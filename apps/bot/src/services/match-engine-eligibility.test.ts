@@ -137,6 +137,28 @@ describe("match allocation active-slot guard", () => {
     expect(sql).toContain("p.embedding_dirty = false");
   });
 
+  // A13-H3. A Telegram Login account is `mobile` with a REAL positive id; an
+  // unguarded send drew a 403 and the observer stamped `botBlockedAt`, which
+  // only an incoming bot update clears — and an app-only user never sends one.
+  // The stamp must not gate a person the product reaches by push.
+  it("ignores a Telegram-chat stamp for app-only users in both eligibility scans", async () => {
+    await loadEligibleUsers();
+
+    expect(mocks.userFindMany).toHaveBeenCalledTimes(2);
+    for (const [args] of mocks.userFindMany.mock.calls) {
+      // The old top-level `botBlockedAt: null` excluded every stamped row.
+      expect(args.where).not.toHaveProperty("botBlockedAt");
+      expect(args.where.AND).toContainEqual({
+        OR: [{ botBlockedAt: null }, { platform: "mobile" }],
+      });
+    }
+  });
+
+  it("applies the same bot-blocked rule in the single-seeker SQL path", () => {
+    const sql = buildCandidateSql();
+    expect(sql).toContain("AND (u.bot_blocked_at IS NULL OR u.platform = 'mobile')");
+  });
+
   it("excludes blocked pairs in BOTH directions (6.8)", () => {
     // Symmetry is the whole assertion: the blocker must not be shown the
     // blocked person, and the blocked person must not be shown the blocker —

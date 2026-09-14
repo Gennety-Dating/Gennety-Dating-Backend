@@ -72,6 +72,7 @@ import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { prunePlaceCache } from "./services/place-cache.js";
 import { refreshStaleMusicTracks } from "./services/music/profile-music.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
+import { sweepLapsedVenueNegotiations } from "./services/venue-time-lapse.js";
 import { guardedTick } from "./utils/guarded-tick.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
@@ -492,11 +493,15 @@ async function expiryJob(): Promise<void> {
 
 async function dateLifecycleTick(): Promise<void> {
   try {
-    const [lifecycle, safety, coordination, venueRetries] = await Promise.all([
+    const [lifecycle, safety, coordination, venueRetries, venueLapsed] = await Promise.all([
       runDateLifecycleTick(bot.api),
       runPreDateSafetyTick(bot.api),
       runCoordinationTick(bot.api),
       retryDueVenueSelections(),
+      // A13-H5: a pair still choosing a venue when their date runs out of
+      // runway goes back to the calendar. Here rather than on a cron of its
+      // own because this tick already owns "things that happen before a date".
+      sweepLapsedVenueNegotiations(bot.api),
     ]);
     if (
       lifecycle.icebreakers > 0 ||
@@ -514,6 +519,7 @@ async function dateLifecycleTick(): Promise<void> {
       );
     }
     if (venueRetries > 0) console.log(`[venue-intent-v2] retried=${venueRetries}`);
+    if (venueLapsed > 0) console.log(`[venue-time-lapse] returned-to-calendar=${venueLapsed}`);
   } catch (err) {
     console.error("date lifecycle tick failed:", err);
   }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION, t } from "@gennety/shared";
 
@@ -182,7 +182,16 @@ function stubLifecycleQueries(rows: {
 // ---------------------------------------------------------------------------
 
 describe("emergency cancellation", () => {
+  // The fixture date is 2026-04-10T19:00Z. Since A13-M20 the cancel refuses
+  // once that time has come, so the clock is pinned to the morning of the date
+  // (only `Date` is faked; timers stay real).
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-10T12:00:00Z"));
     vi.resetAllMocks();
     mApplyEmergencyCancellationPeerBoost.mockResolvedValue(505);
     mRefundMatchTickets.mockResolvedValue([]);
@@ -339,7 +348,12 @@ describe("emergency cancellation", () => {
     // Claimed with a compare-and-set, so two clients racing cancel once.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1", status: "scheduled", emergencyCancelledBy: null },
+        where: {
+          id: "match-1",
+          status: "scheduled",
+          emergencyCancelledBy: null,
+          agreedTime: { gt: new Date("2026-04-10T12:00:00Z") },
+        },
         data: {
           status: "cancelled",
           emergencyCancelledBy: "uid-A",
@@ -485,6 +499,42 @@ describe("emergency cancellation", () => {
 
     expect(mMatch.updateMany).toHaveBeenCalled();
     expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // A13-M20. The emergency button stays in the chat after the date, and the
+  // cancel used to work until T+24h — refunding both tickets for a date that
+  // had already happened.
+  it("handleEmergencyStart refuses once the date has started, and says why", async () => {
+    vi.setSystemTime(new Date("2026-04-10T19:30:00Z"));
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const ctx = createCtx({ callbackData: "emerg:start:match-1", fromId: 1001 });
+    await handleEmergencyStart(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "emergencyDateStarted"));
+    expect(ctx.session.matchFlow).toBe("idle");
+  });
+
+  it("handleEmergencyReason cancels nothing when the reason arrives after the start", async () => {
+    vi.setSystemTime(new Date("2026-04-10T19:00:00Z"));
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValue(matchRow());
+
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: "она не пришла",
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mRefundMatchTickets).not.toHaveBeenCalled();
+    expect(mApplyEmergencyCancellationPeerBoost).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "emergencyDateStarted"));
   });
 
   it("handleEmergencyReason no-ops when match is not scheduled", async () => {
@@ -713,7 +763,7 @@ describe("date-lifecycle tick", () => {
     // on the still-null marker, BEFORE any send.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1", icebreakersSentAt: null },
+        where: { id: "match-1", status: "scheduled", icebreakersSentAt: null },
         data: expect.objectContaining({ icebreakersSentAt: now }),
       }),
     );
@@ -840,7 +890,7 @@ describe("date-lifecycle tick", () => {
     // so a failed send can't strand the match for a duplicate next tick.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1", icebreakersSentAt: null },
+        where: { id: "match-1", status: "scheduled", icebreakersSentAt: null },
         data: expect.objectContaining({ icebreakersSentAt: now }),
       }),
     );
@@ -875,6 +925,75 @@ describe("date-lifecycle tick", () => {
     for (const call of (api.sendMessage as any).mock.calls) {
       expect(call[0]).toBe(1001);
     }
+  });
+
+  // A13-H3. A Telegram Login account is app-only with a REAL positive id. The
+  // old `telegramId > 0n` gate streamed ice-breakers and the emergency card
+  // into a chat that does not exist; the 403 stamped them bot-blocked, which
+  // took them out of every future drop.
+  it("does not stream into the chat of an app-only account with a real Telegram id", async () => {
+    const agreedTime = new Date("2026-04-10T19:00:00Z");
+    const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
+
+    stubLifecycleQueries({
+      upcoming: [
+        {
+          id: "match-4",
+          agreedTime,
+          userA: { id: "ua-4", telegramId: 1001n, platform: "telegram", language: "en", firstName: "Alice" },
+          userB: { id: "ub-4", telegramId: 1002n, platform: "mobile", language: "en", firstName: "AppBob" },
+        },
+      ],
+    });
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mMatch.update.mockResolvedValue({});
+    mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const opts = makeStreamOptions();
+    await runDateLifecycleTick(api, now, opts as never);
+
+    // Only Alice: her stream + her emergency card.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    for (const call of (api.sendMessage as any).mock.calls) {
+      expect(call[0]).toBe(1001);
+    }
+    expect(opts.streamImpl).toHaveBeenCalledTimes(1);
+  });
+
+  // A13-L20. The claim ran on `icebreakersSentAt` alone, so a date cancelled
+  // between the read and the claim still got ice-breakers and a cancel button.
+  it("sends nothing when the date left `scheduled` before the claim", async () => {
+    const agreedTime = new Date("2026-04-10T19:00:00Z");
+    const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
+
+    stubLifecycleQueries({
+      upcoming: [
+        {
+          id: "match-5",
+          agreedTime,
+          userA: { id: "ua-5", telegramId: 1001n, platform: "telegram", language: "en", firstName: "Alice" },
+          userB: { id: "ub-5", telegramId: 1002n, platform: "telegram", language: "en", firstName: "Bob" },
+        },
+      ],
+    });
+    mMatch.updateMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+      args.where.icebreakersSentAt === null && args.where.status !== "scheduled"
+        ? { count: 1 }
+        : { count: 0 },
+    );
+    mMatch.update.mockResolvedValue({});
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const result = await runDateLifecycleTick(api, now, makeStreamOptions() as never);
+
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-5", status: "scheduled", icebreakersSentAt: null },
+      }),
+    );
+    expect(result.icebreakers).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("returns zeros when there are no matches to process", async () => {

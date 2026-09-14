@@ -1509,8 +1509,16 @@ production.** Per side, counted from when the phase opened:
   (§3.2 filter 8), which is the exact failure this whole section exists to
   prevent. The state was reachable in one ordinary move: pick a slot, have your
   partner counter with a different one. Both sides owe it now, because either
-  of them can end it alone (widen, or take one of the other's slots — a shared
-  slot auto-locks the date). It is also the reason §3.6b shows no status there.
+  of them can end it alone (widen, or take one of the other's slots — a single
+  shared slot auto-locks the date). It is also the reason §3.6b shows no status there.
+- **Several shared slots is a stall too — `pick-final`, owed by both (2026-09-14,
+  audit A13-H6).** With more than one shared slot the scheduler locks nothing and
+  sends nothing: the actor gets a "choose the final one" confirm card in the Mini
+  App. The predicate used to assume any shared slot had already locked, so a pair
+  whose actor closed the Mini App at that card sat in `negotiating` forever. Both
+  sides owe it — nothing records which side saw the card, and either can finish
+  it by saving — and get the same reminder / check-in / timeout as any other owed
+  action.
 - **🟢 commits instantly, 🔴 always confirms.** Green needs no confirmation:
   it changes nothing the user could regret, pushes that side's 48 h out from now,
   and re-arms the question **once** (gated on it being the first confirmation, so
@@ -1555,8 +1563,18 @@ production.** Per side, counted from when the phase opened:
 - **Telegram-only, and fail-safe about it.** The check-in is an inline-keyboard
   question, so a mobile-only participant (synthetic negative `telegramId`) could
   never answer it. A stall whose owing side is unreachable is therefore left
-  **completely alone** — never asked, never timed out. Cancelling on someone we
+  **completely alone** — never asked, never timed out by the 48 h chain. Cancelling on someone we
   never asked would be indefensible.
+- **The hard ceiling applies to every planning row (2026-09-14, audit A13-H6).**
+  The worker used to skip a row where nobody owed an action BEFORE looking at the
+  ceiling, so rows the owed-action predicate cannot see — several shared slots
+  before `pick-final` existed, a Venue Intent V2 search that failed for good after
+  both sides confirmed (no venue, no retry still ahead) — were never ended. The
+  ceiling is now checked first on every `negotiating` / `negotiating_venue` row;
+  a dead venue search is cancelled with its own notice (`stallTimeoutVenueUnresolved`,
+  nobody is blamed) and both sides get next-batch priority. The stall scan reads
+  only rows past their first check-in window and pages through all of them, so
+  old dead rows can no longer starve newer pairs out of the 50-row batch.
 - Quiet hours (23:00–09:00 Kyiv) suppress the whole chain, cancellation
   included — that outcome is a real notification. A few hours of extra grace on a
   two-day deadline costs nothing. Runs on the existing hourly `match-nudge` cron;

@@ -6,6 +6,7 @@ import {
   PULSE_DATE_PAST_DAYS,
   PULSE_DROP_WINDOW_MINUTES,
   PULSE_ROWS_MAX,
+  VENUE_SELECTION_MAX_ATTEMPTS,
   type PulseRowKind,
   type PulseRowState,
 } from "@gennety/shared";
@@ -160,7 +161,7 @@ export async function venueSearchRow(userId: string): Promise<PulseRowDto | null
       OR: [{ userAId: userId }, { userBId: userId }],
       status: "negotiating_venue",
       venueSelectionNextRetryAt: { not: null },
-      venueSelectionAttempts: { lt: 3 },
+      venueSelectionAttempts: { lt: VENUE_SELECTION_MAX_ATTEMPTS },
     },
     select: { id: true, venueSelectionNextRetryAt: true },
   });

@@ -35,6 +35,10 @@ import {
 } from "../services/prime-time.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { rematchSearchSteps } from "../services/analysis-status.js";
+import {
+  VENUE_AGREEMENT_NONCE_SELECT,
+  venueAgreementNonce,
+} from "../services/venue-agreement-nonce.js";
 
 /**
  * Telegram Stars (XTR) payment handlers.
@@ -170,18 +174,32 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
         match?.status === "negotiating" && primeTimeUnlockReason(match) === null;
     }
   } else if (venue != null) {
-    // Venue change — payload `venue:<matchId>:<mode>`. Invoice links are
-    // reusable, so beyond the amount we also confirm the swap is still
-    // awaiting payment: a stale link (already settled / lapsed / reverted
+    // Venue change — payload `venue:<matchId>:<mode>:<agreementNonce>`. Invoice
+    // links are reusable, so beyond the amount we also confirm the swap is
+    // still awaiting payment: a stale link (already settled / lapsed / reverted
     // express) is declined here, BEFORE any Stars move.
-    if (query.currency === "XTR" && query.total_amount === env.VENUE_CHANGE_STARS) {
+    //
+    // "Awaiting payment" is not enough on its own (A13-L6): a link minted for
+    // an agreement the pair has since declined and replaced still found the row
+    // `agreed` and paid for the NEW venue. The nonce names the agreement the
+    // link was minted for; a link from before nonces existed names none, and is
+    // declined for that reason — the board mints a current one in a tap, while
+    // a wrongly approved one would take the Stars first.
+    if (
+      venue.nonce != null &&
+      query.currency === "XTR" &&
+      query.total_amount === env.VENUE_CHANGE_STARS
+    ) {
       const match = await prisma.match
         .findUnique({
           where: { id: venue.matchId },
-          select: { venueChangeStatus: true, status: true },
+          select: { venueChangeStatus: true, status: true, ...VENUE_AGREEMENT_NONCE_SELECT },
         })
         .catch(() => null);
-      ok = match?.status === "scheduled" && match.venueChangeStatus === "agreed";
+      ok =
+        match?.status === "scheduled" &&
+        match.venueChangeStatus === "agreed" &&
+        venueAgreementNonce(match) === venue.nonce;
     }
   } else {
     // Date gate — payload `gate:<matchId>:<scope>`. The participant + male-only
@@ -371,7 +389,7 @@ async function settleSuccessfulPayment(
     }
     const venue = parseVenueInvoicePayload(payment.invoice_payload);
     if (venue != null) {
-      return await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
+      return await handleVenueSuccessfulPayment(ctx, venue.matchId, venue.nonce, payment);
     }
     const rematch = parseRematchInvoicePayload(payment.invoice_payload);
     if (rematch != null) {
@@ -590,6 +608,7 @@ async function handlePremiumPackagePayment(
 async function handleVenueSuccessfulPayment(
   ctx: BotContext,
   matchId: string,
+  agreementNonce: string | null,
   payment: { total_amount: number; telegram_payment_charge_id: string },
 ): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
@@ -606,6 +625,7 @@ async function handleVenueSuccessfulPayment(
     telegramId,
     matchId,
     payment.telegram_payment_charge_id,
+    agreementNonce,
   );
   if (!result.ok) {
     console.error(

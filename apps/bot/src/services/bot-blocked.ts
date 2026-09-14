@@ -33,12 +33,25 @@ export function isPermanentTelegramRefusal(err: unknown): boolean {
   return err instanceof GrammyError && isPermanentChatRefusal(err.error_code);
 }
 
+/**
+ * The rails on which a 403 means the person shut the chat.
+ *
+ * An app-only account signed in through Telegram Login carries a REAL positive
+ * id and never pressed Start, so a send to it is refused with the same 403 — a
+ * refusal about a chat that never existed, not a door that closed. Stamping it
+ * took that person out of every drop for good: eligibility requires a null
+ * stamp, and only an incoming bot update clears it, which an app-only user
+ * never sends. `platform` is NOT NULL with a `telegram` default, so rows that
+ * predate the column already read `telegram` and keep being stamped.
+ */
+const BOT_CHAT_PLATFORMS = ["telegram", "both"] as const;
+
 /** Stamp the door shut. Best-effort: this may never fail a send path. */
 export async function markBotBlocked(telegramId: bigint): Promise<void> {
   if (telegramId <= 0n) return;
   await prisma.user
     .updateMany({
-      where: { telegramId, botBlockedAt: null },
+      where: { telegramId, botBlockedAt: null, platform: { in: [...BOT_CHAT_PLATFORMS] } },
       data: { botBlockedAt: new Date() },
     })
     .then((result) => {

@@ -94,6 +94,22 @@ describe("proposalCountdownTick", () => {
     expect(api.editMessageReplyMarkup.mock.calls[0][0]).toBe(2);
   });
 
+  // A13-L19. `accepted === true` let a side that PASSED (`false`) through, and
+  // re-rendering its pitch keyboard handed a live reply button back to someone
+  // whose decision is final.
+  it("skips a side that already passed, too", async () => {
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeMatch({ acceptedByA: false }),
+    ]);
+    const api = createApi();
+
+    const result = await proposalCountdownTick(api, { now: NOW, renderCache: new Map() });
+
+    expect(result.edited).toBe(1); // only side B
+    expect(api.editMessageReplyMarkup).toHaveBeenCalledTimes(1);
+    expect(api.editMessageReplyMarkup.mock.calls[0][0]).toBe(2);
+  });
+
   it("caches the rendered label and skips a no-op re-render on the next tick", async () => {
     (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([makeMatch()]);
     const api = createApi();

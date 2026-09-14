@@ -7,7 +7,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 vi.mock("../config.js", () => ({
-  env: { TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 }, PREMIUM_STARS: 500 },
+  env: { TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 }, PREMIUM_STARS: 500, VENUE_CHANGE_STARS: 150 },
 }));
 vi.mock("../services/ticket-wallet.js", () => ({
   grantTickets: vi.fn(),
@@ -39,6 +39,7 @@ import {
 import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
 import { notifyFounderPaymentStuck } from "../services/founder-notify.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
+import { venueAgreementNonce } from "../services/venue-agreement-nonce.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const matchFindUnique = prisma.match.findUnique as unknown as ReturnType<typeof vi.fn>;
@@ -222,6 +223,63 @@ describe("handlePreCheckout", () => {
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+});
+
+describe("handlePreCheckout — venue change (A13-L6)", () => {
+  /** An agreement awaiting payment, and the nonce an invoice minted for it carries. */
+  const agreement = {
+    status: "scheduled",
+    venueChangeStatus: "agreed",
+    venueChangeProposedAt: new Date("2026-09-14T10:00:00Z"),
+    venueChangeProposerId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    venueChangeExpiresAt: new Date("2026-09-14T22:00:00Z"),
+    venueChangeExpressAt: null,
+    venueChangePlaceId: "p1",
+    venueChangeName: "New Cafe",
+    venueChangeTier: "base",
+  };
+  const nonce = venueAgreementNonce(agreement);
+
+  it("approves an invoice minted for the agreement that is awaiting payment", async () => {
+    matchFindUnique.mockResolvedValue(agreement);
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `venue:${GATE_UUID}:agreed:${nonce}`,
+      currency: "XTR",
+      total_amount: 150,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
+  });
+
+  it("REGRESSION: declines a reusable link minted for an agreement the pair has since replaced", async () => {
+    // Declined, then agreed on another place: the row is `agreed` again, which
+    // is all the old check looked at.
+    matchFindUnique.mockResolvedValue({
+      ...agreement,
+      venueChangeName: "Park Spot",
+      venueChangePlaceId: "p2",
+      venueChangeProposedAt: new Date("2026-09-14T11:00:00Z"),
+    });
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `venue:${GATE_UUID}:agreed:${nonce}`,
+      currency: "XTR",
+      total_amount: 150,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("declines a link minted before nonces existed, without reading the match", async () => {
+    matchFindUnique.mockResolvedValue(agreement);
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `venue:${GATE_UUID}:agreed`,
+      currency: "XTR",
+      total_amount: 150,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+    expect(matchFindUnique).not.toHaveBeenCalled();
   });
 });
 

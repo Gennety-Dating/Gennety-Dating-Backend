@@ -1,5 +1,5 @@
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { t, type Language, type TranslationKey } from "@gennety/shared";
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
@@ -18,6 +18,8 @@ import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 import { offerRematchAfterCancellation } from "./rematch.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
+import { sendPushToUser } from "../../services/push.js";
+import { pushReachable, telegramReachable } from "../../services/telegram-reach.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -130,8 +132,12 @@ function peerLangOf(match: MatchView, side: Side): Language {
   return ((side === "A" ? match.userB.language : match.userA.language) ?? "en") as Language;
 }
 
-function peerTelegramIdOf(match: MatchView, side: Side): bigint {
-  return side === "A" ? match.userB.telegramId : match.userA.telegramId;
+function peerOf(match: MatchView, side: Side): MatchView["userA"] {
+  return side === "A" ? match.userB : match.userA;
+}
+
+function peerIdOf(match: MatchView, side: Side): string {
+  return side === "A" ? match.userBId : match.userAId;
 }
 
 function actorTelegramIdOf(match: MatchView, side: Side): bigint {
@@ -291,10 +297,6 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
     return;
   }
 
-  await ctx.answerCallbackQuery({
-    text: t(lang, action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast"),
-  });
-
   if (action === "accept") {
     // Capture the public Telegram username on the path to every scheduled date,
     // so the pre-date coordination offer can build a `t.me/<username>` link
@@ -307,27 +309,101 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
 }
 
 /**
+ * Answer the tap only once the decision is actually recorded.
+ *
+ * The toast used to go out before `claimMatchDecision`, so a tap that lost the
+ * claim — a double tap, or a row that left `proposed` between the load and the
+ * write — still said "Accepted!" over a decision that was never saved. A query
+ * can be answered once, so the answer waits for the claim, and a lost claim gets
+ * the same inactive-card alert the load-time guard uses, with the dead keyboard.
+ */
+async function answerDecisionTap(
+  ctx: BotContext,
+  claimed: boolean,
+  action: "accept" | "decline",
+): Promise<void> {
+  const lang = ctx.session.language;
+  if (!claimed) {
+    await ctx
+      .answerCallbackQuery({ text: t(lang, "matchCardExpiredAlert"), show_alert: true })
+      .catch(() => {});
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    return;
+  }
+  await ctx
+    .answerCallbackQuery({
+      text: t(lang, action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast"),
+    })
+    .catch(() => {});
+}
+
+/**
+ * Tell the peer something on every rail they actually use.
+ *
+ * Both peer notices here used to be a bare Telegram DM to `telegramId`. A
+ * Telegram Login account is app-only with a REAL positive id, so that DM drew a
+ * 403 — nobody was told, and the refusal stamped them bot-blocked, which took
+ * them out of every future drop (A13-H3). The Telegram leg now asks
+ * `telegramReachable`, and an app-reachable peer gets the push the app decision
+ * rail (`public/matches-service.ts` → `notifyParticipant`) already sends for the
+ * same moment: the same type, the same title, the same localized body — so a
+ * pair reads the same news whichever client the actor used.
+ */
+async function notifyPeer(
+  ctx: BotContext,
+  match: MatchView,
+  side: Side,
+  key: TranslationKey,
+  push: { type: "match.peer_decided" | "match.outcome"; label: string },
+  telegramOptions?: { parse_mode: "Markdown" },
+): Promise<void> {
+  const peer = peerOf(match, side);
+  const text = t(peerLangOf(match, side), key);
+  if (telegramReachable(peer)) {
+    try {
+      await (telegramOptions
+        ? ctx.api.sendMessage(Number(peer.telegramId), text, telegramOptions)
+        : ctx.api.sendMessage(Number(peer.telegramId), text));
+    } catch (err) {
+      console.warn(`[decision] ${push.label} failed:`, (err as Error).message);
+    }
+  }
+  if (pushReachable(peer)) {
+    await sendPushToUser(peerIdOf(match, side), {
+      title: "Gennety",
+      body: text,
+      data: { type: push.type, matchId: match.id },
+    }).catch((err: unknown) => {
+      console.warn(
+        `[decision] ${push.label} push failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
+}
+
+/**
  * Notify the peer that the actor just committed an answer — without
  * revealing which one. Sent only on the first decision per match.
  * Keyed off the prior `peerAccepted` value: `null` means peer hadn't yet
  * decided, so this actor is the "first decider" and the nudge fires.
+ *
+ * Blind on both rails: the push body is the same neutral `matchPeerDecided`
+ * copy, which says only that an answer exists.
  */
 async function sendPeerDecidedNudge(
   ctx: BotContext,
   match: MatchView,
   side: Side,
 ): Promise<void> {
-  const peerLang = peerLangOf(match, side);
-  const peerTelegramId = peerTelegramIdOf(match, side);
-  try {
-    await ctx.api.sendMessage(
-      Number(peerTelegramId),
-      t(peerLang, "matchPeerDecided"),
-      { parse_mode: "Markdown" },
-    );
-  } catch (err) {
-    console.warn("[decision] peer-decided nudge failed:", (err as Error).message);
-  }
+  await notifyPeer(
+    ctx,
+    match,
+    side,
+    "matchPeerDecided",
+    { type: "match.peer_decided", label: "peer-decided nudge" },
+    { parse_mode: "Markdown" },
+  );
 }
 
 /**
@@ -362,14 +438,10 @@ async function sendPeerOutcomeReveal(
   actorAccepted: boolean,
   acceptedSidePriorityBoosted: boolean,
 ): Promise<void> {
-  const peerLang = peerLangOf(match, side);
-  const peerTelegramId = peerTelegramIdOf(match, side);
+  // Both sides have decided by now, so revealing the outcome breaks no
+  // blind-decision rule on either rail.
   const key = outcomeRevealKey(peerAccepted, actorAccepted, acceptedSidePriorityBoosted);
-  try {
-    await ctx.api.sendMessage(Number(peerTelegramId), t(peerLang, key));
-  } catch (err) {
-    console.warn("[decision] peer outcome reveal failed:", (err as Error).message);
-  }
+  await notifyPeer(ctx, match, side, key, { type: "match.outcome", label: "peer outcome reveal" });
 }
 
 async function handleAccept(
@@ -385,6 +457,7 @@ async function handleAccept(
     side,
     decision: true,
   });
+  await answerDecisionTap(ctx, claimed.claimed, "accept");
   if (!claimed.claimed) return;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
   await createMatchEventBestEffort({
@@ -548,6 +621,7 @@ async function handleDecline(
     side,
     decision: false,
   });
+  await answerDecisionTap(ctx, claimed.claimed, "decline");
   if (!claimed.claimed) return;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 

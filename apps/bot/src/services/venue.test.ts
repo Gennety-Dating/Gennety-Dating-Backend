@@ -14,6 +14,8 @@ import {
   pickVenueAtMidpoint,
   searchVenueCandidates,
   fetchPlacePhotoName,
+  fetchPlaceDetails,
+  PlaceNotFoundError,
   gate,
   isBlockedVenueName,
   score,
@@ -479,5 +481,44 @@ describe("fetchPlacePhotoName", () => {
 
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("network")) as unknown as typeof globalThis.fetch;
     await expect(fetchPlacePhotoName("test-key", "x")).resolves.toBeNull();
+  });
+});
+
+describe("fetchPlaceDetails — NOT_FOUND (A13-M16)", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function respond(body: string, status: number, contentType: string): void {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(body, { status, headers: { "content-type": contentType } }),
+    ) as unknown as typeof globalThis.fetch;
+  }
+
+  it("names Google's own NOT_FOUND answer for a stored id", async () => {
+    respond(
+      JSON.stringify({ error: { code: 404, message: "Not found", status: "NOT_FOUND" } }),
+      404,
+      "application/json",
+    );
+    await expect(fetchPlaceDetails("k", "gone")).rejects.toBeInstanceOf(PlaceNotFoundError);
+  });
+
+  it("keeps a bare 404 (a wrong path, a proxy page) an ordinary failure", async () => {
+    respond("<html>404 Not Found</html>", 404, "text/html");
+    const error = await fetchPlaceDetails("k", "p1").catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(PlaceNotFoundError);
+  });
+
+  it("keeps a server error an ordinary failure", async () => {
+    respond(JSON.stringify({ error: { code: 503, status: "UNAVAILABLE" } }), 503, "application/json");
+    const error = await fetchPlaceDetails("k", "p1").catch((err: unknown) => err);
+    expect(error).not.toBeInstanceOf(PlaceNotFoundError);
   });
 });

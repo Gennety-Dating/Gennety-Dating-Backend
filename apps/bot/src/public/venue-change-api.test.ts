@@ -93,6 +93,7 @@ function agreedState(over: Record<string, unknown> = {}) {
       settled: null,
       ...over,
     },
+    agreementNonce: "0a1b2c3d4e",
   };
 }
 
@@ -527,6 +528,18 @@ describe("POST /v1/venue-change/stars-invoice", () => {
       .send({ matchId: VALID_UUID, mode: "agreed" });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, link: "https://t.me/invoice/x", stars: 150 });
+    // A13-L6: the link is pinned to the agreement the state read described.
+    expect(createVenueInvoiceLink.mock.calls[0]![5]).toBe("0a1b2c3d4e");
+  });
+
+  it("agreed: 409 rather than an unpinned link when the read names no agreement", async () => {
+    getVenueBoardState.mockResolvedValue({ ...agreedState(), agreementNonce: null });
+    const res = await request(buildApp())
+      .post(`/v1/venue-change/stars-invoice`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID, mode: "agreed" });
+    expect(res.status).toBe(409);
+    expect(createVenueInvoiceLink).not.toHaveBeenCalled();
   });
 
   it("express: 400 without a key; 403 when not allowed; 200 after a mint", async () => {
@@ -543,7 +556,7 @@ describe("POST /v1/venue-change/stars-invoice", () => {
       .send({ matchId: VALID_UUID, mode: "express", key: "p1" });
     expect(res.status).toBe(403);
 
-    mintExpressChange.mockResolvedValue({ ok: true, venueName: "New Cafe" });
+    mintExpressChange.mockResolvedValue({ ok: true, venueName: "New Cafe", agreementNonce: "5f6e7d8c9b" });
     createVenueInvoiceLink.mockResolvedValue("https://t.me/invoice/y");
     res = await request(buildApp())
       .post(`/v1/venue-change/stars-invoice`)
@@ -551,6 +564,7 @@ describe("POST /v1/venue-change/stars-invoice", () => {
       .send({ matchId: VALID_UUID, mode: "express", key: "p1" });
     expect(res.status).toBe(200);
     expect(res.body.link).toBe("https://t.me/invoice/y");
+    expect(createVenueInvoiceLink.mock.calls[0]![5]).toBe("5f6e7d8c9b");
   });
 });
 

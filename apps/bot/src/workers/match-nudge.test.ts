@@ -222,6 +222,24 @@ describe("matchNudgeTick", () => {
     expect(api.sendMessage).toHaveBeenCalledWith(2, expect.any(String), expect.anything());
   });
 
+  // A13-L19. A side that PASSED holds `false`, and `!false` read it as undecided.
+  it("never reminds a side that already passed to answer", async () => {
+    const match = makeProposedMatch({ acceptedByA: false }); // A passed, B silent
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([match])
+      .mockResolvedValueOnce([]);
+
+    const api = createMockApi();
+    const result = await matchNudgeTick(api, {
+      fetchFn: vi.fn().mockResolvedValue(openaiOk("Hey!")),
+      now: DAY_TIME,
+    });
+
+    expect(result.proposalNudges).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledOnce();
+    expect(api.sendMessage).toHaveBeenCalledWith(2, expect.any(String), expect.anything());
+  });
+
   it("sends nudge 2 (not nudge 1 again) when ≥10h elapsed and nudge1 already sent", async () => {
     const dispatched = new Date(DAY_TIME.getTime() - PROPOSAL_NUDGE2_MS - 60_000);
     const match = makeProposedMatch({
@@ -351,21 +369,45 @@ describe("matchNudgeTick", () => {
     }
   });
 
-  it("stays silent once a shared slot exists (the date auto-locks)", async () => {
+  // A13-H6. Only ONE shared slot locks the date; with several the server waits
+  // for someone to choose and tells nobody. This used to be treated as "the
+  // date auto-locks", so the pair got silence — and no stall end — forever.
+  it("reminds BOTH sides to choose when several shared slots sit unlocked", async () => {
     const match = makeNegotiatingMatch({
       availableTimesA: [SCHED_SLOT, SCHED_SLOT_2],
-      availableTimesB: [new Date(SCHED_SLOT.getTime())],
+      availableTimesB: [new Date(SCHED_SLOT.getTime()), new Date(SCHED_SLOT_2.getTime())],
     });
 
     (prisma.match.findMany as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([match]);
 
+    const mockFetch = vi.fn();
     const api = createMockApi();
-    const result = await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+    const result = await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
-    expect(result.schedNudges).toBe(0);
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(result.schedNudges).toBe(2);
+    expect(mockFetch).not.toHaveBeenCalled();
+    for (const chatId of [11, 12]) {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        chatId,
+        t("en", "matchSchedulePickFinalYet"),
+        expect.objectContaining({
+          reply_markup: expect.objectContaining({ inline_keyboard: expect.anything() }),
+        }),
+      );
+    }
+  });
+
+  it("reads only due scheduling rows with an open Calendar, oldest first", async () => {
+    const api = createMockApi();
+    await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+
+    const scheduling = (prisma.match.findMany as ReturnType<typeof vi.fn>).mock.calls
+      .map(([args]) => args as { where: Record<string, unknown>; orderBy: unknown })
+      .find((args) => args.where.status === "negotiating")!;
+    expect(scheduling.where.proposedTimes).toEqual({ isEmpty: false });
+    expect(scheduling.orderBy).toEqual([{ createdAt: "asc" }, { id: "asc" }]);
   });
 
   it("C-6: scheduling phase skips mobile-only users (telegramId <= 0n)", async () => {
@@ -666,6 +708,83 @@ describe("matchNudgeTick — stall chain", () => {
     expect(result.stallCheckIns).toBe(0);
     expect(result.stallTimeouts).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // A13-H6. Both finished the venue step and the place search died for good:
+  // nobody owes anything, and the worker used to `continue` on that before it
+  // ever looked at the ceiling, so the pair stayed live and out of every drop.
+  it("ends a planning row nobody owes anything on once the hard ceiling passes", async () => {
+    const asked = new Date(DAY_TIME.getTime() - 3 * STALL_TIMEOUT_MS - 60_000);
+    const match = makeVenueMatch({
+      venuePromptAskedAt: asked,
+      vibeTextA: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      venueName: null,
+      venueSelectionNextRetryAt: null,
+    });
+    routeFindMany({ stall: [match] });
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(match);
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallTimeouts).toBe(1);
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-v", status: "negotiating_venue" },
+        data: { status: "cancelled" },
+      }),
+    );
+  });
+
+  it("scans only rows past the first check-in window, and pages past rows that act on nothing", async () => {
+    // Page 1 is full of a row that can do nothing this tick (its only owing side
+    // is unreachable and the ceiling is days away). With one unordered `take`
+    // such rows filled every batch, and the due pair behind them was never asked.
+    const stuck = makeVenueMatch({
+      id: "match-stuck",
+      venuePromptAskedAt: new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60 * 60_000),
+      userA: { id: "user-a", telegramId: -21n, platform: "mobile", language: "en", firstName: "Alice", theme: "dark" },
+    });
+    const due = makeVenueMatch({
+      id: "match-due",
+      venuePromptAskedAt: new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60_000),
+    });
+    type ScanArgs = { where: { status?: unknown; AND?: unknown[] } };
+    const stallCalls: ScanArgs[] = [];
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+      (args: ScanArgs) => {
+        const status = args.where.status;
+        if (typeof status !== "object" || status === null || !("in" in status)) {
+          return Promise.resolve([]);
+        }
+        stallCalls.push(args);
+        const afterCursor = (args.where.AND ?? []).length > 1;
+        if (stallCalls.length > 2) return Promise.resolve([]);
+        return Promise.resolve([
+          afterCursor
+            ? { ...due, createdAt: new Date("2024-06-02T00:00:00Z") }
+            : { ...stuck, createdAt: new Date("2024-06-01T00:00:00Z") },
+        ]);
+      },
+    );
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME, batchSize: 1 });
+
+    expect(result.stallCheckIns).toBe(1);
+    expect(stallCalls.length).toBeGreaterThanOrEqual(2);
+    // The due filter: nothing earlier than the first check-in window.
+    expect(JSON.stringify(stallCalls[0]!.where.AND?.[0])).toContain(
+      new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS).toISOString(),
+    );
+    expect(stallCalls[1]!.where.AND?.[1]).toEqual({
+      OR: [
+        { createdAt: { gt: new Date("2024-06-01T00:00:00Z") } },
+        { createdAt: new Date("2024-06-01T00:00:00Z"), id: { gt: "match-stuck" } },
+      ],
+    });
   });
 
   it("never asks or cancels on a side with no Telegram presence", async () => {

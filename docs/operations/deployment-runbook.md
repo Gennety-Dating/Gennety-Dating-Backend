@@ -936,7 +936,8 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `venue_change_offer_pay_sent_at`, `venue_change_ping_sent_to_a/b_at`,
   `venue_change_express_at` — non-destructive), and redeploy the Mini App
   bundle (`venue-change.html`, fully reworked board UI). Payments ride the
-  Stars rails (`venue:<matchId>:<mode>` payload in `handlers/payments.ts`; no
+  Stars rails (`venue:<matchId>:<mode>:<nonce>` payload in `handlers/payments.ts` — the nonce
+  fingerprints the agreement the invoice was minted for, since 2026-09-14; no
   merchant account — same XTR mechanics as tickets, independent of
   `TICKET_STARS_ENABLED`); a lost parallel-pay race is auto-refunded via
   `refundStarPayment`. The wish-card PNG reuses the date-card satori stack +

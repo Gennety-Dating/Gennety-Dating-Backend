@@ -167,6 +167,18 @@ export function buildCalendarKeyboard(
  * persistent ticket card (when the Date Ticket gate is on) — it follows it
  * rather than replacing it, so the ticket entry stays re-openable
  * (PRODUCT_SPEC §3.5b / §3.6).
+ *
+ * **Idempotent (A13-H4).** The grid is opened by a compare-and-set on an empty
+ * `proposedTimes`, and only the call that wins it resets both sides' picks and
+ * stamps `schedulingOpenedAt`. Every caller today reaches here with the grid
+ * still empty — the mutual accept (either surface), the event handoff, the gate
+ * completing, the gate lapsing — and `proposedTimes` is the same "the Calendar
+ * has opened" fact the §3.5c stall chain and the §3.6b shimmer read. A repeat
+ * call only (re)sends the cards. It used to rewrite the grid unconditionally, so
+ * the ticket sweep's hourly retry wiped the payer's marked times and restarted
+ * the stall clock on every pass. A future path that re-opens the Calendar for a
+ * NEW phase must empty `proposedTimes` in the same CAS that moves the row back
+ * to `negotiating`; otherwise this keeps the old grid.
  */
 export async function startScheduling(
   api: Api<RawApi>,
@@ -199,8 +211,8 @@ export async function startScheduling(
   // could only ever disagree with each other.
   const resend = opts?.afterTicketGate === true;
   const slots = generateProposalSlots();
-  await prisma.match.update({
-    where: { id: matchId },
+  const opened = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating", proposedTimes: { isEmpty: true } },
     data: {
       // Iteration tracking is legacy but retained until the cleanup
       // migration drops it; pinning to 3 keeps any code path that still
@@ -221,6 +233,7 @@ export async function startScheduling(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
+      status: true,
       calendarMessageIdA: true,
       calendarMessageIdB: true,
       userA: { select: { telegramId: true, platform: true, language: true, theme: true } },
@@ -228,14 +241,20 @@ export async function startScheduling(
     },
   });
   if (!match) return;
+  // Lost the claim to a row that is no longer planning a time (cancelled, or
+  // already past the Calendar): there is no card worth sending. A row still in
+  // `negotiating` lost it only because its grid is already open, and gets its
+  // cards again below with that grid and both sides' picks left as they are.
+  if (opened.count === 0 && match.status !== "negotiating") return;
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  const sends: Array<Promise<unknown>> = [];
+  const sends: Array<{ side: PostAcceptSide; delivery: Promise<void> }> = [];
   if (opts?.skipSide !== "A") {
-    sends.push(
-      replaceCalendarMessage(
+    sends.push({
+      side: "A",
+      delivery: replaceCalendarMessage(
         api,
         matchId,
         "A",
@@ -247,11 +266,12 @@ export async function startScheduling(
         match.userA.theme,
         resend,
       ),
-    );
+    });
   }
   if (opts?.skipSide !== "B") {
-    sends.push(
-      replaceCalendarMessage(
+    sends.push({
+      side: "B",
+      delivery: replaceCalendarMessage(
         api,
         matchId,
         "B",
@@ -263,9 +283,22 @@ export async function startScheduling(
         match.userB.theme,
         resend,
       ),
-    );
+    });
   }
-  await Promise.all(sends);
+  // Per side, settled rather than all-or-nothing: one partner who has blocked
+  // the bot must not reject the call that delivers the other side's Calendar —
+  // nor the caller that has already done its irreversible part (the ticket
+  // refund, A13-H4). The grid is open either way, and the scheduling reminder
+  // brings the way in back later.
+  const results = await Promise.allSettled(sends.map((entry) => entry.delivery));
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") return;
+    const reason: unknown = result.reason;
+    console.warn(
+      `[scheduler] calendar card failed match=${matchId} side=${sends[index]!.side}:`,
+      reason instanceof Error ? reason.message : reason,
+    );
+  });
 }
 
 /**

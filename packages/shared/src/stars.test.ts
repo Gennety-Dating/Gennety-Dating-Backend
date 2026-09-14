@@ -9,6 +9,8 @@ import {
   buildPrimeInvoicePayload,
   parsePrimeInvoicePayload,
   parseVenueInvoicePayload,
+  VENUE_AGREEMENT_NONCE_LENGTH,
+  isVenueAgreementNonce,
   SUB_INVOICE_PREFIX,
   buildSubInvoicePayload,
   parseSubInvoicePayload,
@@ -76,20 +78,33 @@ describe("gate invoice payload", () => {
 });
 
 describe("venue-change invoice payload", () => {
-  it("builds a payload for a match + mode", () => {
-    expect(buildVenueInvoicePayload(UUID, "agreed")).toBe(`venue:${UUID}:agreed`);
+  const NONCE = "0a1b2c3d4e";
+
+  it("builds a payload for a match + mode + agreement nonce", () => {
+    expect(buildVenueInvoicePayload(UUID, "agreed", NONCE)).toBe(`venue:${UUID}:agreed:${NONCE}`);
   });
 
   it("round-trips build → parse for both modes", () => {
     for (const mode of ["agreed", "express"] as const) {
-      expect(parseVenueInvoicePayload(buildVenueInvoicePayload(UUID, mode))).toEqual({
+      expect(parseVenueInvoicePayload(buildVenueInvoicePayload(UUID, mode, NONCE))).toEqual({
         matchId: UUID,
         mode,
+        nonce: NONCE,
       });
     }
   });
 
-  it("returns null for non-venue, bad-UUID, or unknown-mode payloads", () => {
+  it("still parses a payload minted before the nonce, with nonce: null", () => {
+    // It must reach the venue branch (which refuses it) rather than fall
+    // through to the date-gate parser as an unknown payload.
+    expect(parseVenueInvoicePayload(`venue:${UUID}:agreed`)).toEqual({
+      matchId: UUID,
+      mode: "agreed",
+      nonce: null,
+    });
+  });
+
+  it("returns null for non-venue, bad-UUID, unknown-mode or bad-nonce payloads", () => {
     expect(parseVenueInvoicePayload("")).toBeNull();
     expect(parseVenueInvoicePayload(null)).toBeNull();
     expect(parseVenueInvoicePayload(undefined)).toBeNull();
@@ -98,12 +113,21 @@ describe("venue-change invoice payload", () => {
     expect(parseVenueInvoicePayload(`venue:${UUID}`)).toBeNull(); // no mode
     expect(parseVenueInvoicePayload(`venue:${UUID}:free`)).toBeNull(); // bad mode
     expect(parseVenueInvoicePayload("venue:not-a-uuid:agreed")).toBeNull();
+    expect(parseVenueInvoicePayload(`venue:${UUID}:agreed:XYZ`)).toBeNull(); // bad nonce
+    expect(parseVenueInvoicePayload(`venue:${UUID}:agreed:${NONCE}:extra`)).toBeNull();
   });
 
   it("does not cross-parse with the store/gate helpers", () => {
-    expect(parseStoreInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
-    expect(parseGateInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
+    expect(parseStoreInvoicePayload(buildVenueInvoicePayload(UUID, "agreed", NONCE))).toBeNull();
+    expect(parseGateInvoicePayload(buildVenueInvoicePayload(UUID, "agreed", NONCE))).toBeNull();
     expect(parseVenueInvoicePayload(buildGateInvoicePayload(UUID, "self"))).toBeNull();
+  });
+
+  it("fits the agreement nonce into the wish card's 64-byte decline callback", () => {
+    expect(`vchg:paydecline:${UUID}:${NONCE}`.length).toBeLessThanOrEqual(64);
+    expect(NONCE).toHaveLength(VENUE_AGREEMENT_NONCE_LENGTH);
+    expect(isVenueAgreementNonce(NONCE)).toBe(true);
+    expect(isVenueAgreementNonce("0A1B2C3D4E")).toBe(false);
   });
 });
 

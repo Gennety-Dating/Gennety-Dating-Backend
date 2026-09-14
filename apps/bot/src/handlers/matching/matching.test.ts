@@ -130,6 +130,16 @@ vi.mock("../../services/peer-wait.js", () => ({
   startPeerWaitShimmer: vi.fn(),
 }));
 
+// The app rail for the peer notices (A13-H3). Only `sendPushToUser` is stubbed;
+// everything else the module exports stays real.
+const { mSendPushToUser } = vi.hoisted(() => ({
+  mSendPushToUser: vi.fn().mockResolvedValue(true),
+}));
+vi.mock("../../services/push.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/push.js")>()),
+  sendPushToUser: (...args: unknown[]) => mSendPushToUser(...args),
+}));
+
 vi.mock("./rematch.js", () => ({
   offerRematchAfterCancellation: (...args: unknown[]) =>
     mOfferRematchAfterCancellation(...args),
@@ -1600,6 +1610,158 @@ describe("matching decision flow", () => {
     expect(peerCalls[0]![1]).not.toMatch(/mutual|accepted|both/i);
   });
 
+  // A13-H3. A Telegram Login account is app-only with a REAL positive id. The
+  // nudge used to be a bare DM to that id: Telegram refused it with a 403, the
+  // peer was never told, and the refusal stamped them bot-blocked — out of every
+  // future drop. The DM now needs a Telegram rail, and the app rail gets the
+  // push the app's own decision surface sends for the same moment.
+  it("first decision reaches an app-only peer by push — never by a DM to their real Telegram id", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ userB: { telegramId: 1002n, platform: "mobile", language: "en" } }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: null,
+    });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    const peerDms = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0] === 1002,
+    );
+    expect(peerDms).toHaveLength(0);
+    expect(mSendPushToUser).toHaveBeenCalledTimes(1);
+    const [userId, payload] = mSendPushToUser.mock.calls[0]!;
+    expect(userId).toBe("uid-B");
+    expect(payload).toEqual({
+      title: "Gennety",
+      body: t("en", "matchPeerDecided"),
+      data: { type: "match.peer_decided", matchId: "match-1" },
+    });
+    // Blind on the push rail too: the body says an answer exists, not which.
+    expect(payload.body).not.toMatch(/accepted|mutual|passed|declined/i);
+  });
+
+  it("a `both` peer hears the first decision on both rails", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ userB: { telegramId: 1002n, platform: "both", language: "en" } }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: null,
+    });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:do:decline:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      1002,
+      t("en", "matchPeerDecided"),
+      { parse_mode: "Markdown" },
+    );
+    expect(mSendPushToUser).toHaveBeenCalledWith(
+      "uid-B",
+      expect.objectContaining({ data: { type: "match.peer_decided", matchId: "match-1" } }),
+    );
+  });
+
+  it("the outcome reveal reaches an app-only first decider by push, not by DM", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({
+        acceptedByA: false,
+        acceptedByB: null,
+        userA: { telegramId: 1001n, platform: "mobile", language: "en" },
+      }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: true,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(mSendPushToUser).toHaveBeenCalledWith(
+      "uid-A",
+      expect.objectContaining({
+        body: expect.stringMatching(/your match was in/i),
+        data: { type: "match.outcome", matchId: "match-1" },
+      }),
+    );
+  });
+
+  // A13-L19. The "Accepted!" toast used to be answered before the claim, so a
+  // tap that lost it still said the decision was saved.
+  it("answers the inactive-card alert, not the accepted toast, when the claim is lost", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mClaimMatchDecision.mockResolvedValueOnce({ claimed: false });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "matchCardExpiredAlert"),
+      show_alert: true,
+    });
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
+    expect(mMatchEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("answers the saved toast only after the claim lands", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    const order: string[] = [];
+    mClaimMatchDecision.mockImplementationOnce(async () => {
+      order.push("claim");
+      return { claimed: true, status: "proposed", acceptedByA: false, acceptedByB: null };
+    });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:do:decline:match-1",
+      fromId: 1001,
+    });
+    ctx.answerCallbackQuery.mockImplementation(async () => {
+      order.push("answer");
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(order).toEqual(["claim", "answer"]);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "matchDecisionSavedToast"),
+    });
+  });
+
   it("second decider on a peer-declined match: cancels + reveals peer's decline to actor + DMs first-decider", async () => {
     // A declined first (acceptedByA=false). B now taps Accept. We must:
     //   1. Flip status to 'cancelled' (both decisions are in).
@@ -2132,6 +2294,14 @@ describe("matching decision flow", () => {
 // ---------------------------------------------------------------------------
 
 describe("venue negotiation finalization", () => {
+  /**
+   * Relative to the real clock on purpose. Since A13-H5 every finalizer refuses
+   * a date without `VENUE_FINALIZE_MIN_LEAD_MS` of runway, so a fixed calendar
+   * date in these fixtures would silently turn every case into the lapse path
+   * the day it passed — which is exactly what happened to "2026-05-16".
+   */
+  const FUTURE_AGREED_TIME = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mMatch.findUnique.mockReset();
@@ -2158,7 +2328,7 @@ describe("venue negotiation finalization", () => {
     mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
-      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      agreedTime: FUTURE_AGREED_TIME,
       vibeTextA: "quiet cafe",
       vibeTextB: "quiet cafe",
       // Разные отправные точки: середина обязана отличаться от координат
@@ -2182,7 +2352,12 @@ describe("venue negotiation finalization", () => {
     // Теперь точки разные, и колонка проверяется по существу.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-venue-1", status: "negotiating_venue" },
+        // The lock re-asserts the runway (A13-H5): the search takes seconds.
+        where: {
+          id: "match-venue-1",
+          status: "negotiating_venue",
+          agreedTime: { gt: expect.any(Date) },
+        },
         data: expect.objectContaining({
           status: "scheduled",
           venueLat: 50.4712,
@@ -2258,7 +2433,7 @@ describe("venue negotiation finalization", () => {
     mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
-      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      agreedTime: FUTURE_AGREED_TIME,
       vibeTextA: "quiet cafe",
       vibeTextB: "quiet cafe",
       vibeLatA: 50.45,
@@ -2299,7 +2474,7 @@ describe("venue negotiation finalization", () => {
     mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
-      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      agreedTime: FUTURE_AGREED_TIME,
       vibeTextA: "quiet cafe",
       vibeTextB: "quiet cafe",
       vibeLatA: 50.45,
@@ -2332,7 +2507,7 @@ describe("venue negotiation finalization", () => {
     mMatch.findUnique.mockResolvedValueOnce({
       id: "match-venue-1",
       status: "negotiating_venue",
-      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      agreedTime: FUTURE_AGREED_TIME,
       vibeTextA: "quiet cafe",
       vibeTextB: "quiet cafe",
       vibeLatA: 50.45,
@@ -2356,6 +2531,50 @@ describe("venue negotiation finalization", () => {
     // A lost race means this caller never reaches deliverScheduledConfirmation
     // at all — nothing here should push the banner either.
     expect(mRefreshStatusBanners).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION (A13-H5): a date that already passed goes back to the calendar instead of being scheduled", async () => {
+    // Locked for an hour ago, venue confirmed only now. Scheduling it would
+    // skip every pre-date rail and ask "how did it go?" about a date that
+    // never happened.
+    const lapsed = new Date(Date.now() - 60 * 60 * 1000);
+    mMatch.findUnique.mockResolvedValue({
+      id: "match-venue-1",
+      status: "negotiating_venue",
+      agreedTime: lapsed,
+      vibeTextA: "quiet cafe",
+      vibeTextB: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+      parsedCategoryA: null,
+      parsedCategoryB: null,
+      venueIntentA: null,
+      venueIntentB: null,
+      userAId: "uid-A",
+      userBId: "uid-B",
+      userA: { id: "uid-A", telegramId: 1001n, platform: "telegram", language: "en" },
+      userB: { id: "uid-B", telegramId: 1002n, platform: "telegram", language: "ru" },
+    });
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
+
+    await tryFinalize(api, "match-venue-1");
+
+    expect(mPickVenueAtMidpoint).not.toHaveBeenCalled();
+    expect(
+      mMatch.updateMany.mock.calls.some((call) => call[0]?.data?.status === "scheduled"),
+    ).toBe(false);
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-venue-1", status: "negotiating_venue", agreedTime: lapsed },
+        data: expect.objectContaining({ status: "negotiating", agreedTime: null, proposedTimes: [] }),
+      }),
+    );
+    // Told why, in their own language, then handed a fresh calendar.
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "venueTimeLapsedBackToCalendar"));
+    expect(api.sendMessage).toHaveBeenCalledWith(1002, t("ru", "venueTimeLapsedBackToCalendar"));
+    expect(startScheduling).toHaveBeenCalledWith(api, "match-venue-1", { afterTicketGate: true });
   });
 });
 

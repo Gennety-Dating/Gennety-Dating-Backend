@@ -1,5 +1,5 @@
 import type { Api, RawApi } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import { CADENCE, VOICE_CORE, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -11,6 +11,7 @@ import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { buildLocationMapKeyboard } from "../handlers/matching/venue-negotiation.js";
 import { buildCalendarCta } from "../handlers/matching/scheduler.js";
 import {
+  STALL_CHECK_IN_MS,
   STALL_MATCH_SELECT,
   VENUE_NUDGE1_MS,
   VENUE_NUDGE2_MS,
@@ -18,6 +19,8 @@ import {
   cancelStalledMatch,
   schedulingOwedKind,
   sideOwesAction,
+  stallCeilingApplies,
+  stallCeilingAt,
   stallCheckInAskedAt,
   stallCheckInDueAt,
   stallDeadlineAt,
@@ -42,9 +45,10 @@ import { isQuietHours } from "./quiet-hours.js";
  * B) SCHEDULING nudges (status = 'negotiating', both accepted, slot not yet agreed):
  *    - Nudge 1: ≥6h after the Calendar opened, schedNudge1SentAt is null.
  *    - Nudge 2: ≥12h after it, schedNudge2SentAt is null.
- *    Sent to whichever side still owes the move — either it never opened the
- *    calendar, or both picked and nothing lines up (`schedulingOwedKind`). The
- *    second case is why this is a reminder rather than the §3.6b shimmer: when
+ *    Sent to whichever side still owes the move — it never opened the calendar,
+ *    both picked and nothing lines up, or several slots line up and nobody has
+ *    chosen the final one (`schedulingOwedKind`). The
+ *    last two cases are why this is a reminder rather than the §3.6b shimmer: when
  *    the next move is the user's own, a "we're coordinating" status tells them
  *    to sit still while the flow is blocked on them.
  *
@@ -110,6 +114,38 @@ export const DEADLINE_NUDGE_PUSH_TYPE = "match.deadline";
 async function anyRailLanded(legs: Array<Promise<boolean>>): Promise<boolean> {
   if (legs.length === 0) return false;
   return (await Promise.all(legs)).some(Boolean);
+}
+
+/** Where the previous page of a planning scan ended. */
+interface PlanningScanCursor {
+  createdAt: Date;
+  id: string;
+}
+
+/**
+ * Oldest first, with `id` breaking ties, so pages are a total order and a row
+ * can be neither skipped nor read twice within one tick.
+ */
+const PLANNING_SCAN_ORDER: Prisma.MatchOrderByWithRelationInput[] = [
+  { createdAt: "asc" },
+  { id: "asc" },
+];
+
+/**
+ * The rows after the previous page, by value rather than by a Prisma `cursor`:
+ * a cursor row that is deleted mid-tick (an account deletion cascades its
+ * matches away) would otherwise end the scan early.
+ */
+function afterPlanningCursor(cursor: PlanningScanCursor | null): Prisma.MatchWhereInput[] {
+  if (!cursor) return [];
+  return [
+    {
+      OR: [
+        { createdAt: { gt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+      ],
+    },
+  ];
 }
 
 export interface NudgeOptions {
@@ -390,8 +426,12 @@ async function handleProposalNudges(
     // Not having accepted is WHO is owed the reminder — unchanged. The rail is
     // decided per leg below; folding `telegramId > 0n` in here is what dropped
     // every app-side recipient of this cadence.
-    if (!match.acceptedByA) targets.push({ ...match.userA, pitch: match.pitchForA });
-    if (!match.acceptedByB) targets.push({ ...match.userB, pitch: match.pitchForB });
+    //
+    // `=== null`, not falsy (A13-L19): a side that PASSED holds `false`, and its
+    // decision is final — reminding it to answer is nagging someone who already
+    // did, the same rule the deadline nudge above states.
+    if (match.acceptedByA === null) targets.push({ ...match.userA, pitch: match.pitchForA });
+    if (match.acceptedByB === null) targets.push({ ...match.userB, pitch: match.pitchForB });
 
     for (const target of targets) {
       const lang: Language = (target.language as Language) ?? "en";
@@ -550,147 +590,186 @@ async function handleSchedulingNudges(
   const nudge1Cutoff = new Date(now.getTime() - SCHED_NUDGE1_MS);
   const nudge2Cutoff = new Date(now.getTime() - SCHED_NUDGE2_MS);
 
+  let count = 0;
+  let cursor: PlanningScanCursor | null = null;
+
   // C-6: phase-specific schedNudge*SentAt columns, so a proposal-phase stamp
   // (now in proposalNudge*SentAt) can't gate us. The anchor moved off
   // `updatedAt` in the same pass — writing a nudge stamp bumped it, which reset
   // the 12h cutoff and broke the documented 6h/12h cadence.
-  const matches = await prisma.match.findMany({
-    where: {
-      status: "negotiating",
-      schedNudge2SentAt: null,
-      // Anchor on when the Calendar actually opened, not on dispatch. A pair
-      // that accepted at hour 23 of the 24h decision window was already "6h
-      // past dispatch", so the first nudge could land right behind the
-      // Calendar card itself. Rows predating `schedulingOpenedAt` keep the old
-      // dispatch anchor — a slightly early nudge beats none at all.
-      OR: [
-        { schedulingOpenedAt: { lt: nudge1Cutoff } },
-        { schedulingOpenedAt: null, dispatchedAt: { not: null, lt: nudge1Cutoff } },
-      ],
-    },
-    // Same select the stall chain uses, so "whose move is it" is answered by
-    // ONE predicate (`sideOwesAction`) across the reminder, the check-in and
-    // the cancellation instead of three queries with three ideas about it.
-    select: {
-      ...STALL_MATCH_SELECT,
-      // Widened locally, additively, on top of the shared select: `platform` is
-      // the rail and this cadence now has two of them. `STALL_MATCH_SELECT`
-      // itself is NOT edited — the check-in and the 48h cancellation read it
-      // too — and the extra field changes nothing for `stallPhaseOf` /
-      // `schedulingOwedKind`, which never look at the participants.
-      userA: { select: { ...STALL_MATCH_SELECT.userA.select, platform: true } },
-      userB: { select: { ...STALL_MATCH_SELECT.userB.select, platform: true } },
-      schedulingIteration: true,
-      schedNudge1SentAt: true,
-      schedNudge2SentAt: true,
-    },
-    take: batchSize,
-  });
-
-  let count = 0;
-
-  for (const match of matches) {
-    // `negotiating` also covers the §3.5b Date Ticket gate, where the Calendar
-    // has NOT been sent yet — nudging "pick a time" there points at a screen
-    // the user doesn't have. `stallPhaseOf` discriminates on `proposedTimes`,
-    // which `startScheduling` writes when (and only when) the Calendar opens;
-    // `ticketStatus` cannot be used, since it defaults to "pending" even with
-    // the ticket feature switched off entirely.
-    if (stallPhaseOf(match) !== "scheduling") continue;
-
-    const owing = (["A", "B"] as MatchSide[])
-      .map((side) => ({ side, owed: schedulingOwedKind(match, side) }))
-      .filter((entry): entry is { side: MatchSide; owed: SchedulingOwed } => entry.owed !== null)
-      .map((entry) => ({ ...entry, user: entry.side === "A" ? match.userA : match.userB }))
-      // NOT `stallReachableFor`. That predicate is right for the stall chain,
-      // whose question is an inline keyboard in a Telegram chat that an app user
-      // has nothing to answer with — but a reminder is just a reminder, and it
-      // reaches the app perfectly well. `schedulingOwedKind` above already said
-      // whose move it is; this only drops someone no rail can reach at all.
-      .filter(({ user }) => telegramReachable(user) || pushReachable(user));
-    // Nobody reachable → no claim, so the stamp is not spent on a reminder that
-    // was never sent and the next tick re-evaluates. Deliberately unlike the
-    // two proposal-phase cadences, whose claim is upstream of their recipient
-    // list; both orderings are pre-existing and neither is changed here.
-    if (owing.length === 0) continue;
-
-    const anchor = match.schedulingOpenedAt ?? match.dispatchedAt!;
-    const isNudge2 = anchor <= nudge2Cutoff && !match.schedNudge2SentAt;
-    const isNudge1 = !match.schedNudge1SentAt;
-    const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
-    if (nudgeIndex === 0) continue;
-
-    const claim = await prisma.match.updateMany({
+  //
+  // Paged through every due row rather than one unordered `take`: a row that is
+  // selected but acts on nothing this tick (nobody reachable) used to be able to
+  // fill the batch on every tick and keep newer pairs from ever being reminded.
+  for (;;) {
+    // Typed on its own line: read inline, the page's type would depend on
+    // `cursor`'s narrowing across the loop's back edge, which in turn depends
+    // on this page (`last`, `matches.length`) — a cycle TypeScript cannot infer.
+    const after: Prisma.MatchWhereInput[] = afterPlanningCursor(cursor);
+    const matches = await prisma.match.findMany({
       where: {
-        id: match.id,
         status: "negotiating",
-        ...(nudgeIndex === 2
-          ? { schedNudge2SentAt: null }
-          : { schedNudge1SentAt: null }),
+        // Only an open Calendar has anything to pick in; a §3.5b gate row is
+        // skipped in memory below as well, but must not take a page slot.
+        proposedTimes: { isEmpty: false },
+        schedNudge2SentAt: null,
+        AND: [
+          // Anchor on when the Calendar actually opened, not on dispatch. A pair
+          // that accepted at hour 23 of the 24h decision window was already "6h
+          // past dispatch", so the first nudge could land right behind the
+          // Calendar card itself. Rows predating `schedulingOpenedAt` keep the old
+          // dispatch anchor — a slightly early nudge beats none at all.
+          //
+          // Due only: the first nudge not yet sent and its cutoff passed, or the
+          // second's cutoff passed. A row between the two used to be re-read on
+          // every tick just to be skipped.
+          {
+            OR: [
+              { schedNudge1SentAt: null, schedulingOpenedAt: { lt: nudge1Cutoff } },
+              {
+                schedNudge1SentAt: null,
+                schedulingOpenedAt: null,
+                dispatchedAt: { not: null, lt: nudge1Cutoff },
+              },
+              { schedulingOpenedAt: { lte: nudge2Cutoff } },
+              { schedulingOpenedAt: null, dispatchedAt: { not: null, lte: nudge2Cutoff } },
+            ],
+          },
+          ...after,
+        ],
       },
-      data:
-        nudgeIndex === 2
-          ? { schedNudge2SentAt: now }
-          : { schedNudge1SentAt: now },
+      // Same select the stall chain uses, so "whose move is it" is answered by
+      // ONE predicate (`sideOwesAction`) across the reminder, the check-in and
+      // the cancellation instead of three queries with three ideas about it.
+      select: {
+        ...STALL_MATCH_SELECT,
+        // Widened locally, additively, on top of the shared select: `platform` is
+        // the rail and this cadence now has two of them. `STALL_MATCH_SELECT`
+        // itself is NOT edited — the check-in and the 48h cancellation read it
+        // too — and the extra field changes nothing for `stallPhaseOf` /
+        // `schedulingOwedKind`, which never look at the participants.
+        userA: { select: { ...STALL_MATCH_SELECT.userA.select, platform: true } },
+        userB: { select: { ...STALL_MATCH_SELECT.userB.select, platform: true } },
+        schedulingIteration: true,
+        schedNudge1SentAt: true,
+        schedNudge2SentAt: true,
+        createdAt: true,
+      },
+      orderBy: PLANNING_SCAN_ORDER,
+      take: batchSize,
     });
-    if (claim.count === 0) continue;
 
-    for (const { owed, user } of owing) {
-      const lang = (user.language ?? "en") as Language;
-      const legs: Promise<boolean>[] = [];
+    for (const match of matches) {
+      // `negotiating` also covers the §3.5b Date Ticket gate, where the Calendar
+      // has NOT been sent yet — nudging "pick a time" there points at a screen
+      // the user doesn't have. `stallPhaseOf` discriminates on `proposedTimes`,
+      // which `startScheduling` writes when (and only when) the Calendar opens;
+      // `ticketStatus` cannot be used, since it defaults to "pending" even with
+      // the ticket feature switched off entirely.
+      if (stallPhaseOf(match) !== "scheduling") continue;
 
-      if (telegramReachable(user)) {
-        legs.push(
-          (async () => {
-            if (owed === "no-overlap") {
-              // Static copy + the way in, exactly like the venue nudge. A
-              // generated "pick a time" line would be flatly wrong here — this
-              // person DID pick; what they need is to widen the selection or
-              // take one of the partner's slots, and the Calendar card scrolled
-              // away hours ago.
-              await api.sendMessage(Number(user.telegramId), t(lang, "matchScheduleNoOverlapYet"), {
-                reply_markup: buildCalendarCta(match.id, lang, user.theme),
-              });
-            } else {
-              const text = await generateSchedulingNudge(
-                { ...user, nudgeIndex, iteration: match.schedulingIteration },
-                fetchFn,
+      const owing = (["A", "B"] as MatchSide[])
+        .map((side) => ({ side, owed: schedulingOwedKind(match, side) }))
+        .filter((entry): entry is { side: MatchSide; owed: SchedulingOwed } => entry.owed !== null)
+        .map((entry) => ({ ...entry, user: entry.side === "A" ? match.userA : match.userB }))
+        // NOT `stallReachableFor`. That predicate is right for the stall chain,
+        // whose question is an inline keyboard in a Telegram chat that an app user
+        // has nothing to answer with — but a reminder is just a reminder, and it
+        // reaches the app perfectly well. `schedulingOwedKind` above already said
+        // whose move it is; this only drops someone no rail can reach at all.
+        .filter(({ user }) => telegramReachable(user) || pushReachable(user));
+      // Nobody reachable → no claim, so the stamp is not spent on a reminder that
+      // was never sent and the next tick re-evaluates. Deliberately unlike the
+      // two proposal-phase cadences, whose claim is upstream of their recipient
+      // list; both orderings are pre-existing and neither is changed here.
+      if (owing.length === 0) continue;
+
+      const anchor = match.schedulingOpenedAt ?? match.dispatchedAt!;
+      const isNudge2 = anchor <= nudge2Cutoff && !match.schedNudge2SentAt;
+      const isNudge1 = !match.schedNudge1SentAt;
+      const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
+      if (nudgeIndex === 0) continue;
+
+      const claim = await prisma.match.updateMany({
+        where: {
+          id: match.id,
+          status: "negotiating",
+          ...(nudgeIndex === 2
+            ? { schedNudge2SentAt: null }
+            : { schedNudge1SentAt: null }),
+        },
+        data:
+          nudgeIndex === 2
+            ? { schedNudge2SentAt: now }
+            : { schedNudge1SentAt: now },
+      });
+      if (claim.count === 0) continue;
+
+      for (const { owed, user } of owing) {
+        const lang = (user.language ?? "en") as Language;
+        const legs: Promise<boolean>[] = [];
+
+        if (telegramReachable(user)) {
+          legs.push(
+            (async () => {
+              if (owed === "no-overlap" || owed === "pick-final") {
+                // Static copy + the way in, exactly like the venue nudge. A
+                // generated "pick a time" line would be flatly wrong here — this
+                // person DID pick; what they need is to widen the selection or
+                // take one of the partner's slots (no-overlap), or to choose one
+                // of the several times they already share (pick-final) — and the
+                // Calendar card scrolled away hours ago.
+                const copy =
+                  owed === "pick-final" ? "matchSchedulePickFinalYet" : "matchScheduleNoOverlapYet";
+                await api.sendMessage(Number(user.telegramId), t(lang, copy), {
+                  reply_markup: buildCalendarCta(match.id, lang, user.theme),
+                });
+              } else {
+                const text = await generateSchedulingNudge(
+                  { ...user, nudgeIndex, iteration: match.schedulingIteration },
+                  fetchFn,
+                );
+                await api.sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" });
+              }
+              return true;
+            })().catch((err: unknown) => {
+              console.warn(
+                `[match-nudge] scheduling send failed for ${user.telegramId}:`,
+                err instanceof Error ? err.message : err,
               );
-              await api.sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" });
-            }
-            return true;
-          })().catch((err: unknown) => {
-            console.warn(
-              `[match-nudge] scheduling send failed for ${user.telegramId}:`,
-              err instanceof Error ? err.message : err,
-            );
-            return false;
-          }),
-        );
-      }
+              return false;
+            }),
+          );
+        }
 
-      if (pushReachable(user)) {
-        // ONE copy for both `owed` branches, and that is a constraint on the
-        // copy rather than a shortcut: it has to be true whether the calendar
-        // was never opened or both picked and nothing lined up. So it says
-        // "open the calendar", never "pick a time".
-        legs.push(
-          sendPushToUser(user.id, {
-            title: t(lang, "planningNudgePushTitle"),
-            body: t(lang, "planningNudgePushBody"),
-            data: { type: PLANNING_NUDGE_PUSH_TYPE, matchId: match.id },
-          }).catch((err: unknown) => {
-            console.warn(
-              `[match-nudge] scheduling push failed for ${user.id}:`,
-              err instanceof Error ? err.message : err,
-            );
-            return false;
-          }),
-        );
-      }
+        if (pushReachable(user)) {
+          // ONE copy for every `owed` branch, and that is a constraint on the
+          // copy rather than a shortcut: it has to be true whether the calendar
+          // was never opened, both picked and nothing lined up, or several
+          // shared times are waiting for a final choice. So it says "open the
+          // calendar", never "pick a time".
+          legs.push(
+            sendPushToUser(user.id, {
+              title: t(lang, "planningNudgePushTitle"),
+              body: t(lang, "planningNudgePushBody"),
+              data: { type: PLANNING_NUDGE_PUSH_TYPE, matchId: match.id },
+            }).catch((err: unknown) => {
+              console.warn(
+                `[match-nudge] scheduling push failed for ${user.id}:`,
+                err instanceof Error ? err.message : err,
+              );
+              return false;
+            }),
+          );
+        }
 
-      if (await anyRailLanded(legs)) count++;
+        if (await anyRailLanded(legs)) count++;
+      }
     }
+
+    const last: PlanningScanCursor | undefined = matches.at(-1);
+    if (!last || matches.length < batchSize) break;
+    cursor = { createdAt: last.createdAt, id: last.id };
   }
 
   return count;
@@ -845,104 +924,163 @@ async function handleStallChain(
   now: Date,
   batchSize: number,
 ): Promise<{ checkIns: number; timeouts: number }> {
-  const matches = await prisma.match.findMany({
-    where: { status: { in: ["negotiating", "negotiating_venue"] } },
-    select: STALL_MATCH_SELECT,
-    orderBy: { createdAt: "asc" },
-    take: batchSize,
-  });
+  // Nothing in the chain can be due before the first check-in window has
+  // passed: the check-in is the earliest action, and the 48h end and the hard
+  // ceiling count from the same anchor (or later). So the scan reads only rows
+  // past that point — before A13-H6 it read the 50 oldest planning rows with no
+  // "due" filter at all, and rows that were stuck but not yet actionable could
+  // fill every batch and keep newer pairs from ever being asked.
+  const checkInCutoff = new Date(now.getTime() - STALL_CHECK_IN_MS);
 
   let checkIns = 0;
   let timeouts = 0;
+  let cursor: PlanningScanCursor | null = null;
 
-  for (const match of matches) {
-    const phase = stallPhaseOf(match);
-    // `negotiating` with no slots yet means the Date Ticket gate is still open;
-    // its own expiry worker owns that wait, so there is nothing to stall on.
-    if (!phase) continue;
-
-    const owing = (["A", "B"] as MatchSide[]).filter((side) => sideOwesAction(match, side));
-    if (owing.length === 0) continue;
-
-    // Past the deadline on any owing side → the match ends here. The service
-    // re-reads the row and re-checks reachability, so it is safe to just ask.
-    const expired = owing.some((side) => {
-      const deadline = stallDeadlineAt(match, side);
-      return deadline !== null && deadline <= now;
+  for (;;) {
+    // Typed on its own line: read inline, the page's type would depend on
+    // `cursor`'s narrowing across the loop's back edge, which in turn depends
+    // on this page (`last`, `matches.length`) — a cycle TypeScript cannot infer.
+    const after: Prisma.MatchWhereInput[] = afterPlanningCursor(cursor);
+    const matches = await prisma.match.findMany({
+      where: {
+        status: { in: ["negotiating", "negotiating_venue"] },
+        AND: [
+          {
+            OR: [
+              // `negotiating` with no `proposedTimes` is the Date Ticket gate,
+              // which its own expiry worker owns — never a stall.
+              {
+                status: "negotiating",
+                proposedTimes: { isEmpty: false },
+                schedulingOpenedAt: { lte: checkInCutoff },
+              },
+              {
+                status: "negotiating",
+                proposedTimes: { isEmpty: false },
+                schedulingOpenedAt: null,
+                dispatchedAt: { lte: checkInCutoff },
+              },
+              { status: "negotiating_venue", venuePromptAskedAt: { lte: checkInCutoff } },
+            ],
+          },
+          ...after,
+        ],
+      },
+      select: { ...STALL_MATCH_SELECT, createdAt: true },
+      orderBy: PLANNING_SCAN_ORDER,
+      take: batchSize,
     });
-    if (expired) {
-      const outcome = await cancelStalledMatch(api, match.id, now);
-      if (outcome.cancelled) timeouts++;
-      continue;
-    }
 
-    for (const side of owing) {
-      const user = side === "A" ? match.userA : match.userB;
-      // A side that cannot receive an inline keyboard is never asked, and
-      // (see `cancelStalledMatch`) never counted as a ghost — though the match
-      // itself still lapses at the hard ceiling.
-      if (!stallReachableFor(user)) continue;
+    for (const match of matches) {
+      const phase = stallPhaseOf(match);
+      // `negotiating` with no slots yet means the Date Ticket gate is still open;
+      // its own expiry worker owns that wait, so there is nothing to stall on.
+      if (!phase) continue;
 
-      // Phase-scoped: a stamp left over from the scheduling step must not
-      // suppress the venue step's question (see `stallCheckInAskedAt`).
-      if (stallCheckInAskedAt(match, side)) continue;
-
-      const due = stallCheckInDueAt(match, side);
-      if (!due || due > now) continue;
-
-      const claim = await prisma.match.updateMany({
-        where: {
-          id: match.id,
-          status: match.status,
-          ...(side === "A" ? { stallCheckInSentAtA: null } : { stallCheckInSentAtB: null }),
-        },
-        data: side === "A" ? { stallCheckInSentAtA: now } : { stallCheckInSentAtB: now },
-      });
-      if (claim.count === 0) continue;
-
-      const partner = side === "A" ? match.userB : match.userA;
-      const lang = (user.language ?? "en") as Language;
-      const partnerLabel = partner.firstName ?? t(lang, "stallPartnerFallbackName");
-
-      try {
-        await api.sendMessage(
-          Number(user.telegramId),
-          t(lang, phase === "venue" ? "stallCheckInVenue" : "stallCheckInScheduling", {
-            name: partnerLabel,
-          }),
-          { reply_markup: buildStallCheckInKeyboard(match.id, lang) },
-        );
-        checkIns++;
-      } catch (err) {
-        console.warn(
-          `[match-nudge] stall check-in failed for ${user.telegramId}:`,
-          (err as Error).message,
-        );
+      // The hard ceiling first, for EVERY planning row — whether or not anyone
+      // owes a move (A13-H6). It used to be reachable only through an owing
+      // side's 48h deadline, so a row nobody owed anything on was skipped before
+      // the ceiling was ever looked at: a pair with several shared slots, or a
+      // venue step both had finished whose place search then died, stayed live
+      // forever and out of every drop. `stallCeilingApplies` keeps a venue search
+      // that is still running or retrying out of it; the service re-reads the
+      // row and re-checks all of this before it cancels anything.
+      const ceiling = stallCeilingAt(match);
+      if (ceiling !== null && ceiling <= now && stallCeilingApplies(match, now)) {
+        const outcome = await cancelStalledMatch(api, match.id, now);
+        if (outcome.cancelled) timeouts++;
         continue;
       }
 
-      // Tell the side that DID their part that something is happening. This is
-      // the whole reason the check-in exists: without it, doing everything right
-      // and then waiting days is indistinguishable from the product being
-      // broken. Skipped when both sides are quiet — nobody is owed an update on
-      // a wait they are themselves causing.
-      const partnerOwes = sideOwesAction(match, side === "A" ? "B" : "A");
-      if (partnerOwes || !stallReachableFor(partner)) continue;
+      const owing = (["A", "B"] as MatchSide[]).filter((side) => sideOwesAction(match, side));
+      if (owing.length === 0) continue;
 
-      const partnerLang = (partner.language ?? "en") as Language;
-      const askedLabel = user.firstName ?? t(partnerLang, "stallPartnerFallbackName");
-      try {
-        await api.sendMessage(
-          Number(partner.telegramId),
-          t(partnerLang, "stallPeerAsked", { name: askedLabel }),
-        );
-      } catch (err) {
-        console.warn(
-          `[match-nudge] stall peer notice failed for ${partner.telegramId}:`,
-          (err as Error).message,
-        );
+      // Past the deadline on any owing side → the match ends here. The service
+      // re-reads the row and re-checks reachability, so it is safe to just ask.
+      const expired = owing.some((side) => {
+        const deadline = stallDeadlineAt(match, side);
+        return deadline !== null && deadline <= now;
+      });
+      if (expired) {
+        const outcome = await cancelStalledMatch(api, match.id, now);
+        if (outcome.cancelled) timeouts++;
+        continue;
+      }
+
+      for (const side of owing) {
+        const user = side === "A" ? match.userA : match.userB;
+        // A side that cannot receive an inline keyboard is never asked, and
+        // (see `cancelStalledMatch`) never counted as a ghost — though the match
+        // itself still lapses at the hard ceiling.
+        if (!stallReachableFor(user)) continue;
+
+        // Phase-scoped: a stamp left over from the scheduling step must not
+        // suppress the venue step's question (see `stallCheckInAskedAt`).
+        if (stallCheckInAskedAt(match, side)) continue;
+
+        const due = stallCheckInDueAt(match, side);
+        if (!due || due > now) continue;
+
+        const claim = await prisma.match.updateMany({
+          where: {
+            id: match.id,
+            status: match.status,
+            ...(side === "A" ? { stallCheckInSentAtA: null } : { stallCheckInSentAtB: null }),
+          },
+          data: side === "A" ? { stallCheckInSentAtA: now } : { stallCheckInSentAtB: now },
+        });
+        if (claim.count === 0) continue;
+
+        const partner = side === "A" ? match.userB : match.userA;
+        const lang = (user.language ?? "en") as Language;
+        const partnerLabel = partner.firstName ?? t(lang, "stallPartnerFallbackName");
+
+        try {
+          await api.sendMessage(
+            Number(user.telegramId),
+            t(lang, phase === "venue" ? "stallCheckInVenue" : "stallCheckInScheduling", {
+              name: partnerLabel,
+            }),
+            { reply_markup: buildStallCheckInKeyboard(match.id, lang) },
+          );
+          checkIns++;
+        } catch (err) {
+          console.warn(
+            `[match-nudge] stall check-in failed for ${user.telegramId}:`,
+            (err as Error).message,
+          );
+          continue;
+        }
+
+        // Tell the side that DID their part that something is happening. This is
+        // the whole reason the check-in exists: without it, doing everything right
+        // and then waiting days is indistinguishable from the product being
+        // broken. Skipped when both sides are quiet — nobody is owed an update on
+        // a wait they are themselves causing.
+        const partnerOwes = sideOwesAction(match, side === "A" ? "B" : "A");
+        if (partnerOwes || !stallReachableFor(partner)) continue;
+
+        const partnerLang = (partner.language ?? "en") as Language;
+        const askedLabel = user.firstName ?? t(partnerLang, "stallPartnerFallbackName");
+        try {
+          await api.sendMessage(
+            Number(partner.telegramId),
+            t(partnerLang, "stallPeerAsked", { name: askedLabel }),
+          );
+        } catch (err) {
+          console.warn(
+            `[match-nudge] stall peer notice failed for ${partner.telegramId}:`,
+            (err as Error).message,
+          );
+        }
       }
     }
+
+    // Paged to the end, oldest first, so no set of stuck rows can crowd a newer
+    // pair out of the tick.
+    const last: PlanningScanCursor | undefined = matches.at(-1);
+    if (!last || matches.length < batchSize) break;
+    cursor = { createdAt: last.createdAt, id: last.id };
   }
 
   return { checkIns, timeouts };

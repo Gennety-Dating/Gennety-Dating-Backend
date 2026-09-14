@@ -29,10 +29,12 @@ import { refreshStatusBanners } from "./status-banner-refresh.js";
  *
  * Atomicity:
  *   - The `proposed → expired` flip is a per-row `updateMany WHERE
- *     id=X AND status='proposed'` so a concurrent decision-handler
- *     transition (e.g. mutual accept arriving in the same tick) never
- *     gets clobbered. If the flip's `count === 0`, we silently skip the
- *     match — somebody else got there first.
+ *     id=X AND status='proposed' AND acceptedByA/B = <snapshot>` so a
+ *     concurrent decision-handler transition (e.g. mutual accept arriving in
+ *     the same tick) never gets clobbered, and neither does a single late
+ *     decision that leaves the row `proposed`. If the flip's `count === 0`, we
+ *     silently skip the match — somebody else got there first, and the next
+ *     tick re-reads it.
  *   - `silentIgnoreCount` is incremented via Prisma's `{ increment: 1 }`
  *     so two parallel expiry ticks can't double-count.
  */
@@ -178,8 +180,20 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
     // Atomic flip — if a concurrent decision-handler already moved the
     // row to `cancelled` / `negotiating`, this updates 0 rows and we
     // skip the match entirely.
+    //
+    // The decisions the classification below is built from are part of the
+    // compare-and-set (A13-M19). A first decision leaves the row `proposed`
+    // (blind rule), so a status-only CAS let an accept that landed between the
+    // read and the flip through — and the side that had just answered was then
+    // penalised as silent and told they never replied. Losing on a changed
+    // decision skips the row; the next tick reads the decision it now carries.
     const flip = await prisma.match.updateMany({
-      where: { id: candidate.id, status: "proposed" },
+      where: {
+        id: candidate.id,
+        status: "proposed",
+        acceptedByA: candidate.acceptedByA,
+        acceptedByB: candidate.acceptedByB,
+      },
       data: { status: "expired" },
     });
     if (flip.count === 0) continue;

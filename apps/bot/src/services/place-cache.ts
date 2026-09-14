@@ -59,11 +59,12 @@ export interface CachedPlace {
    */
   photoRefs: string[];
   /**
-   * When the provider content was last written. Exposed because the fields in
-   * this row do not all age at the same rate: coordinates and an address are
-   * permanent, while a photo resource name ROTATES and a stale one 404s. A
-   * caller that only wants the photos therefore reads with its own, shorter
-   * `ttlMs` and can size its own downstream cache from what is left of it.
+   * The age of the OLDEST provider content in the row — never newer than its
+   * photo refs (see `writePlaceCache`). Exposed because the fields in this row
+   * do not all age at the same rate: coordinates and an address are permanent,
+   * while a photo resource name ROTATES and a stale one 404s. A caller that
+   * only wants the photos therefore reads with its own, shorter `ttlMs` and can
+   * size its own downstream cache from what is left of it.
    */
   refreshedAt: Date;
 }
@@ -150,9 +151,22 @@ export async function readPlaceCacheMany(
  * so a photo lookup cannot blank the coordinates a resolve call stored, and a
  * resolve cannot blank the photo refs.
  *
- * `refreshedAt` is always stamped, including on a partial write — which is the
- * intended reading of the TTL: it dates the last time we heard from the
- * provider about this place at all.
+ * `refreshedAt` dates the OLDEST content the row holds, and a write only moves
+ * it when that stays true (A13-L28). There is one stamp for the whole row, and
+ * the photo reader trusts refs for a single day by that stamp — so a
+ * coordinates-only write that re-stamped the row used to hand weeks-old photo
+ * names a fresh day, and they 404ed into category glyphs. So a write without
+ * `photoRefs`:
+ *
+ *  - on a live row that still holds photos, keeps the stamp. The coordinates it
+ *    brings then expire early, with those photos — the safe direction for a
+ *    30-day ceiling, and one extra lookup at worst;
+ *  - on an expired row, re-stamps it and drops the photos: they are content we
+ *    may no longer hold, and leaving the stamp old would keep the brand-new
+ *    coordinates a miss until the nightly prune;
+ *  - on a row without photos (or no row), re-stamps as before.
+ *
+ * A write that carries `photoRefs` always re-stamps, as it always did.
  */
 export async function writePlaceCache(
   placeId: string,
@@ -166,10 +180,27 @@ export async function writePlaceCache(
     Object.entries(data).filter(([, value]) => value !== undefined),
   ) as PlaceCacheWrite;
   try {
+    let stamp: { refreshedAt?: Date; photoRefs?: string[] } = { refreshedAt };
+    if (content.photoRefs === undefined) {
+      // Read-then-write, not a transaction: this is a best-effort cache, and
+      // the worst a race can do is cost one Place Details lookup later. The
+      // keep case leaves the column out of the write entirely rather than
+      // writing back what it read, so a photo write that lands in between
+      // keeps its own, newer stamp.
+      const existing = await prisma.placeCache.findUnique({
+        where: { placeId },
+        select: { refreshedAt: true, photoRefs: true },
+      });
+      if (existing && existing.photoRefs.length > 0) {
+        stamp = isFresh(existing.refreshedAt, PLACE_CACHE_TTL_MS, refreshedAt.getTime())
+          ? {}
+          : { refreshedAt, photoRefs: [] };
+      }
+    }
     await prisma.placeCache.upsert({
       where: { placeId },
       create: { placeId, ...content, refreshedAt },
-      update: { ...content, refreshedAt },
+      update: { ...content, ...stamp },
     });
   } catch (err) {
     console.warn(`[place-cache] write failed for ${placeId}:`, err);

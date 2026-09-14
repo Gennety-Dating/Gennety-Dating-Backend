@@ -327,6 +327,13 @@ matchesRouter.post("/:id/cancel", async (req: Request, res: Response): Promise<v
       res.status(403).json({ error: "Not a participant of this match" });
       return;
     }
+    // The date's time has come (A13-M20). Its own code, because the client has
+    // something different to say than for a cancelled row: the date is still
+    // on the record, and whether it happened is asked after it, not here.
+    if (result.error === "date-started") {
+      res.status(409).json({ error: "Date has already started", code: "date_started" });
+      return;
+    }
     // Already cancelled, or never got as far as a scheduled date. 409 rather
     // than 404: the match exists and the caller is on it.
     res.status(409).json({ error: "Match is not a scheduled date" });

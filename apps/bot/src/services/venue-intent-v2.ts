@@ -8,6 +8,8 @@ import {
   VENUE_FORMATS,
   VENUE_INTENT_PARSER_VERSION,
   VENUE_PRICE_LIMITS,
+  VENUE_SELECTION_MAX_ATTEMPTS,
+  VENUE_SELECTION_RETRY_DELAYS_MINUTES,
   VENUE_SELECTION_VERSION,
   DEFAULT_MARKET,
   defaultVenueGeoTolerance,
@@ -76,6 +78,11 @@ import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from ".
 import { runStatusSequence } from "./ai-stream.js";
 import { applyVenueDiversity, loadVenueUsage } from "./venue-diversity.js";
 import { venueSearchSteps } from "./analysis-status.js";
+import {
+  returnLapsedVenueStageToCalendar,
+  venueLapseThreshold,
+  venueSlotStillAhead,
+} from "./venue-time-lapse.js";
 
 /**
  * Hard ceiling on the in-chat venue-search status. The selector normally
@@ -154,6 +161,21 @@ const PRIVATE_SETTING = /\b(hotel|motel|hostel|airbnb|sauna|banya|spa|massage|my
 const WIDENED_COMMUTE_KM = 12;
 const WIDENED_FAIRNESS_KM = 5;
 
+/**
+ * `venueSelectionError` for a run that THREW rather than returned a verdict (a
+ * database blip, a provider response we failed to parse). Distinct from
+ * `provider_unavailable` so the founder alert and the row say which it was.
+ */
+const SELECTION_CRASHED = "selection_failed";
+
+/** When the retry after the `attempts`-th failed attempt is due. */
+function selectionRetryAt(attempts: number, now: number = Date.now()): Date {
+  const delays = VENUE_SELECTION_RETRY_DELAYS_MINUTES;
+  // Past the end of the schedule the last delay repeats.
+  const minutes = delays[Math.min(Math.max(attempts, 1), delays.length) - 1] ?? 0;
+  return new Date(now + minutes * 60_000);
+}
+
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
@@ -190,6 +212,7 @@ async function participant(matchId: string, userId: string) {
       userAId: true,
       userBId: true,
       status: true,
+      agreedTime: true,
       venueIntentA: true,
       venueIntentB: true,
       venueSelectionError: true,
@@ -399,6 +422,19 @@ export async function confirmVenueIntent(
 ): Promise<VenueIntentStateResponse | VenueOriginRefusal | null> {
   const own = await participant(matchId, userId);
   if (!own || own.match.status !== "negotiating_venue") return null;
+  // A13-H5: the one write that enters the pair into selection must not do so
+  // for a date that no longer has the runway to happen. The confirmation is
+  // refused and a live pair is handed back to the calendar, which says why in
+  // the chat. In the background, like the selector itself: the refusal must
+  // not wait on two chat messages and a calendar card.
+  if (own.match.agreedTime && !venueSlotStillAhead(own.match.agreedTime)) {
+    if (venueIntentMode(matchId) === "live") {
+      void returnLapsedVenueStageToCalendar(matchId).catch((err: unknown) => {
+        console.warn(`[venue-intent-v2] returning ${matchId} to the calendar failed:`, err);
+      });
+    }
+    return null;
+  }
   const draft = parseStored(own.side === "A" ? own.match.venueIntentA : own.match.venueIntentB);
   if (!draft) return null;
   const origin = input.origin;
@@ -882,25 +918,106 @@ function chipCorrectionCount(intent: VenueIntentV2): number {
   return [...before].filter((id) => !after.has(id)).length + [...after].filter((id) => !before.has(id)).length;
 }
 
+/**
+ * Run the selector once per match in this process. Never rejects (A13-H6).
+ *
+ * A throw inside the selector used to vanish: the Mini App path fires this
+ * with `void …catch(warn)`, so nothing recorded that the run happened, no retry
+ * was scheduled, and the pair sat with both sides confirmed and nothing coming.
+ * Now a throw is a failed attempt like any other (`recordSelectionCrash`).
+ */
 export async function tryFinalizeVenueIntentV2(matchId: string): Promise<void> {
-  return runVenueFinalizationOnce(matchId, () => finalizeVenueIntentV2(matchId));
+  return runVenueFinalizationOnce(matchId, () =>
+    finalizeVenueIntentV2(matchId).catch((error: unknown) => recordSelectionCrash(matchId, error)),
+  );
 }
 
-/** Durable retry sweep; due timestamps survive process restarts. */
+/**
+ * Durable retry sweep; due timestamps survive process restarts.
+ *
+ * Each due retry is CLAIMED (its timestamp cleared, compare-and-set) before it
+ * runs. Otherwise a run that returns without writing anything — the pair no
+ * longer both confirmed, say — left the stamp due forever, and this sweep took
+ * that row first on every tick. Clearing it also makes a retry run once across
+ * processes; a failed run writes the next one itself.
+ */
 export async function retryDueVenueSelections(): Promise<number> {
   if (!env.VENUE_INTENT_V2_ENABLED) return 0;
   const due = await prisma.match.findMany({
     where: {
       status: "negotiating_venue",
       venueSelectionNextRetryAt: { lte: new Date() },
-      venueSelectionAttempts: { lt: 3 },
+      venueSelectionAttempts: { lt: VENUE_SELECTION_MAX_ATTEMPTS },
     },
     orderBy: { venueSelectionNextRetryAt: "asc" },
     take: 10,
-    select: { id: true },
+    select: { id: true, venueSelectionNextRetryAt: true },
   });
-  for (const row of due) await tryFinalizeVenueIntentV2(row.id);
-  return due.length;
+  let retried = 0;
+  for (const row of due) {
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: row.id,
+        status: "negotiating_venue",
+        venueSelectionNextRetryAt: row.venueSelectionNextRetryAt,
+      },
+      data: { venueSelectionNextRetryAt: null },
+    });
+    if (claim.count === 0) continue;
+    await tryFinalizeVenueIntentV2(row.id);
+    retried += 1;
+  }
+  return retried;
+}
+
+/**
+ * Record a selector run that threw as a failed attempt: the error on the row, a
+ * bounded retry while attempts remain, and — once they are spent — the same
+ * way out a terminal `provider_unavailable` gets: a notice telling the pair how
+ * to try again, and a founder alert. The row then holds no retry, which is the
+ * shape the §3.5c stall chain treats as stalled (both confirmed, no retry
+ * pending, no venue), so its ceiling ends the match if nobody acts.
+ *
+ * Never throws: it runs in place of a rejection nobody is listening for.
+ */
+async function recordSelectionCrash(matchId: string, error: unknown): Promise<void> {
+  console.error(`[venue-intent-v2] selection threw for ${matchId}:`, error);
+  try {
+    const row = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: {
+        id: true,
+        status: true,
+        venueSelectionAttempts: true,
+        userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
+        userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
+      },
+    });
+    if (!row || row.status !== "negotiating_venue") return;
+    const attempts = row.venueSelectionAttempts + 1;
+    const exhausted = attempts >= VENUE_SELECTION_MAX_ATTEMPTS;
+    // CAS on the attempt count it read: two crashing runs in two processes
+    // count as two attempts, never as one written twice.
+    const recorded = await prisma.match.updateMany({
+      where: {
+        id: matchId,
+        status: "negotiating_venue",
+        venueSelectionAttempts: row.venueSelectionAttempts,
+      },
+      data: {
+        venueSelectionAttempts: attempts,
+        venueSelectionError: SELECTION_CRASHED,
+        venueSelectionNextRetryAt: exhausted ? null : selectionRetryAt(attempts),
+      },
+    });
+    if (recorded.count === 0 || !exhausted) return;
+    if (venueIntentMode(matchId) === "live") {
+      await notifyVenueIntentParticipants(row, SELECTION_CRASHED);
+    }
+    await notifyFounderVenueSelectionFailure(matchId, SELECTION_CRASHED, attempts);
+  } catch (recordError) {
+    console.error(`[venue-intent-v2] could not record the failed selection for ${matchId}:`, recordError);
+  }
 }
 
 async function finalizeVenueIntentV2(matchId: string): Promise<void> {
@@ -914,6 +1031,14 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     },
   });
   if (!match || match.status !== "negotiating_venue" || !match.agreedTime) return;
+  // A13-H5: a venue is only worth selecting for a date that can still happen.
+  // Checked before the search (no Places spend on a lapsed date) and again in
+  // the lock below, since the search itself takes seconds. Shadow runs assign
+  // nothing, so they leave the lapse to the authoritative legacy path.
+  if (!venueSlotStillAhead(match.agreedTime)) {
+    if (venueIntentMode(matchId) === "live") await returnLapsedVenueStageToCalendar(matchId);
+    return;
+  }
   const a = parseStored(match.venueIntentA);
   const b = parseStored(match.venueIntentB);
   if (!a || !b || !isConfirmedVenueIntent(a) || !isConfirmedVenueIntent(b) || !a.origin || !b.origin) return;
@@ -1267,7 +1392,10 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
    */
   const lockVenue = async (record: SelectionRecord, confidence: number, reason: string): Promise<void> => {
     const committed = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating_venue" },
+      // The runway is re-asserted in the lock itself: a selection that started
+      // just inside it must not schedule a date that ran out during the search.
+      // Losing on that clause leaves the row to the lapse sweep.
+      where: { id: matchId, status: "negotiating_venue", agreedTime: { gt: venueLapseThreshold() } },
       data: {
         status: "scheduled", venueName: record.name, venueAddress: record.address,
         venueLat: record.lat, venueLng: record.lng, venueMidpointLat: mid.lat, venueMidpointLng: mid.lng,
@@ -1375,13 +1503,15 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     const current = await prisma.match.findUnique({ where: { id: matchId }, select: { venueSelectionAttempts: true } });
     const attempts = (current?.venueSelectionAttempts ?? 0) + 1;
 
+    const terminal = failure.startsWith("no_candidates") || attempts >= VENUE_SELECTION_MAX_ATTEMPTS;
+
     // The hub fallback (decision 2026-09-11), on exactly the outcomes that used
     // to be DEAD ENDS: `no_candidates`, which schedules no retry at all, and the
     // last `provider_unavailable` attempt. An earlier provider failure keeps its
     // retry — in a few minutes Places may still find a venue that fits what the
     // pair asked for, which the hub by construction does not try to do. Shadow
     // runs assign nothing, so they never reach for it.
-    if (mode === "live" && (failure.startsWith("no_candidates") || attempts >= 3)) {
+    if (mode === "live" && terminal) {
       const hub = chooseHubFallback(await loadHubCandidates(cityKey, universityDomain), {
         agreedTime: match.agreedTime,
         midpoint: mid,
@@ -1396,13 +1526,16 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       );
     }
 
-    const delay = [1, 5, 15][Math.min(attempts - 1, 2)]!;
-    await prisma.match.update({
-      where: { id: matchId },
+    // Guarded on the stage: a run that outlived it (the pair went back to the
+    // calendar, or the match was cancelled, while the search ran) must not
+    // plant retry state on a row that has moved on, nor tell anyone about it.
+    const recorded = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating_venue" },
       data: {
         venueSelectionAttempts: attempts,
         venueSelectionError: failure,
-        venueSelectionNextRetryAt: failure === "provider_unavailable" && attempts < 3 ? new Date(Date.now() + delay * 60_000) : null,
+        venueSelectionNextRetryAt:
+          failure === "provider_unavailable" && !terminal ? selectionRetryAt(attempts) : null,
       },
     });
     await prisma.venueSelectionLog.create({ data: {
@@ -1416,18 +1549,23 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       latencyMs: Date.now() - started, placesCallCount: placesCalls,
       chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
     } });
-    if (failure.startsWith("no_candidates") || attempts >= 3) {
+    if (recorded.count === 0 || !terminal) return;
+    // A terminal failure leaves the row with no retry pending. The pair is told
+    // how to move it (widen the ask, or confirm again) — only on a live run:
+    // shadow traffic is observation, and its pair is in the legacy flow, where
+    // a V2 notice and button would be noise.
+    if (mode === "live") {
       await notifyVenueIntentParticipants(match, failure);
     }
-    // Both failure modes reach the founder now. `no_candidates` is terminal —
-    // it schedules no retry — so a pair sits in `negotiating_venue` until the
-    // §3.5c stall chain cancels them 48 h later. That is a live match about to
-    // be lost, and it used to be visible only in the database. Since the hub
-    // fallback it only gets here when not even the hub was open at the slot
-    // (or in shadow mode), which is exactly when the founder has to step in.
-    if (failure.startsWith("no_candidates") || attempts >= 3) {
-      await notifyFounderVenueSelectionFailure(matchId, failure, attempts);
-    }
+    // Both failure modes reach the founder. Nothing on the selector's side ends
+    // this row any more: it stays in `negotiating_venue` with both sides
+    // confirmed and no retry pending — the shape the §3.5c stall chain treats
+    // as stalled, so its hard ceiling is what finally frees the pair if nobody
+    // acts. That is a live match about to be lost, and it used to be visible
+    // only in the database. Since the hub fallback a live run only gets here
+    // when not even the hub was open at the slot, which is exactly when the
+    // founder has to step in.
+    await notifyFounderVenueSelectionFailure(matchId, failure, attempts);
     return;
   }
 
@@ -1485,31 +1623,32 @@ function buildVenueRetryKeyboard(
   };
 }
 
+/**
+ * The legacy per-outcome copy, kept local for the two outcomes that still use
+ * it. A failed search that is not about the pair's ask (`provider_unavailable`,
+ * `selection_failed`) uses the shared `venueSelectionFailedRetry` instead, which
+ * says what to do about it rather than only that it happened.
+ */
 const VENUE_NOTICE = {
   en: {
     scheduled: (name: string, uri: string) => `Your date spot is ready: ${name}\n${uri}`,
     no_candidates: "I couldn't find a verified place that matches what you both asked for. Reopen the venue screen and widen it a little — a different setting, or one fewer must-have.",
-    provider_unavailable: "The venue provider is still unavailable after several retries. Your date is not scheduled yet; I'll keep the match safe and let the team know.",
   },
   ru: {
     scheduled: (name: string, uri: string) => `Место для свидания готово: ${name}\n${uri}`,
     no_candidates: "Не удалось найти проверенное место под то, что вы оба выбрали. Открой экран места и чуть расширь запрос — другой формат или на одно пожелание меньше.",
-    provider_unavailable: "Сервис мест всё ещё недоступен после нескольких попыток. Свидание пока не назначено; матч остаётся в безопасном ожидании.",
   },
   uk: {
     scheduled: (name: string, uri: string) => `Місце для побачення готове: ${name}\n${uri}`,
     no_candidates: "Не вдалося знайти перевірене місце під те, що ви обоє обрали. Відкрий екран місця й трохи розшир запит — інший формат або на одне побажання менше.",
-    provider_unavailable: "Сервіс місць досі недоступний після кількох спроб. Побачення ще не призначене; матч залишається в безпечному очікуванні.",
   },
   de: {
     scheduled: (name: string, uri: string) => `Euer Treffpunkt steht fest: ${name}\n${uri}`,
     no_candidates: "Ich konnte keinen verifizierten Ort finden, der zu euren beiden Wünschen passt. Öffne den Ortsbildschirm und mach die Auswahl etwas weiter - ein anderes Format oder ein Muss weniger.",
-    provider_unavailable: "Der Ortsdienst ist nach mehreren Versuchen weiterhin nicht verfügbar. Das Date ist noch nicht geplant und das Match bleibt sicher in Wartestellung.",
   },
   pl: {
     scheduled: (name: string, uri: string) => `Miejsce na randkę jest gotowe: ${name}\n${uri}`,
     no_candidates: "Nie udało się znaleźć zweryfikowanego miejsca pasującego do tego, co oboje wybraliście. Otwórz ekran miejsca i poszerz nieco wybór - inny format albo o jedno wymaganie mniej.",
-    provider_unavailable: "Usługa miejsc nadal jest niedostępna po kilku próbach. Randka nie została jeszcze zaplanowana, a dopasowanie bezpiecznie czeka.",
   },
 } as const;
 
@@ -1532,7 +1671,7 @@ async function notifyVenueIntentParticipants(
       ? copy.scheduled(venue.venueName, venue.mapsUri)
       : state.startsWith("no_candidates")
         ? copy.no_candidates
-        : copy.provider_unavailable;
+        : t(locale, "venueSelectionFailedRetry");
     if (opts?.telegram !== false && api && user.telegramId > 0n && (user.platform === "telegram" || user.platform === "both")) {
       // A failure the user is asked to fix has to carry the way to fix it. The
       // notice used to be a bare `sendMessage` telling them to "reopen the

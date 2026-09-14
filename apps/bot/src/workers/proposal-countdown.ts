@@ -27,8 +27,8 @@ import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
  *      replaces the old `editMessageText` path that rebuilt the whole body
  *      as `pitch + plate` and clobbered the synergy header on first tick.
  *
- * Sides that already accepted are skipped — only the proposer's UI for
- * the other (still-pending) half keeps ticking. Sides whose pitch DM
+ * Sides that already decided are skipped — only a still-undecided half keeps
+ * ticking. Sides whose pitch DM
  * never reached Telegram (`pitchMessageId{A,B} == null`, e.g. mobile-only
  * users) are also skipped — the Expo client gets the deadline via the
  * public API and renders its own real-time timer.
@@ -133,7 +133,11 @@ export async function proposalCountdownTick(
       const accepted = side === "A" ? match.acceptedByA : match.acceptedByB;
       const user = side === "A" ? match.userA : match.userB;
       if (messageId == null) continue;
-      if (accepted === true) continue;
+      // Only an UNDECIDED side still has a deadline to count down to. A side
+      // that passed holds `false`, and re-rendering its pitch keyboard handed
+      // back a live reply button — and a ticking "time left to reply" — to
+      // someone whose decision is final (A13-L19).
+      if (accepted !== null) continue;
 
       const lang: Language = (user.language as Language) ?? "en";
       const label = renderCountdownButtonLabel(lang, minutesLeft);

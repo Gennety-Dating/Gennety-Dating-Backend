@@ -67,7 +67,7 @@ describe("the observer", () => {
     await expect(api.sendMessage(4242, "hi")).rejects.toThrow(/blocked/);
 
     expect(updateMany).toHaveBeenCalledWith({
-      where: { telegramId: 4242n, botBlockedAt: null },
+      where: { telegramId: 4242n, botBlockedAt: null, platform: { in: ["telegram", "both"] } },
       data: { botBlockedAt: expect.any(Date) },
     });
   });
@@ -106,7 +106,18 @@ describe("marking and forgetting", () => {
     expect(updateMany.mock.calls[0]![0].where).toEqual({
       telegramId: 4242n,
       botBlockedAt: null,
+      platform: { in: ["telegram", "both"] },
     });
+  });
+
+  it("never stamps an app-only account, even one carrying a real Telegram id (A13-H3)", async () => {
+    // Telegram Login stores a REAL positive id on a `mobile` account that never
+    // pressed Start. A send to it is refused with a 403 about a chat that never
+    // existed; stamping it removed the person from every drop, and only an
+    // incoming bot update — which an app-only user never sends — cleared it.
+    await markBotBlocked(4242n);
+    const where = updateMany.mock.calls[0]![0].where as { platform: { in: string[] } };
+    expect(where.platform.in).not.toContain("mobile");
   });
 
   it("ignores a mobile-only synthetic id", async () => {

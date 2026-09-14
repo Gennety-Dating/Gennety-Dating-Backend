@@ -1442,8 +1442,13 @@ export async function completeTicketGateAndUnlockScheduling(
   api: Api<RawApi>,
   matchId: string,
 ): Promise<void> {
+  // Only an OPEN gate completes (A13-L21). `{ not: "completed" }` also matched
+  // `refund_pending`: a second payment landing in the milliseconds after the
+  // expiry sweep claimed the refund would flip that row to `completed` while
+  // the sweep went on to refund the first side — one ticket paid, both slots
+  // settled, a free date. Same set every slot claim already asserts.
   const flip = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating", ticketStatus: { not: "completed" } },
+    where: { id: matchId, status: "negotiating", ticketStatus: { in: [...OPEN_GATE_STATUSES] } },
     data: { ticketStatus: "completed", ticketExpiresAt: null },
   });
   if (flip.count === 0) return; // already completed / wrong state
@@ -1753,8 +1758,9 @@ async function refundPaidTicketSide(
 
 /**
  * A `partial` (or `pending`) ticket lapsed. Claim `refund_pending`, perform the
- * provider/wallet refund, and only then mark the row `refunded` and announce it.
- * Failed refunds stay retryable instead of being reported as successful.
+ * provider/wallet refund, mark the row `refunded` and announce it, and only then
+ * open the Calendar. Failed refunds stay retryable instead of being reported as
+ * successful.
  */
 export async function refundAndFallbackToScheduling(
   api: Api<RawApi>,
@@ -1790,8 +1796,19 @@ export async function refundAndFallbackToScheduling(
   }
 
   if (match.ticketStatus !== "refund_pending") {
+    // The unpaid slot must still be empty (A13-L21). The row above was read
+    // before this claim, and the second side's payment can land in between; the
+    // refund would then return the first side's money on a gate that had
+    // actually closed with both slots paid. Losing this CAS leaves the row to
+    // the payment path, which completes the gate instead.
+    const unpaidSlotField = paidSide === "A" ? "ticketPaidB" : "ticketPaidA";
     const claimed = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      where: {
+        id: matchId,
+        status: "negotiating",
+        ticketStatus: { in: [...OPEN_GATE_STATUSES] },
+        [unpaidSlotField]: null,
+      },
       data: { ticketStatus: "refund_pending", ticketExpiresAt: null },
     });
     if (claimed.count === 0) return;
@@ -1800,10 +1817,15 @@ export async function refundAndFallbackToScheduling(
   const refunded = await refundPaidTicketSide(api, match, paidSide);
   if (!refunded) throw new Error(`Ticket refund remains pending for match ${matchId}`);
 
-  // Keep `refund_pending` through the scheduling handoff. If the Calendar send
-  // fails, the next expiry tick retries the idempotent refund + scheduler path.
-  await startScheduling(api, matchId, { afterTicketGate: true });
-
+  // The debt is settled, so `refund_pending` ends HERE — before the Calendar,
+  // not after it (A13-H4). It used to be held through `startScheduling` "so a
+  // failed Calendar send retries", and that retry was the defect: the handoff
+  // resets the grid and both sides' picks, and one 403 from a partner who had
+  // blocked the bot rejected it before `refunded` was written. The hourly sweep
+  // then re-ran the whole thing forever — a fresh card to the payer every hour,
+  // their marked times wiped, and the stall anchor reset each time, so neither
+  // the check-in nor the 48h end ever arrived. A Calendar delivery problem is
+  // not a refund problem; `startScheduling` now owns its own retries.
   const finalized = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating", ticketStatus: "refund_pending" },
     data: { ticketStatus: "refunded", ticketExpiresAt: null },
@@ -1813,6 +1835,16 @@ export async function refundAndFallbackToScheduling(
   emitTicketEvent("ticket_refunded", { matchId, side: paidSide });
   const payer = selfUser(match, paidSide);
   if (telegramReachable(payer)) {
-    await api.sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"));
+    // Ahead of the Calendar, so the card lands right under "let's find a time".
+    await api
+      .sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"))
+      .catch((err: unknown) => {
+        console.warn(
+          `[ticket-gate] refund notice failed match=${matchId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
   }
+
+  await startScheduling(api, matchId, { afterTicketGate: true });
 }

@@ -37,6 +37,7 @@ import {
   t,
   type Language,
   buildVenueInvoicePayload,
+  isVenueAgreementNonce,
   VENUE_CHANGE_MAX_PER_DATE,
   type VenueInvoiceMode,
 } from "@gennety/shared";
@@ -80,9 +81,16 @@ import {
   VENUE_PURCHASE_SETTLED,
   type VenueChangePurchaseRecord,
 } from "../../services/venue-change-refund.js";
+import {
+  venueAgreementNonce,
+  venueAgreementWhere,
+} from "../../services/venue-agreement-nonce.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
+
+/** Callback-data prefix of the wish card's `[Not this time]` button. */
+const VENUE_PAY_DECLINE_PREFIX = "vchg:paydecline:";
 
 /** Re-exported: the rule lives with the catalog (`services/venue-change.ts`). */
 export { venueKeyOf };
@@ -506,6 +514,10 @@ function venueLabel(name: string, address: string): string {
  * Mint a Telegram Stars invoice link for this match's venue change. One flat
  * price for every path; the payload mode is informative (settle re-derives
  * express-ness from the row), but pre-checkout validates the amount.
+ *
+ * `agreementNonce` pins the link to the agreement the caller just read
+ * (`services/venue-agreement-nonce.ts`): links are reusable, and without it a
+ * link minted for one agreement settled whichever one the pair reached later.
  */
 export async function createVenueInvoiceLink(
   api: Api<RawApi>,
@@ -513,11 +525,12 @@ export async function createVenueInvoiceLink(
   matchId: string,
   mode: VenueInvoiceMode,
   venueName: string,
+  agreementNonce: string,
 ): Promise<string> {
   return api.createInvoiceLink(
     t(lang, "venueInvoiceTitle"),
     t(lang, "venueInvoiceDesc", { venue: venueName }),
-    buildVenueInvoicePayload(matchId, mode),
+    buildVenueInvoicePayload(matchId, mode, agreementNonce),
     "", // provider_token — empty for Telegram Stars (XTR)
     "XTR",
     [{ label: t(lang, "venueInvoiceLabel"), amount: env.VENUE_CHANGE_STARS }],
@@ -606,7 +619,17 @@ export interface VenueBoardStateView {
 
 export type VenueBoardStateResult =
   | { ok: false; reason: "match-not-found" | "not-participant" }
-  | { ok: true; state: VenueBoardStateView };
+  | {
+      ok: true;
+      state: VenueBoardStateView;
+      /**
+       * The fingerprint of the agreement this state describes, or null when
+       * nothing is agreed. Server-side only — the invoice route mints from it,
+       * so the link and the venue name it prints come from the same read. Not
+       * part of `state`, which is what the Mini App receives.
+       */
+      agreementNonce: string | null;
+    };
 
 export async function getVenueBoardState(
   telegramId: bigint,
@@ -619,7 +642,11 @@ export async function getVenueBoardState(
   if (!side) return { ok: false, reason: "not-participant" };
   const state = buildBoardState(match, side, now);
   const photoRefs = await originalPhotoRefs(match);
-  return { ok: true, state: { ...state, original: { ...state.original, photoRefs } } };
+  return {
+    ok: true,
+    state: { ...state, original: { ...state.original, photoRefs } },
+    agreementNonce: match.venueChangeStatus === "agreed" ? venueAgreementNonce(match) : null,
+  };
 }
 
 /**
@@ -972,16 +999,24 @@ export async function submitVenueLikes(
     });
   }
 
-  // Overlap → agreement, exactly like the calendar.
+  // Overlap → agreement, exactly like the calendar — and, like the calendar,
+  // against the peer side RE-READ after our write (A13-M14).
   //
-  // `match` is the pre-write snapshot, so on a restart it still carries the
-  // PREVIOUS round's peer hearts — which the write above just cleared. Reading
-  // them here would let the very first like of round two "overlap" a venue the
-  // partner chose in round one and has not looked at since, agreeing a change
-  // nobody is currently making. A restart always begins with an empty board.
-  const peerKeys = new Set(
-    access.restart ? [] : likesOfSide(match, otherSide(side)).map((l) => l.key),
-  );
+  // `match` is the snapshot taken before the catalog rebuild and before this
+  // write, which is a window of a Places round trip. Two simultaneous hearts on
+  // the same venue therefore each saw the other's board without it and neither
+  // agreed; and a venue the partner had just un-hearted still "overlapped" and
+  // agreed a paid change nobody was making any more. On a restart the stale
+  // snapshot is worse still: it carries the PREVIOUS round's hearts, which the
+  // write above just cleared. The fresh row answers all three — the reset lands
+  // in the same statement as our likes, so a restart reads an empty peer board
+  // unless the partner has genuinely hearted something since.
+  const fresh = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { venueLikesA: true, venueLikesB: true },
+  });
+  const peerLikes = fresh ? parseLikes(side === "A" ? fresh.venueLikesB : fresh.venueLikesA) : [];
+  const peerKeys = new Set(peerLikes.map((l) => l.key));
   const overlap = snapshots.filter((s) => peerKeys.has(s.key));
   if (overlap.length === 1) {
     const r = await reachAgreement(api, matchId, me.id, overlap[0], now);
@@ -1289,7 +1324,13 @@ export type ExpressMintResult =
         | "not-allowed"
         | "premium-locked";
     }
-  | { ok: true; venueName: string; free: boolean };
+  | {
+      ok: true;
+      venueName: string;
+      free: boolean;
+      /** Fingerprint of the express agreement just written — for its invoice. */
+      agreementNonce: string;
+    };
 
 /**
  * Stamp an express pick onto the row (status → agreed + expressAt) so the
@@ -1345,6 +1386,17 @@ export async function mintExpressChange(
     ),
   );
 
+  // Named, because the same values are both written and fingerprinted for the
+  // invoice below — the nonce must describe exactly the agreement on the row.
+  const agreement = {
+    venueChangeProposerId: me.id,
+    venueChangeProposedAt: access.restart ? now : (match.venueChangeProposedAt ?? now),
+    venueChangeName: picked.name.slice(0, 256),
+    venueChangePlaceId: picked.placeId,
+    venueChangeTier: picked.tier,
+    venueChangeExpiresAt: holdUntil,
+    venueChangeExpressAt: now,
+  };
   const claim = await prisma.match.updateMany({
     where: {
       id: matchId,
@@ -1357,19 +1409,13 @@ export async function mintExpressChange(
       // that mints the new hidden pick, so the partner never sees a board
       // flicker back to life around a swap they are not meant to know about.
       ...resetOnRestart(access.restart),
+      ...agreement,
       venueChangeStatus: "agreed",
-      venueChangeProposerId: me.id,
-      venueChangeProposedAt: access.restart ? now : (match.venueChangeProposedAt ?? now),
-      venueChangeName: picked.name.slice(0, 256),
       venueChangeAddress: picked.address.slice(0, 256),
       venueChangeLat: picked.lat,
       venueChangeLng: picked.lng,
       venueChangeMapsUri: picked.mapsUri,
-      venueChangePlaceId: picked.placeId,
       venueChangePhotoName: picked.photoRef,
-      venueChangeTier: picked.tier,
-      venueChangeExpiresAt: holdUntil,
-      venueChangeExpressAt: now,
     },
   });
   if (claim.count === 0) return { ok: false, reason: "wrong-state" };
@@ -1378,7 +1424,12 @@ export async function mintExpressChange(
   // Free for a premium minter (or a premium venue) — the caller settles it
   // without paying; the route locks it in immediately (§Premium).
   const free = changeIsFree(snapshot.tier, me, now);
-  return { ok: true, venueName: snapshot.name, free };
+  return {
+    ok: true,
+    venueName: snapshot.name,
+    free,
+    agreementNonce: venueAgreementNonce(agreement),
+  };
 }
 
 /**
@@ -1772,11 +1823,14 @@ async function sendWishCard(
   const lang = langOf(him.language);
   const venueName = match.venueChangeName ?? "";
   const label = venueLabel(venueName, match.venueChangeAddress ?? "");
-  const link = await createVenueInvoiceLink(api, lang, match.id, "agreed", venueName);
+  // Both buttons on the card act on THIS agreement and no other: the card stays
+  // in his chat after the pair declines, re-agrees, or agrees somewhere else.
+  const nonce = venueAgreementNonce(match);
+  const link = await createVenueInvoiceLink(api, lang, match.id, "agreed", venueName, nonce);
   const kb = new InlineKeyboard()
     .url(t(lang, "venueWishPayBtn", { stars: env.VENUE_CHANGE_STARS }), link)
     .row()
-    .text(t(lang, "venueWishDeclineBtn"), `vchg:paydecline:${match.id}`);
+    .text(t(lang, "venueWishDeclineBtn"), `${VENUE_PAY_DECLINE_PREFIX}${match.id}:${nonce}`);
 
   const { renderVenueWishCard } = await import("../../services/venue-wish-card.js");
   const png = await renderVenueWishCard(api, match.id).catch(() => null);
@@ -1804,26 +1858,42 @@ async function sendWishCard(
  * His single, final "not this time" — from the wish card's inline button or
  * the Mini App fork. Never cancels anything; she keeps her pay-self path and
  * gets a soft nudge (with no mention of a refusal).
+ *
+ * `agreementNonce` is the wish card's: the card outlives its agreement, so a
+ * tap on an old one must not close an agreement the pair reached since
+ * (`stale: true`). The Mini App fork passes none — it acts on the state it has
+ * just polled — and both paths are CAS-guarded on the agreement they read.
  */
 export async function declineVenuePay(
   api: Api<RawApi>,
   telegramId: bigint,
   matchId: string,
-): Promise<{ ok: boolean }> {
+  agreementNonce?: string,
+): Promise<{ ok: boolean; stale?: boolean }> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false };
   const side = sideOfUser(match, telegramId);
   if (!side) return { ok: false };
   const me = userOfSide(match, side);
 
-  if (match.venueChangeStatus !== "agreed" || match.venueChangeExpressAt) return { ok: false };
+  if (match.venueChangeStatus !== "agreed" || match.venueChangeExpressAt) {
+    return { ok: false, stale: agreementNonce !== undefined };
+  }
   if (payerSide(match) !== side) return { ok: false };
+  if (agreementNonce !== undefined && agreementNonce !== venueAgreementNonce(match)) {
+    return { ok: false, stale: true };
+  }
 
   // In a hetero pair the man pays; his "not this time" ENDS the attempt and
   // keeps the original — she is never pushed to foot the bill for a change he
   // wouldn't. Close the session cleanly (back to the assigned venue).
   const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+    where: {
+      id: matchId,
+      status: "scheduled",
+      venueChangeStatus: "agreed",
+      ...venueAgreementWhere(match),
+    },
     data: {
       venueChangeStatus: null,
       venueChangeProposerId: null,
@@ -1865,17 +1935,40 @@ export async function declineVenuePay(
   return { ok: true };
 }
 
-/** Bot callback for the wish card's `[Not this time]` button. */
+/**
+ * Bot callback for the wish card's `[Not this time]` button:
+ * `vchg:paydecline:<matchId>:<agreementNonce>`.
+ *
+ * A card minted before the nonce existed (`vchg:paydecline:<matchId>`) is
+ * treated as stale rather than trusted: nothing on it says which agreement it
+ * was for, and closing the wrong one is the bug this guards against. The reply
+ * sends him to the board, where the same decision is one tap away on the live
+ * agreement.
+ */
 export async function handleVenuePayDecline(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("vchg:paydecline:")) return;
-  const matchId = data.slice("vchg:paydecline:".length);
+  if (!data?.startsWith(VENUE_PAY_DECLINE_PREFIX)) return;
+  const [matchId, nonce] = data.slice(VENUE_PAY_DECLINE_PREFIX.length).split(":");
   await ctx.answerCallbackQuery().catch(() => undefined);
   if (!matchId || !ctx.from) return;
 
-  const result = await declineVenuePay(ctx.api, BigInt(ctx.from.id), matchId);
+  const lang = ctx.session.language;
+  const result = isVenueAgreementNonce(nonce)
+    ? await declineVenuePay(ctx.api, BigInt(ctx.from.id), matchId, nonce)
+    : { ok: false, stale: true };
   if (result.ok) {
-    await ctx.reply(t(ctx.session.language, "venuePayDeclineAck")).catch(() => undefined);
+    await ctx.reply(t(lang, "venuePayDeclineAck")).catch(() => undefined);
+    return;
+  }
+  if (result.stale) {
+    const user = await prisma.user
+      .findUnique({ where: { telegramId: BigInt(ctx.from.id) }, select: { theme: true } })
+      .catch(() => null);
+    const kb = new InlineKeyboard().webApp(
+      t(lang, "venuePayOpenBtn"),
+      venueChangeUrl(matchId, lang, user?.theme ?? "dark"),
+    );
+    await ctx.reply(t(lang, "venuePayDeclineStale"), { reply_markup: kb }).catch(() => undefined);
   }
 }
 
@@ -1910,6 +2003,13 @@ export async function settleVenuePayment(
   payerTelegramId: bigint,
   matchId: string,
   telegramChargeId: string,
+  /**
+   * The invoice payload's agreement nonce; null for a payload minted before
+   * nonces existed. Only a nonce equal to the agreement on the row settles —
+   * anything else bought a different (or no longer existing) agreement and is
+   * refunded through the same path as a lost race.
+   */
+  agreementNonce: string | null,
 ): Promise<{ ok: boolean; reason?: string; refunded?: boolean }> {
   const giveBack = async (): Promise<boolean> => {
     try {
@@ -1979,6 +2079,12 @@ export async function settleVenuePayment(
   });
 
   const wasExpress = match.venueChangeExpressAt != null;
+  // Checked AFTER the durable row, not before it: a stale invoice has already
+  // taken the Stars, and the purchase row is what makes giving them back
+  // exactly-once. A legacy payload (no nonce) is refused for the same reason
+  // pre-checkout refuses it — nothing proves which agreement it paid for.
+  const invoiceIsCurrent =
+    agreementNonce != null && agreementNonce === venueAgreementNonce(match);
   // Claim and `settled` commit together. They used to be two writes, so a
   // failure or a crash between them left a delivered swap on a `processing`
   // row, which the five-minute sweep then refunded — the new venue stood and
@@ -1987,8 +2093,16 @@ export async function settleVenuePayment(
   let claimCount: number;
   try {
     claimCount = await prisma.$transaction(async (tx) => {
+      if (!invoiceIsCurrent) return 0;
       const claim = await tx.match.updateMany({
-        where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+        // The agreement columns ride in the guard: the venue copied below is the
+        // one read above, so it may only land while that is still the agreement.
+        where: {
+          id: matchId,
+          status: "scheduled",
+          venueChangeStatus: "agreed",
+          ...venueAgreementWhere(match),
+        },
         data: {
           venueChangeStatus: "settled",
           venueChangeResolvedAt: new Date(),
@@ -2043,7 +2157,8 @@ export async function settleVenuePayment(
     // bought nothing — always give them back. A failed refund parks the row in
     // `refund_failed` for the sweep and is never announced as a success.
     console.warn(
-      `[venue-change] settle claimed nothing match=${matchId} — refunding ${telegramChargeId}`,
+      `[venue-change] settle claimed nothing match=${matchId} ` +
+        `(${invoiceIsCurrent ? "agreement moved" : "stale invoice"}) — refunding ${telegramChargeId}`,
     );
     await refundVenueChangePurchase(
       api,
@@ -2053,7 +2168,7 @@ export async function settleVenuePayment(
     );
     // A refund that fails parks the row in `refund_failed` for the sweep, so
     // the charge is owned either way.
-    return { ok: false, reason: "not-agreed", refunded: true };
+    return { ok: false, reason: invoiceIsCurrent ? "not-agreed" : "stale-invoice", refunded: true };
   }
 
   console.info(

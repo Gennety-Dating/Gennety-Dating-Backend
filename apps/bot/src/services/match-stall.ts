@@ -90,6 +90,10 @@ export const STALL_MATCH_SELECT = {
   stallConfirmedAtB: true,
   venueNudge1SentAt: true,
   venueNudge2SentAt: true,
+  // Read only by `venueSelectionStranded`: whether a venue step that nobody owes
+  // anything on is still going somewhere.
+  venueName: true,
+  venueSelectionNextRetryAt: true,
   userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, theme: true } },
   userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, theme: true } },
 } as const;
@@ -154,11 +158,17 @@ function sharesASlot(mine: Date[], theirs: Date[]): boolean {
 /**
  * WHY this side owes the scheduling step something, or null when it doesn't.
  *
- * Two shapes, and they need different words:
+ * Three shapes, and they need different words:
  *   - `no-picks`   — never opened the calendar. "Pick a time."
  *   - `no-overlap` — both picked and nothing lines up. Telling this person to
  *                    "pick a time" is wrong; they did. Their move is to widen
  *                    the selection or take one of the partner's slots.
+ *   - `pick-final` — both picked and MORE than one slot is shared. Only a single
+ *                    shared slot locks the date by itself (`scheduler.ts`); with
+ *                    several, the server deliberately waits for someone to
+ *                    choose the final one and sends nobody anything. The Mini
+ *                    App offers that choice to whoever saves next, and nothing
+ *                    records who saw it last, so it is owed by BOTH sides.
  *
  * `no-overlap` used to be neither: `sideOwesAction` only asked whether a side
  * had marked anything, so once BOTH had, nobody owed anything. No nudge, no
@@ -166,7 +176,7 @@ function sharesASlot(mine: Date[], theirs: Date[]): boolean {
  * indefinitely, excluded from every drop by the single-live-match rule, with a
  * shimmer telling both of them the time was being coordinated for them.
  */
-export type SchedulingOwed = "no-picks" | "no-overlap";
+export type SchedulingOwed = "no-picks" | "no-overlap" | "pick-final";
 
 export function schedulingOwedKind(row: StallMatchRow, side: MatchSide): SchedulingOwed | null {
   if (stallPhaseOf(row) !== "scheduling") return null;
@@ -176,9 +186,13 @@ export function schedulingOwedKind(row: StallMatchRow, side: MatchSide): Schedul
   // I picked, they haven't opened the calendar yet: their move, not mine. (This
   // is the one calendar state that gets the §3.6b waiting shimmer.)
   if (theirs.length === 0) return null;
-  // A shared slot auto-locks the date (`scheduler.ts`), so if the row is still
-  // here there is none — and the next move belongs to both sides again.
-  return sharesASlot(mine, theirs) ? null : "no-overlap";
+  // A shared slot does NOT mean the date is locked. This used to return null
+  // here on the belief that it did, which left a pair with several common slots
+  // owing nothing: no reminder, no check-in, and — because the stall worker
+  // skipped rows nobody owed — no 48h end either (A13-H6). A single shared slot
+  // locks and moves the row out of `negotiating`, so one still here with shared
+  // slots is waiting on a choice either side can make.
+  return sharesASlot(mine, theirs) ? "pick-final" : "no-overlap";
 }
 
 /**
@@ -302,6 +316,52 @@ export const STALL_HARD_CEILING_MS = STALL_TIMEOUT_MS * 3;
 export function stallCeilingAt(row: StallMatchRow): Date | null {
   const anchor = stallAnchorAt(row);
   return anchor ? new Date(anchor.getTime() + STALL_HARD_CEILING_MS) : null;
+}
+
+/** The venue-selection columns the ceiling reads on top of `StallMatchRow`. */
+export interface VenueSelectionState {
+  venueName: string | null;
+  venueSelectionNextRetryAt: Date | null;
+}
+
+/**
+ * A venue step both sides have finished that is going nowhere.
+ *
+ * Nobody owes anything here, so no reminder, check-in or 48h end can ever be
+ * owed either — and before A13-H6 the worker skipped the row outright. That is
+ * right while the place search is running or has a retry scheduled; it is a
+ * permanent strand once the search has failed for good (`no_candidates`, the
+ * provider giving up, an exception in the background run): the pair sits in
+ * `negotiating_venue`, held out of every drop by the single-live-match rule.
+ *
+ * A retry counts as pending only while it is still ahead. The sweep takes due
+ * retries within a minute and they are minutes apart, so a retry stamp still
+ * sitting in the past when the multi-day ceiling arrives is one nobody is
+ * running (the V2 flag switched off, say), not one about to happen.
+ */
+export function venueSelectionStranded(
+  row: StallMatchRow & VenueSelectionState,
+  now: Date,
+): boolean {
+  if (stallPhaseOf(row) !== "venue") return false;
+  if (sideOwesAction(row, "A") || sideOwesAction(row, "B")) return false;
+  if (row.venueName != null) return false;
+  const retryAt = row.venueSelectionNextRetryAt;
+  return !(retryAt != null && retryAt.getTime() > now.getTime());
+}
+
+/**
+ * Whether the hard ceiling may end this row: someone owes a move, or nobody does
+ * and nothing will ever make one (`venueSelectionStranded`). A venue search that
+ * is still running or retrying is the one planning state the ceiling leaves to
+ * its own machinery.
+ */
+export function stallCeilingApplies(
+  row: StallMatchRow & VenueSelectionState,
+  now: Date,
+): boolean {
+  if (sideOwesAction(row, "A") || sideOwesAction(row, "B")) return true;
+  return venueSelectionStranded(row, now);
 }
 
 // Deliberately four flat, non-nesting prefixes. `stall:cancel:` +
@@ -430,9 +490,14 @@ export async function cancelStalledMatch(
 
   // Never PENALISE a side that could not have answered the question — but do not
   // let that hold the match open forever either. Past the ceiling the pair is
-  // released, and the unreachable side is not counted as a ghost.
+  // released, and the unreachable side is not counted as a ghost. Re-checked on
+  // this fresh read: a venue search that got a retry scheduled since the
+  // worker's scan is not ended by it.
   const ceiling = stallCeilingAt(match);
-  const pastCeiling = ceiling !== null && ceiling <= now;
+  const pastCeiling = ceiling !== null && ceiling <= now && stallCeilingApplies(match, now);
+  // Nobody owed anything and the place search is dead: the product failed this
+  // pair, so neither is told the other went quiet.
+  const venueUnresolved = pastCeiling && venueSelectionStranded(match, now);
   const unreachableOwes = sides.some((s) => s.owes && !stallReachableFor(s.user));
   if (unreachableOwes && !pastCeiling) return empty;
   // The deadline is re-derived here, from a row read AFTER the caller decided.
@@ -502,7 +567,11 @@ export async function cancelStalledMatch(
     // Keyed on who actually ran the clock out, not on who still owes: a side
     // that answered the check-in and was cancelled by the OTHER one is told the
     // truth — their partner never came back.
-    const key = side.ghosted ? "stallTimeoutSelf" : "stallTimeoutPartnerGone";
+    const key = venueUnresolved
+      ? "stallTimeoutVenueUnresolved"
+      : side.ghosted
+        ? "stallTimeoutSelf"
+        : "stallTimeoutPartnerGone";
     const body = `${t(lang, key, { name: partnerName(other, lang) })}${refundLineFor(side.user.id, lang)}`;
 
     if (!stallReachableFor(side.user)) {

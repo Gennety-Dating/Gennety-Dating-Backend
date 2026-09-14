@@ -11,7 +11,7 @@ columns on `matches`.
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
 | T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full set of starters as the plain final `sendMessage` — the emergency-window DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
-| T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
+| T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`). The window **closes at `agreedTime`**: from the start of the date the service refuses (`date-started`, 409 `date_started` on the app) — "they didn't show up" is the T+24h did-you-meet question, not a cancellation that refunds both tickets (2026-09-14, audit A13-M20) | shared with above |
 | T − 5 h | **Start the native «date day» Live Activity** on both sides (`services/date-day-activity.ts`, iOS §4.2) — APNs *push-to-start*, so the card appears on a locked phone whose owner has not opened the app, which is the entire reason the gate is at T-5h. No-op for anyone with no registered start token, i.e. every Telegram-only account. | shared with above |
 | T − 1.5 h | **Advance the Live Activity to the `wingman` stage.** | shared with `wingmanSentAt` |
 | T − 1 h | **Advance the Live Activity to the `chat_open` stage** — fired by `openProxies` in `services/coordination.ts`, not by the lifecycle tick. Declared since the four-stage card and deliberately dark until the native chat screen existed; live since it did. | shared with `proxyOpenedAt` |
@@ -403,6 +403,12 @@ their date was off only by opening the app. The service now pushes the peer on
 either rail — **without the reason**, which is someone else's free text and
 does not belong on a lock screen; it is shown where the recipient chose to look.
 
+- **Only before the date starts.** `cancelScheduledDate` refuses once
+  `agreedTime <= now` (the check is also in its compare-and-set), on the tap, the
+  confirm and a late-arriving reason alike. It used to accept a cancel up to T+24h,
+  so a date that had happened could be "cancelled" with any reason — both tickets
+  refunded, the peer boosted and the outcome never asked (audit A13-M20). No
+  grace window: a no-show belongs to the did-you-meet check.
 - Tap → an explicit **confirmation guard** that makes the lower-risk choice
   visually easier: `[Keep the date]` first with native `success` styling, then
   `[Yes, cancel the date]` with native `danger` styling (callbacks

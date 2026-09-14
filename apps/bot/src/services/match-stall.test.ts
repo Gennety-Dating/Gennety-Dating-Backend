@@ -43,7 +43,10 @@ import {
   stallCheckInPending,
   stallPhaseOf,
   stallReachableFor,
+  stallCeilingApplies,
+  venueSelectionStranded,
   type StallMatchRow,
+  type VenueSelectionState,
 } from "./match-stall.js";
 
 const NOW = new Date("2026-07-29T12:00:00Z");
@@ -129,14 +132,22 @@ describe("schedulingOwedKind", () => {
     expect(schedulingOwedKind(row, "B")).toBe("no-overlap");
   });
 
-  it("nobody owes anything once a slot is shared (the date auto-locks)", () => {
-    // Compared by instant, not by array identity.
+  it("both sides owe the final pick while shared slots sit unlocked (A13-H6)", () => {
+    // Only a SINGLE shared slot locks the date and moves the row on
+    // (`scheduler.ts`); several leave it here with nobody told anything. This
+    // used to return null on the belief that a shared slot always auto-locks,
+    // so the pair owed nothing — no reminder, no check-in, no 48h end, forever.
+    // Nothing records which side was shown the "choose one" card, and either
+    // can end it by saving again, so both owe it. Compared by instant.
     const row = schedulingRow({
+      proposedTimes: [SLOT, OTHER],
       availableTimesA: [SLOT, OTHER],
-      availableTimesB: [new Date(SLOT.getTime())],
+      availableTimesB: [new Date(SLOT.getTime()), new Date(OTHER.getTime())],
     });
-    expect(schedulingOwedKind(row, "A")).toBeNull();
-    expect(schedulingOwedKind(row, "B")).toBeNull();
+    expect(schedulingOwedKind(row, "A")).toBe("pick-final");
+    expect(schedulingOwedKind(row, "B")).toBe("pick-final");
+    expect(sideOwesAction(row, "A")).toBe(true);
+    expect(sideOwesAction(row, "B")).toBe(true);
   });
 
   it("is null outside the scheduling phase", () => {
@@ -224,6 +235,44 @@ describe("stall timing", () => {
     expect(stallBaseFor(row, "A")).toBeNull();
     expect(stallDeadlineAt(row, "A")).toBeNull();
     expect(stallCheckInDueAt(row, "A")).toBeNull();
+  });
+});
+
+describe("venueSelectionStranded / stallCeilingApplies", () => {
+  const bothSubmitted = (
+    overrides: Partial<StallMatchRow> = {},
+  ): StallMatchRow & VenueSelectionState => ({
+    ...venueRow({ vibeTextB: "park walk", vibeLatB: 50.4, vibeLngB: 30.5, ...overrides }),
+    venueName: null,
+    venueSelectionNextRetryAt: null,
+  });
+
+  it("a finished venue step with no venue and no retry ahead is stranded", () => {
+    const row = bothSubmitted();
+    expect(venueSelectionStranded(row, NOW)).toBe(true);
+    expect(stallCeilingApplies(row, NOW)).toBe(true);
+  });
+
+  it("a search with a retry still ahead is left to its own machinery", () => {
+    const row = { ...bothSubmitted(), venueSelectionNextRetryAt: new Date(NOW.getTime() + 60_000) };
+    expect(venueSelectionStranded(row, NOW)).toBe(false);
+    expect(stallCeilingApplies(row, NOW)).toBe(false);
+  });
+
+  it("a retry stamp left in the past is one nobody is running", () => {
+    const row = { ...bothSubmitted(), venueSelectionNextRetryAt: new Date(NOW.getTime() - 3 * 86_400_000) };
+    expect(venueSelectionStranded(row, NOW)).toBe(true);
+  });
+
+  it("is never stranded while a side still owes, and the ceiling applies anyway", () => {
+    const row = { ...venueRow(), venueName: null, venueSelectionNextRetryAt: null };
+    expect(venueSelectionStranded(row, NOW)).toBe(false);
+    expect(stallCeilingApplies(row, NOW)).toBe(true);
+  });
+
+  it("is not a scheduling-phase concept", () => {
+    const row = { ...schedulingRow(), venueName: null, venueSelectionNextRetryAt: null };
+    expect(venueSelectionStranded(row, NOW)).toBe(false);
   });
 });
 
@@ -412,6 +461,55 @@ describe("cancelStalledMatch", () => {
     );
 
     const result = await cancelStalledMatch(mockApi(), "match-1", NOW);
+
+    expect(result.cancelled).toBe(false);
+    expect(prisma.match.updateMany).not.toHaveBeenCalled();
+  });
+
+  // A13-H6. Both sides finished the venue step and the place search then died
+  // for good. Nobody owed anything, so nothing could ever end the match: the
+  // worker skipped rows nobody owed before it looked at the ceiling.
+  it("ends a stranded venue step at the ceiling, blames nobody, and says what failed", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      dbRow({
+        vibeTextB: "park walk",
+        vibeLatB: 50.4,
+        vibeLngB: 30.5,
+        venueName: null,
+        venueSelectionNextRetryAt: null,
+      }),
+    );
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+    const pastTheCeiling = new Date(NOW.getTime() + STALL_HARD_CEILING_MS);
+
+    const result = await cancelStalledMatch(api as never, "match-1", pastTheCeiling);
+
+    expect(result.cancelled).toBe(true);
+    expect(result.ghostUserIds).toEqual([]);
+    // Both did their part; both get the next-drop priority the notice promises.
+    expect(result.waitingUserIds.sort()).toEqual(["user-a", "user-b"]);
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    const bodies = api.sendMessage.mock.calls.map((c) => String(c[1]));
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(body).toContain("couldn't find a place");
+      expect(body).not.toContain("never got back to us");
+    }
+  });
+
+  it("leaves a finished venue step alone at the ceiling while a retry is still ahead", async () => {
+    const pastTheCeiling = new Date(NOW.getTime() + STALL_HARD_CEILING_MS);
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      dbRow({
+        vibeTextB: "park walk",
+        vibeLatB: 50.4,
+        vibeLngB: 30.5,
+        venueName: null,
+        venueSelectionNextRetryAt: new Date(pastTheCeiling.getTime() + 5 * 60_000),
+      }),
+    );
+
+    const result = await cancelStalledMatch(mockApi(), "match-1", pastTheCeiling);
 
     expect(result.cancelled).toBe(false);
     expect(prisma.match.updateMany).not.toHaveBeenCalled();

@@ -30,6 +30,11 @@ import { sendPushToUser } from "../services/push.js";
 import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
 import { runVenueFinalizationOnce } from "../services/venue-finalization-flight.js";
 import { tryFinalizeVenueIntentV2, venueIntentMode } from "../services/venue-intent-v2.js";
+import {
+  returnLapsedVenueStageToCalendar,
+  venueLapseThreshold,
+  venueSlotStillAhead,
+} from "../services/venue-time-lapse.js";
 import { createMatchEventBestEffort } from "../services/match-events.js";
 import { claimMatchDecision } from "../services/match-decision-claim.js";
 import { updateEloScores } from "../utils/elo-calculator.js";
@@ -911,6 +916,12 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
   });
   if (!match || match.status !== "negotiating_venue") return;
   if (!match.agreedTime) return;
+  // A13-H5, the native twin of the bot's legacy finalizer: a date without the
+  // runway to happen goes back to the calendar instead of being scheduled.
+  if (!venueSlotStillAhead(match.agreedTime)) {
+    await returnLapsedVenueStageToCalendar(matchId);
+    return;
+  }
   if (
     !match.vibeTextA ||
     !match.vibeTextB ||
@@ -947,7 +958,8 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
   });
 
   const committed = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating_venue" },
+    // Same runway re-check as the bot paths: the search takes seconds.
+    where: { id: matchId, status: "negotiating_venue", agreedTime: { gt: venueLapseThreshold() } },
     data: {
       status: "scheduled",
       venueName: venue.name,

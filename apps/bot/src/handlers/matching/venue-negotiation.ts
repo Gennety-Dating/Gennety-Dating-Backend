@@ -57,6 +57,11 @@ import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
+import {
+  returnLapsedVenueStageToCalendar,
+  venueLapseThreshold,
+  venueSlotStillAhead,
+} from "../../services/venue-time-lapse.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -423,6 +428,23 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
 
   const lang = ctx.session.language;
 
+  // Venue Intent V2 (live) owns the whole stage in the Mini App (A13-M15). A
+  // raw attach-menu pin used to be written onto the legacy columns and then
+  // finalized by the LEGACY selector — booking a live-V2 pair past V2's hours
+  // and price rules, with no `venuePlaceId`. Nothing is written here: the pin
+  // is answered with the way into the screen that does collect it. The router
+  // still consumes it, because an unanswered pin reads as the bot ignoring you.
+  if (venueIntentMode(matchId) === "live") {
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { theme: true },
+    });
+    await ctx.reply(t(lang, "venueLocationUseMap"), {
+      reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
+    });
+    return;
+  }
+
   // The departure-point gate (PRODUCT_SPEC §3.7). This path — a raw pin shared
   // through Telegram's attach menu — had NO validation at all, not even a
   // coordinate range check, so it was the one way to put an out-of-market
@@ -584,9 +606,17 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
 /**
  * Check whether both sides have submitted vibe + location. If yes, run
  * the midpoint → Places pipeline and finalise.
+ *
+ * A live Venue Intent V2 match is finalized by the V2 selector and only by it
+ * (A13-M15): every legacy entry point — `POST /v1/location/select` from an old
+ * bundle, the demo puppet, a chat save — lands here, and the legacy selector
+ * would otherwise lock a venue V2's hours and price rules never saw. Shadow
+ * runs V2 alongside as observation, with the legacy result authoritative.
  */
 export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<void> {
-  if (venueIntentMode(matchId) === "shadow") await tryFinalizeVenueIntentV2(matchId);
+  const mode = venueIntentMode(matchId);
+  if (mode === "live") return tryFinalizeVenueIntentV2(matchId);
+  if (mode === "shadow") await tryFinalizeVenueIntentV2(matchId);
   return runVenueFinalizationOnce(matchId, () => finalizeVenue(api, matchId));
 }
 
@@ -635,6 +665,14 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   if (!match) return;
   if (match.status !== "negotiating_venue") return; // idempotency
 
+  // A13-H5: never lock a venue for a date that no longer has the runway to
+  // happen — the pair goes back to the calendar instead, whether or not both
+  // sides have submitted yet.
+  if (match.agreedTime && !venueSlotStillAhead(match.agreedTime)) {
+    await returnLapsedVenueStageToCalendar(matchId, { api });
+    return;
+  }
+
   if (
     !match.agreedTime ||
     !match.vibeTextA ||
@@ -681,6 +719,15 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     agreedTime: match.agreedTime,
   });
 
+  // Settled into a value rather than left to reject: a Places failure used to
+  // throw straight out of the chat handler, after the "picking a spot" status
+  // had played, with no reply at all (A13-M15). The status runs treat either
+  // outcome as "done", so they still tear down before the pair hears anything.
+  const venueOutcome = venuePromise.then(
+    (venue) => ({ ok: true as const, venue }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+
   const searchingRuns: Array<Promise<unknown>> = [];
   if (telegramReachable(match.userA)) {
     searchingRuns.push(
@@ -703,10 +750,18 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     );
   }
 
-  const [venue] = await Promise.all([venuePromise, ...searchingRuns]);
+  const [outcome] = await Promise.all([venueOutcome, ...searchingRuns]);
+  if (!outcome.ok) {
+    console.warn(`[venue-negotiation] venue search failed for ${matchId}:`, outcome.error);
+    await notifyLegacyVenueSearchFailed(api, matchId, match);
+    return;
+  }
+  const venue = outcome.venue;
 
   const committed = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating_venue" },
+    // The runway is re-asserted in the lock: the search takes seconds, and a
+    // date that ran out during it is the lapse sweep's to hand back.
+    where: { id: matchId, status: "negotiating_venue", agreedTime: { gt: venueLapseThreshold() } },
     data: {
       status: "scheduled",
       venueName: venue.name,
@@ -744,6 +799,36 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     category: merged.category,
     keywords: merged.keywords,
   });
+}
+
+/**
+ * The legacy search failed outright (no eligible place, or Places down). Both
+ * sides are told, with the map button: re-confirming a departure point re-runs
+ * this finalizer, which is the only retry the legacy path has. Best-effort — a
+ * blocked chat must not turn a failed search into a thrown handler.
+ */
+async function notifyLegacyVenueSearchFailed(
+  api: Api<RawApi>,
+  matchId: string,
+  match: {
+    userA: { telegramId: bigint; platform: string | null; language: string | null; theme: Theme };
+    userB: { telegramId: bigint; platform: string | null; language: string | null; theme: Theme };
+  },
+): Promise<void> {
+  await Promise.all(
+    [match.userA, match.userB]
+      .filter((user) => telegramReachable(user))
+      .map(async (user) => {
+        const lang = (user.language ?? "en") as Language;
+        await api
+          .sendMessage(toTelegramChatId(user.telegramId), t(lang, "venueSelectionFailedRetry"), {
+            reply_markup: buildLocationMapKeyboard(matchId, lang, user.theme),
+          })
+          .catch((err: unknown) => {
+            console.warn(`[venue-negotiation] failure notice failed for ${matchId}:`, err);
+          });
+      }),
+  );
 }
 
 /**

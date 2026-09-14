@@ -535,6 +535,9 @@ export function buildCandidateSql(): string {
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
       AND u.synthetic_at IS NULL
+      -- Same rule as BOT_CHAT_OPEN_WHERE: a shut Telegram chat excludes a
+      -- Telegram user, never an app-only one (reached by push, A13-H3).
+      AND (u.bot_blocked_at IS NULL OR u.platform = 'mobile')
       AND (
         u.verification_status = 'verified'
         OR (
@@ -1744,6 +1747,27 @@ interface LoadEligibleOptions {
   ignoreLiveMatchesFor?: readonly string[];
 }
 
+/**
+ * Telegram has told us this chat is shut (services/bot-blocked.ts). Matching
+ * them anyway costs their partner a day of waiting for an answer that cannot
+ * come, and spends the candidate on a lifetime pair ban all the same. Cleared
+ * the moment they message the bot again.
+ *
+ * Except that an app-only account never messages the bot, so for it the stamp
+ * could never clear — and before A13-H3 it could be written: a Telegram Login
+ * account carries a REAL positive id, any unguarded send to it drew a 403, and
+ * the observer stamped it. `markBotBlocked` no longer stamps `mobile` rows, and
+ * this is what heals the ones already stamped without a manual DB write: an
+ * app-only user is reached by push, so the Telegram chat's state says nothing
+ * about whether they can answer a pitch. Kept in step with `buildCandidateSql`.
+ *
+ * An `AND` element rather than a top-level `OR`: the live-match exemption below
+ * spreads its own top-level `OR`, and two spreads would silently overwrite.
+ */
+const BOT_CHAT_OPEN_WHERE: Prisma.UserWhereInput = {
+  OR: [{ botBlockedAt: null }, { platform: "mobile" }],
+};
+
 function syntheticWhere(scope: SyntheticScope) {
   if (scope === "any") return {};
   return { syntheticAt: scope === "only" ? { not: null } : null };
@@ -1783,14 +1807,10 @@ async function loadEligibleUsersForIds(
       ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
-      // Telegram has told us this chat is shut (services/bot-blocked.ts).
-      // Matching them anyway costs their partner a day of waiting for an answer
-      // that cannot come, and spends the candidate on a lifetime pair ban all
-      // the same. Cleared the moment they message the bot again.
-      botBlockedAt: null,
       gender: { not: null },
       preference: { not: null },
       AND: [
+        BOT_CHAT_OPEN_WHERE,
         TRACK_VERIFIED_CONTACT_WHERE,
         // Mandatory identity gate with an explicit persisted legacy cohort.
         {
@@ -1842,14 +1862,10 @@ async function loadEligibleUsersForIds(
       ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
-      // Telegram has told us this chat is shut (services/bot-blocked.ts).
-      // Matching them anyway costs their partner a day of waiting for an answer
-      // that cannot come, and spends the candidate on a lifetime pair ban all
-      // the same. Cleared the moment they message the bot again.
-      botBlockedAt: null,
       gender: { not: null },
       preference: { not: null },
       AND: [
+        BOT_CHAT_OPEN_WHERE,
         TRACK_VERIFIED_CONTACT_WHERE,
         {
           OR: [

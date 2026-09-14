@@ -3326,7 +3326,10 @@ describe("/v1/matches/*", () => {
   it("POST /:id/cancel calls off a scheduled date and reports the caller's refund", async () => {
     const alice = await seedUser();
     const bob = await seedUser();
-    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    });
 
     const res = await request(app)
       .post(`/v1/matches/${match.id}/cancel`)
@@ -3345,7 +3348,10 @@ describe("/v1/matches/*", () => {
   it("POST /:id/cancel requires a reason — an empty one is refused, nothing is cancelled", async () => {
     const alice = await seedUser();
     const bob = await seedUser();
-    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    });
 
     const res = await request(app)
       .post(`/v1/matches/${match.id}/cancel`)
@@ -3360,7 +3366,10 @@ describe("/v1/matches/*", () => {
     const alice = await seedUser();
     const bob = await seedUser();
     const eve = await seedUser();
-    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    });
 
     const res = await request(app)
       .post(`/v1/matches/${match.id}/cancel`)
@@ -3389,7 +3398,10 @@ describe("/v1/matches/*", () => {
   it("POST /:id/cancel is not repeatable — the second call finds nothing to cancel", async () => {
     const alice = await seedUser();
     const bob = await seedUser();
-    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    });
     const auth = `Bearer ${signAccess(alice.id)}`;
 
     const first = await request(app)
@@ -3405,6 +3417,28 @@ describe("/v1/matches/*", () => {
     expect(second.status).toBe(409);
     // The stored reason is the one that actually cancelled the date.
     expect(db.matches.get(match.id)?.emergencyReason).toBe("первый");
+  });
+
+  // A13-M20. The cancel used to work until the T+24h feedback prompt completed
+  // the row, refunding both tickets for a date that had already happened.
+  it("POST /:id/cancel answers 409 date_started once the agreed time has come, and the date stands", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() - 60 * 1000),
+    });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ reason: "не пришла" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("date_started");
+    const row = db.matches.get(match.id);
+    expect(row?.status).toBe("scheduled");
+    expect(row?.emergencyCancelledBy ?? null).toBeNull();
   });
 
   it("POST /:id/report enforces IDOR: non-participant is 403", async () => {

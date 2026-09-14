@@ -37,6 +37,7 @@ function scheduledRow(overrides: Record<string, unknown> = {}) {
     userAId: ACTOR,
     userBId: PEER,
     emergencyCancelledBy: null,
+    agreedTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
     ...overrides,
   };
 }
@@ -163,6 +164,36 @@ describe("cancelScheduledDate", () => {
     await expect(
       cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x" }),
     ).resolves.toEqual({ ok: false, error: "wrong-state" });
+  });
+
+  // A13-M20. A `scheduled` row stays scheduled until the T+24h feedback prompt,
+  // so the cancel used to refund both tickets for a date that had happened.
+  it("refuses once the agreed time has come — nothing is cancelled or refunded", async () => {
+    const now = new Date("2026-04-10T19:00:00Z");
+    matchFindUnique.mockResolvedValue(scheduledRow({ agreedTime: now }));
+
+    const result = await cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x", now });
+
+    expect(result).toEqual({ ok: false, error: "date-started" });
+    expect(matchUpdateMany).not.toHaveBeenCalled();
+    expect(refundMatchTickets).not.toHaveBeenCalled();
+    expect(applyEmergencyCancellationPeerBoost).not.toHaveBeenCalled();
+    expect(sendPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("carries the start cut-off into the compare-and-set", async () => {
+    const now = new Date("2026-04-10T12:00:00Z");
+    matchFindUnique.mockResolvedValue(
+      scheduledRow({ agreedTime: new Date("2026-04-10T19:00:00Z") }),
+    );
+
+    await cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x", now });
+
+    expect(matchUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "m1", status: "scheduled", emergencyCancelledBy: null, agreedTime: { gt: now } },
+      }),
+    );
   });
 
   it("still cancels when the refund rail throws", async () => {

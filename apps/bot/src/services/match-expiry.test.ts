@@ -153,6 +153,40 @@ describe("expireStaleMatches", () => {
     expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 
+  // A13-M19. A first decision leaves the row `proposed`, so a status-only CAS
+  // let an accept that landed between the read and the flip through — and the
+  // side that had just answered was penalised as silent from the stale read.
+  it("does not expire over a decision that landed after the candidate read", async () => {
+    mMatchFindMany.mockResolvedValueOnce([buildCandidate({ acceptedByA: null, acceptedByB: null })]);
+    // The row now carries A's late accept, so only a CAS on the snapshot misses.
+    mMatchUpdateMany.mockImplementationOnce(async (args: { where: Record<string, unknown> }) =>
+      "acceptedByA" in args.where && args.where.acceptedByA === null ? { count: 0 } : { count: 1 },
+    );
+
+    const result = await expireStaleMatches();
+
+    expect(mMatchUpdateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "proposed", acceptedByA: null, acceptedByB: null },
+      data: { status: "expired" },
+    });
+    expect(result.expired).toBe(0);
+    expect(mProfileUpdate).not.toHaveBeenCalled();
+    expect(mPenalty).not.toHaveBeenCalled();
+    expect(mEventCreate).not.toHaveBeenCalled();
+  });
+
+  it("carries a responder's recorded decision into the flip's compare-and-set", async () => {
+    mMatchFindMany.mockResolvedValueOnce([buildCandidate({ acceptedByA: false, acceptedByB: null })]);
+    mProfileUpdate.mockResolvedValueOnce({ silentIgnoreCount: 1 });
+
+    await expireStaleMatches();
+
+    expect(mMatchUpdateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "proposed", acceptedByA: false, acceptedByB: null },
+      data: { status: "expired" },
+    });
+  });
+
   it("pushes the pinned banner back to the drop countdown for both sides once a match expires", async () => {
     // Its 24h "decision" countdown just ran out with nothing left to count —
     // pushed now rather than left stale for up to a minute on the tick.

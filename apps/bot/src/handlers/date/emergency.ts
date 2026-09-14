@@ -27,14 +27,21 @@ import {
  * the other person with a short Gennety note below it.
  */
 
+/** What the guard found: a participant who may cancel, a date already begun, or nothing. */
+type CancellableCheck =
+  | { kind: "participant"; userId: string }
+  | { kind: "date-started" }
+  | null;
+
 /**
  * Shared guard: load a still-cancellable scheduled match for the tapping user.
- * Returns the participant user id, or null when the action should be ignored.
+ * Returns the participant, `date-started` when the date's time has come, or
+ * null when the action should be ignored.
  */
 async function loadCancellableParticipant(
   ctx: BotContext,
   matchId: string,
-): Promise<string | null> {
+): Promise<CancellableCheck> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
@@ -43,6 +50,7 @@ async function loadCancellableParticipant(
       userAId: true,
       userBId: true,
       emergencyCancelledBy: true,
+      agreedTime: true,
     },
   });
 
@@ -58,7 +66,18 @@ async function loadCancellableParticipant(
   const isParticipant = user.id === match.userAId || user.id === match.userBId;
   if (!isParticipant) return null;
 
-  return user.id;
+  // The button this flow starts from stays in the chat — the T-5h card, the My
+  // Date hub — long after the date. Past its start the shared service refuses
+  // (A13-M20), so the guard says so up front rather than walking the user
+  // through a confirmation and a typed reason that can only be turned down.
+  if (match.agreedTime && match.agreedTime.getTime() <= Date.now()) return { kind: "date-started" };
+
+  return { kind: "participant", userId: user.id };
+}
+
+/** Past the start the date is not cancellable; say where "it didn't happen" goes. */
+async function replyDateStarted(ctx: BotContext): Promise<void> {
+  await ctx.reply(t(ctx.session.language, "emergencyDateStarted")).catch(() => {});
 }
 
 interface EmergencyCancellationNotice {
@@ -94,8 +113,12 @@ export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
 
   await ctx.answerCallbackQuery();
 
-  const participantId = await loadCancellableParticipant(ctx, matchId);
-  if (!participantId) return;
+  const participant = await loadCancellableParticipant(ctx, matchId);
+  if (!participant) return;
+  if (participant.kind === "date-started") {
+    await replyDateStarted(ctx);
+    return;
+  }
 
   const lang = ctx.session.language;
   const keyboard = new InlineKeyboard()
@@ -121,8 +144,13 @@ export async function handleEmergencyConfirm(ctx: BotContext): Promise<void> {
 
   await ctx.answerCallbackQuery();
 
-  const participantId = await loadCancellableParticipant(ctx, matchId);
-  if (!participantId) return;
+  const participant = await loadCancellableParticipant(ctx, matchId);
+  if (!participant) return;
+  if (participant.kind === "date-started") {
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    await replyDateStarted(ctx);
+    return;
+  }
 
   claimMatchFlow(ctx.session, "awaiting_emergency_reason", matchId);
 
@@ -199,7 +227,12 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     actorUserId: user.id,
     reason,
   });
-  if (!result.ok) return;
+  if (!result.ok) {
+    // The reason was typed before the start and sent after it. Nothing was
+    // cancelled, and silence would read as if it had been.
+    if (result.error === "date-started") await replyDateStarted(ctx);
+    return;
+  }
   const { peerUserId: otherUserId, reason: forwardedReason, refunds } = result.outcome;
 
   const isA = user.id === match.userAId;

@@ -222,7 +222,10 @@ card §3.3), `protect_content`. Под карточкой: `[💫 Оплатит
 
 - **Флаги/env:** `VENUE_CHANGE_FEATURE_ENABLED` остаётся; новый
   `VENUE_CHANGE_STARS` (default `150`). Stars-рельсы обязательны
-  (`TICKET_STARS_ENABLED`-инфраструктура): payload `venue:<matchId>:<path>`
+  (`TICKET_STARS_ENABLED`-инфраструктура): payload `venue:<matchId>:<mode>:<nonce>`, где `nonce` — отпечаток текущего
+  соглашения (`services/venue-agreement-nonce.ts`): счёт, выписанный под прежнее
+  соглашение, отклоняется на pre-checkout, а проскочивший — возвращается при
+  расчёте (аудит A13-L6, 2026-09-14); payload без отпечатка отклоняется
   в `handlers/payments.ts` (`pre_checkout_query` re-validate →
   `successful_payment` settle; settle идемпотентен через CAS на
   `venueChange*`-полях — как гейт тикетов, без charge-id колонки).

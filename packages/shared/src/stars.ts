@@ -78,36 +78,65 @@ export function parseGateInvoicePayload(
  *     (the venueChange* fields already hold the agreed venue).
  *   • `express` — the female's unilateral instant swap; the express pick was
  *     stamped onto the venueChange* fields when the invoice was minted.
- * Format: `venue:<matchId>:<mode>`.
+ * Format: `venue:<matchId>:<mode>:<agreementNonce>`.
+ *
+ * The nonce names WHICH agreement the invoice was minted for. Invoice links are
+ * reusable and a match can hold several agreements over its life (agree,
+ * decline, agree on another place), while the status alone only says "some
+ * agreement is waiting for payment" — so a stale link used to settle whatever
+ * the pair had agreed on since. Pre-checkout and settle both compare it with
+ * the agreement on the row.
  */
 export const VENUE_INVOICE_PREFIX = "venue:";
 
 /** The two venue-change Star payment modes. */
 export type VenueInvoiceMode = "agreed" | "express";
 
+/**
+ * Length of a venue-change agreement nonce (lowercase hex). Bounded by the
+ * wish card's decline button: Telegram caps callback data at 64 bytes and
+ * `vchg:paydecline:<uuid>:` already takes 53 of them.
+ */
+export const VENUE_AGREEMENT_NONCE_LENGTH = 10;
+
+const VENUE_AGREEMENT_NONCE = new RegExp(`^[0-9a-f]{${VENUE_AGREEMENT_NONCE_LENGTH}}$`);
+
+/** Whether a string has the shape of an agreement nonce. */
+export function isVenueAgreementNonce(value: string | null | undefined): value is string {
+  return typeof value === "string" && VENUE_AGREEMENT_NONCE.test(value);
+}
+
 /** Build the invoice payload for a venue-change Star payment. */
-export function buildVenueInvoicePayload(matchId: string, mode: VenueInvoiceMode): string {
-  return `${VENUE_INVOICE_PREFIX}${matchId}:${mode}`;
+export function buildVenueInvoicePayload(
+  matchId: string,
+  mode: VenueInvoiceMode,
+  agreementNonce: string,
+): string {
+  return `${VENUE_INVOICE_PREFIX}${matchId}:${mode}:${agreementNonce}`;
 }
 
 /**
- * Parse a venue-change invoice payload back into `{ matchId, mode }`. Returns
- * null for any non-venue, malformed, bad-UUID, or unknown-mode payload — so a
- * foreign or tampered invoice never swaps a venue. Participant/payer checks
- * remain the trust boundary in the settle handler.
+ * Parse a venue-change invoice payload back into `{ matchId, mode, nonce }`.
+ * Returns null for any non-venue, malformed, bad-UUID, unknown-mode or
+ * bad-nonce payload — so a foreign or tampered invoice never swaps a venue.
+ * Participant/payer checks remain the trust boundary in the settle handler.
+ *
+ * A payload minted before the nonce existed (`venue:<matchId>:<mode>`) still
+ * parses, with `nonce: null`, so it reaches the venue branch rather than
+ * falling through to the date-gate parser — and the venue branch refuses it,
+ * because nothing can prove which agreement it was minted for.
  */
 export function parseVenueInvoicePayload(
   payload: string | null | undefined,
-): { matchId: string; mode: VenueInvoiceMode } | null {
+): { matchId: string; mode: VenueInvoiceMode; nonce: string | null } | null {
   if (!payload || !payload.startsWith(VENUE_INVOICE_PREFIX)) return null;
-  const rest = payload.slice(VENUE_INVOICE_PREFIX.length);
-  const sep = rest.lastIndexOf(":");
-  if (sep <= 0) return null;
-  const matchId = rest.slice(0, sep);
-  const mode = rest.slice(sep + 1);
-  if (!GATE_PAYLOAD_UUID.test(matchId)) return null;
+  const parts = payload.slice(VENUE_INVOICE_PREFIX.length).split(":");
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const [matchId, mode, nonce] = parts;
+  if (!matchId || !GATE_PAYLOAD_UUID.test(matchId)) return null;
   if (mode !== "agreed" && mode !== "express") return null;
-  return { matchId, mode };
+  if (nonce !== undefined && !isVenueAgreementNonce(nonce)) return null;
+  return { matchId, mode, nonce: nonce ?? null };
 }
 
 /**

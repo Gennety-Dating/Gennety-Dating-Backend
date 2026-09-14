@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
+    // Read only by the stale wish-card reply, for the Mini App button's theme.
+    user: { findUnique: vi.fn().mockResolvedValue({ theme: "dark" }) },
     match: {
       findUnique: vi.fn(),
       updateMany: vi.fn(),
@@ -53,6 +55,7 @@ import {
   getVenueChangeCatalog,
   offerPartnerPay,
   declineVenuePay,
+  handleVenuePayDecline,
   settleVenuePayment,
   sweepExpiredVenueChanges,
   mintExpressChange,
@@ -61,6 +64,7 @@ import {
   KEEP_KEY,
 } from "./venue-change.js";
 import type { CatalogVenue } from "../../services/venue-change.js";
+import { venueAgreementNonce } from "../../services/venue-agreement-nonce.js";
 import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -182,13 +186,22 @@ function fakeMatch(over: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * The agreement's own timestamps, fixed once so every `agreedMatch()` describes
+ * the SAME agreement — its fingerprint is what an invoice and the wish card
+ * carry (A13-L6), so a fixture minting fresh dates per call would describe a
+ * different agreement each time.
+ */
+const AGREED_PROPOSED_AT = new Date();
+const AGREED_EXPIRES_AT = new Date(Date.now() + 12 * HOUR);
+
 /** Agreed-state row: she initiated, "New Cafe" agreed, payment pending. */
 function agreedMatch(over: Record<string, unknown> = {}) {
   return fakeMatch({
     venueChangeStatus: "agreed",
     venueChangeProposerId: "a",
-    venueChangeProposedAt: new Date(),
-    venueChangeExpiresAt: new Date(Date.now() + 12 * HOUR),
+    venueChangeProposedAt: AGREED_PROPOSED_AT,
+    venueChangeExpiresAt: AGREED_EXPIRES_AT,
     venueChangeName: "New Cafe",
     venueChangeAddress: "New Cafe St",
     venueChangeLat: 50.451,
@@ -199,6 +212,9 @@ function agreedMatch(over: Record<string, unknown> = {}) {
     ...over,
   });
 }
+
+/** The nonce an invoice minted for the default `agreedMatch()` carries. */
+const AGREED_NONCE = venueAgreementNonce(agreedMatch() as Parameters<typeof venueAgreementNonce>[0]);
 
 function fakeApi() {
   return {
@@ -351,6 +367,53 @@ describe("submitVenueLikes", () => {
     expect(mUpdate.mock.calls.some((c) => c[0]?.data?.venueChangePingMsgIdB === 555)).toBe(true);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
+  });
+
+  it("REGRESSION (A13-M14): agrees when the partner hearted the same venue while this submit was in flight", async () => {
+    // Both hearted "New Cafe" at the same moment. Her submit read the row
+    // before his heart landed; the overlap must come from the row as it is
+    // AFTER her write, or neither submit ever sees the other and nobody agrees.
+    const api = fakeApi();
+    const stale = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "b",
+      venueChangeProposedAt: new Date(),
+      venueChangePingSentToAAt: new Date(),
+      venueChangePingSentToBAt: new Date(),
+      venueLikesA: [],
+      venueLikesB: [],
+    });
+    mMatch.findUnique
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce({ venueLikesA: [likeOf("p1", "New Cafe")], venueLikesB: [likeOf("p1", "New Cafe")] })
+      .mockResolvedValue({ ...stale, venueLikesA: [likeOf("p1", "New Cafe")], venueLikesB: [likeOf("p1", "New Cafe")] });
+
+    const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
+
+    expect(res).toEqual({ ok: true, agreed: true, kept: false, overlapCandidates: [] });
+    expect(updateCalls((d) => d.venueChangeStatus === "agreed")).toHaveLength(1);
+  });
+
+  it("REGRESSION (A13-M14): does not agree on a venue the partner un-hearted after this submit read the row", async () => {
+    const api = fakeApi();
+    const stale = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "b",
+      venueChangeProposedAt: new Date(),
+      venueChangePingSentToAAt: new Date(),
+      venueChangePingSentToBAt: new Date(),
+      venueLikesB: [likeOf("p1", "New Cafe")],
+    });
+    mMatch.findUnique
+      .mockResolvedValueOnce(stale)
+      // He took his heart back while her catalog was being built.
+      .mockResolvedValueOnce({ venueLikesA: [likeOf("p1", "New Cafe")], venueLikesB: [] });
+
+    const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
+
+    expect(res).toEqual({ ok: true, agreed: false, kept: false, overlapCandidates: [] });
+    expect(updateCalls((d) => d.venueChangeStatus === "agreed")).toHaveLength(0);
+    expect(api.createInvoiceLink).not.toHaveBeenCalled();
   });
 
   it("rejects a key that is not in the server catalog", async () => {
@@ -581,6 +644,18 @@ describe("getVenueBoardState", () => {
     expect(her.state.express).toBe(true);
   });
 
+  it("names the agreement it describes for the invoice route, and nothing when none is agreed", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    const agreed = await getVenueBoardState(200n, "m1");
+    expect(agreed.ok && agreed.agreementNonce).toBe(AGREED_NONCE);
+    // Server-side only: the Mini App's state payload does not carry it.
+    expect(agreed.ok && "agreementNonce" in agreed.state).toBe(false);
+
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const open = await getVenueBoardState(200n, "m1");
+    expect(open.ok && open.agreementNonce).toBeNull();
+  });
+
   it("express is offered to her (hetero) while the board is open", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
     const her = await getVenueBoardState(100n, "m1");
@@ -684,6 +759,70 @@ describe("offerPartnerPay / declineVenuePay", () => {
 
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
     expect((await declineVenuePay(fakeApi(), 200n, "m1")).ok).toBe(false);
+  });
+
+  it("A13-L6: the wish card's buttons carry the agreement they were minted for", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await offerPartnerPay(api, 100n, "m1");
+
+    expect(api.createInvoiceLink.mock.calls[0][2]).toBe(`venue:m1:agreed:${AGREED_NONCE}`);
+    const keyboard = api.sendMessage.mock.calls[0][2].reply_markup.inline_keyboard as Array<
+      Array<{ callback_data?: string }>
+    >;
+    const decline = keyboard.flat().find((button) => button.callback_data);
+    expect(decline?.callback_data).toBe(`vchg:paydecline:m1:${AGREED_NONCE}`);
+    expect(Buffer.byteLength(decline?.callback_data ?? "")).toBeLessThanOrEqual(64);
+  });
+
+  it("REGRESSION (A13-L6): an old wish card cannot decline an agreement reached since", async () => {
+    // The card was minted for "New Cafe"; the pair has since agreed on "Park
+    // Spot". His tap on the old card must leave the new agreement alone.
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(
+      agreedMatch({ venueChangeName: "Park Spot", venueChangePlaceId: "p2" }),
+    );
+
+    const res = await declineVenuePay(api, 200n, "m1", AGREED_NONCE);
+
+    expect(res).toEqual({ ok: false, stale: true });
+    expect(updateCalls((d) => d.venueChangeStatus === null)).toHaveLength(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("guards the decline write on the agreement it checked", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    expect((await declineVenuePay(fakeApi(), 200n, "m1", AGREED_NONCE)).ok).toBe(true);
+
+    const close = updateCalls((d) => d.venueChangeStatus === null)[0]![0];
+    expect(close.where).toMatchObject({
+      venueChangeStatus: "agreed",
+      venueChangeName: "New Cafe",
+      venueChangePlaceId: "p1",
+      venueChangeProposedAt: AGREED_PROPOSED_AT,
+    });
+  });
+
+  it("a pre-nonce wish card is answered with the board, and closes nothing", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      callbackQuery: { data: "vchg:paydecline:m1" },
+      from: { id: 200 },
+      api: fakeApi(),
+      session: { language: "en" },
+      answerCallbackQuery: vi.fn().mockResolvedValue(true),
+      reply,
+    };
+
+    await handleVenuePayDecline(ctx as unknown as Parameters<typeof handleVenuePayDecline>[0]);
+
+    expect(updateCalls((d) => d.venueChangeStatus === null)).toHaveLength(0);
+    expect(reply).toHaveBeenCalledTimes(1);
+    const [, opts] = reply.mock.calls[0]!;
+    expect(opts.reply_markup.inline_keyboard[0][0].web_app.url).toContain("match=m1");
   });
 });
 
@@ -789,7 +928,7 @@ describe("mintExpressChange", () => {
   it("stamps the express pick for the female (hetero)", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
     const res = await mintExpressChange(100n, "m1", "p1", { loadCatalog });
-    expect(res).toEqual({ ok: true, venueName: "New Cafe", free: false });
+    expect(res).toMatchObject({ ok: true, venueName: "New Cafe", free: false });
     const mint = updateCalls((d) => d.venueChangeExpressAt != null);
     expect(mint.length).toBe(1);
     expect(mint[0][0].data).toMatchObject({
@@ -797,6 +936,13 @@ describe("mintExpressChange", () => {
       venueChangeName: "New Cafe",
       venueChangeProposerId: "a",
     });
+    // The nonce handed to the invoice is the fingerprint of exactly what was
+    // written, so the express invoice settles this mint and no later one.
+    if (res.ok) {
+      expect(res.agreementNonce).toBe(
+        venueAgreementNonce(mint[0][0].data as Parameters<typeof venueAgreementNonce>[0]),
+      );
+    }
   });
 
   it("refuses the male in a hetero pair", async () => {
@@ -815,7 +961,7 @@ describe("settleVenuePayment", () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-1");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-1", AGREED_NONCE);
     expect(res).toEqual({ ok: true });
 
     const settle = updateCalls((d) => d.venueChangeStatus === "settled");
@@ -842,7 +988,7 @@ describe("settleVenuePayment", () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
-    await settleVenuePayment(api, 200n, "m1", "charge-1");
+    await settleVenuePayment(api, 200n, "m1", "charge-1", AGREED_NONCE);
 
     // Without this the banner keeps the old place for up to a minute, until
     // the next status-timer tick — see services/status-banner-refresh.ts.
@@ -857,15 +1003,22 @@ describe("settleVenuePayment", () => {
 
     // Cosmetic re-render, irreversible product step: the order matters.
     await expect(
-      settleVenuePayment(api, 200n, "m1", "charge-1"),
+      settleVenuePayment(api, 200n, "m1", "charge-1", AGREED_NONCE),
     ).resolves.toEqual({ ok: true });
   });
 
   it("express settle sends the partner the positive-frame surprise card", async () => {
     const api = fakeApi();
-    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
+    const row = agreedMatch({ venueChangeExpressAt: new Date() });
+    mMatch.findUnique.mockResolvedValue(row);
 
-    const res = await settleVenuePayment(api, 100n, "m1", "charge-2");
+    const res = await settleVenuePayment(
+      api,
+      100n,
+      "m1",
+      "charge-2",
+      venueAgreementNonce(row as Parameters<typeof venueAgreementNonce>[0]),
+    );
     expect(res).toEqual({ ok: true });
     const hisText = String(
       api.sendMessage.mock.calls.find((c: unknown[]) => c[0] === 200)?.[1] ?? "",
@@ -878,7 +1031,7 @@ describe("settleVenuePayment", () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
-    await settleVenuePayment(api, 200n, "m1", "charge-1");
+    await settleVenuePayment(api, 200n, "m1", "charge-1", AGREED_NONCE);
 
     // The durable record is what makes a crash mid-settle recoverable.
     expect(mPurchase.create).toHaveBeenCalledTimes(1);
@@ -905,7 +1058,7 @@ describe("settleVenuePayment", () => {
     mPurchase.updateMany.mockResolvedValueOnce({ count: 0 });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-1");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-1", AGREED_NONCE);
 
     expect(res).toMatchObject({ ok: false, reason: "refund-in-progress", refunded: true });
     // No cards: the change the partner would be told about was rolled back.
@@ -919,11 +1072,55 @@ describe("settleVenuePayment", () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     mPurchase.create.mockRejectedValue(uniqueViolation());
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-4");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-4", AGREED_NONCE);
     expect(res).toEqual({ ok: true });
     // Nothing is claimed and nothing is refunded — the first delivery did it all.
     expect(mMatch.updateMany).not.toHaveBeenCalled();
     expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION (A13-L6): an invoice minted for an earlier agreement refunds instead of settling the new one", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(
+      agreedMatch({ venueChangeName: "Park Spot", venueChangePlaceId: "p2" }),
+    );
+    mPurchase.create.mockResolvedValue({
+      id: "vp-old",
+      status: "processing",
+      externalPaymentId: "charge-old",
+    });
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-old", AGREED_NONCE);
+
+    expect(res).toMatchObject({ ok: false, reason: "stale-invoice", refunded: true });
+    expect(updateCalls((d) => d.venueChangeStatus === "settled")).toHaveLength(0);
+    // Refunded exactly once, through the durable purchase row.
+    expect(api.refundStarPayment).toHaveBeenCalledTimes(1);
+    expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-old");
+  });
+
+  it("refunds a pre-nonce invoice rather than guessing which agreement it paid for", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-legacy", null);
+
+    expect(res).toMatchObject({ ok: false, reason: "stale-invoice", refunded: true });
+    expect(updateCalls((d) => d.venueChangeStatus === "settled")).toHaveLength(0);
+  });
+
+  it("guards the settle on the agreement whose venue it copies", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await settleVenuePayment(fakeApi(), 200n, "m1", "charge-1", AGREED_NONCE);
+
+    const settle = updateCalls((d) => d.venueChangeStatus === "settled")[0]![0];
+    expect(settle.where).toMatchObject({
+      venueChangeStatus: "agreed",
+      venueChangeName: "New Cafe",
+      venueChangePlaceId: "p1",
+      venueChangeExpiresAt: AGREED_EXPIRES_AT,
+    });
   });
 
   // A settle refused before the durable pre-settle row exists leaves nothing
@@ -932,7 +1129,7 @@ describe("settleVenuePayment", () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(null);
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-lost");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-lost", AGREED_NONCE);
 
     expect(res).toMatchObject({ ok: false, reason: "match-not-found", refunded: true });
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-lost");
@@ -944,7 +1141,7 @@ describe("settleVenuePayment", () => {
     api.refundStarPayment.mockRejectedValue(new Error("telegram down"));
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
-    const res = await settleVenuePayment(api, 999n, "m1", "charge-stuck");
+    const res = await settleVenuePayment(api, 999n, "m1", "charge-stuck", AGREED_NONCE);
 
     expect(res).toMatchObject({ ok: false, reason: "not-participant", refunded: false });
   });
@@ -959,7 +1156,7 @@ describe("settleVenuePayment", () => {
       externalPaymentId: "charge-3",
     });
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-3");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-3", AGREED_NONCE);
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
     expect(mPurchase.updateMany).toHaveBeenCalledWith(
@@ -983,7 +1180,7 @@ describe("settleVenuePayment", () => {
       externalPaymentId: "charge-5",
     });
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-5");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-5", AGREED_NONCE);
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-5");
   });
@@ -999,7 +1196,7 @@ describe("settleVenuePayment", () => {
       externalPaymentId: "charge-6",
     });
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-6");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-6", AGREED_NONCE);
     expect(res.ok).toBe(false);
     expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1127,8 +1324,11 @@ describe("venue change — a second round on a finished session", () => {
     // hearted "New Cafe" last round; she now hearts it again to start a new
     // one. Reading the pre-write snapshot's peer likes would see an overlap on
     // the venue they ALREADY moved to and lock it in as a fresh (chargeable)
-    // change nobody is currently making.
-    mMatch.findUnique.mockResolvedValue(settledMatch());
+    // change nobody is currently making. The overlap is read from the row as it
+    // stands after the claiming write, which reset the partner's hearts.
+    mMatch.findUnique
+      .mockResolvedValueOnce(settledMatch())
+      .mockResolvedValueOnce({ venueLikesA: [likeOf("p1", "New Cafe")], venueLikesB: [] });
 
     const res = await submitVenueLikes(fakeApi(), 100n, "m1", [venueKeyOf(CATALOG[0])], {
       loadCatalog,
@@ -1289,7 +1489,7 @@ describe("venue change — a second round on a finished session", () => {
   it("spends one allowance per settle, inside the settling CAS", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
-    await settleVenuePayment(fakeApi(), 200n, "m1", "charge-1");
+    await settleVenuePayment(fakeApi(), 200n, "m1", "charge-1", AGREED_NONCE);
 
     const settle = mMatch.updateMany.mock.calls.find(
       (c) => (c[0]?.data ?? {}).venueChangeStatus === "settled",

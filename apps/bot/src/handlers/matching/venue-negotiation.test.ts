@@ -45,12 +45,35 @@ vi.mock("../../services/peer-wait.js", () => ({
   startPeerWaitShimmer: vi.fn(),
 }));
 
+// A live Venue Intent V2 match must be finalized by V2 alone (A13-M15); the
+// selector itself has its own suite, so only the hand-off is observed here.
+vi.mock("../../services/venue-intent-v2.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/venue-intent-v2.js")>()),
+  tryFinalizeVenueIntentV2: vi.fn().mockResolvedValue(undefined),
+}));
+
+// The legacy search and its status narration, stubbed so a failed search can
+// be driven without Places or the timed status beats.
+vi.mock("../../services/curated-venue.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/curated-venue.js")>()),
+  resolveVenue: vi.fn(),
+}));
+vi.mock("../../services/ai-stream.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/ai-stream.js")>()),
+  runStatusSequence: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   startVenueNegotiation,
+  handleVenueLocation,
   handleVenueVibe,
   resolveVenueRoutingState,
+  tryFinalize,
 } from "./venue-negotiation.js";
+import { env } from "../../config.js";
+import { tryFinalizeVenueIntentV2 } from "../../services/venue-intent-v2.js";
+import { resolveVenue } from "../../services/curated-venue.js";
 import { parseVibe } from "../../services/vibe-parser.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
 import { renderTimeCard } from "../../services/time-card.js";
@@ -437,5 +460,109 @@ describe("resolveVenueRoutingState", () => {
     });
 
     expect((await resolveVenueRoutingState(222n))?.submitted).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legacy entry points against a live Venue Intent V2 match, and a failed legacy
+// search (A13-M15)
+// ---------------------------------------------------------------------------
+describe("legacy venue entry points (A13-M15)", () => {
+  const mutableEnv = env as unknown as Record<string, unknown>;
+  const mTryFinalizeV2 = tryFinalizeVenueIntentV2 as unknown as MockFn;
+  const mResolveVenue = resolveVenue as unknown as MockFn;
+
+  function goLive(): void {
+    mutableEnv.VENUE_INTENT_V2_ENABLED = true;
+    mutableEnv.VENUE_INTENT_V2_ROLLOUT_PERCENT = 100;
+    mutableEnv.VENUE_INTENT_V2_SHADOW_PERCENT = 0;
+  }
+
+  afterEach(() => {
+    delete mutableEnv.VENUE_INTENT_V2_ENABLED;
+    delete mutableEnv.VENUE_INTENT_V2_ROLLOUT_PERCENT;
+    delete mutableEnv.VENUE_INTENT_V2_SHADOW_PERCENT;
+  });
+
+  beforeEach(() => {
+    mTryFinalizeV2.mockReset().mockResolvedValue(undefined);
+    mResolveVenue.mockReset();
+  });
+
+  it("REGRESSION: a chat location pin on a live V2 match is answered with the Mini App, never written or finalized", async () => {
+    goLive();
+    mUser.findUnique.mockResolvedValueOnce({ id: "u1" }).mockResolvedValueOnce({ theme: "light" });
+    mMatch.findFirst.mockResolvedValue({ id: "m1", userAId: "u1" });
+    const ctx = {
+      message: { location: { latitude: 50.45, longitude: 30.52 } },
+      from: { id: 111 },
+      session: { language: "en" as const },
+      reply: vi.fn().mockResolvedValue(undefined),
+      api: createApi(),
+    } as any;
+
+    await handleVenueLocation(ctx);
+
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mFinalize).not.toHaveBeenCalled();
+    expect(mTryFinalizeV2).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    const [text, opts] = ctx.reply.mock.calls[0]!;
+    expect(text).toBe(t("en", "venueLocationUseMap"));
+    expect(opts.reply_markup.inline_keyboard[0][0].web_app.url).toContain("/location.html?match=m1");
+  });
+
+  it("REGRESSION: tryFinalize hands a live V2 match to the V2 selector and never to the legacy one", async () => {
+    goLive();
+
+    await tryFinalize(createApi(), "m1");
+
+    expect(mTryFinalizeV2).toHaveBeenCalledWith("m1");
+    expect(mFinalize).not.toHaveBeenCalled();
+  });
+
+  it("keeps the legacy selector authoritative when V2 is off", async () => {
+    await tryFinalize(createApi(), "m1");
+
+    expect(mFinalize).toHaveBeenCalledTimes(1);
+    expect(mTryFinalizeV2).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION: a failed legacy search tells both sides how to retry instead of throwing out of the handler", async () => {
+    mFinalize.mockImplementation((_matchId: string, run: () => Promise<void>) => run());
+    mResolveVenue.mockRejectedValue(new Error("Places API (New) searchNearby failed: 503"));
+    mMatch.findUnique.mockResolvedValue({
+      id: "m1",
+      status: "negotiating_venue",
+      agreedTime: new Date("2026-06-20T16:00:00Z"),
+      vibeTextA: "quiet cafe",
+      vibeTextB: "park walk",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.46,
+      vibeLngB: 30.53,
+      parsedCategoryA: "cafe",
+      parsedCategoryB: "park",
+      userA: { telegramId: 111n, platform: "telegram", language: "en", theme: "dark", gender: "female", age: 21, universityDomain: null, firstName: "A", profile: null },
+      userB: { telegramId: 222n, platform: "telegram", language: "ru", theme: "light", gender: "male", age: 22, firstName: "B", profile: null },
+    });
+    const api = createApi();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(tryFinalize(api, "m1")).resolves.toBeUndefined();
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      111,
+      t("en", "venueSelectionFailedRetry"),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      222,
+      t("ru", "venueSelectionFailedRetry"),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
+    warn.mockRestore();
   });
 });

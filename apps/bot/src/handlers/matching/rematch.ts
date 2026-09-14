@@ -19,6 +19,7 @@ import { env } from "../../config.js";
 import type { BotContext } from "../../session.js";
 import { checkRematchEligibility } from "../../services/rematch.js";
 import { renderRematchCard, type RematchCardTheme } from "../../services/rematch-card.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 
 /** Bot API caps a photo caption at 1024 chars; a plain text message gets 4096. */
 const CAPTION_LIMIT = 1024;
@@ -61,12 +62,16 @@ export async function sendRematchOfferIfEligible(
   const user = await prisma.user
     .findUnique({
       where: { id: userId },
-      select: { telegramId: true, language: true, theme: true },
+      select: { telegramId: true, platform: true, language: true, theme: true },
     })
     .catch(() => null);
-  // Telegram-only in v1: a mobile-only account carries a synthetic negative id
-  // and has no Stars rail here.
-  if (!user || user.telegramId <= 0n) return false;
+  // Telegram-only in v1: the offer is a Stars invoice in a bot chat, so there is
+  // no app leg to add. The test is `telegramReachable`, not `telegramId > 0n`
+  // (A13-H3): a Telegram Login account is app-only with a REAL positive id, the
+  // id test sent it an offer that could not arrive, and Telegram's 403 stamped
+  // the person bot-blocked — out of every future drop. Both decision surfaces
+  // call this after a terminal verdict, so the app rail reached it too.
+  if (!user || !telegramReachable(user)) return false;
 
   const lang = (user.language ?? "en") as Language;
   const theme: RematchCardTheme = user.theme === "light" ? "light" : "dark";

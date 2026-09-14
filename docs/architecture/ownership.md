@@ -121,7 +121,9 @@ rather than at the routes: `POST /v1/location/select`, `interpretVenueIntent` +
 `confirmVenueIntent` (shared by the Telegram Mini App and the iOS
 `/v1/matches/:id/venue-intent*` pair), the legacy mobile
 `POST /v1/matches/:id/vibe-location`, and `handleVenueLocation` (a raw Telegram
-attach-menu pin — the one that previously had NO validation whatsoever). The
+attach-menu pin — the one that previously had NO validation whatsoever; since
+2026-09-14 it writes nothing on a Venue Intent V2 live match and points at the
+map instead). The
 refusal is a value, not a throw (`VenueOriginRefusal`), because the two service
 functions already signalled every problem as `null` and the routes turned that
 into `409 wrong-state` — a lie about why the write failed.

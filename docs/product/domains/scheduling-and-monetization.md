@@ -408,8 +408,16 @@ point is saved:
    `vibeLng{A,B}`; the human-readable label from autocomplete is stored in
    `vibeAddress{A,B}` (display only — the matching pipeline runs on
    lat/lng). Telegram users who share a raw location pin via the attach
-   menu still flow through the legacy `handleVenueLocation` path;
-   `vibeAddress*` stays null in that case.
+   menu flow through the legacy `handleVenueLocation` path only while the
+   match is NOT in Venue Intent V2 live mode; `vibeAddress*` stays null in
+   that case. On a live-V2 match the pin writes nothing and the bot answers
+   with the map button (`venueLocationUseMap`) — the legacy finalizer used to
+   book a live-V2 match and skip V2's hours and price rules (audit A13-M15).
+   A date time that is less than `VENUE_FINALIZE_MIN_LEAD_MS` (30 min) away
+   when the venue would be locked sends the pair back to the calendar with a
+   fresh grid instead of booking a date in the past — every finalizer checks it,
+   and a 2-minute sweep catches rows nobody acts on (A13-H5,
+   `services/venue-time-lapse.ts`).
 2. A free-text **vibe** ("cafe / quiet / vegan / park walk / ..."),
    requested **only after** the departure point is on file, which
    `services/vibe-parser.ts` normalises to a strict whitelist
@@ -521,7 +529,7 @@ defers the same dead end to a screen that can no longer fix it.
   `confirmVenueIntent` (Telegram Mini App *and* the iOS `/v1/matches/:id/*`
   pair), the legacy mobile `POST /v1/matches/:id/vibe-location`, and the raw
   Telegram attach-menu pin (`handleVenueLocation`, which had no validation at
-  all). Refused with `400 origin-outside-market` carrying the market, so the
+  all — and since 2026-09-14 writes nothing on a live-V2 match). Refused with `400 origin-outside-market` carrying the market, so the
   native client can name the city too — never as `wrong-state`, which would
   misreport why the write failed.
 - **Fail-open on missing data.** An account whose dating city is absent or not a
@@ -679,7 +687,11 @@ The curated base is kept fresh by the
 daily **venue re-validation** cron (`services/venue-revalidation.ts`): it
 re-checks the oldest-verified active venues against Google Places by stored
 `placeId`, deactivates ones that closed or dropped below the rating/review
-floor, and refreshes opening hours. An infra failure never deactivates a venue.
+floor, and refreshes opening hours. An infra failure never deactivates a venue;
+an explicit Places `NOT_FOUND` (a 404 whose body says so — a place id Google has
+removed) does, immediately, because that venue will never answer again and used
+to stay active with stale hours while taking a slot in every nightly batch
+(audit A13-M16).
 
 **Season and weather sink an unsuitable venue, they never remove it
 (feature-flagged `VENUE_SEASON_WEATHER_ENABLED`, added 2026-07-31).** A park in

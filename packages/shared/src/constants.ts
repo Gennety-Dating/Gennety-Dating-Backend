@@ -354,6 +354,45 @@ export const PROXY_CLOSE_AFTER_HOURS = 2;
 /** Max characters relayed per proxy message (matches the emergency-reason clamp) */
 export const PROXY_MAX_MESSAGE_LEN = 1000;
 
+/** Phase 3.7: Concierge venue negotiation (`negotiating_venue`) */
+/**
+ * The least runway a date may still have at the moment its venue is locked in
+ * (`scheduled`). Checked by every venue finalizer and by the lapse sweep.
+ *
+ * The venue stage has no deadline of its own, while the calendar guard only
+ * runs when the time is LOCKED. A pair that locked 13:30 at noon and confirmed
+ * the venue at 14:00 was therefore scheduled for a date that had already
+ * happened — the failure the calendar guard exists to prevent, one step later.
+ * Such a pair goes back to the calendar with a fresh grid instead.
+ *
+ * Half an hour rather than hours, deliberately. The pre-date rails catch up on
+ * any date still in the future (the safety brief fires inside its window, not
+ * at an exact instant), so the lead only has to cover "can the pair still see
+ * the card and get there". A longer lead would overrule the calendar's own
+ * rule that a same-day slot a few hours out is legitimate (`MIN_SLOT_LEAD_MS`
+ * in `handlers/matching/scheduler.ts`).
+ */
+export const VENUE_FINALIZE_MIN_LEAD_MS = 30 * 60 * 1000;
+/**
+ * How many `negotiating_venue` rows whose time has already run out one sweep
+ * sends back to the calendar. Each costs two chat messages and a calendar
+ * card per side, so a backlog drains over a few ticks rather than as a burst.
+ */
+export const VENUE_LAPSE_SWEEP_BATCH = 20;
+/**
+ * How many times Venue Intent V2 tries to select a venue on its own before it
+ * stops retrying (a provider outage, or the selector itself throwing). After
+ * the last attempt the row keeps no retry, the pair is told how to try again,
+ * and the §3.5c stall ceiling owns the match from there.
+ */
+export const VENUE_SELECTION_MAX_ATTEMPTS = 3;
+/**
+ * Backoff between those attempts, in minutes, indexed by the attempt that just
+ * failed (1st → 1 min, 2nd → 5 min, the rest → 15 min). A process restart does
+ * not lose it: the due time is written to `venueSelectionNextRetryAt`.
+ */
+export const VENUE_SELECTION_RETRY_DELAYS_MINUTES: readonly number[] = [1, 5, 15];
+
 /** Phase 3.7: Venue change (feature-flagged, female-exclusive one-shot) */
 /**
  * Radius (km) around the original auto-assigned venue within which the

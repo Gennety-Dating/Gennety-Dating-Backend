@@ -103,11 +103,56 @@ describe("writes", () => {
     expect(Object.keys(args.update).sort()).toEqual(["photoRefs", "refreshedAt"]);
   });
 
-  it("restamps the TTL clock on every write, including a partial one", async () => {
+  it("restamps the TTL clock on every write that carries photo refs", async () => {
     const now = new Date(NOW);
     await writePlaceCache("p1", { photoRefs: [] }, { now });
     const args = upsert.mock.calls[0][0] as { update: { refreshedAt: Date } };
     expect(args.update.refreshedAt).toBe(now);
+  });
+
+  type Write = {
+    create: Record<string, unknown>;
+    update: Record<string, unknown>;
+  };
+  const day = 24 * 60 * 60 * 1000;
+
+  it("REGRESSION (A13-L28): a coordinates-only write never re-dates the photo refs already cached", async () => {
+    // The refs are three weeks old. The photo reader trusts refs for a day by
+    // this row's single stamp, so re-stamping it here would serve them as
+    // fresh — and a rotated photo name 404s into a category glyph.
+    findUnique.mockResolvedValue(row("p1", 21 * day));
+    const now = new Date(NOW);
+    await writePlaceCache("p1", { address: "Kyiv", lat: 50.45, lng: 30.52 }, { now });
+    const args = upsert.mock.calls[0][0] as Write;
+    expect(args.update).not.toHaveProperty("refreshedAt");
+    expect(args.update).not.toHaveProperty("photoRefs");
+    expect(args.update).toMatchObject({ lat: 50.45, lng: 30.52 });
+  });
+
+  it("re-stamps an EXPIRED row on a coordinates write, dropping the photos it may no longer hold", async () => {
+    findUnique.mockResolvedValue(row("p1", PLACE_CACHE_TTL_MS + day));
+    const now = new Date(NOW);
+    await writePlaceCache("p1", { lat: 50.45, lng: 30.52 }, { now });
+    const args = upsert.mock.calls[0][0] as Write;
+    expect(args.update.refreshedAt).toBe(now);
+    expect(args.update.photoRefs).toEqual([]);
+  });
+
+  it("re-stamps a coordinates write when the row holds no photos to re-date", async () => {
+    findUnique.mockResolvedValue(row("p1", 21 * day, { photoRefs: [] }));
+    const now = new Date(NOW);
+    await writePlaceCache("p1", { lat: 50.45, lng: 30.52 }, { now });
+    const args = upsert.mock.calls[0][0] as Write;
+    expect(args.update.refreshedAt).toBe(now);
+    expect(args.update).not.toHaveProperty("photoRefs");
+  });
+
+  it("stamps a brand-new row on create, whatever the write carries", async () => {
+    findUnique.mockResolvedValue(null);
+    const now = new Date(NOW);
+    await writePlaceCache("p1", { lat: 50.45, lng: 30.52 }, { now });
+    const args = upsert.mock.calls[0][0] as Write;
+    expect(args.create.refreshedAt).toBe(now);
   });
 });
 

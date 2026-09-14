@@ -15,6 +15,7 @@ vi.mock("@gennety/db", () => ({
     match: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -89,7 +90,7 @@ import { env } from "../../config.js";
 import { wallToUtc } from "../../services/profiler-schedule.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
+const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn; updateMany: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mStartVenue = startVenueNegotiation as unknown as MockFn;
 const mPeerWaitShimmer = startPeerWaitShimmer as unknown as MockFn;
@@ -215,6 +216,9 @@ describe("scheduler: startScheduling", () => {
     // a leftover would silently feed the next test.
     mMatch.findUnique.mockReset();
     mMatch.update.mockReset();
+    mMatch.updateMany.mockReset();
+    // The grid-opening claim wins by default: every caller reaches here with it empty.
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
@@ -232,7 +236,8 @@ describe("scheduler: startScheduling", () => {
     const api = createApi();
     await startScheduling(api, "match-1");
 
-    const updateArg = mMatch.update.mock.calls[0]![0] as {
+    const updateArg = mMatch.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
       data: {
         schedulingIteration: number;
         proposedTimes: Date[];
@@ -240,6 +245,12 @@ describe("scheduler: startScheduling", () => {
         availableTimesB: Date[];
       };
     };
+    // Opened by a compare-and-set, only while no grid exists yet (A13-H4).
+    expect(updateArg.where).toEqual({
+      id: "match-1",
+      status: "negotiating",
+      proposedTimes: { isEmpty: true },
+    });
     expect(updateArg.data.schedulingIteration).toBe(3);
     expect(updateArg.data.proposedTimes.length).toBe(CALENDAR_SLOT_COUNT);
     expect(updateArg.data.availableTimesA).toEqual([]);
@@ -327,6 +338,73 @@ describe("scheduler: startScheduling", () => {
     expect(api.editMessageText).toHaveBeenCalledTimes(2);
     expect(api.deleteMessage).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+  // A13-H4. The grid used to be rewritten on every call, so the ticket sweep's
+  // hourly retry wiped the payer's marked times and restarted the stall clock.
+  it("a repeat call keeps the open grid and both sides' picks, and only resends the cards", async () => {
+    mMatch.updateMany.mockResolvedValue({ count: 0 }); // the grid is already open
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValue({
+      status: "negotiating",
+      calendarMessageIdA: 545,
+      calendarMessageIdB: 546,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = createApi();
+    await startScheduling(api, "match-1", { afterTicketGate: true });
+
+    // Nothing but the tracked card ids was written: no grid, no picks, no anchor.
+    for (const [arg] of mMatch.update.mock.calls) {
+      expect(Object.keys((arg as { data: Record<string, unknown> }).data)).toEqual(
+        expect.arrayContaining([expect.stringMatching(/^calendarMessageId[AB]$/)]),
+      );
+      expect(arg).not.toHaveProperty("data.availableTimesA");
+      expect(arg).not.toHaveProperty("data.proposedTimes");
+      expect(arg).not.toHaveProperty("data.schedulingOpenedAt");
+    }
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends nothing when the claim was lost to a row that left planning", async () => {
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mMatch.findUnique.mockResolvedValue({
+      status: "cancelled",
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = createApi();
+    await startScheduling(api, "match-1");
+
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.editMessageText).not.toHaveBeenCalled();
+  });
+
+  it("a partner who blocked the bot does not reject the call or cost the other side its card", async () => {
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValue({
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+    const api = createApi();
+    api.sendMessage.mockImplementation(async (chatId: number) => {
+      if (chatId === 1002) throw new Error("Forbidden: bot was blocked by the user");
+      return { message_id: 700 };
+    });
+
+    await expect(startScheduling(api, "match-1", { afterTicketGate: true })).resolves.toBeUndefined();
+
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, expect.any(String), expect.anything());
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdA: 700 },
+    });
   });
 });
 

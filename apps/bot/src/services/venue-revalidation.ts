@@ -4,6 +4,7 @@ import {
   fetchPlaceDetails,
   MIN_RATING,
   MIN_RATING_COUNT,
+  PlaceNotFoundError,
   type PlaceDetails,
 } from "./venue.js";
 import { prunePlaceCache } from "./place-cache.js";
@@ -38,6 +39,13 @@ import { prunePlaceCache } from "./place-cache.js";
  * with an absent `businessStatus` is treated as inconclusive (refresh, keep
  * active) rather than a closure. Rows without a `placeId` (hand-entered) can't
  * be re-fetched and are simply not scanned.
+ *
+ * The one failed lookup that DOES deactivate is Google's explicit `NOT_FOUND`
+ * for the stored id (`PlaceNotFoundError`, A13-M16). It is an answer rather
+ * than an outage, and it never heals on its own: such a row used to be skipped
+ * untouched, so it stayed active on hours nobody could refresh, kept being
+ * assigned, and — never getting a `lastVerifiedAt` — sat at the head of the
+ * stalest-first queue taking a slot of every night's batch for good.
  *
  * **The batch is `batchSize` distinct PLACES, not rows** (fixed 2026-08-23 —
  * DECISIONS.md). The seeder writes one row per `universityDomain`, so a single
@@ -260,7 +268,27 @@ export async function venueRevalidationTick(
     try {
       details = await fetchDetails(apiKey, target.placeId);
     } catch (err) {
-      // Infra failure — do NOT deactivate. Retry next tick.
+      if (err instanceof PlaceNotFoundError) {
+        // Deactivated at once rather than after N nights: counting nights needs
+        // a column, i.e. a migration, and the answer is already explicit (see
+        // `PlaceNotFoundError` for why a bare 404 does not count). Stamping
+        // `lastVerifiedAt` is honest here, as in the unfit branch below — Google
+        // did answer. A venue that merely changed id comes back by re-seeding
+        // it under the new one.
+        const { count } = await prisma.curatedVenue.updateMany({
+          where: { placeId: target.placeId },
+          data: { active: false, lastVerifiedAt: new Date() },
+        });
+        deactivated++;
+        console.log(
+          `[venue-revalidation] deactivated "${target.name}" (${target.placeId}): Places NOT_FOUND rows=${count}`,
+        );
+        continue;
+      }
+      // Infra failure — do NOT deactivate. Nor is it pushed back in the queue:
+      // the only ordering column is `lastVerifiedAt`, and stamping it would
+      // record a verification that never happened, hiding stale hours for a
+      // whole cycle. A transient failure clears by itself; retry next tick.
       failed++;
       console.warn(
         `[venue-revalidation] details fetch failed for ${target.name} (${target.placeId}):`,

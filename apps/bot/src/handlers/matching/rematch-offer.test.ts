@@ -64,6 +64,21 @@ describe("rematch offer delivery", () => {
     expect((opts as { reply_markup?: unknown }).reply_markup).toBeDefined();
   });
 
+  // A13-H3. A Telegram Login account is app-only with a REAL positive id; the
+  // old `telegramId > 0n` test sent it an offer Telegram refused with a 403, and
+  // the refusal stamped the person bot-blocked.
+  it("sends nothing to an app-only account, even one carrying a real Telegram id", async () => {
+    findUnique.mockResolvedValueOnce({ telegramId: 111n, platform: "mobile", language: "ru", theme: "dark" });
+    const a = api();
+
+    const sent = await sendRematchOfferIfEligible(a as never, "buyer-1", "failed");
+
+    expect(sent).toBe(false);
+    expect(a.sendPhoto).not.toHaveBeenCalled();
+    expect(a.sendMessage).not.toHaveBeenCalled();
+    expect(findUnique.mock.calls[0]![0].select).toMatchObject({ platform: true });
+  });
+
   it("does not protect the card — there is no partner on it to protect", async () => {
     // Every other card send in the product sets `protect_content` because it
     // renders a face (§3.7a). At offer time nobody has been picked yet, so the

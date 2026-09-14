@@ -23,7 +23,7 @@ import {
   CURATED_PHOTO_REFS_MAX,
   DEFAULT_VENUE_REVALIDATION_BATCH,
 } from "./venue-revalidation.js";
-import type { PlaceDetails } from "./venue.js";
+import { PlaceNotFoundError, type PlaceDetails } from "./venue.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mFindMany = (prisma.curatedVenue as unknown as { findMany: MockFn }).findMany;
@@ -202,6 +202,27 @@ describe("venueRevalidationTick", () => {
     expect(res.failed).toBe(1);
     expect(res.deactivated).toBe(0);
     expect(mUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION (A13-M16): deactivates a place Google explicitly says does not exist", async () => {
+    // Skipped untouched before: active on hours nobody could refresh, and —
+    // never verified — first in the stalest-first queue every night for good.
+    mFindMany.mockResolvedValue(copies("gone", "Closed For Good", 3));
+    const res = await venueRevalidationTick({
+      apiKey: "k",
+      fetchDetails: async (_key, placeId) => {
+        throw new PlaceNotFoundError(placeId);
+      },
+    });
+    expect(res).toMatchObject({ scanned: 1, deactivated: 1, failed: 0 });
+    expect(mUpdateMany).toHaveBeenCalledTimes(1);
+    const arg = mUpdateMany.mock.calls[0]![0] as {
+      where: { placeId: string };
+      data: { active: boolean; lastVerifiedAt: Date };
+    };
+    expect(arg.where).toEqual({ placeId: "gone" });
+    expect(arg.data.active).toBe(false);
+    expect(arg.data.lastVerifiedAt).toBeInstanceOf(Date);
   });
 
   it("scans launched markets only, reading the shared constant", async () => {

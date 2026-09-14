@@ -444,6 +444,9 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     }
 
     let venueName: string;
+    // Which agreement the link pays for. Taken from the same read that names the
+    // venue, so the invoice cannot print one place and settle another.
+    let agreementNonce: string;
     if (mode === "express") {
       const key = typeof body?.key === "string" ? body.key : "";
       if (!key) {
@@ -472,6 +475,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         return;
       }
       venueName = mint.venueName;
+      agreementNonce = mint.agreementNonce;
     } else {
       // "agreed": re-derive the caller's paying rights from the board state —
       // the payer, his fork, or her pay-self path all have a paying action.
@@ -483,16 +487,17 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       const action = state.state.myAction;
       const mayPay =
         action === "pay" || action === "pay_or_decline" || action === "pay_or_offer";
-      if (!state.state.agreed || !mayPay) {
+      if (!state.state.agreed || !mayPay || !state.agreementNonce) {
         res.status(409).json({ error: "wrong-state" });
         return;
       }
       venueName = state.state.agreed.name;
+      agreementNonce = state.agreementNonce;
     }
 
     const lang = await langForTelegramId(auth.user.id);
     try {
-      const link = await createVenueInvoiceLink(api, lang, matchId, mode, venueName);
+      const link = await createVenueInvoiceLink(api, lang, matchId, mode, venueName, agreementNonce);
       noteBoardAction(
         auth.user.id,
         matchId,

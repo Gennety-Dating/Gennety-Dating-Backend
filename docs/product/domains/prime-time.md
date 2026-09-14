@@ -245,7 +245,9 @@ exactly-once, ленту фаундера и админский реестр в�
 
 ## 9. Платёжная рельса
 
-Payload `prime:<matchId>` (зеркало `venue:<matchId>:<mode>`).
+Payload `prime:<matchId>` (по образцу `venue:<matchId>:<mode>`; у смены места с
+2026-09-14 ещё и `:<nonce>` соглашения — у Prime Time отпечаток не нужен, полоса у
+пары одна).
 
 - `pre_checkout_query` — перепроверить форму payload, сумму звёзд, что матч всё
   ещё `negotiating` и полоса всё ещё заперта (ссылки на инвойс переиспользуемы).

@@ -1,14 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultVenueHardConstraints, t } from "@gennety/shared";
 
-vi.mock("../config.js", () => ({
-  env: {
-    VENUE_INTENT_V2_ENABLED: true,
-    VENUE_INTENT_V2_ROLLOUT_PERCENT: 0,
-    VENUE_INTENT_V2_SHADOW_PERCENT: 100,
-  },
+const testEnv = vi.hoisted(() => ({
+  VENUE_INTENT_V2_ENABLED: true,
+  VENUE_INTENT_V2_ROLLOUT_PERCENT: 0,
+  VENUE_INTENT_V2_SHADOW_PERCENT: 100,
 }));
 
+vi.mock("../config.js", () => ({ env: testEnv }));
+
 const matchFindUnique = vi.fn();
+const matchFindMany = vi.fn();
+const matchUpdate = vi.fn();
+const matchUpdateMany = vi.fn();
+const curatedFindMany = vi.fn();
+const selectionLogCreate = vi.fn();
 const profileFindUnique = vi.fn();
 const txQueryRawUnsafe = vi.fn();
 const txMatchFindUnique = vi.fn();
@@ -22,7 +28,14 @@ const prismaTransaction = vi.fn(async (fn: (tx: unknown) => unknown) =>
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: matchFindUnique },
+    match: {
+      findUnique: matchFindUnique,
+      findMany: matchFindMany,
+      update: matchUpdate,
+      updateMany: matchUpdateMany,
+    },
+    curatedVenue: { findMany: curatedFindMany },
+    venueSelectionLog: { create: selectionLogCreate },
     // Read by the departure-point gate (`services/venue-origin.ts`) to resolve
     // the caller's launched market.
     profile: { findUnique: profileFindUnique },
@@ -36,9 +49,32 @@ vi.mock("./openai.js", () => ({
   callOpenAIJson: (...args: unknown[]) => callOpenAIJson(...args),
 }));
 
-const { interpretVenueIntent, hoursEvidenceAdmits, decidePlacesSweep, chooseHubFallback } = await import(
-  "./venue-intent-v2.js"
-);
+// The selection pipeline's side doors, stubbed so a finalize can run offline.
+// No Bot API: the in-chat status shimmer and the chat notices stand down, and
+// the pair is reached through the push the mobile-side fixtures use instead.
+vi.mock("../public/server.js", () => ({ getBotApi: () => null }));
+vi.mock("./weather.js", () => ({ fetchWeatherForecast: vi.fn().mockResolvedValue(null) }));
+const sendPushToUser = vi.fn();
+vi.mock("./push.js", () => ({ sendPushToUser: (...args: unknown[]) => sendPushToUser(...args) }));
+const notifyFounderVenueSelectionFailure = vi.fn();
+vi.mock("./founder-notify.js", () => ({
+  notifyFounderVenueSelectionFailure: (...args: unknown[]) => notifyFounderVenueSelectionFailure(...args),
+}));
+const returnLapsedVenueStageToCalendar = vi.fn();
+vi.mock("./venue-time-lapse.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./venue-time-lapse.js")>()),
+  returnLapsedVenueStageToCalendar: (...args: unknown[]) => returnLapsedVenueStageToCalendar(...args),
+}));
+
+const {
+  interpretVenueIntent,
+  confirmVenueIntent,
+  hoursEvidenceAdmits,
+  decidePlacesSweep,
+  chooseHubFallback,
+  tryFinalizeVenueIntentV2,
+  retryDueVenueSelections,
+} = await import("./venue-intent-v2.js");
 type HubCandidateRow = Parameters<typeof chooseHubFallback>[0][number];
 const { isVenueOriginRefusal } = await import("./venue-origin.js");
 
@@ -97,8 +133,23 @@ function confirmedIntent(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Every match in this file is shadow traffic unless a test opts into live. */
+function goLive(): void {
+  testEnv.VENUE_INTENT_V2_ROLLOUT_PERCENT = 100;
+}
+
+afterEach(() => {
+  testEnv.VENUE_INTENT_V2_ROLLOUT_PERCENT = 0;
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  matchUpdateMany.mockResolvedValue({ count: 1 });
+  curatedFindMany.mockResolvedValue([]);
+  selectionLogCreate.mockResolvedValue({});
+  sendPushToUser.mockResolvedValue(true);
+  notifyFounderVenueSelectionFailure.mockResolvedValue(undefined);
+  returnLapsedVenueStageToCalendar.mockResolvedValue(true);
   // Every participant is a Kyiv account unless a test says otherwise, so the
   // departure-point gate passes for the shared `ORIGIN` (Khreshchatyk).
   profileFindUnique.mockResolvedValue({ homeCityKey: "ua:kyiv" });
@@ -452,5 +503,213 @@ describe("decidePlacesSweep — the Places spend gate", () => {
     expect(
       decidePlacesSweep({ ...base, hasApiKey: false, curatedEligible: 500 }),
     ).toBe("skip-provider-unavailable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finalization: a lapsed date (A13-H5) and a selection that cannot finish (A13-H6)
+// ---------------------------------------------------------------------------
+
+const HOUR = 60 * 60 * 1000;
+
+/** Both sides confirmed from a mobile client, so the pair is reachable by push. */
+function finalizeRow(overrides: Record<string, unknown> = {}) {
+  const user = (id: string) => ({
+    id,
+    telegramId: 0n,
+    platform: "mobile",
+    language: "en",
+    theme: "dark",
+    universityDomain: null,
+    profile: { homeCityKey: "ua:kyiv" },
+  });
+  return {
+    id: MATCH_ID,
+    status: "negotiating_venue",
+    agreedTime: new Date(Date.now() + 24 * HOUR),
+    venueIntentA: confirmedIntent(),
+    venueIntentB: confirmedIntent(),
+    userA: user(USER_A),
+    userB: user(USER_B),
+    ...overrides,
+  };
+}
+
+describe("finalizeVenueIntentV2 — a date that ran out of runway (A13-H5)", () => {
+  it("REGRESSION: sends a live pair back to the calendar instead of selecting a venue for a passed time", async () => {
+    goLive();
+    matchFindUnique.mockResolvedValue(finalizeRow({ agreedTime: new Date(Date.now() - HOUR) }));
+
+    await tryFinalizeVenueIntentV2(MATCH_ID);
+
+    expect(returnLapsedVenueStageToCalendar).toHaveBeenCalledWith(MATCH_ID);
+    // No search was bought and nothing was locked.
+    expect(curatedFindMany).not.toHaveBeenCalled();
+    expect(matchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves a shadow run's lapse to the authoritative legacy path", async () => {
+    matchFindUnique.mockResolvedValue(finalizeRow({ agreedTime: new Date(Date.now() - HOUR) }));
+
+    await tryFinalizeVenueIntentV2(MATCH_ID);
+
+    expect(returnLapsedVenueStageToCalendar).not.toHaveBeenCalled();
+    expect(curatedFindMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses a confirmation for a date without runway, and writes nothing", async () => {
+    goLive();
+    matchFindUnique.mockResolvedValue(
+      baseMatch({
+        agreedTime: new Date(Date.now() + 5 * 60_000),
+        venueIntentA: confirmedIntent({ state: "draft", confirmedAt: null }),
+      }),
+    );
+
+    const result = await confirmVenueIntent(MATCH_ID, USER_A, {
+      experiences: ["coffee_treats"],
+      ambiences: ["quiet"],
+      formats: ["seated"],
+      hardConstraints: defaultVenueHardConstraints(),
+      origin: ORIGIN,
+    });
+
+    expect(result).toBeNull();
+    expect(matchUpdate).not.toHaveBeenCalled();
+    expect(returnLapsedVenueStageToCalendar).toHaveBeenCalledWith(MATCH_ID);
+  });
+});
+
+describe("finalizeVenueIntentV2 — a selection that cannot finish (A13-H6)", () => {
+  it("REGRESSION: a run that throws is recorded as a failed attempt with a bounded retry, not lost", async () => {
+    goLive();
+    matchFindUnique
+      .mockRejectedValueOnce(new Error("connection reset"))
+      .mockResolvedValueOnce({ ...finalizeRow(), venueSelectionAttempts: 0 });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(tryFinalizeVenueIntentV2(MATCH_ID)).resolves.toBeUndefined();
+
+    expect(matchUpdateMany).toHaveBeenCalledTimes(1);
+    const write = matchUpdateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      data: { venueSelectionAttempts: number; venueSelectionError: string; venueSelectionNextRetryAt: Date | null };
+    };
+    expect(write.where).toEqual({ id: MATCH_ID, status: "negotiating_venue", venueSelectionAttempts: 0 });
+    expect(write.data.venueSelectionAttempts).toBe(1);
+    expect(write.data.venueSelectionError).toBe("selection_failed");
+    expect(write.data.venueSelectionNextRetryAt).toBeInstanceOf(Date);
+    // Not terminal yet: nobody is disturbed.
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(notifyFounderVenueSelectionFailure).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it("after the last attempt: no retry, the pair is told how to try again, the founder is alerted", async () => {
+    goLive();
+    matchFindUnique
+      .mockRejectedValueOnce(new Error("connection reset"))
+      .mockResolvedValueOnce({ ...finalizeRow(), venueSelectionAttempts: 2 });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await tryFinalizeVenueIntentV2(MATCH_ID);
+
+    const write = matchUpdateMany.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(write.data).toMatchObject({ venueSelectionAttempts: 3, venueSelectionNextRetryAt: null });
+    expect(sendPushToUser).toHaveBeenCalledTimes(2);
+    expect(sendPushToUser.mock.calls[0]![1]).toMatchObject({ body: t("en", "venueSelectionFailedRetry") });
+    expect(notifyFounderVenueSelectionFailure).toHaveBeenCalledWith(MATCH_ID, "selection_failed", 3);
+    errors.mockRestore();
+  });
+
+  it("a terminal provider failure with no hub open leaves no retry and tells the pair what to do", async () => {
+    goLive();
+    const previousKey = process.env.PLACES_API_KEY;
+    delete process.env.PLACES_API_KEY;
+    matchFindUnique
+      .mockResolvedValueOnce(finalizeRow())
+      .mockResolvedValueOnce({ venueSelectionAttempts: 2 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      await tryFinalizeVenueIntentV2(MATCH_ID);
+    } finally {
+      if (previousKey !== undefined) process.env.PLACES_API_KEY = previousKey;
+      warn.mockRestore();
+    }
+
+    const write = matchUpdateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    // Guarded on the stage, so a run that outlived it plants nothing.
+    expect(write.where).toEqual({ id: MATCH_ID, status: "negotiating_venue" });
+    expect(write.data).toMatchObject({
+      venueSelectionAttempts: 3,
+      venueSelectionError: "provider_unavailable",
+      venueSelectionNextRetryAt: null,
+    });
+    expect(sendPushToUser.mock.calls[0]![1]).toMatchObject({ body: t("en", "venueSelectionFailedRetry") });
+    expect(notifyFounderVenueSelectionFailure).toHaveBeenCalledWith(MATCH_ID, "provider_unavailable", 3);
+  });
+
+  it("tells nobody when the row left the venue stage while the search ran", async () => {
+    goLive();
+    const previousKey = process.env.PLACES_API_KEY;
+    delete process.env.PLACES_API_KEY;
+    matchFindUnique
+      .mockResolvedValueOnce(finalizeRow())
+      .mockResolvedValueOnce({ venueSelectionAttempts: 2 });
+    matchUpdateMany.mockResolvedValue({ count: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      await tryFinalizeVenueIntentV2(MATCH_ID);
+    } finally {
+      if (previousKey !== undefined) process.env.PLACES_API_KEY = previousKey;
+      warn.mockRestore();
+    }
+
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(notifyFounderVenueSelectionFailure).not.toHaveBeenCalled();
+  });
+
+  it("never messages a shadow pair about a V2 failure — their flow is the legacy one", async () => {
+    const previousKey = process.env.PLACES_API_KEY;
+    delete process.env.PLACES_API_KEY;
+    matchFindUnique
+      .mockResolvedValueOnce(finalizeRow())
+      .mockResolvedValueOnce({ venueSelectionAttempts: 2 });
+
+    try {
+      await tryFinalizeVenueIntentV2(MATCH_ID);
+    } finally {
+      if (previousKey !== undefined) process.env.PLACES_API_KEY = previousKey;
+    }
+
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(notifyFounderVenueSelectionFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("claims a due retry before running it, so a run that writes nothing cannot hog the sweep", async () => {
+    const due = new Date(Date.now() - 60_000);
+    matchFindMany.mockResolvedValue([{ id: MATCH_ID, venueSelectionNextRetryAt: due }]);
+    // The run finds nothing to do (the row is gone) and writes nothing.
+    matchFindUnique.mockResolvedValue(null);
+
+    expect(await retryDueVenueSelections()).toBe(1);
+
+    expect(matchUpdateMany).toHaveBeenCalledWith({
+      where: { id: MATCH_ID, status: "negotiating_venue", venueSelectionNextRetryAt: due },
+      data: { venueSelectionNextRetryAt: null },
+    });
+  });
+
+  it("skips a retry another process already claimed", async () => {
+    matchFindMany.mockResolvedValue([{ id: MATCH_ID, venueSelectionNextRetryAt: new Date() }]);
+    matchUpdateMany.mockResolvedValue({ count: 0 });
+
+    expect(await retryDueVenueSelections()).toBe(0);
+    expect(matchFindUnique).not.toHaveBeenCalled();
   });
 });

@@ -214,8 +214,9 @@ export async function runDateLifecycleTick(
     select: {
       id: true,
       agreedTime: true,
-      userA: { select: { id: true, telegramId: true, language: true, firstName: true } },
-      userB: { select: { id: true, telegramId: true, language: true, firstName: true } },
+      // `platform` decides whether the bot can reach them at all — see `deliver`.
+      userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
     },
   });
 
@@ -229,8 +230,13 @@ export async function runDateLifecycleTick(
     // in a follow-up update once it's ready. Ice-breaker generation always
     // produces output (graceful static fallback), so claiming up front never
     // strands a match the way it would for the retry-capable wingman loop.
+    //
+    // The claim also asserts `status: "scheduled"` (A13-L20). The row was read a
+    // moment earlier, and an emergency cancel or a freeze landing in between
+    // must not still earn the ice-breakers — nor, worse, an emergency button
+    // for a date that is already off.
     const claimed = await prisma.match.updateMany({
-      where: { id: match.id, icebreakersSentAt: null },
+      where: { id: match.id, status: "scheduled", icebreakersSentAt: null },
       data: { icebreakersSentAt: now },
     });
     if (claimed.count === 0) continue;
@@ -309,15 +315,25 @@ export async function runDateLifecycleTick(
     // to abort the whole for-loop, leaving icebreakersSentAt null and causing
     // duplicate sends. Each leg is independently caught so one blocked user
     // never strands the other (the marker is already claimed up front, H2).
+    //
+    // The gate is `telegramReachable`, not `telegramId > 0n` (A13-H3): a
+    // Telegram Login account is app-only with a REAL positive id, so the id test
+    // streamed into a chat that does not exist, Telegram refused with a 403, and
+    // the refusal stamped the person bot-blocked — out of every future drop.
+    // Such a person already has their T-5h beat on the app rail: the date-day
+    // Live Activity starts below at this same gate with its own alert, and the
+    // starters themselves ride `/v1/matches/current` (`iceBreakers`). A second
+    // alert push here would announce the same moment twice.
     const deliver = async (
-      tgId: bigint,
+      user: { telegramId: bigint; platform: string | null },
       drafts: string[],
       emergencyText: string,
       emergKb: InlineKeyboard,
       viewerUserId: string,
       lang: Language,
     ): Promise<void> => {
-      if (tgId <= 0n) return;
+      if (!telegramReachable(user)) return;
+      const tgId = user.telegramId;
       const chatId = Number(tgId);
       try {
         await stream(api, chatId, drafts, {
@@ -365,7 +381,7 @@ export async function runDateLifecycleTick(
 
     await Promise.all([
       deliver(
-        match.userA.telegramId,
+        match.userA,
         draftsA,
         t(langA, "emergencyUnlocked"),
         emergKbA,
@@ -373,7 +389,7 @@ export async function runDateLifecycleTick(
         langA,
       ),
       deliver(
-        match.userB.telegramId,
+        match.userB,
         draftsB,
         t(langB, "emergencyUnlocked"),
         emergKbB,

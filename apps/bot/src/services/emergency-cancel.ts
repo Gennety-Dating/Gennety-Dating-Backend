@@ -28,7 +28,16 @@ export interface EmergencyCancelOutcome {
 
 export type EmergencyCancelResult =
   | { ok: true; outcome: EmergencyCancelOutcome }
-  | { ok: false; error: "not-found" | "forbidden" | "wrong-state" };
+  | {
+      ok: false;
+      /**
+       * `date-started`: the agreed time has come. Emergency cancellation is a
+       * way out of a date that is still ahead; once it has begun, "they didn't
+       * show up" belongs to the T+24h did-you-meet question (PRODUCT_SPEC
+       * §Phase 4), not to a rail that refunds both tickets.
+       */
+      error: "not-found" | "forbidden" | "wrong-state" | "date-started";
+    };
 
 /** Telegram already capped the forwarded text here; keep both rails identical. */
 export const EMERGENCY_REASON_MAX_LENGTH = 1000;
@@ -40,29 +49,58 @@ export const EMERGENCY_REASON_MAX_LENGTH = 1000;
  * The status write is a **compare-and-set** on `status: "scheduled"`, so two
  * clients racing (the partner cancelling from Telegram at the same moment)
  * produce one cancellation and one `wrong-state`, not two sets of refunds.
+ *
+ * **Only before the date begins (A13-M20).** A `scheduled` row stays
+ * `scheduled` until the T+24h feedback prompt completes it, and the button that
+ * starts this flow stays in the chat, so the cancel used to work for a whole day
+ * after the date — refunding both tickets for an evening that had already
+ * happened, and skipping the feedback that would have said so. No grace after
+ * the start: the product already has a rail for "they didn't show up" (the
+ * did-you-meet question), and a grace window here would quietly decide the
+ * no-show refund question PRODUCT_SPEC leaves open. The cut-off rides the CAS
+ * too, so a request read a second before the start cannot land after it.
  */
 export async function cancelScheduledDate(input: {
   matchId: string;
   actorUserId: string;
   reason: string;
+  now?: Date;
 }): Promise<EmergencyCancelResult> {
   const reason = input.reason.trim().slice(0, EMERGENCY_REASON_MAX_LENGTH);
+  const now = input.now ?? new Date();
 
   const match = await prisma.match.findUnique({
     where: { id: input.matchId },
-    select: { id: true, status: true, userAId: true, userBId: true, emergencyCancelledBy: true },
+    select: {
+      id: true,
+      status: true,
+      userAId: true,
+      userBId: true,
+      emergencyCancelledBy: true,
+      agreedTime: true,
+    },
   });
   if (!match) return { ok: false, error: "not-found" };
 
   const isParticipant =
     input.actorUserId === match.userAId || input.actorUserId === match.userBId;
   if (!isParticipant) return { ok: false, error: "forbidden" };
-  if (match.status !== "scheduled" || match.emergencyCancelledBy) {
+  // A `scheduled` row always carries its time; one without is not a date this
+  // rail can reason about, so it reads as the wrong state rather than a start.
+  if (match.status !== "scheduled" || match.emergencyCancelledBy || !match.agreedTime) {
     return { ok: false, error: "wrong-state" };
+  }
+  if (match.agreedTime.getTime() <= now.getTime()) {
+    return { ok: false, error: "date-started" };
   }
 
   const claimed = await prisma.match.updateMany({
-    where: { id: match.id, status: "scheduled", emergencyCancelledBy: null },
+    where: {
+      id: match.id,
+      status: "scheduled",
+      emergencyCancelledBy: null,
+      agreedTime: { gt: now },
+    },
     data: {
       status: "cancelled",
       emergencyCancelledBy: input.actorUserId,

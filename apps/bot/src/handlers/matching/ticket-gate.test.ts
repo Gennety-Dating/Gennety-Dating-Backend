@@ -57,6 +57,7 @@ import {
   useTicketFromBalance,
   notePartnerPaidSeen,
   refundAndFallbackToScheduling,
+  completeTicketGateAndUnlockScheduling,
   retryPendingStarsGateRefunds,
   settlePremiumSlots,
   getTicketState,
@@ -882,6 +883,93 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
       }),
     );
     expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "ticketRefundedDm"));
+  });
+
+  // A13-H4. `refund_pending` used to be held until AFTER the Calendar handoff,
+  // and one 403 from a partner who had blocked the bot rejected that handoff —
+  // so `refunded` was never written and the hourly sweep re-ran the whole path
+  // forever, wiping the payer's picks and resetting the stall anchor each time.
+  it("settles the refund before the Calendar, so a failed handoff is not retried as a refund", async () => {
+    const paidRow = matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") });
+    mMatch.findUnique.mockResolvedValueOnce(paidRow);
+    mLedger.findMany
+      .mockResolvedValueOnce([]) // no Stars charge
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+      ]);
+    mStartScheduling.mockRejectedValueOnce(new Error("Forbidden: bot was blocked by the user"));
+    const api = createApi();
+
+    await expect(refundAndFallbackToScheduling(api, "match-1")).rejects.toThrow(/blocked/);
+
+    const flips = mMatch.updateMany.mock.calls.map((call) => call[0].data.ticketStatus);
+    expect(flips).toEqual(["refund_pending", "refunded"]);
+    // The flip and the notice both precede the handoff.
+    const refundedFlipOrder = mMatch.updateMany.mock.invocationCallOrder[1]!;
+    expect(refundedFlipOrder).toBeLessThan(mStartScheduling.mock.invocationCallOrder[0]!);
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "ticketRefundedDm"));
+
+    // The next hourly sweep finds the gate settled and leaves the pair alone:
+    // no second refund, no second Calendar, nothing reset.
+    mMatch.findUnique.mockResolvedValueOnce({ ...paidRow, ticketStatus: "refunded" });
+    await refundAndFallbackToScheduling(api, "match-1");
+    expect(mStartScheduling).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(2);
+    expect(mGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it("still opens the Calendar when the payer's refund notice is refused", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+      ]);
+    const api = createApi();
+    api.sendMessage.mockRejectedValueOnce(new Error("Forbidden: bot was blocked by the user"));
+
+    await expect(refundAndFallbackToScheduling(api, "match-1")).resolves.toBeUndefined();
+
+    expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", { afterTicketGate: true });
+  });
+
+  // A13-L21. The refund claim did not require the unpaid slot to still be
+  // empty, so a second payment racing the sweep could be refunded out of a gate
+  // that had just closed with both slots paid.
+  it("claims the refund only while the unpaid slot is still empty", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 }); // B paid in between
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toEqual({
+      id: "match-1",
+      status: "negotiating",
+      ticketStatus: { in: ["pending", "partial"] },
+      ticketPaidB: null,
+    });
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(mStartScheduling).not.toHaveBeenCalled();
+  });
+
+  it("completes only an open gate — never one the sweep is already refunding", async () => {
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    await completeTicketGateAndUnlockScheduling(api, "match-1");
+
+    expect(mMatch.updateMany.mock.calls[0]![0]).toEqual({
+      where: { id: "match-1", status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      data: { ticketStatus: "completed", ticketExpiresAt: null },
+    });
+    expect(mStartScheduling).not.toHaveBeenCalled();
   });
 
   it("returns a ticket spent on a slot that was never claimed", async () => {

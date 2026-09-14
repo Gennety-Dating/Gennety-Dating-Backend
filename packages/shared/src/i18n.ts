@@ -636,6 +636,12 @@ const translations = {
       "Your date with {name} is cancelled — there was no answer for two days, " +
       "and I couldn't keep you both hanging.\n\n" +
       "If plans change, just tell me. That's completely fine.",
+    // The hard ceiling ended a venue step both sides had finished: the place
+    // search failed for good and nothing was going to retry it. Nobody went
+    // quiet, so neither is told their partner did.
+    stallTimeoutVenueUnresolved:
+      "Your date with {name} is cancelled — I couldn't find a place for you two in time.\n\n" +
+      "That's on me, not on either of you. I've bumped your priority in the next drop.",
     pitchExpired: "⏳ Time's up — this proposal expired.",
     matchExpiredSilentWarning:
       "Time's up — you didn't reply to your match in 24h. " +
@@ -789,6 +795,13 @@ const translations = {
       "Saved ✨ Your match got a ping — I'll tell you the moment they answer.",
     matchScheduleNoOverlapYet:
       "You've both picked times, but nothing overlaps yet. Add a few more — the second a slot matches, it's locked:",
+    // Scheduling reminder for a pair whose calendars already share slots that
+    // have not locked — normally several of them. Only a single shared slot
+    // locks the date by itself; with several, someone has to confirm the final
+    // one, and the server cannot tell which side was shown that choice last —
+    // so both hear it.
+    matchSchedulePickFinalYet:
+      "Your calendars already line up — open it and confirm the time that works best, and it's locked:",
     venueTimeCardLabel: "YOUR DATE",
     venueTimeLockedCaption: "Your date is locked in ✨",
     venueConciergeIntro:
@@ -807,6 +820,12 @@ const translations = {
     venueSafetyOverride:
       "Heads up — picked a public café instead. We keep first dates in public spots.",
     venueWaitingPeer: "Got yours ✨ Waiting for them…",
+    venueLocationUseMap:
+      "Pins shared in the chat don't reach the venue search any more — mark your starting point on the map below 📍",
+    venueTimeLapsedBackToCalendar:
+      "Your date time is too close now to find a spot in time, so let's pick a new one.",
+    venueSelectionFailedRetry:
+      "I couldn't pick a spot for your date just now — the venue search failed on our side. Open the venue screen and confirm your starting point again to retry.",
     peerWaitT1Sent: "Passed it to {name}, waiting for an answer",
     peerWaitT2Waiting: "{name} is still thinking it over",
     peerWaitT3Quiet: "No word from {name} yet, still waiting",
@@ -902,6 +921,8 @@ const translations = {
     venueWishDeclineBtn: "Not this time",
     venuePayDeclineAck:
       "Got it — the venue stays as planned for now. If it changes, you'll get an updated card.",
+    venuePayDeclineStale:
+      "This card is out of date — the venue plans have changed since. Tap below to see where things stand now.",
     venuePaySelfDm:
       "You two agreed on a new place.\n📍 {venue}\nLock it in — I'll update your date cards.",
     venuePaySelfBtn: "⭐ Lock it in — {stars}",
@@ -956,6 +977,13 @@ const translations = {
       "Write your reason. This goes to your match *word for word*.",
     emergencyConfirmed:
       "Date cancelled. Your message was forwarded.",
+    // The emergency button stays in the chat after the date begins, but the
+    // cancel rail refunds both tickets — so past the start time it refuses and
+    // points at the did-you-meet question instead (PRODUCT_SPEC §Phase 4). It
+    // promises nothing about money, exactly like that question's own closing.
+    emergencyDateStarted:
+      "Your date's start time has already passed, so it can't be cancelled any more. " +
+      "If it didn't happen, I'll ask you about it the next day.",
     emergencyReceivedOther:
       "Your match cancelled the date. Here's what they said:\n\n\"{reason}\"",
     emergencyReceivedOtherIntro:
@@ -1986,6 +2014,9 @@ const translations = {
       "Свидание с {name} отменено — ответа не было двое суток, " +
       "а держать вас обоих в подвешенном состоянии я не мог.\n\n" +
       "Если планы меняются — просто напиши мне. Это нормально.",
+    stallTimeoutVenueUnresolved:
+      "Свидание с {name} отменено — я так и не смог вовремя подобрать вам место.\n\n" +
+      "Это не ваша вина, а моя. Поднял твой приоритет в следующем подборе.",
     pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
     matchExpiredSilentWarning:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
@@ -2082,6 +2113,8 @@ const translations = {
       "Сохранил ✨ Мэтч получил пинг — напишу, как только ответит.",
     matchScheduleNoOverlapYet:
       "Вы оба отметили время, но пока ничего не совпало. Добавь ещё пару слотов — как только один пересечётся, фиксирую дату:",
+    matchSchedulePickFinalYet:
+      "Ваши календари уже совпали — открой его и подтверди удобное время, и дата зафиксирована:",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
       "Взаимно 🤍 Открой календарь и отметь удобное время.",
@@ -2145,6 +2178,12 @@ const translations = {
     venueSafetyOverride:
       "Небольшое уточнение — заменил на публичное кафе. Первые свидания у нас в людных местах.",
     venueWaitingPeer: "Принял ✨ Ждём вторую сторону…",
+    venueLocationUseMap:
+      "Геоточки из чата больше не попадают в поиск места — отметь точку отправления на карте ниже 📍",
+    venueTimeLapsedBackToCalendar:
+      "До времени свидания осталось слишком мало, чтобы успеть подобрать место, — давай выберем новое.",
+    venueSelectionFailedRetry:
+      "Не получилось подобрать место для свидания — поиск мест дал сбой на нашей стороне. Открой экран места и ещё раз подтверди точку отправления, чтобы попробовать снова.",
     peerWaitT1Sent: "Передали {name}, ждём ответа",
     peerWaitT2Waiting: "{name} ещё думает над ответом",
     peerWaitT3Quiet: "{name} пока молчит, ждём",
@@ -2227,6 +2266,8 @@ const translations = {
     venueWishDeclineBtn: "Не в этот раз",
     venuePayDeclineAck:
       "Понял — место пока остаётся прежним. Если оно изменится, придёт обновлённая карточка.",
+    venuePayDeclineStale:
+      "Эта карточка уже неактуальна — планы по месту с тех пор поменялись. Нажми ниже, чтобы посмотреть, что сейчас.",
     venuePaySelfDm:
       "Вы сошлись на новом месте.\n📍 {venue}\nЗакрепи его — и я обновлю ваши карточки.",
     venuePaySelfBtn: "⭐ Закрепить — {stars}",
@@ -2276,6 +2317,9 @@ const translations = {
       "Напиши причину. Текст уйдёт мэтчу *как есть*.",
     emergencyConfirmed:
       "Свидание отменено. Сообщение переслано.",
+    emergencyDateStarted:
+      "Время свидания уже наступило, поэтому отменить его больше нельзя. " +
+      "Если встреча не состоялась, я спрошу тебя об этом на следующий день.",
     emergencyReceivedOther:
       "Мэтч отменил свидание. Вот что написал:\n\n\"{reason}\"",
     emergencyReceivedOtherIntro:
@@ -3237,6 +3281,9 @@ const translations = {
       "Побачення з {name} скасовано — відповіді не було дві доби, " +
       "а тримати вас обох у підвішеному стані я не міг.\n\n" +
       "Якщо плани змінюються — просто напиши мені. Це нормально.",
+    stallTimeoutVenueUnresolved:
+      "Побачення з {name} скасовано — я так і не зміг вчасно підібрати вам місце.\n\n" +
+      "Це не ваша провина, а моя. Підняв твій пріоритет у наступному підборі.",
     pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
     matchExpiredSilentWarning:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
@@ -3376,6 +3423,8 @@ const translations = {
       "Зберіг ✨ Метч отримав пінг — напишу, щойно відповість.",
     matchScheduleNoOverlapYet:
       "Ви обоє позначили час, але поки нічого не збіглося. Додай ще кілька слотів — щойно один перетнеться, фіксую дату:",
+    matchSchedulePickFinalYet:
+      "Ваші календарі вже збіглися — відкрий його й підтверди зручний час, і дату зафіксовано:",
     venueTimeCardLabel: "ВАШЕ ПОБАЧЕННЯ",
     venueTimeLockedCaption: "Час вашого побачення зафіксовано ✨",
     venueConciergeIntro:
@@ -3394,6 +3443,12 @@ const translations = {
     venueSafetyOverride:
       "Невеличке уточнення — заміняю на публічне кафе. Перші побачення у нас у людних місцях.",
     venueWaitingPeer: "Прийняв ✨ Чекаємо на іншу сторону…",
+    venueLocationUseMap:
+      "Геоточки з чату більше не потрапляють у пошук місця — познач точку відправлення на карті нижче 📍",
+    venueTimeLapsedBackToCalendar:
+      "До часу побачення лишилося надто мало, щоб встигнути підібрати місце, — оберімо новий.",
+    venueSelectionFailedRetry:
+      "Не вдалося підібрати місце для побачення — пошук місць дав збій на нашому боці. Відкрий екран місця й ще раз підтвердь точку відправлення, щоб спробувати знову.",
     peerWaitT1Sent: "Передали {name}, чекаємо відповіді",
     peerWaitT2Waiting: "{name} ще думає над відповіддю",
     peerWaitT3Quiet: "{name} поки мовчить, чекаємо",
@@ -3476,6 +3531,8 @@ const translations = {
     venueWishDeclineBtn: "Не цього разу",
     venuePayDeclineAck:
       "Зрозумів — місце поки лишається тим самим. Якщо воно зміниться, прийде оновлена картка.",
+    venuePayDeclineStale:
+      "Ця картка вже неактуальна — плани щодо місця відтоді змінилися. Натисни нижче, щоб подивитися, що зараз.",
     venuePaySelfDm:
       "Ви зійшлися на новому місці.\n📍 {venue}\nЗакріпи його — і я оновлю ваші картки.",
     venuePaySelfBtn: "⭐ Закріпити — {stars}",
@@ -3525,6 +3582,9 @@ const translations = {
       "Напиши причину. Текст піде метчу *як є*.",
     emergencyConfirmed:
       "Побачення скасовано. Повідомлення переслано.",
+    emergencyDateStarted:
+      "Час побачення вже настав, тож скасувати його більше не можна. " +
+      "Якщо зустріч не відбулася, я запитаю тебе про це наступного дня.",
     emergencyReceivedOther:
       "Метч скасував побачення. Ось що написав:\n\n\"{reason}\"",
     emergencyReceivedOtherIntro:
@@ -4474,6 +4534,9 @@ const deTranslations: TranslationTable = {
     "Dein Date mit {name} ist abgesagt — zwei Tage keine Antwort, " +
     "und ich konnte euch beide nicht länger hängen lassen.\n\n" +
     "Wenn sich Pläne ändern, sag es mir einfach. Das ist völlig okay.",
+  stallTimeoutVenueUnresolved:
+    "Dein Date mit {name} ist abgesagt — ich habe nicht rechtzeitig einen Ort für euch beide gefunden.\n\n" +
+    "Das liegt an mir, nicht an euch. Ich habe deine Priorität im nächsten Drop erhöht.",
   pitchExpired: "⏳ Zeit abgelaufen - dieser Vorschlag ist verfallen.",
   matchExpiredSilentWarning:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
@@ -4600,6 +4663,8 @@ const deTranslations: TranslationTable = {
     "Gespeichert ✨ Dein Match hat einen Ping bekommen — ich sage Bescheid, sobald eine Antwort kommt.",
   matchScheduleNoOverlapYet:
     "Ihr habt beide Zeiten markiert, aber noch passt nichts zusammen. Füg ein paar Optionen hinzu — sobald ein Slot passt, ist es fix:",
+  matchSchedulePickFinalYet:
+    "Eure Kalender passen schon zusammen — öffne ihn und bestätige die Zeit, die am besten passt, dann steht der Termin:",
   venueTimeCardLabel: "EUER DATE",
   venueTimeLockedCaption: "Euer Termin steht ✨",
   venueConciergeIntro:
@@ -4617,6 +4682,12 @@ const deTranslations: TranslationTable = {
     "Startpunkt gespeichert ✨ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
   venueSafetyOverride: "Kurzer Hinweis - ich habe stattdessen ein öffentliches Café gewählt. Erste Dates bleiben bei uns öffentlich.",
   venueWaitingPeer: "Deins ist da ✨ Wir warten auf sie...",
+  venueLocationUseMap:
+    "Standorte aus dem Chat kommen nicht mehr bei der Ortssuche an — markiere deinen Startpunkt unten auf der Karte 📍",
+  venueTimeLapsedBackToCalendar:
+    "Bis zu eurem Date bleibt zu wenig Zeit, um noch einen Treffpunkt zu finden — lass uns eine neue Zeit wählen.",
+  venueSelectionFailedRetry:
+    "Ich konnte gerade keinen Treffpunkt für euer Date finden — die Ortssuche ist bei uns ausgefallen. Öffne den Ortsbildschirm und bestätige deinen Startpunkt noch einmal, um es erneut zu versuchen.",
   peerWaitT1Sent: "An {name} weitergeleitet, warten auf Antwort",
   peerWaitT2Waiting: "{name} überlegt noch",
   peerWaitT3Quiet: "Von {name} noch nichts, wir warten",
@@ -4699,6 +4770,8 @@ const deTranslations: TranslationTable = {
   venueWishDeclineBtn: "Nicht diesmal",
   venuePayDeclineAck:
     "Verstanden — der Ort bleibt vorerst wie geplant. Falls er sich ändert, bekommst du eine neue Karte.",
+  venuePayDeclineStale:
+    "Diese Karte ist nicht mehr aktuell — die Pläne zum Ort haben sich seitdem geändert. Tippe unten, um den aktuellen Stand zu sehen.",
   venuePaySelfDm:
     "Ihr habt euch auf einen neuen Ort geeinigt.\n📍 {venue}\nSichere ihn — ich aktualisiere eure Karten.",
   venuePaySelfBtn: "⭐ Sichern — {stars}",
@@ -4742,6 +4815,9 @@ const deTranslations: TranslationTable = {
   emergencyAborted: "Okay — dein Date bleibt bestehen. 👍",
   emergencyAskReason: "Schreib deinen Grund. Das geht *wortwörtlich* an dein Match.",
   emergencyConfirmed: "Date abgesagt. Deine Nachricht wurde weitergeleitet.",
+  emergencyDateStarted:
+    "Die Uhrzeit deines Dates ist schon erreicht, daher kann es nicht mehr abgesagt werden. " +
+    "Falls es nicht stattgefunden hat, frage ich dich am nächsten Tag danach.",
   emergencyReceivedOther: "Dein Match hat das Date abgesagt. Das wurde geschrieben:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Dein Match hat das Date abgesagt. Das wurde geschrieben:",
   emergencyReceivedOtherSoftNote: "Das liegt nicht an dir. Gennety erhöht deine Priorität für den nächsten Drop ein wenig.",
@@ -5689,6 +5765,9 @@ const plTranslations: TranslationTable = {
     "Twoja randka z {name} została odwołana — dwa dni bez odpowiedzi, " +
     "a nie mogłem trzymać was oboje w zawieszeniu.\n\n" +
     "Jeśli plany się zmieniają — po prostu napisz. To normalne.",
+  stallTimeoutVenueUnresolved:
+    "Twoja randka z {name} została odwołana — nie udało mi się na czas znaleźć dla was miejsca.\n\n" +
+    "To moja wina, nie wasza. Podniosłem twój priorytet w następnym dropie.",
   pitchExpired: "⏳ Czas minął - ta propozycja wygasła.",
   matchExpiredSilentWarning:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
@@ -5818,6 +5897,8 @@ const plTranslations: TranslationTable = {
     "Zapisane ✨ Dałem znać twojemu matchowi — odezwę się, gdy odpowie.",
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście godziny, ale jeszcze nic się nie pokrywa. Dodaj kilka opcji — gdy tylko jakiś slot się zgodzi, klepnięte:",
+  matchSchedulePickFinalYet:
+    "Wasze kalendarze już się pokrywają — otwórz go i potwierdź najlepszy termin, a randka jest klepnięta:",
   venueTimeCardLabel: "WASZA RANDKA",
   venueTimeLockedCaption: "Termin waszej randki jest ustalony ✨",
   venueConciergeIntro:
@@ -5835,6 +5916,12 @@ const plTranslations: TranslationTable = {
     "Punkt startowy zapisany ✨ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
   venueSafetyOverride: "Mała uwaga - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
   venueWaitingPeer: "Twoje zapisane ✨ Czekamy na nich...",
+  venueLocationUseMap:
+    "Lokalizacje wysłane w czacie nie trafiają już do wyszukiwania miejsca — zaznacz punkt startowy na mapie poniżej 📍",
+  venueTimeLapsedBackToCalendar:
+    "Do randki zostało za mało czasu, żeby zdążyć znaleźć miejsce — wybierzmy nową godzinę.",
+  venueSelectionFailedRetry:
+    "Nie udało się teraz dobrać miejsca na randkę — wyszukiwanie miejsc zawiodło po naszej stronie. Otwórz ekran miejsca i jeszcze raz potwierdź punkt startowy, żeby spróbować ponownie.",
   peerWaitT1Sent: "Przekazaliśmy {name}, czekamy na odpowiedź",
   peerWaitT2Waiting: "{name} jeszcze się zastanawia",
   peerWaitT3Quiet: "Od {name} cisza, czekamy",
@@ -5917,6 +6004,8 @@ const plTranslations: TranslationTable = {
   venueWishDeclineBtn: "Nie tym razem",
   venuePayDeclineAck:
     "Rozumiem — miejsce na razie zostaje bez zmian. Jeśli się zmieni, dostaniesz nową kartę.",
+  venuePayDeclineStale:
+    "Ta karta jest już nieaktualna — plany co do miejsca się od tego czasu zmieniły. Kliknij poniżej, żeby zobaczyć, jak jest teraz.",
   venuePaySelfDm:
     "Zgodziliście się na nowe miejsce.\n📍 {venue}\nZatwierdź je — zaktualizuję wasze karty.",
   venuePaySelfBtn: "⭐ Zatwierdź — {stars}",
@@ -5960,6 +6049,9 @@ const plTranslations: TranslationTable = {
   emergencyAborted: "Okej — Twoja randka jest aktualna. 👍",
   emergencyAskReason: "Napisz powód. To pójdzie do Twojego dopasowania *słowo w słowo*.",
   emergencyConfirmed: "Randka odwołana. Twoja wiadomość została przekazana.",
+  emergencyDateStarted:
+    "Godzina randki już minęła, więc nie da się jej już odwołać. " +
+    "Jeśli do spotkania nie doszło, zapytam cię o to następnego dnia.",
   emergencyReceivedOther: "Twoje dopasowanie odwołało randkę. Oto co napisali:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Twoje dopasowanie odwołało randkę. Oto co napisali:",
   emergencyReceivedOtherSoftNote: "To nie przez Ciebie. Gennety trochę podniesie Twój priorytet na kolejny drop.",

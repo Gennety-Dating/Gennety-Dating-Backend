@@ -710,10 +710,39 @@ const PLACE_DETAILS_FIELD_MASK = [
 ].join(",");
 
 /**
+ * Google answered, explicitly, that it has no place under this id: HTTP 404
+ * with the API's own `NOT_FOUND` status in the JSON error body.
+ *
+ * Singled out from every other failure because it is an answer, not an outage.
+ * The body check is what makes it one — a 404 from a wrong URL or a proxy is
+ * an HTML page without that status, and must stay an ordinary failure, or a
+ * deploy that broke the path would deactivate a batch of real venues a night.
+ */
+export class PlaceNotFoundError extends Error {
+  constructor(readonly placeId: string) {
+    super(`Places API (New) has no place ${placeId} (404 NOT_FOUND)`);
+    this.name = "PlaceNotFoundError";
+  }
+}
+
+/** Is this non-OK Places response the API saying NOT_FOUND in its own words? */
+async function isPlacesNotFound(res: Response): Promise<boolean> {
+  if (res.status !== 404) return false;
+  try {
+    const body = (await res.json()) as { error?: { status?: unknown } };
+    return body.error?.status === "NOT_FOUND";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch the current state of a single place by its Places resource id
  * (Place Details). Used by the re-validation cron to detect closures / rating
  * drops and to refresh opening hours. Throws on a non-OK response so the caller
- * can distinguish an infra failure (don't deactivate) from a real "closed".
+ * can distinguish an infra failure (don't deactivate) from a real "closed" —
+ * and throws {@link PlaceNotFoundError} for the one non-OK answer that is not an
+ * infra failure at all.
  */
 export async function fetchPlaceDetails(
   apiKey: string,
@@ -731,6 +760,7 @@ export async function fetchPlaceDetails(
     },
   );
   if (!res.ok) {
+    if (await isPlacesNotFound(res)) throw new PlaceNotFoundError(placeId);
     throw new Error(`Places API (New) place details failed: ${res.status}`);
   }
   const p = (await res.json()) as PlaceV1;
