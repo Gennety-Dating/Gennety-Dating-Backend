@@ -1665,7 +1665,7 @@ paths:
                 properties:
                   voicePrompt:
                     $ref: "#/components/schemas/MyVoicePrompt"
-        "400": { description: Malformed request, or an upload over `maxBytes` (`voice_too_long`) }
+        "400": { description: "Malformed request, or an upload over `maxBytes` (`voice_too_long`)" }
         "403":
           description: "`upload-not-owned` — `uploadPath` is not a key minted for the caller"
           content:
