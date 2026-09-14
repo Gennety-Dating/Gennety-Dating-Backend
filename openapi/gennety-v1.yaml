@@ -1626,19 +1626,35 @@ paths:
         bounds are enforced on that — a clip may be refused `voice_too_long`
         whatever it claimed. Rate limit: `VOICE_PROMPT_UPLOADS_PER_HOUR` (10)
         commits per user per hour.
+
+        Two transports, one pipeline. **Preferred:** PUT the file to the
+        `uploadUrl` from `/upload-url`, then commit `{uploadPath, durationSec}`
+        naming the `uploadPath` that came with it. **Fallback** (when
+        `/upload-url` answered `uploadUrl: null`): commit `{audio, durationSec,
+        mimeType}` with the bytes in base64. Exactly one of `uploadPath` /
+        `audio` is expected; `uploadPath` wins when both are sent.
+
+        A refused signed upload is removed from storage, except on
+        `processing_unavailable`, where the same `uploadPath` may be committed
+        again.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [audio, durationSec]
+              required: [durationSec]
               properties:
+                uploadPath:
+                  type: string
+                  description: The `uploadPath` a `/upload-url` answer carried, after the PUT succeeded.
                 audio:
                   type: string
-                  description: base64 audio bytes, at most `VOICE_PROMPT_MAX_FILE_SIZE_BYTES`
+                  description: base64 audio bytes, at most `VOICE_PROMPT_MAX_FILE_SIZE_BYTES` (fallback transport)
                 durationSec: { type: integer, minimum: 1 }
-                mimeType: { type: string }
+                mimeType:
+                  type: string
+                  description: Fallback transport only; a signed upload's type follows its key.
       responses:
         "200":
           description: Saved
@@ -1649,7 +1665,20 @@ paths:
                 properties:
                   voicePrompt:
                     $ref: "#/components/schemas/MyVoicePrompt"
-        "400": { description: Malformed request }
+        "400": { description: Malformed request, or an upload over `maxBytes` (`voice_too_long`) }
+        "403":
+          description: "`upload-not-owned` — `uploadPath` is not a key minted for the caller"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `upload-missing` — nothing is stored under `uploadPath` (the PUT
+            failed or never ran). Retry the PUT with the recording the client
+            still holds; nothing about the clip was judged.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: |
             The request is well-formed and the CONTENT is refused. `error`
@@ -1682,7 +1711,18 @@ paths:
     post:
       tags: [me]
       operationId: getVoicePromptUploadUrl
-      summary: Bounds for a voice-prompt upload
+      summary: A signed upload for a voice prompt, plus its bounds
+      description: |
+        `uploadUrl` is a one-shot Supabase signed PUT (valid ~2 h): send the
+        raw file as the body with `Content-Type` set to the `contentType`
+        requested here, then commit `uploadPath` to `POST /v1/me/voice-prompt`.
+        The bytes never pass through the API server.
+
+        Both are null when storage cannot sign right now; the client then
+        commits the bytes as base64 instead. The bounds are the recorder's
+        own: stop at `maxDurationSec` (30), refuse to submit under
+        `minDurationSec` (3). Rate limit: three mints per allowed commit per
+        user per hour.
       requestBody:
         required: true
         content:
@@ -1691,7 +1731,9 @@ paths:
               type: object
               required: [contentType]
               properties:
-                contentType: { type: string }
+                contentType:
+                  type: string
+                  description: "`audio/mp4` for the native AAC-LC `.m4a` recording"
       responses:
         "200":
           description: OK
@@ -1699,15 +1741,20 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [maxBytes, minDurationSec, maxDurationSec]
                 properties:
                   uploadUrl:
                     type: [string, "null"]
-                    description: Reserved for a true presigned PUT; null means POST the bytes.
+                    description: Signed PUT URL; null means commit the bytes as base64.
+                  uploadPath:
+                    type: [string, "null"]
+                    description: The key to name in the commit; null exactly when `uploadUrl` is.
                   maxBytes: { type: integer }
                   minDurationSec: { type: integer }
                   maxDurationSec: { type: integer }
         "400": { description: Not an audio content type }
         "404": { description: Feature disabled }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/me/photos:
     get:
@@ -2018,6 +2065,40 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: Transcription failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/onboarding/interview/voice-prompt:
+    post:
+      tags: [onboarding]
+      operationId: finishInterviewVoicePrompt
+      summary: Leave the voice-prompt step (`uiHint.control = voice_record`), kept or skipped
+      description: |
+        Call after the recording is committed (`POST /v1/me/voice-prompt`), or
+        instead of recording when the user taps Skip. The server decides which
+        exit it was from whether a recording is saved — the client does not say
+        — marks the step, and resumes the collector, which normally finalizes
+        onboarding. The response is the next interview state, exactly like an
+        answer's.
+
+        Without this call a native account stays on the voice question: the
+        commit route does not advance onboarding by itself.
+
+        Idempotent: when the collector is no longer on the voice question it
+        changes nothing and returns the current state. 404 while
+        `VOICE_PROMPT_ENABLED` is off (the step is then never asked).
+      responses:
+        "200":
+          description: Next interview state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Feature disabled }
+        "409":
+          description: Onboarding already complete, terms not accepted or language not selected
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2705,6 +2786,40 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
           description: No live match with this id for this caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/matches/{id}/partner-voice-prompt:
+    get:
+      tags: [matches]
+      operationId: getPartnerVoicePrompt
+      summary: The partner's voice prompt with a FRESH signed audio URL
+      description: |
+        `SerializedMatch.partnerVoicePrompt` already carries the recording, but
+        its `audioUrl` is minted with `/current` and lives 5 minutes — shorter
+        than a pitch stays open. Ask here when that URL is refused (or older
+        than its TTL), not on every tap.
+
+        Same entitlement as `partner-photos`: participant of a live match.
+        `voicePrompt` is absent when the partner recorded none; its `audioUrl`
+        is null for a Telegram-recorded prompt (the bars still render, there is
+        nothing to play). 404 also while `VOICE_PROMPT_ENABLED` is off.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voicePrompt:
+                    $ref: "#/components/schemas/PartnerVoicePrompt"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No live match with this id for this caller, or the feature is off
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

@@ -459,13 +459,20 @@ All additive. Same commit updates `openapi/gennety-v1.yaml`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/me/voice-prompt/upload-url` | Presigned Supabase PUT (iOS only) |
-| `POST` | `/v1/me/voice-prompt` | Commit `{storagePath, durationSec}` → validate → persist. The stored duration is Whisper's measured one (the client value is only a fallback, clamped); 10 uploads per user per hour, then 429 (2026-09-14, A13-L14) |
+| `POST` | `/v1/me/voice-prompt/upload-url` | Signed Supabase PUT `{uploadUrl, uploadPath}` + bounds (iOS only). Both null when storage cannot sign → the client commits base64 instead. 30 mints per user per hour |
+| `POST` | `/v1/me/voice-prompt` | Commit `{uploadPath, durationSec}` (or the fallback `{audio, durationSec, mimeType}`) → validate → persist. The stored duration is Whisper's measured one (the client value is only a fallback, clamped); 10 uploads per user per hour, then 429 (2026-09-14, A13-L14). A refused upload is deleted, except on `processing_unavailable` |
 | `DELETE` | `/v1/me/voice-prompt` | Remove the active prompt |
-| `GET` | `/v1/matches/{id}/partner-voice-prompt` | Signed, short-TTL audio URL + peaks |
+| `GET` | `/v1/matches/{id}/partner-voice-prompt` | Fresh signed, short-TTL audio URL + peaks (the copy on `/current` lives 5 minutes) |
+| `POST` | `/v1/onboarding/interview/voice-prompt` | Leave the onboarding step, kept or skipped — the native twin of `exitVoiceStep` (mark the field, then a `resume` turn) |
 
 There is no catalog endpoint (decision 5) — the recommendations are copy on the
 recording screen, not data the client fetches.
+
+**Built 2026-09-14 (native half).** The first build had shipped
+`uploadUrl: null` with base64 bodies, a 60-second cap, no way for a native
+account to leave the onboarding step, and no refresh for the partner's URL. The
+signed PUT, the 30-second cap of §5.2, the onboarding exit and the refresh
+route came with the iOS client; decision journal 2026-09-14.
 
 `SerializedMatch` gains an optional `voicePrompt` object (`durationSec`,
 `waveform`) so the card can render the bars before any audio is fetched — which
@@ -801,9 +808,9 @@ re-apply.
 - [ ] State plainly that we transcribe and do **not** voice-print
 
 ### M4 — iOS (parallel with M1–M2)
-- [ ] `/v1/*` endpoints + `openapi/gennety-v1.yaml` in the **same commit**
+- [x] `/v1/*` endpoints + `openapi/gennety-v1.yaml` in the **same commit** (signed PUT, onboarding exit and partner refresh: 2026-09-14)
 - [ ] `./scripts/generate-api.sh` emits zero `skipping` lines (§4.2)
-- [ ] `collectOwnedPaths` covers `storagePath` (§5.6) — silent if missed
+- [x] `collectOwnedPaths` covers `storagePath` (§5.6) — and the `${userId}/` prefix sweep covers uploads never committed
 - [ ] Recorder: permission gate, live visualiser, 3s floor / 30s stop, preview
 - [ ] Player: precomputed bars, scrubber, `AudioPlaybackCoordinator`
 - [ ] Task recorded in `Gennety-iOS/IMPLEMENTATION_PLAN.md`

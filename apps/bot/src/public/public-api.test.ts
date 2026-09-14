@@ -84,6 +84,8 @@ vi.mock("../config.js", () => ({
     AWS_SECRET_ACCESS_KEY: "",
     PROFILE_MEDIA_VALIDATION_ENABLED: false,
     PROFILE_VIDEO_API_ENABLED: true,
+    // Flipped on per test by the voice-prompt suites; off is the shipped default.
+    VOICE_PROMPT_ENABLED: false,
     PROFILE_MEDIA_VALIDATION_FAIL_OPEN: false,
     PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: 24,
     PROFILE_VIDEO_VALIDATION_TIMEOUT_MS: 60_000,
@@ -431,6 +433,11 @@ vi.mock("@gennety/db", async () => {
       },
 
       onboardingProgress: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+
+      // ----- voicePrompt ----- (partner refresh + the native onboarding exit)
+      voicePrompt: {
         findUnique: vi.fn().mockResolvedValue(null),
       },
 
@@ -1016,6 +1023,11 @@ vi.mock("../services/onboarding-agent.js", () => ({
   ),
 }));
 
+vi.mock("../services/onboarding-collector.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/onboarding-collector.js")>()),
+  markOnboardingField: vi.fn(async () => ({})),
+}));
+
 vi.mock("../services/menu-agent.js", () => ({
   AGENT_TOOLS: [],
   runMenuAgentTurn: vi.fn(async (_tgId: bigint, text: string) => ({
@@ -1054,6 +1066,9 @@ vi.mock("../services/storage.js", () => ({
   createSelfieSignedUrl: vi.fn(async (path: string) => `https://signed.test/${path}`),
   createProfilePhotoSignedUrl: vi.fn(
     async (path: string) => `https://signed.test/photo/${path}`,
+  ),
+  createVoicePromptSignedUrl: vi.fn(
+    async (path: string) => `https://signed.test/voice/${path}`,
   ),
   deleteStorageObject: vi.fn(async () => true),
   // Account deletion lists each bucket under the user's prefix (A13-M12).
@@ -1127,6 +1142,12 @@ const { prisma: prismaMock } = await import("@gennety/db");
 const { runAgentTurn: runAgentTurnMock } = await import(
   "../services/onboarding-agent.js"
 );
+const { markOnboardingField: markOnboardingFieldMock } = await import(
+  "../services/onboarding-collector.js"
+);
+const { env: envMock } = (await import("../config.js")) as unknown as {
+  env: Record<string, unknown>;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -3002,6 +3023,82 @@ describe("/v1/onboarding/interview", () => {
       { canPresentTypeRadar: false },
     );
   });
+
+  describe("POST /interview/voice-prompt", () => {
+    beforeEach(() => {
+      envMock.VOICE_PROMPT_ENABLED = true;
+      vi.mocked(markOnboardingFieldMock).mockClear();
+      vi.mocked(runAgentTurnMock).mockClear();
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockReset().mockResolvedValue(null);
+    });
+    afterEach(() => {
+      envMock.VOICE_PROMPT_ENABLED = false;
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    it("records a skip when no recording exists, then resumes the collector", async () => {
+      const user = await seedUser({ onboardingStep: "conversational" });
+      vi.mocked(prismaMock.onboardingProgress.findUnique)
+        .mockResolvedValueOnce({ currentQuestion: "voice_prompt" } as never)
+        .mockResolvedValueOnce({ currentQuestion: "complete" } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/interview/voice-prompt")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).toHaveBeenCalledWith(user.telegramId, "voice_prompt", true);
+      // The same exit the Telegram step and the photo stage take — never a
+      // direct finalize (PRODUCT_SPEC §1.3).
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+    });
+
+    it("records a keep when the recording is already saved", async () => {
+      const user = await seedUser({ onboardingStep: "conversational" });
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "voice_prompt",
+      } as never);
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockResolvedValue({ id: "vp-1" } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/interview/voice-prompt")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).toHaveBeenCalledWith(user.telegramId, "voice_prompt", false);
+    });
+
+    it("changes nothing when the collector is not on the voice question", async () => {
+      const user = await seedUser({ onboardingStep: "conversational" });
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "hobbies",
+      } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/interview/voice-prompt")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("404s while the feature is off", async () => {
+      envMock.VOICE_PROMPT_ENABLED = false;
+      const user = await seedUser({ onboardingStep: "conversational" });
+
+      const res = await request(app)
+        .post("/v1/onboarding/interview/voice-prompt")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(404);
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("/v1/assistant/ask", () => {
@@ -3303,6 +3400,85 @@ describe("/v1/matches/*", () => {
 
       db.matches.get(match.id)!.status = "cancelled";
       const res = await request(app).get(`${url.pathname}${url.search}`);
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("GET /:id/partner-voice-prompt", () => {
+    beforeEach(() => {
+      envMock.VOICE_PROMPT_ENABLED = true;
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockReset().mockResolvedValue(null);
+    });
+    afterEach(() => {
+      envMock.VOICE_PROMPT_ENABLED = false;
+    });
+
+    it("mints a fresh URL for the PARTNER's recording, never the caller's", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockResolvedValue({
+        durationSec: 14,
+        waveform: [10, 100, 40],
+        storagePath: `${bob.id}/1716000000000-abc.m4a`,
+      } as never);
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-voice-prompt`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        voicePrompt: {
+          durationSec: 14,
+          waveform: [10, 100, 40],
+          audioUrl: `https://signed.test/voice/${bob.id}/1716000000000-abc.m4a`,
+        },
+      });
+      expect(prismaMock.voicePrompt.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: bob.id } }),
+      );
+      // The transcript is never selected, so it cannot leak into the body.
+      expect(JSON.stringify(res.body)).not.toContain("transcript");
+    });
+
+    it("answers without a voicePrompt key when the partner recorded none", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-voice-prompt`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({});
+    });
+
+    it("404s for a user who is not in the match", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const stranger = await seedUser({ firstName: "Mallory" });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-voice-prompt`)
+        .set("Authorization", `Bearer ${signAccess(stranger.id)}`);
+
+      expect(res.status).toBe(404);
+      expect(prismaMock.voicePrompt.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("404s while the feature is off", async () => {
+      envMock.VOICE_PROMPT_ENABLED = false;
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-voice-prompt`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
 
       expect(res.status).toBe(404);
     });

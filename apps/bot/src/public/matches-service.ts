@@ -538,8 +538,12 @@ async function partnerPlacesBestEffort(partnerId: string): Promise<PartnerPlace[
  * play button until `ensureTelegramFileIdForVoicePrompt`'s mirror image exists
  * for this direction. The bars are still worth sending: they say a recording
  * exists, which is the difference between a quiet card and a wrong one.
+ *
+ * Also behind `GET /v1/matches/:id/partner-voice-prompt`: the URL here lives
+ * five minutes, a pitch stays open far longer, and that route is how the
+ * player gets a fresh one instead of a silent tap.
  */
-async function serializePartnerVoicePrompt(
+export async function serializePartnerVoicePrompt(
   prompt: { durationSec: number; waveform: number[]; storagePath: string | null } | null,
 ): Promise<SerializedMatch["partnerVoicePrompt"]> {
   if (!env.VOICE_PROMPT_ENABLED || !prompt) return null;

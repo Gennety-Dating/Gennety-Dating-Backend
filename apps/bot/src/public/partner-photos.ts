@@ -88,7 +88,7 @@ async function resolvePartnerPhotos(
 export async function resolvePartnerMedia(
   viewerId: string,
   matchId: string,
-): Promise<{ photos: string[]; profileMedia: unknown } | null> {
+): Promise<{ partnerId: string; photos: string[]; profileMedia: unknown } | null> {
   const match = await prisma.match.findFirst({
     where: {
       id: matchId,
@@ -97,13 +97,18 @@ export async function resolvePartnerMedia(
     },
     select: {
       userAId: true,
+      userBId: true,
       userA: { select: { profile: { select: { photos: true, profileMedia: true } } } },
       userB: { select: { profile: { select: { photos: true, profileMedia: true } } } },
     },
   });
   if (!match) return null;
-  const partner = match.userAId === viewerId ? match.userB : match.userA;
+  const viewerIsA = match.userAId === viewerId;
+  const partner = viewerIsA ? match.userB : match.userA;
   return {
+    // The partner's voice prompt is read by id under this same entitlement, so
+    // it can never be handed out on a looser rule than the face.
+    partnerId: viewerIsA ? match.userBId : match.userAId,
     photos: partner.profile?.photos ?? [],
     profileMedia: partner.profile?.profileMedia ?? [],
   };

@@ -440,6 +440,20 @@ export const voicePromptUploadLimiter = make({
   message: { error: "Too many voice prompt uploads, try again later." },
 });
 
+/**
+ * Signed-upload minting for the voice prompt — three per allowed commit. A
+ * signed PUT writes into OUR bucket without passing this process, so an
+ * unmetered mint would let one account fill storage with objects no commit
+ * ever validates. Looser than the commit because a mint that ends in a failed
+ * PUT (a dropped connection on a train) is ordinary and costs nothing.
+ */
+export const voicePromptUploadUrlLimiter = make({
+  windowMs: 3_600_000,
+  limit: VOICE_PROMPT_UPLOADS_PER_HOUR * 3,
+  keyGenerator: (req): string => `voice-url:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many voice prompt uploads, try again later." },
+});
+
 /** Mobile chat turn — 60/hour per user (falls back to IP). */
 export const chatMessageLimiter = make({
   windowMs: 3_600_000,

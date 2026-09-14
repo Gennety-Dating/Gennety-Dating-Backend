@@ -10,7 +10,9 @@ import {
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
+import { env } from "../../config.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
+import { markOnboardingField } from "../../services/onboarding-collector.js";
 import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
@@ -107,6 +109,61 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
     }),
   );
 });
+
+/**
+ * POST /v1/onboarding/interview/voice-prompt — leave the voice step
+ * (`uiHint.control = "voice_record"`), kept or skipped.
+ *
+ * The native twin of the Telegram step's single exit (`exitVoiceStep` in
+ * `handlers/onboarding/voice-prompt.ts`): mark the field, then hand the
+ * conversation back to the collector with a `resume` turn so it finalizes —
+ * the same path the photo stage takes, never a direct finalize (PRODUCT_SPEC
+ * §1.3 records what calling it directly cost). Without it a native account was
+ * stranded on this question once the flag went on: the recording is committed
+ * through `/v1/me/voice-prompt`, which knows nothing about onboarding, and
+ * there was no skip at all.
+ *
+ * The client does not say which exit it took, the row does: a saved recording
+ * is "kept", no recording is "skipped". That keeps the two truths from ever
+ * disagreeing — a client that skipped after a failed upload cannot record a
+ * "kept" over nothing.
+ *
+ * Idempotent: called when the collector is no longer on this question (a
+ * retried request whose first attempt landed) it changes nothing and returns
+ * the current state.
+ */
+onboardingRouter.post(
+  "/interview/voice-prompt",
+  agentTextLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    if (!env.VOICE_PROMPT_ENABLED) {
+      res.status(404).json({ error: "voice-prompt-disabled" });
+      return;
+    }
+    const user = await loadUser(req.userId!);
+    if (!ensureInterviewAllowed(user, res)) return;
+
+    const before = await loadStateContext(req.userId!);
+    if (before.step !== "conversational" || before.currentQuestion !== "voice_prompt") {
+      res.json(buildInterviewState(before));
+      return;
+    }
+
+    const recording = await prisma.voicePrompt.findUnique({
+      where: { userId: req.userId! },
+      select: { id: true },
+    });
+    await markOnboardingField(user.telegramId, "voice_prompt", recording === null);
+    const result = await runAgentTurn(
+      user.telegramId,
+      { kind: "resume" },
+      { canPresentTypeRadar: false },
+    );
+
+    const ctx = await loadStateContext(req.userId!);
+    res.json(buildInterviewState({ ...ctx, question: result.reply }));
+  },
+);
 
 /**
  * POST /v1/onboarding/consent — Initialization & Consent screen.

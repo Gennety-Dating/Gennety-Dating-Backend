@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { isUuid } from "../../utils/uuid.js";
 import { getBotApi } from "../server.js";
@@ -10,6 +11,7 @@ import { serializePartnerProfileVideo } from "../../services/native-profile-vide
 import { env } from "../../config.js";
 import {
   getCurrentMatchForUser,
+  serializePartnerVoicePrompt,
   applyMatchDecision,
   submitVibeLocation,
   acknowledgeSafetyBrief,
@@ -106,6 +108,41 @@ matchesRouter.get("/:id/partner-photos", async (req: Request, res: Response): Pr
     ...(video ? { video } : {}),
   });
 });
+
+/**
+ * GET /v1/matches/:id/partner-voice-prompt — a FRESH signed URL for the
+ * partner's recording (voice-prompts.md §4.2).
+ *
+ * `SerializedMatch.partnerVoicePrompt` already carries one, minted with the
+ * rest of `/current`, and it lives five minutes; a pitch is a 24-hour decision
+ * that people leave open and come back to. Without this, the play button on a
+ * card opened a while ago would fail in silence. The player asks here when the
+ * embedded URL is refused, not on every tap.
+ *
+ * Same entitlement as the photos (participant of a live match), and `404` with
+ * the feature off — the gate every other voice route answers with. No
+ * `voicePrompt` key when the partner has none.
+ */
+matchesRouter.get(
+  "/:id/partner-voice-prompt",
+  async (req: Request, res: Response): Promise<void> => {
+    if (!env.VOICE_PROMPT_ENABLED) {
+      res.status(404).json({ error: "voice-prompt-disabled" });
+      return;
+    }
+    const partner = await resolvePartnerMedia(req.userId!, paramId(req));
+    if (partner === null) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    const prompt = await prisma.voicePrompt.findUnique({
+      where: { userId: partner.partnerId },
+      select: { durationSec: true, waveform: true, storagePath: true },
+    });
+    const voicePrompt = await serializePartnerVoicePrompt(prompt);
+    res.json(voicePrompt ? { voicePrompt } : {});
+  },
+);
 
 matchesRouter.get("/current", async (req: Request, res: Response): Promise<void> => {
   const match = await getCurrentMatchForUser(req.userId!);

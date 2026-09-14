@@ -11,6 +11,44 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра (2026-09-14).**
+**Схема Prisma не меняется, миграций нет, новых переменных окружения нет.** Только код:
+`/v1/me/voice-prompt/upload-url` чеканит signed PUT Supabase, коммит принимает `uploadPath`
+(base64 остаётся запасным путём), новые `POST /v1/onboarding/interview/voice-prompt` и
+`GET /v1/matches/:id/partner-voice-prompt`, `VOICE_PROMPT_MAX_DURATION_SECONDS` 60 → 30 (оба рельса;
+копия `voicePromptTooLong` ×5). Журнал решений — запись 2026-09-14 «голосовые визитки, нативная
+половина».
+
+**Порядок выката:** обычный рестарт бота. **Флаг `VOICE_PROMPT_ENABLED` остаётся выключенным** —
+пока он выключен, все маршруты отвечают 404 и поведение прода не меняется ни для кого. Включение —
+отдельное решение основателя; перед ним: бакет `SUPABASE_VOICE_BUCKET` (по умолчанию `voice-prompts`)
+должен существовать и быть приватным — signed upload на несуществующий бакет отвечает отказом, и
+клиент уйдёт на base64 молча.
+
+**Проверка после выката** (флаг выключен): `curl -s -o /dev/null -w '%{http_code}' -X POST
+-H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' -d '{"contentType":"audio/mp4"}'
+"$API/v1/me/voice-prompt/upload-url"` → `404`. **После включения флага** (на тестовом аккаунте):
+
+```
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"contentType":"audio/mp4"}' "$API/v1/me/voice-prompt/upload-url" | jq
+# → uploadUrl — https://…/storage/v1/object/upload/sign/voice-prompts/<userId>/<ts>-<hex>.m4a?token=…,
+#   uploadPath — <userId>/<ts>-<hex>.m4a, maxDurationSec — 30
+curl -s -X PUT -H 'Content-Type: audio/mp4' --data-binary @clip.m4a "$UPLOAD_URL"   # 200
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d "{\"uploadPath\":\"$UPLOAD_PATH\",\"durationSec\":12}" "$API/v1/me/voice-prompt" | jq
+# → voicePrompt.durationSec ≈ 12, waveform — 40 чисел 0..100, audioUrl подписан
+```
+
+Чужой `uploadPath` → 403; `uploadPath` без PUT → 409 `upload-missing`.
+
+**Откат:** свободный, только код — `git revert` и рестарт; уже сохранённые записи совместимы с обеими
+версиями (строка та же). **Влияние на iOS:** клиент голосовых визиток (Gennety-iOS, запись 2026-09-14)
+пользуется новыми маршрутами; без этого выката он видит 404 и прячет фичу — ровно как при выключенном
+флаге. **Demo-mode:** не затронут — у куклы голосового нет, демо ходит телеграм-рельсом.
+
+---
+
 **PENDING — Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде (2026-09-14).**
 **Схема Prisma не меняется, миграций нет, новых переменных окружения нет** (`WEBAPP_URL` уже
 задан — по нему бот строит ссылки мини-аппа). Только код: `routes/radar.ts` принимает оба рельса,

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
 
@@ -497,6 +498,101 @@ export async function createVoicePromptSignedUrl(
   expiresInSeconds: number = 300,
 ): Promise<string | null> {
   return createSignedUrl(env.SUPABASE_VOICE_BUCKET, path, expiresInSeconds);
+}
+
+/** The container a native voice upload is stored under, by the MIME it declared. */
+function voicePromptExtension(mime: string): "m4a" | "ogg" {
+  return mime === "audio/ogg" || mime === "audio/opus" ? "ogg" : "m4a";
+}
+
+/**
+ * Mint a one-shot signed PUT for a native voice prompt (voice-prompts.md §4.2).
+ *
+ * The bytes go phone → Supabase and never through the single Node process
+ * that also runs the bot, every cron and both APIs. The commit then names the
+ * returned `path`, and the server downloads it once for moderation — so the
+ * object is untrusted until that commit, which is also why the key is minted
+ * HERE rather than chosen by the client: the `${userId}/` prefix is what
+ * `collectOwnedPaths` erases on account deletion and what the commit checks
+ * ownership against.
+ *
+ * Null when storage is not configured or Supabase refuses; the caller then
+ * advertises `uploadUrl: null` and the client falls back to the base64 body,
+ * which is exactly the contract that existed before this.
+ */
+export async function createVoicePromptSignedUpload(
+  userId: string,
+  mime: string,
+): Promise<{ uploadUrl: string; path: string } | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+
+  const suffix = randomBytes(6).toString("hex");
+  const path = `${userId}/${Date.now()}-${suffix}.${voicePromptExtension(mime)}`;
+  if (!isSafeStorageObjectPath(path)) return null;
+
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/storage/v1/object/upload/sign/${env.SUPABASE_VOICE_BUCKET}/${path}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+        signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as { url?: string };
+    if (!json.url) return null;
+    const uploadUrl = json.url.startsWith("http")
+      ? json.url
+      : `${env.SUPABASE_URL}/storage/v1${json.url}`;
+    return { uploadUrl, path };
+  } catch {
+    return null;
+  }
+}
+
+/** A native upload is the caller's only if the server minted it under their prefix. */
+export function isOwnVoicePromptUploadPath(path: string, userId: string): boolean {
+  return isSafeStorageObjectPath(path) && path.startsWith(`${userId}/`) && path.split("/").length === 2;
+}
+
+export type VoicePromptUploadDownload =
+  | { ok: true; audio: Buffer }
+  | { ok: false; reason: "missing" | "too_large" };
+
+/**
+ * Read back an object the client PUT through a signed upload, refusing to
+ * buffer anything over `maxBytes`.
+ *
+ * A signed upload carries no size limit of its own, so the declared
+ * `Content-Length` is checked before the body is read — the commit must never
+ * be the step that loads an arbitrary blob into this process's memory.
+ */
+export async function downloadVoicePromptUpload(
+  path: string,
+  maxBytes: number,
+): Promise<VoicePromptUploadDownload> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, reason: "missing" };
+  if (!isSafeStorageObjectPath(path)) return { ok: false, reason: "missing" };
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_VOICE_BUCKET}/${path}`;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) return { ok: false, reason: "missing" };
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      await res.body?.cancel().catch(() => {});
+      return { ok: false, reason: "too_large" };
+    }
+    const audio = Buffer.from(await res.arrayBuffer());
+    if (audio.byteLength > maxBytes) return { ok: false, reason: "too_large" };
+    if (audio.byteLength === 0) return { ok: false, reason: "missing" };
+    return { ok: true, audio };
+  } catch {
+    return { ok: false, reason: "missing" };
+  }
 }
 
 export type AnnouncementAssetRole = "media" | "poster";

@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 177 entries
+# Deploy journal index — 178 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра | [pending](./pending.md) |
 | PENDING |  | Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде | [pending](./pending.md) |
 | PENDING |  | координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` | [pending](./pending.md) |
 | PENDING |  | ремедиация аудита 2026-09-13 (`A13-*`): захват по email, прокси-чат после отмены, платежи, стагнация, удаление аккаунта | [pending](./pending.md) |

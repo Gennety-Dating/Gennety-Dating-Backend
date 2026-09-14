@@ -168,19 +168,23 @@ export const VIDEO_SAMPLE_TARGET_FRAMES = 12;
  * a broken feature rather than as a short person.
  *
  * The CEILING is the listener's, not the recorder's. The copy asks for ~15
- * seconds; 60 is where a voice note stops being something a stranger will
- * press play on. It is deliberately far below `voiceHandler`'s own
- * MAX_VOICE_DURATION_SEC (300), which bounds a transcription request rather
- * than a profile element, so the two must not be conflated.
+ * seconds; 30 is the spec's Hinge-parity bound (voice-prompts.md §5.2), restored
+ * by founder decision 2026-09-14 after the first build had shipped 60 without a
+ * journal entry. The native recorder stops itself here, so this is also the
+ * longest clip a partner is ever asked to sit through. It is deliberately far
+ * below `voiceHandler`'s own MAX_VOICE_DURATION_SEC (300), which bounds a
+ * transcription request rather than a profile element, so the two must not be
+ * conflated.
  *
  * The BYTE ceiling is a safety-path limit in the same sense as the profile
- * video's: the validation path downloads the clip via Bot API `getFile`, so it
- * has to stay well inside the 20 MB cloud limit. 2 MB is ~4x the worst case a
- * 60-second Opus voice note actually produces, so it only ever catches
- * something pathological.
+ * video's: the validation path downloads the clip via Bot API `getFile` (or
+ * from our bucket, for a native upload), so it has to stay well inside the
+ * 20 MB cloud limit. 2 MB is ~8x the worst case a 30-second Opus note or a
+ * 32 kbps AAC clip actually produces, so it only ever catches something
+ * pathological.
  */
 export const VOICE_PROMPT_MIN_DURATION_SECONDS = 3;
-export const VOICE_PROMPT_MAX_DURATION_SECONDS = 60;
+export const VOICE_PROMPT_MAX_DURATION_SECONDS = 30;
 export const VOICE_PROMPT_TARGET_DURATION_SECONDS = 15;
 export const VOICE_PROMPT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 

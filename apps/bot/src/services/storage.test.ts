@@ -10,6 +10,7 @@ vi.mock("../config.js", () => ({
     SUPABASE_PHOTO_BUCKET: "photos",
     SUPABASE_SELFIE_BUCKET: "selfies",
     SUPABASE_CHAT_BUCKET: "chat",
+    SUPABASE_VOICE_BUCKET: "voice-prompts",
   },
 }));
 
@@ -22,6 +23,9 @@ const {
   listStorageObjects,
   storageBucketState,
   storageKeyWrittenAt,
+  createVoicePromptSignedUpload,
+  downloadVoicePromptUpload,
+  isOwnVoicePromptUploadPath,
 } = await import("./storage.js");
 
 const TG_TOKEN = "999:fake-bot-token";
@@ -414,5 +418,92 @@ describe("storageKeyWrittenAt", () => {
   it("answers null for keys without that shape", () => {
     expect(storageKeyWrittenAt("u1/video-1715000000000.mp4")).toBeNull();
     expect(storageKeyWrittenAt("AgACAgIAAxkBAAIC")).toBeNull();
+  });
+});
+
+describe("voice prompt signed uploads", () => {
+  it("signs a PUT for a server-minted key under the caller's prefix", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ url: "/object/upload/sign/voice-prompts/u1/k.m4a?token=abc" }),
+    });
+
+    const signed = await createVoicePromptSignedUpload("u1", "audio/mp4");
+
+    expect(signed).not.toBeNull();
+    expect(signed!.path).toMatch(/^u1\/\d{13}-[0-9a-f]{12}\.m4a$/);
+    expect(signed!.uploadUrl).toBe(
+      "https://supabase.test/storage/v1/object/upload/sign/voice-prompts/u1/k.m4a?token=abc",
+    );
+    const [calledUrl, init] = fetchMock.mock.calls[0]!;
+    expect(calledUrl).toBe(
+      `https://supabase.test/storage/v1/object/upload/sign/voice-prompts/${signed!.path}`,
+    );
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Bearer test-service-role-key");
+  });
+
+  it("names an Opus upload .ogg and anything else .m4a", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/object/upload/sign/x?token=t" }) });
+    expect((await createVoicePromptSignedUpload("u1", "audio/ogg"))!.path).toMatch(/\.ogg$/);
+    expect((await createVoicePromptSignedUpload("u1", "audio/x-m4a"))!.path).toMatch(/\.m4a$/);
+  });
+
+  it("answers null when Supabase refuses or is unreachable, never throws", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    await expect(createVoicePromptSignedUpload("u1", "audio/mp4")).resolves.toBeNull();
+    fetchMock.mockRejectedValueOnce(new Error("socket hang up"));
+    await expect(createVoicePromptSignedUpload("u1", "audio/mp4")).resolves.toBeNull();
+  });
+
+  it("accepts only a one-level key under exactly the caller's prefix", () => {
+    expect(isOwnVoicePromptUploadPath("u1/1716000000000-ab.m4a", "u1")).toBe(true);
+    expect(isOwnVoicePromptUploadPath("u10/1716000000000-ab.m4a", "u1")).toBe(false);
+    expect(isOwnVoicePromptUploadPath("u2/1716000000000-ab.m4a", "u1")).toBe(false);
+    expect(isOwnVoicePromptUploadPath("u1/../u2/x.m4a", "u1")).toBe(false);
+    expect(isOwnVoicePromptUploadPath("u1/a/x.m4a", "u1")).toBe(false);
+  });
+
+  it("refuses an object whose declared size is over the cap without reading its body", async () => {
+    const arrayBuffer = vi.fn();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({ "content-length": String(3 * 1024 * 1024) }),
+      body: { cancel: vi.fn(async () => undefined) },
+      arrayBuffer,
+    });
+
+    await expect(downloadVoicePromptUpload("u1/k.m4a", 2 * 1024 * 1024)).resolves.toEqual({
+      ok: false,
+      reason: "too_large",
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("returns the bytes of an object inside the cap, and missing for absent or empty", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({ "content-length": "3" }),
+      arrayBuffer: async () => bytes.buffer,
+    });
+    const found = await downloadVoicePromptUpload("u1/k.m4a", 1024);
+    expect(found).toEqual({ ok: true, audio: Buffer.from(bytes) });
+
+    fetchMock.mockResolvedValueOnce({ ok: false, headers: new Headers() });
+    await expect(downloadVoicePromptUpload("u1/k.m4a", 1024)).resolves.toEqual({
+      ok: false,
+      reason: "missing",
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers(),
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    await expect(downloadVoicePromptUpload("u1/k.m4a", 1024)).resolves.toEqual({
+      ok: false,
+      reason: "missing",
+    });
   });
 });
