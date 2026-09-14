@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MIN_AGE, MAX_AGE, MIN_PHOTOS, MAX_PHOTOS } from "@gennety/shared";
 import { ONBOARDING_QUESTIONS } from "../services/onboarding-collector.js";
@@ -89,5 +90,26 @@ describe("buildInterviewState uiHint wiring", () => {
     expect(
       buildInterviewState({ step: "completed", history: [], photoCount: 4 }).uiHint,
     ).toBeNull();
+  });
+});
+
+describe("the OpenAPI contract", () => {
+  // The Swift client decodes `UiHint.control` into a FROZEN enum: a value the
+  // spec does not list does not fall back to a text field, it fails to decode
+  // the whole interview state. `voice_record` shipped in this file on
+  // 2026-08-21 and was missing from the spec until 2026-09-14, so the first
+  // iOS account to reach the voice step with the flag on would have lost the
+  // interview screen.
+  it("declares every control the server can send", () => {
+    const spec = readFileSync(new URL("../../../../openapi/gennety-v1.yaml", import.meta.url), "utf8");
+    const block = spec.slice(spec.indexOf("\n    UiHint:"));
+    const listed = /control:\s*\n\s*type: string\s*\n\s*enum:\s*\[([^\]]+)\]/.exec(block);
+    expect(listed, "UiHint.control enum in openapi/gennety-v1.yaml").not.toBeNull();
+    const declared = new Set(listed![1]!.split(",").map((value) => value.trim()));
+
+    for (const question of ONBOARDING_QUESTIONS) {
+      const control = uiHintForQuestion(question)?.control;
+      if (control) expect(declared, `control ${control} (${question})`).toContain(control);
+    }
   });
 });

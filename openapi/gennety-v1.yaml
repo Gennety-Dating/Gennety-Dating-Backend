@@ -6323,13 +6323,21 @@ components:
           type: string
           enum:
             [name_age, choice_chips, height_wheel, text, multiline_text,
-             magic_prompt, photo_upload]
+             magic_prompt, photo_upload, voice_record]
+          description: |
+            `voice_record` — the voice-prompt step: record a 3–30 s clip, commit
+            it through `/v1/me/voice-prompt`, then leave the step with
+            `POST /v1/onboarding/interview/voice-prompt` (also the Skip path).
         options:
           type: array
           items: { type: string }
           description: choice_chips only — canonical values accepted verbatim
-        min: { type: integer }
-        max: { type: integer }
+        min:
+          type: integer
+          description: Inclusive lower bound — a count for wheels/photos, SECONDS for `voice_record`.
+        max:
+          type: integer
+          description: Inclusive upper bound — a count for wheels/photos, SECONDS for `voice_record`.
         skippable: { type: boolean }
 
     InterviewState:
