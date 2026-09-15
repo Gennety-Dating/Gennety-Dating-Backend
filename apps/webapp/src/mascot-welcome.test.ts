@@ -6,6 +6,7 @@ import {
   gScaleX,
   gripPoint,
   handScale,
+  handsBehindBody,
   BEATS,
   CARDS,
   cardX,
@@ -395,6 +396,39 @@ describe("markup", () => {
     // And the stream sits behind the body too, so the grab and the release do
     // not jump a card from one side of him to the other.
     expect(html.indexOf('class="mw-cards"')).toBeLessThan(html.indexOf('class="mw-body"'));
+  });
+
+  // The same reasoning, one layer up: a hand working on a card in front of him
+  // is further from us than his back. Painted over him, a glove sat on his wing
+  // in 35% of loop frames — a white disc with its arm already gone behind him,
+  // which read as a sticker on his back rather than a hand. The gloves stay
+  // above the held card: the grip is on its bottom-outer corner.
+  it("starts the gloves behind his back and above the card he holds", () => {
+    const html = mascotWelcomeMarkup("x");
+    expect(html.indexOf('class="mw-gloves"'), "his back must occlude his hands").toBeLessThan(
+      html.indexOf('class="mw-body"'),
+    );
+    expect(html.indexOf('class="mw-gloves"'), "the hand must stay on the card").toBeGreaterThan(
+      html.indexOf('class="mw-held"'),
+    );
+  });
+
+  // The gloves change sides exactly once, and only where the change cannot be
+  // seen: the frame the body is squeezed edge-on. Anywhere else a hand resting
+  // on a wing would blink from over him to under him.
+  it("brings the gloves in front of him only at the turn, while he is edge-on", () => {
+    for (let t = 0; t <= LOOP_FLOOR_MS * 3; t += 50) {
+      expect(handsBehindBody("loop", t), `loop at ${t}ms`).toBe(true);
+    }
+    for (let t = 0; t <= GREET_MS; t += 10) {
+      expect(handsBehindBody("greet", t), `greet at ${t}ms`).toBe(t < BEATS.turn);
+    }
+    expect(handsBehindBody("greet", BEATS.turn - 1)).toBe(true);
+    expect(handsBehindBody("greet", BEATS.turn)).toBe(false);
+    let narrowest = Infinity;
+    for (let t = 0; t <= BEATS.peer; t += 1) narrowest = Math.min(narrowest, gScaleX(t));
+    expect(gScaleX(BEATS.turn), "the switch must land on the edge-on frame").toBe(narrowest);
+    expect(gScaleX(BEATS.turn), "a sliver, not a body a hand could sit on").toBeLessThan(0.1);
   });
 
   // The other half of putting the card behind him: he may occlude it on the way

@@ -898,6 +898,29 @@ const gBendR = track([
 const REST_L: readonly [number, number] = [5, 81];
 const REST_R: readonly [number, number] = [95, 81];
 
+/**
+ * Are the gloves painted BEHIND the body? For as long as he has his back to us:
+ * the whole loop, and the greeting up to the turn.
+ *
+ * He works on cards in front of him, away from the camera, so a hand on a card
+ * is deeper in the scene than his back and wherever the two overlap his back
+ * covers it. The arms, the stream and the held card already said so; the
+ * gloves were the one layer still painted over him, and a white disc sitting
+ * on his wing with its arm gone behind him reads as a sticker on his back.
+ * Measured on the loop: a glove touches the silhouette in 35% of hand-frames,
+ * is more than half on it in 12%, and entirely on it in 1%.
+ *
+ * It flips at `BEATS.turn`, the instant the shade drops and the face appears,
+ * and for the same reason those do: `gScaleX` has him edge-on there, a sliver a
+ * few units wide that neither hand is anywhere near (0 overlap measured on that
+ * frame and the two after it), so the switch cannot pop. Facing us the order
+ * is the old one — the rest stance sits in front of his lower wings, and the
+ * curtain hand holds an edge in front of everything.
+ */
+export function handsBehindBody(phase: "loop" | "greet", t: number): boolean {
+  return phase === "loop" || t < BEATS.turn;
+}
+
 /* ----------------------------------------------------------------- markup */
 
 export function escapeHtml(value: string): string {
@@ -947,6 +970,11 @@ export function mascotWelcomeMarkup(ariaLabel: string): string {
   // out. It stays ABOVE `.mw-arms`, which is untouched: the bottom-outer grip
   // was chosen so the arm runs along the card's lower edge and reads end to
   // end, and that is a relationship this change has no business disturbing.
+  //
+  // The gloves start in the same place for the same reason — behind him, above
+  // the held card — because the loop is the first thing shown. They are the
+  // only layer that changes sides: `placeGloves` moves them in front of the body
+  // at the turn (`handsBehindBody`).
   const held = `${cardMarkup()}${cardMarkup()}`;
 
   return (
@@ -968,13 +996,13 @@ export function mascotWelcomeMarkup(ariaLabel: string): string {
     `<g class="mw-cards">${cards}</g>` +
     `<g class="mw-arms"><path class="mw-arm mw-arm-l"/><path class="mw-arm mw-arm-r"/></g>` +
     `<g class="mw-held">${held}</g>` +
+    `<g class="mw-gloves"></g>` +
     `<g class="mw-body"><g class="mw-turner">` +
     `<path class="mw-wings" fill="url(#${GRADIENT_ID})" d="${MASCOT_BODY}"/>` +
     `<path class="mw-shade" d="${MASCOT_BODY}"/>` +
     `<g class="mw-face">` +
     `<ellipse class="mw-eye mw-eye-l"/><path class="mw-lid"/><ellipse class="mw-eye mw-eye-r"/>` +
     `</g></g></g>` +
-    `<g class="mw-gloves"></g>` +
     `</g>` +
     `<rect class="mw-edge" y="-238" height="576" width="14" fill="url(#gnt-mw-edge)" opacity="0"/>` +
     `<g class="mw-grab"></g>` +
@@ -1147,9 +1175,21 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
   }
 
   /**
+   * Move the gloves to his side of the body or to ours (`handsBehindBody`).
+   *
+   * The same node re-parented, not a second pair of hands: two glove groups
+   * would each have to hide the other on exactly the frame of the switch.
+   * Touches the DOM only on the frame the side actually changes.
+   */
+  function placeGloves(behind: boolean): void {
+    if ((glovesG.nextElementSibling === bodyG) === behind) return;
+    bodyG.parentNode!.insertBefore(glovesG, behind ? bodyG : bodyG.nextSibling);
+  }
+
+  /**
    * Draw the stream, and the one or two cards currently out of it.
    *
-   * A held card is drawn by its own node in `.mw-held` (above the body) and its
+   * A held card is drawn by its own node in `.mw-held` (behind the body) and its
    * stream twin is hidden, so the same card is never painted twice.
    */
   function drawCards(t: number, opacity: number, hands: readonly [HandState, HandState]): void {
@@ -1238,6 +1278,7 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     armR.setAttribute("d", Bm.d);
     setHand(gL, hL[0], hL[1], A.ang, a.grip);
     setHand(gR, hR[0], hR[1], Bm.ang, b.grip);
+    placeGloves(handsBehindBody("loop", t));
     gR.g.setAttribute("opacity", "1");
     gGrab.g.setAttribute("opacity", "0");
 
@@ -1337,6 +1378,7 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     const swap = t >= B.grip;
     setHand(gL, hL[0], hL[1], A.ang, gripL);
     setHand(gR, hR[0], hR[1], Bm.ang, gripR, pinchR);
+    placeGloves(handsBehindBody("greet", t));
     gR.g.setAttribute("opacity", swap ? "0" : "1");
     setHand(gGrab, hR[0], hR[1], Bm.ang, gripR, pinchR);
     // The grabbing hand rides OUTSIDE the curtain clip — that is what lets it
