@@ -23,7 +23,9 @@ const {
   resetShowcaseCache,
   selectShowcase,
   showcasePhotoRef,
+  showcasePriceLevel,
   SHOWCASE_CACHE_TTL_MS,
+  SHOWCASE_GALLERY_MAX,
   SHOWCASE_LIMIT,
 } = await import("./curated-venue.js");
 type Candidate = import("./curated-venue.js").ShowcaseCandidate;
@@ -48,6 +50,8 @@ function row(overrides: Partial<Candidate> = {}): Candidate {
     photoRefs: ["places/x/photos/y"],
     rating: 4.5,
     userRatingCount: 100,
+    priceLevel: null,
+    googleMapsUri: null,
     ...overrides,
   };
 }
@@ -188,7 +192,7 @@ describe("getShowcaseVenues", () => {
     });
   });
 
-  it("answers the card's shape: a photo flag instead of refs, periods, a trimmed summary", async () => {
+  it("answers the card's shape: a photo count instead of refs, periods, a trimmed summary", async () => {
     findMany.mockResolvedValue([
       row({
         editorialSummary: "  Books and coffee.  ",
@@ -201,11 +205,60 @@ describe("getShowcaseVenues", () => {
 
     expect(first).not.toHaveProperty("photoRefs");
     expect(first).not.toHaveProperty("priority");
-    expect(first.hasPhoto).toBe(true);
+    expect(first.photoCount).toBe(1);
     expect(first.editorialSummary).toBe("Books and coffee.");
     expect(first.openingHours).toHaveLength(1);
-    expect(second.hasPhoto).toBe(false);
+    expect(second.photoCount).toBe(0);
     expect(second.editorialSummary).toBeNull();
+  });
+
+  it("caps the gallery at the founder's five, however many photos the catalog holds", async () => {
+    const refs = Array.from({ length: 10 }, (_, i) => `places/x/photos/${i}`);
+    findMany.mockResolvedValue([row({ photoRefs: refs })]);
+
+    const [place] = await getShowcaseVenues("ua:kyiv");
+
+    expect(SHOWCASE_GALLERY_MAX).toBe(5);
+    expect(place.photoCount).toBe(5);
+  });
+
+  it("carries the profile's facts — price, rating, the Maps page — and reads them from the catalog", async () => {
+    findMany.mockResolvedValue([
+      row({
+        priceLevel: "PRICE_LEVEL_MODERATE",
+        rating: 4.6,
+        userRatingCount: 1204,
+        googleMapsUri: "https://maps.google.com/?cid=123",
+      }),
+    ]);
+
+    const [place] = await getShowcaseVenues("ua:kyiv");
+
+    expect(findMany.mock.calls[0][0].select).toMatchObject({ priceLevel: true, googleMapsUri: true });
+    expect(place).toMatchObject({
+      priceLevel: "moderate",
+      rating: 4.6,
+      userRatingCount: 1204,
+      mapsUri: "https://maps.google.com/?cid=123",
+    });
+    expect(place).not.toHaveProperty("googleMapsUri");
+  });
+
+  it("drops facts a client could not use as is rather than passing junk through", async () => {
+    findMany.mockResolvedValue([
+      row({ priceLevel: "PRICE_LEVEL_UNSPECIFIED", rating: 0, userRatingCount: -3, googleMapsUri: "javascript:alert(1)" }),
+      row({ priceLevel: null, rating: Number.NaN, userRatingCount: 2.5, googleMapsUri: "http://maps.google.com/?cid=1" }),
+      row({ rating: null, userRatingCount: null, googleMapsUri: "not a url" }),
+    ]);
+
+    const places = await getShowcaseVenues("ua:kyiv");
+
+    for (const place of places) {
+      expect(place.priceLevel).toBeNull();
+      expect(place.rating).toBeNull();
+      expect(place.userRatingCount).toBeNull();
+      expect(place.mapsUri).toBeNull();
+    }
   });
 
   it("serves one city's selection from memory for the cache window", async () => {
@@ -246,5 +299,38 @@ describe("showcasePhotoRef", () => {
     findUnique.mockResolvedValue({ active: true, photoRefs: [] });
 
     expect(await showcasePhotoRef("id")).toBeNull();
+  });
+
+  it("answers a gallery slot, and nothing past the row's photos or the cap", async () => {
+    const refs = Array.from({ length: 8 }, (_, i) => `places/a/photos/${i}`);
+    findUnique.mockResolvedValue({ active: true, photoRefs: refs });
+
+    expect(await showcasePhotoRef("id", 3)).toBe("places/a/photos/3");
+    expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX - 1)).toBe("places/a/photos/4");
+    // Held by the catalog, but past the cap — the cap is the bill.
+    expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX)).toBeNull();
+    expect(await showcasePhotoRef("id", -1)).toBeNull();
+
+    findUnique.mockResolvedValue({ active: true, photoRefs: refs.slice(0, 2) });
+    expect(await showcasePhotoRef("id", 2)).toBeNull();
+  });
+
+  it("never reads the catalog for a slot it would refuse anyway", async () => {
+    expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX)).toBeNull();
+    expect(await showcasePhotoRef("id", 1.5)).toBeNull();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("showcasePriceLevel", () => {
+  it("reads both spellings the catalog has held, and nothing else", () => {
+    expect(showcasePriceLevel("PRICE_LEVEL_FREE")).toBe("free");
+    expect(showcasePriceLevel("inexpensive")).toBe("inexpensive");
+    expect(showcasePriceLevel("PRICE_LEVEL_EXPENSIVE")).toBe("expensive");
+    // Not folded into "expensive" the way the venue policy folds it: the
+    // profile shows the level, it does not decide on it.
+    expect(showcasePriceLevel("PRICE_LEVEL_VERY_EXPENSIVE")).toBe("very_expensive");
+    expect(showcasePriceLevel("PRICE_LEVEL_UNSPECIFIED")).toBeNull();
+    expect(showcasePriceLevel(undefined)).toBeNull();
   });
 });

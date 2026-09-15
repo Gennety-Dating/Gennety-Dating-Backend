@@ -14,15 +14,18 @@ import { venuePhotoSignatureValid, venuePhotoUrl } from "../showcase-photos.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import {
   getShowcaseVenues,
+  SHOWCASE_GALLERY_MAX,
   showcasePhotoRef,
   type ShowcasePlace,
 } from "../../services/curated-venue.js";
 
 /**
- * Curated places for the iOS standby canvas (`IDLE_EXPLORING`).
+ * Curated places for the iOS standby canvas (`IDLE_EXPLORING`) — the map's
+ * city guide and the venue profile opened from it.
  *
  *   GET /v1/venues/showcase[?cityKey=ua:kyiv] — the places, in display order
- *   GET /v1/venues/:id/photo?w=&e=&sig=       — one place's photo, by signed link
+ *   GET /v1/venues/:id/photo?w=&e=&sig=       — one place's cover, by signed link
+ *   GET /v1/venues/:id/photo/:slot?w=&e=&sig= — a gallery photo (slot 1…4), same way
  *
  * The two halves authenticate differently, and on purpose. The list is the
  * canvas talking, so it takes either rail like every other canvas call. The
@@ -52,28 +55,51 @@ const CARD_WIDTH = ALLOWED_PHOTO_WIDTHS[1];
 const PIN_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
 
 /**
- * Bytes of proxied photos. 24 places × two widths is the working set of a
- * city, so 96 entries hold two cities with room to spare; see
- * `createPhotoCache` for why this surface needs one and the board does not.
+ * Bytes of proxied photos; see `createPhotoCache` for why this surface needs
+ * one and the board does not. A city's working set is 24 covers at two widths
+ * plus, once profiles are opened, up to four gallery photos each at the card
+ * width: 48 + 96 = 144 entries. Count was the binding limit at 96, so it grew
+ * to hold that set; the byte ceiling did not — ~150 KB a 1200 px photo keeps a
+ * whole launched city (~18 MB) under 24 MB, and a second city simply evicts.
  */
 const photoCache = createPhotoCache({
-  maxEntries: 96,
+  maxEntries: 192,
   maxBytes: 24 * 1024 * 1024,
   ttlMs: 12 * 60 * 60 * 1000,
 });
+
+/** Gallery slots that have a route of their own: 1…`SHOWCASE_GALLERY_MAX - 1`. */
+function gallerySlot(raw: unknown): number | null {
+  const text = String(raw ?? "");
+  if (!/^[1-9]\d*$/.test(text)) return null;
+  const slot = Number(text);
+  return slot < SHOWCASE_GALLERY_MAX ? slot : null;
+}
 
 /** Test-only: forget every cached photo. */
 export function resetVenuePhotoCache(): void {
   photoCache.clear();
 }
 
-/** One place as it goes over the wire: photo links are signed per response. */
+/**
+ * One place as it goes over the wire: photo links are signed per response.
+ *
+ * The whole gallery's links ride in the list. Signing is free; only fetching a
+ * photo is billed, and nobody fetches a gallery until they open the profile —
+ * so the profile opens without a request of its own. `photoUrls[0]` is
+ * byte-for-byte `photoUrl`, so the cover the card already shows is not
+ * downloaded (or billed) a second time.
+ */
 export function serializeShowcasePlace(place: ShowcasePlace, now: number = Date.now()) {
-  const { hasPhoto, ...rest } = place;
+  const { photoCount, ...rest } = place;
+  const photoUrls = Array.from({ length: photoCount }, (_, index) =>
+    venuePhotoUrl(place.id, CARD_WIDTH, now, index),
+  );
   return {
     ...rest,
-    photoUrl: hasPhoto ? venuePhotoUrl(place.id, CARD_WIDTH, now) : null,
-    thumbnailUrl: hasPhoto ? venuePhotoUrl(place.id, PIN_WIDTH, now) : null,
+    photoUrl: photoUrls[0] ?? null,
+    thumbnailUrl: photoCount > 0 ? venuePhotoUrl(place.id, PIN_WIDTH, now) : null,
+    photoUrls,
   };
 }
 
@@ -117,59 +143,75 @@ venuesRouter.get(
   },
 );
 
+venuesRouter.get("/:id/photo", venuePhotoLimiter, (req: Request, res: Response) =>
+  servePhoto(req, res, 0),
+);
+
 venuesRouter.get(
-  "/:id/photo",
+  "/:id/photo/:slot",
   venuePhotoLimiter,
   async (req: Request, res: Response): Promise<void> => {
-    const id = String(req.params.id ?? "");
-    const width = Number(req.query.w);
-    const expiresAt = Number(req.query.e);
-    const sig = typeof req.query.sig === "string" ? req.query.sig : "";
-
-    if (
-      !UUID_REGEX.test(id) ||
-      !(ALLOWED_PHOTO_WIDTHS as readonly number[]).includes(width) ||
-      !Number.isFinite(expiresAt) ||
-      !sig
-    ) {
+    // Slot 0 has no path of its own — the cover is `/photo` — so `/photo/0`,
+    // like a slot past the gallery cap, is a malformed link rather than a
+    // second name for a picture.
+    const slot = gallerySlot(req.params.slot);
+    if (slot === null) {
       res.status(400).json({ error: "bad-link" });
       return;
     }
-    if (!venuePhotoSignatureValid(id, width, expiresAt, sig)) {
-      // Forged and expired look the same from here, and the client's answer
-      // to both is the same: ask the list again.
-      res.status(403).json({ error: "bad-signature" });
-      return;
-    }
-
-    const key = `${id}@${width}`;
-    const cached = photoCache.get(key);
-    if (cached) {
-      sendPhoto(res, cached);
-      return;
-    }
-
-    const apiKey = process.env.PLACES_API_KEY;
-    if (!apiKey) {
-      res.status(404).json({ error: "photos-unavailable" });
-      return;
-    }
-    const url = buildPlacesPhotoUrl(await showcasePhotoRef(id), apiKey, width);
-    if (!url) {
-      res.status(404).json({ error: "no-photo" });
-      return;
-    }
-
-    const result = await fetchPlacesPhoto(url, "[venues]");
-    if (!result.ok) {
-      res.status(502).json({ error: "upstream" });
-      return;
-    }
-    const photo: PhotoBytes = { contentType: result.contentType, body: result.body };
-    photoCache.set(key, photo);
-    sendPhoto(res, photo);
+    await servePhoto(req, res, slot);
   },
 );
+
+async function servePhoto(req: Request, res: Response, slot: number): Promise<void> {
+  const id = String(req.params.id ?? "");
+  const width = Number(req.query.w);
+  const expiresAt = Number(req.query.e);
+  const sig = typeof req.query.sig === "string" ? req.query.sig : "";
+
+  if (
+    !UUID_REGEX.test(id) ||
+    !(ALLOWED_PHOTO_WIDTHS as readonly number[]).includes(width) ||
+    !Number.isFinite(expiresAt) ||
+    !sig
+  ) {
+    res.status(400).json({ error: "bad-link" });
+    return;
+  }
+  if (!venuePhotoSignatureValid(id, width, expiresAt, sig, Date.now(), slot)) {
+    // Forged and expired look the same from here, and the client's answer
+    // to both is the same: ask the list again.
+    res.status(403).json({ error: "bad-signature" });
+    return;
+  }
+
+  const key = slot === 0 ? `${id}@${width}` : `${id}#${slot}@${width}`;
+  const cached = photoCache.get(key);
+  if (cached) {
+    sendPhoto(res, cached);
+    return;
+  }
+
+  const apiKey = process.env.PLACES_API_KEY;
+  if (!apiKey) {
+    res.status(404).json({ error: "photos-unavailable" });
+    return;
+  }
+  const url = buildPlacesPhotoUrl(await showcasePhotoRef(id, slot), apiKey, width);
+  if (!url) {
+    res.status(404).json({ error: "no-photo" });
+    return;
+  }
+
+  const result = await fetchPlacesPhoto(url, "[venues]");
+  if (!result.ok) {
+    res.status(502).json({ error: "upstream" });
+    return;
+  }
+  const photo: PhotoBytes = { contentType: result.contentType, body: result.body };
+  photoCache.set(key, photo);
+  sendPhoto(res, photo);
+}
 
 function sendPhoto(res: Response, photo: PhotoBytes): void {
   res.setHeader("Content-Type", photo.contentType);

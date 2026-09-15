@@ -265,6 +265,19 @@ books, changes or suggests a venue for a match. An empty list (no city, no
 catalog) simply leaves the ordinary idle sheet in place. The Mini App canvas is
 unchanged.
 
+**The city guide's venue profile — iOS only (2026-09-15).** Tapping a card (or
+the pin already selected) opens the place's profile over the map: a gallery of
+at most five photos, category, price level and Google rating, opening hours,
+the address with a copy action, the vibe highlights, a route drawn on the app's
+own map with the transit dock, and Google Maps as a secondary link. Everything
+rides in the same showcase list — `photoUrls[]`, `priceLevel`, `rating`,
+`userRatingCount`, `mapsUri` — so the profile costs no request of its own, and a
+photo is fetched (and billed) only when someone swipes to it. Deliberately not
+in it (founder, 2026-09-15): a written description (`editorialSummary` stays
+unbought), district, socials/menu/website, popular hours, an average-check
+amount, categories beyond the catalog's, and the full catalog instead of the
+top 24.
+
 ### 6.4a Date Terminal (Contact Sync) — the bot's way into the date day
 
 **`canvas.html` has no way in from the bot, and it still has none of its own.**

@@ -5602,6 +5602,40 @@ components:
         thumbnailUrl:
           type: [string, "null"]
           description: The same photo at 240 px, for the map pin. Null exactly when `photoUrl` is.
+        photoUrls:
+          type: array
+          description: >
+            The venue profile's gallery: at most 5 photos at 1200 px, signed
+            the same way as `photoUrl`, cover first. `photoUrls[0]` is
+            byte-for-byte `photoUrl`, so the cover is not downloaded twice; the
+            rest carry their slot in the PATH (`/v1/venues/{id}/photo/{slot}`,
+            slot 1…4). Every photo fetched is a billed Places request, so a
+            client loads the gallery when the profile opens, not with the list.
+            Empty exactly when `photoUrl` is null.
+
+
+            Not in `required`, like the four fields below (added 2026-09-15):
+            a client built from this spec must still read a server that
+            predates them. The server always sends them.
+          items: { type: string }
+        priceLevel:
+          type: [string, "null"]
+          description: >
+            Google's price level in the product's words — `free`,
+            `inexpensive`, `moderate`, `expensive`, `very_expensive`. A
+            documented string rather than an enum, like `category`. Null when
+            unknown; there is no price amount (average check) in the catalog.
+        rating:
+          type: [number, "null"]
+          description: Google rating, 1.0–5.0. Null when unknown.
+        userRatingCount:
+          type: [integer, "null"]
+          description: How many Google ratings `rating` is made of. Null when unknown.
+        mapsUri:
+          type: [string, "null"]
+          description: >
+            The place's Google Maps page (always `https:`), for the profile's
+            secondary "open in Google Maps". Null when the catalog has none.
 
     ShowcaseOpeningPeriod:
       type: object

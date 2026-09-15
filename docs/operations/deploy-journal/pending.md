@@ -695,6 +695,24 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<thumbnailUrl из о�
 **Влияние на iOS:** парный релиз — витрина на канве (Gennety-iOS, ветка
 `standby-showcase`). **Demo-mode:** не затронут.
 
+**Дополнено 2026-09-15 — профиль места «Городского гида», выкатывается тем же блоком.**
+Схема и миграции не меняются. В каждом месте ответа витрины новые поля `photoUrls[]`
+(галерея, до 5 фото по 1200 px), `priceLevel`, `rating`, `userRatingCount`, `mapsUri`; новый
+маршрут `GET /v1/venues/:id/photo/:slot` (слоты 1…4, подпись с номером слота). Подпись
+обложки не менялась — выданные ссылки живы. LRU фото: 192 записи (было 96), байтовый
+потолок прежний, 24 МБ. **Цена:** каждое фото галереи вне кэша — платный запрос Place
+Photo, грузится только при пролистывании профиля. Проверка после выката:
+
+```
+curl -s -H "Authorization: Bearer $JWT" "$API/v1/venues/showcase" \
+  | jq '.venues[0] | {n: (.photoUrls | length), first: (.photoUrls[0] == .photoUrl), priceLevel, rating, mapsUri}'
+# второе фото галереи открывается без авторизации:
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<photoUrls[1] из ответа>"
+```
+
+Ожидается `n` от 0 до 5, `first: true`, `200 image/jpeg`. Старая сборка iOS новые поля
+игнорирует.
+
 ---
 
 **PENDING — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**

@@ -447,6 +447,47 @@ export const SHOWCASE_CACHE_TTL_MS = 10 * 60 * 1000;
 /** Cities remembered at once — bounds the cache against junk keys. */
 const SHOWCASE_CACHE_MAX_CITIES = 32;
 
+/**
+ * How many of a place's photos the venue profile's gallery gets.
+ *
+ * The catalog keeps up to ten per place, but every photograph a person swipes
+ * to is a separately billed Place Photo request whenever the process has not
+ * fetched it for somebody else first — and the profile is open to everyone in
+ * the city, not to one match. Five is the founder's cap (2026-09-15): enough
+ * to see the room, the terrace and the menu, cheap enough to leave on.
+ */
+export const SHOWCASE_GALLERY_MAX = 5;
+
+/**
+ * Google's price level, reduced to the product's words. A documented string on
+ * the wire rather than an enum, for the same reason as `category`: a value added
+ * later must not fail decoding in an App Store build.
+ */
+export type ShowcasePriceLevel = "free" | "inexpensive" | "moderate" | "expensive" | "very_expensive";
+
+/** Both spellings the catalog has held: the Places enum and the seeder's own. */
+export function showcasePriceLevel(raw: string | null | undefined): ShowcasePriceLevel | null {
+  switch (raw) {
+    case "free":
+    case "PRICE_LEVEL_FREE":
+      return "free";
+    case "inexpensive":
+    case "PRICE_LEVEL_INEXPENSIVE":
+      return "inexpensive";
+    case "moderate":
+    case "PRICE_LEVEL_MODERATE":
+      return "moderate";
+    case "expensive":
+    case "PRICE_LEVEL_EXPENSIVE":
+      return "expensive";
+    case "very_expensive":
+    case "PRICE_LEVEL_VERY_EXPENSIVE":
+      return "very_expensive";
+    default:
+      return null;
+  }
+}
+
 /** The catalog columns the showcase reads (a subset of the Prisma row). */
 export interface ShowcaseCandidate {
   id: string;
@@ -465,6 +506,8 @@ export interface ShowcaseCandidate {
   photoRefs: string[];
   rating: number | null;
   userRatingCount: number | null;
+  priceLevel: string | null;
+  googleMapsUri: string | null;
 }
 
 /** A moment of the venue's week, in its own wall-clock time (day 0 = Sunday). */
@@ -482,8 +525,8 @@ export interface ShowcaseOpeningPeriod {
 
 /**
  * One place as the canvas receives it, minus the photo links: those are signed
- * per response (`public/showcase-photos.ts`), so only whether there IS a photo
- * is decided here. The Places resource name never leaves the server.
+ * per response (`public/showcase-photos.ts`), so only how many photos there ARE
+ * is decided here. The Places resource names never leave the server.
  */
 export interface ShowcasePlace {
   id: string;
@@ -498,7 +541,13 @@ export interface ShowcasePlace {
   facetTags: string[];
   utcOffsetMinutes: number | null;
   openingHours: ShowcaseOpeningPeriod[];
-  hasPhoto: boolean;
+  /** Photos the gallery may show, `0…SHOWCASE_GALLERY_MAX`; slot 0 is the cover. */
+  photoCount: number;
+  priceLevel: ShowcasePriceLevel | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  /** Google Maps page of the place — the profile's secondary "open in Maps". */
+  mapsUri: string | null;
 }
 
 /**
@@ -644,8 +693,31 @@ function toShowcasePlace(row: ShowcaseCandidate): ShowcasePlace {
     facetTags: row.facetTags,
     utcOffsetMinutes: row.utcOffsetMinutes,
     openingHours: normalizeOpeningPeriods(row.openingHours),
-    hasPhoto: row.photoRefs.length > 0,
+    photoCount: Math.min(row.photoRefs.length, SHOWCASE_GALLERY_MAX),
+    priceLevel: showcasePriceLevel(row.priceLevel),
+    rating: row.rating != null && Number.isFinite(row.rating) && row.rating >= 1 && row.rating <= 5 ? row.rating : null,
+    userRatingCount:
+      row.userRatingCount != null && Number.isInteger(row.userRatingCount) && row.userRatingCount >= 0
+        ? row.userRatingCount
+        : null,
+    mapsUri: httpsLink(row.googleMapsUri),
   };
+}
+
+/**
+ * A link the client may open as is. The column is written by the seeder and the
+ * nightly scan from Google's own field, but a hand-edited row could hold
+ * anything, and an `http:` or `javascript:` link handed to an app's URL opener
+ * is not a thing to find out about in production.
+ */
+function httpsLink(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 const showcaseCache = new Map<string, { at: number; places: ShowcasePlace[] }>();
@@ -680,6 +752,8 @@ export async function getShowcaseVenues(
       photoRefs: true,
       rating: true,
       userRatingCount: true,
+      priceLevel: true,
+      googleMapsUri: true,
     },
   });
 
@@ -705,15 +779,19 @@ export function resetShowcaseCache(): void {
 }
 
 /**
- * The cover photo of one catalog row, for the signed photo route — or null when
- * the row is gone, retired, or not yet reached by the nightly scan. A retired
- * row answering nothing is what makes its already-minted links stop with it.
+ * One photo of one catalog row, for the signed photo route — slot 0 is the
+ * cover, the rest the profile's gallery — or null when the row is gone,
+ * retired, not yet reached by the nightly scan, or has fewer photos than the
+ * slot. A retired row answering nothing is what makes its already-minted links
+ * stop with it. A slot past {@link SHOWCASE_GALLERY_MAX} answers nothing even
+ * when the catalog holds it: the cap is a bill, not a display preference.
  */
-export async function showcasePhotoRef(venueId: string): Promise<string | null> {
+export async function showcasePhotoRef(venueId: string, index = 0): Promise<string | null> {
+  if (!Number.isInteger(index) || index < 0 || index >= SHOWCASE_GALLERY_MAX) return null;
   const row = await prisma.curatedVenue.findUnique({
     where: { id: venueId },
     select: { active: true, photoRefs: true },
   });
   if (!row?.active) return null;
-  return row.photoRefs[0] ?? null;
+  return row.photoRefs[index] ?? null;
 }

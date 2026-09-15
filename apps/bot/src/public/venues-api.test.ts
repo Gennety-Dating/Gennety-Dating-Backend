@@ -74,8 +74,8 @@ function catalogRow(overrides: Record<string, unknown> = {}) {
 }
 
 /** Path + query of a link the list would mint, ready for supertest. */
-function signedPath(id = VENUE_ID, width = 1200, now = Date.now()): string {
-  const url = new URL(venuePhotoUrl(id, width, now));
+function signedPath(id = VENUE_ID, width = 1200, now = Date.now(), slot = 0): string {
+  const url = new URL(venuePhotoUrl(id, width, now, slot));
   return url.pathname + url.search;
 }
 
@@ -170,6 +170,118 @@ describe("GET /v1/venues/showcase", () => {
 
     expect(res.body.venues[0].photoUrl).toBeNull();
     expect(res.body.venues[0].thumbnailUrl).toBeNull();
+    expect(res.body.venues[0].photoUrls).toEqual([]);
+  });
+
+  it("carries the whole gallery's links, cover first and identical to the card's photo", async () => {
+    const refs = Array.from({ length: 7 }, (_, i) => `places/ChIJ-sens/photos/${i}`);
+    venueFindMany.mockResolvedValue([catalogRow({ photoRefs: refs })]);
+
+    const res = await request(buildApp()).get("/v1/venues/showcase?cityKey=ua:kyiv");
+    const venue = res.body.venues[0];
+    const paths = (venue.photoUrls as string[]).map((link) => new URL(link));
+
+    // Capped at five however many the catalog holds.
+    expect(paths).toHaveLength(5);
+    // The cover is not a second download of the picture the card already shows.
+    expect(venue.photoUrls[0]).toBe(venue.photoUrl);
+    expect(paths.map((url) => url.pathname)).toEqual([
+      `/v1/venues/${VENUE_ID}/photo`,
+      `/v1/venues/${VENUE_ID}/photo/1`,
+      `/v1/venues/${VENUE_ID}/photo/2`,
+      `/v1/venues/${VENUE_ID}/photo/3`,
+      `/v1/venues/${VENUE_ID}/photo/4`,
+    ]);
+    expect(paths.every((url) => url.searchParams.get("w") === "1200")).toBe(true);
+    expect(new Set(paths.map((url) => url.searchParams.get("sig"))).size).toBe(5);
+    expect(JSON.stringify(res.body)).not.toContain("places/ChIJ-sens/photos");
+  });
+
+  it("carries the profile's facts in the product's words", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({ priceLevel: "PRICE_LEVEL_INEXPENSIVE", googleMapsUri: "https://maps.google.com/?cid=42" }),
+    ]);
+
+    const res = await request(buildApp()).get("/v1/venues/showcase?cityKey=ua:kyiv");
+
+    expect(res.body.venues[0]).toMatchObject({
+      priceLevel: "inexpensive",
+      rating: 4.7,
+      userRatingCount: 812,
+      mapsUri: "https://maps.google.com/?cid=42",
+    });
+    expect(res.body.venues[0]).not.toHaveProperty("photoCount");
+    expect(res.body.venues[0]).not.toHaveProperty("googleMapsUri");
+  });
+});
+
+describe("GET /v1/venues/:id/photo/:slot", () => {
+  const gallery = ["places/x/photos/0", "places/x/photos/1", "places/x/photos/2"];
+
+  it("serves the gallery photo its slot names", async () => {
+    venueFindUnique.mockResolvedValue({ active: true, photoRefs: gallery });
+    const fetchMock = vi.fn().mockResolvedValue(jpeg());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(buildApp()).get(signedPath(VENUE_ID, 1200, Date.now(), 2));
+
+    expect(res.status).toBe(200);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("places/x/photos/2/media?maxWidthPx=1200");
+  });
+
+  it("refuses a link moved to another slot, or the cover's link put on a slot", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const second = signedPath(VENUE_ID, 1200, Date.now(), 1);
+    const moved = second.replace("/photo/1", "/photo/3");
+    const cover = signedPath().replace("/photo?", "/photo/1?");
+    const coverFromSlot = second.replace("/photo/1", "/photo");
+
+    expect((await request(buildApp()).get(moved)).status).toBe(403);
+    expect((await request(buildApp()).get(cover)).status).toBe(403);
+    expect((await request(buildApp()).get(coverFromSlot)).status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 for slot 0 and for a slot past the cap — neither has a path", async () => {
+    const zero = await request(buildApp()).get(
+      signedPath(VENUE_ID, 1200, Date.now(), 1).replace("/photo/1", "/photo/0"),
+    );
+    const past = await request(buildApp()).get(
+      signedPath(VENUE_ID, 1200, Date.now(), 5),
+    );
+    const junk = await request(buildApp()).get(`/v1/venues/${VENUE_ID}/photo/one?w=1200&e=1&sig=x`);
+
+    expect(zero.status).toBe(400);
+    expect(past.status).toBe(400);
+    expect(junk.status).toBe(400);
+    expect(venueFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 for a slot the place has no photo in", async () => {
+    venueFindUnique.mockResolvedValue({ active: true, photoRefs: gallery });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(buildApp()).get(signedPath(VENUE_ID, 1200, Date.now(), 4));
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("no-photo");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("caches each slot apart from the cover", async () => {
+    venueFindUnique.mockResolvedValue({ active: true, photoRefs: gallery });
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jpeg()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await request(buildApp()).get(signedPath())).status).toBe(200);
+    expect((await request(buildApp()).get(signedPath(VENUE_ID, 1200, Date.now(), 1))).status).toBe(200);
+    expect((await request(buildApp()).get(signedPath(VENUE_ID, 1200, Date.now(), 1))).status).toBe(200);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("places/x/photos/0/");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("places/x/photos/1/");
   });
 });
 
