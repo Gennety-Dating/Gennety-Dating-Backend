@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 179 entries
+# Deploy journal index — 180 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | маскот входного экрана: кисти за спиной, пока он спиной | [pending](./pending.md) |
 | PENDING |  | Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` | [pending](./pending.md) |
 | PENDING |  | голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра | [pending](./pending.md) |
 | PENDING |  | Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде | [pending](./pending.md) |
