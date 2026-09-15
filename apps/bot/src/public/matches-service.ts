@@ -47,7 +47,7 @@ import {
 import { getBotApi } from "./server.js";
 import { offerRematchAfterCancellation } from "../handlers/matching/rematch.js";
 import { deadlineFor } from "../services/proposal-deadline.js";
-import { PRE_DATE_WINGMAN_HOURS } from "@gennety/shared";
+import { preDateBriefingVisibility } from "@gennety/shared";
 import {
   ACTIVE_MATCH_STATUSES,
   pickCurrentMatch,
@@ -436,17 +436,19 @@ export async function getCurrentMatchForUser(
   // appear while the server would refuse a message, or vice versa.
   const proxyWindow = proxyChatWindow(match);
 
-  // Wingman hint is only revealed within T-1.5h of the agreed time. This is
-  // the single source of truth for the reveal gate — the column may already
-  // contain the string well ahead of that window (generation happens at
-  // `scheduled` transition), but clients see `null` until the gate opens.
-  const revealAtMs = match.agreedTime
-    ? match.agreedTime.getTime() - PRE_DATE_WINGMAN_HOURS * 60 * 60 * 1000
-    : null;
-  const wingmanUnlocked = revealAtMs !== null && Date.now() >= revealAtMs;
-  const wingmanHint = wingmanUnlocked
+  // The pre-date briefing gate — the single source of truth for both fields.
+  // The wingman column may already contain the string well ahead of T-1.5h
+  // (generation happens at the `scheduled` transition), but clients see `null`
+  // until the gate opens; and both fields empty out at T+2h, because a match
+  // stays `scheduled` until T+24h and the app shows the briefing on its home
+  // screen for as long as the server returns it.
+  const briefing = preDateBriefingVisibility(match.agreedTime, new Date());
+  const wingmanHint = briefing.wingmanHint
     ? (side === "A" ? match.wingmanHintA : match.wingmanHintB) ?? null
     : null;
+  const iceBreakers = briefing.iceBreakers
+    ? (side === "A" ? match.iceBreakersA : match.iceBreakersB) ?? []
+    : [];
 
   // Response deadline (services/proposal-deadline.ts — flat 24h under the
   // weekly cadence profile, anchored to the next batch under daily). Only
@@ -465,7 +467,7 @@ export async function getCurrentMatchForUser(
     id: match.id,
     status: match.status,
     pitchForMe: side === "A" ? match.pitchForA : match.pitchForB,
-    iceBreakers: (side === "A" ? match.iceBreakersA : match.iceBreakersB) ?? [],
+    iceBreakers,
     wingmanHint,
     synergyScore: match.synergyScore,
     // The score is pair-level, but the reason is prose written in one side's

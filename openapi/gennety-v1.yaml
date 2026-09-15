@@ -7002,9 +7002,10 @@ components:
         iceBreakers:
           type: array
           items: { type: string }
+          description: empty until the T-5h tick writes them, and again from T+2h after agreedTime (server-gated close)
         wingmanHint:
           type: [string, "null"]
-          description: null until T-1.5h before agreedTime (server-gated reveal)
+          description: null until T-1.5h before agreedTime (server-gated reveal) and again from T+2h (server-gated close)
         synergyScore:
           type: [integer, "null"]
           minimum: 70

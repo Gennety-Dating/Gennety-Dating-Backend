@@ -6,7 +6,9 @@ import {
   DATE_DAY_END_HOURS,
   DATE_DAY_SPOTTER_LEAD_MINUTES,
   DATE_DAY_VIBE_AFTER_HOURS,
+  PRE_DATE_BRIEFING_CLOSE_AFTER_HOURS,
   dateDayBeatFor,
+  preDateBriefingVisibility,
 } from "./date-lifecycle.js";
 import {
   COORD_OFFER_HOURS,
@@ -163,5 +165,43 @@ describe("the pre-date schedule", () => {
 
   it("keeps the chat open across the whole meeting, not just the approach", () => {
     expect(PROXY_OPEN_HOURS + PROXY_CLOSE_AFTER_HOURS).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("preDateBriefingVisibility", () => {
+  const wingmanMinutes = PRE_DATE_WINGMAN_HOURS * 60;
+  const closeMinutes = PRE_DATE_BRIEFING_CLOSE_AFTER_HOURS * 60;
+
+  it("shows nothing for a match with no agreed time", () => {
+    expect(preDateBriefingVisibility(null, AGREED)).toEqual({
+      iceBreakers: false,
+      wingmanHint: false,
+    });
+  });
+
+  it("keeps the wingman hint hidden until T-1.5h, though the column is filled at scheduling", () => {
+    expect(preDateBriefingVisibility(AGREED, at(-wingmanMinutes - 1)).wingmanHint).toBe(false);
+    expect(preDateBriefingVisibility(AGREED, at(-wingmanMinutes)).wingmanHint).toBe(true);
+  });
+
+  it("does not gate ice-breakers before the date — the T-5h tick is their gate", () => {
+    expect(preDateBriefingVisibility(AGREED, at(-DATE_ALERT_HOURS * 60)).iceBreakers).toBe(true);
+  });
+
+  it("keeps both on screen through the date itself", () => {
+    expect(preDateBriefingVisibility(AGREED, at(0))).toEqual({ iceBreakers: true, wingmanHint: true });
+    expect(preDateBriefingVisibility(AGREED, at(closeMinutes - 1))).toEqual({
+      iceBreakers: true,
+      wingmanHint: true,
+    });
+  });
+
+  it("takes both off at T+2h, long before the match leaves `scheduled` at T+24h", () => {
+    // Without this bound the app's home screen held the tips for a day after
+    // the evening ended: `completed` is only written by the feedback tick.
+    expect(preDateBriefingVisibility(AGREED, at(closeMinutes))).toEqual({
+      iceBreakers: false,
+      wingmanHint: false,
+    });
   });
 });

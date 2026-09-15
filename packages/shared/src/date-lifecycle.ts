@@ -14,6 +14,8 @@
  * these names and `openapi/gennety-v1.yaml` carries them as an enum.
  */
 
+import { PRE_DATE_WINGMAN_HOURS } from "./constants.js";
+
 /**
  * Every state the canvas can be in.
  *
@@ -285,4 +287,41 @@ export function dateTerminalBeatFor(
     return sent.invite ? null : "invite";
   }
   return null;
+}
+
+/**
+ * How long after `agreedTime` the pre-date briefing — the T-5h ice-breakers and
+ * the T-1.5h wingman hint — stays on the app's screens.
+ *
+ * The iOS app shows the briefing on «Сегодня» throughout the date (founder,
+ * 2026-09-15), and a match stays `scheduled` until the feedback tick at T+24h,
+ * so without a closing bound the tips would sit on the home screen for a day
+ * after the evening ended. Two hours is when the rest of the evening's surfaces
+ * let go (`DATE_BUMP_GRACE_HOURS`, `PROXY_CLOSE_AFTER_HOURS`) — equal to them by
+ * choice, not by construction, and free to move apart like they already have.
+ */
+export const PRE_DATE_BRIEFING_CLOSE_AFTER_HOURS = 2;
+
+/**
+ * Which half of the pre-date briefing the app may see at `now`.
+ *
+ * The one gate for both fields of `SerializedMatch`, so the reveal and the
+ * close cannot drift apart between them. Ice-breakers carry no opening bound
+ * here: their column is empty until the T-5h tick writes it (together with the
+ * Telegram message), and a second gate could only disagree with that one. The
+ * wingman hint is written at scheduling, hours early, so it needs this gate to
+ * stay hidden until T-1.5h.
+ */
+export function preDateBriefingVisibility(
+  agreedTime: Date | null,
+  now: Date,
+): { iceBreakers: boolean; wingmanHint: boolean } {
+  if (!agreedTime) return { iceBreakers: false, wingmanHint: false };
+  const at = agreedTime.getTime();
+  const current = now.getTime();
+  const open = current < at + PRE_DATE_BRIEFING_CLOSE_AFTER_HOURS * HOUR_MS;
+  return {
+    iceBreakers: open,
+    wingmanHint: open && current >= at - PRE_DATE_WINGMAN_HOURS * HOUR_MS,
+  };
 }

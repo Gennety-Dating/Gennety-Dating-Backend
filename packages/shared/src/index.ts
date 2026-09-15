@@ -74,6 +74,8 @@ export {
   DATE_TERMINAL_REMINDER_LEAD_MINUTES,
   DATE_TERMINAL_REMINDER_GRACE_MINUTES,
   dateTerminalBeatFor,
+  PRE_DATE_BRIEFING_CLOSE_AFTER_HOURS,
+  preDateBriefingVisibility,
 } from "./date-lifecycle.js";
 export type { DateLifecycleState, DateDayBeat, DateTerminalBeat } from "./date-lifecycle.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
