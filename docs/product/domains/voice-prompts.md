@@ -809,11 +809,11 @@ re-apply.
 
 ### M4 — iOS (parallel with M1–M2)
 - [x] `/v1/*` endpoints + `openapi/gennety-v1.yaml` in the **same commit** (signed PUT, onboarding exit and partner refresh: 2026-09-14)
-- [ ] `./scripts/generate-api.sh` emits zero `skipping` lines (§4.2)
+- [x] `./scripts/generate-api.sh` emits zero `skipping` lines (§4.2) — checked with the generator binary over the full spec, 2026-09-14
 - [x] `collectOwnedPaths` covers `storagePath` (§5.6) — and the `${userId}/` prefix sweep covers uploads never committed
-- [ ] Recorder: permission gate, live visualiser, 3s floor / 30s stop, preview
-- [ ] Player: precomputed bars, scrubber, `AudioPlaybackCoordinator`
-- [ ] Task recorded in `Gennety-iOS/IMPLEMENTATION_PLAN.md`
+- [x] Recorder: permission gate, live visualiser, 3s floor / 30s stop, preview (Gennety-iOS `a81b481`, 2026-09-15)
+- [x] Player: precomputed bars, tap-to-seek (no drag scrub), `AudioPlaybackCoordinator`; partner URL refresh
+- [x] Task recorded in Gennety-iOS `docs/product/stage-plan.md` §7.1 (the former `IMPLEMENTATION_PLAN.md`)
 
 ### M5 — QA, demo & docs
 - [ ] E2E on `@gennetytestbot`: record → moderate → pitch → play, both rails
