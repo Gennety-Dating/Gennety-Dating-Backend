@@ -61,7 +61,6 @@ describe("parseAnnouncementFields", () => {
         ...valid,
         agentBrief: null,
         suggestedQuestions: [],
-        eventId: null,
         audience: {},
         sendPush: true,
       },
@@ -72,7 +71,6 @@ describe("parseAnnouncementFields", () => {
     [{ ...valid, title: "" }, "title_required"],
     [{ ...valid, teaser: "x".repeat(141) }, "teaser_too_long"],
     [{ ...valid, suggestedQuestions: ["a", "b", "c", "d"] }, "suggestedQuestions_invalid"],
-    [{ ...valid, eventId: "launch" }, "eventId_invalid"],
     [{ ...valid, audience: { languages: ["fr"] } }, "audience_invalid"],
     [{ ...valid, sendPush: "yes" }, "sendPush_invalid"],
   ])("names the broken field", (body, error) => {

@@ -9,8 +9,6 @@ const flag = {
   TICKET_FEATURE_ENABLED: true,
   FAMINE_DISCOUNT_PCT: 77,
   FAMINE_DISCOUNT_TTL_DAYS: 30,
-  EVENT_FEEDBACK_DISCOUNT_PCT: 40,
-  EVENT_FEEDBACK_DISCOUNT_TTL_DAYS: 30,
 };
 vi.mock("../config.js", () => ({ env: flag }));
 
@@ -98,7 +96,6 @@ const {
   activeDiscountFromColumns,
   getActiveDiscount,
   grantFamineDiscountIfEligible,
-  grantEventFeedbackDiscount,
   consumeActiveDiscount,
 } = await import("./ticket-discount.js");
 
@@ -121,8 +118,6 @@ beforeEach(() => {
   flag.TICKET_FEATURE_ENABLED = true;
   flag.FAMINE_DISCOUNT_PCT = 77;
   flag.FAMINE_DISCOUNT_TTL_DAYS = 30;
-  flag.EVENT_FEEDBACK_DISCOUNT_PCT = 40;
-  flag.EVENT_FEEDBACK_DISCOUNT_TTL_DAYS = 30;
   resetUser();
 });
 
@@ -191,6 +186,19 @@ describe("grantFamineDiscountIfEligible", () => {
     expect(db.user.ticketDiscountConsumedAt).toBeNull();
     expect(db.user.ticketDiscountExpiresAt).toEqual(new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000));
   });
+  // The slot has one filler, and it writes unconditionally: a still-starved
+  // user holding a live discount gets a fresh one with the TTL slid, rather
+  // than a silent no-op that would read as the perk failing to arrive.
+  it("replaces a live discount rather than refusing", async () => {
+    resetUser({
+      ticketDiscountPct: 40,
+      ticketDiscountExpiresAt: new Date(NOW.getTime() + 60_000),
+      ticketDiscountSource: "famine",
+    });
+    expect(await grantFamineDiscountIfEligible("u1", NOW)).toMatchObject({ granted: true, pct: 77 });
+    expect(db.user.ticketDiscountPct).toBe(77);
+    expect(db.user.ticketDiscountExpiresAt).toEqual(new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000));
+  });
 });
 
 describe("consumeActiveDiscount", () => {
@@ -210,86 +218,3 @@ describe("consumeActiveDiscount", () => {
   });
 });
 
-/**
- * The two mechanisms share ONE slot, and the collision rule is asymmetric:
- * famine replaces, event feedback only ever fills an empty slot. These are the
- * tests that hold the asymmetry — the alternative ("keep the better one") is
- * an arithmetic comparison two call sites would eventually disagree about.
- */
-describe("grantEventFeedbackDiscount", () => {
-  it("fills an empty slot and stamps its source", async () => {
-    const res = await grantEventFeedbackDiscount("u1", NOW);
-    expect(res).toEqual({
-      granted: true,
-      pct: 40,
-      expiresAt: new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000),
-    });
-    expect(db.user.ticketDiscountPct).toBe(40);
-    expect(db.user.ticketDiscountSource).toBe("event_feedback");
-  });
-
-  // The one that matters: answering the form must never cost someone a live
-  // 77% famine discount in exchange for a 40% one.
-  it("does NOT displace an active famine discount", async () => {
-    resetUser({
-      ticketDiscountPct: 77,
-      ticketDiscountExpiresAt: new Date(NOW.getTime() + 60_000),
-      ticketDiscountSource: "famine",
-    });
-    const res = await grantEventFeedbackDiscount("u1", NOW);
-    expect(res).toEqual({ granted: false });
-    expect(db.user.ticketDiscountPct).toBe(77);
-    expect(db.user.ticketDiscountSource).toBe("famine");
-  });
-
-  it("fills a slot whose discount was already spent", async () => {
-    resetUser({
-      ticketDiscountPct: 77,
-      ticketDiscountExpiresAt: new Date(NOW.getTime() + 60_000),
-      ticketDiscountConsumedAt: new Date(NOW.getTime() - 60_000),
-    });
-    expect(await grantEventFeedbackDiscount("u1", NOW)).toMatchObject({ granted: true });
-    expect(db.user.ticketDiscountPct).toBe(40);
-    // …and clears the spent marker, or the fresh grant would be dead on arrival.
-    expect(db.user.ticketDiscountConsumedAt).toBeNull();
-  });
-
-  it("fills a slot whose discount has expired", async () => {
-    resetUser({
-      ticketDiscountPct: 77,
-      ticketDiscountExpiresAt: new Date(NOW.getTime() - 60_000),
-    });
-    expect(await grantEventFeedbackDiscount("u1", NOW)).toMatchObject({ granted: true });
-    expect(db.user.ticketDiscountPct).toBe(40);
-  });
-
-  // A zero percent is not a discount; writing one would occupy the slot with
-  // something that discounts nothing and block the next real grant.
-  it("writes nothing when the configured percent is zero", async () => {
-    flag.EVENT_FEEDBACK_DISCOUNT_PCT = 0;
-    expect(await grantEventFeedbackDiscount("u1", NOW)).toEqual({ granted: false });
-    expect(db.user.ticketDiscountPct).toBe(0);
-    expect(db.user.ticketDiscountSource).toBeNull();
-  });
-
-  it("is inert with tickets switched off", async () => {
-    flag.TICKET_FEATURE_ENABLED = false;
-    expect(await grantEventFeedbackDiscount("u1", NOW)).toEqual({ granted: false });
-    expect(db.user.ticketDiscountPct).toBe(0);
-  });
-});
-
-describe("grantFamineDiscountIfEligible, alongside the second mechanism", () => {
-  // Famine is unchanged: it replaces whatever is there, including an
-  // event-feedback discount, which is always an improvement.
-  it("still replaces unconditionally, and stamps its own source", async () => {
-    resetUser({
-      ticketDiscountPct: 40,
-      ticketDiscountExpiresAt: new Date(NOW.getTime() + 60_000),
-      ticketDiscountSource: "event_feedback",
-    });
-    expect(await grantFamineDiscountIfEligible("u1", NOW)).toMatchObject({ granted: true, pct: 77 });
-    expect(db.user.ticketDiscountPct).toBe(77);
-    expect(db.user.ticketDiscountSource).toBe("famine");
-  });
-});

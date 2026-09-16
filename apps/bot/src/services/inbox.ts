@@ -31,17 +31,6 @@ export interface InboxItemDto {
   announcementId: string | null;
 }
 
-export interface InboxEventDto {
-  id: string;
-  title: string;
-  status: string;
-  venueName: string;
-  venueAddress: string;
-  startsAt: string;
-  endsAt: string;
-  timeZone: string;
-}
-
 export interface InboxMediaDto {
   kind: "image" | "video";
   url: string;
@@ -52,7 +41,6 @@ export interface InboxAnnouncementDto {
   body: string;
   suggestedQuestions: string[];
   media?: InboxMediaDto;
-  event?: InboxEventDto;
 }
 
 export interface InboxItemDetailDto {
@@ -224,18 +212,6 @@ export async function getInboxItemDetail(
           mediaKind: true,
           mediaPath: true,
           posterPath: true,
-          event: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              venueName: true,
-              venueAddress: true,
-              startsAt: true,
-              endsAt: true,
-              timeZone: true,
-            },
-          },
         },
       },
     },
@@ -252,19 +228,6 @@ export async function getInboxItemDetail(
   };
   const media = await signMedia(announcement);
   if (media) dto.media = media;
-  if (announcement.event) {
-    const e = announcement.event;
-    dto.event = {
-      id: e.id,
-      title: e.title,
-      status: e.status,
-      venueName: e.venueName,
-      venueAddress: e.venueAddress,
-      startsAt: e.startsAt.toISOString(),
-      endsAt: e.endsAt.toISOString(),
-      timeZone: e.timeZone,
-    };
-  }
   return { item, announcement: dto };
 }
 

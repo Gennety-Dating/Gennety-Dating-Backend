@@ -904,13 +904,10 @@ describe("runFaceMatchVerification — activation prerequisites (A13-M18)", () =
 
   it("does not activate or pay the referrer without a verified track contact", async () => {
     const h = makeHarness({ user: { registrationTrack: "general", phoneVerifiedAt: null } });
-    const admission = vi.fn(async () => {});
-    h.deps.settleEventAdmission = admission;
     await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(h.persisted[0]!.shouldActivate).toBe(false);
     expect(h.referralSettles).toHaveLength(0);
-    expect(admission).not.toHaveBeenCalled();
   });
 
   it("leaves an already-active account's rerun untouched by the prerequisites", async () => {
