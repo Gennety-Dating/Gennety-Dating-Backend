@@ -38,10 +38,18 @@
   --accent-bright: #b6304f;
   --self: #ffffff;
 
-  /* Чернила. На тёмном стоке карточки бордо читается крупным кеглем, но
-     фольга читается мгновенно — выбор оставлен основателю, а не зашит. */
-  --ink: #d64363;
-  --ink-glow: rgba(214, 67, 99, 0.22);
+  /* Чернила БЕЛЫЕ. Решение от 2026-09-16: бордо по бордово-чёрному стоку
+     сливается с карточкой; белила — единственный пигмент, который на этом
+     стоке читается мгновенно. Тёплый оттенок, а не #fff: чистый белый на
+     тёмном выглядит как векторный интерфейс, а не как краска. */
+  --ink: #f2efea;
+  --ink-glow: rgba(242, 239, 234, 0.10);
+
+  /* Служебная моногарнитура. Системный стек — это SF Mono на iOS/macOS и
+     Roboto Mono на Android: ноль байт загрузки, и обе не выглядят дёшево.
+     IBM Plex Mono подключается переключателем для сравнения. */
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Roboto Mono",
+          "Courier New", monospace;
 
   /* Геометрия блока штампа. Всё остальное считается от этих трёх чисел. */
   --block-w: 248px;
@@ -163,7 +171,10 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32);
   color: #f2ecf4;
-  padding: 24px 22px;
+  /* Верхнее поле поджато с 24 до 15: бланк вырос со 150 до 170 px, штамп
+     вместе с ним, и имена надо было увести выше его силуэта. Это не
+     переделка карточки, а плата за размер оттиска. */
+  padding: 12px 22px 18px;
   display: flex;
   flex-direction: column;
   /* Насечка отрыва — настоящие дырки, как у билета. */
@@ -187,7 +198,7 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
   color: rgba(255, 255, 255, 0.38);
 }
 .card-names {
-  margin-top: 12px;
+  margin-top: 9px;
   font-family: "Space Grotesk", "Inter", sans-serif;
   font-size: 24px;
   line-height: 1.16;
@@ -198,6 +209,18 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
 .card-row { display: flex; justify-content: space-between; font-size: 12.5px; }
 .card-row b { font-weight: 500; color: rgba(255, 255, 255, 0.86); }
 .card-row span { color: rgba(255, 255, 255, 0.40); }
+/* Предложение, а не решение: до отпечатка поле «когда» закрыто плашкой, и
+   именно удар штампа его рассекречивает. Цензура тогда не наклейка, а
+   сюжет ролика. По умолчанию выключено — карточку я не переделываю. */
+.card-redact {
+  display: none;
+  width: 86px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 1px;
+}
+.card.is-redacting #cardWhen { visibility: hidden; }
+.card.is-redacting .card-redact { display: block; }
 /* Нижняя треть карточки намеренно пустая — это поле под печать. Так на
    настоящих бланках и делают, и только поэтому печать не ложится на текст. */
 .card-stub {
@@ -223,10 +246,10 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
      поле было 198 px против 144 px подошвы, края печати вылезали из-под
      блока ещё в момент удара — и весь фокус «её не видно, пока штамп не
      ушёл» рассыпался. Размер поля привязан к --block-w × BLOCK_SCALE_3D. */
-  top: 246px;
-  width: 150px;
-  height: 84px;
-  margin-left: -75px;
+  top: 234px;
+  width: 170px;
+  height: 94px;
+  margin-left: -85px;
   transform-style: preserve-3d;
   pointer-events: none;
 }
@@ -237,45 +260,110 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
 .ink {
   position: absolute;
   inset: 0;
-  transform: translateZ(var(--ink-z, 0px)) rotate(-3deg) scale(var(--ink-s, 1));
+  /* 1,8°, а не 3°. Ручной штамп никогда не встаёт строго по линейке, но
+     заметный перекос читается как наклейка. Неточность должна быть на
+     грани различимости — тогда она работает на подлинность. */
+  transform: translateZ(var(--ink-z, 0px)) rotate(-1.8deg) scale(var(--ink-s, 1));
   opacity: var(--ink-op, 0);
   color: var(--ink);
-  display: grid;
-  place-items: center;
-  border: 2px solid currentColor;
-  border-radius: 11px;
-  box-shadow: inset 0 0 0 4px currentColor;
-}
-.ink.is-rough { filter: url(#ink-rough); }
-.ink-inner { text-align: center; padding: 4px 8px; }
-.ink-kicker {
-  font-size: 7.5px;
-  letter-spacing: 0.26em;
+  font-family: var(--mono);
   text-transform: uppercase;
+  /* Двойная линейка бланка: тяжёлая наружная и волосяная внутренняя. Углы
+     почти прямые — документ, а не карточка (у самой карточки радиус 22). */
+  border: 1.2px solid currentColor;
+  border-radius: 2px;
+  padding: 9px 11px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  /* Оттиск ВДАВЛЕН в сток: тонкая тёмная подложка под штрихом. Полтора
+     пикселя, иначе получается обводка. */
+  filter: drop-shadow(0 0.6px 0 rgba(0, 0, 0, 0.6));
+}
+.ink.is-rough { filter: url(#ink-rough) drop-shadow(0 0.6px 0 rgba(0, 0, 0, 0.6)); }
+/* Внутренняя волосяная линейка — отдельным слоем, а не inset-тенью: тень со
+   spread заливает полосу СПЛОШЬ от края внутрь, и двойная линейка
+   превращалась в один жирный брусок. */
+.ink::before {
+  content: "";
+  position: absolute;
+  inset: 3.5px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Приводочные метки — СНАРУЖИ рамки, как метки реза в типографии. Внутри
+   они попадали в полосу двойной линейки и там пропадали; снаружи это самая
+   дешёвая деталь, которая больше всего добавляет достоверности. */
+.ink .tick {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+.ink .tl { top: -4px; left: -4px; border-right: 0; border-bottom: 0; }
+.ink .tr { top: -4px; right: -4px; border-left: 0; border-bottom: 0; }
+.ink .bl { bottom: -4px; left: -4px; border-right: 0; border-top: 0; }
+.ink .br { bottom: -4px; right: -4px; border-left: 0; border-top: 0; }
+
+.ink-head {
+  font-size: 6.5px;
+  letter-spacing: 0.16em;
   font-weight: 700;
+  text-align: center;
+  opacity: 0.95;
+}
+.ink-rule { height: 1px; background: currentColor; opacity: 0.85; }
+.ink-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  row-gap: 1.5px;
+  font-size: 6px;
+  letter-spacing: 0.10em;
+  line-height: 1.5;
+}
+.ink-fields .k { opacity: 0.72; }
+.ink-fields .v { text-align: right; opacity: 0.95; }
+/* Цензура. Работает по назначению — закрывает УРОВЕНЬ ДОПУСКА, а не
+   украшает: единственное поле бланка, которое не раскрывается. */
+.redact {
+  display: inline-block;
+  width: 46px;
+  height: 6.5px;
+  background: currentColor;
+  vertical-align: -1px;
   opacity: 0.92;
 }
-.ink-main {
-  font-family: "Space Grotesk", "Inter", sans-serif;
-  font-size: 19px;
+/* Полезная нагрузка — единственное, что обязано читаться с одного взгляда. */
+.ink-payload {
+  /* 14, а не 15,5: строка укладывалась в бланк с запасом в 2 px на системном
+     моно, а Courier New (запасной вариант) заметно шире и обрезал бы её. */
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.1;
-  margin-top: 3px;
+  letter-spacing: 0;
+  line-height: 1.12;
+  text-align: center;
   white-space: nowrap;
+  margin: 1px 0;
 }
-.ink-sub {
-  font-size: 7.5px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  margin-top: 3px;
-  opacity: 0.74;
+.ink-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 5.8px;
+  letter-spacing: 0.10em;
+  opacity: 0.8;
 }
 /* Тень под ещё не севшей печатью — отдельным слоем, чтобы гасла своей кривой. */
 .ink-shadow {
   position: absolute;
   inset: 0;
-  transform: translateZ(0.4px) rotate(-3deg) scale(1.02);
-  border-radius: 11px;
+  transform: translateZ(0.4px) rotate(-1.8deg) scale(1.02);
+  border-radius: 2px;
   background: rgba(0, 0, 0, 0.6);
   filter: blur(var(--ink-sh-blur, 10px));
   opacity: var(--ink-sh-op, 0);
@@ -420,6 +508,20 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
   opacity: var(--lab-op, 1);
 }
 
+/* Служебный вид самого инструмента. Литеры на барабанах — те же знаки, что
+   он печатает, поэтому гарнитура у лица и у оттиска обязана быть одна.
+   Подписи колонок здесь НЕ переводятся: прибор технический, а переводится
+   только то, что он печатает. Заодно снимается риск, что «Время» на пяти
+   языках не влезет в 1,3 доли колонки. */
+.face.is-mono .face-top,
+.face.is-mono .drum-row,
+.face.is-mono .face-labels { font-family: var(--mono); }
+.face.is-mono .drum-row { font-weight: 500; letter-spacing: 0.02em; }
+.face.is-mono .face-labels { letter-spacing: 0.14em; }
+.face.is-mono .drum-window { border-radius: 2px; }
+/* Индикатор заряженной краски в служебном виде — квадратная метка. */
+.face.is-mono .ink-pad { border-radius: 1px; }
+
 /* ── Подписи вокруг сцены ──────────────────────────────────────────────── */
 .caption {
   position: absolute;
@@ -483,13 +585,16 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="ink-rough" x="-15%" y="-15%" width="130%" height="130%">
     <!-- Резиновая печать никогда не ложится ровно: рваный край + пропуски. -->
-    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" result="n"/>
-    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G" result="d"/>
-    <feTurbulence type="fractalNoise" baseFrequency="0.22" numOctaves="2" seed="3" result="n2"/>
-    <!-- Пропуски краски должны быть редкими: при -1.4/1.06 оттиск съедался
-         почти наполовину и переставал читаться на тёмном стоке. -->
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n"/>
+    <!-- Смещение меньше, чем было у бордо: бланк держится на прямых линейках
+         и моноширинной сетке, и рваная линейка сразу читается как брак,
+         а не как краска. 1,4 px — предел, за которым ломается строй. -->
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="0.85" xChannelSelector="R" yChannelSelector="G" result="d"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.34" numOctaves="2" seed="3" result="n2"/>
+    <!-- Белый пигмент лежит ПОВЕРХ тёмного стока, поэтому пропуски видны
+         сильнее, чем у тёмной краски по светлому: покрытие держим ~90 %. -->
     <feColorMatrix in="n2" type="matrix"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.8 1.22" result="holes"/>
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.7 1.26" result="holes"/>
     <feComposite in="d" in2="holes" operator="in"/>
   </filter>
 </svg>
@@ -507,7 +612,7 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
       <div class="card-brand">Gennety</div>
       <div class="card-names">Глеб&nbsp;&amp;&nbsp;Аня</div>
       <div class="card-rows">
-        <div class="card-row"><span id="lblWhen">Когда</span><b id="cardWhen">—</b></div>
+        <div class="card-row"><span id="lblWhen">Когда</span><b id="cardWhen">—</b><i class="card-redact" id="cardRedact"></i></div>
         <div class="card-row"><span id="lblWhere">Где</span><b>Kyiv · Podil</b></div>
         <div class="card-row"><span id="lblSeat">Столик</span><b>№ 12</b></div>
       </div>
@@ -517,11 +622,25 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
       </div>
       <div class="ink-slot">
         <div class="ink-shadow" id="inkShadow"></div>
+        <!-- Оттиск — служебный бланк, а не наклейка. Всё внутри обязано быть
+             гравируемым: одна толщина штриха, никаких градиентов и полутонов.
+             Резиновая литера физически не умеет ничего другого. -->
         <div class="ink is-rough" id="ink">
-          <div class="ink-inner">
-            <div class="ink-kicker" id="inkKicker">Подтверждено</div>
-            <div class="ink-main" id="inkMain">18 СЕН · 19:30</div>
-            <div class="ink-sub">Gennety</div>
+          <b class="tick tl"></b><b class="tick tr"></b><b class="tick bl"></b><b class="tick br"></b>
+          <div class="ink-head"><span id="inkHead">GENNETY // DATE PROTOCOL</span></div>
+          <div class="ink-rule"></div>
+          <div class="ink-fields">
+            <span class="k">CASE</span><span class="v" id="inkCase">GN-0067-KYV</span>
+            <span class="k">GRID</span><span class="v" id="inkGrid">50.4652N 30.5145E</span>
+          </div>
+          <div class="ink-payload" id="inkMain">18 СЕН 2026 :: 19:30</div>
+          <div class="ink-fields">
+            <span class="k">CLEARANCE</span><span class="v"><i class="redact"></i></span>
+          </div>
+          <div class="ink-rule"></div>
+          <div class="ink-foot">
+            <span id="inkAuth">AUTHENTICATED</span>
+            <span id="inkHash">HASH 4F2A·91C7</span>
           </div>
         </div>
       </div>
@@ -531,7 +650,7 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
 
     <div class="block" id="block">
       <div class="block-body" id="blockBody">
-        <div class="face">
+        <div class="face is-mono" id="face">
           <div class="face-top">
             <span id="faceTitle">Свидание</span>
             <span class="ink-pad" id="inkPad"></span>
@@ -567,9 +686,10 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
     </label>
     <label>Чернила
       <select class="lab" id="inkSel">
-        <option value="burgundy" selected>Бордо</option>
-        <option value="foil">Фольга</option>
-        <option value="deep">Тёмные</option>
+        <option value="white" selected>Белила</option>
+        <option value="cold">Чистый белый</option>
+        <option value="bone">Кость</option>
+        <option value="burgundy">Бордо (как было)</option>
       </select>
     </label>
     <label>Язык
@@ -587,6 +707,11 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
   </div>
   <div class="panel-row">
     <button class="lab ghost" id="tRough" aria-pressed="true">Рваный край</button>
+    <button class="lab ghost" id="tMono" aria-pressed="true">Моно-лицо блока</button>
+    <button class="lab ghost" id="tPlex" aria-pressed="false">IBM Plex Mono</button>
+    <button class="lab ghost" id="tRedact" aria-pressed="false">Цензура даты на карточке</button>
+  </div>
+  <div class="panel-row">
     <button class="lab ghost" id="tSound" aria-pressed="false">Щелчки</button>
     <button class="lab ghost" id="tMarks" aria-pressed="true">Фазы</button>
     <button class="lab ghost" id="tReduced" aria-pressed="false">Без анимации</button>
@@ -658,18 +783,21 @@ const HAPTICS = [
    ещё 39 px подъёма. Отсюда потолок: выше ~95 штамп начинает резать имена
    на карточке, а имена — это то, ради чего карточка и существует.        */
 const Z = {
-  hover:   76,
-  anticip: 92,
+  hover:   70,
+  anticip: 82,
   contact:  6,   // резина легла (не 0 — она сама имеет толщину)
   press:    2,   // доджим под нагрузкой
-  rest:    88,   // где замирает после отдачи (выше покоя — как в референсе)
+  rest:    82,   // где замирает после отдачи (выше покоя — как в референсе)
   exit:    520,
 };
 const ROW = 28;
-const BLOCK_SCALE_3D = 0.62;  // «компактный блок»: во сколько ужимается к изометрии
+/* «Компактный блок»: во сколько ужимается к изометрии. Нижняя граница задана
+   не вкусом, а оттиском: подошва 248 × 0,74 = 183 px должна накрывать бланк
+   178 px, иначе он вылезает из-под штампа ещё в момент удара. */
+const BLOCK_SCALE_3D = 0.74;
 /* Центр поля печати в координатах стола: карточка 392 высотой центрирована,
-   .ink-slot занимает 246…330 от её верха, значит его центр на +92 от центра. */
-const BLOCK_Y_3D = 92;
+   .ink-slot занимает 234…338 от её верха, значит его центр на +90 от центра. */
+const BLOCK_Y_3D = 85;
 
 /* ════════════════════════════════════════════════════════════════════════════
    3. ДАННЫЕ И ЯЗЫКИ
@@ -873,7 +1001,7 @@ function apply(t) {
   const tOut = easeInOut(seg(t, T.untilt[0], T.untilt[1]));
   const k = tIn - tOut;                       // 0 — плоско, 1 — изометрия
   world.style.setProperty("--tilt", (tiltMax * k).toFixed(2) + "deg");
-  world.style.setProperty("--cam-s", String(lerp(1, 0.86, k)));
+  world.style.setProperty("--cam-s", String(lerp(1, 0.92, k)));
   world.style.setProperty("--cam-y", lerp(0, 40, k).toFixed(1) + "px");
 
   /* Блок ужимается в «компактный»: интерфейсная панель становится предметом,
@@ -942,6 +1070,10 @@ function apply(t) {
   inkShadow.style.setProperty("--ink-sh-op", String((1 - inkU) * (t >= T.strike[1] ? 0.5 : 0)));
   inkShadow.style.setProperty("--ink-sh-blur", lerp(12, 2, inkU).toFixed(1) + "px");
 
+  /* Цензура даты на карточке — снимается ровно ударом штампа, ни кадром
+     раньше. Смысл в том, что оттиск не «сообщает» дату, а рассекречивает её. */
+  card.classList.toggle("is-redacting", redactOn && t < T.strike[1]);
+
   /* ── Подписи ─────────────────────────────────────────────────────────── */
   headline.style.setProperty("--hl-op", String(1 - easeOut(seg(t, T.tilt[0], T.tilt[0] + 0.25))));
   const uiU = easeOut(seg(t, T.ui[0], T.ui[1]));
@@ -953,7 +1085,7 @@ function apply(t) {
    6. ПРОГОН, ПЕРЕМОТКА, ЛЕНТА ФАЗ
    ════════════════════════════════════════════════════════════════════════ */
 let speed = 1, playing = false, t0 = 0, raf = 0, fired = new Set();
-let audioCtx = null, soundOn = false;
+let audioCtx = null, soundOn = false, redactOn = false;
 
 function click(kind) {
   if (!soundOn) return;
@@ -1039,9 +1171,10 @@ $("tiltMax").addEventListener("input", (e) => {
 });
 
 const INKS = {
-  burgundy: { ink: "#d64363", glow: "rgba(214,67,99,0.22)" },
-  foil:     { ink: "#f0e6ea", glow: "rgba(240,230,234,0.18)" },
-  deep:     { ink: "#7d1f33", glow: "rgba(125,31,51,0.30)" },
+  white: { ink: "#f2efea", glow: "rgba(242,239,234,0.10)" },  // рабочее решение
+  cold:  { ink: "#ffffff", glow: "rgba(255,255,255,0.12)" },  // чистый, «векторнее»
+  bone:  { ink: "#e6ddd2", glow: "rgba(230,221,210,0.10)" },  // сильнее в тёплое
+  burgundy: { ink: "#d64363", glow: "rgba(214,67,99,0.22)" }, // как было, для сравнения
 };
 $("inkSel").addEventListener("change", (e) => {
   const v = INKS[e.target.value];
@@ -1049,25 +1182,65 @@ $("inkSel").addEventListener("change", (e) => {
   document.documentElement.style.setProperty("--ink-glow", v.glow);
 });
 
+/* ── Служебные реквизиты бланка ──────────────────────────────────────────
+   Всё здесь должно быть внутренне согласованным, иначе бланк читается как
+   набор случайных букв «под спецслужбы». Номер дела — из матча и города,
+   координаты — настоящие (Подол), хэш — детерминированная функция от даты
+   и номера дела, а не случайная строка. */
+const CASE_NO = "GN-0067-KYV";
+const GRID_REF = "50.4652N 30.5145E";
+const SLOT_ISO = "2026-09-18T19:30+03:00";
+
+function hash8(str) {
+  let h = 0x811c9dc5;                    // FNV-1a, 32 бита
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  const hex = h.toString(16).toUpperCase().padStart(8, "0");
+  return hex.slice(0, 4) + "·" + hex.slice(4);
+}
+
+/* Литеры барабана — всегда латиница. Это не небрежность к переводу, а
+   физика: у датера одна лента месяцев, отлитая раз и навсегда, и оттиск
+   обязан совпадать с ней знак в знак. Заодно снимается риск, что «Время»
+   или «Godz» на пятом языке не влезет в колонку. Переводится то, что
+   человек читает на карточке, а не то, что выбито на приборе. */
+const MONTHS_DIE = ["AUG", "SEP", "OCT"];
+const DIE_COLS = ["DD", "MM", "HH:MM"];
+
+let curLang = "ru";
+let monoFace = true;
+
+function refreshDie() {
+  DRUMS[1].values = MONTHS_DIE.slice();
+  drumEls[1].rows.forEach((r, i) => { r.textContent = MONTHS_DIE[i]; });
+  $("faceLabels").innerHTML = (monoFace ? DIE_COLS : STRINGS[curLang].cols)
+    .map((c) => "<span>" + c + "</span>").join("");
+  $("faceTitle").textContent = monoFace ? "GN-0067 // DATE DIE" : STRINGS[curLang].face;
+  // Без года: свидание в пределах пары недель, год в оттиске — шум, а по
+  // ширине бланка он стоил двух пунктов кегля у единственной строки,
+  // которую вообще надо прочитать.
+  $("inkMain").textContent = "18 " + MONTHS_DIE[1] + " :: 19:30";
+  $("inkCase").textContent = CASE_NO;
+  $("inkGrid").textContent = GRID_REF;
+  $("inkHash").textContent = "HASH " + hash8(SLOT_ISO + CASE_NO);
+}
+
 function setLang(l) {
   const s = STRINGS[l];
+  curLang = l;
   document.documentElement.lang = l;
   $("hlTitle").textContent = s.hl;
   $("hlSub").textContent = s.hlSub;
   $("capTitle").textContent = s.cap;
   $("capSub").textContent = s.capSub;
-  $("inkKicker").textContent = s.kicker;
-  $("faceTitle").textContent = s.face;
   $("cardStub").textContent = s.stub;
   $("lblWhen").textContent = s.when;
   $("lblWhere").textContent = s.where;
   $("lblSeat").textContent = s.seat;
-  DRUMS[1].values = s.months.slice();
-  drumEls[1].rows.forEach((r, i) => { r.textContent = s.months[i]; });
-  $("faceLabels").innerHTML = s.cols.map((c) => "<span>" + c + "</span>").join("");
-  const dateStr = "18 " + s.months[1] + " · 19:30";
-  $("inkMain").textContent = dateStr;
-  $("cardWhen").textContent = dateStr;
+  $("cardWhen").textContent = "18 " + s.months[1] + " · 19:30";
+  refreshDie();
   buildGrid(l);
   setT((Number($("scrub").value) / 1000) * DURATION, false);
 }
@@ -1084,6 +1257,29 @@ function toggle(id, on, fn) {
   fn(on);
 }
 toggle("tRough", true, (on) => ink.classList.toggle("is-rough", on));
+toggle("tMono", true, (on) => {
+  monoFace = on;
+  $("face").classList.toggle("is-mono", on);
+  refreshDie();
+});
+toggle("tPlex", false, (on) => {
+  // Подгружается только по требованию: в Mini App лишний шрифт — это запрос
+  // и сдвиг вёрстки, а системный моно уже стоит на всех телефонах.
+  if (on && !document.getElementById("plexLink")) {
+    const l = document.createElement("link");
+    l.id = "plexLink";
+    l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap";
+    document.head.appendChild(l);
+  }
+  document.documentElement.style.setProperty("--mono",
+    on ? '"IBM Plex Mono", ui-monospace, Menlo, monospace'
+       : 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Roboto Mono", "Courier New", monospace');
+});
+toggle("tRedact", false, (on) => {
+  redactOn = on;
+  setT((Number($("scrub").value) / 1000) * DURATION, false);
+});
 toggle("tSound", false, (on) => { soundOn = on; });
 toggle("tMarks", true, (on) => $("track").classList.toggle("is-hidden", !on));
 toggle("tReduced", false, (on) => {
