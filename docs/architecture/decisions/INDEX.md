@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 345 entries
+# Decision index — all 346 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-16 | штамп даты: ставим на экране календаря, и пока только в iOS — Mini App его не получает | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-16 | штамп даты для экрана «время согласовано»: белая печать в стиле рассекреченного архива, карточка только из того, что известно в этот момент | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-15 | профиль места «Городского гида»: галерея до пяти фото и факты места едут в списке витрины, без нового эндпоинта и без миграции | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-15 | брифинг перед свиданием уходит с экранов в T+2ч: у гейта wingman появилась верхняя граница | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
