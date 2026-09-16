@@ -78,7 +78,6 @@ MUST_DIFFER = [
 # arms itself the moment production sets it, which is the point where inheriting
 # it starts to matter.
 MUST_DIFFER_IF_SET = [
-    "EVENT_QR_SECRET",        # signs event door codes (LAUNCH_EVENTS §8)
 ]
 # Present in demo at all = a route into production's ops surface.
 MUST_BE_ABSENT = ["ADMIN_API_KEY", "FOUNDER_BOT_TOKEN", "FOUNDER_TELEGRAM_ID"]

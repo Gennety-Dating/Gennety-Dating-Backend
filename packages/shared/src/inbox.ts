@@ -108,7 +108,6 @@ export type ChatContextKind = (typeof CHAT_CONTEXT_KINDS)[number];
 export const PULSE_ROW_KINDS = [
   "drop_batch",
   "venue_search",
-  "event_application",
   "announcement",
   "date_past",
   "chat_topic",

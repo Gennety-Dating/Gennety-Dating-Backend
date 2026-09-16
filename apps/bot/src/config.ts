@@ -847,37 +847,6 @@ export const env = {
   SYNTHETIC_PARTNER_CRON_SCHEDULE:
     process.env.SYNTHETIC_PARTNER_CRON_SCHEDULE ?? "* * * * *",
 
-  // ── Launch events (LAUNCH_EVENTS_PRODUCT_SPEC.md) ────────────────────
-  /// Master flag for the offline launch-event subsystem: waitlist admission,
-  /// the founder moderation hub, and (later phases) ticketing, the door
-  /// scanner and in-event rounds.
-  ///
-  /// Ships OFF, and OFF is genuinely inert rather than merely quiet: the
-  /// verification pipeline's admission hook returns immediately, so a
-  /// registration cannot land in a queue nobody is watching, and no admin
-  /// route is reachable. The tables exist and stay empty.
-  EVENTS_FEATURE_ENABLED: process.env.EVENTS_FEATURE_ENABLED === "true",
-  /// HMAC key for door-entry QR codes. **Its own secret, never `JWT_SECRET`** —
-  /// the demo once inherited production's JWT key and made every `/v1/*` token
-  /// cross-valid (DEMO_MODE.md → the isolation gate), and the lesson recorded
-  /// there is that every new secret gets its own key AND a line in
-  /// `deploy-demo.sh`'s MUST_DIFFER list. Empty while the feature is off; the
-  /// ticket routes refuse to mint or verify a code without it rather than
-  /// signing with a blank string, which would make every forgery valid.
-  EVENT_QR_SECRET: process.env.EVENT_QR_SECRET ?? "",
-  /// The post-event feedback incentive (LAUNCH_EVENTS §11) — the same
-  /// single-ticket discount mechanism the famine perk uses, deliberately not a
-  /// second one. Smaller than famine's 77% because it buys a minute of the
-  /// user's time rather than apologising for a week without a match, and
-  /// because the two share ONE slot: the grant only ever fills an empty one
-  /// (`services/ticket-discount.ts`), so a modest number can never displace a
-  /// large one. Inert unless BOTH `EVENTS_FEATURE_ENABLED` and
-  /// `TICKET_FEATURE_ENABLED`.
-  EVENT_FEEDBACK_DISCOUNT_PCT: Number(process.env.EVENT_FEEDBACK_DISCOUNT_PCT ?? "40"),
-  EVENT_FEEDBACK_DISCOUNT_TTL_DAYS: Number(
-    process.env.EVENT_FEEDBACK_DISCOUNT_TTL_DAYS ?? "30",
-  ),
-
   // ── Bonus Campus Drop (§Campus Radar) ────────────────────────────────
   /// An out-of-cycle drop for one university whose verified cohort just grew.
   /// Ships OFF: it is a second entry point into the allocator, and the reason

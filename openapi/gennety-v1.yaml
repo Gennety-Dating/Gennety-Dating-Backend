@@ -6608,7 +6608,6 @@ components:
           items: { type: string }
           description: Tappable questions under the chat chip
         media: { $ref: "#/components/schemas/InboxMedia" }
-        event: { $ref: "#/components/schemas/InboxEvent" }
 
     InboxMedia:
       type: object
@@ -6624,21 +6623,6 @@ components:
           type: string
           description: Video only — shown before playback and under Reduce Motion
 
-    InboxEvent:
-      type: object
-      required: [id, title, status, venueName, venueAddress, startsAt, endsAt, timeZone]
-      properties:
-        id: { type: string, format: uuid }
-        title: { type: string }
-        status: { type: string }
-        venueName: { type: string }
-        venueAddress: { type: string }
-        startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
-        timeZone:
-          type: string
-          description: The event's own zone — draw times on its clock, not the device's
-
     PulseRow:
       type: object
       required: [id, kind, state, title, subtitle, status, at, deadlineAt, target]
@@ -6648,17 +6632,17 @@ components:
           description: Stable across polls
         kind:
           type: string
-          description: drop_batch | venue_search | event_application | announcement | date_past | chat_topic
+          description: drop_batch | venue_search | announcement | date_past | chat_topic
         state:
           type: string
           description: processing | active | past
         title:
           type: [string, "null"]
-          description: Server-owned content (an announcement or event title); null when the client writes the copy
+          description: Server-owned content (an announcement's title); null when the client writes the copy
         subtitle: { type: [string, "null"] }
         status:
           type: [string, "null"]
-          description: "`event_application`: approved | pending | waitlisted"
+          description: Machine value the client's copy branches on; null unless a kind defines one
         at: { type: [string, "null"], format: date-time }
         deadlineAt:
           type: [string, "null"]

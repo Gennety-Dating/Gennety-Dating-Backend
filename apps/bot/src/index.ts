@@ -39,8 +39,6 @@ import { createNoMatchNoticeJob } from "./services/no-match-notice-job.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
-import { runEventRoundTick } from "./services/event-rounds.js";
-import { runEventRecapTick } from "./services/event-recap-tick.js";
 import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
 import { runCoordinationTick } from "./services/coordination.js";
 import { startAdminServer } from "./admin/server.js";
@@ -161,32 +159,6 @@ function resolveDateLifecycleTickMs(raw: string | undefined): number {
   return parsed;
 }
 const DATE_LIFECYCLE_TICK_MS = resolveDateLifecycleTickMs(process.env.DATE_LIFECYCLE_TICK_MS);
-
-/**
- * Party Mode's round tick (LAUNCH_EVENTS §9.2). One minute is deliberately
- * finer than the round it drives: `planCurrentRound` is a pure function of the
- * clock, so the tick only decides how LATE a round can open — a five-minute
- * interval would mean people standing around for up to five minutes past the
- * moment the product told them a round had begun.
- *
- * Registered only when the events feature is on, and the guard below means an
- * unparseable override disables the party rather than crashing it.
- */
-const DEFAULT_EVENT_ROUND_TICK_MS = 60 * 1000;
-const EVENT_ROUND_TICK_MS = (() => {
-  const raw = process.env.EVENT_ROUND_TICK_MS;
-  if (raw === undefined || raw.trim() === "") return DEFAULT_EVENT_ROUND_TICK_MS;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `[config] EVENT_ROUND_TICK_MS="${raw}" is not a non-negative number — ` +
-        `falling back to ${DEFAULT_EVENT_ROUND_TICK_MS}ms. Use a millisecond ` +
-        `integer (or 0 to disable Party Mode rounds).`,
-    );
-    return DEFAULT_EVENT_ROUND_TICK_MS;
-  }
-  return parsed;
-})();
 
 /**
  * Peer-wait shimmer interval (PRODUCT_SPEC §3.6b). A `<tg-thinking>` draft dies
@@ -333,22 +305,6 @@ const SELFIE_RETENTION_CRON_SCHEDULE =
  */
 const RETENTION_CRON_SCHEDULE =
   process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
-
-/**
- * The post-event loop (LAUNCH_EVENTS §11): the T+18h recap fan-out and the
- * sweep that turns a mutual thumbs-up into a real match.
- *
- * Every five minutes rather than hourly, and the reason is the second stage:
- * the reveal ("you both felt it") is sent by the thumb itself and is instant,
- * but the ticket card that follows comes from this tick, and an hour of
- * silence between the two reads as the product forgetting. The recap half does
- * not need the precision — T+18h to the minute is nobody's requirement.
- *
- * Registered only when the events feature is on, so with it off the worker
- * does not exist rather than merely finding nothing.
- */
-const EVENT_RECAP_CRON_SCHEDULE =
-  process.env.EVENT_RECAP_CRON_SCHEDULE ?? "*/5 * * * *";
 
 /**
  * DAU/MAU reconcile: re-derive `user_activity_days` from the inbound chat
@@ -646,7 +602,6 @@ function validateSchedules(): void {
       EMBEDDING_REFRESH_CRON_SCHEDULE,
       SELFIE_RETENTION_CRON_SCHEDULE,
       RETENTION_CRON_SCHEDULE,
-      EVENT_RECAP_CRON_SCHEDULE,
       ACTIVITY_ROLLUP_CRON_SCHEDULE,
       VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
       AD_SPEND_REMINDER_CRON_SCHEDULE,
@@ -801,28 +756,6 @@ function registerSchedules(): void {
     intervals.push(
       setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS),
     );
-  }
-
-  // Party Mode rounds. Gated on the feature flag rather than only on the
-  // interval, so with events off the worker does not exist at all — the same
-  // "off is inert, not merely quiet" property the rest of the feature has.
-  if (env.EVENTS_FEATURE_ENABLED && EVENT_ROUND_TICK_MS > 0) {
-    intervals.push(
-      setInterval(
-        guardedTick("event-rounds", async () => {
-          const result = await runEventRoundTick();
-          if (result.roundsOpened > 0 || result.roundsClosed > 0) {
-            console.log(
-              `[event-rounds] scanned=${result.eventsScanned} opened=${result.roundsOpened} ` +
-                `closed=${result.roundsClosed} pairings=${result.pairingsCreated} ` +
-                `unpaired=${result.unpaired}`,
-            );
-          }
-        }),
-        EVENT_ROUND_TICK_MS,
-      ),
-    );
-    console.log(`[worker] Party Mode rounds every ${EVENT_ROUND_TICK_MS}ms`);
   }
 
   // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so
@@ -1154,30 +1087,6 @@ function registerSchedules(): void {
     guardedTick("verification-stuck", () => verificationStuckSweep().then(() => undefined)),
     { timezone: CRON_TIMEZONE },
   );
-
-  // Post-event recap + mutual sweep. Logs only when something happened, so a
-  // quiet tick is the healthy case; `deferred` staying high across many
-  // ticks means mutuals are piling up behind live matches (or behind the
-  // lifetime pair ban, which the sweep cannot tell apart — see the service).
-  if (env.EVENTS_FEATURE_ENABLED) {
-    cron.schedule(
-      EVENT_RECAP_CRON_SCHEDULE,
-      guardedTick("event-recap", async () => {
-        const r = await runEventRecapTick();
-        if (r.recapsSent > 0 || r.recapsFailed > 0 || r.matchesCreated > 0) {
-          console.log(
-            `[event-recap] events=${r.eventsScanned} recaps=${r.recapsSent} ` +
-              `failed=${r.recapsFailed} matches=${r.matchesCreated} ` +
-              `deferred=${r.matchesDeferred} blocked=${r.matchesBlocked}`,
-          );
-        }
-      }),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(
-      `[cron] Event recap scheduled: "${EVENT_RECAP_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-    );
-  }
 
   // DAU/MAU self-heal. Logs only when it actually repaired something, so a
   // silent night is the healthy case and a `repaired=` line is the signal

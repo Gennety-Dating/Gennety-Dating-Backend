@@ -3,15 +3,12 @@ import { env } from "../config.js";
 import { emitTicketEvent } from "./ticket-analytics.js";
 
 /**
- * The single-ticket discount — ONE slot per user, now shared by two mechanisms.
+ * The single-ticket discount — ONE slot per user, filled by one mechanism.
  *
- * 1. **Famine** (PRODUCT_SPEC §3.5b) — the loyalty perk handed to a user who
- *    was eligible-but-unpaired for `CADENCE.famineDiscountMinTier` consecutive
- *    batch intervals. The threshold check lives in `no-match-notifier.ts`;
- *    this module only owns the grant.
- * 2. **Event feedback** (LAUNCH_EVENTS §11) — the incentive for answering the
- *    T+18h post-event form. Same mechanism, different source, deliberately:
- *    a SECOND discount system would double the wallet code's own №1 lesson.
+ * **Famine** (PRODUCT_SPEC §3.5b) — the loyalty perk handed to a user who was
+ * eligible-but-unpaired for `CADENCE.famineDiscountMinTier` consecutive batch
+ * intervals. The threshold check lives in `no-match-notifier.ts`; this module
+ * only owns the grant.
  *
  * This module is the ONLY owner of the discount math + lifecycle (parallels
  * `ticket-wallet.ts` for the balance). It discounts a SINGLE ticket purchase —
@@ -20,15 +17,8 @@ import { emitTicketEvent } from "./ticket-analytics.js";
  * `TICKET_FEATURE_ENABLED`; when the flag is off, grants are no-ops and
  * `getActiveDiscount` always returns null, so production behavior is unchanged.
  *
- * **The two mechanisms collide on purpose, and the collision rule is
- * asymmetric.** Famine REPLACES whatever is in the slot (unchanged behaviour:
- * a still-starved user who already redeemed one gets a fresh one, TTL slid,
- * `consumedAt` cleared). Event feedback only ever fills an EMPTY slot, because
- * it is the smaller perk and overwriting a live 77% famine discount with it
- * would take something away from a user as a reward for helping us. There is
- * deliberately no "keep the better one" arithmetic — comparing a percent
- * against a deadline is a judgement two call sites would eventually make
- * differently, and "never take anything away" needs no comparison at all.
+ * A famine grant REPLACES whatever is in the slot: a still-starved user who
+ * already redeemed one gets a fresh one, TTL slid, `consumedAt` cleared.
  *
  * The entitlement lives on five additive `User` columns:
  *   ticketDiscountPct        — the granted percent (0 = none)
@@ -40,11 +30,11 @@ import { emitTicketEvent } from "./ticket-analytics.js";
  */
 
 /**
- * Which mechanism put the current discount in the slot. Persisted for the
- * admin/audit question "how many discounts did event feedback actually buy" —
- * deliberately NOT read by any pricing path, which cares only about `pct`.
+ * Which mechanism put the current discount in the slot. Persisted for audit
+ * only — deliberately NOT read by any pricing path, which cares only about
+ * `pct`.
  */
-export type DiscountSource = "famine" | "event_feedback";
+export type DiscountSource = "famine";
 
 export interface ActiveDiscount {
   pct: number;
@@ -112,18 +102,11 @@ export interface GrantResult {
 }
 
 /**
- * Write the slot. The one place any mechanism's grant lands.
- *
- * `mode` is the collision rule stated at the top of this file:
- *   - `replace`   — unconditional (famine).
- *   - `onlyIfFree` — the CAS refuses when an active discount is already there,
- *     so the grant can never take something away. Expressed as a `where` on
- *     the same row rather than as read-then-write, because two surfaces can
- *     grant at once and a read-then-write would let the loser clobber.
+ * Write the slot. The one place any mechanism's grant lands, unconditionally.
  */
 async function writeDiscount(
   userId: string,
-  opts: { pct: number; ttlDays: number; source: DiscountSource; mode: "replace" | "onlyIfFree" },
+  opts: { pct: number; ttlDays: number; source: DiscountSource },
   now: Date,
 ): Promise<GrantResult> {
   if (!env.TICKET_FEATURE_ENABLED) return { granted: false };
@@ -134,21 +117,7 @@ async function writeDiscount(
   const expiresAt = new Date(now.getTime() + opts.ttlDays * 24 * 60 * 60 * 1000);
 
   const updated = await prisma.user.updateMany({
-    where:
-      opts.mode === "replace"
-        ? { id: userId }
-        : {
-            id: userId,
-            // "No ACTIVE discount" — the negation of `activeDiscountFromColumns`,
-            // so a consumed or expired one counts as free rather than as a
-            // permanent block.
-            OR: [
-              { ticketDiscountPct: { lte: 0 } },
-              { ticketDiscountConsumedAt: { not: null } },
-              { ticketDiscountExpiresAt: null },
-              { ticketDiscountExpiresAt: { lte: now } },
-            ],
-          },
+    where: { id: userId },
     data: {
       ticketDiscountPct: opts.pct,
       ticketDiscountGrantedAt: now,
@@ -179,37 +148,10 @@ export async function grantFamineDiscountIfEligible(
       pct: env.FAMINE_DISCOUNT_PCT,
       ttlDays: env.FAMINE_DISCOUNT_TTL_DAYS,
       source: "famine",
-      mode: "replace",
     },
     now,
   );
   if (result.granted) emitTicketEvent("famine_discount_granted", { userId });
-  return result;
-}
-
-/**
- * The post-event feedback incentive (LAUNCH_EVENTS §11).
- *
- * `onlyIfFree`, so answering the form can never cost someone a live famine
- * discount. A user who already holds one gets nothing new — and the caller
- * still returns them their existing discount, so the screen says something
- * true rather than reading as a reward that failed to arrive.
- */
-export async function grantEventFeedbackDiscount(
-  userId: string,
-  now: Date = new Date(),
-): Promise<GrantResult> {
-  const result = await writeDiscount(
-    userId,
-    {
-      pct: env.EVENT_FEEDBACK_DISCOUNT_PCT,
-      ttlDays: env.EVENT_FEEDBACK_DISCOUNT_TTL_DAYS,
-      source: "event_feedback",
-      mode: "onlyIfFree",
-    },
-    now,
-  );
-  if (result.granted) emitTicketEvent("event_feedback_discount_granted", { userId });
   return result;
 }
 

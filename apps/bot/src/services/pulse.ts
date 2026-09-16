@@ -12,7 +12,6 @@ import {
 } from "@gennety/shared";
 import { getPreviousBatchDate } from "./next-batch.js";
 import { listChatTopics } from "./chat-topics.js";
-import { ADMITTED_TIERS } from "./event-admission.js";
 
 /**
  * Live Pulse — the rows under the status panel on the iOS Today screen
@@ -27,8 +26,7 @@ import { ADMITTED_TIERS } from "./event-admission.js";
  *    batch in its first minutes, a scheduled venue-selection retry, and nothing
  *    else. Decision F2: between drops nothing runs, so nothing may spin — the
  *    Telegram "calibrating pairs" shimmer is scripted and has no place here.
- *  - `active` — something the person holds: an event place, an unread
- *    announcement.
+ *  - `active` — something the person holds: an unread announcement.
  *  - `past` — what already happened: a completed date, a read announcement, a
  *    recent conversation with the agent.
  *
@@ -50,15 +48,12 @@ export interface PulseRowDto {
   id: string;
   kind: PulseRowKind;
   state: PulseRowState;
-  /** Content the server owns (an announcement's title, an event's name). Null when the client writes the copy from `kind`. */
+  /** Content the server owns (an announcement's title). Null when the client writes the copy from `kind`. */
   title: string | null;
   subtitle: string | null;
-  /**
-   * Machine value the client's copy branches on — `event_application`:
-   * approved | pending | waitlisted. Null elsewhere.
-   */
+  /** Machine value the client's copy branches on. Null unless a kind defines one. */
   status: string | null;
-  /** The instant the row is about (event start, date time, arrival). */
+  /** The instant the row is about (date time, arrival). */
   at: string | null;
   /** `processing` only: when the job settles at the latest. */
   deadlineAt: string | null;
@@ -77,29 +72,22 @@ export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<
   const now = deps.now ?? new Date();
   const topics = deps.topics ?? listChatTopics;
 
-  const [user, drop, venue, events, announcements, pastDate, chat] = await Promise.all([
+  const [user, drop, venue, announcements, pastDate, chat] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { status: true } }),
     dropBatchRow(userId, now),
     venueSearchRow(userId),
-    eventRows(userId, now),
     announcementRows(userId, now),
     pastDateRow(userId, now),
     topics(userId, PULSE_CHAT_TOPICS_MAX).then((r) => r.topics).catch(() => []),
   ]);
   if (!user) return [];
 
-  // An announcement about an event the person applied to is already the event
-  // row's target; a second row about the same party is the feed repeating
-  // itself (found on a live database, 2026-09-13).
-  const eventTargets = new Set(events.map((r) => r.target.id).filter(Boolean));
-  const notAboutAnEvent = (r: PulseRowDto) => !eventTargets.has(r.target.id);
-
   const rows: PulseRowDto[] = [];
   if (drop && user.status === "active") rows.push(drop);
   if (venue) rows.push(venue);
-  rows.push(...events, ...announcements.active.filter(notAboutAnEvent));
+  rows.push(...announcements.active);
   if (pastDate) rows.push(pastDate);
-  rows.push(...announcements.past.filter(notAboutAnEvent));
+  rows.push(...announcements.past);
   for (const topic of chat.slice(0, PULSE_CHAT_TOPICS_MAX)) {
     rows.push({
       id: `chat_topic:${topic.anchorId}`,
@@ -177,56 +165,6 @@ export async function venueSearchRow(userId: string): Promise<PulseRowDto | null
     deadlineAt: match.venueSelectionNextRetryAt.toISOString(),
     target: { kind: "map" },
   };
-}
-
-/**
- * The person's own place at an upcoming or live event. Opens the announcement
- * about that event when one is in their inbox — the chat with that context is
- * one tap from there — and the plain chat otherwise.
- */
-export async function eventRows(userId: string, now: Date): Promise<PulseRowDto[]> {
-  const applications = await prisma.waitlistApplication.findMany({
-    where: {
-      userId,
-      tier: { not: "revoked" },
-      event: { status: { in: ["upcoming", "live"] }, endsAt: { gt: now } },
-    },
-    select: {
-      tier: true,
-      event: { select: { id: true, title: true, venueName: true, startsAt: true } },
-    },
-    orderBy: { event: { startsAt: "asc" } },
-    take: 2,
-  });
-  if (applications.length === 0) return [];
-
-  const inbox = await prisma.inboxItem.findMany({
-    where: {
-      userId,
-      announcement: { eventId: { in: applications.map((a) => a.event.id) } },
-    },
-    select: { id: true, announcement: { select: { eventId: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return applications.map(({ tier, event }) => {
-    const item = inbox.find((i) => i.announcement?.eventId === event.id);
-    return {
-      id: `event_application:${event.id}`,
-      kind: "event_application" as const,
-      state: "active" as const,
-      title: event.title,
-      subtitle: event.venueName,
-      status: (ADMITTED_TIERS as readonly string[]).includes(tier)
-        ? "approved"
-        : tier === "waitlisted"
-          ? "waitlisted"
-          : "pending",
-      at: event.startsAt.toISOString(),
-      deadlineAt: null,
-      target: item ? { kind: "inbox_item", id: item.id } : { kind: "chat" },
-    };
-  });
 }
 
 export async function announcementRows(

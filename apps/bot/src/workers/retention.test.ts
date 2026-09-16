@@ -6,7 +6,6 @@ const userSession = { findMany: vi.fn(), deleteMany: vi.fn() };
 const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
 const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
-const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
 const inboxItem = { findMany: vi.fn(), deleteMany: vi.fn() };
 const safetyTombstone = { findMany: vi.fn(), deleteMany: vi.fn() };
@@ -20,7 +19,6 @@ vi.mock("@gennety/db", () => ({
     proxyMessage,
     chatEvent,
     clientEvent,
-    eventFeedback,
     userPlaceVisit,
     inboxItem,
     safetyTombstone,
@@ -35,7 +33,6 @@ const {
   PROXY_MESSAGE_RETENTION_MS,
   CHAT_EVENT_RETENTION_MS,
   CLIENT_EVENT_RETENTION_MS,
-  EVENT_FEEDBACK_RETENTION_MS,
   ORPHAN_SESSION_RETENTION_MS,
   PLACE_VISIT_RETENTION_DAYS,
   safetyTombstoneCutoff,
@@ -49,7 +46,6 @@ const ALL_MODELS = [
   proxyMessage,
   chatEvent,
   clientEvent,
-  eventFeedback,
   userPlaceVisit,
   inboxItem,
   safetyTombstone,
@@ -116,7 +112,6 @@ describe("retentionTick", () => {
       proxyMessages: 0,
       chatEvents: 0,
       clientEvents: 0,
-      eventFeedback: 0,
       placeVisits: 0,
       inboxItems: 0,
       orphanBotSessions: 0,
@@ -222,21 +217,6 @@ describe("retentionTick", () => {
     expect(String(log.mock.calls[0][0])).toContain("clientEvents=1");
   });
 
-  it("keeps an `unsafe` event-feedback row forever, and says so in SQL", async () => {
-    // The exemption is written as an explicit OR rather than
-    // `NOT (safety = 'unsafe')`, because in SQL a NULL comparison is neither
-    // true nor false — the negation would silently retain every row that
-    // carried no safety answer at all, which is most of them.
-    await retentionTick(NOW);
-    const where = eventFeedback.findMany.mock.calls[0][0].where;
-    expect(where.createdAt).toEqual({
-      lt: new Date(NOW.getTime() - EVENT_FEEDBACK_RETENTION_MS),
-    });
-    expect(where.OR).toEqual([{ safety: null }, { safety: { not: "unsafe" } }]);
-    // Same window as the proxy-chat log and the reference selfie.
-    expect(EVENT_FEEDBACK_RETENTION_MS).toBe(90 * 24 * 60 * 60 * 1000);
-  });
-
   it("sweeps frequent-place days on the ranking's own window, by calendar day", async () => {
     // A day older than the window can no longer move anything a person or
     // their match sees — keeping it would be holding where someone was for no
@@ -276,7 +256,6 @@ describe("retentionTick", () => {
       proxyMessages: 2,
       chatEvents: 0,
       clientEvents: 0,
-      eventFeedback: 0,
       placeVisits: 0,
       inboxItems: 0,
       orphanBotSessions: 0,

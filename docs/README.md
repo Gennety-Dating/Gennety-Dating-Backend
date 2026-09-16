@@ -39,7 +39,7 @@ docs/
 │       ├── venue-intent-v2.md               Venue intent selection (2026-07-21)
 │       ├── daily-matching.md                ACTIVE migration — prod still on `weekly`; see §3.1 for remaining work
 │       ├── venue-engine-plan.md             Venue ranking improvements; Stage 5 + Part 6 still open
-│       └── launch-events.md · voice-prompts.md · type-radar.md · rematch.md · prime-time.md · profile-music.md
+│       └── voice-prompts.md · type-radar.md · rematch.md · prime-time.md · profile-music.md
 │           promo-codes.md · referral.md · venue-change.md · ad-spend-tracking.md
 │           frequent-places.md (catalog places a person keeps returning to — detection, thresholds, what the match sees)
 │           inbox-and-announcements.md (the iOS bell inbox, admin announcements + fan-out, Live Pulse, chat context)

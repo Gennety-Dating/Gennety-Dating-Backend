@@ -92,7 +92,6 @@ export interface AnnouncementFields {
   body: string;
   agentBrief: string | null;
   suggestedQuestions: string[];
-  eventId: string | null;
   audience: AnnouncementAudience;
   sendPush: boolean;
 }
@@ -160,12 +159,6 @@ export function parseAnnouncementFields(body: unknown, partial: boolean): Fields
     value.suggestedQuestions = cleaned;
   } else if (!partial) value.suggestedQuestions = [];
 
-  if (b.eventId !== undefined) {
-    if (b.eventId === null) value.eventId = null;
-    else if (typeof b.eventId === "string" && UUID_RE.test(b.eventId)) value.eventId = b.eventId;
-    else return { ok: false, error: "eventId_invalid" };
-  } else if (!partial) value.eventId = null;
-
   if (b.audience !== undefined || !partial) {
     const audience = parseAnnouncementAudience(b.audience);
     if (!audience) return { ok: false, error: "audience_invalid" };
@@ -190,7 +183,6 @@ const ADMIN_SELECT = {
   body: true,
   agentBrief: true,
   suggestedQuestions: true,
-  eventId: true,
   mediaKind: true,
   mediaPath: true,
   posterPath: true,
@@ -213,7 +205,6 @@ export interface AdminAnnouncementDto {
   body: string;
   agentBrief: string | null;
   suggestedQuestions: string[];
-  eventId: string | null;
   mediaKind: string | null;
   mediaUrl: string | null;
   posterUrl: string | null;
@@ -243,7 +234,6 @@ async function toAdminDto(row: AdminRow, withMedia: boolean): Promise<AdminAnnou
     body: row.body,
     agentBrief: row.agentBrief,
     suggestedQuestions: row.suggestedQuestions,
-    eventId: row.eventId,
     mediaKind: row.mediaKind,
     mediaUrl,
     posterUrl,
@@ -280,16 +270,10 @@ export type WriteResult =
   | { ok: true; announcement: AdminAnnouncementDto }
   | { ok: false; error: string; status: number };
 
-async function eventExists(eventId: string | null | undefined): Promise<boolean> {
-  if (!eventId) return true;
-  return (await prisma.event.count({ where: { id: eventId } })) > 0;
-}
-
 export async function createAnnouncement(body: unknown): Promise<WriteResult> {
   const parsed = parseAnnouncementFields(body, false);
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
   const v = parsed.value as AnnouncementFields;
-  if (!(await eventExists(v.eventId))) return { ok: false, error: "event_not_found", status: 422 };
   const row = await prisma.announcement.create({
     data: {
       title: v.title,
@@ -297,7 +281,6 @@ export async function createAnnouncement(body: unknown): Promise<WriteResult> {
       body: v.body,
       agentBrief: v.agentBrief,
       suggestedQuestions: v.suggestedQuestions,
-      eventId: v.eventId,
       audience: v.audience as Prisma.InputJsonObject,
       sendPush: v.sendPush,
     },
@@ -312,7 +295,6 @@ export async function updateAnnouncementDraft(id: string, body: unknown): Promis
   const parsed = parseAnnouncementFields(body, true);
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
   const v = parsed.value;
-  if (!(await eventExists(v.eventId))) return { ok: false, error: "event_not_found", status: 422 };
 
   const { count } = await prisma.announcement.updateMany({
     where: { id, status: "draft" },
@@ -322,7 +304,6 @@ export async function updateAnnouncementDraft(id: string, body: unknown): Promis
       ...(v.body !== undefined ? { body: v.body } : {}),
       ...(v.agentBrief !== undefined ? { agentBrief: v.agentBrief } : {}),
       ...(v.suggestedQuestions !== undefined ? { suggestedQuestions: v.suggestedQuestions } : {}),
-      ...(v.eventId !== undefined ? { eventId: v.eventId } : {}),
       ...(v.audience !== undefined ? { audience: v.audience as Prisma.InputJsonObject } : {}),
       ...(v.sendPush !== undefined ? { sendPush: v.sendPush } : {}),
     },

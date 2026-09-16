@@ -468,7 +468,7 @@ export interface SeekerProfile {
  * drop, which is what its cooldown is derived from. A counter would be a second
  * source of truth about the same fact; this cannot drift from it.
  */
-export type MatchSource = "weekly" | "rematch" | "synthetic" | "campus" | "event";
+export type MatchSource = "weekly" | "rematch" | "synthetic" | "campus";
 
 export interface ScoredCandidate {
   userId: string;
@@ -1264,25 +1264,6 @@ export async function createProposedMatch(
   allocation?: {
     source: MatchSource;
     rematchPaidById?: string;
-    /**
-     * Both sides have ALREADY consented (LAUNCH_EVENTS §11: a mutual `true`
-     * from the post-event thumbs). The row is therefore born at `negotiating`
-     * with both accept columns set — the pitch/decision phase is not skipped
-     * so much as already over, and a `proposed` row here would ask two people
-     * a question they have each answered.
-     *
-     * Stamped INSIDE the creating transaction for the same reason `source` is,
-     * and for one stronger one: a `negotiating` row is invisible to the expiry
-     * sweep (which filters on `dispatchedAt`), so a follow-up UPDATE that
-     * failed would leave a live match nothing can ever resolve — the §3.3
-     * hole, one stage on. `ticketGateExpiresAt` rides the same write for the
-     * §3.5b half of it: a `negotiating` row with neither a gate deadline nor
-     * `proposedTimes` is invisible to the ticket sweep AND exempt from the
-     * §3.5c stall chain at once, and strands both participants for good.
-     */
-    preAccepted?: boolean;
-    /** The gate deadline to arm alongside `preAccepted`. See above. */
-    ticketGateExpiresAt?: Date;
   },
 ): Promise<{ id: string } | null> {
   const now = new Date();
@@ -1367,14 +1348,7 @@ export async function createProposedMatch(
       data: {
         userAId,
         userBId,
-        status: allocation?.preAccepted ? "negotiating" : "proposed",
-        ...(allocation?.preAccepted
-          ? {
-              acceptedByA: true,
-              acceptedByB: true,
-              ticketExpiresAt: allocation.ticketGateExpiresAt ?? null,
-            }
-          : {}),
+        status: "proposed",
         source: allocation?.source ?? "weekly",
         rematchPaidById: allocation?.rematchPaidById ?? null,
       },
@@ -1507,16 +1481,8 @@ export interface ScoredPair {
 /**
  * Do these two want each other's gender? The half of compatibility that is
  * about the PEOPLE rather than about where they live.
- *
- * Split out of `areMutuallyCompatible` for Party Mode (LAUNCH_EVENTS §9.2),
- * which needs this rule and must NOT have the same-city rule: at an offline
- * event, standing in the venue is stronger proof of locality than a profile
- * column, so a person who changed their dating city after being admitted must
- * not become unpairable at a party they are physically at. Sharing the
- * predicate rather than forking it is the point — a second definition of "do
- * these two want each other" is exactly what §6.6 warns about.
  */
-export function preferencesAgree(
+function preferencesAgree(
   a: Pick<BatchUser, "gender" | "preference">,
   b: Pick<BatchUser, "gender" | "preference">,
 ): boolean {
@@ -2104,12 +2070,8 @@ async function loadHistoricalMatchPairs(
  * directions of `user_blocks`. Keys are `"a:b"` AND `"b:a"`, so a caller never
  * has to canonicalise.
  *
- * Exported for Party Mode (LAUNCH_EVENTS §9.2), which respects the same ban —
- * founder decision §14.2, defaulted to "never re-pair people the core product
- * already banned". Calling this rather than re-deriving it is what keeps the
- * party and the Thursday drop agreeing on who is off-limits.
  */
-export async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
+async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
   const [historical, blocked] = await Promise.all([
     loadHistoricalMatchPairs(userIds),
     loadBlockedPairKeys(userIds),

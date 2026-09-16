@@ -11,6 +11,55 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Launch Events удалены из кода и из схемы (2026-09-16).**
+**Бот + webapp + СХЕМА (деструктивная миграция).** Решение основателя, запись в журнале решений
+2026-09-16. Подсистема офлайн-мероприятий вырезана целиком, а не выключена флагом: ушли сервисы
+`services/event-*`, роутер `/v1/events/*`, портал двери `/gk/*`, админ-хаб `/admin/events/*`,
+воркеры раундов и пост-ивент свипа, экраны `event.html` / `gatekeeper.html`, флаги
+`EVENTS_FEATURE_ENABLED`, `EVENT_QR_SECRET`, `EVENT_FEEDBACK_DISCOUNT_PCT`,
+`EVENT_FEEDBACK_DISCOUNT_TTL_DAYS`, `EVENT_ROUND_TICK_MS`, `EVENT_RECAP_CRON_SCHEDULE`.
+
+**Миграция `20260916120000_drop_launch_events` ДРОПАЕТ 8 таблиц** (`events`,
+`waitlist_applications`, `event_ticket_tiers`, `event_tickets`, `event_staff_tokens`,
+`event_rounds`, `event_round_pairings`, `event_feedback`) и колонку `announcements.event_id`.
+
+**ПЕРЕД выкатом — убедиться, что таблицы пусты.** `EVENTS_FEATURE_ENABLED` в прод-`.env`
+никогда не добавлялся, поэтому строк там быть не должно, но проверяется это одной командой,
+а не памятью:
+
+```sql
+SELECT count(*) FROM events;                -- ожидается 0
+SELECT count(*) FROM waitlist_applications; -- ожидается 0
+SELECT count(*) FROM event_tickets;         -- ожидается 0
+SELECT count(*) FROM announcements WHERE event_id IS NOT NULL;  -- ожидается 0
+```
+
+Если хоть где-то не ноль — **выкат остановить** и вернуться к основателю: миграция удалит эти
+строки безвозвратно.
+
+1. БД: `prisma migrate deploy` (после проверки выше).
+2. Бот: сборка и рестарт (публичный API + админ + воркеры).
+3. Webapp: пересборка — из бандла уходят две точки входа.
+4. Переменные окружения: перечисленные выше ключи можно удалить из прод-`.env`; оставленные
+   ни на что не влияют.
+
+**Проверка после выката:** `GET /v1/events` и `GET /gk/...` отвечают 404 (роутов нет, а не
+«фича выключена»); `GET /v1/pulse` и `GET /v1/inbox/:id` отвечают как прежде для обычного
+пользователя; в логах старта нет строк `[worker] Party Mode rounds` и `[cron] Event recap`;
+создание и правка анонса в админке проходят без поля `eventId`.
+
+**Откат:** ревертом коммита возвращается код, но НЕ таблицы — миграция односторонняя.
+Откат до состояния «подсистема на месте» = ревертнуть коммит и накатить схему из `a9d1e74d`
+заново. Поскольку таблицы уезжают пустыми, терять в них нечего.
+
+**Влияние на iOS:** два необязательных поля уходят из ответов — капсула `event` в
+`InboxAnnouncement` и строка `event_application` в `/v1/pulse`. Ни одно не было в `required`,
+а виды строк ленты клиент обязан читать как строки и пропускать незнакомое, поэтому текущая
+сборка деградирует молча. Правок в Gennety-iOS эта задача не делала.
+**Demo-mode:** `EVENT_QR_SECRET` убран из списка `MUST_DIFFER` в `scripts/deploy-demo.sh`.
+
+---
+
 **PENDING — брифинг перед свиданием уходит с экранов в T+2ч: верхняя граница гейта `iceBreakers` / `wingmanHint` (2026-09-15).**
 **Только бот (публичный API).** Коммит `74c642cc`. Схема, миграции, webapp и переменные окружения не
 меняются. `/v1/matches/current` отдаёт `iceBreakers: []` и `wingmanHint: null` начиная с
