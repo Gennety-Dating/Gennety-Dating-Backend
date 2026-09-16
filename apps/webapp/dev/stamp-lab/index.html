@@ -197,30 +197,52 @@ body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.38);
 }
-.card-names {
+/* Заголовок карточки — дата словами. Раньше здесь стояли имена пары, но в
+   момент согласования календарь знает только своё имя, а не партнёра.
+   Одна строка на всех пяти языках («18. September» — самая длинная) —
+   иначе вторая строка уехала бы под силуэт штампа в 3D-кадре. */
+.card-hero {
   margin-top: 9px;
   font-family: "Space Grotesk", "Inter", sans-serif;
   font-size: 24px;
   line-height: 1.16;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
 }
 .card-rows { margin-top: 16px; display: grid; gap: 7px; }
-.card-row { display: flex; justify-content: space-between; font-size: 12.5px; }
+.card-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
 .card-row b { font-weight: 500; color: rgba(255, 255, 255, 0.86); }
 .card-row span { color: rgba(255, 255, 255, 0.40); }
-/* Предложение, а не решение: до отпечатка поле «когда» закрыто плашкой, и
-   именно удар штампа его рассекречивает. Цензура тогда не наклейка, а
-   сюжет ролика. По умолчанию выключено — карточку я не переделываю. */
-.card-redact {
-  display: none;
-  width: 86px;
+
+/* МЕСТО ЗАКРЫТО ЦЕНЗУРОЙ — не декор, а правда: в момент штампа его ещё не
+   существует. Ровно приём из концепции «рассекреченного архива»: скрытый
+   параметр плюс триггер раскрытия. Честное «ещё не знаем» заодно становится
+   зацепкой к следующему шагу. */
+.redact-bar {
+  display: block;
+  width: 108px;
   height: 11px;
   background: rgba(255, 255, 255, 0.82);
   border-radius: 1px;
 }
-.card.is-redacting #cardWhen { visibility: hidden; }
-.card.is-redacting .card-redact { display: block; }
+.card-reveal {
+  margin-top: -3px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Переключатель «Цензура даты»: до удара дата и время закрыты плашкой
+   ровно по ширине текста, и удар штампа их рассекречивает. */
+.card.is-redacting .redactable {
+  color: transparent;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 1px;
+}
 /* Нижняя треть карточки намеренно пустая — это поле под печать. Так на
    настоящих бланках и делают, и только поэтому печать не ложится на текст. */
 .card-stub {
@@ -593,16 +615,24 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
     <div class="grid" id="grid"></div>
 
     <div class="card" id="card">
+      <!-- ТОЛЬКО то, что календарь знает в момент согласования (GET
+           /v1/calendar/state): agreedTime, timeZone, matchId, язык. Места ещё
+           нет — матч только что ушёл в negotiating_venue, venueName пишется
+           на следующем шаге. Имени партнёра в ответе календаря нет вовсе.
+           Номера столика не будет никогда. -->
       <div class="card-brand">Gennety</div>
-      <div class="card-names">Глеб&nbsp;&amp;&nbsp;Аня</div>
+      <div class="card-hero"><span class="redactable" id="cardDate">18 сентября</span></div>
       <div class="card-rows">
-        <div class="card-row"><span id="lblWhen">Когда</span><b id="cardWhen">—</b><i class="card-redact" id="cardRedact"></i></div>
-        <div class="card-row"><span id="lblWhere">Где</span><b>Kyiv · Podil</b></div>
-        <div class="card-row"><span id="lblSeat">Столик</span><b>№ 12</b></div>
+        <div class="card-row"><span id="lblTime">Время</span><b class="redactable" id="cardTime">пятница, 19:30</b></div>
+        <div class="card-row card-row-venue">
+          <span id="lblPlace">Место</span>
+          <i class="redact-bar" aria-hidden="true"></i>
+        </div>
+        <div class="card-reveal" id="cardReveal">откроется после выбора места</div>
       </div>
       <div class="card-stub">
         <div class="card-stub-label" id="cardStub">Карточка свидания</div>
-        <div class="card-stub-label">#0067</div>
+        <div class="card-stub-label" id="cardNo">#7K2Q</div>
       </div>
       <div class="ink-slot">
         <div class="ink-shadow" id="inkShadow"></div>
@@ -618,7 +648,7 @@ input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width
             <span id="inkDate">18 SEP</span><i class="sep">::</i><span id="inkTime">19:30</span>
           </div>
           <div class="ink-foot">
-            <span id="inkCase">GN-0067-KYV</span>
+            <span id="inkCase">GN-7K2Q</span>
             <i class="redact"></i>
           </div>
         </div>
@@ -785,31 +815,31 @@ const STRINGS = {
   ru: { hl: "Время согласовано", hlSub: "Ставим печать на карточку свидания",
         cap: "Свидание назначено", capSub: "Карточка сохранена — напомним за три часа",
         kicker: "Подтверждено", face: "Свидание", stub: "Карточка свидания",
-        when: "Когда", where: "Где", seat: "Столик",
+        time: "Время", place: "Место", reveal: "откроется после выбора места",
         cols: ["День", "Мес", "Время"], grid: "Выберите время",
         months: ["АВГ", "СЕН", "ОКТ"] },
   uk: { hl: "Час узгоджено", hlSub: "Ставимо печатку на картку побачення",
         cap: "Побачення призначено", capSub: "Картку збережено — нагадаємо за три години",
         kicker: "Підтверджено", face: "Побачення", stub: "Картка побачення",
-        when: "Коли", where: "Де", seat: "Столик",
+        time: "Час", place: "Місце", reveal: "відкриється після вибору місця",
         cols: ["День", "Міс", "Час"], grid: "Оберіть час",
         months: ["СЕР", "ВЕР", "ЖОВ"] },
   en: { hl: "Time agreed", hlSub: "Stamping your date card",
         cap: "Date is set", capSub: "Card saved — we'll remind you three hours before",
         kicker: "Confirmed", face: "Date", stub: "Date card",
-        when: "When", where: "Where", seat: "Table",
+        time: "Time", place: "Venue", reveal: "revealed once the venue is set",
         cols: ["Day", "Mon", "Time"], grid: "Pick a time",
         months: ["AUG", "SEP", "OCT"] },
   de: { hl: "Zeit vereinbart", hlSub: "Wir stempeln deine Date-Karte",
         cap: "Date steht fest", capSub: "Karte gespeichert — Erinnerung drei Stunden vorher",
         kicker: "Bestätigt", face: "Date", stub: "Date-Karte",
-        when: "Wann", where: "Wo", seat: "Tisch",
+        time: "Zeit", place: "Ort", reveal: "sichtbar, sobald der Ort feststeht",
         cols: ["Tag", "Mon", "Zeit"], grid: "Zeit wählen",
         months: ["AUG", "SEP", "OKT"] },
   pl: { hl: "Termin ustalony", hlSub: "Stemplujemy kartę randki",
         cap: "Randka umówiona", capSub: "Karta zapisana — przypomnimy trzy godziny wcześniej",
         kicker: "Potwierdzono", face: "Randka", stub: "Karta randki",
-        when: "Kiedy", where: "Gdzie", seat: "Stolik",
+        time: "Godzina", place: "Miejsce", reveal: "odsłonimy po wyborze miejsca",
         cols: ["Dzień", "Mies", "Godz"], grid: "Wybierz godzinę",
         months: ["SIE", "WRZ", "PAŹ"] },
 };
@@ -1161,12 +1191,22 @@ $("inkSel").addEventListener("change", (e) => {
   document.documentElement.style.setProperty("--ink-glow", v.glow);
 });
 
-/* ── Служебные реквизиты бланка ──────────────────────────────────────────
-   Всё здесь должно быть внутренне согласованным, иначе бланк читается как
-   набор случайных букв «под спецслужбы». Номер дела — из матча и города.
-   Координаты и хэш из оттиска сняты 2026-09-16: мельче 7 px они на карточке
-   не читались и работали только как шум, мешая увидеть сам штамп. */
-const CASE_NO = "GN-0067-KYV";
+/* ── Данные момента согласования ─────────────────────────────────────────
+   Ровно то, что Mini App календаря получает на экране «agreed»: matchId из
+   start_param, agreedTime и timeZone из GET /v1/calendar/state. Больше
+   ничего — ни места (его выберут на следующем шаге), ни имени партнёра, ни
+   порядкового номера матча, ни города (есть только зона).
+
+   Номер дела — хвост matchId. Это настоящий идентификатор, а не набор букв
+   «под спецслужбы»: у двух людей одной пары он совпадёт, у разных пар — нет.
+   Порядкового «#0067» у матча нет, поэтому и в оттиске его быть не может. */
+const MATCH_ID = "cmfq2k7x40001kd9z7k2q";
+const AGREED_TIME = "2026-09-18T16:30:00.000Z";   // 19:30 по Киеву
+const TIME_ZONE = "Europe/Kyiv";
+const CASE_TAIL = MATCH_ID.slice(-4).toUpperCase();
+const CASE_NO = "GN-" + CASE_TAIL;
+
+const LOCALE = { ru: "ru-RU", uk: "uk-UA", en: "en-GB", de: "de-DE", pl: "pl-PL" };
 
 /* Литеры барабана — всегда латиница. Это не небрежность к переводу, а
    физика: у датера одна лента месяцев, отлитая раз и навсегда, и оттиск
@@ -1184,11 +1224,15 @@ function refreshDie() {
   drumEls[1].rows.forEach((r, i) => { r.textContent = MONTHS_DIE[i]; });
   $("faceLabels").innerHTML = (monoFace ? DIE_COLS : STRINGS[curLang].cols)
     .map((c) => "<span>" + c + "</span>").join("");
-  $("faceTitle").textContent = monoFace ? "GN-0067 // DATE DIE" : STRINGS[curLang].face;
+  $("faceTitle").textContent = monoFace ? CASE_NO + " // DATE DIE" : STRINGS[curLang].face;
   // Без года: свидание в пределах пары недель, год в оттиске — шум, а по
   // ширине бланка он стоил кегля единственной строке, которую надо прочитать.
-  $("inkDate").textContent = "18 " + MONTHS_DIE[1];
-  $("inkTime").textContent = "19:30";
+  // Из того же agreedTime, что и карточка: оттиск и карточка обязаны показать
+  // одну дату, и это гарантируется одним источником, а не двумя константами.
+  const when = new Date(AGREED_TIME);
+  const part = (o) => when.toLocaleString("en-GB", { ...o, timeZone: TIME_ZONE });
+  $("inkDate").textContent = part({ day: "numeric" }) + " " + part({ month: "short" }).toUpperCase().slice(0, 3);
+  $("inkTime").textContent = part({ hour: "2-digit", minute: "2-digit", hour12: false });
   $("inkCase").textContent = CASE_NO;
 }
 
@@ -1201,10 +1245,19 @@ function setLang(l) {
   $("capTitle").textContent = s.cap;
   $("capSub").textContent = s.capSub;
   $("cardStub").textContent = s.stub;
-  $("lblWhen").textContent = s.when;
-  $("lblWhere").textContent = s.where;
-  $("lblSeat").textContent = s.seat;
-  $("cardWhen").textContent = "18 " + s.months[1] + " · 19:30";
+  $("lblTime").textContent = s.time;
+  $("lblPlace").textContent = s.place;
+  $("cardReveal").textContent = s.reveal;
+  $("cardNo").textContent = "#" + CASE_TAIL;
+  // Дата и время — из agreedTime в зоне рынка, как formatDate/formatTime в
+  // src/slots.ts: не зона телефона, а часы города свидания.
+  const when = new Date(AGREED_TIME);
+  $("cardDate").textContent = when.toLocaleDateString(LOCALE[l], {
+    day: "numeric", month: "long", timeZone: TIME_ZONE,
+  });
+  $("cardTime").textContent =
+    when.toLocaleDateString(LOCALE[l], { weekday: "long", timeZone: TIME_ZONE }) + ", " +
+    when.toLocaleTimeString(LOCALE[l], { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
   refreshDie();
   buildGrid(l);
   setT((Number($("scrub").value) / 1000) * DURATION, false);
