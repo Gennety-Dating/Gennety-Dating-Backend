@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Штамп даты — лаборатория</title>
+<!--
+  ─────────────────────────────────────────────────────────────────────────────
+  ИЗОЛИРОВАННЫЙ ПРОТОТИП. Не импортируется приложением, не входит в
+  rollupOptions.input (apps/webapp/vite.config.ts), не собирается в dist.
+  Открывается напрямую: apps/webapp/dev/stamp-lab/index.html
+
+  Success State календаря: согласованный слот собирается в компактный 3D-блок
+  штампа, барабаны дощёлкивают дату и время, сцена уходит в изометрию, под
+  блоком встаёт Карточка Свидания, штамп впечатывает в неё печать.
+
+  Числа сняты ПОКАДРОВО с референса s03qKByL8vApYHUB.mp4 (60 fps, 523 кадра),
+  а не со слов — разбор в README.md рядом. Кратко:
+    • щелчок барабана — критически задемпфированная пружина ω=25 рад/с,
+                        один ряд за 0,20 с, без перелёта;
+    • удар вниз       — ease-in со степенью 2,5, ход 0,15 с;
+    • контакт         — выдержка 0,17 с: микроотскок 3 px, затем доджим;
+    • отдача вверх    — пружина ζ=0,70, ω=20,3 рад/с (перелёт ≈5 %);
+    • уход штампа     — РАВНОМЕРНО, без разгона, 0,27 с;
+    • наклон камеры   — 0,70 с туда и столько же обратно.
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<style>
+/* ── Токены. Срез apps/webapp/src/theme.css — лаборатория намеренно
+      самодостаточна, чтобы открываться по file:// без сборки. ───────────── */
+:root {
+  --bg: #030303;
+  --text: #e9e6e5;
+  --text-muted: #8e8895;
+  --text-faint: #6a656b;
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #8b253b;
+  --accent-bright: #b6304f;
+  --self: #ffffff;
+
+  /* Чернила. На тёмном стоке карточки бордо читается крупным кеглем, но
+     фольга читается мгновенно — выбор оставлен основателю, а не зашит. */
+  --ink: #d64363;
+  --ink-glow: rgba(214, 67, 99, 0.22);
+
+  /* Геометрия блока штампа. Всё остальное считается от этих трёх чисел. */
+  --block-w: 248px;
+  --block-h: 152px;
+  --block-z: 58px;   /* толщина тела в 3D */
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  overscroll-behavior: none;
+}
+body { display: grid; grid-template-rows: 1fr auto; min-height: 100dvh; }
+
+/* ══ СЦЕНА ══════════════════════════════════════════════════════════════════
+   .stage задаёт перспективу. .world — «стол»: его плоскость XY и есть
+   поверхность, на которой лежит карточка. rotateX(--tilt) кладёт стол от
+   камеры: 0deg = смотрим строго сверху, и это ровно наш плоский 2D-экран;
+   52deg = изометрия референса. Всё, что поднято над столом, живёт на
+   translateZ(+N) и получает правильное смещение и укрупнение само.
+
+   Фон НЕЙТРАЛЬНЫЙ. Бордовая заливка сцены — ровно та ошибка, про которую
+   написано в theme.css: глубина берётся из подъёма (bg → surface → рамка),
+   а не из подкраски. Цвет тратится только на чернила.                     */
+.stage {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  perspective: 1300px;
+  perspective-origin: 50% 44%;
+  background:
+    /* Лужа света на «столе» — единственное, что отделяет сцену от чёрной
+       дыры. Нейтральная: цвет тратится только на чернила. */
+    radial-gradient(60% 34% at 50% 62%, rgba(255, 255, 255, 0.055), transparent 72%),
+    radial-gradient(120% 80% at 50% 10%, rgba(255, 255, 255, 0.05), transparent 60%),
+    var(--bg);
+}
+
+.world {
+  position: relative;
+  width: 340px;
+  height: 560px;
+  transform-style: preserve-3d;
+  transform:
+    translateY(var(--cam-y, 0px))
+    scale(var(--cam-s, 1))
+    rotateX(var(--tilt, 0deg));
+  will-change: transform;
+}
+.world > * { position: absolute; left: 50%; top: 50%; transform-style: preserve-3d; }
+
+/* ── Сетка слотов: исходное состояние, плоское ──────────────────────────── */
+.grid {
+  width: 300px;
+  margin-left: -150px;
+  margin-top: -150px;
+  transform: translateZ(2px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  pointer-events: none;
+}
+.grid-head {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+  opacity: var(--head-op, 1);
+}
+.chip {
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transform: translate(var(--cx, 0px), var(--cy, 0px)) scale(var(--cs, 1));
+  opacity: var(--co, 1);
+}
+.chip.is-picked {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+/* ── Карточка Свидания: лежит на столе ─────────────────────────────────── */
+.card {
+  width: 268px;
+  height: 392px;
+  margin-left: -134px;
+  margin-top: -196px;
+  border-radius: 22px;
+  /* Тот же «бордово-чёрный сток», что у .ticket-card в
+     apps/webapp/src/ticket/ticket.css — карточка обязана быть тем же
+     физическим предметом, что и билет. */
+  background:
+    /* Ключевой свет сцены. Без него сток проваливается в чёрное: на плоском
+       экране карточку держит её собственный градиент, а в 3D — то, как на
+       неё падает свет. Пятно смещено к дальнему краю, откуда светит. */
+    radial-gradient(90% 55% at 50% 14%, rgba(255, 255, 255, 0.11), transparent 70%),
+    radial-gradient(120% 90% at 20% 0%, rgba(182, 48, 79, 0.24), transparent 55%),
+    radial-gradient(110% 80% at 90% 100%, rgba(139, 37, 59, 0.20), transparent 60%),
+    linear-gradient(155deg, #3d1825 0%, #1c0c11 55%, #301220 100%);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32);
+  color: #f2ecf4;
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  /* Насечка отрыва — настоящие дырки, как у билета. */
+  --perf-y: 70%;
+  -webkit-mask:
+    radial-gradient(circle 11px at 0% var(--perf-y), transparent 10px, #000 11px),
+    radial-gradient(circle 11px at 100% var(--perf-y), transparent 10px, #000 11px);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle 11px at 0% var(--perf-y), transparent 10px, #000 11px),
+    radial-gradient(circle 11px at 100% var(--perf-y), transparent 10px, #000 11px);
+  mask-composite: intersect;
+  transform: translateZ(1px) translateY(var(--card-y, 0px));
+  opacity: var(--card-op, 0);
+}
+.card-brand {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+.card-names {
+  margin-top: 12px;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 24px;
+  line-height: 1.16;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+.card-rows { margin-top: 16px; display: grid; gap: 7px; }
+.card-row { display: flex; justify-content: space-between; font-size: 12.5px; }
+.card-row b { font-weight: 500; color: rgba(255, 255, 255, 0.86); }
+.card-row span { color: rgba(255, 255, 255, 0.40); }
+/* Нижняя треть карточки намеренно пустая — это поле под печать. Так на
+   настоящих бланках и делают, и только поэтому печать не ложится на текст. */
+.card-stub {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.card-stub-label {
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+/* Поле печати — пустая зона карточки, ничем не подсвечена. */
+.ink-slot {
+  position: absolute;
+  left: 50%;
+  /* Оттиск не может быть шире подошвы штампа: она его и оставляет. Пока
+     поле было 198 px против 144 px подошвы, края печати вылезали из-под
+     блока ещё в момент удара — и весь фокус «её не видно, пока штамп не
+     ушёл» рассыпался. Размер поля привязан к --block-w × BLOCK_SCALE_3D. */
+  top: 246px;
+  width: 150px;
+  height: 84px;
+  margin-left: -75px;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+/* ── Печать. Живёт на карточке, но в момент отпечатка приподнята над ней на
+      --ink-z: перспектива сама даёт смещение, а отдельный слой тени —
+      ощущение «краска ещё садится». В референсе это занимает 0,3 с.      */
+.ink {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(var(--ink-z, 0px)) rotate(-3deg) scale(var(--ink-s, 1));
+  opacity: var(--ink-op, 0);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 4px currentColor;
+}
+.ink.is-rough { filter: url(#ink-rough); }
+.ink-inner { text-align: center; padding: 4px 8px; }
+.ink-kicker {
+  font-size: 7.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  font-weight: 700;
+  opacity: 0.92;
+}
+.ink-main {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.ink-sub {
+  font-size: 7.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  margin-top: 3px;
+  opacity: 0.74;
+}
+/* Тень под ещё не севшей печатью — отдельным слоем, чтобы гасла своей кривой. */
+.ink-shadow {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(0.4px) rotate(-3deg) scale(1.02);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.6);
+  filter: blur(var(--ink-sh-blur, 10px));
+  opacity: var(--ink-sh-op, 0);
+}
+
+/* ── Тень штампа на карточке ───────────────────────────────────────────── */
+.shadow {
+  width: var(--block-w);
+  height: var(--block-h);
+  margin-left: calc(var(--block-w) / -2);
+  margin-top: calc(var(--block-h) / -2);
+  border-radius: 32px;
+  background: #000;
+  transform: translateY(var(--by, 0px)) translateZ(0.6px) scale(var(--sh-s, 1));
+  filter: blur(var(--sh-blur, 26px));
+  opacity: var(--sh-op, 0);
+}
+
+/* ── БЛОК ШТАМПА ────────────────────────────────────────────────────────────
+   Тело собрано из одинаковых скруглённых пластин, разложенных по Z: при
+   наклоне их передние кромки складываются в сплошной бок с правильным
+   скруглённым силуэтом — без швов, неизбежных у сборки из четырёх плоских
+   граней. Тело — светлая сталь, ложемент внизу — почти чёрная резина.
+
+   Пока камера смотрит строго сверху (tilt = 0), тела не видно вообще:
+   виден только тёмный интерфейсный «циферблат». Материал не нужно ни во
+   что превращать — он просто открывается вместе с наклоном.              */
+.block {
+  width: var(--block-w);
+  height: var(--block-h);
+  margin-left: calc(var(--block-w) / -2);
+  margin-top: calc(var(--block-h) / -2);
+  /* scale3d, а не scale: «компактный блок» должен ужиматься и по толщине.
+     --by уводит штамп по столу вниз, на поле печати: пока камера смотрит
+     сверху, он стоит на месте выбранного слота, а к изометрии встаёт над
+     тем местом карточки, куда ляжет оттиск, и перестаёт закрывать имена. */
+  transform:
+    translateY(var(--by, 0px))
+    translateZ(var(--lift, 0px))
+    scale3d(var(--bs, 1), var(--bs, 1), var(--bs, 1));
+  opacity: var(--block-op, 0);
+}
+/* Сжатие резины под нагрузкой: origin по Z = 0, то есть подошва стоит на
+   месте, а сминается тело. Это и есть squash настоящего штампа. */
+.block-body {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: scaleZ(var(--squash, 1));
+  transform-origin: 50% 50% 0;
+}
+.slice { position: absolute; inset: 0; border-radius: 32px; }
+
+/* Лицевая панель с барабанами — верхняя грань блока, наш тёмный интерфейс. */
+.face {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(var(--block-z));
+  border-radius: 32px;
+  overflow: hidden;
+  background: linear-gradient(168deg, #212126 0%, #141418 58%, #1a1a1f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 12px 26px -18px rgba(255, 255, 255, 0.45),
+    inset 0 -12px 26px -18px rgba(255, 255, 255, 0.22),
+    inset 10px 0 24px -16px rgba(255, 255, 255, 0.30),
+    inset -10px 0 24px -16px rgba(255, 255, 255, 0.30);
+  padding: 13px 14px 11px;
+  display: flex;
+  flex-direction: column;
+}
+.face-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+/* Индикатор заряженной краски — как красная точка в референсе. */
+.ink-pad {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 0 10px var(--ink-glow);
+  transform: scale(var(--pad-s, 1));
+}
+
+/* ── Барабаны ──────────────────────────────────────────────────────────── */
+.drums {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  align-items: center;
+  margin-top: 2px;
+}
+.drum {
+  position: relative;
+  height: 82px;
+  overflow: hidden;
+  /* Цилиндр: края уходят в тень, как у настоящего барабана. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26%, #000 74%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 26%, #000 74%, transparent 100%);
+}
+.drum-strip {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  transform: translateY(calc(-50% + var(--roll, 0px)));
+}
+.drum-row {
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* Соседние значения: глубина резкости — дальше от центра, тусклее и мягче. */
+.drum-row[data-d="1"] { color: var(--text-muted); filter: blur(0.5px); }
+.drum-row[data-d="2"] { color: var(--text-faint); filter: blur(1.6px); }
+.drum-row[data-d="3"] { color: var(--text-faint); filter: blur(3px); }
+.drum-window {
+  position: absolute;
+  left: 4px; right: 4px; top: 50%;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.face-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-align: center;
+  opacity: var(--lab-op, 1);
+}
+
+/* ── Подписи вокруг сцены ──────────────────────────────────────────────── */
+.caption {
+  position: absolute;
+  left: 0; right: 0; bottom: 5%;
+  text-align: center;
+  opacity: var(--cap-op, 0);
+  transform: translateY(var(--cap-y, 12px));
+  pointer-events: none;
+}
+.caption h2 { margin: 0; font-family: "Space Grotesk", "Inter", sans-serif; font-size: 21px; font-weight: 600; }
+.caption p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
+
+.headline {
+  position: absolute;
+  left: 0; right: 0; top: 6%;
+  text-align: center;
+  opacity: var(--hl-op, 1);
+  pointer-events: none;
+}
+.headline h1 { margin: 0; font-family: "Space Grotesk", "Inter", sans-serif; font-size: 18px; font-weight: 600; }
+.headline p { margin: 5px 0 0; font-size: 12.5px; color: var(--text-muted); }
+
+/* ── Панель управления лабораторией ────────────────────────────────────── */
+.panel {
+  border-top: 1px solid var(--border);
+  background: #0a0a0a;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  display: grid; gap: 9px; font-size: 12px;
+}
+.panel-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.panel label { color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
+button.lab {
+  appearance: none; border: 0; border-radius: 10px; padding: 8px 14px;
+  font: inherit; font-weight: 500; color: #0a0a0a; background: var(--self); cursor: pointer;
+}
+button.lab.ghost { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+button.lab.ghost[aria-pressed="true"] { background: var(--accent); color: #fff; }
+select.lab {
+  background: rgba(255, 255, 255, 0.08); color: var(--text);
+  border: 0; border-radius: 8px; padding: 6px 8px; font: inherit;
+}
+input[type="range"].lab { accent-color: var(--accent-bright); flex: 1; min-width: 120px; }
+.readout { font-variant-numeric: tabular-nums; color: var(--text-faint); min-width: 118px; }
+
+/* Лента фаз — видно, где сейчас прогон и куда падают тактильные удары.
+   Рабочий инструмент согласования, а не декорация. */
+.track { position: relative; height: 24px; border-radius: 7px; background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+.track i {
+  position: absolute; top: 0; bottom: 0; font-style: normal; font-size: 8px;
+  color: var(--text-faint); display: grid; place-items: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; white-space: nowrap;
+}
+.track b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent-bright); }
+.track u { position: absolute; top: 0; bottom: 0; width: 1.5px; background: rgba(255, 255, 255, 0.5); }
+.track u.heavy { width: 3px; background: var(--self); }
+.track.is-hidden i, .track.is-hidden u { display: none; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="ink-rough" x="-15%" y="-15%" width="130%" height="130%">
+    <!-- Резиновая печать никогда не ложится ровно: рваный край + пропуски. -->
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G" result="d"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.22" numOctaves="2" seed="3" result="n2"/>
+    <!-- Пропуски краски должны быть редкими: при -1.4/1.06 оттиск съедался
+         почти наполовину и переставал читаться на тёмном стоке. -->
+    <feColorMatrix in="n2" type="matrix"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.8 1.22" result="holes"/>
+    <feComposite in="d" in2="holes" operator="in"/>
+  </filter>
+</svg>
+
+<div class="stage" id="stage">
+  <div class="headline" id="headline">
+    <h1 id="hlTitle">Время согласовано</h1>
+    <p id="hlSub">Ставим печать на карточку свидания</p>
+  </div>
+
+  <div class="world" id="world">
+    <div class="grid" id="grid"></div>
+
+    <div class="card" id="card">
+      <div class="card-brand">Gennety</div>
+      <div class="card-names">Глеб&nbsp;&amp;&nbsp;Аня</div>
+      <div class="card-rows">
+        <div class="card-row"><span id="lblWhen">Когда</span><b id="cardWhen">—</b></div>
+        <div class="card-row"><span id="lblWhere">Где</span><b>Kyiv · Podil</b></div>
+        <div class="card-row"><span id="lblSeat">Столик</span><b>№ 12</b></div>
+      </div>
+      <div class="card-stub">
+        <div class="card-stub-label" id="cardStub">Карточка свидания</div>
+        <div class="card-stub-label">#0067</div>
+      </div>
+      <div class="ink-slot">
+        <div class="ink-shadow" id="inkShadow"></div>
+        <div class="ink is-rough" id="ink">
+          <div class="ink-inner">
+            <div class="ink-kicker" id="inkKicker">Подтверждено</div>
+            <div class="ink-main" id="inkMain">18 СЕН · 19:30</div>
+            <div class="ink-sub">Gennety</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shadow" id="shadow"></div>
+
+    <div class="block" id="block">
+      <div class="block-body" id="blockBody">
+        <div class="face">
+          <div class="face-top">
+            <span id="faceTitle">Свидание</span>
+            <span class="ink-pad" id="inkPad"></span>
+          </div>
+          <div class="drums" id="drums"></div>
+          <div class="face-labels" id="faceLabels"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption" id="caption">
+    <h2 id="capTitle">Свидание назначено</h2>
+    <p id="capSub">Карточка сохранена — напомним за три часа</p>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="track" id="track"><b id="playhead"></b></div>
+  <div class="panel-row">
+    <button class="lab" id="play">Прогон</button>
+    <input type="range" class="lab" id="scrub" min="0" max="1000" value="0" />
+    <span class="readout" id="readout">0.00 c</span>
+  </div>
+  <div class="panel-row">
+    <label>Темп
+      <select class="lab" id="speed">
+        <option value="0.5">0,5×</option>
+        <option value="1" selected>1× — 4,5 с</option>
+        <option value="1.3">1,3× — 3,5 с</option>
+        <option value="1.6">1,6× — 2,8 с</option>
+      </select>
+    </label>
+    <label>Чернила
+      <select class="lab" id="inkSel">
+        <option value="burgundy" selected>Бордо</option>
+        <option value="foil">Фольга</option>
+        <option value="deep">Тёмные</option>
+      </select>
+    </label>
+    <label>Язык
+      <select class="lab" id="lang">
+        <option value="ru" selected>RU</option>
+        <option value="uk">UK</option>
+        <option value="en">EN</option>
+        <option value="de">DE</option>
+        <option value="pl">PL</option>
+      </select>
+    </label>
+  </div>
+  <div class="panel-row">
+    <label>Наклон <input type="range" class="lab" id="tiltMax" min="30" max="70" value="52" /><span class="readout" id="tiltOut">52°</span></label>
+  </div>
+  <div class="panel-row">
+    <button class="lab ghost" id="tRough" aria-pressed="true">Рваный край</button>
+    <button class="lab ghost" id="tSound" aria-pressed="false">Щелчки</button>
+    <button class="lab ghost" id="tMarks" aria-pressed="true">Фазы</button>
+    <button class="lab ghost" id="tReduced" aria-pressed="false">Без анимации</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   1. КРИВЫЕ. Сняты покадрово с референса и записаны как физика, а не как
+      cubic-bezier: пружину можно один в один перенести в SwiftUI
+      (.spring(response:dampingFraction:)), безье — нет.
+   ════════════════════════════════════════════════════════════════════════ */
+function spring(t, w, z) {
+  if (t <= 0) return 0;
+  if (z < 1) {
+    const wd = w * Math.sqrt(1 - z * z);
+    return 1 - Math.exp(-z * w * t) * (Math.cos(wd * t) + (z * w / wd) * Math.sin(wd * t));
+  }
+  return 1 - Math.exp(-w * t) * (1 + w * t);
+}
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const seg = (t, a, b) => clamp01((t - a) / (b - a));
+const easeOut = (u) => 1 - Math.pow(1 - u, 3);
+const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+const lerp = (a, b, u) => a + (b - a) * u;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2. ПАРТИТУРА. Секунды от нажатия «Подтвердить». Длительности ударных фаз
+      взяты из референса как есть, паузы сжаты: в референсе между ними
+      пользователь читает счёт, у нас читать нечего.
+   ════════════════════════════════════════════════════════════════════════ */
+const T = {
+  collapse:  [0.00, 0.42],  // сетка опадает, выбранный чип уезжает в лицо блока
+  drumsIn:   [0.26, 0.52],  // соседние значения проявляются, барабан оживает
+  rollDay:   [0.52, 0.78],  // 2 ряда
+  rollMonth: [0.76, 0.98],  // 1 ряд
+  rollTime:  [0.96, 1.24],  // 2 ряда
+  lock:      [1.24, 1.42],  // окошки вспыхивают, краска наливается
+  tilt:      [1.40, 2.10],  // камера в изометрию, блок ужимается, карточка встаёт
+  settle:    [2.10, 2.25],  // блок доходит до высоты покоя
+  anticip:   [2.25, 2.42],  // замах вверх, затем выдержка
+  strike:    [2.50, 2.65],  // удар вниз, ease-in p2.5
+  contact:   [2.65, 2.82],  // выдержка с микроотскоком
+  recoil:    [2.82, 3.13],  // отдача, пружина с перелётом
+  inkSet:    [2.84, 3.15],  // печать проявляется и садится на карточку
+  hold:      [3.13, 3.55],
+  exit:      [3.55, 3.85],  // штамп уходит равномерно
+  untilt:    [3.55, 4.25],  // камера обратно в 2D
+  ui:        [4.15, 4.50],
+};
+const DURATION = 4.50;
+
+/* Тактильные удары. light — фиксация барабана, heavy — отпечаток.
+   В Mini App это Telegram.WebApp.HapticFeedback.impactOccurred(). */
+const HAPTICS = [
+  { t: T.rollDay[1],   kind: "light" },
+  { t: T.rollMonth[1], kind: "light" },
+  { t: T.rollTime[1],  kind: "light" },
+  { t: T.strike[1],    kind: "heavy" },
+  { t: T.exit[0],      kind: "soft"  },
+];
+
+/* Высота штампа над карточкой, px «стола» (Z вверх от плоскости карточки).
+
+   Числа не произвольные. В перспективе поднятый предмет уезжает по экрану
+   ВВЕРХ от своего следа: замерено, что при этой камере лицевая панель висит
+   на 113 px выше пятна, куда ляжет оттиск, и каждые 50 px высоты добавляют
+   ещё 39 px подъёма. Отсюда потолок: выше ~95 штамп начинает резать имена
+   на карточке, а имена — это то, ради чего карточка и существует.        */
+const Z = {
+  hover:   76,
+  anticip: 92,
+  contact:  6,   // резина легла (не 0 — она сама имеет толщину)
+  press:    2,   // доджим под нагрузкой
+  rest:    88,   // где замирает после отдачи (выше покоя — как в референсе)
+  exit:    520,
+};
+const ROW = 28;
+const BLOCK_SCALE_3D = 0.62;  // «компактный блок»: во сколько ужимается к изометрии
+/* Центр поля печати в координатах стола: карточка 392 высотой центрирована,
+   .ink-slot занимает 246…330 от её верха, значит его центр на +92 от центра. */
+const BLOCK_Y_3D = 92;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3. ДАННЫЕ И ЯЗЫКИ
+   ════════════════════════════════════════════════════════════════════════ */
+const STRINGS = {
+  ru: { hl: "Время согласовано", hlSub: "Ставим печать на карточку свидания",
+        cap: "Свидание назначено", capSub: "Карточка сохранена — напомним за три часа",
+        kicker: "Подтверждено", face: "Свидание", stub: "Карточка свидания",
+        when: "Когда", where: "Где", seat: "Столик",
+        cols: ["День", "Мес", "Время"], grid: "Выберите время",
+        months: ["АВГ", "СЕН", "ОКТ"] },
+  uk: { hl: "Час узгоджено", hlSub: "Ставимо печатку на картку побачення",
+        cap: "Побачення призначено", capSub: "Картку збережено — нагадаємо за три години",
+        kicker: "Підтверджено", face: "Побачення", stub: "Картка побачення",
+        when: "Коли", where: "Де", seat: "Столик",
+        cols: ["День", "Міс", "Час"], grid: "Оберіть час",
+        months: ["СЕР", "ВЕР", "ЖОВ"] },
+  en: { hl: "Time agreed", hlSub: "Stamping your date card",
+        cap: "Date is set", capSub: "Card saved — we'll remind you three hours before",
+        kicker: "Confirmed", face: "Date", stub: "Date card",
+        when: "When", where: "Where", seat: "Table",
+        cols: ["Day", "Mon", "Time"], grid: "Pick a time",
+        months: ["AUG", "SEP", "OCT"] },
+  de: { hl: "Zeit vereinbart", hlSub: "Wir stempeln deine Date-Karte",
+        cap: "Date steht fest", capSub: "Karte gespeichert — Erinnerung drei Stunden vorher",
+        kicker: "Bestätigt", face: "Date", stub: "Date-Karte",
+        when: "Wann", where: "Wo", seat: "Tisch",
+        cols: ["Tag", "Mon", "Zeit"], grid: "Zeit wählen",
+        months: ["AUG", "SEP", "OKT"] },
+  pl: { hl: "Termin ustalony", hlSub: "Stemplujemy kartę randki",
+        cap: "Randka umówiona", capSub: "Karta zapisana — przypomnimy trzy godziny wcześniej",
+        kicker: "Potwierdzono", face: "Randka", stub: "Karta randki",
+        when: "Kiedy", where: "Gdzie", seat: "Stolik",
+        cols: ["Dzień", "Mies", "Godz"], grid: "Wybierz godzinę",
+        months: ["SIE", "WRZ", "PAŹ"] },
+};
+
+/* Барабаны стартуют на первом значении и дощёлкивают до согласованного. */
+const DRUMS = [
+  { key: "day",   values: ["16", "17", "18", "19", "20"],       from: 0, to: 2 },
+  { key: "month", values: ["АВГ", "СЕН", "ОКТ"],                from: 0, to: 1 },
+  { key: "time",  values: ["18:30", "19:00", "19:30", "20:00"], from: 0, to: 2 },
+];
+const SLOT_TIMES = ["17:00", "18:00", "19:00", "17:30", "18:30", "19:30", "20:00", "20:30", "21:00"];
+const PICKED_CHIP = 5; // «19:30»
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4. РАЗМЕТКА, СОБИРАЕМАЯ СКРИПТОМ
+   ════════════════════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+const world = $("world"), block = $("block"), blockBody = $("blockBody");
+const card = $("card"), grid = $("grid"), shadow = $("shadow");
+const ink = $("ink"), inkShadow = $("inkShadow");
+const caption = $("caption"), headline = $("headline");
+
+/* Тело штампа: пластины по Z. Их ровно столько, чтобы при 52° ступенька
+   силуэта была меньше 2 px — иначе бок читается как лесенка. */
+const SLICES = 32;
+const BLOCK_Z = 58;
+for (let i = 0; i < SLICES; i++) {
+  const u = i / (SLICES - 1);              // 0 — подошва, 1 — под лицевой панелью
+  const el = document.createElement("div");
+  el.className = "slice";
+  el.style.transform = "translateZ(" + (u * BLOCK_Z).toFixed(2) + "px)";
+  if (u < 0.15) {
+    // Резиновый ложемент: почти чёрный, чуть светлеет кверху.
+    const c = lerp(17, 34, u / 0.15);
+    el.style.background = "rgb(" + c.toFixed(0) + "," + c.toFixed(0) + "," + (c + 3).toFixed(0) + ")";
+  } else {
+    // Корпус: светлая сталь. Свет падает сверху, поэтому книзу темнеет.
+    const k = (u - 0.15) / 0.85;
+    const c = lerp(120, 226, k * k * 0.55 + k * 0.45);
+    el.style.background = "rgb(" + c.toFixed(0) + "," + (c - 2).toFixed(0) + "," + (c - 5).toFixed(0) + ")";
+  }
+  if (i === 0) el.style.boxShadow = "0 0 0 1.2px var(--ink)"; // кромка заряжена краской
+  blockBody.insertBefore(el, blockBody.firstChild);
+}
+
+/* Барабаны. */
+const drumEls = [];
+DRUMS.forEach((d) => {
+  const wrap = document.createElement("div");
+  wrap.className = "drum";
+  const win = document.createElement("div");
+  win.className = "drum-window";
+  const strip = document.createElement("div");
+  strip.className = "drum-strip";
+  d.values.forEach((v) => {
+    const row = document.createElement("div");
+    row.className = "drum-row";
+    row.textContent = v;
+    strip.appendChild(row);
+  });
+  wrap.appendChild(strip);
+  wrap.appendChild(win);
+  $("drums").appendChild(wrap);
+  drumEls.push({ wrap, strip, win, rows: Array.from(strip.children), def: d });
+});
+
+/* Сетка слотов. Смещение выбранного чипа до центра меряется по факту —
+   «слот собирается в блок» обязан быть одним движением, а не заменой
+   одного элемента другим в разных точках экрана. */
+const chipEls = [];
+let pickedOffset = { x: 0, y: 0 };
+function buildGrid(lang) {
+  grid.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "grid-head";
+  head.id = "gridHead";
+  head.textContent = STRINGS[lang].grid + " · 18 " + STRINGS[lang].months[1];
+  grid.appendChild(head);
+  chipEls.length = 0;
+  SLOT_TIMES.forEach((t, i) => {
+    const c = document.createElement("div");
+    c.className = "chip" + (i === PICKED_CHIP ? " is-picked" : "");
+    c.textContent = t;
+    grid.appendChild(c);
+    chipEls.push(c);
+  });
+  measurePicked();
+}
+function measurePicked() {
+  const a = chipEls[PICKED_CHIP].getBoundingClientRect();
+  const b = block.getBoundingClientRect();
+  pickedOffset = {
+    x: (b.left + b.width / 2) - (a.left + a.width / 2),
+    y: (b.top + b.height / 2) - (a.top + a.height / 2),
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5. ОДИН КАДР. apply(t) полностью задаёт картинку, поэтому прогон,
+      перемотка и покадровая запись дают ровно одно и то же.
+   ════════════════════════════════════════════════════════════════════════ */
+let tiltMax = 52;
+
+function apply(t) {
+  /* ── Фаза 0. Сетка опадает, выбранный чип уезжает в лицо блока ────────── */
+  chipEls.forEach((c, i) => {
+    if (i === PICKED_CHIP) {
+      // Выбранный не исчезает на месте: он ЕДЕТ в центр и там растворяется
+      // ровно в тот момент, когда на его месте уже проявилось лицо блока.
+      const u = easeInOut(seg(t, 0, 0.34));
+      c.style.setProperty("--cx", (pickedOffset.x * u).toFixed(1) + "px");
+      c.style.setProperty("--cy", (pickedOffset.y * u).toFixed(1) + "px");
+      c.style.setProperty("--cs", String(lerp(1, 2.6, u)));
+      c.style.setProperty("--co", String(clamp01(1 - seg(t, 0.16, 0.32))));
+    } else {
+      // Остальные уходят с задержкой от расстояния до выбранного — волна,
+      // а не одновременное исчезновение.
+      const d = Math.abs(i - PICKED_CHIP);
+      const u = easeOut(clamp01((seg(t, 0, 0.42) * 0.42 - d * 0.022) / 0.24));
+      c.style.setProperty("--co", String(1 - u));
+      c.style.setProperty("--cx", "0px");
+      c.style.setProperty("--cy", (u * 26).toFixed(1) + "px");
+      c.style.setProperty("--cs", String(lerp(1, 0.9, u)));
+    }
+  });
+  const gh = $("gridHead");
+  if (gh) gh.style.setProperty("--head-op", String(1 - easeOut(seg(t, 0, 0.22))));
+
+  /* ── Блок: проявляется под уезжающим чипом, уходит в конце ролика ─────── */
+  const appear = easeOut(seg(t, 0.18, 0.40));
+  const vanish = easeOut(seg(t, T.exit[0] + 0.16, T.exit[1]));
+  block.style.setProperty("--block-op", String(appear * (1 - vanish)));
+
+  /* ── Фаза 1. Барабаны оживают: соседние значения проявляются ──────────── */
+  const dIn = easeOut(seg(t, T.drumsIn[0], T.drumsIn[1]));
+  drumEls.forEach((d) => {
+    d.rows.forEach((r, i) => {
+      const dist = Math.min(3, Math.abs(i - d.def.to));
+      r.dataset.d = String(dist);
+      r.style.opacity = dist === 0 ? "1" : String(dIn * (dist === 1 ? 0.72 : dist === 2 ? 0.40 : 0.14));
+    });
+  });
+  $("faceLabels").style.setProperty("--lab-op", String(dIn));
+
+  /* ── Фазы 2–4. Щелчки барабанов ──────────────────────────────────────── */
+  const rolls = [T.rollDay, T.rollMonth, T.rollTime];
+  drumEls.forEach((d, i) => {
+    const [a, b] = rolls[i];
+    const w = 5 / (b - a);  // ω подобрана так, что за (b−a) проходится весь ход
+    const u = t <= a ? 0 : spring(t - a, w, 1) / spring(b - a, w, 1);
+    const idx = d.def.from + (d.def.to - d.def.from) * clamp01(u);
+    const center = (d.def.values.length - 1) / 2;
+    d.strip.style.setProperty("--roll", ((center - idx) * ROW).toFixed(2) + "px");
+    // Фиксация: окно вспыхивает в момент остановки и гаснет за 0,22 с.
+    const lit = t >= b - 0.02 ? clamp01(1 - (t - b) / 0.22) : 0;
+    d.win.style.background =
+      "rgba(" + Math.round(lerp(255, 192, lit)) + "," +
+      Math.round(lerp(255, 52, lit)) + "," +
+      Math.round(lerp(255, 79, lit)) + "," +
+      (0.09 + lit * 0.18).toFixed(3) + ")";
+  });
+
+  /* ── Фаза 5. Заряд краски: индикатор наливается перед ударом ──────────── */
+  $("inkPad").style.setProperty("--pad-s", String(lerp(1, 1.5, easeInOut(seg(t, T.lock[0], T.strike[0])))));
+
+  /* ── Камера ──────────────────────────────────────────────────────────── */
+  const tIn = easeInOut(seg(t, T.tilt[0], T.tilt[1]));
+  const tOut = easeInOut(seg(t, T.untilt[0], T.untilt[1]));
+  const k = tIn - tOut;                       // 0 — плоско, 1 — изометрия
+  world.style.setProperty("--tilt", (tiltMax * k).toFixed(2) + "deg");
+  world.style.setProperty("--cam-s", String(lerp(1, 0.86, k)));
+  world.style.setProperty("--cam-y", lerp(0, 40, k).toFixed(1) + "px");
+
+  /* Блок ужимается в «компактный»: интерфейсная панель становится предметом,
+     который заметно меньше карточки — иначе он её просто закрывает. */
+  block.style.setProperty("--bs", String(lerp(1, BLOCK_SCALE_3D, k)));
+  // И встаёт над полем печати — центр .ink-slot в координатах стола.
+  const by = lerp(0, BLOCK_Y_3D, k).toFixed(1) + "px";
+  block.style.setProperty("--by", by);
+  shadow.style.setProperty("--by", by);
+
+  /* ── Карточка встаёт под блок ────────────────────────────────────────── */
+  card.style.setProperty("--card-op", String(seg(t, T.tilt[0] + 0.10, T.tilt[0] + 0.34)));
+  card.style.setProperty("--card-y",
+    lerp(150, 0, clamp01(spring(Math.max(0, t - (T.tilt[0] + 0.12)), 15, 0.8))).toFixed(1) + "px");
+
+  /* ── Высота штампа: главная кривая всего ролика ──────────────────────── */
+  let z;
+  if (t < T.tilt[0]) {
+    z = 0;                                     // лежит в плоскости интерфейса
+  } else if (t < T.anticip[0]) {
+    z = lerp(0, Z.hover, spring(t - T.tilt[0], 7.5, 0.85));
+  } else if (t < T.anticip[1]) {
+    z = lerp(Z.hover, Z.anticip, easeOut(seg(t, T.anticip[0], T.anticip[1])));
+  } else if (t < T.strike[0]) {
+    z = Z.anticip;                             // выдержка на замахе
+  } else if (t < T.strike[1]) {
+    // Удар: степень 2,5 — быстрее кубической, медленнее квадратичной.
+    z = lerp(Z.anticip, Z.contact, Math.pow(seg(t, T.strike[0], T.strike[1]), 2.5));
+  } else if (t < T.contact[1]) {
+    // Контакт: микроотскок 2,5 px, затем доджим — ровно как в референсе.
+    const u = seg(t, T.contact[0], T.contact[1]);
+    z = u < 0.35
+      ? Z.contact + Math.sin((u / 0.35) * Math.PI) * 2.5
+      : lerp(Z.contact, Z.press, easeOut((u - 0.35) / 0.65));
+  } else if (t < T.exit[0]) {
+    // Отдача: пружина ζ=0,70 — перелёт около 5 %, как измерено.
+    z = lerp(Z.press, Z.rest, spring(t - T.recoil[0], 20.3, 0.70));
+  } else {
+    // Уход: РАВНОМЕРНО. В референсе скорость постоянна — штамп не улетает
+    // сам, его уводит механизм.
+    z = lerp(Z.rest, Z.exit, seg(t, T.exit[0], T.exit[1]));
+  }
+  block.style.setProperty("--lift", z.toFixed(2) + "px");
+
+  /* Сжатие резины в момент контакта: 6 % толщины за 0,12 с, подошва на месте. */
+  blockBody.style.setProperty("--squash",
+    (t >= T.strike[1] && t < T.strike[1] + 0.12
+      ? 1 - 0.06 * Math.sin(seg(t, T.strike[1], T.strike[1] + 0.12) * Math.PI)
+      : 1).toFixed(4));
+
+  /* ── Тень: размер и мягкость — функция высоты, а не отдельная анимация ─ */
+  const near = clamp01(1 - z / Z.hover);
+  shadow.style.setProperty("--sh-op",
+    (seg(t, T.tilt[0] + 0.10, T.tilt[0] + 0.40) * lerp(0.30, 0.66, near) * (1 - vanish)).toFixed(3));
+  shadow.style.setProperty("--sh-blur", lerp(28, 8, near).toFixed(1) + "px");
+  shadow.style.setProperty("--sh-s", String(lerp(1.04, 0.90, near) * lerp(1, BLOCK_SCALE_3D, k)));
+
+  /* ── Печать. Создаётся в момент удара — под блоком, поэтому её не видно;
+        проявляется по мере того, как блок уходит вверх, и садится своей
+        кривой. В референсе между ударом и первым красным пикселем ровно
+        0,18 с — это не задержка, это блок её закрывает.                  */
+  const inkU = easeOut(seg(t, T.inkSet[0], T.inkSet[1]));
+  ink.style.setProperty("--ink-op", String(t >= T.strike[1] ? easeOut(seg(t, T.inkSet[0], T.inkSet[0] + 0.18)) : 0));
+  ink.style.setProperty("--ink-z", lerp(9, 0, inkU).toFixed(2) + "px");
+  ink.style.setProperty("--ink-s", String(lerp(1.035, 1, inkU)));
+  inkShadow.style.setProperty("--ink-sh-op", String((1 - inkU) * (t >= T.strike[1] ? 0.5 : 0)));
+  inkShadow.style.setProperty("--ink-sh-blur", lerp(12, 2, inkU).toFixed(1) + "px");
+
+  /* ── Подписи ─────────────────────────────────────────────────────────── */
+  headline.style.setProperty("--hl-op", String(1 - easeOut(seg(t, T.tilt[0], T.tilt[0] + 0.25))));
+  const uiU = easeOut(seg(t, T.ui[0], T.ui[1]));
+  caption.style.setProperty("--cap-op", String(uiU));
+  caption.style.setProperty("--cap-y", lerp(14, 0, uiU).toFixed(1) + "px");
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6. ПРОГОН, ПЕРЕМОТКА, ЛЕНТА ФАЗ
+   ════════════════════════════════════════════════════════════════════════ */
+let speed = 1, playing = false, t0 = 0, raf = 0, fired = new Set();
+let audioCtx = null, soundOn = false;
+
+function click(kind) {
+  if (!soundOn) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    const heavy = kind === "heavy";
+    o.type = "square";
+    o.frequency.value = heavy ? 90 : 1500;
+    g.gain.setValueAtTime(heavy ? 0.35 : 0.10, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (heavy ? 0.16 : 0.03));
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + (heavy ? 0.18 : 0.04));
+  } catch (_) { /* лаборатория, звук не критичен */ }
+}
+
+function phaseAt(t) {
+  let name = "—";
+  for (const [k, v] of Object.entries(T)) if (t >= v[0] && t < v[1]) name = k;
+  return name;
+}
+
+function setT(t, fireHaptics) {
+  apply(t);
+  const pct = clamp01(t / DURATION);
+  $("scrub").value = String(Math.round(pct * 1000));
+  $("playhead").style.left = (pct * 100).toFixed(2) + "%";
+  $("readout").textContent = t.toFixed(2) + " c · " + phaseAt(t);
+  if (fireHaptics) {
+    HAPTICS.forEach((h, i) => { if (t >= h.t && !fired.has(i)) { fired.add(i); click(h.kind); } });
+  }
+}
+
+function buildTrack() {
+  const track = $("track");
+  Array.from(track.querySelectorAll("i,u")).forEach((n) => n.remove());
+  Object.entries(T).forEach(([k, [a, b]]) => {
+    const el = document.createElement("i");
+    el.style.left = ((a / DURATION) * 100).toFixed(2) + "%";
+    el.style.width = (((b - a) / DURATION) * 100).toFixed(2) + "%";
+    el.textContent = k;
+    track.appendChild(el);
+  });
+  HAPTICS.forEach((h) => {
+    const u = document.createElement("u");
+    if (h.kind === "heavy") u.className = "heavy";
+    u.style.left = ((h.t / DURATION) * 100).toFixed(2) + "%";
+    track.appendChild(u);
+  });
+}
+
+function frame(now) {
+  if (!playing) return;
+  const t = ((now - t0) / 1000) * speed;
+  if (t >= DURATION) { setT(DURATION, true); playing = false; $("play").textContent = "Ещё раз"; return; }
+  setT(t, true);
+  raf = requestAnimationFrame(frame);
+}
+function run() {
+  cancelAnimationFrame(raf);
+  fired = new Set();
+  playing = true;
+  $("play").textContent = "Идёт…";
+  t0 = performance.now();
+  raf = requestAnimationFrame(frame);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7. ПАНЕЛЬ
+   ════════════════════════════════════════════════════════════════════════ */
+$("play").addEventListener("click", run);
+$("scrub").addEventListener("input", (e) => {
+  playing = false;
+  cancelAnimationFrame(raf);
+  $("play").textContent = "Прогон";
+  setT((Number(e.target.value) / 1000) * DURATION, false);
+});
+$("speed").addEventListener("change", (e) => { speed = Number(e.target.value); });
+$("tiltMax").addEventListener("input", (e) => {
+  tiltMax = Number(e.target.value);
+  $("tiltOut").textContent = tiltMax + "°";
+  setT((Number($("scrub").value) / 1000) * DURATION, false);
+});
+
+const INKS = {
+  burgundy: { ink: "#d64363", glow: "rgba(214,67,99,0.22)" },
+  foil:     { ink: "#f0e6ea", glow: "rgba(240,230,234,0.18)" },
+  deep:     { ink: "#7d1f33", glow: "rgba(125,31,51,0.30)" },
+};
+$("inkSel").addEventListener("change", (e) => {
+  const v = INKS[e.target.value];
+  document.documentElement.style.setProperty("--ink", v.ink);
+  document.documentElement.style.setProperty("--ink-glow", v.glow);
+});
+
+function setLang(l) {
+  const s = STRINGS[l];
+  document.documentElement.lang = l;
+  $("hlTitle").textContent = s.hl;
+  $("hlSub").textContent = s.hlSub;
+  $("capTitle").textContent = s.cap;
+  $("capSub").textContent = s.capSub;
+  $("inkKicker").textContent = s.kicker;
+  $("faceTitle").textContent = s.face;
+  $("cardStub").textContent = s.stub;
+  $("lblWhen").textContent = s.when;
+  $("lblWhere").textContent = s.where;
+  $("lblSeat").textContent = s.seat;
+  DRUMS[1].values = s.months.slice();
+  drumEls[1].rows.forEach((r, i) => { r.textContent = s.months[i]; });
+  $("faceLabels").innerHTML = s.cols.map((c) => "<span>" + c + "</span>").join("");
+  const dateStr = "18 " + s.months[1] + " · 19:30";
+  $("inkMain").textContent = dateStr;
+  $("cardWhen").textContent = dateStr;
+  buildGrid(l);
+  setT((Number($("scrub").value) / 1000) * DURATION, false);
+}
+$("lang").addEventListener("change", (e) => setLang(e.target.value));
+
+function toggle(id, on, fn) {
+  const b = $(id);
+  b.setAttribute("aria-pressed", String(on));
+  b.addEventListener("click", () => {
+    const next = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(next));
+    fn(next);
+  });
+  fn(on);
+}
+toggle("tRough", true, (on) => ink.classList.toggle("is-rough", on));
+toggle("tSound", false, (on) => { soundOn = on; });
+toggle("tMarks", true, (on) => $("track").classList.toggle("is-hidden", !on));
+toggle("tReduced", false, (on) => {
+  // Что увидит пользователь с prefers-reduced-motion: сразу конечный кадр.
+  if (on) { playing = false; cancelAnimationFrame(raf); setT(DURATION, false); }
+});
+
+/* Съёмка: детерминированный доступ для CDP-скриншотера. */
+window.__stampLab = { duration: DURATION, seek(t) { playing = false; cancelAnimationFrame(raf); setT(t, false); }, phases: T, haptics: HAPTICS };
+
+setLang("ru");
+buildTrack();
+setT(0, false);
+</script>
+</body>
+</html>
