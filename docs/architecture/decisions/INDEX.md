@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 347 entries
+# Decision index — all 348 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-21 | сводный выкат всего `main` на прод и переход прода на миграции (`migrate deploy`), не `db push`; дописана миграция `image_urls` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-21 | chat turn carries several photos: `imageUrls` beside the legacy `imageUrl` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-16 | штамп даты: ставим на экране календаря, и пока только в iOS — Mini App его не получает | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-16 | штамп даты для экрана «время согласовано»: белая печать в стиле рассекреченного архива, карточка только из того, что известно в этот момент | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
