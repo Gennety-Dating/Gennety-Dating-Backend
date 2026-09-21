@@ -465,7 +465,8 @@ P2022/P2021 в главном экране iOS и в каждом матч-пу�
 
 1. **Бакет Supabase `announcements`, ПРИВАТНЫЙ** — создать до первой загрузки медиа
    (Storage → New bucket, public = off). Без него загрузка медиа отвечает 502, остальное
-   работает.
+   работает. **✓ Прод: создан 2026-09-21** (Storage API, `public=false`, проект
+   `ophztqjrabwemkqwidkq`). Демо — ещё нет.
 2. Миграция: `pnpm --filter @gennety/db db:deploy`.
 3. Бот: обычный рестарт. Webapp не меняется.
 
@@ -4451,7 +4452,8 @@ pnpm db:drift-check   # must exit 0 before pm2 restart
 ```
 
 **Create a PRIVATE `voice-prompts` bucket** in the production Supabase project
-(and `voice-prompts-demo` in the demo one). Nothing writes to it while the flag
+(and `voice-prompts-demo` in the demo one). **✓ Prod: created 2026-09-21**
+(Storage API, `public=false`; it did not exist until then). Demo not checked. Nothing writes to it while the flag
 is off and nothing on the Telegram rail ever writes to it at all — a
 Telegram-recorded prompt is a `file_id` and Telegram is its store — but
 `SUPABASE_VOICE_BUCKET` defaults to `voice-prompts`, and account deletion
