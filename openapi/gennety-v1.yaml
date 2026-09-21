@@ -2160,7 +2160,19 @@ paths:
                 text: { type: string, maxLength: 4000 }
                 imageUrl:
                   type: string
-                  description: Path returned by /v1/chat/upload; must be owned by the caller
+                  description: >-
+                    Path returned by /v1/chat/upload; must be owned by the
+                    caller. One photo — the field older builds send. With
+                    `imageUrls` it is the first of them.
+                imageUrls:
+                  type: array
+                  maxItems: 10
+                  items: { type: string }
+                  description: >-
+                    Several photos in ONE turn, in the order the person picked
+                    them (album parity with Telegram, up to 10). Every path
+                    must be owned by the caller — one foreign path refuses the
+                    whole turn. The agent sees all of them and answers once.
                 context:
                   $ref: "#/components/schemas/ChatContextRef"
                   description: >-
@@ -6546,7 +6558,16 @@ components:
           type: string
           enum: [user, assistant, system]
         content: { type: [string, "null"] }
-        imageUrl: { type: [string, "null"] }
+        imageUrl:
+          type: [string, "null"]
+          description: First photo of the turn; `imageUrls` holds all of them.
+        imageUrls:
+          type: array
+          items: { type: string }
+          description: >-
+            Photos of the turn, in the order they were sent. Empty on a message
+            without photos. Rows written before 2026-09-21 have only `imageUrl`,
+            and the server answers with it as a single-item list.
         createdAt: { type: string, format: date-time }
         context:
           $ref: "#/components/schemas/ChatContextSummary"
@@ -6686,6 +6707,12 @@ components:
             signedImageUrl:
               type: [string, "null"]
               description: 5-min TTL render URL; empty string when signing failed
+            signedImageUrls:
+              type: array
+              items: { type: string }
+              description: >-
+                5-min TTL render URLs for `imageUrls`, same order. An entry is
+                an empty string when that one could not be signed.
 
     ChatTopic:
       type: object

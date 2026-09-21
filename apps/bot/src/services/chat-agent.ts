@@ -54,10 +54,14 @@ const CHAT_ADDENDUM = `## This surface: chat with images
 
 The person is in the app's Chat tab, not in Telegram. Two things follow.
 
-1. **They can attach photos.** When an image is clearly a head-and-shoulders
-   portrait of the user themselves, call \`attach_profile_photo\` with the
-   \`imageUrl\` token from their most recent turn. Never attach group photos,
-   screenshots, memes, or photos that are not of them. If unsure, ask first.
+1. **They can attach photos.** A turn may carry several — each image is
+   followed by its own \`[imageUrl=…]\` token, in the order the person picked
+   them. When an image is clearly a head-and-shoulders portrait of the user
+   themselves, call \`attach_profile_photo\` with THAT image's token from their
+   most recent turn; call it once per photo worth attaching. Never attach group
+   photos, screenshots, memes, or photos that are not of them. If unsure, ask
+   first — and when several photos arrive together, answer about them as one
+   set, not one reply per photo.
 2. **A few profile fields live only here.** \`update_profile\` covers what the
    other tools do not — \`preference\` and \`height\`. Everything else has its
    own tool; use that one instead, and never both for the same fact.
@@ -169,7 +173,12 @@ interface ChatCompletionResponse {
 export interface ChatTurnInput {
   userId: string;
   text: string;
-  imageUrl: string | null;
+  /**
+   * Снимки хода, в порядке выбора (до десяти — альбом). Пусто — реплика без
+   * вложения. Первый ложится и в `imageUrl` строки: сборки, которые про
+   * список не знают, читают его.
+   */
+  imageUrls: string[];
   /**
    * The inbox item the person opened the chat from, already checked to be
    * theirs (`resolveChatContextSnapshot`). Stored on the user row; the prompt
@@ -227,7 +236,7 @@ async function runTurnInner(
   input: ChatTurnInput,
   deps: ChatDeps,
 ): Promise<ChatTurnResult> {
-  const { userId, text, imageUrl } = input;
+  const { userId, text, imageUrls } = input;
   const context = input.context ?? null;
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
@@ -247,7 +256,8 @@ async function runTurnInner(
       userId,
       role: "user",
       content: text,
-      imageUrl,
+      imageUrl: imageUrls[0] ?? null,
+      imageUrls,
       ...(context ? { context: { kind: context.kind, id: context.id, title: context.title } } : {}),
     },
   });
@@ -390,20 +400,29 @@ async function buildChatMessages(
     const isLast = i === rows.length - 1;
 
     if (row.role === "user") {
-      if (isLast && row.imageUrl) {
-        const signed = await createChatImageSignedUrl(row.imageUrl);
+      // Строки до 2026-09-21 несут один путь в `imageUrl`, новые — список.
+      const images = row.imageUrls.length > 0 ? row.imageUrls : row.imageUrl ? [row.imageUrl] : [];
+      if (isLast && images.length > 0) {
         const parts: Array<TextPart | ImagePart> = [];
         const txt = row.content ?? "";
         if (txt) parts.push({ type: "text", text: txt });
-        if (signed) {
+        for (const path of images) {
+          const signed = await createChatImageSignedUrl(path);
+          if (!signed) continue;
           parts.push({ type: "image_url", image_url: { url: signed } });
           // Surface the storage path so the model can pass it back into
           // `attach_profile_photo` without us round-tripping a separate URL.
-          parts.push({ type: "text", text: `[imageUrl=${row.imageUrl}]` });
+          // Стоит СРАЗУ ЗА своим снимком: с альбомом иначе не понять, какой
+          // токен к какому кадру.
+          parts.push({ type: "text", text: `[imageUrl=${path}]` });
         }
         out.push({ role: "user", content: parts });
       } else {
-        const suffix = row.imageUrl ? "\n[image attached earlier]" : "";
+        const suffix = images.length > 1
+          ? `\n[${images.length} images attached earlier]`
+          : images.length === 1
+            ? "\n[image attached earlier]"
+            : "";
         out.push({ role: "user", content: (row.content ?? "") + suffix });
       }
     } else if (row.role === "assistant") {

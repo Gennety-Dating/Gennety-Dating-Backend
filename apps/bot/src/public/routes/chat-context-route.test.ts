@@ -145,8 +145,8 @@ describe("POST /v1/chat/voice with a context chip", () => {
 describe("GET /v1/chat/history", () => {
   it("returns the chip on the message it was sent with, and omits it elsewhere", async () => {
     messageFindMany.mockResolvedValue([
-      { id: "b", role: "assistant", content: "Smart casual.", imageUrl: null, context: null, createdAt: new Date("2026-09-13T10:00:01Z") },
-      { id: "a", role: "user", content: "какой дресс-код?", imageUrl: null, context: snapshot, createdAt: new Date("2026-09-13T10:00:00Z") },
+      { id: "b", role: "assistant", content: "Smart casual.", imageUrl: null, imageUrls: [], context: null, createdAt: new Date("2026-09-13T10:00:01Z") },
+      { id: "a", role: "user", content: "какой дресс-код?", imageUrl: null, imageUrls: [], context: snapshot, createdAt: new Date("2026-09-13T10:00:00Z") },
     ]);
 
     const res = await request(app()).get("/v1/chat/history").set(auth());

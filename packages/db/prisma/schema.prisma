@@ -2700,12 +2700,18 @@ enum MessageRole {
 /// `imageUrl` stores the *opaque* Supabase Storage path (e.g.
 /// `{userId}/{ts}.jpg`), never a public URL. Renderers mint short-lived signed
 /// URLs at read time via `createChatImageSignedUrl`.
+///
+/// A turn may carry SEVERAL photos (`imageUrls`, album parity with Telegram,
+/// up to CHAT_IMAGES_MAX). `imageUrl` stays as the first of them: old rows
+/// have only it, and an older client reading history still gets one photo
+/// instead of none. Write both, read `imageUrls` first and fall back.
 model Message {
   id        String      @id @default(uuid()) @db.Uuid
   userId    String      @map("user_id") @db.Uuid
   role      MessageRole
   content   String      @db.Text
   imageUrl  String?     @map("image_url")
+  imageUrls String[]    @default([]) @map("image_urls")
   /// What the person was looking at when they wrote this turn — set only on a
   /// `user` row sent from "Обсудить с агентом" (decision 2026-09-13).
   /// `{ kind: "inbox_item", inboxItemId, title }`.

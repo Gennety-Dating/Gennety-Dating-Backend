@@ -90,6 +90,45 @@ describe("POST /v1/chat/message — imageUrl ownership", () => {
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
+  it("takes several own keys in the order they were sent", async () => {
+    const first = `${CALLER}/1750000000001.jpg`;
+    const second = `${CALLER}/1750000000002.jpg`;
+    const res = await request(buildApp())
+      .post("/v1/chat/message")
+      .send({ imageUrls: [second, first] });
+    expect(res.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ imageUrls: [second, first] }));
+  });
+
+  /// Один чужой путь в списке отказывает ВСЕМУ ходу: пропустить остальные
+  /// значило бы отправить сообщение, которого человек не составлял.
+  it("refuses the whole turn when one key in the list is foreign", async () => {
+    const res = await request(buildApp())
+      .post("/v1/chat/message")
+      .send({ imageUrls: [`${CALLER}/1750000000001.jpg`, `${VICTIM}/1750000000002.jpg`] });
+    expect(res.status).toBe(403);
+    expect(runChatTurn).not.toHaveBeenCalled();
+  });
+
+  it("refuses more than ten photos in one turn", async () => {
+    const many = Array.from({ length: 11 }, (_, i) => `${CALLER}/17500000000${10 + i}.jpg`);
+    const res = await request(buildApp()).post("/v1/chat/message").send({ imageUrls: many });
+    expect(res.status).toBe(413);
+    expect(runChatTurn).not.toHaveBeenCalled();
+  });
+
+  /// Старое поле и список приходят вместе: одиночный снимок встаёт первым и
+  /// не дублируется.
+  it("merges imageUrl into the list without duplicating it", async () => {
+    const one = `${CALLER}/1750000000001.jpg`;
+    const two = `${CALLER}/1750000000002.jpg`;
+    const res = await request(buildApp())
+      .post("/v1/chat/message")
+      .send({ imageUrl: one, imageUrls: [one, two] });
+    expect(res.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ imageUrls: [one, two] }));
+  });
+
   it("refuses a key with an unexpected shape under the caller's own prefix", async () => {
     for (const key of [
       `${CALLER}/nested/1750000000000.jpg`,

@@ -109,7 +109,7 @@ describe("чат приложения ходит в общий набор инс
   it("инструмент меню исполняется общим исполнителем по telegramId", async () => {
     queue = [completion([{ name: "update_bio", args: '{"bio":"новое"}' }]), plain];
 
-    const turn = await runChatTurn({ userId: "u1", text: "поменяй био", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "поменяй био", imageUrls: [] }, { fetchFn });
 
     expect(executeAgentTool).toHaveBeenCalledWith(4242n, "update_bio", { bio: "новое" });
     // Чек пишет код, а не модель, и на языке аккаунта.
@@ -119,7 +119,7 @@ describe("чат приложения ходит в общий набор инс
   it("системный промпт берётся общий, а не свой", async () => {
     queue = [plain];
 
-    await runChatTurn({ userId: "u1", text: "привет", imageUrl: null }, { fetchFn });
+    await runChatTurn({ userId: "u1", text: "привет", imageUrls: [] }, { fetchFn });
 
     expect(buildSystemPrompt).toHaveBeenCalledWith(4242n);
   });
@@ -133,7 +133,7 @@ describe("чат приложения ходит в общий набор инс
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "поменяй дважды", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "поменяй дважды", imageUrls: [] }, { fetchFn });
 
     expect(executeAgentTool).toHaveBeenCalledTimes(1);
     expect(turn.receipts).toHaveLength(1);
@@ -148,7 +148,7 @@ describe("чат приложения ходит в общий набор инс
       plain,
     ];
 
-    await runChatTurn({ userId: "u1", text: "почему нет матчей", imageUrl: null }, { fetchFn });
+    await runChatTurn({ userId: "u1", text: "почему нет матчей", imageUrls: [] }, { fetchFn });
 
     expect(executeAgentTool).toHaveBeenCalledTimes(2);
   });
@@ -156,7 +156,7 @@ describe("чат приложения ходит в общий набор инс
   it("свои инструменты остаются свои и общего исполнителя не зовут", async () => {
     queue = [completion([{ name: "update_profile", args: '{"height":180}' }]), plain];
 
-    await runChatTurn({ userId: "u1", text: "мой рост 180", imageUrl: null }, { fetchFn });
+    await runChatTurn({ userId: "u1", text: "мой рост 180", imageUrls: [] }, { fetchFn });
 
     expect(applyChatProfilePatch).toHaveBeenCalledOnce();
     expect(executeAgentTool).not.toHaveBeenCalled();
@@ -170,7 +170,7 @@ describe("чат приложения ходит в общий набор инс
     });
     queue = [completion([{ name: "offer_cancel_premium" }]), plain];
 
-    const turn = await runChatTurn({ userId: "u1", text: "отмени премиум", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "отмени премиум", imageUrls: [] }, { fetchFn });
 
     expect(turn.action).toEqual({ kind: "premium_cancel_confirm" });
   });
@@ -204,7 +204,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "мне все нравятся", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "мне все нравятся", imageUrls: [] }, { fetchFn });
 
     expect(applyChatProfilePatch).toHaveBeenCalledOnce();
     expect(executeAgentTool).not.toHaveBeenCalled();
@@ -222,7 +222,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: [] }, { fetchFn });
 
     expect(attachChatProfilePhoto).toHaveBeenCalledOnce();
     expect(applyChatProfilePatch).not.toHaveBeenCalled();
@@ -243,7 +243,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: [] }, { fetchFn });
 
     expect(applyChatProfilePatch).not.toHaveBeenCalled();
     expect(turn.receipts).toBeUndefined();
@@ -263,7 +263,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "рост 300", imageUrl: null }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "рост 300", imageUrls: [] }, { fetchFn });
 
     expect(executeAgentTool).toHaveBeenCalledOnce();
     expect(turn.receipts).toEqual(["«О себе» обновлено"]);

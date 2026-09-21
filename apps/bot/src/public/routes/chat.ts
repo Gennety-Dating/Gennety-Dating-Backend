@@ -33,6 +33,12 @@ import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
  * `/message` referencing it. Either field is sufficient; both can be
  * combined for a captioned image.
  *
+ * A turn may carry SEVERAL photos: `imageUrls` (up to `CHAT_IMAGES_MAX`),
+ * album parity with Telegram. `imageUrl` stays accepted and is the first of
+ * them — an older app build keeps working, and its single photo lands in the
+ * same place. The agent sees every photo of the turn and answers ONCE: that
+ * is the whole point of a list instead of N separate messages.
+ *
  * The two spending routes carry `requireAgentAccess` — the same rule the
  * Telegram router and `/v1/assistant` ask. The read routes deliberately do
  * not: showing someone the conversation they already had costs no tokens and
@@ -47,6 +53,8 @@ chatRouter.use(usageGuard);
 
 const CHAT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const CHAT_TEXT_MAX_LENGTH = 4_000;
+/** Сколько снимков несёт один ход — как альбом Telegram. */
+const CHAT_IMAGES_MAX = 10;
 const SIGNED_URL_TTL_S = 300;
 
 /** Аудио: лимит Whisper, а не картиночные 8 МБ. */
@@ -116,11 +124,21 @@ chatRouter.post(
   async (req: Request, res: Response): Promise<void> => {
     const rawText = req.body?.text;
     const rawImageUrl = req.body?.imageUrl;
+    const rawImageUrls = req.body?.imageUrls;
 
     const text = typeof rawText === "string" ? rawText.trim() : "";
     const imageUrl = typeof rawImageUrl === "string" ? rawImageUrl.trim() : "";
+    // Оба поля принимаются вместе: старая сборка шлёт одно, новая — список.
+    // Порядок списка — порядок, в котором человек отмечал снимки; дубли
+    // снимаются, пустые строки отбрасываются.
+    const listed = Array.isArray(rawImageUrls)
+      ? rawImageUrls
+          .filter((value: unknown): value is string => typeof value === "string")
+          .map((value) => value.trim())
+      : [];
+    const imageUrls = [...new Set([...(imageUrl ? [imageUrl] : []), ...listed])].filter(Boolean);
 
-    if (!text && !imageUrl) {
+    if (!text && imageUrls.length === 0) {
       res.status(400).json({ error: "Provide text or imageUrl" });
       return;
     }
@@ -128,7 +146,13 @@ chatRouter.post(
       res.status(413).json({ error: "Text too long" });
       return;
     }
-    if (imageUrl && !isOwnChatImagePath(imageUrl, req.userId!)) {
+    if (imageUrls.length > CHAT_IMAGES_MAX) {
+      res.status(413).json({ error: `At most ${CHAT_IMAGES_MAX} images per message` });
+      return;
+    }
+    // Владение проверяется у КАЖДОГО пути: один чужой в списке — отказ всему
+    // ходу, а не тихая отправка остальных.
+    if (imageUrls.some((path) => !isOwnChatImagePath(path, req.userId!))) {
       res.status(403).json({ error: "Image not owned by caller" });
       return;
     }
@@ -138,7 +162,7 @@ chatRouter.post(
     const turn = await runChatTurn({
       userId: req.userId!,
       text,
-      imageUrl: imageUrl || null,
+      imageUrls,
       context,
     });
 
@@ -215,7 +239,7 @@ chatRouter.post(
     const turn = await runChatTurn({
       userId: req.userId!,
       text: transcript,
-      imageUrl: null,
+      imageUrls: [],
       context,
     });
 
@@ -286,10 +310,18 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       id: row.id,
       role: row.role,
       content: row.content,
+      // Список — источник правды; одиночные поля остаются ПЕРВЫМ снимком для
+      // сборок, которые про список не знают.
       imageUrl: row.imageUrl,
       signedImageUrl: row.imageUrl
         ? (await createChatImageSignedUrl(row.imageUrl, SIGNED_URL_TTL_S)) ?? ""
         : null,
+      imageUrls: rowImages(row),
+      signedImageUrls: await Promise.all(
+        rowImages(row).map(
+          async (path) => (await createChatImageSignedUrl(path, SIGNED_URL_TTL_S)) ?? "",
+        ),
+      ),
       createdAt: row.createdAt.toISOString(),
       // The chip the message was sent with. Omitted — not null — when there is
       // none: the generated Swift client drops a nullable object silently.
@@ -298,6 +330,14 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   );
   res.json({ messages, hasMore });
 });
+
+/**
+ * Снимки строки: список, а у строк до 2026-09-21 — одиночный путь. Одна
+ * точка чтения, потому что читают их и лента, и агент.
+ */
+function rowImages(row: { imageUrl: string | null; imageUrls: string[] }): string[] {
+  return row.imageUrls.length > 0 ? row.imageUrls : row.imageUrl ? [row.imageUrl] : [];
+}
 
 /**
  * GET /v1/chat/topics — the read-only index of past conversations.
