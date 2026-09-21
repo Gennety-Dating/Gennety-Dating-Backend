@@ -179,32 +179,30 @@ pnpm --filter @gennety/db db:generate
 pnpm build
 ```
 
-If `packages/db/prisma/schema.prisma` changed, update the production database
-schema before restarting the bot. The Prisma CLI runs inside `packages/db` and
-does **not** read the root `/opt/gennety/.env`, so `DATABASE_URL` must be passed
-in explicitly — without it `db:push` fails with `P1012: Environment variable not
-found: DATABASE_URL`:
+If `packages/db/prisma/migrations/` gained a migration, apply it to the
+production database before restarting the bot. The Prisma CLI runs inside
+`packages/db` and does **not** read the root `/opt/gennety/.env`, so
+`DATABASE_URL` must be passed in explicitly — without it the CLI fails with
+`P1012: Environment variable not found: DATABASE_URL`:
 
 ```sh
 cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
 export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
-pnpm --filter @gennety/db db:push
+pnpm --filter @gennety/db exec prisma migrate status   # lists what is pending
+pnpm --filter @gennety/db db:deploy
 ```
 
-**There IS a migrations directory now** (`packages/db/prisma/migrations/`,
-added 2026-09-07 by the audit finding "Миграции БД"), but it has **not been
-adopted on prod yet** — that takes three one-time steps, and they are written
-down in [`packages/db/prisma/migrations/README.md`](../../packages/db/prisma/migrations/README.md):
-verify the set against a shadow database, `migrate resolve --applied 0_baseline`,
-then `db:deploy`. Until those run, the workflow below (`db:push`) is still what
-prod uses, and mixing the two would leave the migration table lying about what
-has been applied.
-
-After adoption the deploy step becomes `pnpm --filter @gennety/db db:deploy`
-and `db:push` stops being used against prod at all. The reason to move is not
-tidiness: with `db:push` there is no way back. Rolling the CODE back while the
-schema has already moved is not a degradation, it is a full outage of the
-public API the iOS client depends on.
+**Prod runs on migrations** (`packages/db/prisma/migrations/`). Adoption
+already happened: prod's `_prisma_migrations` shows `0_baseline` resolved and
+the first three migrations applied on **2026-09-08 02:18 UTC** (read from the
+2026-09-21 backup — until then these docs still said "not adopted yet"). So
+**never** run `migrate resolve --applied 0_baseline` again (it fails with P3008)
+and never run `db:push` against prod: it would change the schema outside the
+history and leave the migration table lying. Every `schema.prisma` change ships
+with its migration file in the same commit. The reason is not tidiness: with
+`db:push` there is no way back. Rolling the CODE back while the schema has
+already moved is not a degradation, it is a full outage of the public API the
+iOS client depends on. (Demo still uses `db:push` through `deploy-demo.sh`.)
 
 Before risky schema changes, take a Supabase backup from the Supabase
 dashboard. The droplet still does not have `pg_dump` installed — migrations
@@ -245,7 +243,7 @@ silent P2022 crash-loop above into a clean pre-restart stop:
 
 ```sh
 export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
-pnpm db:drift-check   # exit 0 = match (safe); exit 2 = DRIFT → run db:push, re-check
+pnpm db:drift-check   # exit 0 = match (safe); exit 2 = DRIFT → a migration is missing: write it, db:deploy, re-check (not db:push)
 ```
 
 Restart after the code and any required schema update are both in place:
