@@ -11,6 +11,29 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — обложка места свидания в `/v1/date/state`: `venue.photoUrl` / `venue.thumbnailUrl` (2026-09-22).**
+Коммит `49b8bc35`. **Только код бота:** без миграций (колонка `venue_photo_name`
+давно есть), без env, без новых зависимостей; Mini App не пересобирать — он новые
+поля не читает. Ответ аддитивный: `DateStateVenue` получил два НЕОБЯЗАТЕЛЬНЫХ поля —
+подписанные ссылки на `/v1/venue-change/photo/:token` (тот же подписант, что у
+борда смены места), `null`, когда у места нет фото. Решение — журнал решений,
+2026-09-22. Выкат: обычный рестарт бота.
+
+**Проверка после выката** (JWT любого аккаунта с назначенным свиданием):
+
+```
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/date/state | jq '.match.venue'
+# → есть photoUrl/thumbnailUrl вида https://dating-api.gennety.com/v1/venue-change/photo/<base64url>?w=1200&e=…&sig=…
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<photoUrl из ответа>"   # без заголовка → 200 image/*
+```
+
+**Откат:** `git revert 49b8bc35` и рестарт. **Влияние на iOS:** панель свидания на
+карте показывает фото места; старые сборки поля не декодируют и не замечают.
+**Demo-mode:** своей логики нет — демо назначает место тем же путём V2, поле просто
+появляется в ответе.
+
+---
+
 **PENDING — реферальная программа платит только билетами; приглашение убрано из воронок Premium (2026-09-22).**
 **Бот + СХЕМА + Mini App.** Флаг `REFERRAL_FEATURE_ENABLED` в проде выключен и
 остаётся выключенным — пользователи ничего не увидят, пока основатель его не
