@@ -2029,7 +2029,8 @@ The **Profiler** (`workers/profiler.ts` + `services/profiler.ts`,
 `services/profiler-schedule.ts`) collects gender-specific Q&A *after*
 onboarding to fuel the §Phase 4 icebreakers and wingman hints. It is
 **not** an input to the matching algorithm — purely fuel for icebreakers/hints.
-Telegram-only in v1.
+Telegram-only until 2026-09-22; since then the native app asks the same
+questions too — see **Native app** at the end of this list.
 
 - **Entry.** The first question fires **~10 min after onboarding completes**
   (`PROFILER_ENTRY_DELAY_MS`), armed at `finalize_onboarding`; the scheduler
@@ -2058,8 +2059,9 @@ Telegram-only in v1.
   Reachability mirrors this worker's `platform in (telegram, both)` filter
   rather than the looser `telegramId > 0` test beside it — a "Continue with
   Telegram" account carries a REAL positive id the bot cannot message (§1.1), so
-  that test alone would promise questions that never arrive. Telegram-only, like
-  the Profiler itself; the native client owns its own onboarding shell.
+  that test alone would promise questions that never arrive. The heads-up is
+  Telegram-only; the native client owns its own onboarding shell (and shows the
+  questions on its Today screen, below).
 - **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
   **Every** question — the first of a batch and every follow-up — is delivered
   through the same **native Telegram AI-compose** path (Bot API 10.1 rich
@@ -2386,4 +2388,51 @@ Telegram-only in v1.
   `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;
   generation falls back to `psychologicalSummary` when a user has no answers
   (see §3.7 wingman and §Phase 4 icebreakers).
-- **Off switch.** `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`).
+- **Off switch.** `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`). It stops
+  the Telegram push only; the native pull below has no switch of its own.
+- **Native app (2026-09-22).** The iOS client shows the questions on its Today
+  screen through `GET /v1/me/profiler` + `POST /v1/me/profiler/answer`
+  (`services/profiler-native.ts`, JWT). Before this an app-only account
+  (`platform = mobile`) was never asked anything — the worker filters on
+  `platform in (telegram, both)` — so its dates got icebreakers and wingman hints
+  built from nothing but `psychologicalSummary`.
+  **Telegram pushes, the app pulls.** The worker still owns every
+  Telegram-reachable user; mobile users are served *on demand*: whenever the
+  app asks, a due batch is opened on the spot. "Due" is the worker's rule
+  (`profilerNextAt` has passed — for an account finalized by the onboarding
+  agent, on either surface, that is the usual ~10 min entry delay) plus one
+  extension: a `profilerNextAt` that was **never armed** (null) counts as due.
+  The worker's lazy seed arms legacy rows and completion paths that bypass
+  `finalize_onboarding` only for Telegram-reachable users, so without this an
+  app-only account on such a path would never be asked; with it, it is asked
+  straight away. Batch size, rush mode, the date-negotiation gate and the question
+  order are the worker's. **Local quiet hours are not applied to the pull**: they
+  exist so a push never lands at 3 am, and a person who opened the app is
+  already looking at it. A batch held by the gate is not re-armed either — the
+  first pull after the negotiation ends opens it.
+  **Resume.** A live question is returned as is, whichever surface opened it —
+  that is how the app continues mid-batch after being closed. Nothing expires a
+  mobile user's live question (the worker never looks at them), so it waits for
+  as long as they are away. A `both` user's question — Telegram- or app-opened —
+  still falls to the 6 h stall sweep exactly as before; an app-opened one has no
+  Telegram message, so the sweep has nothing to delete.
+  **Parity.** Every non-delivery step is shared with the chat path
+  (`services/profiler.ts`): the atomic claim on `profilerActiveQuestionId`, the
+  answer upsert (`upsertProfilerAnswer`), the Skip transition, the refusal rule
+  (`isProfilerRefusal` → skip + pause the batch → `outcome: paused`), the batch
+  step (`nextProfilerBatchStep`) and the pause/finish scheduling. So an answer
+  from the app is the same `ProfilerAnswer` row a Telegram answer is, and
+  nothing new fires on it — the icebreakers and the wingman hint read it later,
+  as they always did. Opening a batch is a compare-and-set on the
+  `profilerNextAt` value that was read, so the worker and a parallel request
+  cannot both open one. An app-opened question sets no
+  `profilerAnswerWindowUntil` and no `profilerQuestionMessageId`, so a `both`
+  user's next Telegram message is never captured as the answer to a question
+  the chat never showed. When the app resolves a question the bot had sent, its
+  Skip button in Telegram is stripped (best effort, like the chat path); nothing
+  is ever sent to Telegram from these endpoints.
+  **Text only.** The humour question's meme/reel reading (`acceptsImage`) is a
+  Telegram extra; in the app the question is answered in words, which the paid
+  pre-date meme reveal therefore never offers.
+  Demo mode: no separate behaviour — the demo bot is Telegram-only, and the
+  endpoints run the same code for any JWT the demo API issues.

@@ -1,10 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { profilerQuestionBank } from "@gennety/shared";
+import {
+  PROFILER_ANSWER_WINDOW_MS,
+  PROFILER_STALL_TIMEOUT_MS,
+  profilerQuestionBank,
+} from "@gennety/shared";
 import {
   batchSizeFor,
   isQuietHourLocal,
   isRushMode,
+  nextProfilerBatchStep,
   nextWindowAt,
+  profilerActiveQuestionPatch,
   resolveZone,
   selectNextProfilerQuestion,
   shouldCaptureProfilerAnswer,
@@ -257,6 +263,61 @@ describe("shouldCaptureProfilerAnswer", () => {
   it("never captures without an active question", () => {
     const state = { activeQuestionId: null, answerWindowUntil: OPEN, questionMessageId: 42 };
     expect(shouldCaptureProfilerAnswer(state, { now: NOW, replyToMessageId: 42 })).toBe(false);
+  });
+});
+
+describe("nextProfilerBatchStep", () => {
+  const CYCLE = "2026-W24";
+  const answeredRow = (questionId: string): ProfilerAnswerRow => ({
+    questionId,
+    answerText: "x",
+    skipped: false,
+    skipReturned: false,
+    cycleId: CYCLE,
+  });
+
+  it("asks the next pending question while the batch has room", () => {
+    const step = nextProfilerBatchStep("female", [answeredRow("f_date_spots")], 2, CYCLE);
+    expect(step).toEqual({ kind: "ask", question: expect.objectContaining({ id: "f_comm_style" }) });
+  });
+
+  it("pauses at the batch boundary when the batch is spent but questions remain", () => {
+    expect(nextProfilerBatchStep("female", [], 0, CYCLE)).toEqual({ kind: "boundary" });
+  });
+
+  it("reports exhaustion before the counter — nothing pending finishes even mid-batch", () => {
+    const all = profilerAllAsked().map(answeredRow);
+    expect(nextProfilerBatchStep("female", all, 2, CYCLE)).toEqual({ kind: "exhausted" });
+    expect(nextProfilerBatchStep("female", all, 0, CYCLE)).toEqual({ kind: "exhausted" });
+  });
+
+  it("is exhausted for an unknown gender (empty bank)", () => {
+    expect(nextProfilerBatchStep(null, [], 3, CYCLE)).toEqual({ kind: "exhausted" });
+  });
+});
+
+describe("profilerActiveQuestionPatch", () => {
+  const NOW = new Date("2026-06-10T07:00:00Z");
+
+  it("a Telegram-delivered question anchors its message and opens the free-text window", () => {
+    expect(profilerActiveQuestionPatch("f_humor", 1, NOW, 42)).toEqual({
+      profilerActiveQuestionId: "f_humor",
+      profilerBatchRemaining: 1,
+      profilerAnswerWindowUntil: new Date(NOW.getTime() + PROFILER_ANSWER_WINDOW_MS),
+      profilerQuestionMessageId: 42,
+      profilerNextAt: new Date(NOW.getTime() + PROFILER_STALL_TIMEOUT_MS),
+    });
+  });
+
+  it("an app-delivered question opens no window, so Telegram text is never captured for it", () => {
+    expect(profilerActiveQuestionPatch("f_humor", 2, NOW, null)).toEqual({
+      profilerActiveQuestionId: "f_humor",
+      profilerBatchRemaining: 2,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
+      // Still a stall deadline, never null: the worker's reclaim sweep keys on it.
+      profilerNextAt: new Date(NOW.getTime() + PROFILER_STALL_TIMEOUT_MS),
+    });
   });
 });
 

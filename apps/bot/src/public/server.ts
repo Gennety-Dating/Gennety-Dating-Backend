@@ -58,6 +58,7 @@ import { createProfileVideoRouter } from "./routes/profile-video.js";
 import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
 import { createSpotifyImportRouter } from "./routes/spotify-import.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
+import { createNativeProfilerRouter } from "./routes/profiler-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
@@ -420,6 +421,13 @@ app.use("/v1/me/feedback", (req, res, next) => {
   if (!nativeFeedbackRouter) nativeFeedbackRouter = createNativeFeedbackRouter();
   nativeFeedbackRouter(req, res, next);
 });
+
+// The Profiler for the NATIVE client (§Phase 1b). Telegram pushes each batch
+// from the worker; the app pulls — a due batch opens when it asks, and a live
+// question is handed back as is, so the app resumes mid-batch. Needs no bot API:
+// it never sends a Telegram message (see services/profiler-native.ts). Same
+// more-specific-prefix rule as every `/v1/me/*` mount: before `/v1/me`.
+app.use("/v1/me/profiler", createNativeProfilerRouter());
 
 // Anonymous pre-date chat for the NATIVE client — the JWT twin of the Telegram
 // relay, which is a bot chat session and therefore unreachable from the app.

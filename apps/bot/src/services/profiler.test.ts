@@ -476,6 +476,26 @@ describe("expireStalledProfilerQuestion", () => {
     expect(editMessageReplyMarkup).toHaveBeenCalledWith(123, 77);
   });
 
+  it("reclaims a question the native app opened (no Telegram message) without touching the chat", async () => {
+    // A `both` user: the app put the question up, so no message id was ever
+    // anchored. The worker's sweep still owns its stall deadline.
+    mProfileFind.mockResolvedValueOnce({
+      profilerActiveQuestionId: "f_date_spots",
+      timeZone: "Europe/Kyiv",
+      user: { telegramId: 123n },
+    });
+    mProfileFind.mockResolvedValueOnce({ profilerQuestionMessageId: null });
+    mAnswerFind.mockResolvedValue(null);
+
+    const ok = await expireStalledProfilerQuestion("u1", new Date("2026-06-10T07:00:00Z"), fakeApi);
+
+    expect(ok).toBe(true);
+    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(editMessageReplyMarkup).not.toHaveBeenCalled();
+    expect(mAnswerUpsert.mock.calls[0]![0].create).toMatchObject({ skipped: true });
+    expect(mProfileUpdate.mock.calls.at(-1)![0].data.profilerActiveQuestionId).toBeNull();
+  });
+
   it("never overwrites an answer that landed in the same instant", async () => {
     mProfileFind.mockResolvedValue({
       profilerActiveQuestionId: "f_date_spots",

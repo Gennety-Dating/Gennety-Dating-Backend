@@ -28,7 +28,13 @@ import {
  *      due, deferring out of the user's local quiet hours and while the user is
  *      mid date-negotiation (pitch decision / scheduling / venue selection).
  *
- * Telegram-only in v1 (mobile-first users carry a negative `telegramId`).
+ * Serves Telegram-reachable users only. App-only accounts (`platform = mobile`)
+ * are never touched here: the native app PULLS its batches through
+ * `GET /v1/me/profiler` (`services/profiler-native.ts`), and because nothing
+ * here reclaims their live question, the app resumes it whenever it returns.
+ * A `both` user's question — opened by either surface — still falls to the
+ * reclaim sweep below; an app-opened one has no Telegram message, which
+ * `retireExpiredQuestion` already treats as nothing to delete.
  */
 
 const MAX_SEED_PER_TICK = 100;

@@ -717,6 +717,10 @@ Supported first-class flows:
   `POST /v1/me/feedback/post-date`. The GET has no Telegram equivalent: there
   the T+24h DM carries the link, while `/v1/matches/current` stops returning
   the match once it is `completed`, so the app has nothing to discover it from.
+- **Profiler questions** (Today screen) — `GET /v1/me/profiler` +
+  `POST /v1/me/profiler/answer`. The app pulls the batch the worker would have
+  pushed into the bot chat, and resumes a live question after being closed;
+  rules and parity in `onboarding.md` §Phase 1b → "Native app".
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
   push via `services/push.ts` for the same events that DM Telegram users.
 - `/v1/me/home-location` persists canonical dating city + coordinates for

@@ -1421,6 +1421,105 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/profiler:
+    get:
+      tags: [me]
+      operationId: getProfilerBatch
+      summary: The Profiler question to show now (opens a due batch)
+      description: |
+        PRODUCT_SPEC §Phase 1b. The Profiler asks short questions after
+        onboarding whose answers fuel the pre-date icebreakers and wingman
+        hints — never matching. Telegram PUSHES each batch from the worker;
+        the app PULLS it here. Same bank, same rows, same skip/return rules:
+        `services/profiler-native.ts` shares every non-delivery step with the
+        Telegram path.
+
+        What this returns, in order:
+        - `{}` when the caller is not eligible (not `active`, onboarding not
+          `completed`, or no gender).
+        - **The live question, if there is one — whichever surface opened it.**
+          This is the resume: close the app mid-batch and the same question is
+          waiting next time. For an app-only account nothing ever expires it
+          (the worker does not serve `platform = mobile`); for a `both`
+          account the worker's 6 h stall sweep still records an unanswered
+          question as an implicit skip, exactly as in Telegram.
+        - Otherwise, when a batch is due — the next window has passed (after
+          onboarding: the ~10 min entry delay), or the Profiler was never
+          armed at all, in which case the caller is asked straight away —
+          and the caller is not mid
+          date-negotiation (`proposed` / `negotiating` / `negotiating_venue`),
+          a batch is opened atomically and its first question returned. Batch
+          size is 3, or 2 in rush mode (a drop is imminent). Local quiet hours
+          do NOT apply here: they exist so a push never lands at 3 am, and a
+          person who opened the app is already looking at it.
+        - `{}` otherwise. That is the ordinary state, not an error.
+
+        The text is in `User.language` (English fallback). Poll it when the
+        Today screen appears; it is cheap and writes nothing when nothing is
+        due.
+      responses:
+        "200":
+          description: The current question, or `{}` when nothing is pending
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfilerBatch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/profiler/answer:
+    post:
+      tags: [me]
+      operationId: answerProfilerQuestion
+      summary: Answer, skip, or refuse the live Profiler question
+      description: |
+        Resolves the caller's live question with the same compare-and-set the
+        Telegram chat uses, so exactly one reply — from either surface — ever
+        counts.
+
+        - `skip: true` is the Skip button: the question returns once later in
+          this cycle, then steps aside until the next one. Any `text` sent with
+          it is ignored.
+        - A text that is a refusal ("later", "не хочу", "skip"…, matched on the
+          whole utterance) is recorded as a skip, NOT as an answer, and pauses
+          the rest of the batch to the caller's next local window →
+          `outcome: paused`.
+        - Anything else is stored as the answer (trimmed, capped at 1000
+          characters), exactly as a Telegram answer is. Text only — the humour
+          question's meme reading is a Telegram-only extra.
+
+        Then the batch advances: `next` carries the following question;
+        `done` means the batch is over (or nothing is left this cycle, or a
+        date negotiation started meanwhile) and the next one opens at the
+        caller's next local morning/evening window. Nothing is sent to
+        Telegram; answering does not trigger anything new.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfilerAnswerRequest" }
+      responses:
+        "200":
+          description: Recorded; what the batch does next
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfilerAnswerResult" }
+        "400":
+          description: |
+            `missing_question_id`, or `empty_answer` — neither a non-empty
+            `text` nor `skip: true`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `question_not_active` — `questionId` is not the caller's live
+            question: already answered in Telegram, reclaimed by the stall
+            sweep, or a double tap. Nothing was recorded; re-read
+            `GET /v1/me/profiler`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/music:
     get:
       tags: [music]
@@ -6307,6 +6406,42 @@ components:
           type: string
           format: date-time
           description: Server clock, for the same skew correction the countdowns use.
+
+    ProfilerBatch:
+      type: object
+      description: The current Profiler question for the native app. Absent `question` = nothing pending right now.
+      properties:
+        question:
+          $ref: '#/components/schemas/ProfilerQuestion'
+        remaining:
+          type: integer
+          description: Questions left in the current batch INCLUDING `question` (1 = this is the last one).
+
+    ProfilerQuestion:
+      type: object
+      required: [id, text]
+      properties:
+        id: { type: string, description: 'Bank id, e.g. f_date_spots' }
+        text: { type: string, description: 'Question text in the user language' }
+
+    ProfilerAnswerRequest:
+      type: object
+      required: [questionId]
+      properties:
+        questionId: { type: string }
+        text: { type: string, description: 'Answer text; trimmed and capped at PROFILER_MAX_ANSWER_LEN (1000). Omit when skip=true.' }
+        skip: { type: boolean, description: 'true = the Skip button' }
+
+    ProfilerAnswerResult:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [next, done, paused]
+          description: 'next = `question` is the next one in this batch; done = batch finished (answered or skipped the last one, bank exhausted, or a blocking match started); paused = the text was a refusal ("later", "не хочу"…): recorded as a skip and the rest of the batch waits for the next window, exactly as in Telegram.'
+        question: { $ref: '#/components/schemas/ProfilerQuestion' }
+        remaining: { type: integer, description: 'Questions left INCLUDING `question`' }
 
     ProxyChatState:
       type: object

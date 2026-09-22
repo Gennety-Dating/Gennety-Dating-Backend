@@ -4,9 +4,7 @@ import { prisma, type MatchStatus } from "@gennety/db";
 import {
   t,
   type Language,
-  PROFILER_ANSWER_WINDOW_MS,
   PROFILER_MAX_ANSWER_LEN,
-  PROFILER_STALL_TIMEOUT_MS,
   isRefreshableProfilerQuestion,
   profilerQuestionBank,
   profilerQuestionById,
@@ -25,9 +23,10 @@ import {
   batchSizeFor,
   isRushMode,
   isoWeekKey,
+  nextProfilerBatchStep,
   nextWindowAt,
+  profilerActiveQuestionPatch,
   resolveZone,
-  selectNextProfilerQuestion,
   shouldCaptureProfilerAnswer,
   skipTransition,
   type ProfilerAnswerRow,
@@ -42,7 +41,13 @@ import {
  * Profiler orchestration (PRODUCT_SPEC §Phase 1b) — the IO layer over the pure
  * scheduling/selection logic in `profiler-schedule.ts`. Sends questions in
  * timed batches, persists answers/skips to `ProfilerAnswer`, and advances the
- * `Profile.profiler*` state machine. Telegram-only in v1.
+ * `Profile.profiler*` state machine.
+ *
+ * The native app asks the same questions through `services/profiler-native.ts`
+ * (`GET /v1/me/profiler`, `POST /v1/me/profiler/answer`). Everything that does
+ * not talk to Telegram — the claim, the answer/skip upserts, the pause and
+ * finish scheduling — is exported from here and shared, so the two surfaces
+ * write the same rows the same way; only delivery differs.
  *
  * The data fuels icebreakers + hints (see `wingman-hint.ts` and
  * `date-lifecycle.ts`); it is NOT consumed by the matching algorithm.
@@ -101,7 +106,7 @@ export function profilerCycleId(now: Date): string {
   return isoWeekKey(now);
 }
 
-interface ProfilerUserState {
+export interface ProfilerUserState {
   userId: string;
   telegramId: bigint;
   gender: "male" | "female" | null;
@@ -112,7 +117,8 @@ interface ProfilerUserState {
   answers: ProfilerAnswerRow[];
 }
 
-async function loadState(userId: string): Promise<ProfilerUserState | null> {
+/** The user's Profiler state plus every answer row. Shared with the native path. */
+export async function loadProfilerState(userId: string): Promise<ProfilerUserState | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -214,9 +220,10 @@ async function sendQuestion(
  * Best-effort removal of the Skip keyboard from a question that was **resolved**
  * (answered, or explicitly skipped). Leaves the question text in place — it is
  * the context for the answer sitting right below it, and the user knows they
- * dealt with it. Never throws.
+ * dealt with it. Never throws. Also used by the native path when the app
+ * resolves a question the bot had sent to Telegram.
  */
-async function stripQuestionKeyboard(
+export async function stripQuestionKeyboard(
   api: Api<RawApi>,
   telegramId: bigint,
   messageId: number | null,
@@ -271,14 +278,22 @@ async function sendOneFromBatch(
   wait?: Wait,
 ): Promise<"sent" | "paused" | "done"> {
   const cycleId = profilerCycleId(now);
-  if (state.profilerBatchRemaining <= 0) {
-    return pauseOrFinish(api, state, now, cycleId, wait);
-  }
-  const question = selectNextProfilerQuestion(state.gender, state.answers, cycleId);
-  if (!question) {
+  const step = nextProfilerBatchStep(
+    state.gender,
+    state.answers,
+    state.profilerBatchRemaining,
+    cycleId,
+  );
+  if (step.kind === "exhausted") {
+    // All questions exhausted — completion is SILENT per spec §Phase 1b
+    // (no "profile complete" ping). Do NOT play a status here.
     await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
+  if (step.kind === "boundary") {
+    return pauseAtBatchBoundary(api, state, now, wait);
+  }
+  const question = step.question;
   // Every question — first of a batch ("open") or a follow-up ("advance") —
   // goes through the same native AI-compose beat; only the status differs.
   const messageId = await sendQuestion(api, state.telegramId, question, state.language, mode, wait);
@@ -298,48 +313,32 @@ async function sendOneFromBatch(
   }
   await prisma.profile.update({
     where: { userId: state.userId },
-    data: {
-      profilerActiveQuestionId: question.id,
-      profilerBatchRemaining: state.profilerBatchRemaining - 1,
-      // The question owns free text only for this short window; after it (or
-      // after the user does anything else) plain text belongs to the menu
-      // agent again. See `shouldCaptureProfilerAnswer`.
-      profilerAnswerWindowUntil: new Date(now.getTime() + PROFILER_ANSWER_WINDOW_MS),
-      profilerQuestionMessageId: messageId,
-      // NOT null: while a question is active, `profilerNextAt` carries its
-      // stall deadline so `expireStalledProfilerQuestion` can reclaim a user
-      // who simply never replied. The dispatch sweep is unaffected — it also
-      // requires `profilerActiveQuestionId: null`.
-      profilerNextAt: new Date(now.getTime() + PROFILER_STALL_TIMEOUT_MS),
-    },
+    // The question owns free text only for a short window after it lands
+    // (`shouldCaptureProfilerAnswer`); `profilerNextAt` carries its stall
+    // deadline so `expireStalledProfilerQuestion` can reclaim a user who simply
+    // never replied. The dispatch sweep is unaffected — it also requires
+    // `profilerActiveQuestionId: null`. See `profilerActiveQuestionPatch`.
+    data: profilerActiveQuestionPatch(
+      question.id,
+      state.profilerBatchRemaining - 1,
+      now,
+      messageId,
+    ),
   });
   return "sent";
 }
 
-async function pauseOrFinish(
+/**
+ * The batch is spent but questions are still pending: release the active slot,
+ * pause to the next local window, and narrate the boundary in the chat.
+ */
+async function pauseAtBatchBoundary(
   api: Api<RawApi>,
   state: ProfilerUserState,
   now: Date,
-  cycleId: string,
   wait?: Wait,
-): Promise<"paused" | "done"> {
-  const pending = selectNextProfilerQuestion(state.gender, state.answers, cycleId);
-  if (!pending) {
-    // All questions exhausted — completion is SILENT per spec §Phase 1b
-    // (no "profile complete" ping). Do NOT play a status here.
-    await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
-    return "done";
-  }
-  await prisma.profile.update({
-    where: { userId: state.userId },
-    data: {
-      profilerActiveQuestionId: null,
-      profilerAnswerWindowUntil: null,
-      profilerQuestionMessageId: null,
-      profilerBatchRemaining: 0,
-      profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
-    },
-  });
+): Promise<"paused"> {
+  await pauseBatchUntilNextWindow(state.userId, now, state.timeZone);
   // Batch boundary (not completion): narrate that the answers were folded into
   // the profile so the user feels the agent is actively learning between drops.
   // Persisted final line (no delete) — it IS the between-batch message.
@@ -366,7 +365,7 @@ async function pauseOrFinish(
  * it is answered or skipped, `selectNextProfilerQuestion` would hand back the
  * very question still sitting unanswered on screen — sending it twice.
  */
-async function claimActiveQuestion(
+export async function claimActiveQuestion(
   userId: string,
   questionId: string,
 ): Promise<{ claimed: boolean; messageId: number | null }> {
@@ -585,7 +584,7 @@ async function finish(userId: string): Promise<void> {
  * worker's existing per-tick limits, and every current gender bank guarantees
  * at least one refreshable question (see profiler-questions.test.ts).
  */
-async function finishOrAwaitNextCycle(
+export async function finishOrAwaitNextCycle(
   userId: string,
   gender: "male" | "female" | null,
   now: Date,
@@ -625,13 +624,13 @@ export async function startProfilerBatch(
   now: Date = new Date(),
   wait?: Wait,
 ): Promise<"sent" | "paused" | "done"> {
-  const state = await loadState(userId);
+  const state = await loadProfilerState(userId);
   if (!state) return "done";
   if (state.telegramId <= 0n) return "done";
   return dispatchToChat(Number(state.telegramId), async () => {
     // Re-read inside the queue: a reply may have landed while we waited, which
     // would have opened its own question (active != null) or finished the run.
-    const fresh = await loadState(userId);
+    const fresh = await loadProfilerState(userId);
     if (!fresh) return "done";
     if (fresh.activeQuestionId) return "paused";
     const rush = isRushMode(now, getNextBatchDate(now));
@@ -684,38 +683,7 @@ export async function recordProfilerAnswer(
   const claim = await claimActiveQuestion(userId, questionId);
   if (!claim.claimed) return false;
 
-  // Every field is written on every path, `null` included: a re-answer that
-  // arrives as plain text must CLEAR a pointer and a source URL left by an
-  // earlier picture, or the reveal would sell media the current answer is no
-  // longer about.
-  const media = {
-    memeFileId: options.media?.fileId ?? null,
-    memeKind: options.media?.kind ?? null,
-    memeSourceUrl: options.media?.sourceUrl ?? null,
-  };
-
-  await prisma.profilerAnswer.upsert({
-    where: { userId_questionId: { userId, questionId } },
-    create: {
-      userId,
-      questionId,
-      priority: question.priority,
-      answerText,
-      answeredAt: now,
-      skipped: false,
-      skipReturned: false,
-      cycleId,
-      ...media,
-    },
-    update: {
-      answerText,
-      answeredAt: now,
-      skipped: false,
-      skipReturned: false,
-      cycleId,
-      ...media,
-    },
-  });
+  await upsertProfilerAnswer(userId, question, answerText, now, cycleId, options.media);
 
   if (shouldReactToProfilerAnswer(questionId) && options.reactionTarget) {
     await reactToMessage(api, options.reactionTarget, MESSAGE_REACTION.like);
@@ -791,7 +759,7 @@ export async function recordProfilerRefusal(
 
   await upsertProfilerSkip(userId, question, cycleId);
 
-  const state = await loadState(userId);
+  const state = await loadProfilerState(userId);
   if (!state) return false;
 
   // The question is resolved, so its Skip button must go — the same rule an
@@ -814,8 +782,57 @@ export async function recordProfilerRefusal(
   return true;
 }
 
+/**
+ * Write an answer to a question: the text, the time, the drop cycle, and the
+ * skip flags reset. Shared by the Telegram path (`recordProfilerAnswer`) and the
+ * native app (`services/profiler-native.ts`), which is what keeps the rows the
+ * icebreaker / wingman generators read identical whichever surface asked.
+ *
+ * `answerText` must already be trimmed and capped (`PROFILER_MAX_ANSWER_LEN`).
+ * Every media field is written on every path, `null` included: a re-answer that
+ * arrives as plain text must CLEAR a pointer and a source URL left by an
+ * earlier picture, or the reveal would sell media the current answer is no
+ * longer about.
+ */
+export async function upsertProfilerAnswer(
+  userId: string,
+  question: ProfilerQuestion,
+  answerText: string,
+  now: Date,
+  cycleId: string,
+  media?: { fileId: string; kind: "photo" | "sticker"; sourceUrl?: string },
+): Promise<void> {
+  const mediaFields = {
+    memeFileId: media?.fileId ?? null,
+    memeKind: media?.kind ?? null,
+    memeSourceUrl: media?.sourceUrl ?? null,
+  };
+  await prisma.profilerAnswer.upsert({
+    where: { userId_questionId: { userId, questionId: question.id } },
+    create: {
+      userId,
+      questionId: question.id,
+      priority: question.priority,
+      answerText,
+      answeredAt: now,
+      skipped: false,
+      skipReturned: false,
+      cycleId,
+      ...mediaFields,
+    },
+    update: {
+      answerText,
+      answeredAt: now,
+      skipped: false,
+      skipReturned: false,
+      cycleId,
+      ...mediaFields,
+    },
+  });
+}
+
 /** Write the one-time-return skip state for a question (`skipTransition`). */
-async function upsertProfilerSkip(
+export async function upsertProfilerSkip(
   userId: string,
   question: ProfilerQuestion,
   cycleId: string,
@@ -851,7 +868,7 @@ async function upsertProfilerSkip(
  * Release the active question and pause the rest of the batch to the user's
  * next local window. Shared by the date-negotiation gate and the refusal path.
  */
-async function pauseBatchUntilNextWindow(
+export async function pauseBatchUntilNextWindow(
   userId: string,
   now: Date,
   timeZone: string | null,
@@ -876,7 +893,7 @@ async function advanceAfterReply(
   wait?: Wait,
 ): Promise<boolean> {
   // Re-read state AFTER the upsert so selection sees the just-recorded row.
-  const state = await loadState(userId);
+  const state = await loadProfilerState(userId);
   if (!state) return false;
   // If a date negotiation started while this batch was mid-flight, don't fire
   // the next question into the planning flow — the answer just given is saved,

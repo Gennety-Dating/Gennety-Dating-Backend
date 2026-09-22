@@ -11,10 +11,12 @@
 import {
   CADENCE,
   DEFAULT_TIME_ZONE,
+  PROFILER_ANSWER_WINDOW_MS,
   PROFILER_BATCH_SIZE_NORMAL,
   PROFILER_BATCH_SIZE_RUSH,
   PROFILER_EVENING_HOUR,
   PROFILER_MORNING_HOUR,
+  PROFILER_STALL_TIMEOUT_MS,
   isRefreshableProfilerQuestion,
   profilerQuestionBank,
   type ProfilerQuestion,
@@ -239,6 +241,77 @@ export function selectNextProfilerQuestion(
     return q;
   }
   return null;
+}
+
+/**
+ * What a batch does next, once a question is resolved (answered / skipped) —
+ * the one decision both delivery surfaces share: the Telegram path
+ * (`sendOneFromBatch` in `profiler.ts`) and the native app
+ * (`services/profiler-native.ts`) differ only in how they carry it out.
+ *
+ *   - `exhausted` — nothing is pending in this drop cycle at all. Checked
+ *     FIRST, whatever the batch counter says, exactly as the Telegram path
+ *     always did (a spent batch with nothing pending finishes rather than
+ *     pausing).
+ *   - `boundary`  — the batch is spent (`batchRemaining` ≤ 0) but questions are
+ *     still pending: pause to the user's next local window.
+ *   - `ask`       — put `question` in front of the user.
+ *
+ * `batchRemaining` is `Profile.profilerBatchRemaining`: questions left in the
+ * batch NOT counting the one being resolved (a batch of 3 stores 2 while its
+ * first question is live).
+ */
+export type ProfilerBatchStep =
+  | { kind: "ask"; question: ProfilerQuestion }
+  | { kind: "boundary" }
+  | { kind: "exhausted" };
+
+export function nextProfilerBatchStep(
+  gender: Gender | null,
+  rows: ProfilerAnswerRow[],
+  batchRemaining: number,
+  currentCycleId: string,
+): ProfilerBatchStep {
+  const question = selectNextProfilerQuestion(gender, rows, currentCycleId);
+  if (!question) return { kind: "exhausted" };
+  if (batchRemaining <= 0) return { kind: "boundary" };
+  return { kind: "ask", question };
+}
+
+/**
+ * The `Profile` patch that makes `questionId` the live question — one shape for
+ * both surfaces, so they cannot disagree about what "a question is out" means.
+ *
+ * `profilerNextAt` carries the question's **stall deadline**
+ * (`PROFILER_STALL_TIMEOUT_MS`), never null: the worker's reclaim sweep keys on
+ * it (see `expireStalledProfilerQuestion`).
+ *
+ * `telegramMessageId` is the Telegram message that carries the question, or
+ * `null` when the question was put in front of the user by the native app. The
+ * implicit free-text window (`profilerAnswerWindowUntil`) opens ONLY for a
+ * Telegram-delivered question: a question the chat never showed must not turn
+ * the user's next Telegram message into its answer.
+ */
+export function profilerActiveQuestionPatch(
+  questionId: string,
+  batchRemainingAfter: number,
+  now: Date,
+  telegramMessageId: number | null,
+): {
+  profilerActiveQuestionId: string;
+  profilerBatchRemaining: number;
+  profilerAnswerWindowUntil: Date | null;
+  profilerQuestionMessageId: number | null;
+  profilerNextAt: Date;
+} {
+  return {
+    profilerActiveQuestionId: questionId,
+    profilerBatchRemaining: batchRemainingAfter,
+    profilerAnswerWindowUntil:
+      telegramMessageId === null ? null : new Date(now.getTime() + PROFILER_ANSWER_WINDOW_MS),
+    profilerQuestionMessageId: telegramMessageId,
+    profilerNextAt: new Date(now.getTime() + PROFILER_STALL_TIMEOUT_MS),
+  };
 }
 
 // ---------------------------------------------------------------------------
