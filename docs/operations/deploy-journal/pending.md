@@ -11,6 +11,48 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Live Activity смены места на iOS: `venue_change` (2026-09-22).**
+Коммиты `e7bb0906` (таблица + миграция), `633ee715` (регистрация токенов, OpenAPI),
+`9b1cb060` (карточка). **Миграция + рестарт бота:** `20260922180000_venue_change_activity` —
+чисто аддитивная (новая таблица `venue_change_activities`, старый код её не читает), через
+`db:deploy` ДО рестарта. Без env, без новых зависимостей; Mini App не пересобирать. Если код
+всё же поднимется раньше миграции — синхронизация карточек пишет предупреждение в лог
+(P2021) и ничего не ломает: хуки доски «выстрелил и забыл», развёртка в тике обёрнута `.catch`.
+Решение — журнал решений, 2026-09-22.
+
+**Что изменится на проде сразу:** ничего, пока iOS-сборка не регистрирует токены
+`activityType: venue_change`. Когда начнёт — на каждую запись доски смены места (сердечко,
+согласие, keep, пожелание, отказ, любая оплата, лапс/откат) сервер пересчитает обе
+карточки и пошлёт push-to-start / update / end через APNs; тик `date-lifecycle` раз в 2 мин
+гасит карточки после отсечки T − 5h и перезапускает те, что живут дольше 7,5 ч. Работает
+только при `VENUE_CHANGE_FEATURE_ENABLED=true` (флаг выключен → живые карточки гаснут).
+
+**Проверка после выката** (JWT своего тестового аккаунта):
+
+```
+pnpm --filter @gennety/db db:migrate:status          # → Database schema is up to date
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" \
+  -H 'Content-Type: application/json' -d '{"activityType":"venue_change","kind":"start","token":"probe"}' \
+  https://dating-api.gennety.com/v1/me/live-activity-token                          # → 200
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -H "Authorization: Bearer $JWT" \
+  https://dating-api.gennety.com/v1/me/live-activity-token/venue_change/start       # → 204
+```
+
+Насквозь — только с iOS-сборкой, которая умеет `VenueChangeActivity`: два тестовых аккаунта в
+одной паре, сердечко с одного → у второго на экране блокировки «{имя} предлагает …» за секунды,
+у первого — «Ждём ответ по месту». Живые карточки: `select count(*) from venue_change_activities;`.
+
+**Откат:** `git revert 9b1cb060 633ee715` и рестарт. Таблицу не трогать — старый код её не
+читает; уже запущенные карточки сами станут «устаревшими» в свой срок (`stale-date`) и умрут
+на 8-м часу. `e7bb0906` можно оставить (одна пустая таблица).
+**Влияние на iOS:** новое значение `venue_change` в enum `activityType` (регистрация и удаление
+токена) — клиент перегенерировать; старые сборки не затронуты. Новая сборка на старом сервере
+получит 400 на регистрацию `venue_change` — клиент должен молча это пережить.
+**Demo-mode:** своей логики нет — демо-бот телеграмный, токенов Live Activity у его людей нет,
+каждая синхронизация — один поиск токена и ни одного пуша; выкатывается отдельно, как всегда.
+
+---
+
 **PENDING — медиана времени ответа в дашборде здоровья снова считается (2026-09-22).**
 Коммит `07d424fa`. **Только код бота:** без миграций, без env; Mini App не пересобирать.
 `medianResponseSeconds` (`admin/utils/user-health-source.ts`) с `a232ee20` (09-07) падал на
