@@ -1,9 +1,17 @@
 name: CI
 
+# Docs-only commits (the deploy journal, decisions) cannot break the build:
+# nothing under apps/ or packages/ reads a .md file.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 permissions:
   contents: read
@@ -38,11 +46,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
+          # Same major as the droplet (docs/operations/environments.md).
           node-version: 20
 
       - name: Enable pinned pnpm
@@ -58,9 +67,6 @@ jobs:
 
       - name: Check tracked secrets
         run: pnpm security:secrets
-
-      - name: Audit dependencies
-        run: pnpm security:audit
 
       - name: Lint
         run: pnpm lint
@@ -79,3 +85,27 @@ jobs:
 
       - name: Run PostgreSQL integration tests
         run: pnpm test:integration
+
+  # A new advisory turns this red with no change in the repo (72 of the 139
+  # failed runs between 2026-08-24 and 2026-09-22), so it reports without
+  # failing the run. pnpm audit reads the lockfile alone — no install needed.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.0 --activate
+
+      - name: Audit dependencies
+        run: pnpm security:audit

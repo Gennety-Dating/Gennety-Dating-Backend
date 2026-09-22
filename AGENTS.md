@@ -68,7 +68,8 @@ docs/           ALL project documentation (see routing below)
 
 ## Git journal workflow (single-branch)
 
-Solo repo, no CI, no reviewers. Work on `main`; commit and push after **every**
+Solo repo, no reviewers. CI (`.github/workflows/ci.yml`) runs on pushes to `main`
+but gates nothing — a red run is a signal to look. Work on `main`; commit and push after **every**
 change, however small — `git add -A`, scoped `git commit`, `git push origin HEAD`.
 This is pre-authorised: do not ask. Only a turn that changed no file skips it.
 Never create branches; roll back with `git revert`. Full mechanics:

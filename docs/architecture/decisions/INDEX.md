@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 354 entries
+# Decision index — all 355 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-22 | CI оставлен и починен, не удалён: `pnpm audit` — отдельная джоба с `continue-on-error` (гейт аудита остаётся в preflight деплоя), docs-only коммиты CI не запускают, actions v7 (Node 24); время в промпте агента — явно в `RENDER_TZ` (на UTC-хосте было на 3 ч раньше карточки) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | вопросы Profiler'а в iOS: `GET /v1/me/profiler` + `POST /v1/me/profiler/answer`; приложение тянет батч само (null `profilerNextAt` = пора, без тихих часов), живой вопрос ждёт возвращения; телеграм-логика общая, в Телеграм ничего не шлётся; пуш о батче и мем в ответ — не сделаны | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | галерея профиля места «Городского гида» — до десяти фото (`SHOWCASE_GALLERY_MAX` 5 → 10, слоты 1…9, кэш фото 96 МБ); карточка на карте показывает первые пять; без миграции — каталог и так хранит десять | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | обложка места свидания в `/v1/date/state`: `venue.photoUrl`/`thumbnailUrl` — подписанные ссылки борда смены места из `venuePhotoName` (необязательные поля); запасное фото из каталога сознательно не сделано | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
