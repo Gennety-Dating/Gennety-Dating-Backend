@@ -62,8 +62,13 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 убрана (`excludedPlaces` манифеста, `approved.json`), так что импорт её не
 вернёт. Откат этой записи: тот же `updateMany` с `active: true`.
 
-Выкат: `git archive` коммита → rsync в `/opt/gennety` по исключениям ранбука
-(копия `/opt/gennety-prev-<ts>` до записи) → `pm2 restart gennety-bot` → health.
+Выкат: `git archive 4315bc66` — **ровно этот коммит, не свежий `main`**: следом
+в `main` лёг `5bd5dcfc` (реферальная программа другой сессии со своей миграцией),
+и её выкат — решение её владельца; парижская La Coupole в `7321c620` — только
+файлы каталога, боту в рантайме не нужны. Скрипт основателя:
+`bash ~/gennety-backups/deploy-showcase.sh` (сухой rsync с остановкой на любом
+удалении → копия `/opt/gennety-prev-<ts>` → rsync `--checksum` → drift-гейт →
+`pm2 restart gennety-bot` → health с автооткатом → La Coupole off → проверка витрины).
 `pnpm install` и `db:deploy` не нужны (lockfile и схема не менялись); drift-гейт —
 по ранбуку.
 
