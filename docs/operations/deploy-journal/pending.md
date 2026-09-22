@@ -11,7 +11,82 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING — чат: один ход несёт до десяти снимков (`imageUrls`), 2026-09-21.**
+**Deployed 2026-09-22 — сводный выкат всего `main` (`28313fb6`) на прод, 00:31–00:57 UTC.**
+**Бот + СХЕМА + Mini App.** Каждый блок ниже с пометкой «Deployed 2026-09-22 (was
+PENDING; сводный выкат `28313fb6`)» уехал этим выкатом — живо состояние `main` на
+`28313fb6`. **Демо НЕ выкачено.** Решение и отступления: `docs/architecture/decisions/`
+→ 2026-09-21 и 2026-09-22.
+
+1. **Страховка.** JSON-бэкап всех 54 таблиц (`scripts/dump-prod-backup.mjs`) у
+   основателя на Mac, вне репо: `~/gennety-backups/prod-backup-2026-09-21T23-06-31Z.json`.
+   Копия прод-дерева для отката: `/opt/gennety-prev-20260922` (с `node_modules`,
+   `.env`, `keys/`).
+2. **Код.** `git archive 28313fb6` → rsync с исключениями ранбука. Удалён ровно один
+   файл — `apps/webapp/src/ticket/MockPayment.tsx` (снят в `983b7f1e`).
+3. **Дроплет.** `pnpm install --frozen-lockfile`, `db:generate`, сборка Mini App —
+   **не** `pnpm build` (ранбук, «Not `pnpm build` on the droplet»).
+4. **База.** `db:deploy` — 8 миграций (`20260908120000_virality_tracking` …
+   `20260921120000_message_image_urls`), `migrate status` — up to date. До наката
+   чтением проверено: ни одного их объекта в базе не было (`proxy_messages.reaction`
+   тоже).
+5. **Drift-гейт** остановил первый прогон до рестарта: в базе пять чужих таблиц
+   `canvas_*` с данными. Не удалены; `db:drift-check` теперь их терпит
+   (`FOREIGN_TABLES`), любое другое расхождение — по-прежнему DRIFT.
+6. **Окружение.** `.env` не менялся (снимок `.env.bak.20260922-003108`), сверен по
+   именам со всеми 23 проверками старта нового кода — проходят. `gennety-bot`
+   пересоздан с `--kill-timeout 30000` (дренаж 20 с).
+7. **Mini App** собран на дроплете → `/var/www/dating-app`; прежний —
+   `/var/www/dating-app.prev-20260922-005609`.
+
+**Проверено после выката:** через 2,5 ч `online`, 0 рестартов; в логе
+`Bot @gennetybot started`, API на `127.0.0.1:3100`/`3101`, `Announcement fan-out
+scheduled`, `Venue re-validation scheduled`; `/v1/ping` — ok;
+`/v1/venues/showcase`, `/v1/inbox`, `/v1/frequent-places` — 401 (до выката 404);
+шесть страниц Mini App и `date-terminal.html` — 200; `radar/a/{fp1,ma3,fa2,mp1}.jpg`
+— `image/jpeg`. `WEBAPP_URL` — https; `PUBLIC_BASE_URL` не задан (дефолт
+`https://dating-api.gennety.com`). `curated_venues.city_key` заполнен у всех 1712
+(Киев — 1278), бэкфилл города не нужен.
+
+**Не проверено — нужен телефон или JWT:** витрина с местами `ua:kyiv` в приложении,
+несколько снимков в одном ходе чата, инбокс, часто посещаемые места, email-OTP и
+429, прокси-чат после отмены — по пунктам «проверка после выката» в блоках ниже.
+
+**Откат кода** (миграции остаются — они только добавляют):
+`pm2 delete gennety-bot`, `mv /opt/gennety /opt/gennety-failed-<ts>`,
+`cp -a /opt/gennety-prev-20260922 /opt/gennety`, затем команда пересоздания из
+ранбука; Mini App — `rsync -a --delete /var/www/dating-app.prev-20260922-005609/
+/var/www/dating-app/`. **Безопасен только до первого удаления аккаунта** (A13): после
+него в журналах покупок и жалобах появятся строки с `NULL` в связях, которые старый
+Prisma-клиент считает обязательными.
+
+**Осталось — решения и руки основателя:**
+- Чьи пять таблиц `canvas_*` в прод-базе (их нет ни в коде, ни в миграциях).
+- Политика конфиденциальности: `LEGAL_DOCS_VERSION` поднят в коде и уже пишется в
+  новые согласия — опубликовать §4/§11/§16 на сайте (`src/app/privacy/page.tsx`) и
+  `legal/privacy-policy.md`.
+- Twilio: Fraud Guard и ограничения по странам (A13, кодом не делается).
+- История активности: `pnpm activity:backfill` (пробный) → `pnpm
+  activity:backfill:apply` — `chat_events` хранятся 30 дней, окно закрывается.
+- Флаги, выключенные в коде: `SHORT_VIDEO_LINKS_ENABLED`, `MEME_REVEAL_ENABLED`;
+  тёмные по замыслу: `VOICE_PROMPT_ENABLED`, `PRIME_TIME_APPSTORE_ENABLED`,
+  `PROFILE_MUSIC_ENABLED`, `HDYHAU_SURVEY_ENABLED`, `EVENTS_FEATURE_ENABLED`,
+  `PRIME_TIME_ENABLED`, `CAMPUS_DROP_ENABLED`.
+- Через ~10 ночей, когда `photo_refs` Киева заполнятся: `VENUE_REVALIDATION_BATCH_SIZE=10`.
+- Внешний админ-дашборд должен переживать `reporter` / `reported` / `userId` = `null`.
+- Контрольное удаление тестового аккаунта — чистка во всех четырёх бакетах.
+
+**Демо — отдельным выкатом, не сделано:** `scripts/deploy-demo.sh` не запускать из
+воркtree (корневой `node_modules` там симлинк — rsync заменит им настоящий); в
+скрипте `pnpm build` (память дроплета) и `db:push` — решить push или migrate для
+демо-базы; бакеты `voice-prompts-demo` и объявлений в демо-Supabase и их явные имена
+в `.env.demo`; пересоздать `gennety-demo` с `--kill-timeout 30000`; `pnpm demo:seed
+-- --photos=<dir>` для восьми новых кукол.
+
+**Как выкатывали:** записи на прод автоклассификатор Claude Code агенту не дал —
+скрипты (стоп до рестарта при любой ошибке, автооткат по health-гейту) запускал
+основатель через `!`; агент готовил их и разбирал вывод.
+
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — чат: один ход несёт до десяти снимков (`imageUrls`), 2026-09-21.**
 **Бот + СХЕМА.** Схема: колонка `messages.image_urls` (`text[]`, дефолт `{}`) —
 добавление, ничего не переписывает и не удаляет. Webapp и переменные окружения
 не меняются.
@@ -41,7 +116,7 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
-**PENDING — брифинг перед свиданием уходит с экранов в T+2ч: верхняя граница гейта `iceBreakers` / `wingmanHint` (2026-09-15).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — брифинг перед свиданием уходит с экранов в T+2ч: верхняя граница гейта `iceBreakers` / `wingmanHint` (2026-09-15).**
 **Только бот (публичный API).** Коммит `74c642cc`. Схема, миграции, webapp и переменные окружения не
 меняются. `/v1/matches/current` отдаёт `iceBreakers: []` и `wingmanHint: null` начиная с
 `agreedTime + 2ч` (`preDateBriefingVisibility`); раскрытие подсказки в T-1.5ч прежнее. Telegram-рассылка
@@ -64,7 +139,7 @@ Gennety-iOS). До выката карточка «Темы на вечер» п
 
 ---
 
-**PENDING — маскот входного экрана: кисти за спиной, пока он спиной (2026-09-15).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — маскот входного экрана: кисти за спиной, пока он спиной (2026-09-15).**
 **Только webapp.** Коммит `47cfb812`. Схема, миграции, бот и переменные окружения не меняются.
 Меняется только порядок слоёв в SVG маскота (`apps/webapp/src/mascot-welcome.ts`): в петле и
 в приветствии до поворота белые кисти рисуются ЗА телом, с кадра поворота — перед ним, как раньше.
@@ -93,7 +168,7 @@ Gennety-iOS), своя запись; контракт OpenAPI не менялс�
 
 ---
 
-**PENDING — Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` (2026-09-14).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` (2026-09-14).**
 **Схема Prisma не меняется, миграций нет.** Новые переменные окружения, обе необязательные:
 `PRIME_TIME_APPSTORE_ENABLED` (по умолчанию `false` — выкатывается ВЫКЛЮЧЕННЫМ) и
 `PRIME_TIME_APPSTORE_PRODUCT_ID` (по умолчанию `prime_time_pass`). Код: новый маршрут и сервис
@@ -134,7 +209,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT"
 
 ---
 
-**PENDING — голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра (2026-09-14).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра (2026-09-14).**
 **Схема Prisma не меняется, миграций нет, новых переменных окружения нет.** Только код:
 `/v1/me/voice-prompt/upload-url` чеканит signed PUT Supabase, коммит принимает `uploadPath`
 (base64 остаётся запасным путём), новые `POST /v1/onboarding/interview/voice-prompt` и
@@ -172,7 +247,7 @@ curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/js
 
 ---
 
-**PENDING — Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде (2026-09-14).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде (2026-09-14).**
 **Схема Prisma не меняется, миграций нет, новых переменных окружения нет** (`WEBAPP_URL` уже
 задан — по нему бот строит ссылки мини-аппа). Только код: `routes/radar.ts` принимает оба рельса,
 отдаёт абсолютный `imageUrl` и новую ручку состояния; продолжение онбординг-чата после сабмита —
@@ -211,7 +286,7 @@ dev-бота, как раньше.
 
 ---
 
-**PENDING — координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` (2026-09-14).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` (2026-09-14).**
 **Схема Prisma не меняется, миграций нет.** Только код: `services/frequent-places.ts` отдаёт месту
 точку заведения из каталога (`curated_venues.lat/lng` той строки, что называет место) — оба ключа
 или ни одного; необязательные `PartnerFrequentPlace.latitude/longitude` в `openapi/gennety-v1.yaml`.
@@ -242,7 +317,7 @@ curl -s -H "Authorization: Bearer $JWT" "$API/v1/matches/current" \
 ---
 
 <!-- A13-REMEDIATION-START -->
-**PENDING — ремедиация аудита 2026-09-13 (коды `A13-*`): захват аккаунта по email, прокси-чат после отмены, лимиты кодов (2026-09-14).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — ремедиация аудита 2026-09-13 (коды `A13-*`): захват аккаунта по email, прокси-чат после отмены, лимиты кодов (2026-09-14).**
 **Все пакеты в стволе. СХЕМА МЕНЯЕТСЯ — одна миграция (пакет 9), порядок выката ниже.** Отчёт аудита вне репо
 (`~/Desktop/Gennety-отчёт/Аудит логики 2026-09-13/отчёт.md`), развилки — журнал решений
 2026-09-14 «аудит 2026-09-13: ремедиация утверждена».
@@ -385,7 +460,7 @@ pm2 logs gennety-bot --lines 80   # старт без ошибок конфиг�
 `subscription_ledger`, `reports`, `user_blocks`); позже — только вперёд.
 <!-- A13-REMEDIATION-END -->
 
-**PENDING — миниатюры мест в блоке партнёра: `thumbnailUrl` в `partnerFrequentPlaces` (2026-09-13).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — миниатюры мест в блоке партнёра: `thumbnailUrl` в `partnerFrequentPlaces` (2026-09-13).**
 **Схема Prisma не меняется, миграций нет.** Только код: выборка каталога в
 `services/frequent-places.ts` читает `photo_refs` и отдаёт месту подписанную ссылку 240 px
 на `/v1/venues/:id/photo`; необязательное поле `PartnerFrequentPlace.thumbnailUrl` в
@@ -420,7 +495,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<thumbnailUrl из о�
 
 ---
 
-**PENDING — видео профиля из приложения: `POST/DELETE /v1/me/video`, `video` в `GET /v1/me/photos` и в `partner-photos`, отправка нативного видео в Telegram-питч (2026-09-13).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — видео профиля из приложения: `POST/DELETE /v1/me/video`, `video` в `GET /v1/me/photos` и в `partner-photos`, отправка нативного видео в Telegram-питч (2026-09-13).**
 **Изменения схемы Prisma нет** — видео ложится в существующий `profiles.profile_media`.
 Журнал решений — запись 2026-09-13 «видео профиля из приложения».
 
@@ -452,7 +527,7 @@ curl -s -H "Authorization: Bearer $TOKEN" https://dating-api.gennety.com/v1/me/p
 
 ---
 
-**PENDING — инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `context` в чате, `/admin/announcements*` (2026-09-13).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `context` в чате, `/admin/announcements*` (2026-09-13).**
 **Есть изменение схемы Prisma** — миграция `20260913090000_inbox_announcements`, аддитивная:
 `messages.context` (JSONB, nullable), таблицы `announcements` и `inbox_items`. Проверена на
 живом Postgres: база из схемы ствола + эта миграция = схема ветки (`migrate diff` пуст), и
@@ -508,7 +583,7 @@ curl -s -X POST -H "Authorization: Bearer $ADMIN_API_KEY" -H "Content-Type: appl
 
 ---
 
-**PENDING — часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` (2026-09-11).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911200000_frequent_places`, аддитивная:
 `users.frequent_places_opt_in` (`NOT NULL DEFAULT true`), таблицы `user_place_visits` и
 `user_hidden_places`. Коммит `11cf3118`. Идёт ПОСЛЕ миграции музыки
@@ -549,7 +624,7 @@ curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/freque
 
 ---
 
-**PENDING — Музыка в профиле (Spotify), оба флага выключены (2026-09-11).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Музыка в профиле (Spotify), оба флага выключены (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911190000_profile_music_tracks`,
 чисто аддитивная: новая таблица `profile_music_tracks` (FK на `users`, каскад).
 Проверена на живом Postgres: база ствола + эта миграция = схема ветки
@@ -613,7 +688,7 @@ cron не планируется, строки остаются. Откат ко
 
 ---
 
-**PENDING — транспортный док на канве Mini App: Uber и карты в одно касание (2026-09-11).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — транспортный док на канве Mini App: Uber и карты в одно касание (2026-09-11).**
 **Только webapp.** Коммит `d9cd0798`. Схема, миграции и бот не меняются: доку хватает
 того, что `/v1/date/state` уже отдаёт (точка и имя места).
 
@@ -647,7 +722,7 @@ Android, маршрут в выбранном режиме. В пределах 
 
 ---
 
-**PENDING — Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` (2026-09-11).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911120000_date_terminal_and_hub_fallback`,
 аддитивная: `matches.terminal_invite_sent_at`, `matches.terminal_reminder_sent_at`
 (обе nullable), `curated_venues.is_hub_fallback` (`NOT NULL DEFAULT false`), плюс одна
@@ -697,7 +772,7 @@ Date Terminal в демо нет (демо проигрывает жизненн
 
 ---
 
-**PENDING — витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест (2026-09-11).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест (2026-09-11).**
 **Схема Prisma не меняется, миграций нет.** Только код: роутер `/v1/venues`
 (`public/routes/venues.ts`), выборка в `services/curated-venue.ts`, подписи ссылок
 в `public/showcase-photos.ts` и общий фото-прокси `public/places-photo.ts` — в него
@@ -746,7 +821,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<photoUrls[1] из о�
 
 ---
 
-**PENDING — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**
 **Есть изменение схемы Prisma** — миграция `20260909000000_proxy_chat_reactions`,
 **чисто аддитивная**: две nullable-колонки в `proxy_messages`, ни одной изменённой
 или удалённой. Коммиты бэкенда: `dbfdc803`, `b7db6916`. Парный релиз iOS: `4aa91d4`.
@@ -783,7 +858,7 @@ psql "$DATABASE_URL" -c "\d proxy_messages" | grep -E 'reaction|author_chat_mess
 
 ---
 
-**PENDING — агентская сессия 2026-09-08: гейт `/v1/chat`, счётчик города,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — агентская сессия 2026-09-08: гейт `/v1/chat`, счётчик города,
 маршрут языка.** Схема Prisma НЕ меняется, миграций нет. Четыре коммита:
 `925d01b`, `07e2fd0`, `59b6414`, `1bb665f`.
 
@@ -833,7 +908,7 @@ curl -sS -X PATCH https://<host>/v1/me/language -H "Authorization: Bearer $TOKEN
 
 ---
 
-**PENDING — виральность: K-фактор, воронка шеринга, опрос HDYHAU и четыре
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — виральность: K-фактор, воронка шеринга, опрос HDYHAU и четыре
 эндпоинта для Hermes, ветка `worktree-virality-k-factor` (2026-09-08).**
 **Есть изменение схемы Prisma** — миграция `20260908120000_virality_tracking`,
 **чисто аддитивная**: четыре новые таблицы, ни одной изменённой или удалённой
@@ -914,7 +989,7 @@ this server yet», а не ошибку.
 
 ---
 
-**PENDING — ремедиация аудита 2026-09-06: 75 находок, обе ветки
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — ремедиация аудита 2026-09-06: 75 находок, обе ветки
 `fix/audit-remediations-p1` (2026-09-07).** **Есть изменение схемы Prisma И
 изменение способа её накатывания.** 47 коммитов в бэкенде, 8 в iOS.
 
@@ -983,7 +1058,7 @@ ADD COLUMN nullable): удалений и смен типов нет, поэто
 совместим. Единственное, что стоит снять при подозрении на троттлинг Telegram, —
 это `installApiLimits` в `bot.ts` (один вызов).
 
-**PENDING — статусы доставки в прокси-чате + координация без развилки для пар
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — статусы доставки в прокси-чате + координация без развилки для пар
 с приложением (2026-09-07).** **СХЕМА PRISMA МЕНЯЕТСЯ — три новые колонки.**
 Новых env нет. Порядок обязателен: сначала схема, потом код, иначе бот на
 рестарте начнёт спрашивать колонки, которых в базе ещё нет.
@@ -1044,7 +1119,7 @@ nullable и старый код их просто не читает, а `DROP CO
 **iOS: требует этой поставки.** Клиент рисует галочки из поля `status`. До
 деплоя поле не приходит, и приложение показывает пузыри без галочек — то есть
 деградирует молча, а не ломается.
-**PENDING — «Мои билеты» открывают магазин без промежуточного сообщения
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — «Мои билеты» открывают магазин без промежуточного сообщения
 (2026-09-07).** **Схема Prisma НЕ меняется, новых env НЕТ.** Правка только в
 боте (одна строка меню), Mini App и дашборд не затронуты — `tickets.html` уже
 собран и не менялся. Последовательность обычная: Deploy Full Server Code →
@@ -1075,7 +1150,7 @@ grep -E '^(WEBAPP_URL|TICKET_FEATURE_ENABLED)=' /opt/gennety/.env
 
 ---
 
-**PENDING — ввод расходов на привлечение с телефона + аудит фаундер-бота
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — ввод расходов на привлечение с телефона + аудит фаундер-бота
 (2026-09-07).** **Схема Prisma НЕ меняется, новых env НЕТ.** Правки только в
 боте; Mini App и дашборд не затронуты. Последовательность обычная: Deploy Full
 Server Code → `pm2 restart`. Откат — `git revert` и рестарт; ничего не мигрирует,
@@ -1140,7 +1215,7 @@ WHERE channel NOT IN ('organic','referral','mobile','unattributed')
 
 ---
 
-**PENDING — ответы профайлера мемом и ссылкой на короткое видео
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — ответы профайлера мемом и ссылкой на короткое видео
 (2026-09-06; PRODUCT_SPEC §Phase 1b).** **Есть изменение схемы Prisma:**
 новая таблица `short_video_analysis`, перечисления `ProfilerMediaKind` и
 `ShortVideoPlatform`, поля `memeFileId` / `memeKind` / `memeSourceUrl` у
@@ -1172,7 +1247,7 @@ WHERE channel NOT IN ('organic','referral','mobile','unattributed')
 
 # Gennety Dating Deploy
 
-**PENDING — предсвиданное раскрытие мема: бесплатно и по согласию
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — предсвиданное раскрытие мема: бесплатно и по согласию
 (2026-09-06; PRODUCT_SPEC §Phase 4).** **Нет изменения схемы Prisma.** Новый
 env — `MEME_REVEAL_ENABLED`. Правки только в боте.
 
@@ -1198,7 +1273,7 @@ env — `MEME_REVEAL_ENABLED`. Правки только в боте.
 
 # Gennety Dating Deploy
 
-**PENDING — guard'ы: форма UUID, владение картинкой чата, путь в хранилище
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — guard'ы: форма UUID, владение картинкой чата, путь в хранилище
 (2026-09-06).** **Нет изменения схемы Prisma, нет новых env.** Правки только в
 боте. Последовательность: Deploy Full Server Code → `pm2 restart`.
 
@@ -1227,7 +1302,7 @@ env'ом, — это guard, который выключат.
 
 # Gennety Dating Deploy
 
-**PENDING — координация сдвигается с T-60м на T-3ч, прокси открывается в T-1ч
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — координация сдвигается с T-60м на T-3ч, прокси открывается в T-1ч
 (2026-09-06; PRODUCT_SPEC §Pre-date coordination).** **Нет изменения схемы
 Prisma, нет новых env** — `COORD_OFFER_HOURS` 1 → 3 и `PROXY_OPEN_HOURS`
 0.5 → 1 живут в коде. Правки в боте и в текстах демо.
@@ -1252,7 +1327,7 @@ Prisma, нет новых env** — `COORD_OFFER_HOURS` 1 → 3 и `PROXY_OPEN_H
 
 # Gennety Dating Deploy
 
-**PENDING — счёт Google Places: гейт, Autocomplete-сессии и кэш мест
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — счёт Google Places: гейт, Autocomplete-сессии и кэш мест
 (2026-09-04; `docs/architecture/decisions/2026-08-27_2026-09-01.md` →
 «счёт Google Places», `docs/architecture/data-model.md` → `place_cache`).**
 **Есть изменение схемы Prisma: новая таблица `place_cache`.** Новый env —
@@ -1323,7 +1398,7 @@ ssh root@167.172.178.229 'grep -c "Places search skipped" /root/.pm2/logs/gennet
 
 ---
 
-**PENDING — лист ожидания по городам (2026-09-04; PRODUCT_SPEC §1.3,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — лист ожидания по городам (2026-09-04; PRODUCT_SPEC §1.3,
 `docs/architecture/data-model.md` → `city_waitlist_entries`).** **Есть изменение
 схемы Prisma: новая таблица `city_waitlist_entries`.** Новых env и флагов нет.
 Правки в боте, в Mini App и в админ-дашборде (отдельный репозиторий,
@@ -1468,7 +1543,7 @@ curl -s https://dating-calendar.gennety.com/location.html \
 
 ---
 
-**PENDING — фотография места возвращается на дата-карточку (PRODUCT_SPEC §3.7a,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — фотография места возвращается на дата-карточку (PRODUCT_SPEC §3.7a,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
 изменения Mini App** (`apps/webapp` не тронут) — только бот, так что полный
 деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -1544,7 +1619,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep '\[date-card\] venue photo'
 
 ---
 
-**PENDING — карта перестаёт быть в водяных знаках: CARTO требует API-ключ
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — карта перестаёт быть в водяных знаках: CARTO требует API-ключ
 (ARCHITECTURE.md → `/v1/maptiles`, DECISIONS.md).** **Нет изменения схемы
 Prisma, нет флагов, НЕТ ИЗМЕНЕНИЯ Mini App** (`apps/webapp` не тронут — URL у
 клиента прежний, он ходит в наш прокси) — только бот, **плюс одна новая env**.
@@ -1607,7 +1682,7 @@ md5 -q /tmp/keyed.png /tmp/unkeyed.png
 
 ---
 
-**PENDING — карточку типажа можно отменить, и двойной тап больше не отвечает
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — карточку типажа можно отменить, и двойной тап больше не отвечает
 за человека (TYPE_RADAR_PRODUCT_SPEC.md → Flow, DECISIONS.md).** **Нет
 изменения схемы Prisma, нет новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА
 ВООБЩЕ** — дифф это `apps/webapp/src/radar/**` плюс документация. Путь **Deploy
@@ -1668,7 +1743,7 @@ curl -s https://dating-calendar.gennety.com/radar.html \
 
 ---
 
-**PENDING — аудит: блок соблюдается на третьем пути, достижимость партнёра по
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — аудит: блок соблюдается на третьем пути, достижимость партнёра по
 `platform`, и разблокированный тайпчек (DECISIONS.md 2026-08-30).** **Нет
 изменения схемы Prisma, нет новых env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — только бот, так что полный деплой кода несёт всё
@@ -1725,7 +1800,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep '\[event-recap\]'
 
 ---
 
-**PENDING — онбординг перестаёт открываться в пустой экран (PRODUCT_SPEC §1.1,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — онбординг перестаёт открываться в пустой экран (PRODUCT_SPEC §1.1,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — дифф это `apps/webapp` плюс документация. Путь
 **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`); рсинкать в
@@ -1814,7 +1889,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — когортный отток на вкладке Ads (ARCHITECTURE.md → `user_activity_days`
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — когортный отток на вкладке Ads (ARCHITECTURE.md → `user_activity_days`
 + Admin API, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет
 флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только бот, плюс
 **редеплой дашборда** (отдельный репозиторий, `~/Desktop/gennety-admin-dashboard`,
@@ -1895,7 +1970,7 @@ curl -sD- -o /dev/null -H "Authorization: Bearer $KEY" \
 
 ---
 
-**PENDING — Launch Events, Фаза 4: пост-ивентная петля (LAUNCH_EVENTS_PRODUCT_SPEC.md
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Launch Events, Фаза 4: пост-ивентная петля (LAUNCH_EVENTS_PRODUCT_SPEC.md
 §11, ARCHITECTURE.md → `event_feedback`, DECISIONS.md).** **Уезжает ТЁМНОЙ** —
 `EVENTS_FEATURE_ENABLED` в прод-`.env` по-прежнему не добавляется. Половина
 клиента плюс аддитивный `db:push`: Deploy Full Server Code → `db:push` →
@@ -2021,7 +2096,7 @@ curl -s https://dating-calendar.gennety.com/event.html \
 
 ---
 
-**PENDING — Launch Events, Фаза 3: Party Mode, раунды знакомств внутри ивента
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Launch Events, Фаза 3: Party Mode, раунды знакомств внутри ивента
 (LAUNCH_EVENTS_PRODUCT_SPEC.md §9, ARCHITECTURE.md → `event_rounds` /
 `event_round_pairings`, DECISIONS.md).** **Уезжает ТЁМНОЙ** —
 `EVENTS_FEATURE_ENABLED` в прод-`.env` по-прежнему не добавляется. Половина
@@ -2138,7 +2213,7 @@ Party Mode**, и закрывается это засеянным `live`-иве�
 
 ---
 
-**PENDING — Launch Events, Фаза 2: бесплатный билет, дверь и подписанный QR
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Launch Events, Фаза 2: бесплатный билет, дверь и подписанный QR
 (LAUNCH_EVENTS_PRODUCT_SPEC.md §6–§8, ARCHITECTURE.md → `event_ticket_tiers` /
 `event_tickets` / `event_staff_tokens`, DECISIONS.md).** **Уезжает ТЁМНОЙ** —
 `EVENTS_FEATURE_ENABLED` в прод-`.env` не добавляется этим деплоем, как и в
@@ -2255,7 +2330,7 @@ done
 
 ---
 
-**PENDING — Launch Events, Фаза 1: приём заявок + модерационный хаб
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Launch Events, Фаза 1: приём заявок + модерационный хаб
 (LAUNCH_EVENTS_PRODUCT_SPEC.md, ARCHITECTURE.md → `events` /
 `waitlist_applications`, DECISIONS.md).** **Нет изменения Mini App**
 (`apps/webapp` не тронут), **нет `/v1/*` и OpenAPI**, **одна новая
@@ -2615,7 +2690,7 @@ pm2 logs gennety-bot --lines 40 --nostream | grep 'Ad-spend reminder scheduled'
 
 ---
 
-**PENDING — Type Radar v2: дека архетипов вместо пяти признаков (PRODUCT_SPEC
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Type Radar v2: дека архетипов вместо пяти признаков (PRODUCT_SPEC
 §Type Radar, TYPE_RADAR_PRODUCT_SPEC.md → Dataset, DECISIONS.md).** **Нет
 изменения схемы Prisma, нет новых env, нет флипа флагов** — но это половина
 клиента, поэтому: Deploy Full Server Code → `pnpm db:drift-check` →
@@ -2696,7 +2771,7 @@ id). Схемы, env и флага откатывать нечего. Уже з�
 
 ---
 
-**PENDING — DAU/MAU (ARCHITECTURE.md → `user_activity_days`, DECISIONS.md
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — DAU/MAU (ARCHITECTURE.md → `user_activity_days`, DECISIONS.md
 2026-08-27).** **Нет новых обязательных env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — но нужен **аддитивный `db:push` ДО рестарта**, так
 что порядок: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
@@ -2792,7 +2867,7 @@ pm2 logs gennety-bot --lines 40 --nostream | grep 'Activity rollup scheduled'
 
 ---
 
-**PENDING — тумблер Scratch Map, лимит канвы, покрытие возвратов реметча, плюс
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — тумблер Scratch Map, лимит канвы, покрытие возвратов реметча, плюс
 правка приватности (DECISIONS.md 2026-08-27, позже).** **Нет изменения схемы
 Prisma, нет новых env, нет флагов** — но правки есть и в `apps/webapp`, и в
 `packages/shared`, поэтому полный набор: Deploy Full Server Code →
@@ -2856,7 +2931,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/date/
 
 ---
 
-**PENDING — аудит: атомарность бампа, три очереди возвратов, и четыре
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — аудит: атомарность бампа, три очереди возвратов, и четыре
 молчаливых пути (DECISIONS.md 2026-08-27).** **Нет изменения схемы Prisma, нет
 новых env, нет флагов, `/v1/*` не менялся** — но правки есть и в `apps/webapp`,
 поэтому: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
@@ -2917,7 +2992,7 @@ psql "$DATABASE_URL" -c "select status, count(*) from venue_change_purchases gro
 
 ---
 
-**PENDING — платная вечерняя полоса календаря (PRODUCT_SPEC §3.6/§3.8,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — платная вечерняя полоса календаря (PRODUCT_SPEC §3.6/§3.8,
 PRIME_TIME_PRODUCT_SPEC.md, DECISIONS.md).** **Нужен аддитивный `db:push` ДО
 рестарта**, и это половина клиента, так что последовательность: Deploy Full
 Server Code → `db:push` → `pnpm db:drift-check` → `pm2 restart` →
@@ -3004,7 +3079,7 @@ pm2 logs gennety-bot --lines 40 --nostream | grep -i "prime"
 
 ---
 
-**PENDING — Scratch Map + Campus Radar (PRODUCT_SPEC §6.5/§6.6, DECISIONS.md
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Scratch Map + Campus Radar (PRODUCT_SPEC §6.5/§6.6, DECISIONS.md
 2026-08-26).** Rides the SAME `db:push` as the Living Canvas block below — its
 two tables and two columns were already in that block's plan, so there is
 **no additional schema step**. Half client, so the sequence is unchanged:
@@ -3071,7 +3146,7 @@ deploy's business).
 
 ---
 
-**PENDING — Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md).**
 Needs an **additive `db:push` BEFORE the restart**, and it is half client, so
 the sequence is: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
 `pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
@@ -3177,7 +3252,7 @@ psql "$DATABASE_URL" -c "select count(*) from user_scratch_maps;"
 
 ---
 
-**PENDING — напоминание рекуррентному подписчику о пополнении баланса звёзд
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — напоминание рекуррентному подписчику о пополнении баланса звёзд
 (PRODUCT_SPEC §3.8, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env,
 нет флага, нет изменения Mini App** (`apps/webapp` не тронут) — только бот и
 `@gennety/shared`, так что полный деплой кода несёт всё целиком, плюс
@@ -3242,7 +3317,7 @@ pm2 logs gennety-bot --lines 40 --nostream | grep "premium-reminder"
 
 ---
 
-**PENDING — Premium на 3 и 6 месяцев + напоминания об истечении (PRODUCT_SPEC
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Premium на 3 и 6 месяцев + напоминания об истечении (PRODUCT_SPEC
 §3.8, DECISIONS.md).** **Нет новых env, нет нового флага** — но нужен
 **аддитивный `db:push` ДО рестарта**, и это половина клиента, так что
 последовательность: Deploy Full Server Code → `db:push` → `pnpm db:drift-check`
@@ -3333,7 +3408,7 @@ pm2 logs gennety-bot --lines 40 --nostream | grep "Premium expiry reminder sched
 
 ---
 
-**PENDING — цель отношений: шестой экран онбординга + множитель `V_intent`
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — цель отношений: шестой экран онбординга + множитель `V_intent`
 (PRODUCT_SPEC §1.1 / §1.3 / §2.1 / §3.2, DECISIONS.md).** **Новых обязательных
 env нет, флага нет** — но нужен **аддитивный `db:push` ДО рестарта**, и это
 половина клиента, так что последовательность: Deploy Full Server Code →
@@ -3482,7 +3557,7 @@ psql "$DATABASE_URL" -c "select count(*) from match_score_logs where score_inten
 
 ---
 
-**PENDING — расход Google Places: cron ревалидации приводится в соответствие со
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — расход Google Places: cron ревалидации приводится в соответствие со
 спекой, демо перестаёт платить за второй каталог (PRODUCT_SPEC §3.7 / §3.7a,
 ARCHITECTURE → `curated_venues`, DECISIONS.md).** **Нет изменения схемы Prisma,
 нет изменения Mini App** (`apps/webapp` не тронут) — только бот и скрипты, так
@@ -3559,7 +3634,7 @@ FROM curated_venues WHERE active AND city_key = 'ua:kyiv';
 
 ---
 
-**PENDING — `InterviewState.reaction`: реакция бота в онбординге доезжает до
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — `InterviewState.reaction`: реакция бота в онбординге доезжает до
 нативного клиента (OpenAPI `InterviewState.reaction`, DECISIONS.md
 2026-08-23).** **Нет изменения схемы Prisma, нет новых env, нет флагов, Mini App
 не тронут** — только бот; полный деплой кода несёт это целиком. Telegram-рельса
@@ -3569,7 +3644,7 @@ FROM curated_venues WHERE active AND city_key = 'ua:kyiv';
 не станет. Проверка после рестарта: ответить боту на вопрос про хобби — на
 сообщении должен стоять 👍, как и раньше.
 
-**PENDING — «made with Gennety» снова опционален на дата-карточке (PRODUCT_SPEC
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — «made with Gennety» снова опционален на дата-карточке (PRODUCT_SPEC
 §3.7a, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов,
 нет изменения Mini App** (`apps/webapp` не тронут) — только бот, так что полный
 деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -3624,7 +3699,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep '\[date-card\]'
 
 ---
 
-**PENDING — у демо-куклы своё имя на каждом языке (DEMO_MODE.md, DECISIONS.md).**
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — у демо-куклы своё имя на каждом языке (DEMO_MODE.md, DECISIONS.md).**
 **Только демо** — дифф это `apps/bot/src/demo/**`, `scripts/seed-demo-partners.mjs`
 и документация, так что **в `/opt/gennety` синкать нечего и прод НЕ
 перезапускается**; весь деплой — `pnpm demo:deploy`. Нет изменения схемы, нет
@@ -3687,7 +3762,7 @@ select language, gender, first_name, telegram_id
 
 ---
 
-**PENDING — блокировка пользователя (6.8; PRODUCT_SPEC §Blocking, ARCHITECTURE
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — блокировка пользователя (6.8; PRODUCT_SPEC §Blocking, ARCHITECTURE
 → `user_blocks`, DECISIONS.md 2026-08-23).** **Нет изменения Mini App**
 (`apps/webapp` не тронут), **нет новых env, нет флагов** — но нужен
 **аддитивный `db:push` ДО рестарта**. Порядок: Deploy Full Server Code →
@@ -3750,7 +3825,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X GET \
 
 ---
 
-**PENDING — маскот вместо орба на входном экране онбординга (PRODUCT_SPEC §1.1,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — маскот вместо орба на входном экране онбординга (PRODUCT_SPEC §1.1,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ РАНТАЙМА СЕРВЕРА** — единственный файл вне `apps/webapp` это
 `apps/bot/src/assets/brand/butterfly-logo-v2.svg`, который **никем не
@@ -3955,7 +4030,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' \
 
 ---
 
-**PENDING — просьба о голосовом: короче, без невыполнимого совета, и с
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — просьба о голосовом: короче, без невыполнимого совета, и с
 указателем на кнопку пропуска (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC
 §4.1, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов,
 нет изменения Mini App** (`apps/webapp` не тронут) — только бот и
@@ -4007,7 +4082,7 @@ pnpm demo:deploy
 
 ---
 
-**PENDING — питч ужимается с шести сообщений до четырёх, плюс починка разметки
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — питч ужимается с шести сообщений до четырёх, плюс починка разметки
 заголовка (PRODUCT_SPEC §3.3 + §1.3b, DEMO_MODE.md, DECISIONS.md).** **Нет
 изменения схемы Prisma, нет новых env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — бот и `@gennety/shared`, так что полный деплой кода
@@ -4201,7 +4276,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — карта уведомлений §4.3 доезжает до приложения: «нет пары» + три
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — карта уведомлений §4.3 доезжает до приложения: «нет пары» + три
 каденции напоминаний (PRODUCT_SPEC §3.1 / §3.5, ARCHITECTURE → APNs,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
 изменения Mini App** (`apps/webapp` не тронут) — только бот, так что полный
@@ -4264,7 +4339,7 @@ psql "$DATABASE_URL" -c "select platform, count(*) filter (where push_token is n
 
 ---
 
-**PENDING — обязательных фотографий четыре, а не три (`MIN_PHOTOS` 3 → 4,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — обязательных фотографий четыре, а не три (`MIN_PHOTOS` 3 → 4,
 PRODUCT_SPEC §1.3, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env,
 нет флагов, нет изменения Mini App** (`apps/webapp` не тронут — он не собирает
 фото вовсе) — только бот и `@gennety/shared`, так что полный деплой кода несёт
@@ -4319,7 +4394,7 @@ psql "$DATABASE_URL" -c "select u.status, coalesce(array_length(p.photos,1),0) p
 
 ---
 
-**PENDING — демо-кукла может держать несколько живых матчей (DEMO_MODE.md,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — демо-кукла может держать несколько живых матчей (DEMO_MODE.md,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
 изменения Mini App** (`apps/webapp` не тронут).
 
@@ -4429,7 +4504,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md,
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md,
 DECISIONS.md ×3).** Ships **DARK** — `VOICE_PROMPT_ENABLED` is unset in
 `/opt/gennety/.env` and stays unset in this deploy. **No Mini App change**
 (`apps/webapp` untouched) — but it needs an **additive `db:push` BEFORE the
@@ -4554,7 +4629,7 @@ once the code is gone). The bucket can stay either way.
 
 ---
 
-**PENDING — Premium покрывает свой билет: безлимитные свидания (PRODUCT_SPEC
+**Deployed 2026-09-22 (was PENDING; сводный выкат `28313fb6`) — Premium покрывает свой билет: безлимитные свидания (PRODUCT_SPEC
 §3.5b + §3.8, DECISIONS.md `84f5aa6`/`c59f583`).** **Нет изменения схемы
 Prisma, нет новых env, нет нового флага** — но правки есть и в `apps/webapp`,
 поэтому релиз не только серверный: Deploy Full Server Code →

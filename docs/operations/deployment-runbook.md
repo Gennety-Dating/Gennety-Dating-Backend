@@ -176,8 +176,20 @@ ffprobe -version | head -n 1
 
 pnpm install --frozen-lockfile
 pnpm --filter @gennety/db db:generate
-pnpm build
+pnpm --filter @gennety/webapp build   # Mini App bundle (apps/webapp/.env.production → prod API base)
 ```
+
+**Not `pnpm build` on the droplet (since 2026-09-22).** The bot runs from
+source through `tsx`, and `@gennety/db` / `@gennety/shared` export
+`src/index.ts`, so the only build outputs the server needs are the Prisma client
+and the Mini App bundle. `pnpm -r build` would also run `remotion bundle` for
+`apps/video` (not part of the runtime) and three `tsc --noEmit` typechecks on a
+2 GB box next to the live bot — an OOM there kills the bot, not the build. The
+typecheck belongs to the local preflight. The droplet-built bundle is then
+copied into place on the server itself (`rsync -a --delete
+apps/webapp/dist/ /var/www/dating-app/`, previous copy kept next to it) — same
+result as `./scripts/deploy-webapp.sh`, but built from exactly the lockfile the
+server installed.
 
 If `packages/db/prisma/migrations/` gained a migration, apply it to the
 production database before restarting the bot. The Prisma CLI runs inside
@@ -209,33 +221,26 @@ dashboard. The droplet still does not have `pg_dump` installed — migrations
 give a reproducible ORDER of changes, not a backup, and the two are not
 substitutes.
 
-Prisma refuses to add a `@unique` column without `--accept-data-loss`, even when
-the column is brand new (it cannot know the column will be all-`NULL`). Before
-reaching for that flag, confirm the change is genuinely additive. The
-authoritative gate is `pnpm db:drift-check` (it introspects the live prod DB
-rather than diffing schema files); to SEE which DROPs `--accept-data-loss` would
-run, dump the plan with `prisma migrate diff --from-schema-datasource
-prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` (URL
-read from env, never `--from-url`, which would leak the password into `ps` and
-pnpm's failure echo) and confirm every DROP is one you intend. The older manual
-pair below still works as a cross-check — the deploy is only safe if **both** hold:
+To SEE what the live database differs by, dump the plan with `prisma migrate
+diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel
+prisma/schema.prisma --script` from `packages/db` (URL read from env, never
+`--from-url`, which would leak the password into `ps` and pnpm's failure echo).
+A new migration that is not purely additive — a DROP, a type change, a `@unique`
+on a table with rows — is reviewed statement by statement before `db:deploy`.
+The older manual cross-check still works for spotting removals in the schema
+file itself (empty output = additive only):
 
 ```sh
-# 1. No column/model removals in the schema diff (empty output = additive only):
 diff -u <(ssh root@167.172.178.229 'cat /opt/gennety/packages/db/prisma/schema.prisma') \
         packages/db/prisma/schema.prisma | grep '^-' | grep -v '^---' | grep -vE '^-\s*(///)?\s*$'
-# 2. The new unique columns do not yet exist in the *public* schema (Supabase's
-#    auth.users has its own `phone` column — always filter on table_schema).
 ```
-
-Then run `pnpm --filter @gennety/db db:push --accept-data-loss`.
 
 **Schema drift is a real failure mode here.** A production DB missing a column
 the code reads throws `P2022` as an *unhandled rejection*, which kills the
 process — an unnoticed drift shows up as a PM2 restart loop, not as a clean
 error. If `pm2 status` shows a climbing restart count, check
-`grep P2022 /root/.pm2/logs/gennety-bot-error.log` before anything else; a
-`db:push` is the fix.
+`grep P2022 /root/.pm2/logs/gennety-bot-error.log` before anything else; the
+fix is the missing migration through `db:deploy` (never `db:push` on prod).
 
 **Mandatory drift gate before restart.** Whether or not you think the schema
 changed, confirm the production DB now matches the code schema — this turns the
@@ -246,12 +251,37 @@ export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
 pnpm db:drift-check   # exit 0 = match (safe); exit 2 = DRIFT → a migration is missing: write it, db:deploy, re-check (not db:push)
 ```
 
+**Foreign tables are tolerated, not dropped.** Since the 2026-09-22 deploy the
+prod database also holds five `canvas_*` tables (`canvas_projects`,
+`canvas_workspaces`, `canvas_project_versions`, `canvas_project_shares`,
+`canvas_audit_logs`) that no model, migration or line of our code knows — some
+other app created them after the 2026-09-07 baseline, and they hold rows. An
+extra table cannot crash Prisma, so `db:drift-check` lists them in
+`FOREIGN_TABLES` and reports `OK` when a `DROP TABLE` of one of them is the only
+difference; any other statement is still DRIFT. Whose they are is an open
+question for the founder — never drop them from a deploy.
+
 Restart after the code and any required schema update are both in place:
 
 ```sh
 pm2 restart gennety-bot --update-env
 pm2 save
 ```
+
+`pm2 restart` keeps the process's stored options. Since 2026-09-22 that includes
+`--kill-timeout 30000`: the bot drains in-flight work for up to
+`SHUTDOWN_DRAIN_TIMEOUT_MS` (20 s) on SIGINT/SIGTERM, and PM2's default 1.6 s
+would SIGKILL it half-way. If the process ever has to be recreated, use exactly:
+
+```sh
+pm2 delete gennety-bot
+pm2 start bash --name gennety-bot --kill-timeout 30000 --merge-logs -- \
+  -c 'cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts'
+pm2 save
+```
+
+Every key the bot reads comes from `/opt/gennety/.env` (dotenv); PM2 carries no
+env of its own, so recreating loses nothing.
 
 ## Deploy Mini App Only
 

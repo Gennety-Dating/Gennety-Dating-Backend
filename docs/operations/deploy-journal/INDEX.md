@@ -1,72 +1,83 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 181 entries
+# Deploy journal index — 192 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING |  | брифинг перед свиданием уходит с экранов в T+2ч: верхняя граница гейта `iceBreakers` / `wingmanHint` | [pending](./pending.md) |
-| PENDING |  | маскот входного экрана: кисти за спиной, пока он спиной | [pending](./pending.md) |
-| PENDING |  | Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` | [pending](./pending.md) |
-| PENDING |  | голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра | [pending](./pending.md) |
-| PENDING |  | Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде | [pending](./pending.md) |
-| PENDING |  | координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` | [pending](./pending.md) |
-| PENDING |  | ремедиация аудита 2026-09-13 (`A13-*`): захват по email, прокси-чат после отмены, платежи, стагнация, удаление аккаунта | [pending](./pending.md) |
-| PENDING |  | миниатюры мест в блоке партнёра: `thumbnailUrl` в `partnerFrequentPlaces` | [pending](./pending.md) |
-| PENDING |  | инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `/admin/announcements*` | [pending](./pending.md) |
-| PENDING |  | часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` | [pending](./pending.md) |
-| PENDING |  | музыка в профиле (Spotify): поиск для всех, импорт топа за вторым флагом; оба флага выключены | [pending](./pending.md) |
-| PENDING |  | транспортный док на канве Mini App: Uber и карты в одно касание | [pending](./pending.md) |
-| PENDING |  | Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` | [pending](./pending.md) |
-| PENDING |  | витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест | [pending](./pending.md) |
-| PENDING |  | «Мои билеты» открывают магазин без промежуточного сообщения | [pending](./pending.md) |
-| PENDING |  | ответы профайлера мемом и ссылкой на короткое видео | [pending](./pending.md) |
-| PENDING |  | предсвиданное раскрытие мема: бесплатно и по согласию | [pending](./pending.md) |
-| PENDING |  | guard'ы: форма UUID, владение картинкой чата, путь в хранилище | [pending](./pending.md) |
-| PENDING |  | координация с T-60м на T-3ч, прокси в T-1ч | [pending](./pending.md) |
-| PENDING |  | лист ожидания по городам: новая таблица `city_waitlist_entries` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 — сводный выкат всего `main` (`28313fb6`): 8 миграций через `db:deploy`, PM2 с `--kill-timeout 30000`, Mini App; все PENDING-блоки ниже уехали им; демо — нет | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — чат: один ход несёт до десяти снимков (`imageUrls`), 2026-09-21. | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — видео профиля из приложения: `POST/DELETE /v1/me/video`, `video` в `GET /v1/me/photos` и в `partner-photos`, … | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09). | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — агентская сессия 2026-09-08: гейт `/v1/chat`, счётчик города, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — виральность: K-фактор, воронка шеринга, опрос HDYHAU и четыре | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — ремедиация аудита 2026-09-06: 75 находок, обе ветки | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — статусы доставки в прокси-чате + координация без развилки для пар | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — ввод расходов на привлечение с телефона + аудит фаундер-бота | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — счёт Google Places: гейт, Autocomplete-сессии и кэш мест | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — «made with Gennety» снова опционален на дата-карточке (PRODUCT_SPEC | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — брифинг перед свиданием уходит с экранов в T+2ч: верхняя граница гейта `iceBreakers` / `wingmanHint` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — маскот входного экрана: кисти за спиной, пока он спиной | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — ремедиация аудита 2026-09-13 (`A13-*`): захват по email, прокси-чат после отмены, платежи, стагнация, удаление аккаунта | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — миниатюры мест в блоке партнёра: `thumbnailUrl` в `partnerFrequentPlaces` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `/admin/announcements*` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — музыка в профиле (Spotify): поиск для всех, импорт топа за вторым флагом; оба флага выключены | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — транспортный док на канве Mini App: Uber и карты в одно касание | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — «Мои билеты» открывают магазин без промежуточного сообщения | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — ответы профайлера мемом и ссылкой на короткое видео | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — предсвиданное раскрытие мема: бесплатно и по согласию | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — guard'ы: форма UUID, владение картинкой чата, путь в хранилище | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — координация с T-60м на T-3ч, прокси в T-1ч | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — лист ожидания по городам: новая таблица `city_waitlist_entries` | [pending](./pending.md) |
 | Deployed | 2026-09-06 | карта переезжает на векторные тайлы + MapLibre (ARCHITECTURE.md → | [pending](./pending.md) |
-| PENDING |  | фотография места возвращается на дата-карточку (PRODUCT_SPEC §3.7a, | [pending](./pending.md) |
-| PENDING |  | карта перестаёт быть в водяных знаках: CARTO требует API-ключ | [pending](./pending.md) |
-| PENDING |  | карточку типажа можно отменить, и двойной тап больше не отвечает | [pending](./pending.md) |
-| PENDING |  | аудит: блок соблюдается на третьем пути, достижимость партнёра по | [pending](./pending.md) |
-| PENDING |  | онбординг перестаёт открываться в пустой экран (PRODUCT_SPEC §1.1, | [pending](./pending.md) |
-| PENDING |  | когортный отток на вкладке Ads (ARCHITECTURE.md → `user_activity_days` | [pending](./pending.md) |
-| PENDING |  | Launch Events, Фаза 4: пост-ивентная петля (LAUNCH_EVENTS_PRODUCT_SPEC.md | [pending](./pending.md) |
-| PENDING |  | Launch Events, Фаза 3: Party Mode, раунды знакомств внутри ивента | [pending](./pending.md) |
-| PENDING |  | Launch Events, Фаза 2: бесплатный билет, дверь и подписанный QR | [pending](./pending.md) |
-| PENDING |  | Launch Events, Фаза 1: приём заявок + модерационный хаб | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — фотография места возвращается на дата-карточку (PRODUCT_SPEC §3.7a, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — карта перестаёт быть в водяных знаках: CARTO требует API-ключ | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — карточку типажа можно отменить, и двойной тап больше не отвечает | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — аудит: блок соблюдается на третьем пути, достижимость партнёра по | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — онбординг перестаёт открываться в пустой экран (PRODUCT_SPEC §1.1, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — когортный отток на вкладке Ads (ARCHITECTURE.md → `user_activity_days` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Launch Events, Фаза 4: пост-ивентная петля (LAUNCH_EVENTS_PRODUCT_SPEC.md | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Launch Events, Фаза 3: Party Mode, раунды знакомств внутри ивента | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Launch Events, Фаза 2: бесплатный билет, дверь и подписанный QR | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Launch Events, Фаза 1: приём заявок + модерационный хаб | [pending](./pending.md) |
 | Deployed | 2026-08-29 | 08-29 (was PENDING) — пять метрик поверх ad-spend + Hermes читает их напрямую | [pending](./pending.md) |
 | Deployed | 2026-08-29 | 08-29 (was PENDING) — трекинг расходов на привлечение: канал × категория, ручной ввод + | [pending](./pending.md) |
-| PENDING |  | Type Radar v2: дека архетипов вместо пяти признаков (PRODUCT_SPEC | [pending](./pending.md) |
-| PENDING |  | DAU/MAU (ARCHITECTURE.md → `user_activity_days`, DECISIONS.md | [pending](./pending.md) |
-| PENDING |  | тумблер Scratch Map, лимит канвы, покрытие возвратов реметча, плюс | [pending](./pending.md) |
-| PENDING |  | аудит: атомарность бампа, три очереди возвратов, и четыре | [pending](./pending.md) |
-| PENDING |  | платная вечерняя полоса календаря (PRODUCT_SPEC §3.6/§3.8, | [pending](./pending.md) |
-| PENDING |  | Scratch Map + Campus Radar (PRODUCT_SPEC §6.5/§6.6, DECISIONS.md | [pending](./pending.md) |
-| PENDING |  | Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md). | [pending](./pending.md) |
-| PENDING |  | напоминание рекуррентному подписчику о пополнении баланса звёзд | [pending](./pending.md) |
-| PENDING |  | Premium на 3 и 6 месяцев + напоминания об истечении (PRODUCT_SPEC | [pending](./pending.md) |
-| PENDING |  | цель отношений: шестой экран онбординга + множитель `V_intent` | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Type Radar v2: дека архетипов вместо пяти признаков (PRODUCT_SPEC | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — DAU/MAU (ARCHITECTURE.md → `user_activity_days`, DECISIONS.md | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — тумблер Scratch Map, лимит канвы, покрытие возвратов реметча, плюс | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — аудит: атомарность бампа, три очереди возвратов, и четыре | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — платная вечерняя полоса календаря (PRODUCT_SPEC §3.6/§3.8, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Scratch Map + Campus Radar (PRODUCT_SPEC §6.5/§6.6, DECISIONS.md | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md). | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — напоминание рекуррентному подписчику о пополнении баланса звёзд | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Premium на 3 и 6 месяцев + напоминания об истечении (PRODUCT_SPEC | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — цель отношений: шестой экран онбординга + множитель `V_intent` | [pending](./pending.md) |
 | NOTE | 2026-08-29 | **Отменено 2026-08-29, в прод не уезжало — шиммер над голосовым ОТВЕТОМ снят | [pending](./pending.md) |
-| PENDING |  | расход Google Places: cron ревалидации приводится в соответствие со | [pending](./pending.md) |
-| PENDING |  | `InterviewState.reaction`: реакция бота в онбординге доезжает до | [pending](./pending.md) |
-| PENDING |  | у демо-куклы своё имя на каждом языке (DEMO_MODE.md, DECISIONS.md). | [pending](./pending.md) |
-| PENDING |  | блокировка пользователя (6.8; PRODUCT_SPEC §Blocking, ARCHITECTURE | [pending](./pending.md) |
-| PENDING |  | маскот вместо орба на входном экране онбординга (PRODUCT_SPEC §1.1, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — расход Google Places: cron ревалидации приводится в соответствие со | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — `InterviewState.reaction`: реакция бота в онбординге доезжает до | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — у демо-куклы своё имя на каждом языке (DEMO_MODE.md, DECISIONS.md). | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — блокировка пользователя (6.8; PRODUCT_SPEC §Blocking, ARCHITECTURE | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — маскот вместо орба на входном экране онбординга (PRODUCT_SPEC §1.1, | [pending](./pending.md) |
 | Deployed | 2026-08-23 | 08-23 — точечный деплой Mini App: три onboarding-блока, ТОЛЬКО | [pending](./pending.md) |
-| PENDING |  | просьба о голосовом: короче, без невыполнимого совета, и с | [pending](./pending.md) |
-| PENDING |  | питч ужимается с шести сообщений до четырёх, плюс починка разметки | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — просьба о голосовом: короче, без невыполнимого совета, и с | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — питч ужимается с шести сообщений до четырёх, плюс починка разметки | [pending](./pending.md) |
 | Deployed | 2026-08-23 | 08-23 (was PENDING) — экран пола переходит на фотографии, | [pending](./pending.md) |
 | Deployed | 2026-08-23 | 08-23 (was PENDING) — экран имени перестаёт схлопываться в верхнюю треть при открытии | [pending](./pending.md) |
-| PENDING |  | карта уведомлений §4.3 доезжает до приложения: «нет пары» + три | [pending](./pending.md) |
-| PENDING |  | обязательных фотографий четыре, а не три (`MIN_PHOTOS` 3 → 4, | [pending](./pending.md) |
-| PENDING |  | демо-кукла может держать несколько живых матчей (DEMO_MODE.md, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — карта уведомлений §4.3 доезжает до приложения: «нет пары» + три | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — обязательных фотографий четыре, а не три (`MIN_PHOTOS` 3 → 4, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — демо-кукла может держать несколько живых матчей (DEMO_MODE.md, | [pending](./pending.md) |
 | Deployed | 2026-08-23 | 08-23 (was PENDING) — зазор между стрелкой «Назад» и кнопкой «Дальше» в онбординге | [pending](./pending.md) |
-| PENDING |  | Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md, | [pending](./pending.md) |
-| PENDING |  | Premium покрывает свой билет: безлимитные свидания (PRODUCT_SPEC | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md, | [pending](./pending.md) |
+| Deployed | 2026-09-22 | 09-22 (was PENDING) — Premium покрывает свой билет: безлимитные свидания (PRODUCT_SPEC | [pending](./pending.md) |
 | Deployed | 2026-08-21 | 08-21 — релиз `57cb108`: возврат за недоставленный реметч + | [shipped-part1](../../archive/deploy-journal/shipped-part1.md) |
 | Deployed | 2026-08-21 | 08-21 — реметч, чей питч не дошёл ни до кого, возвращает звёзды | [shipped-part1](../../archive/deploy-journal/shipped-part1.md) |
 | Deployed | 2026-08-21 | 08-21 (was PENDING) — приём клиентской воронки нативного приложения | [shipped-part1](../../archive/deploy-journal/shipped-part1.md) |
