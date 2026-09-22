@@ -441,6 +441,7 @@ model User {
   venueChangePurchases      VenueChangePurchase[]
   primeTimePurchases        PrimeTimePurchase[]
   liveActivityTokens        LiveActivityToken[]
+  venueChangeActivities     VenueChangeActivity[]
   mediaValidationRejections MediaValidationRejection[]
   chatEvents                ChatEvent[]
   activityDays              UserActivityDay[]
@@ -2636,6 +2637,31 @@ model LiveActivityToken {
 
   @@unique([userId, activityType, kind])
   @@map("live_activity_tokens")
+}
+
+/// What the server last put on one side's venue-change lock-screen card (the
+/// iOS `venue_change` Live Activity, decision 2026-09-22). A row exists exactly
+/// while the server believes that card is running: push-start creates it,
+/// ending the card deletes it. It is durable on purpose — a second push-to-start
+/// does not replace a running activity, it opens a SECOND card on the phone, so
+/// a bot restart must never forget that one is already up (nor forget to end it).
+/// `matchId` is free-form (no FK), like `VenueChangePurchase.matchId`: the
+/// 2-minute sweep drops a row whose match is gone.
+model VenueChangeActivity {
+  matchId     String   @map("match_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  /// `waiting` | `partner` | `match` — the phase last sent.
+  phase       String
+  /// Hash of the content-state last sent. Equal hash ⇒ nothing is pushed.
+  contentHash String   @map("content_hash")
+  /// When the running card was push-started — the ~7.5h restart reads it.
+  startedAt   DateTime @map("started_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, userId])
+  @@map("venue_change_activities")
 }
 
 /// Native-app phone-code challenges (general track on iOS/Android, where the

@@ -329,7 +329,7 @@ multiple competing codes.
 ### `live_activity_tokens`
 
 APNs push tokens for the native app's Live Activities (ActivityKit). One row
-per (user, `activityType` ∈ `match_decision`/`date_day`, `kind` ∈
+per (user, `activityType` ∈ `match_decision`/`date_day`/`venue_change`, `kind` ∈
 `start`/`update`), unique composite — the single-live-match invariant means a
 user never runs two activities of one type, so re-registration upserts in
 place. A token APNs reports dead is deleted so the next activity re-registers
@@ -346,7 +346,25 @@ lifecycle push-starts the card at T-5h on a phone whose owner has not opened
 the app, then updates it — while `match_decision` deliberately registers
 neither: the only thing that changes over its 24 hours is the clock, and the
 system runs that itself (PRODUCT_SPEC §Phase 4, iOS ARCHITECTURE §Live
-Activities).
+Activities). `venue_change` (2026-09-22) uses both, and its `update` rows carry
+`matchId`: the server pushes only into a token registered for that match at or
+after the card's push-start (`updated_at` ≥ `venue_change_activities.started_at`).
+
+### `venue_change_activities`
+
+What the server last put on one side's venue-change lock-screen card (§3.7b,
+decision 2026-09-22). PK (`match_id`, `user_id`); `phase` (`waiting` /
+`partner` / `match`), `content_hash` (of the content-state last pushed — equal
+hash, no push), `started_at` (the card's push-start; the 7.5 h renewal reads
+it). **A row exists exactly while the server believes that card is running**:
+push-start inserts it (as a claim, before the push — released if APNs refuses),
+end deletes it, so the table is also the 2-minute sweep's work list. Durable
+because a second push-to-start does not replace a running activity, it opens a
+second one — a restarted bot must know a card is up. `user_id` →
+`users` `ON DELETE CASCADE`; `match_id` has no FK (like
+`venue_change_purchases.match_id`) — the sweep ends and drops a row whose match
+is gone. Written and read only by `services/venue-change-activity.ts`.
+Migration `20260922180000_venue_change_activity`.
 
 ### `phone_otps`
 
