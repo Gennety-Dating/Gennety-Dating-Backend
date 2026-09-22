@@ -24,6 +24,11 @@ vi.mock("./canvas-auth.js", () => ({
 
 const { dateStateRouter } = await import("./routes/date-state.js");
 const { deadlineFor } = await import("../services/proposal-deadline.js");
+// The real signer, not a mock: the point of the photo tests is that the link
+// this route mints is one the signed photo route will actually accept.
+const { boardPhotoSignatureValid, decodePhotoRef } = await import("./venue-change-photos.js");
+
+const COVER_REF = "places/ChIJkavarnya/photos/AXCover-1";
 
 function buildApp() {
   const app = express();
@@ -52,6 +57,7 @@ function liveMatch(overrides: Record<string, unknown> = {}) {
     venueLat: 50.44,
     venueLng: 30.52,
     venueGoogleMapsUri: "https://maps.google.com/?cid=1",
+    venuePhotoName: null,
     ...overrides,
   };
 }
@@ -83,6 +89,65 @@ describe("GET /v1/date/state", () => {
     expect(res.body.match.id).toBe("match-1");
     expect(res.body.match.venue.name).toBe("Kavarnya");
     expect(res.body.match.agreedTime).toBe(AGREED.toISOString());
+  });
+
+  // The map's date panel shows the venue's cover. An image loader sends no
+  // Authorization header, so the link itself must carry the permission — and
+  // it must be one `/v1/venue-change/photo/:token` accepts, or the panel shows
+  // a broken image rather than none.
+  it("signs the venue's cover for an image loader", async () => {
+    matchFindMany.mockResolvedValue([liveMatch({ venuePhotoName: COVER_REF })]);
+
+    const res = await request(buildApp()).get("/v1/date/state");
+    const { photoUrl, thumbnailUrl } = res.body.match.venue;
+
+    for (const [link, width] of [
+      [photoUrl, 1200],
+      [thumbnailUrl, 240],
+    ] as const) {
+      const url = new URL(String(link));
+      const token = url.pathname.split("/").pop() ?? "";
+      expect(url.pathname).toBe(`/v1/venue-change/photo/${token}`);
+      // The ref is the PATH segment (the iOS cache keys on host + path).
+      expect(decodePhotoRef(token)).toBe(COVER_REF);
+      expect(url.searchParams.get("w")).toBe(String(width));
+      expect(
+        boardPhotoSignatureValid(
+          token,
+          width,
+          Number(url.searchParams.get("e")),
+          url.searchParams.get("sig") ?? "",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  // The canvas polls; a link that changed on every poll would miss the image
+  // cache every time and re-download the cover.
+  it("mints the same cover links on every poll within the day", async () => {
+    matchFindMany.mockResolvedValue([liveMatch({ venuePhotoName: COVER_REF })]);
+
+    const first = await request(buildApp()).get("/v1/date/state");
+    const second = await request(buildApp()).get("/v1/date/state");
+
+    expect(second.body.match.venue.photoUrl).toBe(first.body.match.venue.photoUrl);
+    expect(second.body.match.venue.thumbnailUrl).toBe(first.body.match.venue.thumbnailUrl);
+  });
+
+  it("answers null cover links for a venue with no photo, and nothing else changes", async () => {
+    matchFindMany.mockResolvedValue([liveMatch()]);
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.match.venue).toEqual({
+      name: "Kavarnya",
+      address: "Velyka Vasylkivska 1",
+      lat: 50.44,
+      lng: 30.52,
+      mapsUri: "https://maps.google.com/?cid=1",
+      photoUrl: null,
+      thumbnailUrl: null,
+    });
   });
 
   // The one state whose clock is running is also the one where `agreedTime` is

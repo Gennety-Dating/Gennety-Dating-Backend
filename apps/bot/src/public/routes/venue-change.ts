@@ -148,8 +148,10 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
   // not put its initData into a URL. The link itself is the permission
   // (`venue-change-photos.ts` says why, and why the ref is a path segment
   // rather than a query value).
-  // Minted only by the catalog and state responses, so this is no more an open
-  // Places proxy than the `tma` path is.
+  // Minted only by the board's catalog and state responses and, since
+  // 2026-09-22, by `/v1/date/state` for the assigned venue's cover — every one
+  // of them behind auth — so this is no more an open Places proxy than the
+  // `tma` path is.
   router.get(
     "/photo/:token",
     photoProxyLimiter,

@@ -5692,6 +5692,20 @@ components:
         lat: { type: [number, "null"] }
         lng: { type: [number, "null"] }
         mapsUri: { type: [string, "null"] }
+        photoUrl:
+          type: [string, "null"]
+          description: >
+            The venue's cover, 1200 px: an absolute signed link an image loader
+            takes as-is (no Authorization header), valid for at least a day and
+            byte-identical for every poll within that UTC day. Same signing and
+            route as `VenueBoardOriginal.photoUrl`. Null when the venue has no
+            photo. Optional — added 2026-09-22, so a client still decodes an
+            older server's answer.
+        thumbnailUrl:
+          type: [string, "null"]
+          description: >
+            The same cover at 240 px; same signing as `photoUrl`. Null when the
+            venue has no photo. Optional — added 2026-09-22.
 
     DateStateBump:
       type: object

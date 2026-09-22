@@ -12,6 +12,7 @@ import { deriveDateState, sideOf } from "../../services/date-state.js";
 import { deadlineFor } from "../../services/proposal-deadline.js";
 import type { BumpDeck } from "../../services/date-bump.js";
 import { venueCoordinatesOf } from "../../services/venue-location.js";
+import { boardPhotoLinks } from "../venue-change-photos.js";
 
 /**
  * `GET /v1/date/state` — everything the Living Canvas draws, in one call
@@ -50,6 +51,7 @@ const MATCH_SELECT = {
   venueMidpointLat: true,
   venueLng: true,
   venueGoogleMapsUri: true,
+  venuePhotoName: true,
 } as const;
 
 export const dateStateRouter: Router = Router();
@@ -182,6 +184,16 @@ dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void>
                 lat: venueCoordinatesOf(usable)?.lat ?? null,
                 lng: venueCoordinatesOf(usable)?.lng ?? null,
                 mapsUri: usable.venueGoogleMapsUri,
+                // The venue's cover, as signed links an image loader takes
+                // as-is — the same signer and route as the venue-change
+                // board's `original` card, because the subject is the same
+                // thing: `venuePhotoName`, the Places photo resource name the
+                // date card renders (written at scheduling, moved with the
+                // rest of the snapshot when a venue change settles). The
+                // expiry is day-rounded, so the canvas's polling mints
+                // byte-identical links and never defeats the image cache.
+                // Nulls when the venue has no photograph.
+                ...boardPhotoLinks(usable.venuePhotoName, now.getTime()),
               }
             : null,
           // Outside `bump` on purpose: that object is asserted by exact shape

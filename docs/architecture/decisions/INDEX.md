@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 351 entries
+# Decision index — all 352 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-22 | обложка места свидания в `/v1/date/state`: `venue.photoUrl`/`thumbnailUrl` — подписанные ссылки борда смены места из `venuePhotoName` (необязательные поля); запасное фото из каталога сознательно не сделано | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | реферальная программа платит только билетами (+1 пригласившему за верифицированного друга, лимит 20, +1 приглашённому при его верификации); приглашение только у шлюза билета, в магазине и в хабе — никогда в воронке Premium (отменяет 2026-08-08) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | витрина «Городского гида» = топ города (до 64): в Киеве ручной список основателя из 62 мест (premium, модные, Milk Bar/Idealist, пять парков), иначе правило — premium первым, без `alternative` и грузинской/татарской/узбекской кухни; парижская La Coupole в каталоге найдена и выведена (`excludedPlaces` + `active = false`) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | сводный выкат `28313fb6` проведён: на дроплете только generate + Mini App (не `pnpm build`), чужие `canvas_*` терпит drift-гейт и не удаляются, PM2 с `--kill-timeout 30000`, демо — отдельно | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
