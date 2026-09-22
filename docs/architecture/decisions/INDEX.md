@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 356 entries
+# Decision index — all 357 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-22 | лист места на доске смены места: `profile` = `ShowcaseVenue` «Городского гида» у каждой карточки `/v1/venue-change/catalog` и у `original` в `/state`; строка по ключу карточки среди активных строк любого tier (включая `alternative`), та же копия, что у витрины; нет строки → `null`; ссылки фото витринные (без заголовка, оба рельса); один запрос на доску + кэш 10 мин; телефона/Instagram нет — нет и у витрины | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | Live Activity смены места на iOS (`venue_change`): фазы match > partner > waiting с каждой стороны, гаснет, когда ничего не применимо; имя партнёра на экране блокировки — исключение основателя только для этой карточки; ждущий плательщика — `waiting` + `agreedName`; экспресс замораживает обе; своя таблица `venue_change_activities`, перезапуск через 7,5 ч | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | CI оставлен и починен, не удалён: `pnpm audit` — отдельная джоба с `continue-on-error` (гейт аудита остаётся в preflight деплоя), docs-only коммиты CI не запускают, actions v7 (Node 24); время в промпте агента — явно в `RENDER_TZ` (на UTC-хосте было на 3 ч раньше карточки) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | вопросы Profiler'а в iOS: `GET /v1/me/profiler` + `POST /v1/me/profiler/answer`; приложение тянет батч само (null `profilerNextAt` = пора, без тихих часов), живой вопрос ждёт возвращения; телеграм-логика общая, в Телеграм ничего не шлётся; пуш о батче и мем в ответ — не сделаны | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

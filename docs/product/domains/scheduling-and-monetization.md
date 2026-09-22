@@ -1098,6 +1098,18 @@ rule nobody wants to own. Three things differ, and only three:
   a venue a few places, never to the top. Nothing known (opted out, no visits, no
   location) means the ordinary order, which is also the fallback on any error.
 
+**Place sheet (founder, 2026-09-22 — canvas «Редизайн смены места»).** On iOS a
+tap on a card, or on the pinned current venue, opens the place at 80% height:
+gallery, opening hours, price level, vibe, rating, address, the Maps link. It is
+presentation, not a fourth difference — nothing about the mechanic changes. The
+data is the city guide's profile of the same place: `profile` on every catalog
+card and on the state's `original`, the very `ShowcaseVenue` object
+`/v1/venues/showcase` serves, found by the card's key among the active catalog
+rows of **any** tier (so the board-only `alternative` places the guide never
+lists get one too). A place the catalog does not hold — a Places-fallback venue,
+a hand-entered pick — gets `null`, and the sheet falls back to the card's own
+fields. The Mini App ignores the field.
+
 - **Entry — no disclaimers.** BOTH sides' scheduled cards carry a passive
   "📍 Change venue" `web_app` button (no proactive "does the venue suit you?"
   question, no hint DM). The board is open from `scheduled` up to

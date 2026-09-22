@@ -16,6 +16,7 @@ vi.mock("./venue.js", async (importOriginal) => ({
 
 import { prisma } from "@gennety/db";
 import { fetchPlacePhotoNames } from "./venue.js";
+import { SHOWCASE_CACHE_TTL_MS } from "./curated-venue.js";
 import {
   evaluateVenueBoardEligibility,
   evaluateVenueChangeRestart,
@@ -32,6 +33,8 @@ import {
   resolveVenuePhotoRefs,
   VENUE_CHANGE_PHOTOS_PER_VENUE,
   __resetVenuePhotoCacheForTests,
+  boardPlaceProfiles,
+  __resetBoardProfileCacheForTests,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
   type VenueChangeRestartInput,
@@ -973,5 +976,147 @@ describe("buildVenueChangeCatalog — curated cover photos", () => {
       photoLookup.mockResolvedValue(null);
       expect(await resolveVenuePhotoRefs("c1")).toEqual([]);
     });
+  });
+});
+
+// The board's place sheet (founder, 2026-09-22): each card opens the city
+// guide's profile of the same place, found by the board's own key.
+describe("boardPlaceProfiles", () => {
+  // The showcase's own TTL — the catalog changes by import, not by the minute.
+  const TTL = SHOWCASE_CACHE_TTL_MS;
+  const NOW = 1_700_000_000_000;
+
+  let seq = 0;
+  /** A catalog row with every column the showcase reads. */
+  function catalogRow(over: Record<string, unknown> = {}) {
+    seq += 1;
+    return {
+      id: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
+      placeId: `place-${seq}`,
+      name: `Place ${seq}`,
+      address: `Street ${seq}`,
+      category: "cafe",
+      tier: "alternative",
+      primaryType: null,
+      priority: 2,
+      lat: 50.45,
+      lng: 30.52,
+      editorialSummary: null,
+      vibeTags: ["cozy"],
+      facetTags: [],
+      utcOffsetMinutes: 180,
+      openingHours: { periods: [{ open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } }] },
+      photoRefs: ["places/x/photos/0"],
+      rating: 4.6,
+      userRatingCount: 320,
+      priceLevel: "PRICE_LEVEL_MODERATE",
+      googleMapsUri: "https://maps.google.com/?cid=1",
+      ...over,
+    };
+  }
+
+  beforeEach(() => {
+    seq = 0;
+    findMany.mockReset();
+    __resetBoardProfileCacheForTests();
+  });
+
+  it("reads the whole board in ONE query — active rows only, by place id or, without one, name + address", async () => {
+    findMany.mockResolvedValue([]);
+
+    await boardPlaceProfiles(
+      [
+        { placeId: "a", name: "A", address: "1 St" },
+        { placeId: "b", name: "B", address: "2 St" },
+        { placeId: null, name: "Hand-entered", address: "3 St" },
+        // The same place twice is still one lookup.
+        { placeId: "a", name: "A", address: "1 St" },
+      ],
+      NOW,
+    );
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      OR: [{ placeId: { in: ["a", "b"] } }, { placeId: null, name: "Hand-entered", address: "3 St" }],
+      active: true,
+    });
+  });
+
+  it("answers in input order, with the guide's shape, and null where the catalog has no row", async () => {
+    const keyed = catalogRow({ placeId: "a" });
+    const unkeyed = catalogRow({ placeId: null, name: "Hand-entered", address: "3 St" });
+    findMany.mockResolvedValue([unkeyed, keyed]);
+
+    const [a, fallback, hand] = await boardPlaceProfiles(
+      [
+        { placeId: "a", name: "A", address: "1 St" },
+        // A Places-fallback venue nobody catalogued.
+        { placeId: "places-only", name: "Elsewhere", address: "9 St" },
+        { placeId: null, name: "Hand-entered", address: "3 St" },
+      ],
+      NOW,
+    );
+
+    // The board-only `alternative` tier is exactly what the guide's list
+    // leaves out — and exactly what gets a profile here.
+    expect(a).toMatchObject({
+      id: keyed.id,
+      placeId: "a",
+      openingHours: [{ open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 21, minute: 0 } }],
+      utcOffsetMinutes: 180,
+      photoCount: 1,
+      priceLevel: "moderate",
+      vibeTags: ["cozy"],
+      rating: 4.6,
+      userRatingCount: 320,
+      mapsUri: "https://maps.google.com/?cid=1",
+    });
+    expect(a).not.toHaveProperty("tier");
+    expect(a).not.toHaveProperty("photoRefs");
+    expect(fallback).toBeNull();
+    expect(hand?.id).toBe(unkeyed.id);
+  });
+
+  it("never answers a name + address lookup with a row that has a place id — the key rule", async () => {
+    findMany.mockResolvedValue([catalogRow({ placeId: "real", name: "Twin", address: "5 St" })]);
+
+    const [profile] = await boardPlaceProfiles([{ placeId: null, name: "Twin", address: "5 St" }], NOW);
+
+    expect(profile).toBeNull();
+  });
+
+  it("serves a board seen within the TTL from memory — the pinned card rides the ~4 s poll", async () => {
+    findMany.mockResolvedValue([catalogRow({ placeId: "a" })]);
+    const board = [
+      { placeId: "a", name: "A", address: "1 St" },
+      { placeId: "none", name: "N", address: "2 St" },
+    ];
+
+    await boardPlaceProfiles(board, NOW);
+    const again = await boardPlaceProfiles(board, NOW + TTL - 1);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    // A miss is remembered too: it is a fact about the catalog, not a failure.
+    expect(again[0]?.placeId).toBe("a");
+    expect(again[1]).toBeNull();
+
+    await boardPlaceProfiles(board, NOW + TTL + 1);
+    expect(findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers nulls rather than failing when the catalog cannot be read, and tries again next time", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      findMany.mockRejectedValueOnce(new Error("db down")).mockResolvedValue([catalogRow({ placeId: "a" })]);
+      const board = [{ placeId: "a", name: "A", address: "1 St" }];
+
+      expect(await boardPlaceProfiles(board, NOW)).toEqual([null]);
+      expect(warn).toHaveBeenCalled();
+
+      const [profile] = await boardPlaceProfiles(board, NOW + 1);
+      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(profile?.placeId).toBe("a");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -26,7 +26,13 @@ import {
 import { haversineDistanceKm, type LatLng } from "./geo.js";
 import { PLACES_LIVE_SEARCH_ENABLED } from "../demo/config.js";
 import { readPlaceCacheMany, writePlaceCache } from "./place-cache.js";
-import { isVenueOpenAt, OFFERABLE_CATEGORY_FILTER } from "./curated-venue.js";
+import {
+  findShowcasePlaces,
+  isVenueOpenAt,
+  OFFERABLE_CATEGORY_FILTER,
+  SHOWCASE_CACHE_TTL_MS,
+  type ShowcasePlace,
+} from "./curated-venue.js";
 import { meetsVenueQualityFloor } from "./initial-venue-policy.js";
 import {
   fetchPlacePhotoNames,
@@ -1017,4 +1023,108 @@ export function isWithinRadius(
   radiusKm: number = VENUE_CHANGE_RADIUS_KM,
 ): boolean {
   return haversineDistanceKm(center, point) <= radiusKm;
+}
+
+// ---------------------------------------------------------------------------
+// Place profiles — the board's place sheet (founder, 2026-09-22)
+// ---------------------------------------------------------------------------
+
+/** What names a place on this board: `venueKeyOf`'s inputs. */
+export interface BoardPlaceRef {
+  placeId: string | null;
+  name: string;
+  address: string;
+}
+
+/**
+ * How long a place's profile is served from memory — the showcase's own TTL,
+ * for its reason: the catalog changes by an operator import or the nightly
+ * re-validation, never by the minute. Here it matters more than there, because
+ * the pinned card's profile rides on `/state`, which the board polls every ~4 s
+ * on both sides; without it every poll would re-read the same catalog row.
+ */
+const BOARD_PROFILE_TTL_MS = SHOWCASE_CACHE_TTL_MS;
+
+/** Keys remembered at once. A board is ≤ 22 places, so this is dozens of boards. */
+const BOARD_PROFILE_CACHE_MAX = 512;
+
+/** Venue key → its profile, or null for "the catalog has no active row for it". */
+const boardProfileCache = new Map<string, { at: number; place: ShowcasePlace | null }>();
+
+/** Test seam — the cache is module state. */
+export function __resetBoardProfileCacheForTests(): void {
+  boardProfileCache.clear();
+}
+
+/**
+ * The city guide's profile (`ShowcaseVenue`, before its photo links are
+ * signed) of each board place, in input order — or null where the catalog holds
+ * no active row for it.
+ *
+ * The board's own card fields stay what they were; this is the sheet a card
+ * opens, and it is the guide's object on purpose — hours, price level, vibe
+ * tags, rating, the ten-photo gallery — so one client view model reads both
+ * surfaces. The guide's LIST cannot serve it: it is a city's curated top and
+ * leaves out the board-only `alternative` tier, which is most of a board.
+ *
+ * **Which row.** The catalog row that answers to the place's key
+ * (`venueKeyOf`: its `placeId`, else `name|address` among rows without one) —
+ * whatever its tier or city, as long as it is active. A Places-fallback venue
+ * therefore gets a profile when the catalog happens to hold the same place, and
+ * null otherwise; so does a hand-entered pick nobody catalogued.
+ *
+ * **Cost.** One query for everything the cache does not hold — never one per
+ * place — and nothing at all for a board already seen within the TTL. No
+ * network: the profile is catalog columns only, and a gallery photo is fetched
+ * (and billed) only when the client opens the sheet.
+ *
+ * **Never fails the board.** A read error answers nulls for the uncached keys
+ * and caches nothing, so the next read tries again; the sheet is decoration on
+ * a surface whose job is agreeing on a place.
+ */
+export async function boardPlaceProfiles(
+  places: readonly BoardPlaceRef[],
+  now: number = Date.now(),
+): Promise<Array<ShowcasePlace | null>> {
+  const keys = places.map(venueKeyOf);
+  const fresh = (key: string): boolean => {
+    const hit = boardProfileCache.get(key);
+    return hit != null && now - hit.at < BOARD_PROFILE_TTL_MS;
+  };
+
+  const wanted = new Map<string, BoardPlaceRef>();
+  places.forEach((place, index) => {
+    const key = keys[index] as string;
+    if (!fresh(key)) wanted.set(key, place);
+  });
+
+  if (wanted.size > 0) {
+    const placeIds = [...wanted.values()].flatMap((p) => (p.placeId ? [p.placeId] : []));
+    const unkeyed = [...wanted.values()].filter((p) => !p.placeId);
+    try {
+      const found = await findShowcasePlaces(
+        {
+          OR: [
+            ...(placeIds.length > 0 ? [{ placeId: { in: placeIds } }] : []),
+            // A row without a place id is keyed by name + address — and only
+            // such a row: `venueKeyOf` never matches a keyed row that way.
+            ...unkeyed.map((p) => ({ placeId: null, name: p.name, address: p.address })),
+          ],
+        },
+        venueKeyOf,
+      );
+      for (const key of wanted.keys()) {
+        boardProfileCache.delete(key);
+        if (boardProfileCache.size >= BOARD_PROFILE_CACHE_MAX) {
+          const oldest = boardProfileCache.keys().next().value;
+          if (oldest !== undefined) boardProfileCache.delete(oldest);
+        }
+        boardProfileCache.set(key, { at: now, place: found.get(key) ?? null });
+      }
+    } catch (err) {
+      console.warn("[venue-change] place profiles unavailable:", err);
+    }
+  }
+
+  return keys.map((key) => (fresh(key) ? (boardProfileCache.get(key)?.place ?? null) : null));
 }

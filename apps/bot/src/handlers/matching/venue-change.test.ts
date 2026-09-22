@@ -601,6 +601,22 @@ describe("getVenueBoardState", () => {
     expect(res.state.original.name).toBe("Old Cafe");
   });
 
+  // The route finds the pinned card's city-guide profile by this (2026-09-22).
+  // It names the place the way the catalog does, and stays out of `state` —
+  // the board has never sent a place id for the pinned card.
+  it("names the assigned place for its profile lookup, outside the state the client sees", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch({ venuePlaceId: "p-old" }));
+    const res = await getVenueBoardState(100n, "m1");
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.originalVenue).toEqual({ placeId: "p-old", name: "Old Cafe", address: "Old St" });
+    expect(res.state.original).not.toHaveProperty("placeId");
+
+    mMatch.findUnique.mockResolvedValue(fakeMatch({ venueName: null }));
+    const none = await getVenueBoardState(100n, "m1");
+    if (!none.ok) throw new Error("expected ok");
+    expect(none.originalVenue).toBeNull();
+  });
+
   it("her fork: she initiated → pay_or_offer with price", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     const res = await getVenueBoardState(100n, "m1");

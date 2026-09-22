@@ -4549,6 +4549,12 @@ paths:
         and are shown LOCKED unless `pairPremiumActive` on the board state is
         true. Selecting one without that is refused server-side with 402 — the
         tier is re-resolved from the catalog and never taken from the client.
+
+
+        **Every card carries the place sheet it opens** (`profile`, since
+        2026-09-22): the city guide's `ShowcaseVenue` for the same place, read
+        for the whole board in one catalog query, or null where the catalog has
+        no row for it. No request of its own when a card is tapped.
       parameters:
         - name: match
           in: query
@@ -5482,6 +5488,18 @@ components:
             rather than putting its initData into an image URL. Optional — added
             2026-09-14.
           items: { type: string }
+        profile:
+          $ref: "#/components/schemas/ShowcaseVenue"
+          description: >-
+            The pinned card's place sheet — the same object as
+            `VenueChangeVenue.profile`, for the venue the pair was given (found
+            by its place id, else by name + address). Null (sent explicitly)
+            when the catalog holds no active row for it. Served from a
+            minutes-long server cache, so the four-second poll does not re-read
+            the catalog, and its links are day-stable like `photoUrl`. OPTIONAL
+            rather than `oneOf: [$ref, "null"]` for the reason given on
+            `VenueChangeVenue.profile`: that shape never reaches the generated
+            Swift client. Added 2026-09-22.
 
     VenueBoardAgreed:
       type: object
@@ -5593,6 +5611,39 @@ components:
         editorialSummary:
           type: [string, "null"]
           description: Google's short blurb, when the row has one.
+        profile:
+          $ref: "#/components/schemas/ShowcaseVenue"
+          description: >-
+            The place sheet this card opens: the city guide's profile of the
+            same place — the very object `GET /v1/venues/showcase` serves
+            (`ShowcaseVenue`, same server serializer): opening hours +
+            `utcOffsetMinutes`, the gallery (`photoUrls`, at most 10),
+            `priceLevel`, `vibeTags`, `editorialSummary`, `rating` /
+            `userRatingCount`, `mapsUri`. Found by this card's `key` among the
+            ACTIVE catalog rows of any tier, so the board-only `alternative`
+            places that the guide's list leaves out get one too. Null (sent
+            explicitly) when the catalog holds no such row — a Places-fallback
+            venue nobody catalogued, or a hand-entered pick. Added 2026-09-22.
+
+
+            Its photo links are the guide's (`/v1/venues/{id}/photo[/slot]`),
+            not this card's `/v1/venue-change/photo/{token}`: signed the same
+            way (an HMAC over the subject, the width and the shared
+            day-rounded expiry; the subject in the PATH) and, like the card's,
+            needing no Authorization header — so a client on either rail loads
+            them as they are. `profile.photoUrls[0]` is therefore a different
+            URL for the same picture as `photoUrl`. A profile with no photos
+            (`photoUrls: []`) means the catalog's nightly scan has not reached
+            the row yet; draw the card's own `photoUrls` then.
+
+
+            OPTIONAL rather than a nullable union, and that is load-bearing:
+            `oneOf: [$ref, "null"]` is the shape swift-openapi-generator SKIPS
+            in silence (same trap as `VenueBoardState.agreed` and
+            `/v1/me/feedback/pending`). An optional property decodes the
+            explicit JSON `null` to nil, so the wire keeps saying null and the
+            property actually exists in the generated client — and a client
+            built from this spec still reads a server that predates it.
 
     VenueLikeResult:
       type: object

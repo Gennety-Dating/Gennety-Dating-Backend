@@ -16,7 +16,7 @@
  * the shared package.
  */
 
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import { findCityByKey } from "@gennety/shared";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
 import {
@@ -790,6 +790,40 @@ function httpsLink(raw: string | null): string | null {
   }
 }
 
+/**
+ * The catalog columns a showcase place is built from — one select for every
+ * reader of {@link ShowcaseCandidate}, so a column the profile starts showing
+ * cannot reach one surface and silently miss the other.
+ */
+const SHOWCASE_COLUMNS = {
+  id: true,
+  placeId: true,
+  name: true,
+  address: true,
+  category: true,
+  tier: true,
+  primaryType: true,
+  priority: true,
+  lat: true,
+  lng: true,
+  editorialSummary: true,
+  vibeTags: true,
+  facetTags: true,
+  utcOffsetMinutes: true,
+  openingHours: true,
+  photoRefs: true,
+  rating: true,
+  userRatingCount: true,
+  priceLevel: true,
+  googleMapsUri: true,
+} satisfies Prisma.CuratedVenueSelect;
+
+type ShowcaseRow = Prisma.CuratedVenueGetPayload<{ select: typeof SHOWCASE_COLUMNS }>;
+
+function showcaseCandidateOf(row: ShowcaseRow): ShowcaseCandidate {
+  return { ...row, openingHours: (row.openingHours as RegularOpeningHours | null) ?? null };
+}
+
 const showcaseCache = new Map<string, { at: number; places: ShowcasePlace[] }>();
 
 /**
@@ -805,35 +839,11 @@ export async function getShowcaseVenues(
 
   const rows = await prisma.curatedVenue.findMany({
     where: { cityKey, active: true, category: { notIn: OFFERABLE_CATEGORY_FILTER } },
-    select: {
-      id: true,
-      placeId: true,
-      name: true,
-      address: true,
-      category: true,
-      tier: true,
-      primaryType: true,
-      priority: true,
-      lat: true,
-      lng: true,
-      editorialSummary: true,
-      vibeTags: true,
-      facetTags: true,
-      utcOffsetMinutes: true,
-      openingHours: true,
-      photoRefs: true,
-      rating: true,
-      userRatingCount: true,
-      priceLevel: true,
-      googleMapsUri: true,
-    },
+    select: SHOWCASE_COLUMNS,
   });
 
   const picks = SHOWCASE_PICKS[cityKey]?.map((pick) => pick.placeId) ?? [];
-  const candidates: ShowcaseCandidate[] = rows.map((r) => ({
-    ...r,
-    openingHours: (r.openingHours as RegularOpeningHours | null) ?? null,
-  }));
+  const candidates = rows.map(showcaseCandidateOf);
   const selected = selectShowcase(candidates, { picks, city: findCityByKey(cityKey) });
   if (picks.length > 0) {
     // A pick that stopped resolving is an editorial list going stale — the
@@ -863,6 +873,51 @@ export async function getShowcaseVenues(
 /** Test-only: forget every cached selection. */
 export function resetShowcaseCache(): void {
   showcaseCache.clear();
+}
+
+/**
+ * The city guide's profile of places a caller already knows, looked up by
+ * identity instead of chosen by the rule — for a surface that shows its own
+ * list and wants the facts the guide shows about each entry: the venue-change
+ * board's place sheet (founder, 2026-09-22).
+ *
+ * None of the showcase's SELECTION applies, deliberately: not the tier (the
+ * board-only `alternative` places are exactly what the guide leaves out, and
+ * exactly what the board is made of), not the city's hand-picked list, not the
+ * limit, not the kitchens the guide strikes. What does apply is everything that
+ * makes a place's profile the SAME object as the guide's:
+ *
+ * - **Only active rows.** The signed photo route answers nothing for a retired
+ *   row (`showcasePhotoRef`), so a profile built from one would be a gallery of
+ *   dead links.
+ * - **The same copy.** The catalog holds a row per university domain; copies
+ *   answering to one key compete exactly as they do in {@link selectShowcase}
+ *   (`compareShowcase`), so a place on both surfaces carries the same `id` —
+ *   and therefore the same photo paths, which is what the iOS image cache keys
+ *   on.
+ * - **The same mapping** ({@link toShowcasePlace}), so every field means what
+ *   it means in the guide.
+ *
+ * `keyOf` is the caller's notion of which rows are one place. Passed in rather
+ * than written here so this module does not grow a second copy of the board's
+ * key rule (`venueKeyOf`), which lives beside the board's catalog. Keys that
+ * match no active row are simply absent from the result.
+ */
+export async function findShowcasePlaces(
+  where: Prisma.CuratedVenueWhereInput,
+  keyOf: (row: { placeId: string | null; name: string; address: string }) => string,
+): Promise<Map<string, ShowcasePlace>> {
+  const rows = await prisma.curatedVenue.findMany({
+    where: { ...where, active: true },
+    select: SHOWCASE_COLUMNS,
+  });
+  const byKey = new Map<string, ShowcaseCandidate>();
+  for (const row of rows.map(showcaseCandidateOf)) {
+    const key = keyOf(row);
+    const seen = byKey.get(key);
+    byKey.set(key, seen && compareShowcase(seen, row) <= 0 ? seen : row);
+  }
+  return new Map([...byKey].map(([key, row]) => [key, toShowcasePlace(row)]));
 }
 
 /**

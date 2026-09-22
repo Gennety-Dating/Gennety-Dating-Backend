@@ -7,9 +7,11 @@ import { verifyAccessToken } from "../jwt.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 // From the service, not the handler: the key rule belongs with the catalog,
 // and this route must keep working in tests that mock the handler wholesale.
-import { venueKeyOf } from "../../services/venue-change.js";
+import { boardPlaceProfiles, venueKeyOf } from "../../services/venue-change.js";
+import type { ShowcasePlace } from "../../services/curated-venue.js";
 import { prisma } from "@gennety/db";
 import { fetchPlacesPhoto, snapWidth } from "../places-photo.js";
+import { serializeShowcasePlace } from "../showcase-photos.js";
 import {
   boardGalleryUrls,
   boardPhotoLinks,
@@ -50,7 +52,8 @@ function noteBoardAction(telegramId: number, matchId: string, what: string): voi
  * board out of reach (decision 2026-08-20).
  *
  *   GET  /v1/venue-change/state?match=<id>    — board snapshot (polled ~4s)
- *   GET  /v1/venue-change/catalog?match=<id>  — alternatives within 3 km
+ *   GET  /v1/venue-change/catalog?match=<id>  — alternatives within 3 km, each
+ *                                               with its place sheet (`profile`)
  *   GET  /v1/venue-change/photo               — Places photo proxy (unchanged)
  *   POST /v1/venue-change/like                — full like-set submission
  *   POST /v1/venue-change/confirm             — resolve a multi-overlap
@@ -217,6 +220,12 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       return;
     }
     const now = Date.now();
+    // The pinned card opens the same place sheet as every other card. Cached
+    // per place for minutes (`boardPlaceProfiles`), so the ~4 s poll does not
+    // re-read the catalog each time.
+    const [originalProfile] = result.originalVenue
+      ? await boardPlaceProfiles([result.originalVenue], now)
+      : [null];
     res.status(200).json({
       ok: true,
       ...result.state,
@@ -225,6 +234,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         ...boardPhotoLinks(result.state.original.photoRefs?.[0] ?? null, now),
         // Every photo, signed, for the Mini App's pinned-card gallery (A13-L16).
         photoUrls: boardGalleryUrls(result.state.original.photoRefs, now),
+        profile: profileOf(originalProfile ?? null, now),
       },
     });
   });
@@ -252,9 +262,12 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     // reads `thumbnailUrl`/`photoUrls` — the gallery needs every photo, not
     // only the first (A13-L16). Additive, so no client is on another's schedule.
     const now = Date.now();
+    // The place sheet a card opens: the city guide's profile of the same place,
+    // for the whole board in one catalog read (null where it has no row).
+    const profiles = await boardPlaceProfiles(result.venues, now);
     res.status(200).json({
       ok: true,
-      venues: result.venues.map((v) => ({
+      venues: result.venues.map((v, index) => ({
         ...v,
         // The key the like/confirm calls take, derived HERE rather than by each
         // client. It is `placeId ?? name|address`, and a client re-deriving it
@@ -265,6 +278,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         key: venueKeyOf(v),
         ...boardPhotoLinks(v.photoRefs?.[0] ?? null, now),
         photoUrls: boardGalleryUrls(v.photoRefs, now),
+        profile: profileOf(profiles[index] ?? null, now),
       })),
     });
   });
@@ -520,6 +534,23 @@ async function langForTelegramId(telegramId: number): Promise<Language> {
     .findUnique({ where: { telegramId: BigInt(telegramId) }, select: { language: true } })
     .catch(() => null);
   return (user?.language ?? "en") as Language;
+}
+
+/**
+ * A board place's sheet, exactly as the city guide sends it (`ShowcaseVenue`) —
+ * the guide's own serializer, so the two surfaces cannot drift — or an explicit
+ * null when the catalog holds no row for the place.
+ *
+ * Its photo links are the guide's (`/v1/venues/{id}/photo[/slot]`), not the
+ * board's `/photo/:token`: signed the same way (HMAC, the shared day-rounded
+ * expiry, the subject in the PATH) and, like the board's, carrying the
+ * permission themselves — no Authorization header, so they serve the Mini App
+ * and the native client alike, whichever rail asked for the board. Keeping the
+ * guide's links is what lets a place seen in both surfaces hit one cache entry
+ * on the device and in the guide's server-side photo cache.
+ */
+function profileOf(place: ShowcasePlace | null, now: number) {
+  return place ? serializeShowcasePlace(place, now) : null;
 }
 
 function matchIdOfQuery(req: Request): string | null {

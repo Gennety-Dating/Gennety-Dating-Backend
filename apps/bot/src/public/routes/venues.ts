@@ -10,14 +10,13 @@ import {
   fetchPlacesPhoto,
   type PhotoBytes,
 } from "../places-photo.js";
-import { venuePhotoSignatureValid, venuePhotoUrl } from "../showcase-photos.js";
+import { serializeShowcasePlace, venuePhotoSignatureValid } from "../showcase-photos.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import {
   getShowcaseVenues,
   SHOWCASE_GALLERY_MAX,
   SHOWCASE_LIMIT,
   showcasePhotoRef,
-  type ShowcasePlace,
 } from "../../services/curated-venue.js";
 
 /**
@@ -51,10 +50,6 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  */
 const CITY_KEY_REGEX = /^[a-z0-9:_-]{2,64}$/;
 
-/** Card photo and map-pin photo — the two widths `ALLOWED_PHOTO_WIDTHS` allows. */
-const CARD_WIDTH = ALLOWED_PHOTO_WIDTHS[1];
-const PIN_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
-
 /**
  * Bytes of proxied photos; see `createPhotoCache` for why this surface needs
  * one and the board does not. A city's working set is its showcase's covers at
@@ -84,28 +79,6 @@ function gallerySlot(raw: unknown): number | null {
 /** Test-only: forget every cached photo. */
 export function resetVenuePhotoCache(): void {
   photoCache.clear();
-}
-
-/**
- * One place as it goes over the wire: photo links are signed per response.
- *
- * The whole gallery's links ride in the list. Signing is free; only fetching a
- * photo is billed, and nobody fetches a gallery until they open the profile —
- * so the profile opens without a request of its own. `photoUrls[0]` is
- * byte-for-byte `photoUrl`, so the cover the card already shows is not
- * downloaded (or billed) a second time.
- */
-export function serializeShowcasePlace(place: ShowcasePlace, now: number = Date.now()) {
-  const { photoCount, ...rest } = place;
-  const photoUrls = Array.from({ length: photoCount }, (_, index) =>
-    venuePhotoUrl(place.id, CARD_WIDTH, now, index),
-  );
-  return {
-    ...rest,
-    photoUrl: photoUrls[0] ?? null,
-    thumbnailUrl: photoCount > 0 ? venuePhotoUrl(place.id, PIN_WIDTH, now) : null,
-    photoUrls,
-  };
 }
 
 venuesRouter.get(

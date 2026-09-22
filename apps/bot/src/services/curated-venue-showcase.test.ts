@@ -17,6 +17,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 const {
+  findShowcasePlaces,
   getShowcaseVenues,
   normalizeOpeningPeriods,
   orderAsWalk,
@@ -360,6 +361,65 @@ describe("getShowcaseVenues", () => {
 
     expect(await getShowcaseVenues("ua:kyiv")).toHaveLength(1);
     expect(await getShowcaseVenues("ua:odesa")).toEqual([]);
+  });
+});
+
+// The venue-change board's place sheet (2026-09-22) asks for the guide's
+// profile of places it already chose — by identity, not by the rule.
+describe("findShowcasePlaces", () => {
+  const byPlaceId = (r: { placeId: string | null; name: string; address: string }) =>
+    r.placeId ?? `${r.name}|${r.address}`;
+
+  it("reads only active rows, with exactly the columns the guide reads", async () => {
+    findMany.mockResolvedValue([row()]);
+    await getShowcaseVenues("ua:kyiv");
+    await findShowcasePlaces({ placeId: { in: ["place-1"] } }, byPlaceId);
+
+    const [guide, lookup] = findMany.mock.calls.map((call) => call[0]);
+    expect(lookup.where).toEqual({ placeId: { in: ["place-1"] }, active: true });
+    expect(lookup.select).toEqual(guide.select);
+  });
+
+  it("answers the SAME object the guide serves for the same row", async () => {
+    const sens = row({
+      editorialSummary: " Books and coffee. ",
+      priceLevel: "PRICE_LEVEL_INEXPENSIVE",
+      googleMapsUri: "https://maps.google.com/?cid=9",
+      openingHours: { periods: [{ open: { day: 2, hour: 8, minute: 30 } }] },
+      photoRefs: Array.from({ length: 12 }, (_, i) => `places/x/photos/${i}`),
+    });
+    findMany.mockResolvedValue([sens]);
+
+    const [fromGuide] = await getShowcaseVenues("ua:kyiv");
+    const found = await findShowcasePlaces({}, byPlaceId);
+
+    expect(found.get(sens.placeId!)).toEqual(fromGuide);
+    // The gallery cap holds here too.
+    expect(found.get(sens.placeId!)?.photoCount).toBe(SHOWCASE_GALLERY_MAX);
+  });
+
+  it("picks the copy the guide picks, so a place keeps one id — and one set of photo paths", async () => {
+    const plain = row({ placeId: "shared", name: "Twin", priority: 3 });
+    const best = row({ placeId: "shared", name: "Twin", priority: 1 });
+    findMany.mockResolvedValue([plain, best]);
+
+    const [fromGuide] = await getShowcaseVenues("ua:kyiv");
+    const found = await findShowcasePlaces({}, byPlaceId);
+
+    expect(found.size).toBe(1);
+    expect(found.get("shared")?.id).toBe(best.id);
+    expect(fromGuide?.id).toBe(best.id);
+  });
+
+  it("applies none of the guide's SELECTION — the board-only tier and struck kitchens still get a profile", async () => {
+    const alt = row({ tier: "alternative" });
+    const struck = row({ primaryType: "halal_restaurant" });
+    findMany.mockResolvedValue([alt, struck]);
+
+    expect(await getShowcaseVenues("ua:kyiv")).toEqual([]);
+    const found = await findShowcasePlaces({}, byPlaceId);
+
+    expect([...found.keys()].sort()).toEqual([alt.placeId, struck.placeId].sort());
   });
 });
 

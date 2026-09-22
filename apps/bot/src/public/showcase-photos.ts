@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "../config.js";
+import type { ShowcasePlace } from "../services/curated-venue.js";
+import { ALLOWED_PHOTO_WIDTHS } from "./places-photo.js";
 
 /**
  * Signed links to curated-venue photos for the iOS standby canvas, and — at
@@ -86,4 +88,37 @@ export function venuePhotoUrl(
   });
   const slot = index === 0 ? "" : `/${index}`;
   return `${base}/v1/venues/${venueId}/photo${slot}?${query.toString()}`;
+}
+
+/** Card photo and map-pin photo — the two widths `ALLOWED_PHOTO_WIDTHS` allows. */
+const CARD_WIDTH = ALLOWED_PHOTO_WIDTHS[1];
+const PIN_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
+
+/**
+ * One place as it goes over the wire (`ShowcaseVenue`): photo links are signed
+ * per response.
+ *
+ * The whole gallery's links ride in the list. Signing is free; only fetching a
+ * photo is billed, and nobody fetches a gallery until they open the profile —
+ * so the profile opens without a request of its own. `photoUrls[0]` is
+ * byte-for-byte `photoUrl`, so the cover the card already shows is not
+ * downloaded (or billed) a second time.
+ *
+ * The one serializer of a place profile. It lives beside the signer rather than
+ * in `routes/venues.ts` because two routes speak it: the city guide's list and,
+ * since 2026-09-22, the venue-change board's `profile` on every card and on the
+ * pinned `original` — the same object on both, so one client view model reads
+ * both.
+ */
+export function serializeShowcasePlace(place: ShowcasePlace, now: number = Date.now()) {
+  const { photoCount, ...rest } = place;
+  const photoUrls = Array.from({ length: photoCount }, (_, index) =>
+    venuePhotoUrl(place.id, CARD_WIDTH, now, index),
+  );
+  return {
+    ...rest,
+    photoUrl: photoUrls[0] ?? null,
+    thumbnailUrl: photoCount > 0 ? venuePhotoUrl(place.id, PIN_WIDTH, now) : null,
+    photoUrls,
+  };
 }

@@ -17,8 +17,27 @@ vi.mock("../config.js", () => ({
   env: { BOT_TOKEN, VENUE_CHANGE_STARS: 150, PUBLIC_BASE_URL: "https://api.example.test" },
 }));
 
+// The catalog is read for the place sheet's profile (`boardPlaceProfiles`) —
+// and, in the shape test, by the city guide's own route for the same row.
+const venueFindMany = vi.fn();
+const venueFindUnique = vi.fn();
 vi.mock("@gennety/db", () => ({
-  prisma: { user: { findUnique: vi.fn().mockResolvedValue({ language: "en" }) } },
+  prisma: {
+    user: { findUnique: vi.fn().mockResolvedValue({ language: "en" }) },
+    curatedVenue: {
+      findMany: (...a: unknown[]) => venueFindMany(...a),
+      findUnique: (...a: unknown[]) => venueFindUnique(...a),
+    },
+  },
+}));
+
+// The city guide's list authenticates through the canvas rail; stubbed the way
+// `venues-api.test.ts` stubs it.
+vi.mock("./canvas-auth.js", () => ({
+  requireCanvasAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+    req.userId = "me";
+    next();
+  },
 }));
 
 const getVenueBoardState = vi.fn();
@@ -43,6 +62,9 @@ vi.mock("../handlers/matching/venue-change.js", () => ({
 }));
 
 const { createVenueChangeRouter } = await import("./routes/venue-change.js");
+const { venuesRouter, resetVenuePhotoCache } = await import("./routes/venues.js");
+const { resetShowcaseCache } = await import("../services/curated-venue.js");
+const { __resetBoardProfileCacheForTests } = await import("../services/venue-change.js");
 const fakeApi = {} as Parameters<typeof createVenueChangeRouter>[0];
 
 function buildApp() {
@@ -107,6 +129,11 @@ beforeEach(() => {
   mintExpressChange.mockReset();
   settleFreeVenueChange.mockReset();
   createVenueInvoiceLink.mockReset();
+  venueFindMany.mockReset().mockResolvedValue([]);
+  venueFindUnique.mockReset();
+  __resetBoardProfileCacheForTests();
+  resetShowcaseCache();
+  resetVenuePhotoCache();
 });
 
 afterEach(() => {
@@ -667,6 +694,234 @@ describe("signed gallery links for the Mini App", () => {
     const res = await request(buildApp()).get(`${link.pathname}${link.search}`);
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("image/jpeg");
+  });
+});
+
+// The board's place sheet (founder, 2026-09-22): every card, and the pinned
+// `original`, carries the city guide's profile of the same place.
+describe("place sheet profile (`profile` = ShowcaseVenue)", () => {
+  const ROW_ID = "44444444-4444-4444-8444-444444444444";
+
+  /** A catalog row of the board-only tier — the one the guide's list leaves out. */
+  function catalogRow(over: Record<string, unknown> = {}) {
+    return {
+      id: ROW_ID,
+      placeId: "ChIJ-sens",
+      name: "Sens",
+      address: "Mykilskyi Ln, 1, Kyiv",
+      category: "cafe",
+      tier: "alternative",
+      primaryType: null,
+      priority: 1,
+      lat: 50.4401,
+      lng: 30.5486,
+      editorialSummary: "Books and coffee.",
+      vibeTags: ["books", "quiet"],
+      facetTags: ["quiet"],
+      utcOffsetMinutes: 180,
+      openingHours: {
+        periods: [{ open: { day: 1, hour: 8, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }],
+      },
+      photoRefs: Array.from({ length: 12 }, (_, i) => `places/ChIJ-sens/photos/${i}`),
+      rating: 4.7,
+      userRatingCount: 812,
+      priceLevel: "PRICE_LEVEL_INEXPENSIVE",
+      googleMapsUri: "https://maps.google.com/?cid=42",
+      ...over,
+    };
+  }
+
+  /** A board card as the handler hands it over. */
+  function boardVenue(placeId: string | null, name: string, source = "curated") {
+    return {
+      source,
+      placeId,
+      name,
+      address: `${name} St`,
+      lat: 50.44,
+      lng: 30.54,
+      mapsUri: null,
+      category: "cafe",
+      tier: "alternative",
+      distanceKm: 0.4,
+      photoRefs: [`places/${placeId ?? "x"}/photos/card`],
+      rating: null,
+      userRatingCount: null,
+      editorialSummary: null,
+    };
+  }
+
+  async function getCatalog() {
+    return request(buildApp())
+      .get(`/v1/venue-change/catalog?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+  }
+
+  it("carries the profile on a card whose place is in the catalog, and null on one that is not", async () => {
+    venueFindMany.mockResolvedValue([catalogRow()]);
+    getVenueChangeCatalog.mockResolvedValue({
+      ok: true,
+      venues: [boardVenue("ChIJ-sens", "Sens"), boardVenue("ChIJ-fallback", "Elsewhere", "places")],
+    });
+
+    const res = await getCatalog();
+
+    expect(res.status).toBe(200);
+    const [sens, fallback] = res.body.venues;
+    expect(sens.profile).toMatchObject({
+      id: ROW_ID,
+      placeId: "ChIJ-sens",
+      editorialSummary: "Books and coffee.",
+      vibeTags: ["books", "quiet"],
+      utcOffsetMinutes: 180,
+      openingHours: [{ open: { day: 1, hour: 8, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }],
+      priceLevel: "inexpensive",
+      rating: 4.7,
+      userRatingCount: 812,
+      mapsUri: "https://maps.google.com/?cid=42",
+    });
+    // The profile's gallery is the guide's: capped at ten, cover first, the
+    // row id in the PATH — and no Places resource name on the wire.
+    expect(sens.profile.photoUrls).toHaveLength(10);
+    expect(sens.profile.photoUrls[0]).toBe(sens.profile.photoUrl);
+    expect(new URL(sens.profile.photoUrl).pathname).toBe(`/v1/venues/${ROW_ID}/photo`);
+    expect(new URL(sens.profile.photoUrls[9]).pathname).toBe(`/v1/venues/${ROW_ID}/photo/9`);
+    expect(JSON.stringify(sens.profile)).not.toContain("places/ChIJ-sens/photos");
+    // The card's own fields are untouched.
+    expect(sens.key).toBe("ChIJ-sens");
+    expect(sens.photoUrls).toHaveLength(1);
+    // An explicit null, never an absent key.
+    expect(fallback).toHaveProperty("profile", null);
+  });
+
+  it("reads the catalog once for the whole board, never once per card", async () => {
+    getVenueChangeCatalog.mockResolvedValue({
+      ok: true,
+      venues: [boardVenue("a", "A"), boardVenue("b", "B"), boardVenue(null, "Hand")],
+    });
+
+    await getCatalog();
+
+    expect(venueFindMany).toHaveBeenCalledTimes(1);
+    expect(venueFindMany.mock.calls[0][0].where).toEqual({
+      OR: [{ placeId: { in: ["a", "b"] } }, { placeId: null, name: "Hand", address: "Hand St" }],
+      active: true,
+    });
+  });
+
+  it("is exactly the object the city guide serves for the same row", async () => {
+    // Tier `base` here, so the guide's own list shows the row too.
+    venueFindMany.mockResolvedValue([catalogRow({ tier: "base" })]);
+    getVenueChangeCatalog.mockResolvedValue({ ok: true, venues: [boardVenue("ChIJ-sens", "Sens")] });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const app = express();
+    app.use(express.json());
+    app.use("/v1/venue-change", createVenueChangeRouter(fakeApi));
+    app.use("/v1/venues", venuesRouter);
+
+    try {
+      const guide = await request(app).get("/v1/venues/showcase?cityKey=ua:kyiv");
+      const board = await request(app)
+        .get(`/v1/venue-change/catalog?match=${VALID_UUID}`)
+        .set("Authorization", tmaHeader());
+
+      expect(guide.body.venues).toHaveLength(1);
+      expect(board.body.venues[0].profile).toEqual(guide.body.venues[0]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("a profile photo link opens the guide's photo route with no header — either rail can use it", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    venueFindMany.mockResolvedValue([catalogRow()]);
+    venueFindUnique.mockResolvedValue({ active: true, photoRefs: catalogRow().photoRefs });
+    getVenueChangeCatalog.mockResolvedValue({ ok: true, venues: [boardVenue("ChIJ-sens", "Sens")] });
+    const catalog = await getCatalog();
+    const link = new URL(String(catalog.body.venues[0].profile.photoUrls[3]));
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const app = express();
+    app.use("/v1/venues", venuesRouter);
+    const res = await request(app).get(`${link.pathname}${link.search}`);
+
+    expect(res.status).toBe(200);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("places/ChIJ-sens/photos/3/media");
+  });
+
+  it("never fails the board when the catalog cannot be read", async () => {
+    venueFindMany.mockRejectedValue(new Error("db down"));
+    getVenueChangeCatalog.mockResolvedValue({ ok: true, venues: [boardVenue("ChIJ-sens", "Sens")] });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const res = await getCatalog();
+      expect(res.status).toBe(200);
+      expect(res.body.venues[0]).toHaveProperty("profile", null);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("/state: the pinned original carries its place's profile", async () => {
+    venueFindMany.mockResolvedValue([catalogRow()]);
+    getVenueBoardState.mockResolvedValue({
+      ...agreedState({ original: { name: "Sens", address: "Sens St", mapsUri: null, photoRefs: [] } }),
+      originalVenue: { placeId: "ChIJ-sens", name: "Sens", address: "Sens St" },
+    });
+
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/state?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+
+    expect(res.status).toBe(200);
+    expect(res.body.original).toMatchObject({ name: "Sens", photoUrl: null });
+    expect(res.body.original.profile).toMatchObject({ id: ROW_ID, placeId: "ChIJ-sens", priceLevel: "inexpensive" });
+    expect(res.body.original.profile.photoUrls).toHaveLength(10);
+    // Server-side only, like the agreement nonce.
+    expect(res.body).not.toHaveProperty("originalVenue");
+    expect(res.body).not.toHaveProperty("agreementNonce");
+  });
+
+  it("/state: null when the assigned place has no catalog row, or there is no venue yet", async () => {
+    getVenueBoardState.mockResolvedValue({
+      ...agreedState(),
+      originalVenue: { placeId: "ChIJ-uncatalogued", name: "Old", address: "Old St" },
+    });
+    const uncatalogued = await request(buildApp())
+      .get(`/v1/venue-change/state?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+    expect(uncatalogued.body.original).toHaveProperty("profile", null);
+
+    venueFindMany.mockClear();
+    getVenueBoardState.mockResolvedValue({ ...agreedState(), originalVenue: null });
+    const none = await request(buildApp())
+      .get(`/v1/venue-change/state?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+    expect(none.body.original).toHaveProperty("profile", null);
+    expect(venueFindMany).not.toHaveBeenCalled();
+  });
+
+  it("/state: the ~4 s poll does not re-read the catalog for the same place", async () => {
+    venueFindMany.mockResolvedValue([catalogRow()]);
+    getVenueBoardState.mockResolvedValue({
+      ...agreedState(),
+      originalVenue: { placeId: "ChIJ-sens", name: "Sens", address: "Sens St" },
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await request(buildApp())
+        .get(`/v1/venue-change/state?match=${VALID_UUID}`)
+        .set("Authorization", tmaHeader());
+      expect(res.body.original.profile?.id).toBe(ROW_ID);
+    }
+    expect(venueFindMany).toHaveBeenCalledTimes(1);
   });
 });
 

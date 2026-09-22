@@ -56,6 +56,7 @@ import {
   buildVenueChangeCatalog,
   resolveVenuePhotoRefs,
   venueChangeSessionReset,
+  type BoardPlaceRef,
   type CatalogVenue,
   type VenueChangeIneligibleReason,
   type VenueChangeRestartReason,
@@ -216,14 +217,20 @@ function venueCatalogScope(match: VcMatch): {
     // The assigned venue is already on the board as the pinned "keep this
     // place" card (KEEP_KEY), so it must not also appear among the
     // alternatives — see `BuildCatalogInput.excludeVenue`.
-    excludeVenue: match.venueName
-      ? {
-          placeId: match.venuePlaceId,
-          name: match.venueName,
-          address: match.venueAddress ?? "",
-        }
-      : null,
+    excludeVenue: assignedVenueOf(match),
   };
+}
+
+/**
+ * The assigned venue as the catalog identifies a place (`venueKeyOf`'s
+ * inputs), or null before one is assigned. `venuePlaceId` moves with the rest
+ * of the venue snapshot when a change settles, so this is always the place the
+ * pair is going to now.
+ */
+function assignedVenueOf(match: VcMatch): BoardPlaceRef | null {
+  return match.venueName
+    ? { placeId: match.venuePlaceId, name: match.venueName, address: match.venueAddress ?? "" }
+    : null;
 }
 
 /**
@@ -632,6 +639,13 @@ export type VenueBoardStateResult =
        * part of `state`, which is what the Mini App receives.
        */
       agreementNonce: string | null;
+      /**
+       * The pinned card's place, as the catalog identifies it — null before a
+       * venue is assigned. Server-side only, like `agreementNonce`: the route
+       * looks up its city-guide profile (`original.profile`) by it, and the
+       * place id itself is not something the board has ever sent.
+       */
+      originalVenue: BoardPlaceRef | null;
     };
 
 export async function getVenueBoardState(
@@ -649,6 +663,7 @@ export async function getVenueBoardState(
     ok: true,
     state: { ...state, original: { ...state.original, photoRefs } },
     agreementNonce: match.venueChangeStatus === "agreed" ? venueAgreementNonce(match) : null,
+    originalVenue: assignedVenueOf(match),
   };
 }
 
