@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 349 entries
+# Decision index — all 350 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-22 | витрина «Городского гида» = топ города (до 64): в Киеве ручной список основателя из 62 мест (premium, модные, Milk Bar/Idealist, пять парков), иначе правило — premium первым, без `alternative` и грузинской/татарской/узбекской кухни; в каталоге найдена парижская La Coupole | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-22 | сводный выкат `28313fb6` проведён: на дроплете только generate + Mini App (не `pnpm build`), чужие `canvas_*` терпит drift-гейт и не удаляются, PM2 с `--kill-timeout 30000`, демо — отдельно | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-21 | сводный выкат всего `main` на прод и переход прода на миграции (`migrate deploy`), не `db push`; дописана миграция `image_urls` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-21 | chat turn carries several photos: `imageUrls` beside the legacy `imageUrl` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

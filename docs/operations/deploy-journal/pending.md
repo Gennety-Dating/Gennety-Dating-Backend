@@ -11,6 +11,36 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — витрина «Городского гида» = топ города (2026-09-22).** Только код бота:
+без миграций, без новых зависимостей, без env. `GET /v1/venues/showcase` для
+`ua:kyiv` отдаёт ручной список основателя — 62 места (`SHOWCASE_PICKS` в
+`apps/bot/src/services/showcase-curation.ts`) вместо 24 лучших по приоритету;
+город без списка — правило (premium первым, одна карточка на бренд, без
+`alternative` и грузинской/крымскотатарской/узбекской кухни, плова, шаурмы).
+Потолок 64, строки дальше радиуса города отброшены (в каталоге есть парижская
+La Coupole). Кэш фото-прокси вырос до 384 записей / 48 МБ. Решение — журнал
+решений, 2026-09-22.
+
+Выкат: `git archive` коммита → rsync в `/opt/gennety` по исключениям ранбука
+(копия `/opt/gennety-prev-<ts>` до записи) → `pm2 restart gennety-bot` → health.
+`pnpm install` и `db:deploy` не нужны (lockfile и схема не менялись); drift-гейт —
+по ранбуку.
+
+Проверка на сервере (без JWT, читает прод-БД с самого дроплета):
+
+```sh
+cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx -e \
+  'import("./apps/bot/src/config.ts").then(() => import("./apps/bot/src/services/curated-venue.ts")).then(async (m) => { const p = await m.getShowcaseVenues("ua:kyiv"); console.log(p.length, p.slice(0, 3).map((x) => x.name)); process.exit(0); })'
+# ожидается: 62 [ 'Кафе Fandom', 'Steakhouse', 'Très Branché' ]
+pm2 logs gennety-bot --lines 300 --nostream | grep '\[showcase\]'   # пусто = все 62 нашлись
+```
+
+На iPhone: первая карточка — Кафе Fandom, в карусели 62 места, нет Mama Gochi /
+CHINA MA / Софры. Откат: вернуть `/opt/gennety-prev-<ts>` + `pm2 restart
+gennety-bot` (данные не менялись). **Демо:** та же логика, демо на старом коде до
+своего выката. **iOS:** без изменений — клиент рисует сколько пришло (проверить
+на телефоне плотность 62 булавок).
+
 **Deployed 2026-09-22 — сводный выкат всего `main` (`28313fb6`) на прод, 00:31–00:57 UTC.**
 **Бот + СХЕМА + Mini App.** Каждый блок ниже с пометкой «Deployed 2026-09-22 (was
 PENDING; сводный выкат `28313fb6`)» уехал этим выкатом — живо состояние `main` на

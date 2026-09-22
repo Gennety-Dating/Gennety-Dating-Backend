@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 192 entries
+# Deploy journal index — 193 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-22 | витрина «Городского гида» = топ города: Киев — ручной список из 62 мест, иначе правило; потолок 64, радиус города, кэш фото 48 МБ; только код бота | [pending](./pending.md) |
 | Deployed | 2026-09-22 | 09-22 — сводный выкат всего `main` (`28313fb6`): 8 миграций через `db:deploy`, PM2 с `--kill-timeout 30000`, Mini App; все PENDING-блоки ниже уехали им; демо — нет | [pending](./pending.md) |
 | Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — чат: один ход несёт до десяти снимков (`imageUrls`), 2026-09-21. | [pending](./pending.md) |
 | Deployed | 2026-09-22 | 09-22 (was PENDING, не было в индексе) — видео профиля из приложения: `POST/DELETE /v1/me/video`, `video` в `GET /v1/me/photos` и в `partner-photos`, … | [pending](./pending.md) |

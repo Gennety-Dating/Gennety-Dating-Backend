@@ -254,9 +254,16 @@ nothing is scheduled, the native canvas shows the city's curated places instead
 of the idle sheet: photo pins on the map and a card carousel under it, swiping a
 card flies the map to its pin and tapping a pin scrolls to its card. One call,
 `GET /v1/venues/showcase` (either rail, like the rest of the canvas): one entry
-per real place — the catalog holds a row per university domain — `museum` and
-blocked names excluded, the 24 best by operator priority, then a photo, then
-Google rating, ordered as a walk so neighbouring cards are neighbouring pins.
+per real place — the catalog holds a row per university domain — `museum`,
+blocked names and rows outside the city's radius excluded, ordered as a walk so
+neighbouring cards are neighbouring pins. **Which places (founder, 2026-09-22):**
+the default map is a map of the city — no radius, no query — so it shows the
+city's top rather than the 24 best by priority it showed first: a hand-picked
+list where the city has one (Kyiv: 62 — the premium catalog, fashionable places,
+Milk Bar and Idealist, five parks; `apps/bot/src/services/showcase-curation.ts`),
+otherwise the rule — premium first, one card per brand, never the board-only
+`alternative` tier or the Georgian / Crimean-Tatar / Uzbek kitchens, plov and
+shawarma. At most 64. Those kitchens stay on the venue-change board.
 Photos arrive as signed links to `GET /v1/venues/:id/photo`, because an image
 loader sends no header. Opening hours travel as raw local periods and the client
 derives "open until …" itself: the canvas stays open past the moment any
@@ -276,7 +283,7 @@ photo is fetched (and billed) only when someone swipes to it. Deliberately not
 in it (founder, 2026-09-15): a written description (`editorialSummary` stays
 unbought), district, socials/menu/website, popular hours, an average-check
 amount, categories beyond the catalog's, and the full catalog instead of the
-top 24.
+city's top (24 until 2026-09-22, now the hand-picked list above).
 
 ### 6.4a Date Terminal (Contact Sync) — the bot's way into the date day
 

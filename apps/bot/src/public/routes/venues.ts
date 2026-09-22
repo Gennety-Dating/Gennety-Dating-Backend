@@ -15,6 +15,7 @@ import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import {
   getShowcaseVenues,
   SHOWCASE_GALLERY_MAX,
+  SHOWCASE_LIMIT,
   showcasePhotoRef,
   type ShowcasePlace,
 } from "../../services/curated-venue.js";
@@ -56,15 +57,17 @@ const PIN_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
 
 /**
  * Bytes of proxied photos; see `createPhotoCache` for why this surface needs
- * one and the board does not. A city's working set is 24 covers at two widths
- * plus, once profiles are opened, up to four gallery photos each at the card
- * width: 48 + 96 = 144 entries. Count was the binding limit at 96, so it grew
- * to hold that set; the byte ceiling did not — ~150 KB a 1200 px photo keeps a
- * whole launched city (~18 MB) under 24 MB, and a second city simply evicts.
+ * one and the board does not. A city's working set is its showcase's covers at
+ * two widths plus, once profiles are opened, up to four gallery photos each at
+ * the card width — six entries a place, derived from the limit so the two can
+ * never drift apart again (the count was sized for 24 places and would have
+ * evicted, and re-billed, most of Kyiv's 62 from 2026-09-22). Bytes: ~150 KB a
+ * 1200 px photo puts a fully browsed 64-place city near 48 MB; covers alone are
+ * ~10 MB. On the 2 GB droplet the bot runs at ~250 MB with ~1.2 GB available.
  */
 const photoCache = createPhotoCache({
-  maxEntries: 192,
-  maxBytes: 24 * 1024 * 1024,
+  maxEntries: SHOWCASE_LIMIT * (2 + (SHOWCASE_GALLERY_MAX - 1)),
+  maxBytes: 48 * 1024 * 1024,
   ttlMs: 12 * 60 * 60 * 1000,
 });
 

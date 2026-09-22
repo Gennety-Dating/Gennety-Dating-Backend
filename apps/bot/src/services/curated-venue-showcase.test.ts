@@ -3,7 +3,7 @@
  * order and in what shape. The selection is pure and tested directly; the DB
  * read goes through a mocked Prisma, the same seam the route tests use.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 const findMany = vi.fn();
 const findUnique = vi.fn();
@@ -29,6 +29,7 @@ const {
   SHOWCASE_LIMIT,
 } = await import("./curated-venue.js");
 type Candidate = import("./curated-venue.js").ShowcaseCandidate;
+const { SHOWCASE_PICKS, isShowcaseExcludedKitchen } = await import("./showcase-curation.js");
 
 let seq = 0;
 function row(overrides: Partial<Candidate> = {}): Candidate {
@@ -36,9 +37,13 @@ function row(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
     placeId: `place-${seq}`,
-    name: `Place ${seq}`,
+    // One word: the rule keeps one card per brand, and "Place 1"/"Place 2"
+    // would read as two branches of a chain called "Place".
+    name: `Place${seq}`,
     address: `Street ${seq}`,
     category: "cafe",
+    tier: "base",
+    primaryType: null,
     priority: 2,
     lat: 50.45,
     lng: 30.52,
@@ -56,11 +61,19 @@ function row(overrides: Partial<Candidate> = {}): Candidate {
   };
 }
 
+// Every Kyiv read below misses the hand-picked ids and says so; keep it quiet.
+let warn: MockInstance<typeof console.warn>;
+
 beforeEach(() => {
   seq = 0;
   findMany.mockReset();
   findUnique.mockReset();
   resetShowcaseCache();
+  warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  warn.mockRestore();
 });
 
 describe("selectShowcase", () => {
@@ -92,26 +105,76 @@ describe("selectShowcase", () => {
     expect(picked.map((p) => p.name)).toEqual(["Sens"]);
   });
 
-  it("keeps every tier — the brief asks for all active places", () => {
-    // Tiers are not a column the showcase reads; this pins that no filter
-    // sneaks in through the category or priority either.
-    expect(selectShowcase([row({ priority: 3 }), row({ priority: 1 })])).toHaveLength(2);
-  });
-
-  it("ranks by the operator's priority, then a photo, then the rating", () => {
+  it("ranks premium first, then the operator's priority, then a photo, then the rating", () => {
     const low = row({ priority: 2, rating: 4.9 });
     const noPhoto = row({ priority: 1, photoRefs: [], rating: 4.8 });
     const best = row({ priority: 1, rating: 4.1 });
+    const premium = row({ tier: "premium", priority: 3, rating: 4.0 });
 
-    const picked = selectShowcase([low, noPhoto, best], 2);
+    expect(selectShowcase([low, noPhoto, best], { limit: 2 }).map((p) => p.id)).toEqual([best.id, noPhoto.id]);
+    expect(selectShowcase([low, noPhoto, best, premium], { limit: 1 }).map((p) => p.id)).toEqual([premium.id]);
+  });
 
-    expect(picked.map((p) => p.id)).toEqual([best.id, noPhoto.id]);
+  it("never shows the board-only tier or a kitchen the founder struck", () => {
+    const picked = selectShowcase([
+      row({ name: "Mama Gochi", tier: "alternative" }),
+      row({ name: "Чічіко", tier: "premium", primaryType: "eastern_european_restaurant" }),
+      row({ name: "Шоті", primaryType: "restaurant" }),
+      row({ name: "Софра • Смак Криму" }),
+      row({ name: "Даш кафе", primaryType: "halal_restaurant" }),
+      row({ name: "Шаурма на районі" }),
+      row({ name: "Biggoli", tier: "premium", primaryType: "italian_restaurant" }),
+      row({ name: "Coffee Records" }),
+    ]);
+
+    expect(picked.map((p) => p.name).sort()).toEqual(["Biggoli", "Coffee Records"]);
+  });
+
+  it("keeps one card per brand, the best branch", () => {
+    const picked = selectShowcase([
+      row({ name: "Пиріжкова Тітка Клара", rating: 4.5 }),
+      row({ name: "Пиріжкова тітка Клара", rating: 4.7 }),
+      row({ name: "Idealist Coffee IQ", rating: 4.6 }),
+      row({ name: "Idealist Coffee на Коновальця", rating: 4.3 }),
+      row({ name: "ONE LOVE coffee" }),
+      row({ name: "One Tea Tree" }),
+    ]);
+
+    expect(picked).toHaveLength(4);
+    expect(picked.find((p) => p.name.startsWith("Пиріжкова"))?.rating).toBe(4.7);
+    expect(picked.find((p) => p.name.startsWith("Idealist"))?.name).toBe("Idealist Coffee IQ");
+  });
+
+  it("leaves out a row outside the city — the catalog's Paris La Coupole", () => {
+    const kyiv = { latitude: 50.4501, longitude: 30.5234, radiusKm: 21 };
+    const paris = row({ name: "La Coupole", tier: "premium", lat: 48.8422546, lng: 2.3279506 });
+    const podil = row({ name: "Win Bar", lat: 50.4664, lng: 30.5159 });
+
+    expect(selectShowcase([paris, podil], { city: kyiv }).map((p) => p.name)).toEqual(["Win Bar"]);
+    expect(selectShowcase([paris, podil], { city: kyiv, picks: [paris.placeId!, podil.placeId!] }).map((p) => p.name)).toEqual(["Win Bar"]);
+  });
+
+  it("shows exactly the hand-picked list when the city has one, the rule's exclusions notwithstanding", () => {
+    const first = row({ name: "Кафе Fandom", tier: "premium", lat: 50.44 });
+    const struck = row({ name: "Georgia", tier: "alternative", lat: 50.45 });
+    const unpicked = row({ name: "Very Well Cafe", tier: "premium", rating: 5, lat: 50.46 });
+
+    const picked = selectShowcase([unpicked, struck, first], { picks: [first.placeId!, struck.placeId!, "gone"] });
+
+    expect(picked.map((p) => p.name)).toEqual(["Кафе Fandom", "Georgia"]);
+  });
+
+  it("falls back to the rule when none of the picks is in the catalog any more", () => {
+    const place = row({ name: "Coffee Records" });
+
+    expect(selectShowcase([place], { picks: ["gone", "also-gone"] }).map((p) => p.name)).toEqual(["Coffee Records"]);
   });
 
   it("caps the list", () => {
-    const rows = Array.from({ length: 40 }, (_, i) => row({ lat: 50.4 + i * 0.001 }));
+    const rows = Array.from({ length: SHOWCASE_LIMIT + 16 }, (_, i) => row({ lat: 50.4 + i * 0.001 }));
 
     expect(selectShowcase(rows)).toHaveLength(SHOWCASE_LIMIT);
+    expect(selectShowcase(rows, { picks: rows.map((r) => r.placeId!) })).toHaveLength(SHOWCASE_LIMIT);
   });
 });
 
@@ -270,6 +333,26 @@ describe("getShowcaseVenues", () => {
 
     await getShowcaseVenues("ua:kyiv", 1_000 + SHOWCASE_CACHE_TTL_MS + 1);
     expect(findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves Kyiv's hand-picked list and names the picks it could not show", async () => {
+    const fandom = row({ placeId: SHOWCASE_PICKS["ua:kyiv"]![0]!.placeId, name: "Кафе Fandom", tier: "premium" });
+    findMany.mockResolvedValue([fandom, row({ name: "Not picked", tier: "premium", rating: 5 })]);
+
+    const places = await getShowcaseVenues("ua:kyiv");
+
+    expect(places.map((p) => p.name)).toEqual(["Кафе Fandom"]);
+    expect(findMany.mock.calls[0][0].select).toMatchObject({ tier: true, primaryType: true });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0]![0])).toContain("Win Bar");
+  });
+
+  it("keeps the Kyiv list inside the limit, unique, and free of the struck kitchens", () => {
+    const kyiv = SHOWCASE_PICKS["ua:kyiv"]!;
+    expect(kyiv.length).toBeGreaterThanOrEqual(55);
+    expect(kyiv.length).toBeLessThanOrEqual(SHOWCASE_LIMIT);
+    expect(new Set(kyiv.map((pick) => pick.placeId)).size).toBe(kyiv.length);
+    for (const pick of kyiv) expect(isShowcaseExcludedKitchen({ name: pick.name, primaryType: null })).toBe(false);
   });
 
   it("keeps cities apart", async () => {

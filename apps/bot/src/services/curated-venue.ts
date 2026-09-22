@@ -17,7 +17,14 @@
  */
 
 import { prisma } from "@gennety/db";
+import { findCityByKey } from "@gennety/shared";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
+import {
+  isShowcaseExcludedKitchen,
+  SHOWCASE_EXCLUDED_TIERS,
+  SHOWCASE_PICKS,
+  showcaseBrandKey,
+} from "./showcase-curation.js";
 import {
   fetchPlacePhotoName,
   isBlockedVenueName,
@@ -427,14 +434,17 @@ export function isOfferableVenueCategory(category: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * How many places the standby canvas shows.
+ * The most places the standby canvas shows.
  *
  * Each one is drawn twice — a photo pin on the map and a card in the carousel
- * under it — and Kyiv alone holds ~275 distinct places. All of them would be a
- * map buried under thumbnails and a carousel nobody reaches the end of; two
- * dozen is the city's best, each one swipe from the next.
+ * under it — and Kyiv alone holds ~257 distinct places. All of them would be a
+ * map buried under thumbnails; two dozen (the limit until 2026-09-22) left out
+ * most of the places the product is proud of. The founder's call: the city's
+ * top, "around 55, maybe more" — Kyiv's hand-picked list is 62
+ * (`SHOWCASE_PICKS`), and this is the ceiling any list or the rule must fit,
+ * which is also what the photo proxy's cache is sized for.
  */
-export const SHOWCASE_LIMIT = 24;
+export const SHOWCASE_LIMIT = 64;
 
 /**
  * How long one city's selection is served from memory. The catalog changes by
@@ -495,6 +505,10 @@ export interface ShowcaseCandidate {
   name: string;
   address: string;
   category: string;
+  /** `base` | `premium` | `alternative` — the rule shows premium first, never `alternative`. */
+  tier: string;
+  /** Google's primary type — how the rule recognises a kitchen the founder struck. */
+  primaryType: string | null;
   priority: number;
   lat: number;
   lng: number;
@@ -565,12 +579,17 @@ function placeKey(row: ShowcaseCandidate): string {
 }
 
 /**
- * Showcase order: the operator's own verdict first (`priority`, 1 = best
+ * Showcase order: the premium catalog first (the founder's "преимущественно
+ * премиум", 2026-09-22), then the operator's own verdict (`priority`, 1 = best
  * first-date spot), then a photo — a card without one is the one thing on this
  * screen that looks broken — then Google's rating and how many people gave it.
- * The id last, so equal places always come out in the same order.
+ * The id last, so equal places always come out in the same order. Also the
+ * order in which copies of one place compete for its single entry.
  */
 function compareShowcase(a: ShowcaseCandidate, b: ShowcaseCandidate): number {
+  const premiumA = a.tier === "premium" ? 0 : 1;
+  const premiumB = b.tier === "premium" ? 0 : 1;
+  if (premiumA !== premiumB) return premiumA - premiumB;
   if (a.priority !== b.priority) return a.priority - b.priority;
   const photoA = a.photoRefs.length > 0 ? 0 : 1;
   const photoB = b.photoRefs.length > 0 ? 0 : 1;
@@ -584,29 +603,73 @@ function compareShowcase(a: ShowcaseCandidate, b: ShowcaseCandidate): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/** How {@link selectShowcase} is steered; every field is optional. */
+export interface ShowcaseSelectionOptions {
+  /** At most this many places. */
+  limit?: number;
+  /**
+   * The city's hand-picked list, as Google place ids in display priority
+   * (`SHOWCASE_PICKS`). When any of them is in the catalog, exactly those are
+   * shown and the rule below is not consulted.
+   */
+  picks?: readonly string[];
+  /** The city's centre and radius: a row further out is a geocoding mistake. */
+  city?: { latitude: number; longitude: number; radiusKm: number } | null;
+}
+
 /**
  * Pure selection: one copy per real place, the product's standing exclusions
- * applied, the best {@link SHOWCASE_LIMIT} kept, in walking order.
+ * applied, then the city's hand-picked list — or, for a city without one, the
+ * rule — capped at {@link SHOWCASE_LIMIT}, in walking order.
  *
- * The exclusions are the ones that already hold everywhere else — a category
- * the product never offers (`museum`) and an operator-blocked name. The tier is
- * NOT filtered: the founder's brief asks for every active place, and a tier
- * decides who pays for a venue change, not whether a place is worth seeing.
+ * The standing exclusions hold on both paths: a category the product never
+ * offers (`museum`), an operator-blocked name, and a row outside the city —
+ * Kyiv's catalog holds Google's PARIS La Coupole (48.84, 2.33), which a
+ * premium-first order would otherwise put on the first page and fly the map to.
+ *
+ * The rule (founder, 2026-09-22): never the board-only `alternative` tier or a
+ * struck kitchen (`isShowcaseExcludedKitchen`), one card per brand, premium
+ * first. It is deliberately blunter than the Kyiv list — "fashionable" is
+ * taste, and the list is where taste lives.
  */
 export function selectShowcase(
   rows: ShowcaseCandidate[],
-  limit: number = SHOWCASE_LIMIT,
+  options: ShowcaseSelectionOptions = {},
 ): ShowcaseCandidate[] {
+  const limit = Math.max(0, options.limit ?? SHOWCASE_LIMIT);
+  const city = options.city ?? null;
   const byPlace = new Map<string, ShowcaseCandidate>();
   for (const row of rows) {
     if (!isOfferableVenueCategory(row.category)) continue;
     if (isBlockedVenueName(row.name)) continue;
     if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) continue;
+    if (city && haversineDistanceKm({ lat: city.latitude, lng: city.longitude }, row) > city.radiusKm) continue;
     const key = placeKey(row);
     const seen = byPlace.get(key);
     byPlace.set(key, seen && compareShowcase(seen, row) <= 0 ? seen : row);
   }
-  const chosen = [...byPlace.values()].sort(compareShowcase).slice(0, Math.max(0, limit));
+  const places = [...byPlace.values()];
+
+  if (options.picks && options.picks.length > 0) {
+    const byPlaceId = new Map(places.flatMap((place) => (place.placeId ? [[place.placeId, place] as const] : [])));
+    const picked = options.picks.flatMap((id) => {
+      const place = byPlaceId.get(id);
+      return place ? [place] : [];
+    });
+    if (picked.length > 0) return orderAsWalk(picked.slice(0, limit));
+  }
+
+  const chosen: ShowcaseCandidate[] = [];
+  const brands = new Set<string>();
+  for (const place of places.sort(compareShowcase)) {
+    if (chosen.length >= limit) break;
+    if (SHOWCASE_EXCLUDED_TIERS.includes(place.tier)) continue;
+    if (isShowcaseExcludedKitchen(place)) continue;
+    const brand = showcaseBrandKey(place.name);
+    if (brands.has(brand)) continue;
+    brands.add(brand);
+    chosen.push(place);
+  }
   return orderAsWalk(chosen);
 }
 
@@ -741,6 +804,8 @@ export async function getShowcaseVenues(
       name: true,
       address: true,
       category: true,
+      tier: true,
+      primaryType: true,
       priority: true,
       lat: true,
       lng: true,
@@ -757,12 +822,27 @@ export async function getShowcaseVenues(
     },
   });
 
-  const places = selectShowcase(
-    rows.map((r) => ({
-      ...r,
-      openingHours: (r.openingHours as RegularOpeningHours | null) ?? null,
-    })),
-  ).map(toShowcasePlace);
+  const picks = SHOWCASE_PICKS[cityKey]?.map((pick) => pick.placeId) ?? [];
+  const candidates: ShowcaseCandidate[] = rows.map((r) => ({
+    ...r,
+    openingHours: (r.openingHours as RegularOpeningHours | null) ?? null,
+  }));
+  const selected = selectShowcase(candidates, { picks, city: findCityByKey(cityKey) });
+  if (picks.length > 0) {
+    // A pick that stopped resolving is an editorial list going stale — the
+    // re-validation cron closed the place, or Google re-issued its id. The map
+    // copes (it drops out; none left falls back to the rule); the list should
+    // still be fixed, so say which. Once per cache fill, not per request.
+    const shown = new Set(selected.map((place) => place.placeId));
+    const missing = SHOWCASE_PICKS[cityKey]!.filter((pick) => !shown.has(pick.placeId));
+    if (missing.length > 0) {
+      const named = missing.slice(0, 10).map((pick) => pick.name).join(", ");
+      console.warn(
+        `[showcase] ${cityKey}: ${missing.length} hand-picked place(s) not shown: ${named}${missing.length > 10 ? ", …" : ""}`,
+      );
+    }
+  }
+  const places = selected.map(toShowcasePlace);
 
   showcaseCache.delete(cityKey);
   if (showcaseCache.size >= SHOWCASE_CACHE_MAX_CITIES) {

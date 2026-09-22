@@ -4345,10 +4345,17 @@ paths:
         (`museum`) and operator-blocked names are left out, as everywhere else.
 
 
-        **Capped at 24 and already in display order**: the best-ranked place
-        first (operator priority, then having a photo, then Google rating),
-        then always the nearest place not yet shown — so a swipe of the
-        carousel moves the map a street or two rather than across the city.
+        **The city's top, capped at 64 and already in display order**
+        (founder, 2026-09-22). A city with a hand-picked list (Kyiv: 62
+        places — the premium catalog, fashionable places, the most popular
+        cafés, five parks) gets exactly that list; any other city gets the
+        rule: premium first, then operator priority, a photo and Google
+        rating, one card per brand, never the board-only `alternative` tier
+        or the Georgian / Crimean-Tatar / Uzbek / plov / shawarma kitchens.
+        A row outside the city's radius is left out as a geocoding mistake.
+        The order is a walk from the first place — always the nearest one
+        not yet shown — so a swipe of the carousel moves the map a street or
+        two rather than across the city.
       parameters:
         - name: cityKey
           in: query

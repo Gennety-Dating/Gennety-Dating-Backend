@@ -96,6 +96,15 @@ afterEach(() => {
 });
 
 describe("GET /v1/venues/showcase", () => {
+  // The fixtures are not Kyiv's hand-picked places, and the showcase says so.
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.mocked(console.warn).mockRestore();
+  });
+
   it("defaults to the caller's home city", async () => {
     userFindUnique.mockResolvedValue({ profile: { homeCityKey: "ua:kyiv" } });
     venueFindMany.mockResolvedValue([catalogRow()]);
