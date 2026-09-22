@@ -23,6 +23,7 @@ import {
   ADMIN_CACHE_KEY_PREFIX,
 } from "../admin/utils/cache.js";
 import { env } from "../config.js";
+import { RENDER_TZ } from "./datetime-entity.js";
 import { formatNextBatchDate } from "./next-batch.js";
 import {
   buildProductPlaybook,
@@ -339,16 +340,21 @@ function localeFor(language: string | null): string {
   }
 }
 
-/** Compact local clock label ("19:00"). */
+/**
+ * Compact clock label ("19:00") in `RENDER_TZ` — the zone the date card shows,
+ * so the agent quotes the same figure the user reads. Without an explicit zone
+ * this followed the host clock: a UTC server said "15:00" for a 18:00 Kyiv time.
+ */
 function formatClock(date: Date, locale: string): string {
   return date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: RENDER_TZ,
   });
 }
 
-/** Full local date+time label ("Saturday, May 16, 19:00"). */
+/** Full date+time label ("Saturday, May 16, 19:00") in `RENDER_TZ`. */
 function formatWhen(date: Date, locale: string): string {
   return date.toLocaleString(locale, {
     weekday: "long",
@@ -357,6 +363,7 @@ function formatWhen(date: Date, locale: string): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: RENDER_TZ,
   });
 }
 
@@ -526,12 +533,13 @@ const KIND_LABEL: Record<string, string> = {
   payment: "",
 };
 
-/** "11:02" in the user's own locale — enough to read the ordering. */
+/** "11:02" in the user's own locale and `RENDER_TZ` — enough to read the ordering. */
 function formatEventClock(date: Date, locale: string): string {
   return date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: RENDER_TZ,
   });
 }
 
