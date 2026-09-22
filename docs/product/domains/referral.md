@@ -1,5 +1,5 @@
-<!-- WHEN_TO_READ: You are working on the referral program ('Пригласи друга') — invite links, attribution, or rewards. -->
-<!-- SOURCE: REFERRAL_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+<!-- WHEN_TO_READ: You are working on the referral program ('Пригласи друга') — invite links, attribution, rewards, or where the invite CTA may appear. -->
+<!-- SOURCE: REFERRAL_PRODUCT_SPEC.md (moved 2026-09-01); reward model rewritten 2026-09-22 (tickets only) -->
 
 # Gennety Referral — Product Specification
 
@@ -10,41 +10,42 @@
 
 ## Overview
 
-A referral program layered on the existing Date Ticket wallet + Gennety Premium
-entitlement. Gated by `REFERRAL_FEATURE_ENABLED` (default **off**); it pays
-rewards in Date Tickets **and** complimentary Premium months, so it rides the
-already-on `TICKET_FEATURE_ENABLED` + `PREMIUM_FEATURE_ENABLED`. Both surfaces:
-Telegram (full auto-attributed flow) and iOS (referral code via `/v1/me/referral*`).
+A referral program layered on the existing Date Ticket wallet. Gated by
+`REFERRAL_FEATURE_ENABLED` (default **off**, and off in production — founder
+decision 2026-07-25). It pays in **Date Tickets only** and rides the already-on
+`TICKET_FEATURE_ENABLED`. Both surfaces: Telegram (full auto-attributed flow)
+and iOS (`/v1/me/referral*`).
+
+**Never Premium (founder decision 2026-09-22).** Until then the program also
+granted complimentary Premium months (a welcome month to the invitee, a
+tickets + months ladder to the referrer). That cannibalised recurring revenue —
+a Premium subscriber stops needing tickets — and priced the program in money
+(every rung showed a dollar value). Both are gone: the only unit of reward is a
+ticket, no referral surface shows a price, and no referral code path may call
+the Premium grant. The decision journal entry of 2026-09-22 has the full
+reasoning.
 
 **Killer angle.** A ticket **is** a real date, and matching is same-city — so
 every verified friend also grows the local pool that decides whether the
-referrer themselves gets matched. The reward is framed as *"Give a date, get a
-date."*
+referrer themselves gets matched. *"Give a date, get a date."*
 
 ## Reward model
 
-- **Trigger = verification.** The referrer is paid only when an invited friend
-  reaches `verificationStatus='verified'` — the same anti-fraud gate (Persona
-  liveness + `phone @unique`) that admits a user to matching. The reward
-  condition IS the "this is a real, matchable human" condition; no separate
-  anti-fraud is needed.
-- **Invitee** — a fixed **1 month of Gennety Premium**
-  (`REFERRAL_INVITEE_PREMIUM_MONTHS`), granted + active immediately at a wow
-  screen shown as the **second-to-last screen** of the first onboarding Mini App
-  (right before the AI-memory choice). Granting pre-verification is safe:
-  Premium's only benefit (venue-change) needs a *scheduled date*, so it is
-  practically worthless until the invitee verifies and matches.
-- **Referrer** — a **milestone ladder** (`REFERRAL_LADDER`, default
-  `1:1:1,3:1:1,5:1:1,10:2:2` = `count:ticketsDelta:monthsDelta`). Cumulative
-  totals unlocked at each rung, with the dollar value shown in the Mini App
-  (`$8.49`/ticket + `PREMIUM_PRICE_USD_DISPLAY`/month):
-
-  | Verified friends | Total tickets | Total Premium months | ≈ $ value ($17.99 Premium) |
-  |---|---|---|---|
-  | 1 | 1 | 1 | $26.48 |
-  | 3 | 2 | 2 | $52.96 |
-  | 5 | 3 | 3 | $79.44 |
-  | 10 | 5 | 5 | $132.40 |
+- **Trigger = verification.** Nothing is paid until the invited friend is a
+  member matching could serve: `verificationStatus='verified'`, onboarding
+  finished, and a verified track contact (A13-M18). Neither account may be
+  banned, suspended or under investigation.
+- **Referrer** — `REFERRAL_TICKETS_PER_FRIEND` (default **1**) ticket per
+  verified friend, for at most `REFERRAL_MAX_REWARDED_FRIENDS` (default **20**)
+  friends in a lifetime. Friends past the cap still count toward the tally and
+  still pay their own side — the referrer just earns nothing more.
+- **Invitee** — `REFERRAL_INVITEE_TICKETS` (default **1**) ticket, credited at
+  the same moment and in the same transaction as the referrer's. Not at
+  onboarding: a pre-verification ticket would pay farmed accounts.
+- **Daily velocity cap** — `REFERRAL_DAILY_REWARD_CAP` (default 3): the 4th
+  friend counted for one referrer within 24h has the referrer's ticket **held**,
+  not denied. It is released automatically once the window allows (see below).
+  The invitee's own ticket is never held.
 
 ## Mechanics
 
@@ -53,63 +54,85 @@ date."*
   `referral:<referrerUserId>` (`referralSourceFromParam`, in `handlers/start.ts`
   and the Mini-App `startapp` source, and `POST /v1/me/referral/claim` on iOS).
   First-touch only — never overwritten.
-- **Settlement** (`services/referral.ts`). On `verified` — for an invitee who has
-  also completed onboarding and holds a verified track contact, checked before
-  anything is counted (2026-09-14, A13-M18: a face-match alone used to pay the
-  referrer) — the verification pipeline calls `grantReferralRewardsForVerifiedInvitee` (best-effort, wired
-  through `PipelineDeps.settleReferralReward` + the pull/rerun short-circuit, so
-  it is exactly-once across every path and covers mobile invitees). It:
-  1. resolves the referrer (`parseReferrer`), bails on self-referral (by id or
-     shared verified phone) and banned/suspended/under-investigation referrers;
-  2. counts the invitee once (CAS on `User.referralCountedAt`) and increments
-     `User.referralVerifiedCount`;
-  3. applies the **velocity guard** (`REFERRAL_DAILY_REWARD_CAP`, default 3): if
-     the referrer had more than the cap of invitees counted in the last 24h,
-     rewards are **held** (not denied) — self-healing rungs settle on the next
-     under-cap event or a Mini-App reconcile;
-  4. settles every reached-but-unpaid rung idempotently
-     (`reconcileReferrerRungs`) — tickets via `grantTickets`
-     (`reason: "referral_milestone"`), Premium via
-     `grantComplimentaryPremiumMonths`, each exactly-once via a unique ledger
-     `externalPaymentId` (`referral-rung:<ref>:<atCount>:{tickets,premium}`);
-  5. DMs / APNs-pushes the referrer (`services/referral-notify.ts`) when
-     something was newly credited (with the gift message-effect).
-- **Complimentary Premium** (`grantComplimentaryPremiumMonths`, `services/premium.ts`).
-  Additive (extends `premiumUntil` from `max(now, premiumUntil)`), and
-  DELIBERATELY does **not** touch `premiumAutoRenew` / `premiumProvider` /
-  `premiumExternalId` — a comp must never masquerade as a renewing subscription
-  or clobber a real recurring anchor. Exactly-once via unique `externalPaymentId`.
-- **Invitee gift** (`grantInviteePremium`). One-time Premium month for a
-  genuinely-invited user, idempotent via `referral-invitee-premium:<inviteeId>`
-  + the `User.referralInviteePremiumAt` once-marker (drives "show the wow screen
-  once").
+- **Settlement** (`services/referral.ts`, `grantReferralRewardsForVerifiedInvitee`),
+  called by the verification pipeline on `verified` (best-effort, wired through
+  `PipelineDeps.settleReferralReward`, exactly-once across every path). After
+  the eligibility and self-referral checks (by id and by shared verified
+  phone), ONE transaction:
+  1. counts the invitee once (CAS on `User.referralCountedAt`);
+  2. looks the invitee's proven identities up in `referral_identities` — a hit
+     means the same person was counted before under a deleted account, so the
+     row is recorded as `duplicate`: nobody is paid and the tally does not move;
+  3. otherwise bumps `User.referralVerifiedCount` (this takes the referrer's row
+     lock, so concurrent friends of one referrer decide their slots in turn and
+     the lifetime cap cannot be overshot) and decides the referrer side:
+     `capped` (no slot left) → `held` (over the 24h cap) → `credited`;
+  4. writes the `ReferralQualification` row and the identity hashes;
+  5. credits the tickets through `grantTicketsInTx` — `reason: "referral_reward"`,
+     unique `externalPaymentId` `referral:<qualificationId>:referrer|invitee`.
+  After commit the referrer gets a DM / APNs push (`services/referral-notify.ts`)
+  when their ticket actually landed, and a structured `referral_ticket_earned`
+  log line records every credit.
+- **Held rewards** (`releaseHeldReferralRewards`). Once the referrer is back under
+  the cap, every `held` row is credited — a CAS on the row's status plus the
+  unique ledger key make it exactly-once. Runs when the referrer opens the
+  referral screen (both surfaces) and in the hourly sweep
+  (`sweepHeldReferralRewards`) for referrers who never do.
+- **Invite screen for the invitee.** The Telegram onboarding shows a screen
+  (second-to-last, before the AI-memory choice) telling the invitee they get a
+  ticket once they pass verification. `POST /v1/telegram-onboarding/referral-gift`
+  only marks it seen (`User.referralGiftSeenAt`) — it grants nothing. Hidden
+  when a promo code owns the attribution or `REFERRAL_INVITEE_TICKETS` is 0.
 
-## Anti-fraud (velocity guard)
+## Anti-fraud
 
-Launched while Persona is sandbox (`ALLOW_SANDBOX_PERSONA`), so a temporary
-guard supplements the real moat (`phone @unique` + Persona `verified`):
-self-referral block (by id + shared phone), a per-referrer 24h reward cap that
-holds rather than denies, and structured logging of every grant. The `verified`
-gate remains the primary throttle — farming rewards requires a real phone + a
-real face passing liveness per invitee.
+- The `verified` + registered + proven-contact gate is the primary throttle:
+  every rewarded friend needs a real phone or email and a real face passing
+  liveness.
+- **Identity tombstone** (`referral_identities`): HMAC-SHA256 of each proven
+  identity (positive Telegram id, verified phone, verified email) under a key
+  derived from `JWT_SECRET` with its own label (`keyedIdentitiesOf`,
+  `services/safety-tombstone.ts`). Rows hang off `referral_qualifications`,
+  whose account links are `SET NULL`, so they outlive account deletion — delete
+  and re-register is recognised. Without `JWT_SECRET` (local runs) no identity
+  is recorded or checked.
+- Lifetime cap per referrer, 24h velocity cap that holds rather than denies,
+  self-referral block, and blocked-status checks on both sides.
+- **Not done, deliberately (decision 2026-09-22):** device fingerprinting
+  (Telegram exposes no device id, and iOS has no invite-claim path yet — revisit
+  DeviceCheck when it does) and cross-account face de-duplication (a Rekognition
+  collection; privacy and cost).
+
+## Where the invite may appear
+
+Only at **ticket bottlenecks** and the program's own hub — **never on a Premium
+funnel** (founder decision 2026-09-22; reverses the 2026-08-08 "five paying
+surfaces" rule):
+
+| Surface | Telegram | iOS |
+|---|---|---|
+| Ticket gate (after the mutual "yes") | chip "Invite a friend · earn a ticket", empty wallet only | chip on the gate when the wallet is short |
+| Ticket store | chip, always while the program is on | chip, always while the program is on |
+| Referral hub | menu row → `referral.html` | Settings row |
+| Premium sales screen, venue board (locked venue, pay step) | **never** | **never** |
+
+`VenueBoardState.referralEnabled` is kept in the contract (shipped iOS builds
+require it) but is always `false`.
 
 ## Surfaces
 
 - **Telegram.** Menu row "🎁 Invite a friend" opens the referral Mini App
-  directly (feature-gated) — no title/tagline message first (2026-08-29):
-  `referral.html` already renders the ladder itself, so a message repeating
-  that one tap earlier bought nothing (the same reasoning §3.8 applies to
-  Premium's own menu row). The callback path (`menu:referral` →
-  `handleReferralHub`) still exists as the fallback when `WEBAPP_URL` isn't a
-  real HTTPS host (dev without a tunnel), since Telegram rejects a non-HTTPS
-  `web_app` button outright.
-  Once open: the referral Mini App (`referral.html`) shows the milestone
-  ladder with $ values,
-  and a one-tap **share** (`POST /v1/referral/share-message` mints a
-  `savePreparedInlineMessage` → `WebApp.shareMessage`) that forwards a branded
-  invite card (`services/referral-card`, satori→resvg→JPEG; degrades to a rich
-  text article if the render fails). The public HMAC-signed
-  `GET /v1/referral/card` serves the card Telegram fetches.
+  directly (feature-gated) — no title/tagline message first (2026-08-29). The
+  callback path (`menu:referral` → `handleReferralHub`) still exists as the
+  fallback when `WEBAPP_URL` isn't a real HTTPS host (dev without a tunnel).
+  Once open: the referral Mini App (`referral.html`) shows the rule (+N for you,
+  +N for your friend), friends verified, tickets earned, tickets on the way,
+  and rewards left of the cap — no money anywhere — and a one-tap **share**
+  (`POST /v1/referral/share-message` mints a `savePreparedInlineMessage` →
+  `WebApp.shareMessage`) that forwards a branded invite card
+  (`services/referral-card`, satori→resvg→JPEG; degrades to a rich text article
+  if the render fails). The public HMAC-signed `GET /v1/referral/card` serves
+  the card Telegram fetches; its gift line promises the invitee's ticket.
 
   **The share hands Telegram bytes that already exist.** Telegram downloads
   `photo_url` on its own servers, under its own deadline, and keeps whatever
@@ -117,34 +140,38 @@ real face passing liveness per invitee.
   minting the URL, and only offers the photo result once those bytes exist
   (otherwise the text-article fallback). The card is JPEG rather than PNG both
   because the Bot API requires it and because it is ~5× smaller, and the URL
-  carries a content fingerprint (`v`) because Telegram caches media by URL.
-  Until 2026-08-03 none of that held: the endpoint re-rendered per request
-  (seconds, cold) and pushed a ~453 KB PNG down a stable URL, so a slow fetch
-  delivered a *partially decoded* card — a PNG decodes top-down, so the
-  recipient saw a strip of the top and blank beneath — and Telegram's per-URL
-  cache made that permanent for that referrer.
-- **iOS.** `GET /v1/me/referral` (ladder state) + `POST /v1/me/referral/claim`
-  (enter a referral code), JWT-authed; `features.referral` in `GET /v1/app/config`.
+  carries a content fingerprint (`v`, including `CARD_REVISION`) because
+  Telegram caches media by URL.
+- **iOS.** `GET /v1/me/referral` (`ReferralState`) + `POST /v1/me/referral/claim`
+  (attribute by code), JWT-authed; `features.referral` in `GET /v1/app/config`.
   Reward-on-verify is platform-agnostic.
 
-## Data (additive)
+## Data
 
 - `User.referralVerifiedCount` (referrer tally), `referralCountedAt`
-  (invitee-side once-marker), `referralInviteePremiumAt` (invitee-gift marker).
-- Rewards reuse `ticket_ledger` (`referral_milestone`) and `subscription_ledger`
-  (`provider: "referral"`) — no new tables.
+  (invitee-side once-marker), `referralGiftSeenAt` (invite screen seen; column
+  `referral_invitee_premium_at`, kept from the retired welcome-Premium marker).
+- `referral_qualifications` — one row per counted invitee (status, both sides'
+  ticket amounts, `credited_at`); `referral_identities` — the tombstone hashes.
+  Migration `20260922120000_referral_ticket_rewards` (additive).
+- Tickets in `ticket_ledger` with `reason: "referral_reward"`. Legacy rows from
+  before 2026-09-22 carry `referral_milestone` (tickets) or
+  `subscription_ledger.provider = "referral"` (Premium) — none exist in
+  production, where the program was never switched on.
 
 ## Env
 
-`REFERRAL_FEATURE_ENABLED` (default off), `REFERRAL_INVITEE_PREMIUM_MONTHS` (1),
-`REFERRAL_LADDER` (`1:1:1,3:1:1,5:1:1,10:2:2`), `REFERRAL_DAILY_REWARD_CAP` (3).
-Requires `db:push` of the three additive `User` columns and a redeployed Mini
-App bundle (`referral.html`). Rides `BOT_USERNAME` (invite link) +
-`PUBLIC_BASE_URL` (card URL). Rollback: flip the flag off; columns may stay.
+`REFERRAL_FEATURE_ENABLED` (default off), `REFERRAL_TICKETS_PER_FRIEND` (1),
+`REFERRAL_INVITEE_TICKETS` (1; 0 turns the invitee side and its screen off),
+`REFERRAL_MAX_REWARDED_FRIENDS` (20; always ≥ 1), `REFERRAL_DAILY_REWARD_CAP`
+(3; 0 turns the velocity cap off). `REFERRAL_LADDER` and
+`REFERRAL_INVITEE_PREMIUM_MONTHS` are retired and ignored. Rides `BOT_USERNAME`
+(invite link), `PUBLIC_BASE_URL` (card URL) and `JWT_SECRET` (identity
+tombstone). Rollback: flip the flag off; the tables may stay.
 
 ## Invariants preserved
 
-No user-to-user chat, blind-decision, mandatory verification, and the ticket /
-Premium ledger exactly-once guarantees are all unaffected — referral only reads
-attribution and writes idempotent reward rows through the existing wallet /
-entitlement services.
+No user-to-user chat, blind-decision, mandatory verification, and the ticket
+ledger exactly-once guarantee are all unaffected — referral only reads
+attribution and writes idempotent reward rows through the wallet. Premium and
+its subscription boundary are untouched by the program.

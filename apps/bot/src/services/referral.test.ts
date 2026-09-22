@@ -3,50 +3,52 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   env: {
     REFERRAL_FEATURE_ENABLED: true,
-    REFERRAL_LADDER: [
-      { atCount: 1, tickets: 1, months: 1 },
-      { atCount: 3, tickets: 1, months: 1 },
-      { atCount: 5, tickets: 1, months: 1 },
-      { atCount: 10, tickets: 2, months: 2 },
-    ] as const,
-    REFERRAL_INVITEE_PREMIUM_MONTHS: 1,
+    REFERRAL_TICKETS_PER_FRIEND: 1,
+    REFERRAL_INVITEE_TICKETS: 1,
+    REFERRAL_MAX_REWARDED_FRIENDS: 20,
     REFERRAL_DAILY_REWARD_CAP: 3,
-    TICKET_PRICE_CENTS: 699,
-    PREMIUM_PRICE_USD_DISPLAY: "$11.99",
     BOT_USERNAME: "gennetybot",
   },
-  findUnique: vi.fn(),
-  findMany: vi.fn(),
-  updateMany: vi.fn(),
-  update: vi.fn(),
-  count: vi.fn(),
-  ticketLedgerFindMany: vi.fn(),
-  subscriptionLedgerFindMany: vi.fn(),
+  userFindUnique: vi.fn(),
+  userFindUniqueOrThrow: vi.fn(),
+  userUpdateMany: vi.fn(),
+  userUpdate: vi.fn(),
+  qualGroupBy: vi.fn(),
+  qualCount: vi.fn(),
+  qualCreate: vi.fn(),
+  qualFindMany: vi.fn(),
+  qualUpdateMany: vi.fn(),
+  identityCount: vi.fn(),
+  identityCreateMany: vi.fn(),
   $transaction: vi.fn(),
-  grantTickets: vi.fn(),
-  isUniqueViolation: vi.fn((e: unknown) => (e as { code?: string })?.code === "P2002"),
+  grantTicketsInTx: vi.fn(),
+  keyedIdentitiesOf: vi.fn(),
   grantComplimentaryPremiumMonths: vi.fn(),
 }));
 
+const referralQualification = {
+  groupBy: h.qualGroupBy,
+  count: h.qualCount,
+  create: h.qualCreate,
+  findMany: h.qualFindMany,
+  updateMany: h.qualUpdateMany,
+};
+const referralIdentity = { count: h.identityCount, createMany: h.identityCreateMany };
+const user = {
+  findUnique: h.userFindUnique,
+  findUniqueOrThrow: h.userFindUniqueOrThrow,
+  updateMany: h.userUpdateMany,
+  update: h.userUpdate,
+};
+
 vi.mock("@gennety/db", () => ({
-  prisma: {
-    user: {
-      findUnique: h.findUnique,
-      findMany: h.findMany,
-      updateMany: h.updateMany,
-      update: h.update,
-      count: h.count,
-    },
-    ticketLedger: { findMany: h.ticketLedgerFindMany },
-    subscriptionLedger: { findMany: h.subscriptionLedgerFindMany },
-    $transaction: h.$transaction,
-  },
+  prisma: { user, referralQualification, referralIdentity, $transaction: h.$transaction },
 }));
 vi.mock("../config.js", () => ({ env: h.env }));
-vi.mock("./ticket-wallet.js", () => ({
-  grantTickets: h.grantTickets,
-  isUniqueViolation: h.isUniqueViolation,
-}));
+vi.mock("./ticket-wallet.js", () => ({ grantTicketsInTx: h.grantTicketsInTx }));
+vi.mock("./safety-tombstone.js", () => ({ keyedIdentitiesOf: h.keyedIdentitiesOf }));
+// Referral must never reach Premium again (decision 2026-09-22). If anything in
+// the module started calling it, these spies would record it.
 vi.mock("./premium.js", () => ({
   grantComplimentaryPremiumMonths: h.grantComplimentaryPremiumMonths,
 }));
@@ -55,39 +57,40 @@ const {
   parseReferrer,
   referralSourceFromParam,
   buildReferralLink,
-  cumulativeLadderTotals,
-  nextLadderRung,
-  reconcileReferrerRungs,
+  referralLedgerKey,
   grantReferralRewardsForVerifiedInvitee,
-  grantInviteePremium,
   buildReferralStateView,
-  referralUsdValue,
   claimReferralCode,
   releaseHeldReferralRewards,
   sweepHeldReferralRewards,
   resetReferralReleaseSweepForTests,
+  markReferralGiftSeen,
 } = await import("./referral.js");
 
+const IDENTITIES = [
+  { kind: "telegram", identityHash: "h-tg" },
+  { kind: "phone", identityHash: "h-phone" },
+];
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  for (const fn of [h.findUnique, h.findMany, h.count, h.ticketLedgerFindMany, h.subscriptionLedgerFindMany]) {
-    fn.mockReset();
-  }
-  h.ticketLedgerFindMany.mockResolvedValue([]);
-  h.subscriptionLedgerFindMany.mockResolvedValue([]);
+  vi.resetAllMocks();
   resetReferralReleaseSweepForTests();
-  h.env.REFERRAL_FEATURE_ENABLED = true;
-  h.env.REFERRAL_INVITEE_PREMIUM_MONTHS = 1;
-  h.env.REFERRAL_DAILY_REWARD_CAP = 3;
-  h.isUniqueViolation.mockImplementation(
-    (e: unknown) => (e as { code?: string })?.code === "P2002",
-  );
-  // Default: run the transaction callback against the same user mocks.
+  Object.assign(h.env, {
+    REFERRAL_FEATURE_ENABLED: true,
+    REFERRAL_TICKETS_PER_FRIEND: 1,
+    REFERRAL_INVITEE_TICKETS: 1,
+    REFERRAL_MAX_REWARDED_FRIENDS: 20,
+    REFERRAL_DAILY_REWARD_CAP: 3,
+  });
+  // Every transaction runs its callback against the same model mocks.
   h.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
-    fn({ user: { updateMany: h.updateMany, update: h.update } }),
+    fn({ user, referralQualification, referralIdentity }),
   );
-  h.grantTickets.mockResolvedValue(1);
-  h.grantComplimentaryPremiumMonths.mockResolvedValue({ applied: true, premiumUntil: new Date() });
+  h.keyedIdentitiesOf.mockReturnValue(IDENTITIES);
+  h.identityCount.mockResolvedValue(0);
+  h.identityCreateMany.mockResolvedValue({ count: IDENTITIES.length });
+  h.qualCreate.mockResolvedValue({ id: "q1" });
+  h.grantTicketsInTx.mockResolvedValue(1);
 });
 
 describe("parseReferrer", () => {
@@ -129,60 +132,11 @@ describe("buildReferralLink", () => {
   });
 });
 
-describe("cumulativeLadderTotals / nextLadderRung", () => {
-  it("accumulates the reached rungs (cumulative totals 1/2/3/5)", () => {
-    expect(cumulativeLadderTotals(0)).toEqual({ tickets: 0, months: 0 });
-    expect(cumulativeLadderTotals(1)).toEqual({ tickets: 1, months: 1 });
-    expect(cumulativeLadderTotals(2)).toEqual({ tickets: 1, months: 1 });
-    expect(cumulativeLadderTotals(3)).toEqual({ tickets: 2, months: 2 });
-    expect(cumulativeLadderTotals(5)).toEqual({ tickets: 3, months: 3 });
-    expect(cumulativeLadderTotals(10)).toEqual({ tickets: 5, months: 5 });
-  });
-  it("reports the next unreached rung and remaining count", () => {
-    expect(nextLadderRung(0)).toEqual({ rung: { atCount: 1, tickets: 1, months: 1 }, remaining: 1 });
-    expect(nextLadderRung(1)?.rung.atCount).toBe(3);
-    expect(nextLadderRung(1)?.remaining).toBe(2);
-    expect(nextLadderRung(10)).toBeNull();
-  });
-});
-
-describe("reconcileReferrerRungs", () => {
-  it("grants tickets + premium for every reached rung, exactly-once by id", async () => {
-    const res = await reconcileReferrerRungs("ref", 1);
-    expect(res).toEqual({ ticketsApplied: 1, monthsApplied: 1 });
-    expect(h.grantTickets).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "ref",
-        count: 1,
-        reason: "referral_milestone",
-        externalPaymentId: "referral-rung:ref:1:tickets",
-      }),
-    );
-    expect(h.grantComplimentaryPremiumMonths).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "ref",
-        months: 1,
-        externalPaymentId: "referral-rung:ref:1:premium",
-      }),
-    );
-  });
-
-  it("treats an already-granted rung (P2002) as a no-op, not a throw", async () => {
-    h.grantTickets.mockRejectedValueOnce({ code: "P2002" });
-    h.grantComplimentaryPremiumMonths.mockResolvedValueOnce({ applied: false, premiumUntil: null });
-    const res = await reconcileReferrerRungs("ref", 1);
-    expect(res).toEqual({ ticketsApplied: 0, monthsApplied: 0 });
-  });
-
-  it("rethrows a non-P2002 ticket error", async () => {
-    h.grantTickets.mockRejectedValueOnce({ code: "P2003" });
-    await expect(reconcileReferrerRungs("ref", 1)).rejects.toEqual({ code: "P2003" });
-  });
-});
-
 describe("grantReferralRewardsForVerifiedInvitee", () => {
   /** A member matching could serve: verified, registered, contact proven. */
   const REGISTERED = {
+    status: "active",
+    telegramId: 555n,
     verificationStatus: "verified",
     onboardingStep: "completed",
     registrationTrack: "general",
@@ -190,271 +144,259 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
     isEmailVerified: false,
     phoneVerifiedAt: new Date("2026-08-01T00:00:00Z"),
   };
+  const INVITEE = {
+    ...REGISTERED,
+    id: "inv",
+    referralSource: "referral:ref",
+    referralCountedAt: null,
+    phone: null,
+  };
+  const REFERRER = { id: "ref", status: "active", phone: null };
 
-  function mockInviteeAndReferrer(
-    invitee: Record<string, unknown>,
-    referrer: Record<string, unknown> | null,
-  ) {
-    h.findUnique.mockResolvedValueOnce(invitee);
-    if (referrer !== null) h.findUnique.mockResolvedValueOnce(referrer);
+  /** Invitee + referrer lookups, the count CAS winning, and the tally bump. */
+  function arrangeSettle(opts: { slotsUsed?: number; recent?: number; verifiedCount?: number } = {}) {
+    h.userFindUnique.mockResolvedValueOnce(INVITEE).mockResolvedValueOnce(REFERRER);
+    h.userUpdateMany.mockResolvedValueOnce({ count: 1 });
+    h.userUpdate.mockResolvedValueOnce({ referralVerifiedCount: opts.verifiedCount ?? 1 });
+    // First count = used reward slots, second = the 24h velocity window.
+    h.qualCount.mockResolvedValueOnce(opts.slotsUsed ?? 0).mockResolvedValueOnce(opts.recent ?? 0);
   }
 
   it("no-ops when the feature is off", async () => {
     h.env.REFERRAL_FEATURE_ENABLED = false;
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
-    expect(h.findUnique).not.toHaveBeenCalled();
+    expect(h.userFindUnique).not.toHaveBeenCalled();
   });
 
   it("no-ops when there is no referral source", async () => {
-    h.findUnique.mockResolvedValueOnce({
-      ...REGISTERED,
-      id: "inv",
-      referralSource: "tg:ig_story",
-      referralCountedAt: null,
-      phone: null,
-    });
+    h.userFindUnique.mockResolvedValueOnce({ ...INVITEE, referralSource: "tg:ig_story" });
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
+    expect(h.$transaction).not.toHaveBeenCalled();
   });
 
   it("blocks self-referral (source points at the invitee itself)", async () => {
-    h.findUnique.mockResolvedValueOnce({
-      ...REGISTERED,
-      id: "inv",
-      referralSource: "referral:inv",
-      referralCountedAt: null,
-      phone: null,
-    });
+    h.userFindUnique.mockResolvedValueOnce({ ...INVITEE, referralSource: "referral:inv" });
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
-    // referrer lookup never happens
-    expect(h.findUnique).toHaveBeenCalledTimes(1);
+    expect(h.userFindUnique).toHaveBeenCalledTimes(1); // referrer lookup never happens
   });
 
   it("blocks a shared-phone self-referral", async () => {
-    mockInviteeAndReferrer(
-      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: "+15551234" },
-      { id: "ref", status: "active", phone: "+15551234" },
-    );
+    h.userFindUnique
+      .mockResolvedValueOnce({ ...INVITEE, phone: "+15551234" })
+      .mockResolvedValueOnce({ ...REFERRER, phone: "+15551234" });
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
+    expect(h.$transaction).not.toHaveBeenCalled();
   });
 
   it("skips a banned referrer", async () => {
-    mockInviteeAndReferrer(
-      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
-      { id: "ref", status: "banned", phone: null },
-    );
+    h.userFindUnique
+      .mockResolvedValueOnce(INVITEE)
+      .mockResolvedValueOnce({ ...REFERRER, status: "banned" });
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
+    expect(h.$transaction).not.toHaveBeenCalled();
   });
 
-  it("counts once and grants rung 1 on the happy path", async () => {
-    mockInviteeAndReferrer(
-      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
-      { id: "ref", status: "active", phone: null },
-    );
-    h.updateMany.mockResolvedValueOnce({ count: 1 });
-    h.update.mockResolvedValueOnce({ referralVerifiedCount: 1 });
-    h.count.mockResolvedValueOnce(1);
-
-    const res = await grantReferralRewardsForVerifiedInvitee("inv");
-    expect(res).toEqual({
-      referrerId: "ref",
-      verifiedCount: 1,
-      ticketsApplied: 1,
-      monthsApplied: 1,
-      heldByVelocity: false,
-    });
-  });
-
-  it("is idempotent — an already-counted invitee grants nothing", async () => {
-    mockInviteeAndReferrer(
-      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: new Date(), phone: null },
-      { id: "ref", status: "active", phone: null },
-    );
-    h.updateMany.mockResolvedValueOnce({ count: 0 }); // CAS loses → already counted
-    expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
-    expect(h.grantTickets).not.toHaveBeenCalled();
-  });
-
-  // Audit A13-M18: liveness alone used to settle the referral, so an account
-  // that never finished registering still paid its referrer.
+  // Audit A13-M18 + decision 2026-09-22: an account matching could not serve —
+  // or one moderation has blocked — neither counts nor pays anyone.
   it.each([
     ["onboarding is unfinished", { onboardingStep: "conversational" }],
     ["the track contact is unverified", { phoneVerifiedAt: null }],
     ["the invitee is not verified", { verificationStatus: "pending" }],
+    ["the invitee is suspended", { status: "suspended" }],
   ])("counts nothing and pays nothing while %s", async (_label, gap) => {
-    h.findUnique.mockResolvedValueOnce({
-      ...REGISTERED,
-      ...gap,
-      id: "inv",
-      referralSource: "referral:ref",
-      referralCountedAt: null,
-      phone: null,
-    });
+    h.userFindUnique.mockResolvedValueOnce({ ...INVITEE, ...gap });
 
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
     // Not even the referrer lookup, and above all not the count CAS: the
-    // invitee stays uncounted for a run that finds them registered.
-    expect(h.findUnique).toHaveBeenCalledTimes(1);
-    expect(h.updateMany).not.toHaveBeenCalled();
-    expect(h.grantTickets).not.toHaveBeenCalled();
+    // invitee stays uncounted for a run that finds them eligible.
+    expect(h.userFindUnique).toHaveBeenCalledTimes(1);
+    expect(h.userUpdateMany).not.toHaveBeenCalled();
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
   });
 
-  it("holds rewards when the 24h velocity cap is exceeded", async () => {
-    mockInviteeAndReferrer(
-      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
-      { id: "ref", status: "active", phone: null },
-    );
-    h.updateMany.mockResolvedValueOnce({ count: 1 });
-    h.update.mockResolvedValueOnce({ referralVerifiedCount: 4 });
-    h.count.mockResolvedValueOnce(4); // > cap of 3
+  it("counts once and pays both sides one ticket in one transaction", async () => {
+    arrangeSettle();
 
     const res = await grantReferralRewardsForVerifiedInvitee("inv");
+
     expect(res).toEqual({
       referrerId: "ref",
-      verifiedCount: 4,
-      ticketsApplied: 0,
-      monthsApplied: 0,
-      heldByVelocity: true,
+      qualificationId: "q1",
+      status: "credited",
+      verifiedCount: 1,
+      referrerTicketsApplied: 1,
+      inviteeTicketsApplied: 1,
+      rewardsLeft: 19,
     });
-    expect(h.grantTickets).not.toHaveBeenCalled();
+    expect(h.$transaction).toHaveBeenCalledTimes(1);
+    expect(h.userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "inv", referralCountedAt: null },
+      data: { referralCountedAt: expect.any(Date) },
+    });
+    expect(h.qualCreate.mock.calls[0]![0].data).toMatchObject({
+      inviteeId: "inv",
+      referrerId: "ref",
+      status: "credited",
+      referrerTickets: 1,
+      inviteeTickets: 1,
+      creditedAt: expect.any(Date),
+    });
+    expect(h.identityCreateMany).toHaveBeenCalledWith({
+      data: [
+        { identityHash: "h-tg", kind: "telegram", qualificationId: "q1" },
+        { identityHash: "h-phone", kind: "phone", qualificationId: "q1" },
+      ],
+      skipDuplicates: true,
+    });
+    expect(h.grantTicketsInTx.mock.calls.map((call) => call[1])).toEqual([
+      { userId: "ref", count: 1, reason: "referral_reward", externalPaymentId: "referral:q1:referrer" },
+      { userId: "inv", count: 1, reason: "referral_reward", externalPaymentId: "referral:q1:invitee" },
+    ]);
+    expect(h.grantComplimentaryPremiumMonths).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent — an already-counted invitee writes and grants nothing", async () => {
+    h.userFindUnique.mockResolvedValueOnce(INVITEE).mockResolvedValueOnce(REFERRER);
+    h.userUpdateMany.mockResolvedValueOnce({ count: 0 }); // CAS loses → already counted
+
+    expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
+    expect(h.userUpdate).not.toHaveBeenCalled();
+    expect(h.qualCreate).not.toHaveBeenCalled();
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
+  });
+
+  it("pays nobody for a re-registered identity and does not count it", async () => {
+    h.userFindUnique.mockResolvedValueOnce(INVITEE).mockResolvedValueOnce(REFERRER);
+    h.userUpdateMany.mockResolvedValueOnce({ count: 1 });
+    h.identityCount.mockResolvedValueOnce(1); // this phone was counted before
+    h.userFindUniqueOrThrow.mockResolvedValueOnce({ referralVerifiedCount: 4 });
+
+    const res = await grantReferralRewardsForVerifiedInvitee("inv");
+
+    expect(res).toMatchObject({
+      status: "duplicate",
+      verifiedCount: 4,
+      referrerTicketsApplied: 0,
+      inviteeTicketsApplied: 0,
+    });
+    expect(h.userUpdate).not.toHaveBeenCalled(); // tally untouched
+    expect(h.qualCreate.mock.calls[0]![0].data).toMatchObject({
+      status: "duplicate",
+      referrerTickets: 0,
+      inviteeTickets: 0,
+      creditedAt: null,
+    });
+    // The new account's identities join the tombstone too.
+    expect(h.identityCreateMany).toHaveBeenCalledTimes(1);
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
+  });
+
+  it("stops paying the referrer at the lifetime cap but still pays the friend", async () => {
+    arrangeSettle({ slotsUsed: 20, verifiedCount: 21 });
+
+    const res = await grantReferralRewardsForVerifiedInvitee("inv");
+
+    expect(res).toMatchObject({
+      status: "capped",
+      referrerTicketsApplied: 0,
+      inviteeTicketsApplied: 1,
+      rewardsLeft: 0,
+    });
+    expect(h.qualCreate.mock.calls[0]![0].data).toMatchObject({ status: "capped", referrerTickets: 0 });
+    expect(h.grantTicketsInTx).toHaveBeenCalledTimes(1);
+    expect(h.grantTicketsInTx.mock.calls[0]![1]).toMatchObject({ userId: "inv" });
+  });
+
+  it("holds the referrer's ticket over the 24h velocity cap — the friend is still paid", async () => {
+    arrangeSettle({ slotsUsed: 5, recent: 3 }); // cap 3 → this one is the 4th in 24h
+
+    const res = await grantReferralRewardsForVerifiedInvitee("inv");
+
+    expect(res).toMatchObject({
+      status: "held",
+      referrerTicketsApplied: 0,
+      inviteeTicketsApplied: 1,
+      rewardsLeft: 14, // the held reward reserves its slot
+    });
+    expect(h.qualCreate.mock.calls[0]![0].data).toMatchObject({
+      status: "held",
+      referrerTickets: 1,
+      creditedAt: null,
+    });
+    expect(h.grantTicketsInTx.mock.calls.map((call) => call[1].userId)).toEqual(["inv"]);
+  });
+
+  it("does not hold anything when the velocity cap is switched off", async () => {
+    h.env.REFERRAL_DAILY_REWARD_CAP = 0;
+    arrangeSettle({ recent: 50 });
+    expect(await grantReferralRewardsForVerifiedInvitee("inv")).toMatchObject({ status: "credited" });
+  });
+
+  it("pays only the referrer when the invitee side is set to 0", async () => {
+    h.env.REFERRAL_INVITEE_TICKETS = 0;
+    arrangeSettle();
+
+    const res = await grantReferralRewardsForVerifiedInvitee("inv");
+
+    expect(res).toMatchObject({ referrerTicketsApplied: 1, inviteeTicketsApplied: 0 });
+    expect(h.grantTicketsInTx.mock.calls.map((call) => call[1].userId)).toEqual(["ref"]);
+  });
+
+  it("uses the configured per-friend amount", async () => {
+    h.env.REFERRAL_TICKETS_PER_FRIEND = 2;
+    arrangeSettle();
+    expect(await grantReferralRewardsForVerifiedInvitee("inv")).toMatchObject({
+      referrerTicketsApplied: 2,
+    });
+    expect(h.grantTicketsInTx.mock.calls[0]![1]).toMatchObject({ userId: "ref", count: 2 });
   });
 });
 
-/**
- * A13-M4. The velocity cap held rewards and nothing released them: the promise
- * was "the next under-cap event settles them", and that event is another friend
- * verifying — a referrer whose burst was their last invites never got paid.
- */
-describe("releaseHeldReferralRewards", () => {
-  /** Rung 1 paid; rung 3 (reached at count 4) held back. */
-  function paidRungOneOnly() {
-    h.ticketLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:ref:1:tickets" },
+describe("referralLedgerKey", () => {
+  it("keys each side of a qualification separately", () => {
+    expect(referralLedgerKey("q9", "referrer")).toBe("referral:q9:referrer");
+    expect(referralLedgerKey("q9", "invitee")).toBe("referral:q9:invitee");
+  });
+});
+
+describe("buildReferralStateView", () => {
+  it("reports tickets earned and pending, and the reward slots left — no money, no Premium", async () => {
+    h.qualGroupBy.mockResolvedValueOnce([
+      { status: "credited", _sum: { referrerTickets: 3 }, _count: { _all: 3 } },
+      { status: "held", _sum: { referrerTickets: 1 }, _count: { _all: 1 } },
     ]);
-    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:ref:1:premium" },
-    ]);
-  }
 
-  it("pays a held rung once the referrer is back under the cap", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 4 });
-    paidRungOneOnly();
-    h.count.mockResolvedValueOnce(1); // burst is out of the 24h window
-    h.grantTickets
-      .mockRejectedValueOnce({ code: "P2002" }) // rung 1 already paid
-      .mockResolvedValueOnce(2);
-    h.grantComplimentaryPremiumMonths
-      .mockResolvedValueOnce({ applied: false, premiumUntil: null })
-      .mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+    const view = await buildReferralStateView("ref", 5, "gennetybot");
 
-    const res = await releaseHeldReferralRewards("ref");
-
-    expect(res).toEqual({ ticketsApplied: 1, monthsApplied: 1, stillHeld: false });
-    expect(h.grantTickets).toHaveBeenCalledWith(
-      expect.objectContaining({ externalPaymentId: "referral-rung:ref:3:tickets" }),
+    expect(view).toEqual({
+      inviteLink: "https://t.me/gennetybot?start=referral_ref",
+      verifiedCount: 5,
+      earnedTickets: 3,
+      pendingTickets: 1,
+      ticketsPerFriend: 1,
+      inviteeTickets: 1,
+      rewardCap: 20,
+      rewardsLeft: 16,
+    });
+    expect(h.qualGroupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { referrerId: "ref", status: { in: ["credited", "held"] } } }),
     );
   });
 
-  it("keeps holding while the referrer is still over the cap", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 4 });
-    paidRungOneOnly();
-    h.count.mockResolvedValueOnce(4); // > cap of 3
-
-    const res = await releaseHeldReferralRewards("ref");
-
-    expect(res).toEqual({ ticketsApplied: 0, monthsApplied: 0, stillHeld: true });
-    expect(h.grantTickets).not.toHaveBeenCalled();
-  });
-
-  it("does not replay the ladder for a fully paid referrer", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 1 });
-    h.ticketLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:ref:1:tickets" },
+  it("never reports a negative number of rewards left", async () => {
+    h.qualGroupBy.mockResolvedValueOnce([
+      { status: "credited", _sum: { referrerTickets: 25 }, _count: { _all: 25 } },
     ]);
-    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:ref:1:premium" },
-    ]);
-
-    await releaseHeldReferralRewards("ref");
-
-    expect(h.count).not.toHaveBeenCalled();
-    expect(h.grantTickets).not.toHaveBeenCalled();
-  });
-
-  it("never releases to a blocked referrer", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "banned", referralVerifiedCount: 4 });
-    await releaseHeldReferralRewards("ref");
-    expect(h.ticketLedgerFindMany).not.toHaveBeenCalled();
-    expect(h.grantTickets).not.toHaveBeenCalled();
-  });
-});
-
-describe("sweepHeldReferralRewards", () => {
-  it("releases only the referrers who are owed a rung, and wraps its page cursor", async () => {
-    h.findMany.mockResolvedValueOnce([
-      { id: "paid", referralVerifiedCount: 1 },
-      { id: "owed", referralVerifiedCount: 1 },
-    ]);
-    // Batch lookup: `paid` has both rung-1 rows, `owed` has none.
-    h.ticketLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:paid:1:tickets" },
-    ]);
-    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
-      { externalPaymentId: "referral-rung:paid:1:premium" },
-    ]);
-    // The release for `owed` re-reads and re-checks on its own.
-    h.findUnique.mockResolvedValueOnce({ id: "owed", status: "active", referralVerifiedCount: 1 });
-    h.count.mockResolvedValueOnce(1);
-
-    const res = await sweepHeldReferralRewards();
-
-    expect(res).toEqual({ scanned: 2, released: 1, stillHeld: 0 });
-    expect(h.findUnique).toHaveBeenCalledTimes(1);
-    expect(h.grantTickets).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "owed", externalPaymentId: "referral-rung:owed:1:tickets" }),
-    );
-    // A short page ends the walk: the next tick starts from the beginning.
-    h.findMany.mockResolvedValueOnce([]);
-    await sweepHeldReferralRewards();
-    expect(h.findMany.mock.calls[1]![0].where).not.toHaveProperty("id");
-  });
-
-  it("is inert when the program is off", async () => {
-    h.env.REFERRAL_FEATURE_ENABLED = false;
-    expect(await sweepHeldReferralRewards()).toEqual({ scanned: 0, released: 0, stillHeld: 0 });
-    expect(h.findMany).not.toHaveBeenCalled();
-  });
-});
-
-describe("referralUsdValue / buildReferralStateView", () => {
-  it("prices tickets ($6.99) + Premium months ($11.99) correctly", () => {
-    expect(referralUsdValue(1, 1)).toBe("$18.98");
-    expect(referralUsdValue(5, 5)).toBe("$94.90");
-    expect(referralUsdValue(0, 0)).toBe("$0.00");
-  });
-
-  it("assembles the ladder view with reached flags + invite link", () => {
-    const view = buildReferralStateView("ref-1", 3, "gennetybot");
-    expect(view.inviteLink).toBe("https://t.me/gennetybot?start=referral_ref-1");
-    expect(view.verifiedCount).toBe(3);
-    expect(view.earnedTickets).toBe(2);
-    expect(view.earnedMonths).toBe(2);
-    expect(view.earnedUsd).toBe("$37.96");
-    expect(view.ladder.map((r) => r.reached)).toEqual([true, true, false, false]);
-    expect(view.ladder[3]).toMatchObject({ atCount: 10, tickets: 5, months: 5, usd: "$94.90" });
-    expect(view.next).toEqual({ atCount: 5, remaining: 2, usd: "$56.94" });
-  });
-
-  it("reports next=null once the top rung is reached", () => {
-    expect(buildReferralStateView("r", 10, "gennetybot").next).toBeNull();
+    expect((await buildReferralStateView("ref", 30, "gennetybot")).rewardsLeft).toBe(0);
   });
 });
 
 describe("claimReferralCode", () => {
   it("attributes a first-touch mobile invitee to a valid referrer", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref" }); // referrer exists
-    h.updateMany.mockResolvedValueOnce({ count: 1 }); // first-touch CAS wins
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref" }); // referrer exists
+    h.userUpdateMany.mockResolvedValueOnce({ count: 1 }); // first-touch CAS wins
     expect(await claimReferralCode("inv", "ref")).toEqual({ applied: true });
-    expect(h.updateMany).toHaveBeenCalledWith({
+    expect(h.userUpdateMany).toHaveBeenCalledWith({
       where: { id: "inv", referralSource: null },
       data: { referralSource: "referral:ref" },
     });
@@ -462,11 +404,11 @@ describe("claimReferralCode", () => {
 
   it("rejects a self-referral before any DB call", async () => {
     expect(await claimReferralCode("inv", "inv")).toEqual({ applied: false, reason: "invalid" });
-    expect(h.findUnique).not.toHaveBeenCalled();
+    expect(h.userFindUnique).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown referrer code", async () => {
-    h.findUnique.mockResolvedValueOnce(null);
+    h.userFindUnique.mockResolvedValueOnce(null);
     expect(await claimReferralCode("inv", "ghost")).toEqual({
       applied: false,
       reason: "unknown-referrer",
@@ -474,8 +416,8 @@ describe("claimReferralCode", () => {
   });
 
   it("does not overwrite an existing attribution (first-touch)", async () => {
-    h.findUnique.mockResolvedValueOnce({ id: "ref" });
-    h.updateMany.mockResolvedValueOnce({ count: 0 }); // already attributed
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref" });
+    h.userUpdateMany.mockResolvedValueOnce({ count: 0 }); // already attributed
     expect(await claimReferralCode("inv", "ref")).toEqual({
       applied: false,
       reason: "already-attributed",
@@ -483,44 +425,108 @@ describe("claimReferralCode", () => {
   });
 });
 
-describe("grantInviteePremium", () => {
-  it("grants the welcome month once for a genuinely invited user", async () => {
-    h.findUnique.mockResolvedValueOnce({
-      id: "inv",
-      referralSource: "referral:ref",
-      referralInviteePremiumAt: null,
-    });
-    h.updateMany.mockResolvedValueOnce({ count: 1 });
-    const res = await grantInviteePremium("inv");
-    expect(res).toEqual({ applied: true, months: 1 });
-    expect(h.grantComplimentaryPremiumMonths).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "inv",
-        months: 1,
-        externalPaymentId: "referral-invitee-premium:inv",
-      }),
-    );
+describe("releaseHeldReferralRewards", () => {
+  it("is inert when the program is off", async () => {
+    h.env.REFERRAL_FEATURE_ENABLED = false;
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 0, stillHeld: false });
+    expect(h.userFindUnique).not.toHaveBeenCalled();
   });
 
-  it("does not re-grant when the once-marker is already set", async () => {
-    h.findUnique.mockResolvedValueOnce({
-      id: "inv",
-      referralSource: "referral:ref",
-      referralInviteePremiumAt: new Date(),
+  it("never releases to a blocked referrer", async () => {
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref", status: "banned" });
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 0, stillHeld: false });
+    expect(h.qualFindMany).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a referrer with nothing held", async () => {
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([]);
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 0, stillHeld: false });
+    expect(h.qualCount).not.toHaveBeenCalled();
+  });
+
+  it("keeps holding while the referrer is still over the cap", async () => {
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([{ id: "q1", referrerTickets: 1 }]);
+    h.qualCount.mockResolvedValueOnce(4); // cap 3
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 0, stillHeld: true });
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
+  });
+
+  it("credits every held reward once the referrer is back under the cap", async () => {
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([
+      { id: "q1", referrerTickets: 1 },
+      { id: "q2", referrerTickets: 1 },
+    ]);
+    h.qualCount.mockResolvedValueOnce(3); // at the cap, not over it
+    h.qualUpdateMany.mockResolvedValue({ count: 1 });
+
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 2, stillHeld: false });
+    expect(h.qualUpdateMany).toHaveBeenCalledWith({
+      where: { id: "q1", status: "held" },
+      data: { status: "credited", creditedAt: expect.any(Date) },
     });
-    const res = await grantInviteePremium("inv");
-    expect(res).toEqual({ applied: false, months: 1 });
+    expect(h.grantTicketsInTx.mock.calls.map((call) => call[1].externalPaymentId)).toEqual([
+      "referral:q1:referrer",
+      "referral:q2:referrer",
+    ]);
+  });
+
+  it("does not pay a reward another release already claimed", async () => {
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([{ id: "q1", referrerTickets: 1 }]);
+    h.qualCount.mockResolvedValueOnce(0);
+    h.qualUpdateMany.mockResolvedValueOnce({ count: 0 }); // status CAS lost
+
+    expect(await releaseHeldReferralRewards("ref")).toEqual({ ticketsApplied: 0, stillHeld: false });
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
+  });
+});
+
+describe("sweepHeldReferralRewards", () => {
+  it("is inert when the program is off", async () => {
+    h.env.REFERRAL_FEATURE_ENABLED = false;
+    expect(await sweepHeldReferralRewards()).toEqual({ scanned: 0, released: 0, stillHeld: 0 });
+    expect(h.qualFindMany).not.toHaveBeenCalled();
+  });
+
+  it("releases the referrers with held rewards, one distinct referrer per row", async () => {
+    // Page of referrers with something held.
+    h.qualFindMany.mockResolvedValueOnce([{ referrerId: "a" }, { referrerId: "b" }]);
+    // a: released.
+    h.userFindUnique.mockResolvedValueOnce({ id: "a", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([{ id: "qa", referrerTickets: 1 }]);
+    h.qualCount.mockResolvedValueOnce(0);
+    h.qualUpdateMany.mockResolvedValueOnce({ count: 1 });
+    // b: still over the cap.
+    h.userFindUnique.mockResolvedValueOnce({ id: "b", status: "active" });
+    h.qualFindMany.mockResolvedValueOnce([{ id: "qb", referrerTickets: 1 }]);
+    h.qualCount.mockResolvedValueOnce(9);
+
+    expect(await sweepHeldReferralRewards()).toEqual({ scanned: 2, released: 1, stillHeld: 1 });
+    expect(h.qualFindMany.mock.calls[0]![0]).toMatchObject({
+      where: { status: "held", referrerId: { not: null } },
+      distinct: ["referrerId"],
+      orderBy: { referrerId: "asc" },
+    });
+  });
+});
+
+describe("markReferralGiftSeen", () => {
+  it("stamps the invite-screen marker once and grants nothing", async () => {
+    h.userUpdateMany.mockResolvedValueOnce({ count: 1 });
+    expect(await markReferralGiftSeen("inv")).toBe(true);
+    expect(h.userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "inv", referralGiftSeenAt: null },
+      data: { referralGiftSeenAt: expect.any(Date) },
+    });
+    expect(h.grantTicketsInTx).not.toHaveBeenCalled();
     expect(h.grantComplimentaryPremiumMonths).not.toHaveBeenCalled();
   });
 
-  it("does not grant to a self-referral", async () => {
-    h.findUnique.mockResolvedValueOnce({
-      id: "inv",
-      referralSource: "referral:inv",
-      referralInviteePremiumAt: null,
-    });
-    const res = await grantInviteePremium("inv");
-    expect(res.applied).toBe(false);
-    expect(h.grantComplimentaryPremiumMonths).not.toHaveBeenCalled();
+  it("reports false when the marker was already set", async () => {
+    h.userUpdateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await markReferralGiftSeen("inv")).toBe(false);
   });
 });

@@ -54,6 +54,8 @@ const RESET_EXPIRY_REMINDERS = {
   premiumReminder1dAt: null,
 } as const;
 
+// `referral` is legacy: the referral program stopped granting Premium on
+// 2026-09-22. Kept so rows written before then still type-check.
 export type PremiumProvider = "telegram_stars" | "app_store" | "referral";
 
 export type SubscriptionEvent =
@@ -540,8 +542,8 @@ async function extendPremiumAdditive(input: {
 }
 
 /**
- * Grant `months` of **complimentary** Premium (PRODUCT_SPEC §Referral) — the
- * referral / promo reward path. Additive and non-clobbering; see
+ * Grant `months` of **complimentary** Premium — the promo-code reward path
+ * (referral used it until it went tickets-only, 2026-09-22). Additive and non-clobbering; see
  * `extendPremiumAdditive` for why. Distinct from the paid paths in that it
  * moves no money: no amount, no currency, and no founder-feed announcement.
  */
@@ -551,10 +553,12 @@ export async function grantComplimentaryPremiumMonths(input: {
   externalPaymentId: string;
   note?: string;
   /// `subscription_ledger.provider` for the audit row. Complimentary grants are
-  /// not a paid rail; defaults to `referral`, promo passes `promo`.
-  provider?: string;
+  /// not a paid rail. Required: the referral program — the old default — no
+  /// longer grants Premium at all (decision 2026-09-22), so every caller must
+  /// say who it is (promo passes `promo`).
+  provider: string;
 }): Promise<ActivatePremiumResult> {
-  const { userId, months, externalPaymentId, note, provider = "referral" } = input;
+  const { userId, months, externalPaymentId, note, provider } = input;
   const { applied, premiumUntil } = await extendPremiumAdditive({
     userId,
     months,

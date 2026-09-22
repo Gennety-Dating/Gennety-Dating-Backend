@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthsPhrase, pickLang, tr, type Lang } from "./i18n.js";
+import { pickLang, ticketsPhrase, tr, type Lang } from "./i18n.js";
 
 const languages: Lang[] = ["en", "ru", "uk", "de", "pl"];
 
@@ -80,20 +80,25 @@ describe("Mini App i18n", () => {
     }
   });
 
-  it("monthsPhrase declines the unit word for every supported language", () => {
-    expect(monthsPhrase("en", 1)).toBe("1 month");
-    expect(monthsPhrase("en", 3)).toBe("3 months");
-    expect(monthsPhrase("de", 1)).toBe("1 Monat");
-    expect(monthsPhrase("de", 3)).toBe("3 Monate");
-    expect(monthsPhrase("ru", 1)).toBe("1 месяц");
-    expect(monthsPhrase("ru", 2)).toBe("2 месяца");
-    expect(monthsPhrase("ru", 5)).toBe("5 месяцев");
-    expect(monthsPhrase("ru", 11)).toBe("11 месяцев");
-    expect(monthsPhrase("uk", 1)).toBe("1 місяць");
-    expect(monthsPhrase("uk", 3)).toBe("3 місяці");
-    expect(monthsPhrase("uk", 11)).toBe("11 місяців");
-    expect(monthsPhrase("pl", 1)).toBe("1 miesiąc");
-    expect(monthsPhrase("pl", 2)).toBe("2 miesiące");
-    expect(monthsPhrase("pl", 12)).toBe("12 miesięcy");
+  it("ticketsPhrase declines the unit word for every supported language", () => {
+    expect(ticketsPhrase("en", 1)).toBe("1 date ticket");
+    expect(ticketsPhrase("en", 2)).toBe("2 date tickets");
+    expect(ticketsPhrase("de", 1)).toBe("1 Date-Ticket");
+    expect(ticketsPhrase("de", 2)).toBe("2 Date-Tickets");
+    expect(ticketsPhrase("ru", 1)).toBe("1 билет на свидание");
+    expect(ticketsPhrase("ru", 2)).toBe("2 билета на свидание");
+    expect(ticketsPhrase("ru", 5)).toBe("5 билетов на свидание");
+    expect(ticketsPhrase("ru", 11)).toBe("11 билетов на свидание");
+    expect(ticketsPhrase("ru", 21)).toBe("21 билет на свидание");
+    expect(ticketsPhrase("uk", 1)).toBe("1 квиток на побачення");
+    expect(ticketsPhrase("uk", 2)).toBe("2 квитки на побачення");
+    expect(ticketsPhrase("uk", 5)).toBe("5 квитків на побачення");
+    expect(ticketsPhrase("pl", 1)).toBe("1 bilet na randkę");
+    expect(ticketsPhrase("pl", 2)).toBe("2 bilety na randkę");
+    expect(ticketsPhrase("pl", 5)).toBe("5 biletów na randkę");
+    expect(ticketsPhrase("pl", 12)).toBe("12 biletów na randkę");
+    // Polish singular is exactly 1 — 21 takes the "many" form.
+    expect(ticketsPhrase("pl", 21)).toBe("21 biletów na randkę");
+    expect(ticketsPhrase("pl", 22)).toBe("22 bilety na randkę");
   });
 });

@@ -301,10 +301,13 @@ export function App(): ReactElement {
           ))}
         </div>
 
-        {/* Referral cross-promo: a quiet secondary way to get tickets without
-            paying, shown only while the wallet is genuinely empty — never
+        {/* Referral cross-promo: invite a friend, earn a Date Ticket. The
+            store is a ticket bottleneck, so the chip is always here while the
+            program is on (founder decision 2026-09-22) — whatever the balance,
+            and on the post-purchase screen too, which keeps the bundle list
+            rather than replacing it. It sits at the tail of the content, never
             competing with the bundle buttons above it. */}
-        {!bought && phase.balance === 0 && referralEnabled && (
+        {referralEnabled && (
           <ReferralChip
             lang={lang}
             onTap={() => {

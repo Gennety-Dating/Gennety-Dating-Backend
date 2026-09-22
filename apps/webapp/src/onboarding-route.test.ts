@@ -44,7 +44,7 @@ function user(
     invitedByReferral: false,
     referralGiftSeen: false,
     referrerFirstName: null,
-    referralGiftMonths: 1,
+    referralGiftTickets: 1,
     // Promo welcome gift defaults: not a promo user, so the promo screen is
     // skipped and existing routing tests are unaffected.
     invitedByPromo: false,
@@ -200,7 +200,7 @@ describe("theme picker routing (after the city gate)", () => {
     ).toEqual({ kind: "referralGift" });
   });
 
-  it("skips the referral gift once it has been seen/claimed", () => {
+  it("skips the referral invite screen once it has been seen", () => {
     expect(
       postVisualPhaseFromRemote(
         visualReadyUser({ invitedByReferral: true, referralGiftSeen: true }),

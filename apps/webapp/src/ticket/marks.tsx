@@ -52,8 +52,8 @@ export function LockMark(): ReactElement {
 }
 
 /**
- * Envelope with a heart seal — the "invite a friend instead" referral
- * cross-promo link (React twin of `icons.ts`'s `letter`, same path data).
+ * Envelope with a heart seal — the "invite a friend · earn a ticket" referral
+ * cross-promo chip (React twin of `icons.ts`'s `letter`, same path data).
  */
 export function LetterMark(): ReactElement {
   return (

@@ -5,8 +5,7 @@ import { icon, type IconName } from "./icons";
 import { ctaLabel, ctaTerms } from "./premium-cta-label.js";
 import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
-import { wireReturnBackButton, returnParams } from "./return-to.js";
-import { referralChip } from "./referral-hint.js";
+import { wireReturnBackButton } from "./return-to.js";
 import { invoiceOutcomeFor, premiumScreenFor, type InvoiceOutcome } from "./premium-load.js";
 
 /**
@@ -301,8 +300,6 @@ interface PremiumState {
    * for money.
    */
   plans?: PremiumPlanOffer[];
-  /** Drives the "invite a friend instead" referral cross-promo link. */
-  referralEnabled?: boolean;
 }
 
 interface PremiumPlanOffer {
@@ -621,26 +618,10 @@ function renderOffer(state: PremiumState): void {
   scroll.append(list);
   scroll.append(el("p", "pm-more", s.more));
 
-  // Referral cross-promo: a quiet secondary way to get Premium without paying,
-  // shown only on the sales screen (never once already subscribed) and only
-  // while the program is actually live.
-  //
-  // It sits at the TAIL OF THE SCROLL, never in `.pm-action` below. That footer
-  // is `flex: none`, so anything added to it grows it and pushes the subscribe
-  // CTA and its price line up the screen — which is exactly what this row used
-  // to do, at ~39px, or ~57px once its two-line copy wrapped. The footer now
-  // holds the CTA and the price and nothing else, so it cannot move.
-  if (state.referralEnabled) {
-    scroll.append(
-      referralChip({
-        lang,
-        onTap: () => {
-          haptic("success");
-          location.href = `referral.html?${returnParams("premium", { lang })}`;
-        },
-      }),
-    );
-  }
+  // No referral chip here, by founder decision (2026-09-22): the referral
+  // program pays out Date Tickets only, and its entry points live at ticket
+  // bottlenecks (the ticket gate, the ticket store) and its own hub — never on
+  // a Premium funnel.
 
   const action = el("div", "pm-action");
 
@@ -859,7 +840,6 @@ async function load(): Promise<void> {
           perMonthDisplay: "$12.59",
         },
       ],
-      referralEnabled: true,
     };
     if (preview === "active") renderActive(mock);
     else renderOffer(mock);

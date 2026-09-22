@@ -1,30 +1,52 @@
-import { prisma, type UserStatus } from "@gennety/db";
+import { prisma, type Prisma, type UserStatus } from "@gennety/db";
 import { REFERRAL_RELEASE_SWEEP_BATCH } from "@gennety/shared";
 import { env } from "../config.js";
-import type { ReferralLadderRung } from "../config.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
-import { grantComplimentaryPremiumMonths } from "./premium.js";
-import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
+import { keyedIdentitiesOf } from "./safety-tombstone.js";
+import { grantTicketsInTx } from "./ticket-wallet.js";
 
 /**
- * Referral program core ("Give a date, get a date", PRODUCT_SPEC §Referral).
+ * Referral program core ("Give a date, get a date", §Referral).
  *
  * A referrer shares a `t.me/<bot>?start=referral_<referrerUserId>` link; the
  * invitee's first-touch `User.referralSource` records it. When the invitee
- * clears verification, the referrer climbs a milestone ladder that pays Date
- * Tickets + complimentary Premium months. The invitee separately gets a
- * welcome Premium month on the onboarding wow screen.
+ * clears verification, BOTH sides are paid in Date Tickets — never Premium
+ * (founder decision 2026-09-22: a Premium reward cannibalised the subscription
+ * and priced the program in money):
+ *   - the referrer gets `REFERRAL_TICKETS_PER_FRIEND` per friend, for at most
+ *     `REFERRAL_MAX_REWARDED_FRIENDS` friends, throttled by the 24h velocity
+ *     cap (`REFERRAL_DAILY_REWARD_CAP`) — a held reward is released later;
+ *   - the invitee gets `REFERRAL_INVITEE_TICKETS`.
  *
- * Everything here no-ops when `REFERRAL_FEATURE_ENABLED` is off. Rewards are
- * exactly-once via unique ledger `externalPaymentId`s; the ladder is
- * self-healing (every invocation grants all unclaimed rungs ≤ the current
- * verified count), so a rung skipped by the velocity guard is picked up later.
+ * Each counted invitee is one `ReferralQualification`, written in the same
+ * transaction that stamps `referralCountedAt` and credits the tickets, with the
+ * invitee's proven identities kept as keyed hashes (`ReferralIdentity`) so a
+ * deleted account that re-registers is recognised and pays nobody. Ledger rows
+ * carry `reason: "referral_reward"` and the unique
+ * `referral:<qualificationId>:referrer|invitee` key.
+ *
+ * Everything here no-ops when `REFERRAL_FEATURE_ENABLED` is off.
  */
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Referrer statuses that forfeit referral rewards (moderation / bad actor). */
+/** User statuses that forfeit referral rewards (moderation / bad actor). */
 const REWARD_BLOCKED_STATUSES = new Set<UserStatus>(["banned", "pending_investigation", "suspended"]);
+
+/**
+ * Key label for `referral_identities` hashes. Its own label, so these rows can
+ * never be joined to `safety_tombstones`. Bumping it forgets every counted
+ * identity — a deliberate, total reset.
+ */
+const REFERRAL_IDENTITY_LABEL = "referral-identity/v1";
+
+/** The referrer side of a `ReferralQualification` (see the model). */
+export type ReferralQualificationStatus = "credited" | "held" | "capped" | "duplicate";
+
+/** Rows that took (or reserve) one of the referrer's rewarded slots. */
+const SLOT_STATUSES: ReferralQualificationStatus[] = ["credited", "held"];
+/** Rows that are a counted friend — what the velocity window counts. */
+const COUNTED_STATUSES: ReferralQualificationStatus[] = ["credited", "held", "capped"];
 
 /**
  * Extract the referrer's `User.id` from an invitee's `referralSource`, or null
@@ -66,94 +88,67 @@ export function referralSourceFromParam(param: string, channelPrefix: string): s
   return `${channelPrefix}:${param}`;
 }
 
-/** Cumulative reward totals unlocked once `verifiedCount` friends have verified. */
-export function cumulativeLadderTotals(
-  verifiedCount: number,
-  ladder: readonly ReferralLadderRung[] = env.REFERRAL_LADDER,
-): { tickets: number; months: number } {
-  let tickets = 0;
-  let months = 0;
-  for (const rung of ladder) {
-    if (rung.atCount <= verifiedCount) {
-      tickets += rung.tickets;
-      months += rung.months;
-    }
-  }
-  return { tickets, months };
-}
-
-function ticketUsd(): number {
-  return env.TICKET_PRICE_CENTS / 100;
-}
-
-/** Numeric monthly Premium price parsed from the display string ("$11.99"). */
-function premiumMonthlyUsd(): number {
-  const m = /([\d]+(?:\.[\d]+)?)/.exec(env.PREMIUM_PRICE_USD_DISPLAY);
-  return m ? Number(m[1]) : 0;
-}
-
-/** Dollar value of `tickets` Date Tickets + `months` Premium months ("$18.98"). */
-export function referralUsdValue(tickets: number, months: number): string {
-  const v = tickets * ticketUsd() + months * premiumMonthlyUsd();
-  return `$${v.toFixed(2)}`;
-}
-
 export interface ReferralStateView {
   inviteLink: string;
+  /** Friends who cleared verification through this referrer's link. */
   verifiedCount: number;
+  /** Tickets already credited to the referrer by the program. */
   earnedTickets: number;
-  earnedMonths: number;
-  earnedUsd: string;
-  ladder: Array<{
-    atCount: number;
-    tickets: number;
-    months: number;
-    usd: string;
-    reached: boolean;
-  }>;
-  next: { atCount: number; remaining: number; usd: string } | null;
-  inviteeMonths: number;
+  /** Tickets earned but held by the daily cap; credited automatically. */
+  pendingTickets: number;
+  /** What the referrer earns per verified friend. */
+  ticketsPerFriend: number;
+  /** What the invited friend gets when they clear verification. */
+  inviteeTickets: number;
+  /** Lifetime rewarded-friend cap. */
+  rewardCap: number;
+  /** How many more friends can still earn this referrer a reward. */
+  rewardsLeft: number;
+}
+
+/** Earned / pending tickets and used reward slots for one referrer. */
+async function referrerTotals(
+  referrerId: string,
+): Promise<{ earnedTickets: number; pendingTickets: number; slotsUsed: number }> {
+  const rows = await prisma.referralQualification.groupBy({
+    by: ["status"],
+    where: { referrerId, status: { in: SLOT_STATUSES } },
+    _sum: { referrerTickets: true },
+    _count: { _all: true },
+  });
+  let earnedTickets = 0;
+  let pendingTickets = 0;
+  let slotsUsed = 0;
+  for (const row of rows) {
+    const tickets = row._sum.referrerTickets ?? 0;
+    if (row.status === "credited") earnedTickets += tickets;
+    if (row.status === "held") pendingTickets += tickets;
+    slotsUsed += row._count._all;
+  }
+  return { earnedTickets, pendingTickets, slotsUsed };
 }
 
 /**
- * Assemble the referral ladder view (shared by the Telegram Mini App and the
- * iOS JWT surface). `verifiedCount` is the referrer's materialized tally; every
- * rung carries its cumulative $ value so a client never re-derives money.
+ * The referral screen state (shared by the Telegram Mini App and the iOS JWT
+ * surface). Tickets only — no money and no Premium: the program's value is a
+ * date, not a price (decision 2026-09-22).
  */
-export function buildReferralStateView(
+export async function buildReferralStateView(
   userId: string,
   verifiedCount: number,
   botUsername: string,
-): ReferralStateView {
-  const ladder = env.REFERRAL_LADDER.map((rung) => {
-    const cum = cumulativeLadderTotals(rung.atCount);
-    return {
-      atCount: rung.atCount,
-      tickets: cum.tickets,
-      months: cum.months,
-      usd: referralUsdValue(cum.tickets, cum.months),
-      reached: verifiedCount >= rung.atCount,
-    };
-  });
-  const totals = cumulativeLadderTotals(verifiedCount);
-  const next = nextLadderRung(verifiedCount);
-  const nextCum = next ? cumulativeLadderTotals(next.rung.atCount) : null;
+): Promise<ReferralStateView> {
+  const totals = await referrerTotals(userId);
+  const rewardCap = env.REFERRAL_MAX_REWARDED_FRIENDS;
   return {
     inviteLink: buildReferralLink(userId, botUsername),
     verifiedCount,
-    earnedTickets: totals.tickets,
-    earnedMonths: totals.months,
-    earnedUsd: referralUsdValue(totals.tickets, totals.months),
-    ladder,
-    next:
-      next && nextCum
-        ? {
-            atCount: next.rung.atCount,
-            remaining: next.remaining,
-            usd: referralUsdValue(nextCum.tickets, nextCum.months),
-          }
-        : null,
-    inviteeMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+    earnedTickets: totals.earnedTickets,
+    pendingTickets: totals.pendingTickets,
+    ticketsPerFriend: env.REFERRAL_TICKETS_PER_FRIEND,
+    inviteeTickets: env.REFERRAL_INVITEE_TICKETS,
+    rewardCap,
+    rewardsLeft: Math.max(0, rewardCap - totals.slotsUsed),
   };
 }
 
@@ -186,87 +181,36 @@ export async function claimReferralCode(
   return cas.count > 0 ? { applied: true } : { applied: false, reason: "already-attributed" };
 }
 
-/** The next unreached rung and how many more verified friends it needs. */
-export function nextLadderRung(
-  verifiedCount: number,
-  ladder: readonly ReferralLadderRung[] = env.REFERRAL_LADDER,
-): { rung: ReferralLadderRung; remaining: number } | null {
-  for (const rung of ladder) {
-    if (rung.atCount > verifiedCount) {
-      return { rung, remaining: rung.atCount - verifiedCount };
-    }
-  }
-  return null;
-}
-
 export interface ReferralRewardResult {
   referrerId: string;
+  qualificationId: string;
+  status: ReferralQualificationStatus;
   /** Referrer's lifetime verified-friend tally after this event. */
   verifiedCount: number;
-  /** Tickets actually credited in this invocation (0 if held/already granted). */
-  ticketsApplied: number;
-  /** Premium months actually credited in this invocation. */
-  monthsApplied: number;
-  /** True when the velocity guard held rewards for this event. */
-  heldByVelocity: boolean;
+  /** Tickets credited to the referrer in this call (0 if held/capped/duplicate). */
+  referrerTicketsApplied: number;
+  /** Tickets credited to the invitee in this call. */
+  inviteeTicketsApplied: number;
+  /** Rewarded slots the referrer still has after this event. */
+  rewardsLeft: number;
+}
+
+/** Ledger key of one side of one qualification — the exactly-once guard. */
+export function referralLedgerKey(qualificationId: string, side: "referrer" | "invitee"): string {
+  return `referral:${qualificationId}:${side}`;
 }
 
 /**
- * Grant any ladder rungs the referrer has reached but not yet been paid for,
- * up to `verifiedCount`. Self-healing + exactly-once: each rung is claimed via a
- * unique `externalPaymentId` (`referral-rung:<referrerId>:<atCount>`), so
- * duplicates are no-ops and a rung skipped earlier is settled here on a later
- * call. Returns the deltas that actually applied this call.
- */
-export async function reconcileReferrerRungs(
-  referrerId: string,
-  verifiedCount: number,
-): Promise<{ ticketsApplied: number; monthsApplied: number }> {
-  let ticketsApplied = 0;
-  let monthsApplied = 0;
-
-  for (const rung of env.REFERRAL_LADDER) {
-    if (rung.atCount > verifiedCount) continue;
-    const idBase = `referral-rung:${referrerId}:${rung.atCount}`;
-
-    if (rung.tickets > 0) {
-      try {
-        await grantTickets({
-          userId: referrerId,
-          count: rung.tickets,
-          reason: "referral_milestone",
-          externalPaymentId: `${idBase}:tickets`,
-        });
-        ticketsApplied += rung.tickets;
-      } catch (err) {
-        if (!isUniqueViolation(err)) throw err; // already granted → no-op
-      }
-    }
-
-    if (rung.months > 0) {
-      const res = await grantComplimentaryPremiumMonths({
-        userId: referrerId,
-        months: rung.months,
-        externalPaymentId: `${idBase}:premium`,
-        note: "referral milestone reward",
-      });
-      if (res.applied) monthsApplied += rung.months;
-    }
-  }
-
-  return { ticketsApplied, monthsApplied };
-}
-
-/**
- * Called when `inviteeUserId` reaches `verified`. Resolves the referrer,
- * counts the invitee exactly once toward them (CAS on `referralCountedAt`),
- * increments the referrer's lifetime tally, applies the velocity guard, and
- * settles any reached ladder rungs. Best-effort and fully idempotent — safe to
- * call from every path that can land a user on `verified`.
+ * Called when `inviteeUserId` reaches `verified`. Resolves the referrer, and in
+ * ONE transaction counts the invitee exactly once (CAS on `referralCountedAt`),
+ * records the `ReferralQualification` + identity hashes, decides the referrer
+ * side (credited / held / capped / duplicate) and credits the tickets of both
+ * sides. Best-effort and fully idempotent — safe to call from every path that
+ * can land a user on `verified`.
  *
- * Returns the result (with applied deltas for the notifier) or null when there
- * is nothing to do (feature off, no/invalid referrer, self-referral, or the
- * invitee was already counted).
+ * Returns the result (for the notifier) or null when there is nothing to do
+ * (feature off, not yet eligible, no/invalid referrer, self-referral, a blocked
+ * account on either side, or the invitee was already counted).
  */
 export async function grantReferralRewardsForVerifiedInvitee(
   inviteeUserId: string,
@@ -277,8 +221,10 @@ export async function grantReferralRewardsForVerifiedInvitee(
     where: { id: inviteeUserId },
     select: {
       id: true,
+      status: true,
       referralSource: true,
       referralCountedAt: true,
+      telegramId: true,
       phone: true,
       verificationStatus: true,
       onboardingStep: true,
@@ -293,14 +239,15 @@ export async function grantReferralRewardsForVerifiedInvitee(
   // An invitee counts only once they are a member matching could actually
   // serve: liveness-verified, onboarding finished, and a verified track contact
   // (audit A13-M18). Liveness alone proves a live face, not a registration — a
-  // farm of half-created accounts could otherwise pay a referrer rung by rung
-  // while never being matchable. Refused before the CAS below, so
-  // `referralCountedAt` stays empty and nothing is spent that a later verified
-  // run could not still settle.
+  // farm of half-created accounts could otherwise pay a referrer friend by
+  // friend while never being matchable. Refused before anything is written, so
+  // `referralCountedAt` stays empty and a later verified run can still settle.
+  // A blocked invitee is refused the same way (decision 2026-09-22).
   if (
     invitee.verificationStatus !== "verified" ||
     invitee.onboardingStep !== "completed" ||
-    !hasTrackVerifiedContact(invitee)
+    !hasTrackVerifiedContact(invitee) ||
+    REWARD_BLOCKED_STATUSES.has(invitee.status)
   ) {
     return null;
   }
@@ -317,168 +264,223 @@ export async function grantReferralRewardsForVerifiedInvitee(
   // Self-referral by shared verified phone (same human, two accounts).
   if (invitee.phone && referrer.phone && invitee.phone === referrer.phone) return null;
 
-  // Count this invitee exactly once toward the referrer, and bump the tally in
-  // the same transaction so concurrent verifications can't double-count.
-  const verifiedCount = await prisma.$transaction(async (tx) => {
+  const identities = keyedIdentitiesOf(invitee, REFERRAL_IDENTITY_LABEL);
+  const ticketsPerFriend = env.REFERRAL_TICKETS_PER_FRIEND;
+  const inviteeTickets = env.REFERRAL_INVITEE_TICKETS;
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Count this invitee exactly once. A concurrent run blocks on this row and
+    // then matches nothing.
     const cas = await tx.user.updateMany({
       where: { id: invitee.id, referralCountedAt: null },
       data: { referralCountedAt: new Date() },
     });
     if (cas.count === 0) return null; // already counted → idempotent no-op
-    const updated = await tx.user.update({
-      where: { id: referrerId },
-      data: { referralVerifiedCount: { increment: 1 } },
-      select: { referralVerifiedCount: true },
+
+    // The same person counted before under an account that no longer exists
+    // (delete + re-register): nobody is paid and the friend does not count.
+    const seen =
+      identities.length > 0
+        ? await tx.referralIdentity.count({
+            where: { identityHash: { in: identities.map((i) => i.identityHash) } },
+          })
+        : 0;
+
+    let status: ReferralQualificationStatus;
+    let verifiedCount: number;
+    let slotsUsed = 0;
+    if (seen > 0) {
+      status = "duplicate";
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id: referrerId },
+        select: { referralVerifiedCount: true },
+      });
+      verifiedCount = current.referralVerifiedCount;
+    } else {
+      // Bumping the tally takes the referrer's row lock, so two friends of the
+      // same referrer settling at once decide their slots one after the other
+      // and the lifetime cap cannot be overshot.
+      const bumped = await tx.user.update({
+        where: { id: referrerId },
+        data: { referralVerifiedCount: { increment: 1 } },
+        select: { referralVerifiedCount: true },
+      });
+      verifiedCount = bumped.referralVerifiedCount;
+      slotsUsed = await tx.referralQualification.count({
+        where: { referrerId, status: { in: SLOT_STATUSES } },
+      });
+      if (slotsUsed >= env.REFERRAL_MAX_REWARDED_FRIENDS) {
+        status = "capped";
+      } else if ((await countedInVelocityWindow(tx, referrerId)) + 1 > velocityCap()) {
+        // Velocity guard: a fraud-burst throttle. The honest tally still moves;
+        // the reward waits for `releaseHeldReferralRewards` — delayed, never denied.
+        status = "held";
+      } else {
+        status = "credited";
+      }
+    }
+
+    const referrerShare = status === "capped" || status === "duplicate" ? 0 : ticketsPerFriend;
+    const inviteeShare = status === "duplicate" ? 0 : inviteeTickets;
+    const qualification = await tx.referralQualification.create({
+      data: {
+        inviteeId: invitee.id,
+        referrerId,
+        status,
+        referrerTickets: referrerShare,
+        inviteeTickets: inviteeShare,
+        creditedAt: status === "credited" ? new Date() : null,
+      },
+      select: { id: true },
     });
-    return updated.referralVerifiedCount;
+    if (identities.length > 0) {
+      await tx.referralIdentity.createMany({
+        data: identities.map((identity) => ({
+          identityHash: identity.identityHash,
+          kind: identity.kind,
+          qualificationId: qualification.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    let referrerTicketsApplied = 0;
+    if (status === "credited" && referrerShare > 0) {
+      await grantTicketsInTx(tx, {
+        userId: referrerId,
+        count: referrerShare,
+        reason: "referral_reward",
+        externalPaymentId: referralLedgerKey(qualification.id, "referrer"),
+      });
+      referrerTicketsApplied = referrerShare;
+    }
+    let inviteeTicketsApplied = 0;
+    if (inviteeShare > 0) {
+      await grantTicketsInTx(tx, {
+        userId: invitee.id,
+        count: inviteeShare,
+        reason: "referral_reward",
+        externalPaymentId: referralLedgerKey(qualification.id, "invitee"),
+      });
+      inviteeTicketsApplied = inviteeShare;
+    }
+
+    const slotsAfter = slotsUsed + (status === "credited" || status === "held" ? 1 : 0);
+    return {
+      referrerId,
+      qualificationId: qualification.id,
+      status,
+      verifiedCount,
+      referrerTicketsApplied,
+      inviteeTicketsApplied,
+      rewardsLeft: Math.max(0, env.REFERRAL_MAX_REWARDED_FRIENDS - slotsAfter),
+    } satisfies ReferralRewardResult;
   });
-  if (verifiedCount === null) return null;
+  if (!result) return null;
 
-  // Velocity guard: hold rewards (not the honest tally) when this referrer has
-  // had more than the cap of invitees counted in the last 24h — a fraud-burst
-  // throttle that matters most while Persona is sandbox. Held rungs are
-  // self-healing: `releaseHeldReferralRewards` settles them once the burst is
-  // out of the window — from the referrer's own referral screen and from the
-  // hourly sweep — so a legit power-referrer is delayed, never denied.
-  const recent = await countedInVelocityWindow(referrerId);
-  if (recent !== null) {
+  if (result.status === "held") {
     console.warn(
-      `[referral] velocity cap hit: referrer=${referrerId} counted=${recent} in 24h — holding rewards`,
+      `[referral] velocity cap hit: referrer=${referrerId} — holding reward ` +
+        `qualification=${result.qualificationId}`,
     );
-    return { referrerId, verifiedCount, ticketsApplied: 0, monthsApplied: 0, heldByVelocity: true };
   }
+  if (result.referrerTicketsApplied > 0 || result.inviteeTicketsApplied > 0) {
+    console.info("[referral] referral_ticket_earned", {
+      qualificationId: result.qualificationId,
+      referrerId,
+      inviteeId: invitee.id,
+      status: result.status,
+      referrerTickets: result.referrerTicketsApplied,
+      inviteeTickets: result.inviteeTicketsApplied,
+    });
+  }
+  return result;
+}
 
-  const { ticketsApplied, monthsApplied } = await reconcileReferrerRungs(
-    referrerId,
-    verifiedCount,
-  );
-  return { referrerId, verifiedCount, ticketsApplied, monthsApplied, heldByVelocity: false };
+/** `REFERRAL_DAILY_REWARD_CAP`, or Infinity when the cap is switched off (0). */
+function velocityCap(): number {
+  return env.REFERRAL_DAILY_REWARD_CAP > 0
+    ? env.REFERRAL_DAILY_REWARD_CAP
+    : Number.POSITIVE_INFINITY;
 }
 
 /**
- * How many of `referrerId`'s invitees were counted inside the velocity window
- * — or null when the referrer is NOT over the cap (including when the cap is
- * off). One definition for the hold and for the release, so a reward is never
+ * How many of `referrerId`'s friends were counted inside the 24h velocity
+ * window. One definition for the hold and for the release, so a reward is never
  * released under a looser rule than the one that held it.
  */
-async function countedInVelocityWindow(referrerId: string): Promise<number | null> {
-  if (env.REFERRAL_DAILY_REWARD_CAP <= 0) return null;
-  const since = new Date(Date.now() - ONE_DAY_MS);
-  const recent = await prisma.user.count({
+async function countedInVelocityWindow(
+  db: Prisma.TransactionClient,
+  referrerId: string,
+): Promise<number> {
+  return db.referralQualification.count({
     where: {
-      referralCountedAt: { gte: since },
-      OR: [
-        { referralSource: `referral:${referrerId}` },
-        { referralSource: `tg:referral_${referrerId}` },
-        { referralSource: `tg-mini:referral_${referrerId}` },
-      ],
+      referrerId,
+      status: { in: COUNTED_STATUSES },
+      createdAt: { gte: new Date(Date.now() - ONE_DAY_MS) },
     },
   });
-  return recent > env.REFERRAL_DAILY_REWARD_CAP ? recent : null;
-}
-
-/** The unique ledger ids every rung `verifiedCount` has reached must carry. */
-function reachedRungKeys(
-  referrerId: string,
-  verifiedCount: number,
-): { tickets: string[]; premium: string[] } {
-  const tickets: string[] = [];
-  const premium: string[] = [];
-  for (const rung of env.REFERRAL_LADDER) {
-    if (rung.atCount > verifiedCount) continue;
-    const idBase = `referral-rung:${referrerId}:${rung.atCount}`;
-    if (rung.tickets > 0) tickets.push(`${idBase}:tickets`);
-    if (rung.months > 0) premium.push(`${idBase}:premium`);
-  }
-  return { tickets, premium };
-}
-
-/**
- * Which of these referrers have a reached rung with no ledger row yet — the
- * rewards the velocity cap held back. Two lookups for the whole batch, so the
- * sweep and the state screen ask "is anything owed" without replaying
- * `reconcileReferrerRungs`' inserts (each already-paid rung is a failed unique
- * insert) for referrers who are fully paid.
- */
-async function referrersOwedRungs(
-  referrers: ReadonlyArray<{ id: string; referralVerifiedCount: number }>,
-): Promise<Set<string>> {
-  const expected = referrers.map((r) => ({
-    id: r.id,
-    ...reachedRungKeys(r.id, r.referralVerifiedCount),
-  }));
-  const ticketKeys = expected.flatMap((e) => e.tickets);
-  const premiumKeys = expected.flatMap((e) => e.premium);
-  const [ticketRows, premiumRows] = await Promise.all([
-    ticketKeys.length > 0
-      ? prisma.ticketLedger.findMany({
-          where: { externalPaymentId: { in: ticketKeys } },
-          select: { externalPaymentId: true },
-        })
-      : Promise.resolve([]),
-    premiumKeys.length > 0
-      ? prisma.subscriptionLedger.findMany({
-          where: { externalPaymentId: { in: premiumKeys } },
-          select: { externalPaymentId: true },
-        })
-      : Promise.resolve([]),
-  ]);
-  const paid = new Set(
-    [...ticketRows, ...premiumRows].flatMap((row) =>
-      row.externalPaymentId ? [row.externalPaymentId] : [],
-    ),
-  );
-  return new Set(
-    expected
-      .filter((e) => [...e.tickets, ...e.premium].some((key) => !paid.has(key)))
-      .map((e) => e.id),
-  );
 }
 
 export interface ReferralReleaseResult {
   ticketsApplied: number;
-  monthsApplied: number;
   /** True while the referrer is still over the cap — nothing released yet. */
   stillHeld: boolean;
 }
 
 /**
- * Release ladder rewards the velocity cap held back (§Referral).
- *
- * The cap holds a reward; nothing used to give it back. The comment promised
- * "the next under-cap event settles them", but that event is another friend
- * verifying — a referrer whose burst was their last invites simply never got
- * what the screen told them they had earned. This is the release: once the
- * referrer is back under the cap, every reached-but-unpaid rung is paid through
- * the same exactly-once keys. Blocked referrers stay unpaid, as at the hold.
+ * Release referrer rewards the velocity cap held back (§Referral). Once the
+ * referrer is back under the cap, every `held` qualification is credited
+ * through its own exactly-once guard (a CAS on the row's status, plus the unique
+ * ledger key). Blocked referrers stay unpaid, as at the hold. Called from the
+ * referral screen (both surfaces) and from the hourly sweep.
  */
 export async function releaseHeldReferralRewards(
   referrerId: string,
 ): Promise<ReferralReleaseResult> {
-  const nothing: ReferralReleaseResult = { ticketsApplied: 0, monthsApplied: 0, stillHeld: false };
+  const nothing: ReferralReleaseResult = { ticketsApplied: 0, stillHeld: false };
   if (!env.REFERRAL_FEATURE_ENABLED) return nothing;
 
   const referrer = await prisma.user.findUnique({
     where: { id: referrerId },
-    select: { id: true, status: true, referralVerifiedCount: true },
+    select: { id: true, status: true },
   });
-  if (!referrer || referrer.referralVerifiedCount <= 0) return nothing;
-  if (REWARD_BLOCKED_STATUSES.has(referrer.status)) return nothing;
+  if (!referrer || REWARD_BLOCKED_STATUSES.has(referrer.status)) return nothing;
 
-  const owed = await referrersOwedRungs([referrer]);
-  if (!owed.has(referrer.id)) return nothing;
-  if ((await countedInVelocityWindow(referrer.id)) !== null) {
+  const held = await prisma.referralQualification.findMany({
+    where: { referrerId, status: "held" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, referrerTickets: true },
+  });
+  if (held.length === 0) return nothing;
+  if ((await countedInVelocityWindow(prisma, referrerId)) > velocityCap()) {
     return { ...nothing, stillHeld: true };
   }
 
-  const applied = await reconcileReferrerRungs(referrer.id, referrer.referralVerifiedCount);
-  if (applied.ticketsApplied > 0 || applied.monthsApplied > 0) {
-    console.info(
-      `[referral] released held rewards referrer=${referrer.id} ` +
-        `tickets=${applied.ticketsApplied} months=${applied.monthsApplied}`,
-    );
+  let ticketsApplied = 0;
+  for (const row of held) {
+    ticketsApplied += await prisma.$transaction(async (tx) => {
+      const claimed = await tx.referralQualification.updateMany({
+        where: { id: row.id, status: "held" },
+        data: { status: "credited", creditedAt: new Date() },
+      });
+      if (claimed.count === 0 || row.referrerTickets <= 0) return 0; // released concurrently
+      await grantTicketsInTx(tx, {
+        userId: referrerId,
+        count: row.referrerTickets,
+        reason: "referral_reward",
+        externalPaymentId: referralLedgerKey(row.id, "referrer"),
+      });
+      return row.referrerTickets;
+    });
   }
-  return { ...applied, stillHeld: false };
+  if (ticketsApplied > 0) {
+    console.info("[referral] referral_ticket_earned (released)", {
+      referrerId,
+      referrerTickets: ticketsApplied,
+    });
+  }
+  return { ticketsApplied, stillHeld: false };
 }
 
 /**
@@ -490,7 +492,7 @@ let releaseSweepCursor: string | null = null;
 
 /**
  * Hourly sweep: release held rewards for referrers who never open their
- * referral screen. Walks every referrer who reached at least one rung, one
+ * referral screen. Walks every referrer with a `held` qualification, one
  * bounded page (`REFERRAL_RELEASE_SWEEP_BATCH`) per tick, wrapping around.
  * Safe to run at any cadence — each release re-checks the cap itself.
  */
@@ -501,30 +503,28 @@ export async function sweepHeldReferralRewards(): Promise<{
 }> {
   const result = { scanned: 0, released: 0, stillHeld: 0 };
   if (!env.REFERRAL_FEATURE_ENABLED) return result;
-  const firstRung = Math.min(...env.REFERRAL_LADDER.map((rung) => rung.atCount));
-  if (!Number.isFinite(firstRung)) return result;
 
-  const page = await prisma.user.findMany({
+  const page = await prisma.referralQualification.findMany({
     where: {
-      referralVerifiedCount: { gte: firstRung },
-      status: { notIn: [...REWARD_BLOCKED_STATUSES] },
-      ...(releaseSweepCursor ? { id: { gt: releaseSweepCursor } } : {}),
+      status: "held",
+      referrerId: releaseSweepCursor ? { gt: releaseSweepCursor } : { not: null },
     },
-    orderBy: { id: "asc" },
+    distinct: ["referrerId"],
+    orderBy: { referrerId: "asc" },
     take: REFERRAL_RELEASE_SWEEP_BATCH,
-    select: { id: true, referralVerifiedCount: true },
+    select: { referrerId: true },
   });
   // A short page is the end of the list: start over next tick.
-  releaseSweepCursor = page.length < REFERRAL_RELEASE_SWEEP_BATCH ? null : (page.at(-1)?.id ?? null);
+  releaseSweepCursor =
+    page.length < REFERRAL_RELEASE_SWEEP_BATCH ? null : (page.at(-1)?.referrerId ?? null);
   result.scanned = page.length;
-  if (page.length === 0) return result;
 
-  const owed = await referrersOwedRungs(page);
-  for (const referrerId of owed) {
+  for (const { referrerId } of page) {
+    if (!referrerId) continue;
     try {
       const released = await releaseHeldReferralRewards(referrerId);
       if (released.stillHeld) result.stillHeld += 1;
-      else if (released.ticketsApplied > 0 || released.monthsApplied > 0) result.released += 1;
+      else if (released.ticketsApplied > 0) result.released += 1;
     } catch (err) {
       console.error(`[referral] held-reward release failed referrer=${referrerId}:`, err);
     }
@@ -538,39 +538,15 @@ export function resetReferralReleaseSweepForTests(): void {
 }
 
 /**
- * Grant the INVITEE their one-time welcome Premium month (shown on the
- * onboarding wow screen). Exactly-once via the unique
- * `referral-invitee-premium:<inviteeId>` ledger id; also stamps
- * `referralInviteePremiumAt` so the screen shows once. Only for genuinely
- * invited users (a real referrer, not self).
+ * Mark that the invitee saw the onboarding invite screen (§Referral). The
+ * screen only TELLS them about the ticket they will get on verification —
+ * nothing is granted here (the Premium welcome gift it used to claim was
+ * retired 2026-09-22). Idempotent; returns whether this call set the marker.
  */
-export async function grantInviteePremium(
-  inviteeUserId: string,
-): Promise<{ applied: boolean; months: number }> {
-  const months = env.REFERRAL_INVITEE_PREMIUM_MONTHS;
-  if (!env.REFERRAL_FEATURE_ENABLED || months <= 0) return { applied: false, months };
-
-  const invitee = await prisma.user.findUnique({
-    where: { id: inviteeUserId },
-    select: { id: true, referralSource: true, referralInviteePremiumAt: true },
+export async function markReferralGiftSeen(userId: string): Promise<boolean> {
+  const res = await prisma.user.updateMany({
+    where: { id: userId, referralGiftSeenAt: null },
+    data: { referralGiftSeenAt: new Date() },
   });
-  if (!invitee) return { applied: false, months };
-  if (invitee.referralInviteePremiumAt) return { applied: false, months };
-
-  const referrerId = parseReferrer(invitee.referralSource);
-  if (!referrerId || referrerId === invitee.id) return { applied: false, months };
-
-  const res = await grantComplimentaryPremiumMonths({
-    userId: invitee.id,
-    months,
-    externalPaymentId: `referral-invitee-premium:${invitee.id}`,
-    note: "referral welcome gift",
-  });
-  // Stamp the once-marker (the ledger id already guarantees exactly-once premium;
-  // this only drives the "show the wow screen once" flag).
-  await prisma.user.updateMany({
-    where: { id: invitee.id, referralInviteePremiumAt: null },
-    data: { referralInviteePremiumAt: new Date() },
-  });
-  return { applied: res.applied, months };
+  return res.count > 0;
 }

@@ -762,7 +762,8 @@ describe("grantComplimentaryPremiumMonths (shares the additive path)", () => {
     await grantComplimentaryPremiumMonths({
       userId: "u1",
       months: 1,
-      externalPaymentId: "referral-rung:u1:1:premium",
+      externalPaymentId: "promo:c1:u1:premium",
+      provider: "promo",
     });
 
     expect(transaction.mock.calls[0]![0]).toBeTypeOf("function");
@@ -780,11 +781,12 @@ describe("grantComplimentaryPremiumMonths (shares the additive path)", () => {
     await grantComplimentaryPremiumMonths({
       userId: "u1",
       months: 1,
-      externalPaymentId: "referral:u1",
+      externalPaymentId: "promo:c2:u1:premium",
+      provider: "promo",
     });
 
     expect(ledgerCreate.mock.calls[0][0].data).toMatchObject({
-      provider: "referral",
+      provider: "promo",
       amount: null,
       currency: null,
     });

@@ -88,8 +88,23 @@ export function safetyIdentitiesOf(
   user: SafetyIdentitySource,
   secret: string = env.JWT_SECRET,
 ): SafetyIdentity[] {
+  return keyedIdentitiesOf(user, TOMBSTONE_KEY_LABEL, secret);
+}
+
+/**
+ * The same proven-identity hashing under a caller-chosen key label, so another
+ * store can recognise a returning person without its hashes being joinable to
+ * `safety_tombstones` (the referral program keys `referral_identities` with its
+ * own label). Same rules as `safetyIdentitiesOf`: proven identities only, and
+ * nothing at all without a `JWT_SECRET`.
+ */
+export function keyedIdentitiesOf(
+  user: SafetyIdentitySource,
+  label: string,
+  secret: string = env.JWT_SECRET,
+): SafetyIdentity[] {
   if (!secret) return [];
-  const key = createHmac("sha256", secret).update(TOMBSTONE_KEY_LABEL).digest();
+  const key = createHmac("sha256", secret).update(label).digest();
   const hash = (kind: SafetyIdentityKind, value: string): SafetyIdentity => ({
     kind,
     identityHash: createHmac("sha256", key).update(`${kind}:${value}`).digest("hex"),

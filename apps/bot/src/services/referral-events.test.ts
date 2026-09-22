@@ -3,11 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   env: {
     REFERRAL_FEATURE_ENABLED: true,
-    REFERRAL_LADDER: [] as const,
-    REFERRAL_INVITEE_PREMIUM_MONTHS: 1,
+    REFERRAL_TICKETS_PER_FRIEND: 1,
+    REFERRAL_INVITEE_TICKETS: 1,
+    REFERRAL_MAX_REWARDED_FRIENDS: 20,
     REFERRAL_DAILY_REWARD_CAP: 0,
-    TICKET_PRICE_CENTS: 699,
-    PREMIUM_PRICE_USD_DISPLAY: "$11.99",
     BOT_USERNAME: "gennetybot",
   },
   create: vi.fn(),

@@ -451,19 +451,20 @@ export function App(): ReactElement {
               </button>
             )}
 
-            {/* Referral cross-promo: a quiet secondary way to get a ticket
-                without paying, shown only while the wallet is genuinely empty
-                and only at the offer step — by "cover-partner" he already
-                secured his own ticket, so the pitch no longer applies. It
-                lives here (scroll content), never in the sticky action bar,
-                so it can't compete with the pay/use buttons below. */}
+            {/* Referral cross-promo: invite a friend, earn a Date Ticket.
+                Shown only while the wallet is genuinely empty and only at the
+                offer step — by "cover-partner" he already secured his own
+                ticket, so the pitch no longer applies. It lives here (scroll
+                content), never in the sticky action bar, so it can't compete
+                with the pay/use buttons below.
+
+                It is its own element at the chip's normal spacing, NOT
+                tightened under the Premium row above: the referral program
+                pays in tickets only and is never part of a Premium pitch, so
+                pairing the two as "offer + footnote" would read as one. */}
             {sc === "offer" && state.myBalance === 0 && state.referralEnabled && (
               <ReferralChip
                 lang={lang}
-                // Tightened when the Premium row sits directly above, so the
-                // two read as an offer plus its footnote rather than as a menu
-                // of two alternatives — the same pairing the venue board makes.
-                tight={Boolean(state.premiumWouldCoverMe)}
                 onTap={() => {
                   haptic("light");
                   location.href = `referral.html?${returnParams("ticket-gate", { match: matchId, lang })}`;

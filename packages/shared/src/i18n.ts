@@ -1302,19 +1302,10 @@ const translations = {
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · until {date}",
     menuInviteFriend: "🎁 Invite a friend",
-    referralGiftTitle: "A friend gifted you Premium 💫",
-    referralGiftBody:
-      "Because {name} invited you, your first {months} month of Gennety Premium is on us — it's active right now.",
-    referralGiftBodyNoName:
-      "Because a friend invited you, your first {months} month of Gennety Premium is on us — it's active right now.",
-    referralGiftContinue: "Let's go ✨",
     referralHubTitle: "Invite your friends to Gennety",
     referralHubTagline:
-      "For every friend you invite who passes verification — Date Tickets and months of Premium. The more friends, the bigger the rewards.\n\nAnd the more people in your city, the higher the chance we find a match for you too.",
+      "Every friend who passes verification via your link earns you a date ticket 🎟 — and they get one too.\n\nAnd the more people in your city, the higher the chance we find a match for you too.",
     referralShareButton: "📤 Invite a friend",
-    referralRewardsSoFar: "You've earned {tickets} 🎟 and {months} months of Premium — worth {usd}.",
-    referralProgressNext: "{remaining} more verified friend(s) unlocks the next reward.",
-    referralProgressMaxed: "You've reached the top reward — legend. 💛",
     referralShareCaption: "The AI finds your best match and sets up the meeting itself.",
     referralShareJoin: "Join Gennety 💫",
     // --- HDYHAU (онбординговый вопрос об источнике, `shared/hdyhau.ts`) ---
@@ -1329,17 +1320,15 @@ const translations = {
     hdyhauSkip: "Skip",
     hdyhauThanks: "Thanks — that genuinely helps. 💛",
     referralRewardDm:
-      "{name} passed verification via your link.\n\nCredited: +{tickets} 🎟 · +{months} mo Premium.\n{next}",
-    referralRewardNext: "{remaining} more for the next reward.",
-    referralRewardNextMax: "That's the maximum — thank you.",
-    referralFriendJoinedDm:
-      "{name} joined via your link.\n\nYour reward arrives after they pass verification.",
+      "{name} passed verification via your link.\n\nCredited: +{tickets} 🎟\n{next}",
+    referralRewardNext: "Invite rewards left: {remaining}.",
+    referralRewardNextMax: "That was your last invite reward — thank you 💛",
     referralCardInvitedBy: "Invited by {name}",
     referralCardInvitedGeneric: "You're invited",
     referralCardHeadA: "Real dates.",
     referralCardHeadB: "Zero texting.",
     referralCardSupport: "The AI finds your match on deep compatibility and sets up the meeting in person.",
-    referralCardGift: "{monthsPhrase} of Premium — on us",
+    referralCardGift: "{ticketsPhrase} — on us",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -2587,19 +2576,10 @@ const translations = {
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · до {date}",
     menuInviteFriend: "🎁 Пригласить друга",
-    referralGiftTitle: "Друг подарил тебе Premium 💫",
-    referralGiftBody:
-      "{name} пригласил(а) тебя — поэтому первый {months} месяц Gennety Premium за наш счёт. Он уже активен.",
-    referralGiftBodyNoName:
-      "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Он уже активен.",
-    referralGiftContinue: "Погнали ✨",
     referralHubTitle: "Приглашай друзей в Gennety",
     referralHubTagline:
-      "За каждого приглашённого, кто пройдёт проверку, — билеты на свидания и месяцы Premium. Чем больше друзей, тем крупнее награды.\n\nИ чем больше людей в твоём городе, тем выше шанс, что подберём пару и тебе.",
+      "За каждого друга, который пройдёт проверку по твоей ссылке, — билет на свидание 🎟 тебе, и ему тоже.\n\nИ чем больше людей в твоём городе, тем выше шанс, что подберём пару и тебе.",
     referralShareButton: "📤 Пригласить друга",
-    referralRewardsSoFar: "Ты получил(а) {tickets} 🎟 и {months} мес. Premium — на сумму {usd}.",
-    referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
-    referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
     referralShareCaption: "ИИ подбирает лучшую пару и сам организует встречу.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     // --- HDYHAU (онбординговый вопрос об источнике, `shared/hdyhau.ts`) ---
@@ -2614,17 +2594,15 @@ const translations = {
     hdyhauSkip: "Пропустить",
     hdyhauThanks: "Спасибо — это правда помогает. 💛",
     referralRewardDm:
-      "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟 · +{months} мес Premium.\n{next}",
-    referralRewardNext: "Ещё {remaining} — и следующая награда.",
-    referralRewardNextMax: "Это максимум — спасибо.",
-    referralFriendJoinedDm:
-      "{name} зашёл(ла) по твоей ссылке.\n\nНаграда придёт после проверки.",
+      "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟\n{next}",
+    referralRewardNext: "Осталось наград за приглашения: {remaining}.",
+    referralRewardNextMax: "Это была последняя награда за приглашения — спасибо 💛",
     referralCardInvitedBy: "Тебя пригласил(а) {name}",
     referralCardInvitedGeneric: "Тебя приглашают",
     referralCardHeadA: "Реальные свидания.",
     referralCardHeadB: "Ноль переписки.",
     referralCardSupport: "ИИ подбирает пару по глубокой совместимости и сам организует встречу вживую.",
-    referralCardGift: "Premium на {months} мес — в подарок",
+    referralCardGift: "{ticketsPhrase} — в подарок",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -3859,19 +3837,10 @@ const translations = {
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · до {date}",
     menuInviteFriend: "🎁 Запросити друга",
-    referralGiftTitle: "Друг подарував тобі Premium 💫",
-    referralGiftBody:
-      "{name} запросив(ла) тебе — тому перший {months} місяць Gennety Premium за наш рахунок. Він уже активний.",
-    referralGiftBodyNoName:
-      "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Він уже активний.",
-    referralGiftContinue: "Погнали ✨",
     referralHubTitle: "Запрошуй друзів у Gennety",
     referralHubTagline:
-      "За кожного запрошеного, хто пройде перевірку, — квитки на побачення та місяці Premium. Що більше друзів, то більші нагороди.\n\nІ що більше людей у твоєму місті, то вищий шанс, що підберемо пару й тобі.",
+      "За кожного друга, який пройде перевірку за твоїм посиланням, — квиток на побачення 🎟 тобі, і йому теж.\n\nІ що більше людей у твоєму місті, то вищий шанс, що підберемо пару й тобі.",
     referralShareButton: "📤 Запросити друга",
-    referralRewardsSoFar: "Ти отримав(ла) {tickets} 🎟 і {months} міс. Premium — на суму {usd}.",
-    referralProgressNext: "Ще верифікованих друзів: {remaining} — і відкриється наступна нагорода.",
-    referralProgressMaxed: "Ти досяг(ла) найвищої нагороди — легенда. 💛",
     referralShareCaption: "ШІ підбирає найкращу пару й сам організовує зустріч.",
     referralShareJoin: "Приєднатися до Gennety 💫",
     // --- HDYHAU (онбординговий запит про джерело, `shared/hdyhau.ts`) ---
@@ -3886,17 +3855,15 @@ const translations = {
     hdyhauSkip: "Пропустити",
     hdyhauThanks: "Дякуємо — це справді допомагає. 💛",
     referralRewardDm:
-      "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟 · +{months} міс Premium.\n{next}",
-    referralRewardNext: "Ще {remaining} — і наступна нагорода.",
-    referralRewardNextMax: "Це максимум — дякую.",
-    referralFriendJoinedDm:
-      "{name} зайшов(ла) за твоїм посиланням.\n\nНагорода прийде після перевірки.",
+      "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟\n{next}",
+    referralRewardNext: "Залишилося нагород за запрошення: {remaining}.",
+    referralRewardNextMax: "Це була остання нагорода за запрошення — дякуємо 💛",
     referralCardInvitedBy: "Тебе запросив(ла) {name}",
     referralCardInvitedGeneric: "Тебе запрошують",
     referralCardHeadA: "Справжні побачення.",
     referralCardHeadB: "Нуль листування.",
     referralCardSupport: "ШІ підбирає пару за глибокою сумісністю й сам організовує зустріч наживо.",
-    referralCardGift: "Premium на {months} міс — у подарунок",
+    referralCardGift: "{ticketsPhrase} — у подарунок",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -5108,19 +5075,10 @@ const deTranslations: TranslationTable = {
   menuPremium: "✨ Gennety Premium",
   menuPremiumActive: "✨ Premium · bis {date}",
   menuInviteFriend: "🎁 Freund einladen",
-  referralGiftTitle: "Ein Freund hat dir Premium geschenkt 💫",
-  referralGiftBody:
-    "Weil {name} dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — er ist ab sofort aktiv.",
-  referralGiftBodyNoName:
-    "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — er ist ab sofort aktiv.",
-  referralGiftContinue: "Los geht's ✨",
   referralHubTitle: "Lade deine Freunde zu Gennety ein",
   referralHubTagline:
-    "Für jeden eingeladenen Freund, der die Verifizierung besteht — Date-Tickets und Monate Premium. Je mehr Freunde, desto größer die Belohnungen.\n\nUnd je mehr Menschen in deiner Stadt, desto höher die Chance, dass wir auch für dich ein Match finden.",
+    "Für jeden Freund, der über deinen Link die Verifizierung besteht, bekommst du ein Date-Ticket 🎟 — und er auch.\n\nUnd je mehr Menschen in deiner Stadt, desto höher die Chance, dass wir auch für dich ein Match finden.",
   referralShareButton: "📤 Freund einladen",
-  referralRewardsSoFar: "Du hast {tickets} 🎟 und {months} Monate Premium verdient — im Wert von {usd}.",
-  referralProgressNext: "Noch {remaining} verifizierte Freunde bis zur nächsten Belohnung.",
-  referralProgressMaxed: "Du hast die höchste Belohnung erreicht — Legende. 💛",
   referralShareCaption: "Die KI findet dein bestes Match und plant das Treffen selbst.",
   referralShareJoin: "Gennety beitreten 💫",
   hdyhauQuestion: "Zum Schluss - woher kennst du Gennety?",
@@ -5134,17 +5092,15 @@ const deTranslations: TranslationTable = {
   hdyhauSkip: "Überspringen",
   hdyhauThanks: "Danke - das hilft wirklich. 💛",
   referralRewardDm:
-    "{name} hat die Verifizierung über deinen Link bestanden.\n\nGutgeschrieben: +{tickets} 🎟 · +{months} Mon Premium.\n{next}",
-  referralRewardNext: "Noch {remaining} bis zur nächsten Belohnung.",
-  referralRewardNextMax: "Das ist das Maximum — danke.",
-  referralFriendJoinedDm:
-    "{name} ist über deinen Link beigetreten.\n\nDeine Belohnung kommt nach der Verifizierung.",
+    "{name} hat die Verifizierung über deinen Link bestanden.\n\nGutgeschrieben: +{tickets} 🎟\n{next}",
+  referralRewardNext: "Verbleibende Einladungsbelohnungen: {remaining}.",
+  referralRewardNextMax: "Das war deine letzte Einladungsbelohnung — danke 💛",
   referralCardInvitedBy: "Eingeladen von {name}",
   referralCardInvitedGeneric: "Du bist eingeladen",
   referralCardHeadA: "Echte Dates.",
   referralCardHeadB: "Null Chatten.",
   referralCardSupport: "Die KI findet dein Match nach tiefer Kompatibilität und organisiert das Treffen persönlich.",
-  referralCardGift: "{monthsPhrase} Premium — geschenkt",
+  referralCardGift: "{ticketsPhrase} — geschenkt",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
@@ -6353,19 +6309,10 @@ const plTranslations: TranslationTable = {
   menuPremium: "✨ Gennety Premium",
   menuPremiumActive: "✨ Premium · do {date}",
   menuInviteFriend: "🎁 Zaproś znajomego",
-  referralGiftTitle: "Znajomy podarował ci Premium 💫",
-  referralGiftBody:
-    "Ponieważ {name} cię zaprosił(a), twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — jest już aktywny.",
-  referralGiftBodyNoName:
-    "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — jest już aktywny.",
-  referralGiftContinue: "Zaczynamy ✨",
   referralHubTitle: "Zapraszaj znajomych do Gennety",
   referralHubTagline:
-    "Za każdego zaproszonego, kto przejdzie weryfikację — bilety na randki i miesiące Premium. Im więcej znajomych, tym większe nagrody.\n\nA im więcej osób w twoim mieście, tym większa szansa, że dobierzemy parę także tobie.",
+    "Za każdego znajomego, który przejdzie weryfikację przez twój link, dostajesz bilet na randkę 🎟 — a on też.\n\nA im więcej osób w twoim mieście, tym większa szansa, że dobierzemy parę także tobie.",
   referralShareButton: "📤 Zaproś znajomego",
-  referralRewardsSoFar: "Zdobyłeś(-aś) {tickets} 🎟 i {months} mies. Premium — o wartości {usd}.",
-  referralProgressNext: "Jeszcze {remaining} zweryfikowanych znajomych do następnej nagrody.",
-  referralProgressMaxed: "Osiągnąłeś(-aś) najwyższą nagrodę — legenda. 💛",
   referralShareCaption: "AI dobiera najlepszą parę i sam organizuje spotkanie.",
   referralShareJoin: "Dołącz do Gennety 💫",
   hdyhauQuestion: "Na koniec - skąd wiesz o Gennety?",
@@ -6379,17 +6326,15 @@ const plTranslations: TranslationTable = {
   hdyhauSkip: "Pomiń",
   hdyhauThanks: "Dzięki - to naprawdę pomaga. 💛",
   referralRewardDm:
-    "{name} przeszedł(-eszła) weryfikację przez twój link.\n\nNaliczono: +{tickets} 🎟 · +{months} mies Premium.\n{next}",
-  referralRewardNext: "Jeszcze {remaining} do następnej nagrody.",
-  referralRewardNextMax: "To maksimum — dziękujemy.",
-  referralFriendJoinedDm:
-    "{name} dołączył(a) przez twój link.\n\nNagroda pojawi się po weryfikacji.",
+    "{name} przeszedł(-eszła) weryfikację przez twój link.\n\nNaliczono: +{tickets} 🎟\n{next}",
+  referralRewardNext: "Pozostałe nagrody za zaproszenia: {remaining}.",
+  referralRewardNextMax: "To była twoja ostatnia nagroda za zaproszenie — dziękujemy 💛",
   referralCardInvitedBy: "Zaproszenie od {name}",
   referralCardInvitedGeneric: "Masz zaproszenie",
   referralCardHeadA: "Prawdziwe randki.",
   referralCardHeadB: "Zero pisania.",
   referralCardSupport: "AI dobiera parę według głębokiej zgodności i sam organizuje spotkanie na żywo.",
-  referralCardGift: "{monthsPhrase} Premium — w prezencie",
+  referralCardGift: "{ticketsPhrase} — w prezencie",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
@@ -6534,27 +6479,25 @@ function slavicPlural(n: number, one: string, few: string, many: string): string
 }
 
 /**
- * Fully declined "{count} {unit}" phrase for a Premium-months duration.
+ * Fully declined "{count} {unit}" phrase for a number of Date Tickets.
  * `interpolate()` only does flat `{placeholder}` substitution, and Slavic/
- * Germanic plural rules ("1 month" vs "3 months", "1 месяц" vs "3 месяца" vs
- * "5 месяцев") can't be expressed as a single translation string — so this is
- * computed in code and passed in as one interpolated value. Used only where a
- * whole-word month count is shown (`referralCardGift`, the referral onboarding
- * wow screen); the abbreviated "mo"/"мес"/"міс"/"Mon"/"mies" forms used
- * elsewhere don't decline and don't need this.
+ * Germanic plural rules ("1 date ticket" vs "3 date tickets", "1 билет" vs
+ * "3 билета" vs "5 билетов") can't be expressed as a single translation string —
+ * so this is computed in code and passed in as one interpolated value. Used
+ * where a whole-word ticket count is shown (`referralCardGift`).
  */
-export function monthsPhrase(lang: Language, months: number): string {
+export function dateTicketsPhrase(lang: Language, tickets: number): string {
   switch (lang) {
     case "de":
-      return `${months} Monat${months === 1 ? "" : "e"}`;
+      return `${tickets} Date-Ticket${tickets === 1 ? "" : "s"}`;
     case "ru":
-      return `${months} ${slavicPlural(months, "месяц", "месяца", "месяцев")}`;
+      return `${tickets} ${slavicPlural(tickets, "билет", "билета", "билетов")} на свидание`;
     case "uk":
-      return `${months} ${slavicPlural(months, "місяць", "місяці", "місяців")}`;
+      return `${tickets} ${slavicPlural(tickets, "квиток", "квитки", "квитків")} на побачення`;
     case "pl":
-      return `${months} ${slavicPlural(months, "miesiąc", "miesiące", "miesięcy")}`;
+      return `${tickets} ${slavicPlural(tickets, "bilet", "bilety", "biletów")} na randkę`;
     default:
-      return `${months} month${months === 1 ? "" : "s"}`;
+      return `${tickets} date ticket${tickets === 1 ? "" : "s"}`;
   }
 }
 

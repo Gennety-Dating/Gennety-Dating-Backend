@@ -16,14 +16,14 @@ describe("returnParams", () => {
   });
 
   it("appends to the trail instead of overwriting it", () => {
-    // The bug this fixes: Premium handing off to referral used to emit only
-    // `backTo=premium`, discarding the board that sent the user to Premium —
-    // so back worked exactly once and the board became unreachable.
+    // The mechanism, independent of which two-hop hand-offs exist today: a
+    // page reached from another page hands the NEXT page the whole chain, so
+    // back works at every depth instead of exactly once.
     const params = new URLSearchParams(
-      returnParams("premium", { lang: "ru" }, "?backTo=venue-change&backMatch=m1&lang=ru"),
+      returnParams("ticket-store", { lang: "ru" }, "?backTo=ticket-gate&backMatch=m1&lang=ru"),
     );
-    expect(params.get("backTo")).toBe("premium");
-    expect(params.get("backStack")).toBe("venue-change:m1");
+    expect(params.get("backTo")).toBe("ticket-store");
+    expect(params.get("backStack")).toBe("ticket-gate:m1");
   });
 
   it("collapses a revisit rather than stacking it", () => {
@@ -34,7 +34,7 @@ describe("returnParams", () => {
       returnParams(
         "venue-change",
         { match: "m1", lang: "ru" },
-        "?backTo=premium&backStack=venue-change:m1&lang=ru",
+        "?backTo=ticket-gate&backStack=venue-change:m1&lang=ru",
       ),
     );
     expect(params.get("backTo")).toBe("venue-change");
@@ -45,7 +45,7 @@ describe("returnParams", () => {
     let search = "";
     for (let i = 0; i < 40; i++) {
       // Alternating pages would collapse, so walk all four repeatedly.
-      const page = (["venue-change", "premium", "ticket-store", "ticket-gate"] as const)[i % 4]!;
+      const page = (["venue-change", "calendar", "ticket-store", "ticket-gate"] as const)[i % 4]!;
       search = `?${returnParams(page, {}, search)}`;
     }
     const stack = new URLSearchParams(search).get("backStack") ?? "";
@@ -93,14 +93,20 @@ describe("returnHref", () => {
     expect(returnHref("?backTo=onboarding")).toBeNull();
   });
 
-  it("rebuilds the ticket store, date-ticket gate, and Premium pages", () => {
-    // The referral cross-promo link ("invite a friend instead") sends the user
-    // here from three more screens; the store and Premium carry no match id.
+  it("rebuilds the ticket store and the date-ticket gate", () => {
+    // The referral cross-promo chip ("invite a friend · earn a ticket") sends
+    // the user to the hub from these two screens; the store carries no match id.
     expect(returnHref("?backTo=ticket-store&lang=ru")).toBe("tickets.html?lang=ru");
     expect(returnHref("?backTo=ticket-gate&backMatch=m1&lang=ru")).toBe(
       "ticket.html?match=m1&lang=ru",
     );
-    expect(returnHref("?backTo=premium&lang=ru")).toBe("premium.html?lang=ru");
+  });
+
+  it("no longer returns to Premium — nothing leaves Premium for another page", () => {
+    // Premium's referral chip is gone (2026-09-22: referrals pay in tickets
+    // only, never on a Premium funnel), and with it the only hand-off that
+    // made Premium a page to come back to.
+    expect(returnHref("?backTo=premium&lang=ru")).toBeNull();
   });
 
   it("is not fooled by a prototype key", () => {
@@ -111,37 +117,74 @@ describe("returnHref", () => {
   it("hands the page it returns to the rest of the trail", () => {
     // Otherwise the returned-to page believes it was opened cold and hides its
     // own back button — which is exactly how the chain used to die at depth 2.
-    expect(returnHref("?backTo=premium&backStack=venue-change:m1&lang=ru")).toBe(
-      "premium.html?backTo=venue-change&backMatch=m1&lang=ru",
+    expect(returnHref("?backTo=ticket-store&backStack=ticket-gate:m1&lang=ru")).toBe(
+      "tickets.html?backTo=ticket-gate&backMatch=m1&lang=ru",
     );
   });
 
   it("walks a three-screen chain all the way home", () => {
-    // The reported scenario: board → Premium → referral, then back twice.
-    const toPremium = returnParams("venue-change", { match: "m1", lang: "ru" }, "?match=m1&lang=ru");
-    const toReferral = returnParams("premium", { lang: "ru" }, `?${toPremium}`);
+    // The mechanism on a synthetic chain (gate → store → next page): back
+    // twice lands on the page opened from chat, and stops there.
+    const toStore = returnParams("ticket-gate", { match: "m1", lang: "ru" }, "?match=m1&lang=ru");
+    const toNext = returnParams("ticket-store", { lang: "ru" }, `?${toStore}`);
 
-    const back1 = returnHref(`?${toReferral}`);
-    expect(back1).toBe("premium.html?backTo=venue-change&backMatch=m1&lang=ru");
+    const back1 = returnHref(`?${toNext}`);
+    expect(back1).toBe("tickets.html?backTo=ticket-gate&backMatch=m1&lang=ru");
 
     const back2 = returnHref(`?${back1!.split("?")[1]}`);
-    expect(back2).toBe("venue-change.html?match=m1&lang=ru");
+    expect(back2).toBe("ticket.html?match=m1&lang=ru");
 
-    // …and the board is the bottom: nothing left to go back to.
+    // …and the gate is the bottom: nothing left to go back to.
     expect(returnHref("?match=m1&lang=ru")).toBeNull();
   });
 
   it("keeps a deeper trail intact through the middle hops", () => {
-    const search = "?backTo=premium&backStack=ticket-gate:m1,venue-change:m2&lang=ru";
+    const search = "?backTo=ticket-store&backStack=ticket-gate:m1,venue-change:m2&lang=ru";
     expect(returnHref(search)).toBe(
-      "premium.html?backTo=venue-change&backMatch=m2&backStack=ticket-gate%3Am1&lang=ru",
+      "tickets.html?backTo=venue-change&backMatch=m2&backStack=ticket-gate%3Am1&lang=ru",
     );
   });
 
   it("drops a trail entry that is not on the allowlist instead of failing the parse", () => {
-    expect(returnHref("?backTo=premium&backStack=evil.example,venue-change:m1&lang=ru")).toBe(
-      "premium.html?backTo=venue-change&backMatch=m1&lang=ru",
+    expect(returnHref("?backTo=ticket-store&backStack=evil.example,venue-change:m1&lang=ru")).toBe(
+      "tickets.html?backTo=venue-change&backMatch=m1&lang=ru",
     );
+    // A stale `premium` hop from an old bundle's link degrades the same way.
+    expect(returnHref("?backTo=ticket-store&backStack=premium,venue-change:m1&lang=ru")).toBe(
+      "tickets.html?backTo=venue-change&backMatch=m1&lang=ru",
+    );
+  });
+});
+
+describe("a page's own narrower allowlist (`only`)", () => {
+  // The referral hub's: the only screens that still link to it.
+  const HUB = ["ticket-store", "ticket-gate"] as const;
+
+  it("lets the hub return to the ticket store and the ticket gate", () => {
+    expect(returnHref("?backTo=ticket-store&lang=ru", HUB)).toBe("tickets.html?lang=ru");
+    expect(returnHref("?backTo=ticket-gate&backMatch=m1&lang=ru", HUB)).toBe(
+      "ticket.html?match=m1&lang=ru",
+    );
+  });
+
+  it("refuses the board as the hub's way back — that link is gone", () => {
+    expect(returnHref("?backTo=venue-change&backMatch=m1&lang=ru", HUB)).toBeNull();
+    expect(returnHref("?backTo=premium&backStack=venue-change:m1&lang=ru", HUB)).toBeNull();
+  });
+
+  it("does not narrow any other page: Premium still returns to the board", () => {
+    // board → Premium must keep working; only the hub opts into the filter.
+    expect(returnHref("?backTo=venue-change&backMatch=m1&lang=ru")).toBe(
+      "venue-change.html?match=m1&lang=ru",
+    );
+  });
+
+  it("hides the back button instead of wiring a refused target", () => {
+    const bb = { show: vi.fn(), hide: vi.fn(), onClick: vi.fn() };
+    const wired = wireReturnBackButton(bb, "?backTo=venue-change&backMatch=m1", vi.fn(), HUB);
+    expect(wired).toBe(false);
+    expect(bb.hide).toHaveBeenCalled();
+    expect(bb.onClick).not.toHaveBeenCalled();
   });
 });
 

@@ -47,7 +47,6 @@ import {
 import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { returnParams } from "./return-to.js";
-import { referralChip } from "./referral-hint.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
 
@@ -1349,30 +1348,6 @@ function openPremiumMiniApp(): void {
   location.href = `premium.html?${returnParams("venue-change", { match: matchId, lang })}`;
 }
 
-/** Same hand-off as `openPremiumMiniApp`, but into the referral Mini App. */
-function openReferralMiniApp(): void {
-  haptic("light");
-  location.href = `referral.html?${returnParams("venue-change", { match: matchId, lang })}`;
-}
-
-/**
- * Referral cross-promo — a quiet secondary way to get Premium's perks without
- * paying. Reused at both spots where a non-premium user is asked to pay: the
- * agreed-venue pay step (`renderAgreed`) and a locked premium venue's detail
- * page (`renderDetail`).
- *
- * The shared chip (`referral-hint.ts`). `tight` halves its top gap and is for
- * the pay step alone, where it lands directly beneath the Premium
- * counterfactual: those used to be two full-width rows of identical width,
- * weight and type, reading as a list of two options rather than as an offer
- * plus its footnote. On the detail page it follows an ordinary info row and
- * keeps the full gap, so it reads as the tail of the content instead of as
- * that row's appendix.
- */
-function referralHintNode(opts: { tight?: boolean } = {}): HTMLElement {
-  return referralChip({ lang, tight: opts.tight, onTap: () => openReferralMiniApp() });
-}
-
 /**
  * The brand butterfly, drawn in the same metallic vertical gradient the Premium
  * Mini App gives its crest (theme-aware through the .vc-bf-a / .vc-bf-b stops)
@@ -1963,9 +1938,6 @@ function renderDetail(v: VenueChangeCatalogItem): void {
       }),
     );
     bar.push(el("p", { class: "vc-note", text: s.premiumUnlockConfirm }));
-    // Referral cross-promo lives in the scrollable content, not the sticky
-    // bar, so it never competes with the "Unlock Premium" CTA above it.
-    if (boardState?.referralEnabled) nodes.push(referralHintNode());
     mount(page([el("div", { class: "vc-detail" }, nodes)], bar));
     return;
   }
@@ -2456,7 +2428,9 @@ function renderAgreed(st: VenueBoardState): void {
         [icon("lock", "icon vc-premium-hint-ico"), el("span", { text: s.premiumFreeWithSub })],
       ),
     );
-    if (st.referralEnabled) nodes.push(referralHintNode({ tight: true }));
+    // No referral chip under it (founder decision 2026-09-22): the referral
+    // program rewards Date Tickets only and never appears on a Premium funnel.
+    // The board state's `referralEnabled` is deprecated and ignored here.
   }
 
   // The way back: call the agreement off and keep the assigned venue. Available
@@ -2772,11 +2746,6 @@ function mockState(): VenueBoardState {
     express: false,
     expressAvailable: true,
     settled: null,
-    // The referral cross-promo chip is only reachable on a live board with
-    // `REFERRAL_FEATURE_ENABLED` on — which production does not have — so the
-    // preview turns it on to keep the pay step and the locked-venue page
-    // reviewable at all.
-    referralEnabled: true,
   };
   if (view === "agreed" || view === "offer-sent") {
     const offered = view === "offer-sent";

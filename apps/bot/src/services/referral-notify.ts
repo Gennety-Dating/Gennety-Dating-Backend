@@ -2,11 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { type Language, t } from "@gennety/shared";
 import { env } from "../config.js";
-import {
-  grantReferralRewardsForVerifiedInvitee,
-  nextLadderRung,
-  type ReferralRewardResult,
-} from "./referral.js";
+import { grantReferralRewardsForVerifiedInvitee, type ReferralRewardResult } from "./referral.js";
 import { sendPushToUser } from "./push.js";
 
 /** Localized safety-net name for the (effectively unreachable) no-firstName case. */
@@ -20,9 +16,9 @@ const GENERIC_FRIEND: Record<Language, string> = {
 
 /**
  * Referral settlement + notification (§Referral). Called when `inviteeUserId`
- * reaches `verified`: settles the referrer's ladder rung(s) (idempotent) and,
- * when something was actually credited, DMs / pushes the referrer a celebratory
- * message. Best-effort — never throws, never blocks verification.
+ * reaches `verified`: settles the referral (both sides' tickets, idempotent)
+ * and, when the referrer was actually credited, DMs / pushes them a
+ * celebratory message. Best-effort — never throws, never blocks verification.
  */
 export async function settleReferralOnVerified(
   inviteeUserId: string,
@@ -36,9 +32,9 @@ export async function settleReferralOnVerified(
     return;
   }
   if (!result) return;
-  // Held by the velocity guard, or nothing newly granted (a re-run): stay quiet.
-  if (result.heldByVelocity) return;
-  if (result.ticketsApplied === 0 && result.monthsApplied === 0) return;
+  // Held by the velocity guard, capped, a duplicate identity, or a zero reward:
+  // nothing landed in the referrer's wallet, so stay quiet.
+  if (result.referrerTicketsApplied === 0) return;
 
   try {
     await notifyReferrerReward(result, inviteeUserId, api);
@@ -68,14 +64,13 @@ async function notifyReferrerReward(
   // Invitees always have a firstName by the time they verify (required onboarding
   // field), so this generic is effectively unreachable — a localized safety net.
   const name = invitee?.firstName?.trim() || GENERIC_FRIEND[lang];
-  const next = nextLadderRung(result.verifiedCount);
-  const nextText = next
-    ? t(lang, "referralRewardNext", { remaining: next.remaining })
-    : t(lang, "referralRewardNextMax");
+  const nextText =
+    result.rewardsLeft > 0
+      ? t(lang, "referralRewardNext", { remaining: result.rewardsLeft })
+      : t(lang, "referralRewardNextMax");
   const body = t(lang, "referralRewardDm", {
     name,
-    tickets: result.ticketsApplied,
-    months: result.monthsApplied,
+    tickets: result.referrerTicketsApplied,
     next: nextText,
   });
 

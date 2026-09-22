@@ -668,23 +668,37 @@ function slavicPlural(n: number, one: string, few: string, many: string): string
 }
 
 /**
- * Fully declined "{count} {unit}" phrase for a Premium-months duration (e.g.
- * "1 month" vs "3 months", "1 месяц" vs "3 месяца" vs "5 месяцев") — used by
- * the referral welcome-gift screen, where the whole word is spelled out and a
- * flat `{months}` placeholder can't express plural rules on its own.
+ * Polish plural selection. Unlike Russian/Ukrainian, only exactly 1 takes the
+ * singular — 21, 31… take the "many" form ("21 biletów", not "21 bilet").
  */
-export function monthsPhrase(lang: Lang, months: number): string {
+function polishPlural(n: number, one: string, few: string, many: string): string {
+  if (n === 1) return one;
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/**
+ * Fully declined "{count} {unit}" phrase for Date Tickets (e.g. "1 date
+ * ticket" vs "2 date tickets", "1 билет на свидание" vs "2 билета…" vs
+ * "5 билетов…") — used by the referral invite screen, where the whole word is
+ * spelled out and a flat `{tickets}` placeholder can't express plural rules on
+ * its own. (It replaced a months helper when referrals stopped granting
+ * Premium, 2026-09-22.)
+ */
+export function ticketsPhrase(lang: Lang, tickets: number): string {
   switch (lang) {
     case "de":
-      return `${months} Monat${months === 1 ? "" : "e"}`;
+      return `${tickets} Date-Ticket${tickets === 1 ? "" : "s"}`;
     case "ru":
-      return `${months} ${slavicPlural(months, "месяц", "месяца", "месяцев")}`;
+      return `${tickets} ${slavicPlural(tickets, "билет", "билета", "билетов")} на свидание`;
     case "uk":
-      return `${months} ${slavicPlural(months, "місяць", "місяці", "місяців")}`;
+      return `${tickets} ${slavicPlural(tickets, "квиток", "квитки", "квитків")} на побачення`;
     case "pl":
-      return `${months} ${slavicPlural(months, "miesiąc", "miesiące", "miesięcy")}`;
+      return `${tickets} ${polishPlural(tickets, "bilet", "bilety", "biletów")} na randkę`;
     default:
-      return `${months} month${months === 1 ? "" : "s"}`;
+      return `${tickets} date ticket${tickets === 1 ? "" : "s"}`;
   }
 }
 

@@ -5,15 +5,17 @@
  *
  * It:
  *   - upserts your account as a verified/active REFERRER with a seeded
- *     `referralVerifiedCount` (default 2 → the ladder shows rung 1 done, next 3);
+ *     `referralVerifiedCount` (default 2 — the hub's VERIFIED tile; tickets
+ *     earned come from `referral_qualifications`, so they start at 0);
  *   - upserts a second account as an INVITEE attributed to you
  *     (`referralSource = referral:<yourId>`, gift unclaimed);
- *   - DMs the referrer the ladder Mini App (dark + light) and prints the signed
- *     share-card URL;
- *   - DMs the invitee the onboarding welcome-gift screen
- *     (`onboarding.html?preview=referral-gift`, dark + light);
+ *   - DMs the referrer the referral hub Mini App (dark + light) and prints the
+ *     signed share-card URL;
+ *   - DMs the invitee the onboarding invite screen — "you get a date ticket once
+ *     you pass verification" (`onboarding.html?preview=referral-gift`, dark + light);
  *   - with `--fire-reward`, runs the REAL settle for the invitee so you get the
- *     genuine "reward credited" DM (with the gift effect) and the ladder ticks up.
+ *     genuine "reward credited" DM (with the gift effect) and both wallets get a
+ *     ticket (tickets only since 2026-09-22 — never Premium).
  *
  * Requires `REFERRAL_FEATURE_ENABLED=true` + the referral columns pushed
  * (`pnpm dev:db:push`) + the dev bot/webapp running with a real HTTPS tunnel.
@@ -147,7 +149,7 @@ async function main() {
     email: `dev+${inviteeTg}@${DOMAIN}`, universityDomain: DOMAIN, isEmailVerified: true,
     aiMemoryExportPreference: "undecided", themeChosenAt: now,
     hasConsented: true, consentedAt: now, termsAccepted: true, termsAcceptedAt: now,
-    referralInviteePremiumAt: null, referralCountedAt: null,
+    referralGiftSeenAt: null, referralCountedAt: null,
     lastMessageAt: now,
   };
 
@@ -195,8 +197,8 @@ async function main() {
       inline_keyboard: [[{ text: t(lang, "referralShareButton"), web_app: { url: `${webapp}/referral.html?theme=dark&lang=${lang}` } }]],
     },
   });
-  // B. Ladder Mini App (both themes).
-  await tgSend(referrerTg, "──────────\nB. РЕФЕРОВОД · экран лестницы наград (обе темы):", {
+  // B. Referral hub Mini App (both themes).
+  await tgSend(referrerTg, "──────────\nB. РЕФЕРОВОД · экран приглашений: билеты за друзей (обе темы):", {
     reply_markup: miniAppButtons("referral.html"),
   });
   // C. The forwarded invite — exactly what the referrer sends (card + caption + Join).
@@ -207,8 +209,8 @@ async function main() {
   // C(recv). What the invited friend receives.
   await tgSend(inviteeTg, "──────────\nD. ПРИГЛАШЁННЫЙ · сообщение-приглашение, которое он получает:");
   await tgSendPhoto(inviteeTg, cardUrl, t(lang, "referralShareCaption"), { reply_markup: joinKb });
-  // D. Onboarding welcome-gift screen (both themes).
-  await tgSend(inviteeTg, "──────────\nE. ПРИГЛАШЁННЫЙ · экран подарка Premium в онбординге (обе темы):", {
+  // D. Onboarding invite screen (both themes).
+  await tgSend(inviteeTg, "──────────\nE. ПРИГЛАШЁННЫЙ · экран приглашения в онбординге — билет за верификацию (обе темы):", {
     reply_markup: miniAppButtons("onboarding.html?preview=referral-gift"),
   });
   console.log(`\nShare-card PNG URL:\n  ${cardUrl}`);

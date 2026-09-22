@@ -1032,30 +1032,32 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
     `PREMIUM_FEATURE_ENABLED` off; the additive columns/table may stay. An
     entitlement already granted stays valid regardless of the flag.
 - Referral program (feature-flagged, "Give a date, get a date", see
-  `REFERRAL_PRODUCT_SPEC.md`): `REFERRAL_FEATURE_ENABLED` (default `false` —
-  leave off until launch). Rides the already-on `TICKET_FEATURE_ENABLED` +
-  `PREMIUM_FEATURE_ENABLED` (it pays rewards in Date Tickets AND complimentary
-  Premium months). Tunables: `REFERRAL_INVITEE_PREMIUM_MONTHS` (default `1`, the
-  invited user's welcome Premium month shown on the onboarding wow screen),
-  `REFERRAL_LADDER` (default `1:1:1,3:1:1,5:1:1,10:2:2` =
-  `<count>:<ticketsDelta>:<monthsDelta>`, the referrer's milestone ladder —
-  cumulative 1/1, 2/2, 3/3, 5/5), and `REFERRAL_DAILY_REWARD_CAP` (default `3`,
-  a per-referrer 24h anti-fraud reward-hold). The reward fires at the invited friend's **verification** (the
-  anti-fraud gate); the invitee's Premium month is granted at the onboarding
-  screen. **Requires `db:push` of the additive `users.referral_verified_count`
-  (default 0) / `referral_counted_at` / `referral_invitee_premium_at` columns
-  first** (non-destructive; the referrer tally + invitee once-markers). Rewards
-  reuse `ticket_ledger` (`referral_milestone`) + `subscription_ledger`
-  (`referral`) — no new tables. Also **redeploy the Mini App bundle**
-  (`referral.html` ships with the Vite build — the referrer ladder + one-tap
-  share). Uses `BOT_USERNAME` (invite deep link) + `PUBLIC_BASE_URL` (the public
-  HMAC-signed `GET /v1/referral/card` image Telegram fetches for the shared
-  photo) — both already set. The branded share card reuses the date/match-card
-  satori stack + bundled fonts (no new system dependency); a render failure
-  degrades the share to a rich text article. Runs inline at verification / the
-  onboarding screen — no new cron. iOS: `GET/POST /v1/me/referral*` (JWT) +
-  `features.referral` in `/v1/app/config`. Rollback: flip the flag off; the
-  additive columns may stay. Telegram-first; iOS attribution via a referral code.
+  `docs/product/domains/referral.md`): `REFERRAL_FEATURE_ENABLED` (default
+  `false` — leave off until launch). Pays in **Date Tickets only** since
+  2026-09-22 (never Premium) and rides the already-on `TICKET_FEATURE_ENABLED`.
+  Tunables: `REFERRAL_TICKETS_PER_FRIEND` (default `1`, the referrer's ticket per
+  verified friend), `REFERRAL_INVITEE_TICKETS` (default `1`, the invited friend's
+  ticket, credited with the referrer's; `0` turns that side and its onboarding
+  screen off), `REFERRAL_MAX_REWARDED_FRIENDS` (default `20`, lifetime rewarded
+  friends per referrer; always ≥ 1) and `REFERRAL_DAILY_REWARD_CAP` (default `3`,
+  a per-referrer 24h hold — released by the referral screen and the hourly
+  sweep). `REFERRAL_LADDER` and `REFERRAL_INVITEE_PREMIUM_MONTHS` are retired and
+  ignored — delete them from `.env` if present. Rewards fire at the invited
+  friend's **verification**; the identity tombstone keys its hashes off
+  `JWT_SECRET`. Schema: migration `20260922120000_referral_ticket_rewards`
+  (`referral_qualifications`, `referral_identities`, additive) through the usual
+  `db:deploy`, plus the older `users.referral_verified_count` /
+  `referral_counted_at` / `referral_invitee_premium_at` columns (the last one now
+  backs `User.referralGiftSeenAt`). Tickets land in `ticket_ledger`
+  (`referral_reward`). Also **redeploy the Mini App bundle** (`referral.html` —
+  the hub + one-tap share). Uses `BOT_USERNAME` (invite deep link) +
+  `PUBLIC_BASE_URL` (the public HMAC-signed `GET /v1/referral/card` image
+  Telegram fetches for the shared photo) — both already set. The branded share
+  card reuses the date/match-card satori stack + bundled fonts (no new system
+  dependency); a render failure degrades the share to a rich text article. Runs
+  inline at verification — no new cron beyond the existing hourly held-reward
+  sweep. iOS: `GET/POST /v1/me/referral*` (JWT) + `features.referral` in
+  `/v1/app/config`. Rollback: flip the flag off; the tables may stay.
 - Promo codes (feature-flagged, independent campaign links, see
   `PROMO_CODES_PRODUCT_SPEC.md`): `PROMO_FEATURE_ENABLED` (default `false` — leave
   off until launch). Rides the already-on `TICKET_FEATURE_ENABLED` +

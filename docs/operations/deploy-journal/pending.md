@@ -11,6 +11,42 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — реферальная программа платит только билетами; приглашение убрано из воронок Premium (2026-09-22).**
+**Бот + СХЕМА + Mini App.** Флаг `REFERRAL_FEATURE_ENABLED` в проде выключен и
+остаётся выключенным — пользователи ничего не увидят, пока основатель его не
+включит. Решение: `docs/architecture/decisions/` → 2026-09-22.
+
+1. **База:** миграция `20260922120000_referral_ticket_rewards` — две новые таблицы
+   (`referral_qualifications`, `referral_identities`), ничего не переписывает и не
+   удаляет; едет общим `db:deploy`. Старый код новых таблиц не читает, поэтому
+   порядок «миграция, потом рестарт» безопасен и обратно.
+2. **Окружение:** новые необязательные `REFERRAL_TICKETS_PER_FRIEND` (1),
+   `REFERRAL_INVITEE_TICKETS` (1), `REFERRAL_MAX_REWARDED_FRIENDS` (20) —
+   умолчания верны, ставить не нужно. `REFERRAL_LADDER` и
+   `REFERRAL_INVITEE_PREMIUM_MONTHS` больше не читаются — убрать из `.env`, если есть.
+3. **Бот:** рестарт процесса. **Mini App:** пересобрать (`referral.html`,
+   `premium.html`, `venue-change.html`, `ticket.html`, `tickets.html`, `onboarding.html`).
+
+**Проверка после выката (при выключенном флаге):** `GET /v1/me/referral` → 404
+(как и было); экран Premium и доска смены места без чипа приглашения;
+`GET /v1/venue-change/...` отдаёт `referralEnabled: false`. **Когда основатель
+включит флаг:** друг проходит верификацию → у пригласившего и у друга по +1 в
+`ticket_balance`, в `ticket_ledger` две строки `referral_reward` с ключами
+`referral:<qualificationId>:referrer|invitee`, строка `referral_qualifications`
+со статусом `credited`; `premium_until` обоих не изменился, в
+`subscription_ledger` строк не прибавилось.
+
+**Откат:** `git revert` и рестарт; таблицы можно оставить — старый код их не
+читает. Выплаченные билеты остаются у пользователей.
+
+**Влияние на iOS:** `ReferralState` сменил форму (только билеты). Старые сборки
+при выключенном флаге его не запрашивают (404), при включённом — не декодируют и
+просто не показывают чип/хаб; премиальных обещаний они больше не увидят.
+`VenueBoardState.referralEnabled` оставлен (обязателен в контракте) и всегда `false`.
+**Demo-mode:** отдельной логики нет.
+
+---
+
 **PENDING — витрина «Городского гида» = топ города (2026-09-22).** Только код бота:
 без миграций, без новых зависимостей, без env. `GET /v1/venues/showcase` для
 `ua:kyiv` отдаёт ручной список основателя — 62 места (`SHOWCASE_PICKS` в

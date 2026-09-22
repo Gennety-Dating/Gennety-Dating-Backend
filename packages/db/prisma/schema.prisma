@@ -372,18 +372,19 @@ model User {
   /// subscriber would be false.
   premiumReminder3dAt        DateTime?                @map("premium_reminder_3d_at")
   premiumReminder1dAt        DateTime?                @map("premium_reminder_1d_at")
-  /// Referral program (gated by `REFERRAL_FEATURE_ENABLED`; PRODUCT_SPEC
-  /// §Referral). `referralVerifiedCount` is the referrer's materialized tally of
-  /// invited friends who cleared verification — the milestone-ladder progress,
-  /// read by the referral Mini App. `referralCountedAt` is the INVITEE-side
-  /// once-marker (CAS null→now) proving this user was already counted toward
-  /// their referrer, so the ladder can never double-count. `referralInviteePremiumAt`
-  /// is the INVITEE-side once-marker for the 1-month welcome-Premium gift shown
-  /// on the onboarding wow screen. Rewards themselves live in `ticket_ledger`
-  /// (`referral_milestone`) and `subscription_ledger` (`referral`).
+  /// Referral program (gated by `REFERRAL_FEATURE_ENABLED`; §Referral). Pays in
+  /// Date Tickets only since 2026-09-22 — never Premium. `referralVerifiedCount`
+  /// is the referrer's materialized tally of invited friends who cleared
+  /// verification. `referralCountedAt` is the INVITEE-side once-marker (CAS
+  /// null→now) proving this user was already counted toward their referrer.
+  /// `referralGiftSeenAt` marks that the invitee saw the onboarding invite
+  /// screen; it keeps the column of the retired welcome-Premium marker
+  /// (`referral_invitee_premium_at`), whose only remaining job was exactly this.
+  /// Each counted invitee is a `ReferralQualification`; the tickets themselves
+  /// live in `ticket_ledger` (`referral_reward`).
   referralVerifiedCount      Int                      @default(0) @map("referral_verified_count")
   referralCountedAt          DateTime?                @map("referral_counted_at")
-  referralInviteePremiumAt   DateTime?                @map("referral_invitee_premium_at")
+  referralGiftSeenAt         DateTime?                @map("referral_invitee_premium_at")
   /// Promo-code program (gated by `PROMO_FEATURE_ENABLED`; see
   /// PROMO_CODES_PRODUCT_SPEC.md). Independent campaign codes (not tied to a
   /// referrer) that grant a new user a Date Ticket + Premium months at the
@@ -458,6 +459,9 @@ model User {
 
   referralEventsShared   ReferralEvent[] @relation("ReferralEventReferrer")
   referralEventsReceived ReferralEvent[] @relation("ReferralEventInvitee")
+
+  referralQualificationsAsReferrer ReferralQualification[] @relation("ReferralQualificationReferrer")
+  referralQualificationAsInvitee   ReferralQualification?  @relation("ReferralQualificationInvitee")
 
   reportsFiled   Report[] @relation("ReportReporter")
   reportsAgainst Report[] @relation("ReportReported")
@@ -3170,6 +3174,67 @@ model ReferralEvent {
   /// самое `i` в `K = i × c`.
   @@index([referrerId, occurredAt])
   @@map("referral_events")
+}
+
+/// One invited friend counted toward their referrer (§Referral, decision
+/// 2026-09-22: the program pays in Date Tickets only). Written in the SAME
+/// transaction that stamps the invitee's `referralCountedAt` and credits the
+/// tickets, so a row exists exactly when the friend was counted.
+///
+/// `status` (plain string, like `Match.source`) is the REFERRER side:
+///   - `credited`  — `referrerTickets` are in the referrer's wallet (`creditedAt`).
+///   - `held`      — the daily velocity cap held them; `releaseHeldReferralRewards`
+///                   credits them later under the same exactly-once key.
+///   - `capped`    — the referrer had already used every rewarded slot
+///                   (`REFERRAL_MAX_REWARDED_FRIENDS`); counted, never paid.
+///   - `duplicate` — one of the invitee's identities was already counted once
+///                   (a deleted account re-registering). Nobody is paid and the
+///                   friend does not count.
+/// The invitee's own `inviteeTickets` are credited at settlement for every
+/// status except `duplicate`.
+///
+/// Both links are nullable with `SetNull`: the row, and the identity hashes
+/// hanging off it, must outlive either account — that is what makes a
+/// re-registration recognisable. Ticket ledger keys are
+/// `referral:<id>:referrer` / `referral:<id>:invitee`.
+model ReferralQualification {
+  id              String    @id @default(uuid()) @db.Uuid
+  inviteeId       String?   @unique @map("invitee_id") @db.Uuid
+  referrerId      String?   @map("referrer_id") @db.Uuid
+  status          String
+  referrerTickets Int       @default(0) @map("referrer_tickets")
+  inviteeTickets  Int       @default(0) @map("invitee_tickets")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  creditedAt      DateTime? @map("credited_at")
+
+  invitee    User?              @relation("ReferralQualificationInvitee", fields: [inviteeId], references: [id], onDelete: SetNull)
+  referrer   User?              @relation("ReferralQualificationReferrer", fields: [referrerId], references: [id], onDelete: SetNull)
+  identities ReferralIdentity[]
+
+  /// Rewarded-slot count, the 24h velocity window and the held-reward release
+  /// all read "this referrer's rows by status (and time)".
+  @@index([referrerId, status, createdAt])
+  @@index([status, referrerId])
+  @@map("referral_qualifications")
+}
+
+/// The proven identities (positive Telegram id, verified phone, verified email)
+/// of every counted invitee, so the same person cannot be counted twice by
+/// deleting and re-registering. Stored as keyed hashes only — HMAC-SHA256 under
+/// a key derived from `JWT_SECRET` with its own label
+/// (`services/safety-tombstone.ts` `keyedIdentitiesOf`); rotating the secret
+/// orphans the rows, which degrades to "not recognised", never to a false match.
+model ReferralIdentity {
+  identityHash    String   @id @map("identity_hash")
+  /// `telegram` | `phone` | `email`.
+  kind            String
+  qualificationId String   @map("qualification_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  qualification ReferralQualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+
+  @@index([qualificationId])
+  @@map("referral_identities")
 }
 
 /// Ответ на онбординговый вопрос «откуда вы про нас узнали» (HDYHAU).

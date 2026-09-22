@@ -606,14 +606,17 @@ paths:
     get:
       tags: [me]
       operationId: getReferral
-      summary: Referral ladder state — progress, $ value per rung, invite link
+      summary: Referral state — tickets earned, reward slots left, invite link
       description: >-
-        Feature-flagged (`REFERRAL_FEATURE_ENABLED`; 404 when off). The referrer
-        is paid Date Tickets + Premium months as each invited friend clears
-        verification; every rung carries its cumulative dollar value.
+        Feature-flagged (`REFERRAL_FEATURE_ENABLED`; 404 when off). The program
+        pays in Date Tickets only — never Premium, and no money values (decision
+        2026-09-22): each invited friend who clears verification earns the
+        referrer `ticketsPerFriend` tickets (for at most `rewardCap` friends)
+        and the friend `inviteeTickets` tickets. Reading this also releases
+        rewards the daily velocity cap was holding, once it allows.
       responses:
         "200":
-          description: Ladder + progress + invite link
+          description: Tickets earned / pending, reward slots, invite link
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReferralState" }
@@ -627,8 +630,9 @@ paths:
       summary: Attribute this user to a referrer by code (first-touch, guarded)
       description: >-
         First-touch only — never overwrites an existing attribution. Rejects a
-        self-referral and an unknown code. The reward is paid to the referrer
-        later, when THIS user clears verification.
+        self-referral and an unknown code. Both rewards (tickets for the
+        referrer and for this user) are paid later, when THIS user clears
+        verification.
       requestBody:
         required: true
         content:
@@ -5332,7 +5336,13 @@ components:
           description: >
             The caller is at a paying step and is not premium — the moment to
             show "with Premium this change is free".
-        referralEnabled: { type: boolean }
+        referralEnabled:
+          type: boolean
+          deprecated: true
+          description: >-
+            Always false. It drove an "invite a friend instead" link on this
+            Premium funnel, where referral may never appear (decision
+            2026-09-22). Kept because shipped clients require the field.
 
     VenueBoardOriginal:
       type: object
@@ -5875,37 +5885,47 @@ components:
 
     ReferralState:
       type: object
-      required: [inviteLink, verifiedCount, earnedTickets, earnedMonths, earnedUsd, ladder, inviteeMonths]
+      description: >-
+        Tickets only since 2026-09-22 — the ladder of tickets + Premium months
+        and every dollar value were removed.
+      required:
+        - inviteLink
+        - verifiedCount
+        - earnedTickets
+        - pendingTickets
+        - ticketsPerFriend
+        - inviteeTickets
+        - rewardCap
+        - rewardsLeft
       properties:
         inviteLink: { type: string }
         verifiedCount:
           type: integer
-          description: Invited friends who cleared verification (ladder progress)
-        earnedTickets: { type: integer }
-        earnedMonths: { type: integer }
-        earnedUsd:
-          type: string
-          description: Total dollar value earned, formatted (e.g. "$18.98")
-        ladder:
-          type: array
-          items:
-            type: object
-            required: [atCount, tickets, months, usd, reached]
-            properties:
-              atCount: { type: integer }
-              tickets: { type: integer, description: Cumulative tickets at this rung }
-              months: { type: integer, description: Cumulative Premium months at this rung }
-              usd: { type: string }
-              reached: { type: boolean }
-        next:
-          type: [object, "null"]
-          properties:
-            atCount: { type: integer }
-            remaining: { type: integer }
-            usd: { type: string }
-        inviteeMonths:
+          description: Invited friends who cleared verification through this link
+        earnedTickets:
           type: integer
-          description: Premium months an invited user receives as a welcome gift
+          description: Tickets already credited to this user by the program
+        pendingTickets:
+          type: integer
+          description: >-
+            Tickets earned but held by the daily velocity cap; credited
+            automatically once it allows (no action needed)
+        ticketsPerFriend:
+          type: integer
+          description: Tickets this user earns per friend who clears verification
+        inviteeTickets:
+          type: integer
+          description: >-
+            Tickets the invited friend gets when they clear verification (0 when
+            the invitee side is off)
+        rewardCap:
+          type: integer
+          minimum: 1
+          description: Lifetime number of friends that can earn this user a reward
+        rewardsLeft:
+          type: integer
+          minimum: 0
+          description: How many more friends can still earn this user a reward
 
     AgentAction:
       description: >-
@@ -6349,8 +6369,9 @@ components:
           description: |
             Why the balance moved. Today one of `photo_bonus`, `video_bonus`,
             `verification_bonus` (legacy, no new rows), `student_bonus`,
-            `welcome_gift`, `referral_milestone`, `promo`, `bump_bonus`,
-            `store_purchase`, `spend_match`, `refund`.
+            `welcome_gift`, `referral_reward` (both sides of a referral, since
+            2026-09-22), `referral_milestone` (legacy, no new rows), `promo`,
+            `bump_bonus`, `store_purchase`, `spend_match`, `refund`.
 
             Deliberately a plain string and NOT an `enum`: reasons are added
             server-side whenever a product mechanic grants or spends a ticket,

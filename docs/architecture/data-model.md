@@ -48,7 +48,7 @@ Columns (≈ 35; grouped by purpose):
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. `ticketDiscountSource` (`famine` | `event_feedback`) names WHICH mechanism filled that one slot — analytics only, never read by pricing; see `event_feedback`. |
 | Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. | `premiumReminder3dAt` / `premiumReminder1dAt` are the expiry-reminder once-markers (PRODUCT_SPEC §3.8): the 3-day and 24-hour DMs are sent at most once per PAID PERIOD, so every path that advances `premiumUntil` clears both — otherwise a renewing user is warned once in their life and every later period lapses in silence. Set for BOTH reminder cohorts (PRODUCT_SPEC §3.8): a non-auto-renewing entitlement whose access really is ending, AND a live recurring Telegram Stars subscription, which is warned that the coming charge is taken from the Star balance with no card fallback. (Until 2026-08-24 this was non-renewing only, which left the recurring cohort — the one that can actually lose a subscription to an empty balance — with no warning at all.) A recurring **App Store** subscription is still never marked: Apple runs its own billing retry and there is no Star balance to top up, so neither message is true for that rail. One pair of markers serves both cohorts because they are mutually exclusive at any instant (`premiumAutoRenew` true vs false). Swept by `workers/premium-expiry-reminder.ts` off `@@index([premiumUntil])`, which exists because that hourly sweep asks one question of the whole table and the column is null on most rows. **`activateOrExtendPremium` may only ever EXTEND `premiumUntil`** (a `max()` against the stored value): a monthly subscriber who buys a 3/6-month package holds an expiry months out, and their next 30-day renewal carries an earlier one — writing it through would delete the package they just paid for. `revokePremium` stays the one path allowed to shorten it.
-| Referral (feature-flagged) | `referralVerifiedCount` (referrer's materialized tally of invited friends who cleared verification — the milestone-ladder progress), `referralCountedAt` (invitee-side once-marker: this user was already counted toward their referrer, CAS null→now), `referralInviteePremiumAt` (invitee-side once-marker for the welcome Premium month). Referral program (PRODUCT_SPEC §3.9 / `REFERRAL_PRODUCT_SPEC.md`), owned by `services/referral.ts`; rewards themselves live in `ticket_ledger` (`referral_milestone`) + `subscription_ledger` (`referral`). Inert unless `REFERRAL_FEATURE_ENABLED`. |
+| Referral (feature-flagged) | `referralVerifiedCount` (referrer's materialized tally of invited friends who cleared verification), `referralCountedAt` (invitee-side once-marker: this user was already counted toward their referrer, CAS null→now), `referralGiftSeenAt` (invitee saw the onboarding invite screen; column `referral_invitee_premium_at`, kept from the retired welcome-Premium marker). Referral program (§3.9 / `docs/product/domains/referral.md`), owned by `services/referral.ts`; pays in Date Tickets only since 2026-09-22 — each counted invitee is a `referral_qualifications` row and the tickets are `ticket_ledger` `referral_reward` rows. Inert unless `REFERRAL_FEATURE_ENABLED`. |
 | Promo (feature-flagged) | `promoRedeemedAt` — once-marker for the promo welcome gift's wow screen + grant guard. Independent promo-code program (PRODUCT_SPEC §3.10 / `PROMO_CODES_PRODUCT_SPEC.md`), owned by `services/promo.ts`; attribution reuses `referralSource` as `promo:<CODE>` (mutually exclusive with `referral:*`); the reward lands exactly-once in `PromoRedemption` + `ticket_ledger` (`promo`) + `subscription_ledger` (`promo`). Inert unless `PROMO_FEATURE_ENABLED`. |
 | Synthetic test profile (temporary) | `syntheticAt` — non-null on a seeded stand-in used to balance the gender skew during the friends-and-family production test (PRODUCT_SPEC §3.1c). One marker, three consequences, and each is enforced at exactly one place so a new caller inherits it: `buildCandidateSql` excludes it (keeping every single-seeker path — the paid Rematch, the §3.1b auto-resume probe — from ever surfacing one); `updateEloScores` no-ops on a pair carrying it; the admin classifier files the account as `test`. Written only by `scripts/seed-synthetic-profiles.mjs` via `services/synthetic-profiles.ts`, never by the running product, and null on every real account — so with no seeded rows the whole mechanism is unreachable regardless of `SYNTHETIC_FILL_ENABLED`. Such a row is `platform: "mobile"` with a negative `telegramId` in the `-778_000_00x` band and **no phone or email**: `registrationTrack: "general"` + `phoneVerifiedAt` satisfies the contact rail on its own, and a fake number would squat on `User.phone`'s unique index forever. |
 
@@ -1632,6 +1632,29 @@ the data source for the dashboard's churn-warning trend.
 `referrerId` нулевой у клика по ссылке удалённого аккаунта: внешний ключ
 отверг бы такую строку целиком, а терять этот клик значит отдать органике то,
 что на самом деле было виральным переходом.
+
+### `referral_qualifications` / `referral_identities`
+
+The referral program's reward record (decision 2026-09-22: tickets only).
+
+`referral_qualifications` — one row per invitee counted toward a referrer,
+written in the transaction that stamps `users.referral_counted_at` and credits
+the tickets. `status` (plain string) is the referrer side: `credited` (their
+ticket is in the wallet, `credited_at`), `held` (the 24h velocity cap held it;
+released later under the same key), `capped` (no lifetime slot left — counted,
+not paid) or `duplicate` (the invitee's identity was counted before under a
+deleted account — nobody paid, not counted). `referrer_tickets` /
+`invitee_tickets` freeze the amounts. Ledger keys:
+`referral:<id>:referrer` / `referral:<id>:invitee`. `invitee_id` is `@unique`;
+both user links are `ON DELETE SET NULL` so the row outlives either account.
+
+`referral_identities` — the tombstone: `identity_hash` (PK) is HMAC-SHA256 of a
+proven identity (`telegram` / `phone` / `email`, see `kind`) under a key derived
+from `JWT_SECRET` with the label `referral-identity/v1`
+(`services/safety-tombstone.ts` `keyedIdentitiesOf`). No identifier is stored in
+the clear; rotating `JWT_SECRET` orphans the rows (degrades to "not
+recognised", never to a false match). Cascade-deleted only with its
+qualification.
 
 ### `hdyhau_responses`
 

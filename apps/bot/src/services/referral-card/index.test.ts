@@ -15,7 +15,7 @@ import {
  */
 const RENDER_TIMEOUT_MS = 60_000;
 
-const BASE: ReferralCardInput = { referrerName: "Глеб", giftMonths: 1, lang: "ru" };
+const BASE: ReferralCardInput = { referrerName: "Глеб", giftTickets: 1, lang: "ru" };
 
 /** A JPEG starts with SOI and ends with EOI; a truncated one has no EOI. */
 function isCompleteJpeg(buf: Buffer): boolean {
@@ -94,7 +94,7 @@ describe("referralCardContentVersion", () => {
   it.each([
     ["name", { referrerName: "Anna" }],
     ["language", { lang: "en" as const }],
-    ["gift months", { giftMonths: 3 }],
+    ["gift tickets", { giftTickets: 3 }],
   ])(
     "changes when the %s changes, so Telegram's per-URL media cache is busted",
     (_label, patch) => {

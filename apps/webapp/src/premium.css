@@ -503,10 +503,11 @@ body {
   margin: 1px 0 0;
 }
 
-/* The referral cross-promo is NOT here any more: it is the shared
-   `.gn-referral` chip (`referral-hint.css`) and it lives at the tail of
-   `.pm-scroll`. Anything added to `.pm-action` grows this footer and pushes the
-   CTA up the screen, which is exactly what that row used to do. */
+/* The referral cross-promo is NOT here any more — first it moved out of this
+   footer (anything added to `.pm-action` grows it and pushes the CTA up the
+   screen), and since 2026-09-22 it is off the Premium screen entirely: the
+   referral program rewards Date Tickets only and never appears on a Premium
+   funnel. */
 
 /* THE PLAN PICKER — 1 / 3 / 6 months (§3.8).
  *

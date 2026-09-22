@@ -56,7 +56,7 @@ import {
   type CityWaitlistState,
 } from "../city-waitlist.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
-import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
+import { markReferralGiftSeen, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
 import { recordInviteClickFromStartPayload } from "../../services/referral-events.js";
 import { restoreSafetyHistoryAfterAttach } from "../../services/safety-tombstone.js";
 import {
@@ -94,7 +94,7 @@ type MiniUser = {
   phoneVerifiedAt: Date | null;
   registrationTrack: string | null;
   referralSource: string | null;
-  referralInviteePremiumAt: Date | null;
+  referralGiftSeenAt: Date | null;
   promoRedeemedAt: Date | null;
   messageHistory: unknown[];
   profile: {
@@ -752,10 +752,11 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
-  // Referral welcome gift (§Referral): claim the invitee's one-time Premium
-  // month, shown on the onboarding wow screen (2nd-to-last, before AI-memory).
-  // Idempotent — `grantInviteePremium` is a no-op once the marker is set or when
-  // the user wasn't genuinely invited, so a replayed tap can't double-grant.
+  // Referral invite screen (§Referral): the invitee acknowledged the screen that
+  // tells them about the ticket they get on verification (2nd-to-last, before
+  // AI-memory). Grants NOTHING — the Premium welcome month it used to claim was
+  // retired 2026-09-22; the invitee's ticket is credited at verification with the
+  // referrer's. Idempotent: it only stamps `referralGiftSeenAt`.
   router.post("/referral-gift", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -771,16 +772,13 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const gift = await grantInviteePremium(user.id);
+    const marked = await markReferralGiftSeen(user.id);
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: { ...onboardingActivityPatch() },
       select: miniUserSelect,
     });
-    logTelegramOnboarding("referral-gift-claimed", updated, {
-      applied: gift.applied,
-      months: gift.months,
-    });
+    logTelegramOnboarding("referral-gift-seen", updated, { marked });
     res.json(await serializeState(updated));
   });
 
@@ -914,7 +912,7 @@ const miniUserSelect = {
   phoneVerifiedAt: true,
   registrationTrack: true,
   referralSource: true,
-  referralInviteePremiumAt: true,
+  referralGiftSeenAt: true,
   promoRedeemedAt: true,
   messageHistory: true,
   profile: {
@@ -1027,17 +1025,17 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
   const promoTickets = promoResolved?.ticketReward ?? env.PROMO_DEFAULT_TICKETS;
   const promoMonths = promoResolved?.premiumMonths ?? env.PROMO_DEFAULT_PREMIUM_MONTHS;
 
-  // Referral welcome gift (§Referral): show the wow screen when this user was
-  // invited by a real referrer, the feature is on, and a gift month is offered.
+  // Referral invite screen (§Referral): show it when this user was invited by a
+  // real referrer, the feature is on, and the invitee side pays a ticket.
   // Suppressed when a promo gift owns this user's attribution.
   const referrerId = parseReferrer(user.referralSource);
   const invitedByReferral =
     !invitedByPromo &&
     env.REFERRAL_FEATURE_ENABLED &&
-    env.REFERRAL_INVITEE_PREMIUM_MONTHS > 0 &&
+    env.REFERRAL_INVITEE_TICKETS > 0 &&
     referrerId != null &&
     referrerId !== user.id;
-  const referralGiftSeen = user.referralInviteePremiumAt != null;
+  const referralGiftSeen = user.referralGiftSeenAt != null;
   let referrerFirstName: string | null = null;
   if (invitedByReferral && !referralGiftSeen && referrerId) {
     const referrer = await prisma.user.findUnique({
@@ -1076,11 +1074,12 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       phone: user.phone,
       registrationTrack: user.registrationTrack,
       phoneAuthEnabled: env.PHONE_AUTH_ENABLED,
-      // Referral welcome gift (§Referral): drives the onboarding wow screen.
+      // Referral invite screen (§Referral): drives the onboarding screen that
+      // tells the invitee about the ticket they get on verification.
       invitedByReferral,
       referralGiftSeen,
       referrerFirstName,
-      referralGiftMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+      referralGiftTickets: env.REFERRAL_INVITEE_TICKETS,
       // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): drives the richer
       // promo wow screen; precedence over referral.
       invitedByPromo,
@@ -1171,11 +1170,12 @@ interface TelegramOnboardingStateDto {
     /// Server flag mirror: the Mini App renders the sign-up fork only when
     /// the phone rail is actually live (env-controlled, no rebuild needed).
     phoneAuthEnabled: boolean;
-    // Referral welcome gift (§Referral). Inert for non-referred users.
+    // Referral invite screen (§Referral). Inert for non-referred users.
     invitedByReferral: boolean;
     referralGiftSeen: boolean;
     referrerFirstName: string | null;
-    referralGiftMonths: number;
+    /// Tickets the invitee will get once they clear verification.
+    referralGiftTickets: number;
     // Promo-code welcome gift (PROMO_CODES_PRODUCT_SPEC.md). Drives the richer
     // promo wow screen (ticket + N months). Takes precedence over the referral
     // screen. Inert for non-promo users.

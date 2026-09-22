@@ -85,12 +85,16 @@ export interface OnboardingStrings {
   aiMemoryAccepting: string;
   aiMemoryLater: string;
   aiMemorySaving: string;
-  // Referral welcome gift (§Referral) — the wow screen for an invited user.
+  // Referral invite screen (§Referral) — shown once to an invited user. Grants
+  // nothing itself: the invitee's Date Tickets land when THEY pass
+  // verification. `{name}` is the referrer; `{ticketsPhrase}` a declined
+  // "N date tickets" from `ticketsPhrase()` in i18n.ts.
   referralGiftTitle: string;
+  referralGiftTitleNoName: string;
   referralGiftBody: string;
   referralGiftBodyNoName: string;
   referralGiftContinue: string;
-  referralGiftClaiming: string;
+  referralGiftBusy: string;
   // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md) — the richer wow screen.
   promoGiftTitle: string;
   promoGiftStatusConfirmed: string;
@@ -259,13 +263,14 @@ const en: OnboardingStrings = {
   aiMemoryAccepting: "Connecting...",
   aiMemoryLater: "Later",
   aiMemorySaving: "Saving...",
-  referralGiftTitle: "A friend gifted you Premium",
+  referralGiftTitle: "{name} invited you\u00a0🎟",
+  referralGiftTitleNoName: "A friend invited you\u00a0🎟",
   referralGiftBody:
-    "Because {name} invited you, your first {monthsPhrase} of Gennety Premium is on us — active right now.",
+    "Finish sign-up and pass verification — you'll get {ticketsPhrase} as a welcome gift, and {name} gets one too.",
   referralGiftBodyNoName:
-    "Because a friend invited you, your first {monthsPhrase} of Gennety Premium is on us — active right now.",
-  referralGiftContinue: "Claim & continue",
-  referralGiftClaiming: "Activating...",
+    "Finish sign-up and pass verification — you'll get {ticketsPhrase} as a welcome gift, and your friend gets one too.",
+  referralGiftContinue: "Continue",
+  referralGiftBusy: "One moment...",
   promoGiftTitle: "Your gift is unlocked",
   promoGiftStatusConfirmed: "Status confirmed",
   promoGiftPromoActive: "Promo code active",
@@ -451,13 +456,14 @@ const ru: OnboardingStrings = {
   aiMemoryAccepting: "Подключаю...",
   aiMemoryLater: "Позже",
   aiMemorySaving: "Сохраняю...",
-  referralGiftTitle: "Друг подарил тебе Premium",
+  referralGiftTitle: "{name} пригласил(а) тебя\u00a0🎟",
+  referralGiftTitleNoName: "Тебя пригласил друг\u00a0🎟",
   referralGiftBody:
-    "{name} пригласил(а) тебя — поэтому первый {monthsPhrase} Gennety Premium за наш счёт. Уже активен.",
+    "Заверши регистрацию и пройди верификацию — получишь {ticketsPhrase} в подарок, и {name} тоже.",
   referralGiftBodyNoName:
-    "Тебя пригласил друг — поэтому первый {monthsPhrase} Gennety Premium за наш счёт. Уже активен.",
-  referralGiftContinue: "Забрать и продолжить",
-  referralGiftClaiming: "Активирую...",
+    "Заверши регистрацию и пройди верификацию — получишь {ticketsPhrase} в подарок, и твой друг тоже.",
+  referralGiftContinue: "Продолжить",
+  referralGiftBusy: "Секунду...",
   promoGiftTitle: "Твой подарок активирован",
   promoGiftStatusConfirmed: "Статус подтверждён",
   promoGiftPromoActive: "Промокод активен",
@@ -643,13 +649,14 @@ const uk: OnboardingStrings = {
   aiMemoryAccepting: "Підключаю...",
   aiMemoryLater: "Пізніше",
   aiMemorySaving: "Зберігаю...",
-  referralGiftTitle: "Друг подарував тобі Premium",
+  referralGiftTitle: "{name} запросив(ла) тебе\u00a0🎟",
+  referralGiftTitleNoName: "Тебе запросив друг\u00a0🎟",
   referralGiftBody:
-    "{name} запросив(ла) тебе — тому перший {monthsPhrase} Gennety Premium за наш рахунок. Уже активний.",
+    "Заверши реєстрацію та пройди верифікацію — отримаєш {ticketsPhrase} у подарунок, і {name} теж.",
   referralGiftBodyNoName:
-    "Тебе запросив друг — тому перший {monthsPhrase} Gennety Premium за наш рахунок. Уже активний.",
-  referralGiftContinue: "Забрати й продовжити",
-  referralGiftClaiming: "Активую...",
+    "Заверши реєстрацію та пройди верифікацію — отримаєш {ticketsPhrase} у подарунок, і твій друг теж.",
+  referralGiftContinue: "Продовжити",
+  referralGiftBusy: "Секунду...",
   promoGiftTitle: "Твій подарунок активовано",
   promoGiftStatusConfirmed: "Статус підтверджено",
   promoGiftPromoActive: "Промокод активний",
@@ -836,13 +843,14 @@ const de: OnboardingStrings = {
   aiMemoryAccepting: "Verbinden...",
   aiMemoryLater: "Später",
   aiMemorySaving: "Speichern...",
-  referralGiftTitle: "Ein Freund hat dir Premium geschenkt",
+  referralGiftTitle: "{name} hat dich eingeladen\u00a0🎟",
+  referralGiftTitleNoName: "Ein Freund hat dich eingeladen\u00a0🎟",
   referralGiftBody:
-    "Weil {name} dich eingeladen hat, geht dein erster {monthsPhrase} Gennety Premium auf uns — ab sofort aktiv.",
+    "Schließ die Registrierung ab und bestehe die Verifizierung — du bekommst {ticketsPhrase} als Willkommensgeschenk, und {name} bekommt auch eins.",
   referralGiftBodyNoName:
-    "Weil ein Freund dich eingeladen hat, geht dein erster {monthsPhrase} Gennety Premium auf uns — ab sofort aktiv.",
-  referralGiftContinue: "Einlösen & weiter",
-  referralGiftClaiming: "Wird aktiviert...",
+    "Schließ die Registrierung ab und bestehe die Verifizierung — du bekommst {ticketsPhrase} als Willkommensgeschenk, und dein Freund bekommt auch eins.",
+  referralGiftContinue: "Weiter",
+  referralGiftBusy: "Einen Moment...",
   promoGiftTitle: "Dein Geschenk ist freigeschaltet",
   promoGiftStatusConfirmed: "Status bestätigt",
   promoGiftPromoActive: "Promo-Code aktiv",
@@ -1029,13 +1037,14 @@ const pl: OnboardingStrings = {
   aiMemoryAccepting: "Łączenie...",
   aiMemoryLater: "Później",
   aiMemorySaving: "Zapisywanie...",
-  referralGiftTitle: "Znajomy podarował ci Premium",
+  referralGiftTitle: "{name} zaprosił(a) cię\u00a0🎟",
+  referralGiftTitleNoName: "Zaprosił cię znajomy\u00a0🎟",
   referralGiftBody:
-    "Ponieważ {name} cię zaprosił(a), twój pierwszy {monthsPhrase} Gennety Premium jest na nasz koszt — już aktywny.",
+    "Dokończ rejestrację i przejdź weryfikację — dostaniesz {ticketsPhrase} w prezencie, a {name} też dostanie jeden.",
   referralGiftBodyNoName:
-    "Ponieważ zaprosił cię znajomy, twój pierwszy {monthsPhrase} Gennety Premium jest na nasz koszt — już aktywny.",
-  referralGiftContinue: "Odbierz i kontynuuj",
-  referralGiftClaiming: "Aktywuję...",
+    "Dokończ rejestrację i przejdź weryfikację — dostaniesz {ticketsPhrase} w prezencie, a twój znajomy też dostanie jeden.",
+  referralGiftContinue: "Dalej",
+  referralGiftBusy: "Chwileczkę...",
   promoGiftTitle: "Twój prezent został odblokowany",
   promoGiftStatusConfirmed: "Status potwierdzony",
   promoGiftPromoActive: "Kod promocyjny aktywny",

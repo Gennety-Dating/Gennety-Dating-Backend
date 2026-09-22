@@ -100,9 +100,10 @@ meRouter.get("/", async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * GET /v1/me/referral — referral ladder state for the native app's referral
- * screen (§Referral). Same shape as the Telegram Mini App `/v1/referral/state`,
- * built from the shared assembler. 404 when the feature is off.
+ * GET /v1/me/referral — referral state for the native app's referral screen
+ * (§Referral; tickets only since 2026-09-22). Same shape as the Telegram Mini
+ * App `/v1/referral/state`, built from the shared assembler. 404 when the
+ * feature is off.
  */
 meRouter.get("/referral", async (req: Request, res: Response): Promise<void> => {
   if (!env.REFERRAL_FEATURE_ENABLED) {
@@ -122,7 +123,7 @@ meRouter.get("/referral", async (req: Request, res: Response): Promise<void> => 
   await releaseHeldReferralRewards(user.id).catch((err: unknown) => {
     console.warn("[referral] held-reward release on state failed", { userId: user.id, err });
   });
-  res.json(buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME));
+  res.json(await buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME));
 });
 
 /**

@@ -1,8 +1,16 @@
 /**
- * "Invite a friend instead" — the referral cross-promo affordance shared by
- * every paying Mini App screen (PRODUCT_SPEC §3.9 → cross-promo entry points):
- * the Premium sales screen, the Date Ticket gate, the ticket store, and both
- * places on the venue board where a non-premium user is asked to pay.
+ * "Invite a friend · earn a ticket" — the referral cross-promo affordance
+ * (PRODUCT_SPEC §3.9 → cross-promo entry points).
+ *
+ * The referral program pays out Date Tickets only (founder decision
+ * 2026-09-22: no Premium in any form, and no money value attached to a
+ * referral). So the chip appears ONLY at ticket bottlenecks — the Date Ticket
+ * gate (when the wallet is empty) and the ticket store — plus the program's own
+ * hub it hands off to. It must never appear on a Premium funnel: it used to sit
+ * on the Premium sales screen and at both places on the venue board where a
+ * non-premium user is asked to pay, and all three placements are gone. It is
+ * not an "instead of paying" alternative any more; it is a second way to fill
+ * the ticket wallet, next to the bundles.
  *
  * It used to be four hand-copied full-width rows of sentence-length text — one
  * per app, four identical CSS blocks under four class names — and that shape
@@ -30,49 +38,32 @@
  *
  * The chip is deliberately *findable but weightless*: a 30px pill against a
  * 52px hero CTA, muted text, no border. It stays visible without asking to be
- * read, which is the whole brief — the sales pitch lives on the referral screen
- * this hands off to, not here.
+ * read, which is the whole brief — the pitch lives on the referral hub this
+ * hands off to, not here.
  */
 
 import "./referral-hint.css";
-import { icon } from "./icons";
 
 export type ReferralLang = "en" | "ru" | "uk" | "de" | "pl";
 
 /**
- * One string for every surface, on purpose. Context-specific wording ("get
- * Premium free" / "get a ticket free") reads more precisely but needs five
- * variants per language and pushes several of them back over the one-line
- * budget — and the screen the user is standing on already supplies the context.
+ * One string for every surface, on purpose: every placement is a ticket
+ * bottleneck, so "earn a ticket" is true wherever the chip is drawn, and the
+ * screen the user is standing on already supplies the rest of the context.
  */
 const COPY: Record<ReferralLang, string> = {
-  en: "Invite a friend instead",
-  ru: "Пригласи друга вместо оплаты",
-  uk: "Запроси друга замість оплати",
-  de: "Freund einladen statt zahlen",
-  pl: "Zaproś znajomego zamiast płacić",
+  en: "Invite a friend · earn a ticket",
+  ru: "Пригласи друга — получи билет",
+  uk: "Запроси друга — отримай квиток",
+  de: "Freund einladen, Ticket holen",
+  pl: "Zaproś znajomego, zdobądź bilet",
 };
 
 export function referralHintText(lang: ReferralLang): string {
   return COPY[lang] ?? COPY.en;
 }
 
-export interface ReferralChipOptions {
-  lang: ReferralLang;
-  /** Runs on tap — the call site owns the hand-off (it knows its return trail). */
-  onTap: () => void;
-  /** Sits directly under another tappable row; halves the top gap. */
-  tight?: boolean | undefined;
-}
-
-/** The chip, for the vanilla-TS apps (Premium, venue board). */
-export function referralChip({ lang, onTap, tight }: ReferralChipOptions): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = tight ? "gn-referral gn-referral--tight" : "gn-referral";
-  const span = document.createElement("span");
-  span.textContent = referralHintText(lang);
-  btn.append(icon("letter", "icon gn-referral-ico"), span);
-  btn.addEventListener("click", onTap);
-  return btn;
-}
+// The vanilla-TS `referralChip()` builder lived here too, for Premium and the
+// venue board. Both placements are gone (they were Premium funnels), so the
+// only rail left is the React twin in `referral-hint-react.tsx`; it imports this
+// module for the copy and, through it, the stylesheet.

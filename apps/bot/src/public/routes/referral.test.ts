@@ -18,7 +18,7 @@ vi.mock("../../config.js", () => ({
     BOT_TOKEN,
     BOT_USERNAME: "gennetybot",
     PUBLIC_BASE_URL: "https://dating-api.gennety.com",
-    REFERRAL_INVITEE_PREMIUM_MONTHS: 1,
+    REFERRAL_INVITEE_TICKETS: 1,
   },
 }));
 

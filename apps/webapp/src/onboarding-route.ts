@@ -62,7 +62,8 @@ export type OnboardingPhase =
   // a promo-code user (ticket + N months + special status), shown once as the
   // second-to-last screen. Takes precedence over the referral screen.
   | { kind: "promoGift" }
-  // Referral welcome gift (§Referral): a wow screen for an invited user,
+  // Referral invite screen (§Referral): "a friend invited you" for an invited
+  // user — it promises Date Tickets on verification and grants nothing itself;
   // shown once as the second-to-last screen (right before the AI-memory
   // choice). Skipped entirely for non-referred users.
   | { kind: "referralGift" }

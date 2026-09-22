@@ -391,11 +391,13 @@ export interface TelegramOnboardingState {
     phone: string | null;
     registrationTrack: RegistrationTrack | null;
     phoneAuthEnabled: boolean;
-    // Referral welcome gift (§Referral). Inert for non-referred users.
+    // Referral invite screen (§Referral). Inert for non-referred users. The
+    // invitee's reward is Date Tickets, credited when THEY pass verification —
+    // `referralGiftTickets` is how many, for the copy; nothing is granted here.
     invitedByReferral: boolean;
     referralGiftSeen: boolean;
     referrerFirstName: string | null;
-    referralGiftMonths: number;
+    referralGiftTickets: number;
     // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md). The richer wow screen
     // (ticket + N months). Precedence over referral. Inert for non-promo users.
     invitedByPromo: boolean;
@@ -627,8 +629,12 @@ export async function saveTelegramOnboardingProfile(
   return (await res.json()) as TelegramOnboardingState;
 }
 
-/** Claim the invitee's one-time referral welcome Premium month (§Referral). */
-export async function claimTelegramOnboardingReferralGift(
+/**
+ * Mark the invitee's referral invite screen as seen (§Referral). Grants
+ * nothing: the invitee's Date Tickets are credited server-side once they pass
+ * verification. The endpoint keeps its historical `/referral-gift` path.
+ */
+export async function markTelegramOnboardingReferralGiftSeen(
   initData: string,
 ): Promise<TelegramOnboardingState> {
   const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/referral-gift`, {
@@ -969,7 +975,7 @@ export interface TicketState {
    * development; `none` means nothing can be bought here.
    */
   rail?: TicketPurchaseRail;
-  /** Drives the "invite a friend instead" referral cross-promo link. */
+  /** Drives the "invite a friend · earn a ticket" referral cross-promo chip. */
   referralEnabled?: boolean;
   /**
    * An active Gennety Premium subscription covers MY own slot, so it cost me
@@ -1098,7 +1104,7 @@ export interface WalletState {
   /** Star (XTR) price per bundle count (`{ "1": 350, "3": 830, "6": 1350 }`)
    *  when `starsEnabled`; null otherwise. */
   bundleStars?: Record<string, number> | null;
-  /** Drives the "invite a friend instead" referral cross-promo link. */
+  /** Drives the "invite a friend · earn a ticket" referral cross-promo chip. */
   referralEnabled?: boolean;
   /**
    * The wallet holder subscribes to Gennety Premium, so their OWN dates cost
@@ -1221,7 +1227,11 @@ export interface VenueBoardState {
   /** §Premium: caller has a paying action but isn't premium → show the "free with
    * Premium" counterfactual at the pay step. */
   premiumWouldWaive?: boolean;
-  /** Drives the "invite a friend instead" referral cross-promo link. */
+  /**
+   * @deprecated Always false since 2026-09-22 and ignored by the board: the
+   * referral program never appears on a Premium funnel. Kept only because the
+   * server still sends it.
+   */
   referralEnabled?: boolean;
 }
 

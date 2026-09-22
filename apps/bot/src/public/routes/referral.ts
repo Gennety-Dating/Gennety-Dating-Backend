@@ -18,7 +18,7 @@ import { referralCardImage } from "../../services/referral-card/index.js";
  * a PUBLIC signed image endpoint (Telegram fetches it when rendering the shared
  * photo, so it can't carry initData). Mounted at `/v1/referral`, feature-gated.
  *
- *   GET  /v1/referral/state          — ladder + progress + $ value + invite link
+ *   GET  /v1/referral/state          — tickets earned / pending, reward slots, invite link
  *   POST /v1/referral/share-message  — mint a one-tap savePreparedInlineMessage
  *   POST /v1/referral/share-result   — client reports whether the share was sent
  *   GET  /v1/referral/card?u=&v=&sig= — serve the invite card JPEG (public, HMAC)
@@ -93,7 +93,7 @@ export function createReferralRouter(): Router {
 
     res.status(200).json({
       ok: true,
-      ...buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME),
+      ...(await buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME)),
     });
   });
 
@@ -131,7 +131,7 @@ export function createReferralRouter(): Router {
     // the share is only offered as a photo once the bytes actually exist.
     const card = await referralCardImage({
       referrerName: user.firstName,
-      giftMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+      giftTickets: env.REFERRAL_INVITEE_TICKETS,
       lang,
     });
     const cardUrl = card
@@ -252,7 +252,7 @@ export function createReferralRouter(): Router {
     // the request path Telegram is timing.
     const card = await referralCardImage({
       referrerName: user.firstName,
-      giftMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+      giftTickets: env.REFERRAL_INVITEE_TICKETS,
       lang: (user.language ?? "en") as Language,
     });
     if (!card) {

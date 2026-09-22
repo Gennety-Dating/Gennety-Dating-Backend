@@ -1,4 +1,4 @@
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import {
   PHOTO_BONUS_TICKET_THRESHOLD,
   STUDENT_BONUS_TICKETS,
@@ -30,11 +30,14 @@ export type TicketReason =
   | "verification_bonus"
   | "student_bonus"
   | "welcome_gift"
-  // Referral ladder reward (PRODUCT_SPEC §Referral). Written for the referrer
-  // each time an invited friend clears verification and a ladder rung is
-  // reached; idempotent via a synthetic unique `externalPaymentId`
-  // (`referral-rung:<referrerId>:<rung>`).
+  // Legacy: the referral milestone ladder (tickets + Premium months) was retired
+  // 2026-09-22. No new rows; kept so historical rows stay valid.
   | "referral_milestone"
+  // Referral reward (§Referral, tickets only since 2026-09-22). Written for the
+  // referrer AND the invited friend when the friend clears verification, inside
+  // the transaction that counts them; exactly-once via the unique
+  // `externalPaymentId` `referral:<qualificationId>:referrer|invitee`.
+  | "referral_reward"
   // Independent promo-code welcome gift (PROMO_CODES_PRODUCT_SPEC.md). Granted
   // once to a promo-attributed new user at the onboarding wow screen; idempotent
   // via a unique `externalPaymentId` (`promo:<codeId>:<userId>`).
@@ -179,6 +182,29 @@ export async function grantTickets(args: {
       },
     }),
   ]);
+  return updated.ticketBalance;
+}
+
+/**
+ * The same credit as `grantTickets`, written through the caller's interactive
+ * transaction — for a grant that must commit or roll back together with other
+ * writes (the referral settlement counts the friend and pays both sides in one
+ * go). A duplicate `externalPaymentId` throws P2002 and aborts the caller's
+ * whole transaction. Returns the new balance.
+ */
+export async function grantTicketsInTx(
+  tx: Prisma.TransactionClient,
+  args: { userId: string; count: number; reason: TicketReason; externalPaymentId: string },
+): Promise<number> {
+  const { userId, count, reason, externalPaymentId } = args;
+  const updated = await tx.user.update({
+    where: { id: userId },
+    data: { ticketBalance: { increment: count } },
+    select: { ticketBalance: true },
+  });
+  await tx.ticketLedger.create({
+    data: { userId, delta: count, reason, externalPaymentId },
+  });
   return updated.ticketBalance;
 }
 

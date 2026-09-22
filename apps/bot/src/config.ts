@@ -924,27 +924,27 @@ export const env = {
   MATCH_CARD_FEATURE_ENABLED: process.env.MATCH_CARD_FEATURE_ENABLED === "true",
 
   // ── Referral program ("Give a date, get a date") ─────
-  /// Master flag for the referral system (PRODUCT_SPEC §Referral). Default off.
-  /// Rides the already-on TICKET_FEATURE_ENABLED + PREMIUM_FEATURE_ENABLED (it
-  /// pays rewards in Date Tickets AND complimentary Premium months). When true:
-  /// the "Invite a friend" menu row + referral Mini App appear, referral
-  /// deep-links attribute, the invitee gets a welcome Premium month on the
-  /// onboarding wow screen, and the referrer earns the milestone ladder as each
-  /// invited friend clears verification.
+  /// Master flag for the referral system (§Referral). Default off. Rides the
+  /// already-on TICKET_FEATURE_ENABLED: the program pays in Date Tickets only —
+  /// never Premium (decision 2026-09-22). When true: the "Invite a friend" menu
+  /// row + referral Mini App appear, referral deep-links attribute, the invitee
+  /// sees the invite screen in onboarding, and each invited friend who clears
+  /// verification pays both sides in tickets.
   REFERRAL_FEATURE_ENABLED: process.env.REFERRAL_FEATURE_ENABLED === "true",
-  /// Complimentary Premium months gifted to an INVITED user (shown on the
-  /// onboarding wow screen, granted + active immediately). Default 1.
-  REFERRAL_INVITEE_PREMIUM_MONTHS: Math.max(
-    0,
-    Number(process.env.REFERRAL_INVITEE_PREMIUM_MONTHS ?? "1"),
-  ),
-  /// Milestone ladder ("<count>:<ticketsDelta>:<monthsDelta>,…"). Reward is
-  /// granted to the referrer AT each verified-friend count. Default ladder
-  /// 1→1/1, 3→1/1, 5→1/1, 10→2/2 (cumulative 1/1, 2/2, 3/3, 5/5).
-  REFERRAL_LADDER: parseReferralLadder(process.env.REFERRAL_LADDER),
+  /// Date Tickets credited to the REFERRER per invited friend who clears
+  /// verification. Default 1.
+  REFERRAL_TICKETS_PER_FRIEND: nonNegativeInt(process.env.REFERRAL_TICKETS_PER_FRIEND, 1),
+  /// Date Tickets credited to the INVITED friend, at the same moment and in the
+  /// same transaction as the referrer's. Default 1; 0 turns the invitee side off.
+  REFERRAL_INVITEE_TICKETS: nonNegativeInt(process.env.REFERRAL_INVITEE_TICKETS, 1),
+  /// Lifetime cap: how many invited friends can earn one referrer a reward.
+  /// Friends past it are still counted (and still get their own ticket) but pay
+  /// the referrer nothing. Default 20. Always ≥ 1: an "unlimited" 0 would make
+  /// every client handle a missing cap, and 0 or a typo falls back to 20.
+  REFERRAL_MAX_REWARDED_FRIENDS: positiveInt(process.env.REFERRAL_MAX_REWARDED_FRIENDS, 20),
   /// Anti-abuse: max referral reward events credited to one referrer per rolling
-  /// 24h. Invited friends beyond this are still counted but reward is deferred/
-  /// skipped. Default 3.
+  /// 24h. Invited friends beyond this are still counted; the referrer's reward
+  /// is held and released once the window allows. Default 3.
   REFERRAL_DAILY_REWARD_CAP: Math.max(
     0,
     Number(process.env.REFERRAL_DAILY_REWARD_CAP ?? "3"),
@@ -1372,52 +1372,21 @@ function parseStarBundles(raw: string | undefined): Readonly<Record<number, numb
   return Object.keys(out).length > 0 ? out : fallback;
 }
 
-/** One rung of the referral milestone ladder (PRODUCT_SPEC §Referral). */
-export interface ReferralLadderRung {
-  /** Verified-friend count at which this rung's reward is granted. */
-  atCount: number;
-  /** Date Tickets granted to the referrer when this rung is reached. */
-  tickets: number;
-  /** Complimentary Premium months granted to the referrer at this rung. */
-  months: number;
+/**
+ * A whole, non-negative count from the environment (referral ticket amounts and
+ * caps). Unset, blank, fractional or negative values fall back to `fallback`
+ * rather than silently becoming 0 — a typo must not switch a reward off.
+ */
+function nonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const n = Number(raw.trim());
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
 }
 
-/**
- * Parse `REFERRAL_LADDER` ("<count>:<ticketsDelta>:<monthsDelta>,…") into a
- * count-sorted rung list. Falls back to the default ladder
- * (1→1/1, 3→1/1, 5→1/1, 10→2/2) when unset or fully invalid; invalid individual
- * rungs are skipped. Deltas are what the referrer gains AT that verified-friend
- * count (cumulative totals are 1/1, 2/2, 3/3, 5/5).
- */
-function parseReferralLadder(raw: string | undefined): readonly ReferralLadderRung[] {
-  const fallback: ReferralLadderRung[] = [
-    { atCount: 1, tickets: 1, months: 1 },
-    { atCount: 3, tickets: 1, months: 1 },
-    { atCount: 5, tickets: 1, months: 1 },
-    { atCount: 10, tickets: 2, months: 2 },
-  ];
-  if (!raw) return fallback;
-  const out: ReferralLadderRung[] = [];
-  for (const rung of raw.split(",")) {
-    const [c, t, m] = rung.split(":");
-    const atCount = Number((c ?? "").trim());
-    const tickets = Number((t ?? "").trim());
-    const months = Number((m ?? "").trim());
-    if (
-      Number.isInteger(atCount) &&
-      atCount > 0 &&
-      Number.isInteger(tickets) &&
-      tickets >= 0 &&
-      Number.isInteger(months) &&
-      months >= 0 &&
-      (tickets > 0 || months > 0)
-    ) {
-      out.push({ atCount, tickets, months });
-    }
-  }
-  if (out.length === 0) return fallback;
-  out.sort((a, b) => a.atCount - b.atCount);
-  return out;
+/** `nonNegativeInt`, but 0 also falls back — for caps that must exist. */
+function positiveInt(raw: string | undefined, fallback: number): number {
+  const n = nonNegativeInt(raw, fallback);
+  return n > 0 ? n : fallback;
 }
 
 /**

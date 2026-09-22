@@ -1710,8 +1710,9 @@ number is `PRIME_TIME_SLOT_COUNT` and copy cannot follow it.
   string.
   **Back walks the whole chain, not one hop (2026-08-05).** The first version
   stored a single target, so each hand-off overwrote the previous one: board →
-  Premium → referral (the referral cross-promo link, §3.9) left only
-  "referral came from Premium", and the board was erased. Back therefore worked
+  Premium → referral (the referral cross-promo link of the time — removed from
+  Premium 2026-09-22, §3.9) left only "referral came from Premium", and the
+  board was erased. Back therefore worked
   exactly once at any depth — the user landed on a Premium screen that now
   believed it had been opened cold, showed no button, and the only way out was
   to close the Mini App and reopen "Change venue" from chat. The trail is now a
@@ -1742,75 +1743,58 @@ Telegram-first; iOS in parallel.
 ### 3.9 Referral Program (feature-flagged)
 
 An optional referral program ("Give a date, get a date"), gated by
-`REFERRAL_FEATURE_ENABLED` (default **off**); it pays rewards in Date Tickets
-AND complimentary Premium months, so it rides the already-on
-`TICKET_FEATURE_ENABLED` + `PREMIUM_FEATURE_ENABLED`. Full spec:
+`REFERRAL_FEATURE_ENABLED` (default **off**). It pays in **Date Tickets only**
+and rides the already-on `TICKET_FEATURE_ENABLED`. Full spec:
 [REFERRAL_PRODUCT_SPEC.md](referral.md).
 
+- **Never Premium (founder decision 2026-09-22).** The program used to grant
+  complimentary Premium months as well (a welcome month to the invitee, a
+  tickets + months ladder with dollar values to the referrer). That cannibalised
+  the subscription — a subscriber stops needing tickets — and priced the program
+  in money. The only unit of reward is now a ticket; no referral surface shows a
+  price.
 - **Killer angle.** A ticket is a real date and matching is same-city, so every
   verified friend also grows the local pool that decides whether the referrer
-  themselves gets matched — the reward is framed as *"give a date, get a date"*.
-- **Trigger = verification.** The referrer is paid only when an invited friend
-  reaches `verificationStatus='verified'` — the same anti-fraud gate (liveness +
-  `phone @unique`) that admits a user to matching, so the reward condition IS
-  the "real, matchable human" condition. The `verified` settlement
-  (`grantReferralRewardsForVerifiedInvitee`) is exactly-once across every path
-  (pipeline `verified` branch + pull/rerun short-circuit) and covers mobile
-  invitees (not gated on `telegramId`).
-- **Invitee reward.** A fixed **1 month of Gennety Premium**
-  (`REFERRAL_INVITEE_PREMIUM_MONTHS`), granted + active at a wow screen shown as
-  the second-to-last screen of the first onboarding Mini App (before the
-  AI-memory choice). Safe pre-verification because Premium's only benefit
-  (venue-change) requires a scheduled date.
-- **Referrer reward.** A milestone ladder (`REFERRAL_LADDER`, default cumulative
-  1/1, 2/2, 3/3, 5/5 tickets+months at 1/3/5/10 verified friends), each rung
-  idempotent via a unique ledger id. The referral Mini App shows the ladder with
-  the dollar value at each rung. A per-referrer 24h velocity guard
-  (`REFERRAL_DAILY_REWARD_CAP`) **holds** (never denies) rewards during a
-  suspicious burst; held rungs self-heal on the next event.
+  themselves gets matched — *"give a date, get a date"*.
+- **Trigger = verification.** Nothing is paid until the invited friend is
+  verified, has finished onboarding and holds a verified track contact
+  (A13-M18). The settlement (`grantReferralRewardsForVerifiedInvitee`) is
+  exactly-once across every path and covers mobile invitees.
+- **Rewards.** Referrer: `REFERRAL_TICKETS_PER_FRIEND` (1) per verified friend,
+  for at most `REFERRAL_MAX_REWARDED_FRIENDS` (20) friends. Invitee:
+  `REFERRAL_INVITEE_TICKETS` (1), credited in the same transaction. A 24h
+  velocity cap (`REFERRAL_DAILY_REWARD_CAP`, 3) **holds** (never denies) the
+  referrer's ticket during a burst; held tickets are released from the referral
+  screen and by the hourly sweep. Ledger: `ticket_ledger` `referral_reward`,
+  one unique key per side of each `ReferralQualification`.
+- **Anti-fraud.** Self-referral block (id, shared verified phone), blocked
+  statuses on both sides, the lifetime cap, and an identity tombstone
+  (`referral_identities`, keyed hashes of the invitee's proven identities) that
+  recognises a deleted account re-registering.
 - **Attribution.** First-touch `User.referralSource = referral:<referrerId>`
   from a `?start=referral_<id>` deep link (Telegram) or `POST /v1/me/referral/claim`
-  code (iOS); never overwritten. Self-referral (by id or shared verified phone)
-  is blocked.
-- **Rewards reuse the wallet/entitlement ledgers** (`ticket_ledger`
-  `referral_milestone` + `subscription_ledger` `referral`) with the additive
-  `grantComplimentaryPremiumMonths` (extends `premiumUntil` additively without
-  clobbering a real recurring anchor). No new tables; the blind-decision,
-  no-in-app-chat, and ledger exactly-once invariants are unaffected.
-- **Cross-promo entry points (paying screens → referral.html).** The Ticket
-  Store, the Date Ticket gate, Premium, and the Venue Change board (twice — the
-  pay step and a locked premium venue) each show a quiet, secondary "invite a
-  friend instead" affordance — never a button competing with the real
-  pay/subscribe CTA — only when the user is genuinely short (empty ticket
-  wallet, not subscribed, or paying Stars for a venue swap) and
-  only while `REFERRAL_FEATURE_ENABLED` is on (mirrors `starsEnabled`, exposed
-  per-screen as `referralEnabled` on the wallet/ticket-gate/premium/
-  venue-change state endpoints). Tapping it opens `referral.html`, which
-  carries a native Telegram BackButton back to the exact screen the user came
-  from (`apps/webapp/src/return-to.ts`) — no dead end, no lost payment context.
-  When that screen was itself reached from another (board → Premium → here),
-  back keeps walking rather than stopping one hop up; see §3.8 for the trail
-  and its bounds.
-  **It is a compact chip, and two rules keep it that way (2026-08-08).** It
-  shipped as five hand-copied full-width rows of sentence-length text — four
-  identical CSS blocks under four class names — and each of the three ways that
-  shape failed is now a rule in `apps/webapp/src/referral-hint.ts`, the single
-  module all five call sites share. **(a) Never in an action bar.** On Premium
-  it sat inside the pinned footer, which is `flex: none`, so it grew that footer
-  by ~39px and pushed the subscribe CTA and its price line up the screen — the
-  one surface where the hint MOVED the thing the user came to tap. It is now the
-  tail of the scroll and the footer holds the CTA and the price alone.
-  **(b) One line of copy.** The Premium string ran 59 characters, ~415px at
-  13px/600 against ~350px of usable width on a 390px phone — two lines on every
-  device, i.e. a paragraph rather than a link. Every string is now ≤31
-  characters, one statement rather than a question ("Не хватает билетов?" made
-  the reader answer a question before they could skip the line), one wording for
-  all five surfaces, and a test holds the bound. **(c) Never full width.** A
-  30px auto-width pill on a faint fill, against a 52px hero CTA; on the venue
-  board's pay step it also loses half its top gap, because two equal full-width
-  rows under each other — the Premium counterfactual and this — read as a list
-  of two options rather than as an offer plus its footnote. Telegram-only; the
-  native client owns its own paywall.
+  code (iOS); never overwritten.
+- **Where the invite may appear: ticket bottlenecks only (2026-09-22).** The
+  Date Ticket gate (after the mutual "yes", while the wallet is short), the
+  Ticket Store (always, while the program is on) and the program's own hub (bot
+  menu row / iOS Settings row). **Never on a Premium funnel** — not the Premium
+  sales screen, not the Venue Change board's locked premium venue or pay step.
+  This reverses the 2026-08-08 rule that put an "invite a friend instead" chip
+  on all five paying surfaces. `referralEnabled` stays on the wallet and
+  ticket-gate state endpoints; it was removed from the Premium state, and the
+  venue board's copy is always `false` (kept only because shipped iOS builds
+  require the field). Tapping the chip opens `referral.html`, whose Telegram
+  BackButton returns to the ticket store or gate it came from
+  (`apps/webapp/src/return-to.ts`).
+  **It is a compact chip (2026-08-08), and those shape rules still hold** —
+  `apps/webapp/src/referral-hint.ts`, the single module both call sites share:
+  **(a) never in an action bar** (it once grew Premium's pinned footer by ~39px
+  and pushed the subscribe CTA up); **(b) one line of copy**, ≤31 characters, a
+  statement rather than a question — now "Invite a friend · earn a ticket"
+  (a test holds the bound); **(c) never full width** — a 30px auto-width pill.
+  The "tight" pairing under a Premium counterfactual is gone with the Premium
+  placements: on the ticket gate the chip is its own element, not a footnote to
+  the "free with Premium" row.
 
 ### 3.10 Promo Codes (feature-flagged, independent campaign links)
 
@@ -1826,7 +1810,8 @@ a richer welcome gift. Full spec:
   (three confirmed-status rows — "Status confirmed · Promo active · Subscription
   activated" — plus the ticket + months) shown as the second-to-last onboarding
   screen (Telegram Mini App) or a native paywall-style screen (iOS). Deliberately
-  *more* than the referral welcome screen (which grants only 1 month, no ticket),
+  different from the referral invite screen (which grants nothing itself and only
+  tells the invitee about the ticket they get on verification, since 2026-09-22),
   so it renders differently.
 - **New users only, first-touch.** Recorded as `User.referralSource =
   promo:<CODE>` on the creating touch (Telegram `?start=promo_<CODE>` /

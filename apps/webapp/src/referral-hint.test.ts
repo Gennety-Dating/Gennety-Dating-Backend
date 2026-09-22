@@ -34,6 +34,24 @@ describe("referral cross-promo copy", () => {
     }
   });
 
+  it("offers a ticket — never Premium, never 'instead of paying'", () => {
+    // Since 2026-09-22 the program pays in Date Tickets only and the chip lives
+    // at ticket bottlenecks, next to the bundles, not as an alternative to a
+    // payment. The old copy ("Invite a friend instead") encoded exactly that.
+    const ticketWord: Record<ReferralLang, RegExp> = {
+      en: /ticket/i,
+      ru: /билет/i,
+      uk: /квит/i,
+      de: /ticket/i,
+      pl: /bilet/i,
+    };
+    for (const lang of LANGS) {
+      const text = referralHintText(lang);
+      expect(text, lang).toMatch(ticketWord[lang]);
+      expect(text, lang).not.toMatch(/premium|instead|вместо|замість|statt|zamiast/i);
+    }
+  });
+
   it("is translated in every supported language", () => {
     const texts = LANGS.map(referralHintText);
     expect(new Set(texts).size).toBe(LANGS.length);

@@ -611,10 +611,12 @@ export interface VenueBoardStateView {
    */
   premiumWouldWaive: boolean;
   /**
-   * Drives the "invite a friend instead" referral cross-promo link, shown
-   * client-side only at a paying step / on a locked premium venue.
+   * Deprecated, always false. It drove an "invite a friend instead" referral
+   * link at the paying step and on a locked premium venue — both Premium
+   * funnels, where referral may never appear (decision 2026-09-22). Still sent
+   * because `VenueBoardState` lists it as required and shipped iOS builds decode it.
    */
-  referralEnabled: boolean;
+  referralEnabled: false;
 }
 
 export type VenueBoardStateResult =
@@ -777,7 +779,7 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
         : null,
     pairPremiumActive: pairPremiumActive(match, now),
     premiumWouldWaive: paying && !callerPremium,
-    referralEnabled: env.REFERRAL_FEATURE_ENABLED,
+    referralEnabled: false,
     restartable: evaluateVenueChangeRestart({
       featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
       status: match.status,

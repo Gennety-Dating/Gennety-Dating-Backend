@@ -5,7 +5,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
-import { monthsPhrase, t } from "@gennety/shared";
+import { dateTicketsPhrase, t } from "@gennety/shared";
 import { butterflyPng } from "../match-card/collage.js";
 
 /**
@@ -41,8 +41,10 @@ const CARD_JPEG_QUALITY = 88;
  * parameter, and Telegram caches downloaded media **by URL** — so without a
  * changed URL a recipient keeps getting the previously fetched bytes, which is
  * also why a single failed fetch used to be permanent for a given referrer.
+ * "3" (2026-09-22): the gift line promises a date ticket instead of Premium —
+ * same default count (1), so only the revision can change the URL.
  */
-export const CARD_REVISION = "2";
+export const CARD_REVISION = "3";
 
 /**
  * Encoded cards, keyed by `contentVersion`. The card is a pure function of
@@ -93,7 +95,8 @@ function txt(style: Record<string, unknown>, value: string): Node {
 
 export interface ReferralCardInput {
   referrerName: string | null;
-  giftMonths: number;
+  /** Date Tickets the invitee gets on verification (`REFERRAL_INVITEE_TICKETS`). */
+  giftTickets: number;
   lang: Language;
   /**
    * Member portraits filling the card's portrait row, as `data:` URIs, in
@@ -125,7 +128,7 @@ export function referralCardContentVersion(input: ReferralCardInput): string {
         CARD_REVISION,
         input.referrerName ?? "",
         input.lang,
-        input.giftMonths,
+        input.giftTickets,
         input.portraits ?? null,
       ]),
     )
@@ -269,12 +272,11 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
-    // en/de/pl spell the unit word out (`{monthsPhrase}`, fully declined);
-    // ru/uk keep the abbreviated `{months} мес`/`міс`, which doesn't decline —
-    // pass both so either template resolves.
+    // The ticket count is spelled out and fully declined in every language
+    // (`dateTicketsPhrase`). Tickets only — the card promised a Premium month
+    // until 2026-09-22.
     const giftLine = t(input.lang, "referralCardGift", {
-      months: input.giftMonths,
-      monthsPhrase: monthsPhrase(input.lang, input.giftMonths),
+      ticketsPhrase: dateTicketsPhrase(input.lang, input.giftTickets),
     });
 
     // Everything is centre-formatted: a full-width row with the text centred.

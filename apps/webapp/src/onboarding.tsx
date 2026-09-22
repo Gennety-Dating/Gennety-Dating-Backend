@@ -11,7 +11,7 @@ import {
   searchTelegramOnboardingCities,
   selectTelegramOnboardingCity,
   setTelegramOnboardingAiMemoryPreference,
-  claimTelegramOnboardingReferralGift,
+  markTelegramOnboardingReferralGiftSeen,
   claimTelegramOnboardingPromoGift,
   CalendarApiError,
   saveTelegramOnboardingProfile,
@@ -57,7 +57,7 @@ import {
   saveWelcomeSeen,
   saveOnboardingProgress,
 } from "./device-storage.js";
-import { type Lang, monthsPhrase } from "./i18n.js";
+import { type Lang, ticketsPhrase } from "./i18n.js";
 import {
   initialOnboardingLanguage,
   onboardingStrings,
@@ -81,7 +81,7 @@ const source = params.get("source") ?? app?.initDataUnsafe?.start_param ?? null;
  * requirement, so it can be opened in a plain browser for design review (the
  * scene otherwise sits mid-onboarding behind the initData gate). Harmless in
  * prod: the flag is only set by that explicit query param, and the Continue
- * button still requires real initData to actually claim.
+ * button still requires real initData to actually mark the screen seen.
  */
 const PREVIEW_REFERRAL_GIFT = params.get("preview") === "referral-gift";
 
@@ -92,7 +92,7 @@ const PREVIEW_REFERRAL_GIFT = params.get("preview") === "referral-gift";
  * re-registering an account per iteration.
  *
  * `import.meta.env.DEV`-gated, so it does not exist in the production bundle at
- * all — unlike the referral-gift preview above, whose Claim button still needs
+ * all — unlike the referral-gift preview above, whose Continue button still needs
  * real initData. Saves are no-ops here; the flow just walks forward.
  */
 const PREVIEW_BASICS =
@@ -295,7 +295,7 @@ function App(): ReactElement {
     }
     // Standalone visual preview — no Telegram, no remote state (see the flag's doc).
     if (PREVIEW_REFERRAL_GIFT) {
-      setRemoteUser({ referrerFirstName: "Anna", referralGiftMonths: 1 } as unknown as RemoteUser);
+      setRemoteUser({ referrerFirstName: "Anna", referralGiftTickets: 1 } as unknown as RemoteUser);
       setPhase({ kind: "referralGift" });
       return;
     }
@@ -347,7 +347,7 @@ function App(): ReactElement {
         if (state.user.language) setLang(state.user.language);
         // Dev-QA override: `?preview=referral-gift` jumps straight to the
         // referral welcome-gift screen for visual review (harmless in prod — the
-        // Claim button hits the real, idempotent endpoint and then routes on).
+        // Continue button hits the real, idempotent mark-seen endpoint and routes on).
         if (new URLSearchParams(location.search).get("preview") === "referral-gift") {
           setPhase({ kind: "referralGift" });
           setWelcome("off");
@@ -803,9 +803,9 @@ function App(): ReactElement {
       <Scene active={phase.kind === "referralGift"}>
         <ReferralGiftGate
           lang={lang}
-          months={remoteUser?.referralGiftMonths ?? 1}
+          tickets={remoteUser?.referralGiftTickets ?? 1}
           referrerName={remoteUser?.referrerFirstName ?? null}
-          onClaimed={(state) => {
+          onSeen={(state) => {
             setRemoteUser(state.user);
             setFlowToken(state.flowToken);
             setPhase(postVisualPhaseFromRemote(state.user));
@@ -2259,29 +2259,43 @@ function PromoGiftGate(props: {
   );
 }
 
+/**
+ * The invited user's one-time "a friend invited you" screen (§Referral).
+ *
+ * It grants nothing (since 2026-09-22 the program gives no Premium): it tells
+ * the invitee what they will get — Date Tickets, credited once THEY pass
+ * verification, with one for the referrer too — and the CTA only marks the
+ * screen seen (`POST /referral-gift`) before moving on. With a server-side
+ * invitee reward of 0 the promise line is dropped rather than saying "0".
+ */
 function ReferralGiftGate(props: {
   lang: Lang;
-  months: number;
+  tickets: number;
   referrerName: string | null;
-  onClaimed: (state: TelegramOnboardingState) => void;
+  onSeen: (state: TelegramOnboardingState) => void;
 }): ReactElement {
   const s = useOnboardingStrings();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const phrase = monthsPhrase(props.lang, props.months);
-  const body = props.referrerName
-    ? s.referralGiftBody.replaceAll("{name}", props.referrerName).replaceAll("{monthsPhrase}", phrase)
-    : s.referralGiftBodyNoName.replaceAll("{monthsPhrase}", phrase);
+  const name = props.referrerName;
+  const title = name ? s.referralGiftTitle.replaceAll("{name}", name) : s.referralGiftTitleNoName;
+  const phrase = ticketsPhrase(props.lang, props.tickets);
+  const body =
+    props.tickets > 0
+      ? name
+        ? s.referralGiftBody.replaceAll("{name}", name).replaceAll("{ticketsPhrase}", phrase)
+        : s.referralGiftBodyNoName.replaceAll("{ticketsPhrase}", phrase)
+      : null;
 
-  async function claim(): Promise<void> {
+  async function markSeen(): Promise<void> {
     if (!app?.initData || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const state = await claimTelegramOnboardingReferralGift(app.initData);
+      const state = await markTelegramOnboardingReferralGiftSeen(app.initData);
       app.HapticFeedback?.notificationOccurred("success");
-      props.onClaimed(state);
+      props.onSeen(state);
     } catch (err) {
       setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
@@ -2297,7 +2311,7 @@ function ReferralGiftGate(props: {
             className="referral-gift-butterfly"
             viewBox="-12 -10 124 120"
             role="img"
-            aria-label="Gennety Premium"
+            aria-label="Gennety"
             shapeRendering="geometricPrecision"
           >
             <defs>
@@ -2312,17 +2326,17 @@ function ReferralGiftGate(props: {
             />
           </svg>
         </div>
-        <h1 className="referral-gift-title">{s.referralGiftTitle}</h1>
-        <p className="referral-gift-body">{body}</p>
+        <h1 className="referral-gift-title">{title}</h1>
+        {body ? <p className="referral-gift-body">{body}</p> : null}
         {error ? <div className="gate-error referral-gift-error">{error}</div> : null}
       </div>
       <div className="referral-gift-actions">
         <button
           className="referral-gift-primary"
           disabled={busy || (!app?.initData && !PREVIEW_REFERRAL_GIFT)}
-          onClick={() => void claim()}
+          onClick={() => void markSeen()}
         >
-          {busy ? s.referralGiftClaiming : s.referralGiftContinue}
+          {busy ? s.referralGiftBusy : s.referralGiftContinue}
         </button>
       </div>
     </main>

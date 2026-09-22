@@ -1,7 +1,8 @@
 /**
- * The "invite a friend instead" cross-promo chip — one definition for all four
- * paying Mini Apps (Premium, the Date Ticket gate, the ticket store, the venue
- * board). See `referral-hint.ts` for why it is a chip rather than a row.
+ * The "invite a friend · earn a ticket" cross-promo chip — one definition for
+ * the ticket bottlenecks that carry it (the Date Ticket gate, the ticket
+ * store); never on a Premium surface. See `referral-hint.ts` for why it is a
+ * chip rather than a row.
  *
  * `width: fit-content` + `margin-inline: auto` is what centres it: an
  * `inline-flex` box ignores `margin: auto`, and a full-width flex row is
@@ -39,19 +40,12 @@
   transform: scale(0.96);
   opacity: 0.75;
 }
-/* Matched on the element, not a class: the vanilla rail's `icon()` and the
-   React rail's `LetterMark` build the same envelope but hand it different
-   attributes, and only one of them can be given a class. */
+/* Matched on the element, not a class: the React rail's `LetterMark` takes no
+   className (and the retired vanilla rail's `icon()` built the same envelope
+   with different attributes), so the element selector is the stable hook. */
 .gn-referral svg {
   width: 14px;
   height: 14px;
   flex: none;
   opacity: 0.65;
-}
-
-/* Directly under another tappable row (the venue board stacks this beneath the
-   Premium counterfactual). The default 18px gap would read as two paragraphs;
-   at 8px the pair reads as one line plus its footnote. */
-.gn-referral--tight {
-  margin-top: 8px;
 }

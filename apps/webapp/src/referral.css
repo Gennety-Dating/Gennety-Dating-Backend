@@ -1,9 +1,13 @@
-/* Referral Mini App (§Referral) — milestone ladder + one-tap invite.
+/* Referral Mini App (§Referral) — tickets for verified friends + one-tap invite.
+   (The milestone ladder with months / USD values is gone since 2026-09-22: the
+   program pays in Date Tickets only and never names a money value.)
    Minimal, neutral black-and-white identity (the onboarding AI-memory register):
    structure carries NO colour at all. Every section is BORDERLESS — there is not
    one hairline on this screen; a card is defined purely by its own inner fill
-   stepping away from the page, and a "reached" rung by that fill stepping again.
-   Symbols are borderless line icons from icons.ts, never platform emoji.
+   stepping away from the page.
+   Symbols are borderless line icons from icons.ts, never platform emoji — the
+   🎟 / 💛 inside the rule, pending and cap lines are part of the approved COPY
+   (2026-09-22), read as words in a sentence, not as UI symbols.
 
    The one exception, spent deliberately and exactly once: the single action
    (Invite a friend) is the burgundy accent carrying the inner-perimeter sheen —
@@ -19,11 +23,10 @@
 
 :root,
 :root[data-theme="dark"] {
-  /* Borderless surface ladder — page → card → reached card, and the chip that
-     sits on top of a card (so it needs its own step above the card it's in). */
+  /* Borderless surface ladder — page → card → the stronger fill under the
+     title badge. */
   --ref-card: rgba(255, 255, 255, 0.065);
   --ref-card-strong: rgba(255, 255, 255, 0.11);
-  --ref-chip: rgba(255, 255, 255, 0.09);
 }
 
 :root[data-theme="light"] {
@@ -31,7 +34,6 @@
      lightness, because the page is already near-white. */
   --ref-card: rgba(0, 0, 0, 0.055);
   --ref-card-strong: rgba(0, 0, 0, 0.1);
-  --ref-chip: rgba(0, 0, 0, 0.075);
 }
 
 /* Fullscreen (Bot API 8.0+) floats the close × / menu ⋯ over the page; reserve
@@ -54,8 +56,8 @@ body {
   overflow-x: hidden;
 }
 
-/* The page is a full-height column split in two: the wordmark alone at the very
-   top, then everything else — stats, progress, ladder, button — sitting as one
+/* The page is a full-height column split in two: the title and its rule at the
+   top, then everything else — stats, progress, button — sitting as one
    block at the BOTTOM. The slack between them is a single `margin-top: auto` on
    `.ref-stats` (the first element of the bottom block), so the gap lands under
    the title rather than being sprinkled between sections. On a viewport too
@@ -98,10 +100,22 @@ body {
 .ref-hero {
   flex: 1 1 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 3.4rem;
   padding: 0.6rem 0;
+}
+/* The one rule of the program, directly under the title — the whole pitch now
+   that there is no ladder to read it off. Muted, so the title stays the badge. */
+.ref-rule {
+  margin: 0.35rem 0 0;
+  max-width: 22rem;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  text-wrap: balance;
+  color: var(--text-muted);
 }
 /* The badge is the one deliberately "liquid glass" surface on this otherwise
    flat screen: a translucent frosted fill with an inner top highlight (glass
@@ -119,9 +133,13 @@ body {
   display: inline-flex;
   align-items: center;
   margin: 0;
+  max-width: 100%;
   padding: 0.62rem 1.6rem;
   border-radius: 999px;
-  font-size: 34px;
+  /* Localized now ("Пригласи друзей", "Freunde einladen"…), and a pill that
+     wraps to two lines stops being a pill — so it scales down on narrow
+     phones instead of breaking. 34px from ~425px wide up. */
+  font-size: clamp(26px, 8vw, 34px);
   line-height: 1.05;
   font-weight: 900;
   letter-spacing: -0.03em;
@@ -185,9 +203,14 @@ body {
   text-transform: uppercase;
   color: var(--text-faint);
 }
-/* No colour on VALUE any more — neutral like the rest. */
-.ref-stat.value b {
-  color: var(--text);
+
+/* Tickets held by the daily velocity cap — a quiet status line, not a card:
+   nothing to do about it, they arrive on their own. */
+.ref-pending {
+  margin: 0.7rem 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* ── Progress — borderless neutral track + neutral fill, no glow ───────── */
@@ -210,79 +233,6 @@ body {
   border-radius: 99px;
   background: var(--self);
   transition: width 420ms ease;
-}
-
-/* ── Milestone ladder ─────────────────────────────────────────────────── */
-.ref-ladder {
-  list-style: none;
-  margin: 1.35rem 0 0;
-  padding: 0;
-  display: grid;
-  gap: 0.55rem;
-}
-.ref-rung {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 0.9rem;
-  border-radius: 14px;
-  background: var(--ref-card);
-}
-/* Reached rung — the SAME surface stepped once further from the page. With no
-   hairline anywhere, that step is the entire signal, so it is deliberately a
-   wider gap than the old bordered version needed. */
-.ref-rung.done {
-  background: var(--ref-card-strong);
-}
-.ref-n {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 0.92rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  background: var(--ref-chip);
-}
-/* Reached marker — a filled neutral chip (white on dark, ink on cream) with the
-   check punched out in the page colour. */
-.ref-rung.done .ref-n {
-  background: var(--self);
-  color: var(--bg);
-}
-.ref-check {
-  width: 19px;
-  height: 19px;
-}
-.ref-body {
-  min-width: 0;
-}
-.ref-body b {
-  font-size: 0.95rem;
-}
-.ref-body span {
-  display: block;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-.ref-usd {
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 1rem;
-  white-space: nowrap;
-  text-align: right;
-  color: var(--text);
-}
-.ref-usd small {
-  display: block;
-  font-size: 0.58rem;
-  font-weight: 700;
-  color: var(--text-faint);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 /* ── The one action — the ONLY colour and the ONLY glow on this screen ────
@@ -354,11 +304,20 @@ body {
   opacity: 0.55;
   cursor: default;
 }
+/* When the tickets actually land — said right under the button so nobody
+   expects one the moment the invite is sent. A step louder than the share hint
+   below it: this one sets an expectation, that one is reassurance. */
+.ref-timing {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0.7rem 0 0;
+}
 .ref-share-hint {
   text-align: center;
   font-size: 0.76rem;
   color: var(--text-faint);
-  margin: 0.65rem 0 0;
+  margin: 0.3rem 0 0;
 }
 
 /* The loading state centres the shared butterfly mark in whatever height the

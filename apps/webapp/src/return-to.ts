@@ -6,9 +6,11 @@
  * premium CTA was the original case this exists for: it left the user on the
  * Premium screen with no way back, so someone who looked at the price and
  * decided against it had to close the Mini App and reopen "Change venue" from
- * the chat. The same shape now also carries the referral cross-promo link
- * ("invite a friend instead") from the Ticket Store, the Date Ticket gate, and
- * Premium into `referral.html`.
+ * the chat. The same shape now also carries the referral cross-promo chip
+ * ("invite a friend · earn a ticket") from the Ticket Store and the Date Ticket
+ * gate into `referral.html`. Premium and the venue board no longer hand off to
+ * the referral hub (2026-09-22: the program pays in tickets only and never sits
+ * on a Premium funnel), so Premium is no longer a page anything returns TO.
  *
  * The rule this module encodes is the one that makes that safe to fix: a back
  * affordance appears **only when the page was actually navigated to from
@@ -30,19 +32,26 @@
  * no button, chain gone, the only way out being to close the Mini App and
  * reopen the board from chat. Back worked exactly once, however deep you went.
  * The trail is now a stack, so every screen returns to the one that actually
- * sent the user there, all the way down to the page opened from chat.
+ * sent the user there, all the way down to the page opened from chat. (That
+ * particular chain is gone with the Premium referral chip, but the stack stays:
+ * it costs nothing and any future two-hop hand-off gets it for free.)
  */
 
 /**
  * Pages that may be returned to. An allowlist, not a free-form URL: the return
  * target arrives in a query string the user can edit, and turning that into an
  * arbitrary navigation would be an open redirect inside the WebView.
+ *
+ * Every entry is a page that still hands off somewhere: the board, the ticket
+ * gate and the calendar send the user to Premium; the store and the gate send
+ * them to the referral hub. `premium` was dropped with the Premium referral
+ * chip — nothing leaves Premium for another page any more. A page may narrow
+ * this further for itself (see `only` on `returnHref`).
  */
 const RETURN_PAGES = {
   "venue-change": "venue-change.html",
   "ticket-store": "tickets.html",
   "ticket-gate": "ticket.html",
-  "premium": "premium.html",
   "calendar": "index.html",
 } as const;
 
@@ -176,11 +185,20 @@ export function returnParams(
  *
  * The returned URL carries the REST of the trail, which is what makes the next
  * back tap work: the page we return to is handed the chain that led to it.
+ *
+ * `only` narrows the allowlist for the calling page: the referral hub accepts a
+ * way back to the ticket store or the ticket gate and nothing else, because
+ * those are the only screens that still link to it — a trail naming the board
+ * is stale (an old bundle's link) and gets no button rather than a wrong one.
  */
-export function returnHref(search: string = currentSearch()): string | null {
+export function returnHref(
+  search: string = currentSearch(),
+  only?: readonly ReturnPage[],
+): string | null {
   const trail = readTrail(search);
   const target = trail[trail.length - 1];
   if (!target) return null;
+  if (only && !only.includes(target.page)) return null;
 
   const params = new URLSearchParams();
   if (target.match) params.set("match", target.match);
@@ -217,6 +235,8 @@ interface BackButtonLike {
  * otherwise sit there with no handler — a button that does nothing, which is
  * its own bug. Native-only, matching how `verification.ts` and the board itself
  * already do back navigation.
+ *
+ * `only` is passed straight to `returnHref` — a page's own narrower allowlist.
  */
 export function wireReturnBackButton(
   backButton: BackButtonLike | undefined,
@@ -224,8 +244,9 @@ export function wireReturnBackButton(
   navigate: (href: string) => void = (href) => {
     location.href = href;
   },
+  only?: readonly ReturnPage[],
 ): boolean {
-  const href = returnHref(search);
+  const href = returnHref(search, only);
   if (!backButton) return false;
   if (!href) {
     backButton.hide?.();

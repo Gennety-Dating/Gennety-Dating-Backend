@@ -2219,7 +2219,7 @@ button {
   background: var(--accent);
 }
 
-/* ── Referral welcome gift (§Referral) — invited-user wow screen ───────── */
+/* ── Referral invite (§Referral) — invited-user "a friend invited you" ──── */
 .referral-gift-screen {
   width: 100%;
   max-width: 26.25rem;
@@ -2247,8 +2247,8 @@ button {
   gap: 1.25rem;
 }
 
-/* The brand butterfly crest — the same mark the Premium purchase screen uses,
-   with its metallic vertical gradient. Borderless, no glowing halo; just a soft
+/* The brand butterfly crest (the Gennety mark, not a Premium badge) — drawn
+   in its metallic vertical gradient. Borderless, no glowing halo; just a soft
    neutral drop-shadow for depth. */
 .referral-gift-badge {
   display: flex;
