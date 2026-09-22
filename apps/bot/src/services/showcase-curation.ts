@@ -34,8 +34,9 @@ export interface ShowcasePick {
  * a stale list can never empty the map. Keep it within `SHOWCASE_LIMIT`.
  *
  * Kyiv, 2026-09-22: every premium place except the two Georgian kitchens
- * (Чічіко, Кувшин) and La Coupole — that row is Google's Paris La Coupole,
- * mis-resolved into the Kyiv catalog; then the base places the founder kept or
+ * (Чічіко, Кувшин) and La Coupole — that row was Google's Paris La Coupole,
+ * mis-resolved into the Kyiv catalog, and was removed from it the same day
+ * (the Kyiv place it meant is Купол, listed); then the base places the founder kept or
  * brought back, the most popular Idealist Coffee and five parks.
  */
 export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> = {

@@ -624,8 +624,9 @@ export interface ShowcaseSelectionOptions {
  *
  * The standing exclusions hold on both paths: a category the product never
  * offers (`museum`), an operator-blocked name, and a row outside the city —
- * Kyiv's catalog holds Google's PARIS La Coupole (48.84, 2.33), which a
- * premium-first order would otherwise put on the first page and fly the map to.
+ * Kyiv's catalog held Google's PARIS La Coupole (48.84, 2.33) until
+ * 2026-09-22, which a premium-first order would have put on the first page
+ * and flown the map to. The next mis-resolved row gets the same treatment.
  *
  * The rule (founder, 2026-09-22): never the board-only `alternative` tier or a
  * struck kitchen (`isShowcaseExcludedKitchen`), one card per brand, premium

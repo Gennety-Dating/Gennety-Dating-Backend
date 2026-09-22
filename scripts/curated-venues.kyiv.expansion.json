@@ -1412,18 +1412,6 @@
       ]
     },
     {
-      "placeId": "ChIJYafZxs5x5kcRiDaXQXadCBY",
-      "name": "La Coupole",
-      "category": "cafe",
-      "priority": 2,
-      "tier": "premium",
-      "vibeTags": [
-        "dinner",
-        "wine",
-        "romantic"
-      ]
-    },
-    {
       "placeId": "ChIJhesrUhTS1EARDutoX0xn8wk",
       "name": "Перець",
       "category": "restaurant",
@@ -2763,6 +2751,11 @@
       "name": "Тірамісу",
       "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
       "reason": "Google Places Details returns 404 — listing fully delisted (2026-08-14); does not resolve under any name or address via text search either."
+    },
+    {
+      "name": "La Coupole",
+      "placeId": "ChIJYafZxs5x5kcRiDaXQXadCBY",
+      "reason": "Resolved to Google's PARIS La Coupole (102 Bd du Montparnasse) — the Kyiv place meant here is Купол (Лаврська, 13), already in the catalog. Founder decision 2026-09-22."
     }
   ]
 }
