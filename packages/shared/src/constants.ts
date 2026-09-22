@@ -471,6 +471,33 @@ export const VENUE_CHANGE_MAX_PER_DATE = 2;
 // requirement, not a note. Leaving two that describe a step nobody built means
 // the next edit builds against them.
 
+/**
+ * The venue-change lock-screen card (iOS `venue_change` Live Activity,
+ * decision 2026-09-22).
+ *
+ * RESTART: iOS keeps a Live Activity active for at most 8 hours. A card that
+ * still applies after this many hours is ended and push-started afresh, half an
+ * hour inside the system cap so the replacement lands before the old one is
+ * frozen. A board can stay open for days, so without this the card would go
+ * dead mid-round while still claiming to be live.
+ */
+export const VENUE_CHANGE_ACTIVITY_RESTART_HOURS = 7.5;
+/**
+ * How long a card stays on the lock screen after its round RESOLVED (settled,
+ * or an agreement lapsed) — long enough to read the outcome. A board that
+ * merely closed is dismissed at once: there is nothing to read.
+ */
+export const VENUE_CHANGE_ACTIVITY_RESOLVED_DISMISS_MINUTES = 15;
+/** Partner picks named on the card; the rest ride as a count. */
+export const VENUE_CHANGE_ACTIVITY_PICK_NAMES_MAX = 3;
+/**
+ * Longest venue name put on the card. Names come from Google Places and can be
+ * long; Apple drops a Live Activity payload over 4096 bytes WITHOUT an error,
+ * so the worst case (five names, Cyrillic at two bytes a character) is capped
+ * here and frozen by a test rather than trusted.
+ */
+export const VENUE_CHANGE_ACTIVITY_NAME_MAX_CHARS = 80;
+
 /** Gennety Premium (§Premium, feature-flagged). */
 /**
  * Telegram Stars subscription period, in seconds. Telegram Stars subscriptions

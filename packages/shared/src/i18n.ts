@@ -969,6 +969,16 @@ const translations = {
     emergencyPushTitle: "Your date is off",
     emergencyPushBody: "Open Gennety — they left a reason.",
     dateDayActivityStartBody: "Everything you need is on your lock screen.",
+    // The venue-change lock-screen card (iOS `venue_change` Live Activity,
+    // decision 2026-09-22): the alert a push-to-start must carry. The partner
+    // name is only ever the SUBJECT (nominative) — the server declines no names.
+    // `{what}` is a venue name or `venuePlacesPhrase` ("2 places").
+    venueActivityStartTitle: "Venue change",
+    venueActivityStartPartner: "{name} suggests {what}",
+    venueActivityStartPartnerKeep: "{name} would rather keep {venue}",
+    venueActivityStartWaiting: "Waiting to hear back about the place",
+    venueActivityStartMatch: "You both picked {venue}",
+    venueActivityPartnerFallback: "Your match",
     emergencyUnlocked:
       "Emergency cancel window is open.\n" +
       "If you really can't make it, tap below.\n" +
@@ -2306,6 +2316,12 @@ const translations = {
     emergencyPushTitle: "Свидание отменено",
     emergencyPushBody: "Откройте Gennety — там написана причина.",
     dateDayActivityStartBody: "Всё нужное — на экране блокировки.",
+    venueActivityStartTitle: "Смена места",
+    venueActivityStartPartner: "{name} предлагает {what}",
+    venueActivityStartPartnerKeep: "{name} хочет оставить {venue}",
+    venueActivityStartWaiting: "Ждём ответ по месту",
+    venueActivityStartMatch: "Общий выбор: {venue}",
+    venueActivityPartnerFallback: "Твой мэтч",
     emergencyUnlocked:
       "Окно экстренной отмены открыто.\n" +
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
@@ -3567,6 +3583,12 @@ const translations = {
     emergencyPushTitle: "Побачення скасовано",
     emergencyPushBody: "Відкрийте Gennety — там написана причина.",
     dateDayActivityStartBody: "Усе потрібне — на екрані блокування.",
+    venueActivityStartTitle: "Зміна місця",
+    venueActivityStartPartner: "{name} пропонує {what}",
+    venueActivityStartPartnerKeep: "{name} хоче залишити {venue}",
+    venueActivityStartWaiting: "Чекаємо на відповідь щодо місця",
+    venueActivityStartMatch: "Спільний вибір: {venue}",
+    venueActivityPartnerFallback: "Твій метч",
     emergencyUnlocked:
       "Вікно екстреного скасування відкрите.\n" +
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
@@ -4797,6 +4819,12 @@ const deTranslations: TranslationTable = {
   emergencyPushTitle: "Dein Date ist abgesagt",
   emergencyPushBody: "Öffne Gennety - dort steht der Grund.",
   dateDayActivityStartBody: "Alles Wichtige liegt auf deinem Sperrbildschirm.",
+  venueActivityStartTitle: "Ortswechsel",
+  venueActivityStartPartner: "{name} schlägt {what} vor",
+  venueActivityStartPartnerKeep: "{name} möchte {venue} behalten",
+  venueActivityStartWaiting: "Wir warten auf eine Antwort zum Ort",
+  venueActivityStartMatch: "Ihr habt beide {venue} gewählt",
+  venueActivityPartnerFallback: "Dein Match",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
     "Das Notfall-Storno-Fenster ist offen.\n" +
@@ -6027,6 +6055,12 @@ const plTranslations: TranslationTable = {
   emergencyPushTitle: "Randka odwołana",
   emergencyPushBody: "Otwórz Gennety - jest tam powód.",
   dateDayActivityStartBody: "Wszystko, czego potrzebujesz, jest na ekranie blokady.",
+  venueActivityStartTitle: "Zmiana miejsca",
+  venueActivityStartPartner: "{name} proponuje {what}",
+  venueActivityStartPartnerKeep: "{name} chce zostawić {venue}",
+  venueActivityStartWaiting: "Czekamy na odpowiedź w sprawie miejsca",
+  venueActivityStartMatch: "Wspólny wybór: {venue}",
+  venueActivityPartnerFallback: "Twój match",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
     "Okno awaryjnego odwołania jest otwarte.\n" +
@@ -6498,6 +6532,37 @@ export function dateTicketsPhrase(lang: Language, tickets: number): string {
       return `${tickets} ${slavicPlural(tickets, "bilet", "bilety", "biletów")} na randkę`;
     default:
       return `${tickets} date ticket${tickets === 1 ? "" : "s"}`;
+  }
+}
+
+/**
+ * "{count} places" for the venue-change lock-screen alert ("Anna suggests 2
+ * places"), declined in code for the same reason as `dateTicketsPhrase`.
+ * Polish is spelled out rather than routed through `slavicPlural`: Polish keeps
+ * the singular for exactly one (21 → "21 miejsc", not "21 miejsce"), and the
+ * board holds up to 21 cards plus the current venue.
+ */
+export function venuePlacesPhrase(lang: Language, count: number): string {
+  switch (lang) {
+    case "de":
+      return `${count} ${count === 1 ? "Ort" : "Orte"}`;
+    case "ru":
+      return `${count} ${slavicPlural(count, "место", "места", "мест")}`;
+    case "uk":
+      return `${count} ${slavicPlural(count, "місце", "місця", "місць")}`;
+    case "pl": {
+      const mod10 = count % 10;
+      const mod100 = count % 100;
+      const form =
+        count === 1
+          ? "miejsce"
+          : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
+            ? "miejsca"
+            : "miejsc";
+      return `${count} ${form}`;
+    }
+    default:
+      return `${count} place${count === 1 ? "" : "s"}`;
   }
 }
 

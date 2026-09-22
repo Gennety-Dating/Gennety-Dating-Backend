@@ -168,4 +168,19 @@ without `com.apple.developer.usernotifications.time-sensitive` in the app,
 iOS ignores it entirely and the notification arrives ordinary — measured
 by differential probe, `timeSensitiveSetting` reads `notSupported` without the
 entitlement and `enabled` with it, at identical authorization state.
+**Live Activities driven over this rail: `date_day` and, since 2026-09-22, `venue_change`**
+(`services/venue-change-activity.ts`, attributes type `VenueChangeActivity`, attributes
+`{ matchId }`; content-state `phase` · `partnerFirstName` · `partnerGender` · `myPickName` ·
+`myPickCount` · `partnerPickNames` (≤3) · `partnerPickCount` · `agreedName` · `deadline` (unix
+s, also the `stale-date`) — every key always present). Unlike `date_day`, whose beats are
+fixed by the clock, `venue_change` is **diff-driven and remembers what it sent**
+(`venue_change_activities`), because a second push-to-start does not replace a running
+activity — it opens a second card. So the row is claimed before the start push and released
+if APNs refuses; an update goes only into an update token registered for that match AFTER
+the card's push-start (`sendLiveActivityUpdateToUser(…, { matchId, registeredSince })` —
+an older row belongs to a previous card, and pushing into it would "succeed" invisibly); an
+undelivered update restores the old hash so the 2-minute sweep retries; a card still
+applying 7.5 h after its start is ended and push-started afresh (iOS caps an activity at
+8 h). An end always carries a `dismissal-date` — "now" for a closed board, +15 min for a
+resolved round — because an end without one lingers on the lock screen for up to four hours.
 `apns-collapse-id` is available per send (`ApnsSendOptions.collapseId`) and used by the drop push, where the dispatcher's retry can legitimately fire the same event twice. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |

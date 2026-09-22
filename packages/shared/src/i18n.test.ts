@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dateTicketsPhrase, t, TRANSLATION_KEYS } from "./i18n.js";
+import { dateTicketsPhrase, t, TRANSLATION_KEYS, venuePlacesPhrase } from "./i18n.js";
 import { SUPPORTED_LANGUAGES } from "./types.js";
 
 /**
@@ -305,6 +305,23 @@ describe("t (translation)", () => {
     expect(dateTicketsPhrase("pl", 1)).toBe("1 bilet na randkę");
     expect(dateTicketsPhrase("pl", 2)).toBe("2 bilety na randkę");
     expect(dateTicketsPhrase("pl", 12)).toBe("12 biletów na randkę");
+  });
+
+  it("venuePlacesPhrase declines 'places' — Polish keeps the singular for exactly one", () => {
+    expect(venuePlacesPhrase("en", 1)).toBe("1 place");
+    expect(venuePlacesPhrase("en", 4)).toBe("4 places");
+    expect(venuePlacesPhrase("de", 1)).toBe("1 Ort");
+    expect(venuePlacesPhrase("de", 2)).toBe("2 Orte");
+    expect(venuePlacesPhrase("ru", 2)).toBe("2 места");
+    expect(venuePlacesPhrase("ru", 5)).toBe("5 мест");
+    expect(venuePlacesPhrase("ru", 21)).toBe("21 место");
+    expect(venuePlacesPhrase("uk", 3)).toBe("3 місця");
+    expect(venuePlacesPhrase("uk", 11)).toBe("11 місць");
+    expect(venuePlacesPhrase("pl", 1)).toBe("1 miejsce");
+    expect(venuePlacesPhrase("pl", 3)).toBe("3 miejsca");
+    expect(venuePlacesPhrase("pl", 12)).toBe("12 miejsc");
+    expect(venuePlacesPhrase("pl", 21)).toBe("21 miejsc");
+    expect(venuePlacesPhrase("pl", 22)).toBe("22 miejsca");
   });
 
   it("editProfileBody interpolates all four fixed fields", () => {

@@ -85,6 +85,7 @@ import {
   venueAgreementNonce,
   venueAgreementWhere,
 } from "../../services/venue-agreement-nonce.js";
+import { apnsConfigured } from "../../services/apns.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
@@ -799,6 +800,97 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
 }
 
 // ---------------------------------------------------------------------------
+// Lock-screen card (iOS `venue_change` Live Activity, decision 2026-09-22)
+// ---------------------------------------------------------------------------
+
+/** The row the lock-screen card is derived from — the board's own select. */
+export type VenueChangeActivityMatch = VcMatch;
+
+export function loadVenueChangeActivityMatch(
+  matchId: string,
+): Promise<VenueChangeActivityMatch | null> {
+  return loadMatch(matchId);
+}
+
+/**
+ * One side's board, reduced to what its lock-screen card needs.
+ *
+ * Built FROM `buildBoardState` rather than beside it: who has to pay, what the
+ * partner may see of an agreement and when the board is closed are decided
+ * there once, and a second copy of the payer matrix for the card would be the
+ * copy that drifts. Only the like NAMES are added — the board view carries keys.
+ */
+export interface VenueChangeActivitySlice {
+  userId: string;
+  language: string | null;
+  partnerFirstName: string | null;
+  partnerGender: string | null;
+  matchScheduled: boolean;
+  /** none | liking | agreed | settled | lapsed */
+  status: string;
+  closedReason: VenueChangeIneligibleReason | null;
+  /** A hidden express mint is pending — on either side of it. */
+  expressPending: boolean;
+  myAction: VenuePayAction;
+  myLikes: Array<{ key: string; name: string }>;
+  peerLikes: Array<{ key: string; name: string }>;
+  /** The agreed venue as THIS side may see it (null for a hidden express mint). */
+  agreedName: string | null;
+  agreedExpiresAt: Date | null;
+  /** The board's own close: `agreedTime − DATE_ALERT_HOURS`. */
+  cutoff: Date | null;
+  /** status = settled: the venue that now stands. */
+  settledName: string | null;
+}
+
+export function venueChangeActivitySlice(
+  match: VenueChangeActivityMatch,
+  side: "A" | "B",
+  now: Date,
+): VenueChangeActivitySlice {
+  const view = buildBoardState(match, side, now);
+  const me = userOfSide(match, side);
+  const peer = userOfSide(match, otherSide(side));
+  const names = (likes: VenueLikeSnapshot[]) => likes.map((l) => ({ key: l.key, name: l.name }));
+  return {
+    userId: me.id,
+    language: me.language,
+    partnerFirstName: peer.firstName,
+    partnerGender: peer.gender,
+    matchScheduled: match.status === "scheduled",
+    status: view.status,
+    closedReason: view.closedReason,
+    expressPending: match.venueChangeStatus === "agreed" && match.venueChangeExpressAt != null,
+    myAction: view.myAction,
+    myLikes: names(likesOfSide(match, side)),
+    peerLikes: names(likesOfSide(match, otherSide(side))),
+    agreedName: view.agreed?.name ?? null,
+    agreedExpiresAt: view.agreed ? match.venueChangeExpiresAt : null,
+    cutoff: match.agreedTime ? venueChangeCutoff(match.agreedTime) : null,
+    settledName: view.settled?.name ?? null,
+  };
+}
+
+/**
+ * Re-derive both sides' lock-screen card after a board write.
+ *
+ * Fire-and-forget: the card is a mirror of the board, never a gate on it, so a
+ * slow APNs round trip must not hold the route that changed the board. The
+ * service serializes per match and diffs against what it last sent, so calling
+ * this after a write that changed nothing visible costs a read and no push.
+ * Imported lazily because the service reads this module (the slice above).
+ * Skipped outright where APNs is not configured — there is nothing to drive.
+ */
+function syncLiveActivities(matchId: string): void {
+  if (!apnsConfigured()) return;
+  void import("../../services/venue-change-activity.js")
+    .then((m) => m.syncVenueChangeActivities(matchId))
+    .catch((err) => {
+      console.warn(`[venue-change] live activity sync failed match=${matchId}:`, err);
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Catalog (GET /v1/venue-change/catalog)
 // ---------------------------------------------------------------------------
 
@@ -1022,6 +1114,7 @@ export async function submitVenueLikes(
   const overlap = snapshots.filter((s) => peerKeys.has(s.key));
   if (overlap.length === 1) {
     const r = await reachAgreement(api, matchId, me.id, overlap[0], now);
+    syncLiveActivities(matchId);
     return { ok: true, agreed: r.agreed, kept: r.kept, overlapCandidates: [] };
   }
 
@@ -1038,6 +1131,7 @@ export async function submitVenueLikes(
       console.warn("[venue-change] board ping failed:", err);
     });
   }
+  syncLiveActivities(matchId);
   return { ok: true, agreed: false, kept: false, overlapCandidates: overlap.map((s) => s.key) };
 }
 
@@ -1162,6 +1256,7 @@ export async function confirmVenueAgreement(
   }
 
   const r = await reachAgreement(api, matchId, me.id, mine, now);
+  syncLiveActivities(matchId);
   return { ok: true, kept: r.kept };
 }
 
@@ -1423,6 +1518,7 @@ export async function mintExpressChange(
   if (claim.count === 0) return { ok: false, reason: "wrong-state" };
 
   console.info(`[venue-change] express mint match=${matchId} venue="${snapshot.name}" tier=${snapshot.tier}`);
+  syncLiveActivities(matchId);
   // Free for a premium minter (or a premium venue) — the caller settles it
   // without paying; the route locks it in immediately (§Premium).
   const free = changeIsFree(snapshot.tier, me, now);
@@ -1664,6 +1760,7 @@ export async function keepOriginalVenue(
     `[venue-change] keep-original match=${matchId} by=${me.id} wasAgreed=${wasAgreed} ` +
       `peerLikes=${peerHasLikes}`,
   );
+  syncLiveActivities(matchId);
 
   const peer = userOfSide(match, otherSide(side));
   let toldPartner = false;
@@ -1784,6 +1881,7 @@ export async function offerPartnerPay(
     data: { venueChangeOfferPaySentAt: offeredAt },
   });
   if (claim.count === 0) return { ok: false, reason: "already-offered" };
+  syncLiveActivities(matchId);
 
   const him = userOfSide(match, otherSide(side));
   if (telegramReachable(him)) {
@@ -1922,6 +2020,7 @@ export async function declineVenuePay(
   if (claim.count === 0) return { ok: false };
 
   console.info(`[venue-change] pay declined → keep original match=${matchId} by user=${me.id}`);
+  syncLiveActivities(matchId);
   await retireBoardPings(api, match).catch(() => undefined);
 
   // Neutral notice to her — the original stands. No price, no pay button.
@@ -2177,6 +2276,7 @@ export async function settleVenuePayment(
     `[venue-change] settled match=${matchId} payer=${payer.id} express=${wasExpress} ` +
       `charge=${telegramChargeId}`,
   );
+  syncLiveActivities(matchId);
 
   const venueName = match.venueChangeName ?? "";
   const venueAddress = match.venueChangeAddress ?? "";
@@ -2282,6 +2382,7 @@ async function finalizeVenueChangeFree(
   if (claim.count === 0) return { ok: false, reason: "not-agreed" };
 
   console.info(`[venue-change] settled FREE (premium) match=${matchId} settler=${settler.id}`);
+  syncLiveActivities(matchId);
 
   const venueName = match.venueChangeName ?? "";
   const venueAddress = match.venueChangeAddress ?? "";
@@ -2423,7 +2524,10 @@ export async function sweepExpiredVenueChanges(
           venueChangeExpressAt: null,
         },
       });
-      if (claim.count > 0) resolved += 1;
+      if (claim.count > 0) {
+        resolved += 1;
+        syncLiveActivities(match.id);
+      }
       continue;
     }
 
@@ -2445,6 +2549,7 @@ export async function sweepExpiredVenueChanges(
     });
     if (claim.count === 0) continue;
     resolved += 1;
+    syncLiveActivities(match.id);
 
     const original = match.venueName ?? "";
     for (const user of [match.userA, match.userB]) {

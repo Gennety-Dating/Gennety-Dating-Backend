@@ -31,6 +31,7 @@ import {
   startDateDayActivities,
 } from "./date-day-activity.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
+import { sweepVenueChangeActivities } from "./venue-change-activity.js";
 import { sendDateTerminalBeats } from "./date-terminal-invite.js";
 import { buildAttendanceKeyboard } from "./post-date-keyboards.js";
 import { attendanceQuestionKey } from "./attendance.js";
@@ -198,6 +199,15 @@ export async function runDateLifecycleTick(
   if (venueChangesExpired > 0) {
     console.log(`[date-lifecycle] expired ${venueChangesExpired} stalled venue change(s)`);
   }
+
+  // 0b. The venue-change lock-screen cards (iOS `venue_change` Live Activity):
+  // end the ones the clock closed (T-5h cutoff, a match no longer scheduled),
+  // renew the ones iOS is about to freeze (~7.5h), retry updates that could not
+  // be delivered yet. After the expiry above, so a card whose agreement just
+  // lapsed ends in this same tick. Never lets the rest of the tick fail.
+  await sweepVenueChangeActivities(now).catch((err) => {
+    console.warn("[date-lifecycle] venue-change activity sweep failed:", err);
+  });
 
   // 1 & 2. Ice-breakers + Emergency window — 5h before agreed_time
   const alertThreshold = new Date(now.getTime() + DATE_ALERT_HOURS * 60 * 60 * 1000);

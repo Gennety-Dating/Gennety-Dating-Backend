@@ -1421,6 +1421,40 @@ rule nobody wants to own. Three things differ, and only three:
   nothing was lost, which is also why a lapse spends no part of the per-date
   change allowance and the board can be started over (above). The v1 "decline =
   cancel the match" branch is gone entirely, and with it the v1 disclaimer.
+- **The lock-screen card (iOS Live Activity `venue_change`, since 2026-09-22).**
+  One card per person per match, showing the round from THAT person's side
+  (`services/venue-change-activity.ts`). Three phases, highest first:
+  - `match` — the round is `agreed` and this side still has a move on it
+    (`myAction` = pay / pay_or_decline / pay_or_offer). Shows the agreed venue;
+    deadline = the agreement's expiry.
+  - `partner` — `liking`, and the partner has marked a place this side has not
+    ("your move"). Shows up to three of those names plus their count; deadline
+    = the board cutoff (T − 5h).
+  - `waiting` — this side is blocked on the partner, exactly as
+    `venueChangeSideWaiting` (the §3.6b shimmer predicate) says: I marked and
+    they have not, **or** the round is agreed and the partner is the payer — then
+    the card also carries the agreed venue and the agreement's deadline. Shows my
+    one pick (or my count) otherwise; deadline = the board cutoff.
+  Nothing applies → the card ends. A settled round or a lapsed agreement ends it
+  with a 15-minute linger (a settled one lingers on the venue that now stands);
+  everything else — past the cutoff, keep-original, his decline, the match no
+  longer scheduled, the flag off — ends it at once. **A hidden express mint
+  freezes both cards** (neither is started, updated nor ended until it settles or
+  reverts): ending the partner's card would announce the surprise.
+  **Mechanics.** After every board write (like, confirm, keep, offer, decline,
+  express, every settle rail, the expiry sweep's lapse/revert) the server
+  recomputes BOTH sides and diffs against what it last sent
+  (`venue_change_activities`): nothing running → push-to-start; content changed →
+  update; nothing applies → end; identical → no push. The 2-minute date-lifecycle
+  tick walks the running cards for what no write announces (the cutoff, a
+  cancelled match, an update the device could not take yet) and renews a card
+  still applying after 7.5 h — iOS freezes a Live Activity at 8 h, and a board
+  can stay open for days. **The lock screen names the partner** (first name,
+  nominative only; no photo, no age) — a founder exception for this card alone;
+  every other public surface still identifies nobody. Telegram is unchanged: it
+  has the board ping and the shimmer. Demo mode: nothing to do — the demo bot is
+  Telegram-only, its users register no Live Activity tokens, so every sync is a
+  lookup and no push.
 
 ### 3.8 Gennety Premium (feature-flagged recurring subscription)
 
