@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 195 entries
+# Deploy journal index — 196 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-22 | 09-22 — галерея профиля места до 10 фото (`afc88e07`): `SHOWCASE_GALLERY_MAX` 5 → 10, слоты 1…9, кэш фото 96 МБ; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — обложка места свидания в `/v1/date/state` (`49b8bc35`): `venue.photoUrl`/`thumbnailUrl` — подписанные ссылки борда смены места; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — реферальная программа платит только билетами: миграция `20260922120000_referral_ticket_rewards`, `ReferralState` без Premium/долларов, чип приглашения убран с Premium и доски смены места; флаг в проде остаётся выключенным | [pending](./pending.md) |
 | Deployed | 2026-09-22 | 09-22 07:15 UTC — витрина «Городского гида» = топ города (`4315bc66`): Киев — ручной список из 62 мест, иначе правило; потолок 64, радиус города, кэш фото 48 МБ; парижская La Coupole выключена в проде (5 → 0; в демо активных не было); первая попытка 07:07 — ложный откат по :3100 | [pending](./pending.md) |
