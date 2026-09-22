@@ -69,6 +69,15 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 `bash ~/gennety-backups/deploy-showcase.sh` (сухой rsync с остановкой на любом
 удалении → копия `/opt/gennety-prev-<ts>` → rsync `--checksum` → drift-гейт →
 `pm2 restart gennety-bot` → health с автооткатом → La Coupole off → проверка витрины).
+
+**Попытка 1 — 2026-09-22 07:07 UTC, ложный откат.** Сухой rsync чистый (13 файлов,
+ни одного удаления), drift-гейт `OK` (новый скрипт терпит `canvas_*`), рестарт — и
+health-гейт пинговал `127.0.0.1:3100/v1/ping`: это АДМИН-API (bearer на всём → 401),
+публичный — `:3101` (Caddy `dating-api` → `localhost:3101`, `environments.md`).
+401 прочитан как «бот мёртв» → код откачен из `/opt/gennety-prev-20260922-070749`,
+второй рестарт. Бот всё время был жив: в 07:10 `online`, публичный ping 200. На
+проде — прежний код, La Coupole не тронута. Скрипт исправлен: ping на `:3101` с
+проверкой `"ok":true`. Цена попытки — два рестарта бота подряд.
 `pnpm install` и `db:deploy` не нужны (lockfile и схема не менялись); drift-гейт —
 по ранбуку.
 
