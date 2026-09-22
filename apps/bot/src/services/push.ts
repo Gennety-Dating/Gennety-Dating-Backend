@@ -154,7 +154,28 @@ export async function sendPushToUsers(
   );
 }
 
-export type LiveActivityType = "match_decision" | "date_day";
+export type LiveActivityType = "match_decision" | "date_day" | "venue_change";
+
+/**
+ * Which registered update token may receive a push — for an activity type that
+ * can be started more than once while one token row per (user, type) exists.
+ */
+export interface LiveActivityTokenScope {
+  /**
+   * The token must belong to this match. A row registered with another
+   * `matchId` drives some other match's card and is skipped. A row with no
+   * `matchId` is accepted — older builds did not send one.
+   */
+  matchId?: string;
+  /**
+   * The token must have been (re-)registered at or after this instant. The
+   * client registers a card's update token only once the card is on screen, so
+   * a row older than the push-start that created the current card belongs to
+   * a card that came before it — pushing into it would report success while the
+   * card on the lock screen never changed.
+   */
+  registeredSince?: Date;
+}
 
 /**
  * Push a remote update (or end) into the user's running Live Activity of the
@@ -167,15 +188,29 @@ export async function sendLiveActivityUpdateToUser(
   userId: string,
   activityType: LiveActivityType,
   update: LiveActivityUpdateInput,
+  scope?: LiveActivityTokenScope,
 ): Promise<boolean> {
   if (!apnsConfigured()) return false;
   const row = await prisma.liveActivityToken.findUnique({
     where: {
       userId_activityType_kind: { userId, activityType, kind: "update" },
     },
-    select: { id: true, token: true },
+    select: scope
+      ? { id: true, token: true, matchId: true, updatedAt: true }
+      : { id: true, token: true },
   });
   if (!row) return false;
+  if (scope) {
+    const scoped = row as { matchId?: string | null; updatedAt?: Date };
+    if (scope.matchId && scoped.matchId && scoped.matchId !== scope.matchId) return false;
+    if (
+      scope.registeredSince &&
+      scoped.updatedAt &&
+      scoped.updatedAt.getTime() < scope.registeredSince.getTime()
+    ) {
+      return false;
+    }
+  }
 
   const result = await sendApnsNotification(row.token, buildLiveActivityPayload(update), {
     pushType: "liveactivity",

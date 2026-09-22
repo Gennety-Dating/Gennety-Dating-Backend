@@ -71,6 +71,30 @@ describe("/v1/me/live-activity-token", () => {
     );
   });
 
+  it("accepts the venue-change card's tokens (decision 2026-09-22)", async () => {
+    const start = await request(buildApp())
+      .post("/v1/me/live-activity-token")
+      .send({ activityType: "venue_change", kind: "start", token: "tok-start" });
+    expect(start.status).toBe(200);
+    const update = await request(buildApp())
+      .post("/v1/me/live-activity-token")
+      .send({ activityType: "venue_change", kind: "update", token: "tok-upd", matchId: "m-1" });
+    expect(update.status).toBe(200);
+    expect(upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        create: {
+          userId: "user-1",
+          activityType: "venue_change",
+          kind: "update",
+          token: "tok-upd",
+          matchId: "m-1",
+        },
+      }),
+    );
+    const del = await request(buildApp()).delete("/v1/me/live-activity-token/venue_change/update");
+    expect(del.status).toBe(204);
+  });
+
   it("rejects unknown activity types and kinds", async () => {
     const res = await request(buildApp())
       .post("/v1/me/live-activity-token")

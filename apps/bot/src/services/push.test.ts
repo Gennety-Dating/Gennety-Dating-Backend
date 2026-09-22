@@ -234,6 +234,42 @@ describe("sendLiveActivityUpdateToUser", () => {
     expect(laDelete).toHaveBeenCalledWith({ where: { id: "row-2" } });
   });
 
+  it("with a scope, pushes only into the token of THIS match's current card", async () => {
+    const startedAt = new Date("2026-09-22T10:00:00.000Z");
+    sendApnsNotification.mockResolvedValue({ ok: true });
+    const update = { event: "update" as const, contentState: { phase: "waiting" } };
+    const scope = { matchId: "m-1", registeredSince: startedAt };
+
+    // Another match's card — skipped.
+    laFindUnique.mockResolvedValue({ id: "r", token: "t", matchId: "m-2", updatedAt: startedAt });
+    await expect(sendLiveActivityUpdateToUser("u1", "venue_change", update, scope)).resolves.toBe(false);
+    // Registered before the push-start that created the current card — an older card's token.
+    laFindUnique.mockResolvedValue({
+      id: "r",
+      token: "t",
+      matchId: "m-1",
+      updatedAt: new Date(startedAt.getTime() - 1000),
+    });
+    await expect(sendLiveActivityUpdateToUser("u1", "venue_change", update, scope)).resolves.toBe(false);
+    expect(sendApnsNotification).not.toHaveBeenCalled();
+
+    // This card's token.
+    laFindUnique.mockResolvedValue({
+      id: "r",
+      token: "t",
+      matchId: "m-1",
+      updatedAt: new Date(startedAt.getTime() + 5000),
+    });
+    await expect(sendLiveActivityUpdateToUser("u1", "venue_change", update, scope)).resolves.toBe(true);
+    expect(laFindUnique).toHaveBeenLastCalledWith({
+      where: {
+        userId_activityType_kind: { userId: "u1", activityType: "venue_change", kind: "update" },
+      },
+      select: { id: true, token: true, matchId: true, updatedAt: true },
+    });
+    expect(sendApnsNotification).toHaveBeenCalledTimes(1);
+  });
+
   it("omits content-state on an end event so the activity keeps its last look", async () => {
     laFindUnique.mockResolvedValue({ id: "row-3", token: "la-token" });
     sendApnsNotification.mockResolvedValue({ ok: true });
