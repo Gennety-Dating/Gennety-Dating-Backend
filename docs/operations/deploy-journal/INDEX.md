@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 196 entries
+# Deploy journal index — 197 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-22 | 09-22 — вопросы Profiler'а в iOS (`bc196757`): `GET /v1/me/profiler` + `POST /v1/me/profiler/answer`, общая с Телеграм логика; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — галерея профиля места до 10 фото (`afc88e07`): `SHOWCASE_GALLERY_MAX` 5 → 10, слоты 1…9, кэш фото 96 МБ; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — обложка места свидания в `/v1/date/state` (`49b8bc35`): `venue.photoUrl`/`thumbnailUrl` — подписанные ссылки борда смены места; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — реферальная программа платит только билетами: миграция `20260922120000_referral_ticket_rewards`, `ReferralState` без Premium/долларов, чип приглашения убран с Premium и доски смены места; флаг в проде остаётся выключенным | [pending](./pending.md) |

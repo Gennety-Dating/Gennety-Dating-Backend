@@ -11,6 +11,48 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — вопросы Profiler'а в iOS: `GET /v1/me/profiler` + `POST /v1/me/profiler/answer` (2026-09-22).**
+Коммит `bc196757`. **Только код бота:** без миграций (все колонки `profiler_*` давно есть),
+без env, без новых зависимостей; Mini App не пересобирать — он эти маршруты не читает.
+Два новых JWT-маршрута (`services/profiler-native.ts`): GET отдаёт живой вопрос или открывает
+положенный батч, POST принимает ответ / Skip / отказ. Телеграм-путь переписан только
+структурно — общие функции вынесены из `services/profiler.ts`, поведение то же (все тесты
+Profiler'а зелёные). Решение — журнал решений, 2026-09-22. Выкат: обычный рестарт бота.
+
+**Что изменится на проде сразу:** ничего, пока iOS-сборка не зовёт `GET /v1/me/profiler`.
+Когда начнёт — мобильные аккаунты (`platform = mobile`) впервые получат вопросы; у кого
+`profiler_next_at` ещё null (никогда не взводился), первый вопрос появится при первом же
+открытии «Сегодня». Воркер Profiler'а не изменён.
+
+**Проверка после выката** (JWT активного аккаунта с завершённым онбордингом и полом):
+
+```
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/me/profiler | jq
+# → {} или {"question":{"id":"f_…","text":"…"},"remaining":3}; повторный GET — тот же вопрос
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"questionId":"<id из GET>","skip":true}' https://dating-api.gennety.com/v1/me/profiler/answer | jq
+# → {"outcome":"next","question":{…},"remaining":2}  (или "done" на последнем)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"questionId":"<тот же id>","skip":true}' https://dating-api.gennety.com/v1/me/profiler/answer
+# → 409 (question_not_active)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{}' https://dating-api.gennety.com/v1/me/profiler/answer        # → 400
+```
+
+Проверять лучше на своём тестовом аккаунте: GET открывает настоящий батч, а Skip пишет
+настоящую строку `profiler_answers` (вопрос вернётся один раз, как после Skip в Телеграм).
+
+**Откат:** `git revert bc196757` и рестарт. Ответы, записанные из приложения, остаются
+обычными строками `profiler_answers` — старый код читает их как телеграмные. Живой вопрос,
+открытый приложением у `both`-пользователя, заберёт штатная 6-часовая зачистка воркера; у
+мобильного он просто повиснет до следующего выката (воркер мобильных не трогает) — вреда нет.
+**Влияние на iOS:** новые маршруты; старые сборки их не зовут. Новая сборка на старом сервере
+получит 404 от `/v1/me/profiler` (маршрут падает в `/v1/me`) — клиент должен молча скрыть блок.
+**Demo-mode:** своей логики нет — демо-бот телеграмный, маршруты работают тем же кодом для
+любого JWT демо-API; выкатывается отдельно, как всегда.
+
+---
+
 **PENDING — галерея профиля места «Городского гида»: до 10 фото вместо 5 (2026-09-22).**
 Коммит `afc88e07`. **Только код бота:** без миграций, без env, без новых
 зависимостей; Mini App не пересобирать — витрину он не читает. Правка чтения:
