@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 200 entries
+# Deploy journal index — 201 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-22 | 09-22 — лист места на доске смены места (`009461b9`): `profile` = `ShowcaseVenue` гида у каждой карточки `/v1/venue-change/catalog` и у `original` в `/state`, `null` без строки каталога; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — Live Activity смены места на iOS (`e7bb0906`, `633ee715`, `9b1cb060`): тип `venue_change`, карточка по фазам match > partner > waiting с каждой стороны; **миграция** `20260922180000_venue_change_activity` (`db:deploy` до рестарта), без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — медиана времени ответа в дашборде здоровья (`07d424fa`): `user_id = ANY(…::uuid[])` вместо `IN (text…)`, с 09-07 была пуста у всех; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — время в промпте агента в `RENDER_TZ` (`9fda38f0`): `formatClock`/`formatWhen`/`formatEventClock` не зависят от пояса хоста (на UTC-хосте было на 3 ч раньше карточки); только рестарт бота, без миграций и env | [pending](./pending.md) |

@@ -11,6 +11,44 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — лист места на доске смены места: `profile` у карточек и у `original` (2026-09-22).**
+Коммит `009461b9`. **Только код бота:** без миграций, без env, без зависимостей; Mini App не
+пересобирать (поле он не читает). Каждая карточка `GET /v1/venue-change/catalog` и
+`original` в `GET /v1/venue-change/state` получают необязательное `profile` — объект
+`ShowcaseVenue` «Городского гида» для той же строки каталога (часы, галерея до 10, цена,
+вайб, рейтинг, `mapsUri`), либо `null`, если активной строки нет. Один запрос к
+`curated_venues` на доску, затем кэш в памяти на место на 10 мин. Галерея до десяти — из
+`afc88e07` (он раньше в стволе и тоже PENDING; выкат этого коммита привозит и его).
+Решение — журнал решений, 2026-09-22.
+
+**Что изменится на проде сразу:** ответы доски чуть толще (каталог — до 21 профиля, `/state`
+— один, ~2 КБ); новых платных вызовов нет — фото из листа тянутся, только когда клиент его
+открыл, существующим маршрутом `/v1/venues/:id/photo[/slot]`. Видно станет с iOS-сборкой,
+которая рисует лист места.
+
+**Проверка после выката** (JWT тестового аккаунта с назначенным свиданием, `$MATCH` — его матч):
+
+```
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/venue-change/catalog?match=$MATCH" \
+  | jq '[.venues[] | {name, tier, profile: (.profile.id // null), photos: (.profile.photoUrls | length?)}]'
+# → у кураторских карточек profile = uuid строки, photos ≤ 10; у Places-фолбэка profile = null
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/venue-change/state?match=$MATCH" \
+  | jq '.original.profile | {id, priceLevel, hours: (.openingHours | length)}'
+LINK=$(curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/venue-change/catalog?match=$MATCH" \
+  | jq -r '[.venues[] | .profile.photoUrls[1]? // empty][0]')
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "$LINK"             # → 200 image/jpeg, без заголовка
+```
+
+**Откат:** `git revert 009461b9` + рестарт бота. Поле необязательное — iOS-сборка без него
+рисует лист по полям карточки.
+**Влияние на iOS:** два новых необязательных поля `profile: ShowcaseVenue?`
+(`VenueChangeVenue`, `VenueBoardOriginal`) — клиент перегенерировать; старые сборки не
+затронуты. Новая сборка на старом сервере получит `profile == nil` и должна это пережить.
+**Demo-mode:** своего поведения нет — демо-бот телеграмный, Mini App поле игнорирует; новых
+платных вызовов нет.
+
+---
+
 **PENDING — Live Activity смены места на iOS: `venue_change` (2026-09-22).**
 Коммиты `e7bb0906` (таблица + миграция), `633ee715` (регистрация токенов, OpenAPI),
 `9b1cb060` (карточка). **Миграция + рестарт бота:** `20260922180000_venue_change_activity` —
