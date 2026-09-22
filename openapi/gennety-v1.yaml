@@ -5633,12 +5633,13 @@ components:
           description: The same photo at 240 px, for the map pin. Null exactly when `photoUrl` is.
         photoUrls:
           type: array
+          maxItems: 10
           description: >
-            The venue profile's gallery: at most 5 photos at 1200 px, signed
+            The venue profile's gallery: at most 10 photos at 1200 px, signed
             the same way as `photoUrl`, cover first. `photoUrls[0]` is
             byte-for-byte `photoUrl`, so the cover is not downloaded twice; the
             rest carry their slot in the PATH (`/v1/venues/{id}/photo/{slot}`,
-            slot 1…4). Every photo fetched is a billed Places request, so a
+            slot 1…9). Every photo fetched is a billed Places request, so a
             client loads the gallery when the profile opens, not with the list.
             Empty exactly when `photoUrl` is null.
 

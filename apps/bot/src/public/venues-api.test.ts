@@ -183,26 +183,23 @@ describe("GET /v1/venues/showcase", () => {
   });
 
   it("carries the whole gallery's links, cover first and identical to the card's photo", async () => {
-    const refs = Array.from({ length: 7 }, (_, i) => `places/ChIJ-sens/photos/${i}`);
+    const refs = Array.from({ length: 12 }, (_, i) => `places/ChIJ-sens/photos/${i}`);
     venueFindMany.mockResolvedValue([catalogRow({ photoRefs: refs })]);
 
     const res = await request(buildApp()).get("/v1/venues/showcase?cityKey=ua:kyiv");
     const venue = res.body.venues[0];
     const paths = (venue.photoUrls as string[]).map((link) => new URL(link));
 
-    // Capped at five however many the catalog holds.
-    expect(paths).toHaveLength(5);
+    // Capped at ten however many the catalog holds.
+    expect(paths).toHaveLength(10);
     // The cover is not a second download of the picture the card already shows.
     expect(venue.photoUrls[0]).toBe(venue.photoUrl);
     expect(paths.map((url) => url.pathname)).toEqual([
       `/v1/venues/${VENUE_ID}/photo`,
-      `/v1/venues/${VENUE_ID}/photo/1`,
-      `/v1/venues/${VENUE_ID}/photo/2`,
-      `/v1/venues/${VENUE_ID}/photo/3`,
-      `/v1/venues/${VENUE_ID}/photo/4`,
+      ...Array.from({ length: 9 }, (_, i) => `/v1/venues/${VENUE_ID}/photo/${i + 1}`),
     ]);
     expect(paths.every((url) => url.searchParams.get("w") === "1200")).toBe(true);
-    expect(new Set(paths.map((url) => url.searchParams.get("sig"))).size).toBe(5);
+    expect(new Set(paths.map((url) => url.searchParams.get("sig"))).size).toBe(10);
     expect(JSON.stringify(res.body)).not.toContain("places/ChIJ-sens/photos");
   });
 
@@ -257,7 +254,7 @@ describe("GET /v1/venues/:id/photo/:slot", () => {
       signedPath(VENUE_ID, 1200, Date.now(), 1).replace("/photo/1", "/photo/0"),
     );
     const past = await request(buildApp()).get(
-      signedPath(VENUE_ID, 1200, Date.now(), 5),
+      signedPath(VENUE_ID, 1200, Date.now(), 10),
     );
     const junk = await request(buildApp()).get(`/v1/venues/${VENUE_ID}/photo/one?w=1200&e=1&sig=x`);
 

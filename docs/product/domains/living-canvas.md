@@ -274,7 +274,8 @@ unchanged.
 
 **The city guide's venue profile — iOS only (2026-09-15).** Tapping a card (or
 the pin already selected) opens the place's profile over the map: a gallery of
-at most five photos, category, price level and Google rating, opening hours,
+at most ten photos (five until 2026-09-22, when the founder raised it; the map
+card keeps showing the first five), category, price level and Google rating, opening hours,
 the address with a copy action, the vibe highlights, a route drawn on the app's
 own map with the transit dock, and Google Maps as a secondary link. Everything
 rides in the same showcase list — `photoUrls[]`, `priceLevel`, `rating`,

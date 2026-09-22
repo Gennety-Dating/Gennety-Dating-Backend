@@ -275,14 +275,14 @@ describe("getShowcaseVenues", () => {
     expect(second.editorialSummary).toBeNull();
   });
 
-  it("caps the gallery at the founder's five, however many photos the catalog holds", async () => {
-    const refs = Array.from({ length: 10 }, (_, i) => `places/x/photos/${i}`);
+  it("caps the gallery at the founder's ten, however many photos the catalog holds", async () => {
+    const refs = Array.from({ length: 12 }, (_, i) => `places/x/photos/${i}`);
     findMany.mockResolvedValue([row({ photoRefs: refs })]);
 
     const [place] = await getShowcaseVenues("ua:kyiv");
 
-    expect(SHOWCASE_GALLERY_MAX).toBe(5);
-    expect(place.photoCount).toBe(5);
+    expect(SHOWCASE_GALLERY_MAX).toBe(10);
+    expect(place.photoCount).toBe(10);
   });
 
   it("carries the profile's facts — price, rating, the Maps page — and reads them from the catalog", async () => {
@@ -385,11 +385,11 @@ describe("showcasePhotoRef", () => {
   });
 
   it("answers a gallery slot, and nothing past the row's photos or the cap", async () => {
-    const refs = Array.from({ length: 8 }, (_, i) => `places/a/photos/${i}`);
+    const refs = Array.from({ length: 12 }, (_, i) => `places/a/photos/${i}`);
     findUnique.mockResolvedValue({ active: true, photoRefs: refs });
 
     expect(await showcasePhotoRef("id", 3)).toBe("places/a/photos/3");
-    expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX - 1)).toBe("places/a/photos/4");
+    expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX - 1)).toBe("places/a/photos/9");
     // Held by the catalog, but past the cap — the cap is the bill.
     expect(await showcasePhotoRef("id", SHOWCASE_GALLERY_MAX)).toBeNull();
     expect(await showcasePhotoRef("id", -1)).toBeNull();

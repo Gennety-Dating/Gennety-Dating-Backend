@@ -460,13 +460,16 @@ const SHOWCASE_CACHE_MAX_CITIES = 32;
 /**
  * How many of a place's photos the venue profile's gallery gets.
  *
- * The catalog keeps up to ten per place, but every photograph a person swipes
- * to is a separately billed Place Photo request whenever the process has not
- * fetched it for somebody else first — and the profile is open to everyone in
- * the city, not to one match. Five is the founder's cap (2026-09-15): enough
- * to see the room, the terrace and the menu, cheap enough to leave on.
+ * Every photograph a person swipes to is a separately billed Place Photo
+ * request whenever the process has not fetched it for somebody else first —
+ * and the profile is open to everyone in the city, not to one match. The
+ * founder's cap was five (2026-09-15); on 2026-09-22 the founder raised it to
+ * ten for the venue profile — the iOS map card shows the first five, the
+ * profile all ten. Ten is also everything the catalog keeps per place
+ * (`CURATED_PHOTO_REFS_MAX` in `venue-revalidation.ts`), so raising it was a
+ * read-side change: no migration, no re-import.
  */
-export const SHOWCASE_GALLERY_MAX = 5;
+export const SHOWCASE_GALLERY_MAX = 10;
 
 /**
  * Google's price level, reduced to the product's words. A documented string on
@@ -555,7 +558,10 @@ export interface ShowcasePlace {
   facetTags: string[];
   utcOffsetMinutes: number | null;
   openingHours: ShowcaseOpeningPeriod[];
-  /** Photos the gallery may show, `0…SHOWCASE_GALLERY_MAX`; slot 0 is the cover. */
+  /**
+   * Photos the gallery may show, `0…SHOWCASE_GALLERY_MAX` (ten since 2026-09-22,
+   * five before); slot 0 is the cover.
+   */
   photoCount: number;
   priceLevel: ShowcasePriceLevel | null;
   rating: number | null;

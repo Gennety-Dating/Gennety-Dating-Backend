@@ -43,8 +43,8 @@ export function venuePhotoExpiry(now: number = Date.now()): number {
  * The cover keeps the payload it was born with, so links minted before the
  * gallery existed stay valid for the rest of their day. A gallery slot is part
  * of what is signed — otherwise one signed link would open all of a place's
- * photos, and the cap on them (`SHOWCASE_GALLERY_MAX`) would be the client's to
- * keep rather than the server's.
+ * photos, and the cap on them (`SHOWCASE_GALLERY_MAX`, ten since 2026-09-22)
+ * would be the client's to keep rather than the server's.
  */
 export function signVenuePhoto(venueId: string, width: number, expiresAt: number, index = 0): string {
   const subject = index === 0 ? venueId : `${venueId}#${index}`;
@@ -69,7 +69,7 @@ export function venuePhotoSignatureValid(
 /**
  * Absolute URL the client can hand straight to an image loader. A gallery slot
  * rides in the PATH (`/photo/2`) for the same reason as the venue id: a cache
- * keyed by host + path would otherwise fold a place's five photos into one.
+ * keyed by host + path would otherwise fold a place's ten photos into one.
  */
 export function venuePhotoUrl(
   venueId: string,

@@ -26,7 +26,7 @@ import {
  *
  *   GET /v1/venues/showcase[?cityKey=ua:kyiv] — the places, in display order
  *   GET /v1/venues/:id/photo?w=&e=&sig=       — one place's cover, by signed link
- *   GET /v1/venues/:id/photo/:slot?w=&e=&sig= — a gallery photo (slot 1…4), same way
+ *   GET /v1/venues/:id/photo/:slot?w=&e=&sig= — a gallery photo (slot 1…9), same way
  *
  * The two halves authenticate differently, and on purpose. The list is the
  * canvas talking, so it takes either rail like every other canvas call. The
@@ -58,16 +58,18 @@ const PIN_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
 /**
  * Bytes of proxied photos; see `createPhotoCache` for why this surface needs
  * one and the board does not. A city's working set is its showcase's covers at
- * two widths plus, once profiles are opened, up to four gallery photos each at
- * the card width — six entries a place, derived from the limit so the two can
- * never drift apart again (the count was sized for 24 places and would have
- * evicted, and re-billed, most of Kyiv's 62 from 2026-09-22). Bytes: ~150 KB a
- * 1200 px photo puts a fully browsed 64-place city near 48 MB; covers alone are
- * ~10 MB. On the 2 GB droplet the bot runs at ~250 MB with ~1.2 GB available.
+ * two widths plus, once profiles are opened, up to nine gallery photos each at
+ * the card width — eleven entries a place, derived from the limit and the
+ * gallery cap so neither can drift apart from the cache again (the count was
+ * sized for 24 places and would have evicted, and re-billed, most of Kyiv's 62
+ * from 2026-09-22). Bytes: ~150 KB a 1200 px photo puts a fully browsed
+ * 64-place city at ~96 MB (it was ~48 MB while the gallery held five); covers
+ * alone are ~10 MB. On the 2 GB droplet the bot runs at ~250 MB with ~1.2 GB
+ * available, so the doubled ceiling still leaves a wide margin.
  */
 const photoCache = createPhotoCache({
   maxEntries: SHOWCASE_LIMIT * (2 + (SHOWCASE_GALLERY_MAX - 1)),
-  maxBytes: 48 * 1024 * 1024,
+  maxBytes: 96 * 1024 * 1024,
   ttlMs: 12 * 60 * 60 * 1000,
 });
 
