@@ -4,7 +4,7 @@
  * Всё только на чтение. Модуль отделён от правил намеренно: правила должны
  * проверяться юнит-тестами без базы, а здесь живёт всё, что знает про Prisma.
  */
-import { prisma, Prisma } from "@gennety/db";
+import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import {
   HEALTH_CONFIG,
@@ -84,7 +84,7 @@ async function countInboundByUser(): Promise<Map<string, number>> {
   } catch (err) {
     console.warn(
       "[admin] user-health: chat_events unavailable, inbound counts read as 0:",
-      err instanceof Error ? err.message.split("\n")[0] : err,
+      err instanceof Error ? err.message.trim().split("\n")[0] : err,
     );
   }
   return out;
@@ -116,6 +116,11 @@ export async function medianResponseSeconds(
   // which is what "consecutive user messages give one measurement, not N"
   // means. `percentile_cont` matches `median()`'s averaging of the two middle
   // values on an even count.
+  //
+  // `user_id` is `uuid` and Prisma binds strings as `text`, so the ids go in as
+  // one `::uuid[]` array. A bare `IN (${Prisma.join(ids)})` fails with
+  // `uuid = text`, the catch below swallows it, and every user reads as "never
+  // replied" — that is what shipped between 2026-09-07 and 2026-09-22.
   let rows: Array<{ userId: string; medianSec: number | null; samples: bigint }> = [];
   try {
     rows = await prisma.$queryRaw<
@@ -128,7 +133,7 @@ export async function medianResponseSeconds(
                LAG(created_at) OVER (PARTITION BY user_id ORDER BY created_at) AS prev_at,
                LAG(direction)  OVER (PARTITION BY user_id ORDER BY created_at) AS prev_direction
           FROM chat_events
-         WHERE user_id IN (${Prisma.join([...userIds])})
+         WHERE user_id = ANY(${[...userIds]}::uuid[])
       )
       SELECT user_id AS "userId",
              percentile_cont(0.5) WITHIN GROUP (
@@ -142,7 +147,7 @@ export async function medianResponseSeconds(
   } catch (err) {
     console.warn(
       "[admin] user-health: chat_events unavailable, reply timing skipped:",
-      err instanceof Error ? err.message.split("\n")[0] : err,
+      err instanceof Error ? err.message.trim().split("\n")[0] : err,
     );
     return out;
   }
