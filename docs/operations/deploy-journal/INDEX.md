@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 201 entries
+# Deploy journal index — 202 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-23 | 09-23 — время свидания: пятичасовой запас вместо минуты (`CALENDAR_MIN_LEAD_MS`, сетка включает сегодня) + Live Activity `time_agreement` (`5e1ea617`, `e8b81062`, ветка `time-agreement`, НЕ в стволе); **миграция** `20260923090000_time_agreement_activity` (`db:deploy` до рестарта), без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — лист места на доске смены места (`009461b9`): `profile` = `ShowcaseVenue` гида у каждой карточки `/v1/venue-change/catalog` и у `original` в `/state`, `null` без строки каталога; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — Live Activity смены места на iOS (`e7bb0906`, `633ee715`, `9b1cb060`): тип `venue_change`, карточка по фазам match > partner > waiting с каждой стороны; **миграция** `20260922180000_venue_change_activity` (`db:deploy` до рестарта), без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — медиана времени ответа в дашборде здоровья (`07d424fa`): `user_id = ANY(…::uuid[])` вместо `IN (text…)`, с 09-07 была пуста у всех; только рестарт бота, без миграций и env | [pending](./pending.md) |
