@@ -329,7 +329,8 @@ multiple competing codes.
 ### `live_activity_tokens`
 
 APNs push tokens for the native app's Live Activities (ActivityKit). One row
-per (user, `activityType` ∈ `match_decision`/`date_day`/`venue_change`, `kind` ∈
+per (user, `activityType` ∈
+`match_decision`/`date_day`/`venue_change`/`time_agreement`, `kind` ∈
 `start`/`update`), unique composite — the single-live-match invariant means a
 user never runs two activities of one type, so re-registration upserts in
 place. A token APNs reports dead is deleted so the next activity re-registers
@@ -365,6 +366,18 @@ second one — a restarted bot must know a card is up. `user_id` →
 `venue_change_purchases.match_id`) — the sweep ends and drops a row whose match
 is gone. Written and read only by `services/venue-change-activity.ts`.
 Migration `20260922180000_venue_change_activity`.
+
+### `time_agreement_activities`
+
+The §3.6 twin of the table above — what the server last put on one side's
+time-agreement lock-screen card (decision 2026-09-23). Same PK, same lifecycle,
+same free-form `match_id`, same cascade, plus **one extra column:
+`partner_hash`**, the hash of the partner's slots alone. That is the only change
+allowed to make the card ring on an UPDATE ("your move, because they moved"),
+and inside a single `content_hash` it is indistinguishable from my own edit —
+so it is remembered separately. Written and read only by
+`services/time-agreement-activity.ts`. Migration
+`20260923090000_time_agreement_activity`.
 
 ### `phone_otps`
 

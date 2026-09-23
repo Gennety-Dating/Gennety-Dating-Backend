@@ -442,6 +442,7 @@ model User {
   primeTimePurchases        PrimeTimePurchase[]
   liveActivityTokens        LiveActivityToken[]
   venueChangeActivities     VenueChangeActivity[]
+  timeAgreementActivities   TimeAgreementActivity[]
   mediaValidationRejections MediaValidationRejection[]
   chatEvents                ChatEvent[]
   activityDays              UserActivityDay[]
@@ -2662,6 +2663,33 @@ model VenueChangeActivity {
 
   @@id([matchId, userId])
   @@map("venue_change_activities")
+}
+
+/// Twin of `VenueChangeActivity` for the §3.6 time step — what the server last
+/// put on one side's time-agreement lock-screen card (the iOS `time_agreement`
+/// Live Activity, decision 2026-09-23). Same contract: a row exists exactly
+/// while the server believes that card is running, `matchId` is free-form (no
+/// FK), and the 2-minute sweep reads the table as its work list.
+model TimeAgreementActivity {
+  matchId     String   @map("match_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  /// `waiting` | `partner` | `match` — the phase last sent.
+  phase       String
+  /// Hash of the content-state last sent. Equal hash ⇒ nothing is pushed.
+  contentHash String   @map("content_hash")
+  /// Hash of the PARTNER's slots last sent, remembered apart from the content
+  /// because it is the only thing that may raise an alert on an update: the
+  /// card must buzz when the partner moved and stay silent when I edited my own
+  /// picks, and the two are indistinguishable inside one content hash.
+  partnerHash String   @map("partner_hash")
+  /// When the running card was push-started — the ~7.5h restart reads it.
+  startedAt   DateTime @map("started_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, userId])
+  @@map("time_agreement_activities")
 }
 
 /// Native-app phone-code challenges (general track on iOS/Android, where the
