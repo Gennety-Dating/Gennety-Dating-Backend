@@ -893,7 +893,8 @@ paths:
         One registration per (user, activityType, kind) — re-registration
         upserts in place. The same token held by another account is
         removed from it first (the token names this install). The server uses `update` tokens to drive the
-        "match decision", "date day" and "venue change" Live Activities via APNs.
+        "match decision", "date day", "venue change" and "time agreement" Live
+        Activities via APNs.
 
         `venue_change` (2026-09-22): register the push-to-start token of the
         `VenueChangeActivity` attributes type as `kind: start` (no matchId), and
@@ -901,6 +902,16 @@ paths:
         The server pushes an update only into a token registered for that match
         after the card was push-started, so re-register whenever ActivityKit
         hands out a new update token.
+
+        `time_agreement` (2026-09-23): the same two registrations for the
+        `TimeAgreementActivity` attributes type — the §3.6 card that runs while a
+        pair is agreeing a time. Unlike every other activity here its UPDATE push
+        can carry an `aps.alert`, and does so exactly when the card becomes (or
+        stays) "your move" because the PARTNER marked a time; the END that
+        carries the locked time alerts only the side that was waiting on it. This
+        is the only notification a native, non-Telegram user gets for the time
+        step, so skipping the registration means hearing nothing when your match
+        proposes a time.
       requestBody:
         required: true
         content:
@@ -911,7 +922,7 @@ paths:
               properties:
                 activityType:
                   type: string
-                  enum: [match_decision, date_day, venue_change]
+                  enum: [match_decision, date_day, venue_change, time_agreement]
                 kind:
                   type: string
                   enum: [start, update]
@@ -937,7 +948,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [match_decision, date_day, venue_change]
+            enum: [match_decision, date_day, venue_change, time_agreement]
         - name: kind
           in: path
           required: true
@@ -2962,6 +2973,11 @@ paths:
         first-mover notification — so the two surfaces cannot drift on the one
         question that matters here, which is when a date locks in.
 
+        **The five-hour rule (2026-09-22).** No slot closer than five hours to
+        now is ever offered or accepted, and the window includes TODAY while
+        today still has a slot beyond that line (see `proposedTimes`). So the
+        grid a client holds decays: re-read it, or be ready for the 409 below.
+
         Poll this while the screen is open (~4s, like the Mini App) so the
         partner's marks land live.
       parameters:
@@ -3018,6 +3034,9 @@ paths:
           alone. Initiator offers, responder decides: earliest-wins would
           quietly take the choice away from the person who was offered it.
         - **none** — the partner is told this side proposed times.
+
+        A slot inside the five-hour lead is refused with 409 `slot-in-past`,
+        whatever the grid the client is holding says (see below).
       parameters:
         - $ref: "#/components/parameters/MatchId"
       requestBody:
@@ -3067,7 +3086,22 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: The calendar is closed for this match
+          description: |
+            Two distinct refusals, told apart by `error` — the client should
+            read the body, not the status:
+
+            - `wrong-state` — the calendar is closed for this match (cancelled,
+              expired, or already past the time step). Nothing to retry.
+            - `slot-in-past` — at least one submitted slot is now within the
+              five-hour lead (`DATE_ALERT_HOURS`) or already gone. The slot was
+              real; the world moved on while the client held the grid, which is
+              the same class of refusal as `wrong-state` rather than a 400.
+              Nothing was saved — the whole submission is refused, not the
+              offending entries — so re-read the grid and re-submit without it.
+
+            Documented after the fact: the server has answered `slot-in-past`
+            since 2026-09-07, and the five-hour lead replaced its one-minute
+            guard on 2026-09-22.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -6264,8 +6298,22 @@ components:
           type: array
           items: { type: string, format: date-time }
           description: |
-            Every offerable instant, ascending. Server-owned and identical for
-            both sides; a submission outside this set is refused.
+            Every STILL-offerable instant, ascending. Server-owned and identical
+            for both sides; a submission outside this set is refused.
+
+            The grid itself is written once, when the calendar opens: six
+            consecutive days, every 30 minutes from 13:00 to 19:30 in the pair's
+            city (`timeZone`). It starts TODAY while today still has a slot more
+            than five hours away, otherwise tomorrow — and it is six days long
+            either way, so an evening pair loses no choice (founder, 2026-09-22).
+
+            What is returned is that grid minus everything now inside the
+            five-hour lead (`DATE_ALERT_HOURS`): the server would refuse those
+            (409 `slot-in-past`), so the client must not draw them. Slots
+            therefore DISAPPEAR from this list over the life of one calendar —
+            re-read rather than caching it for hours. `mySlots` / `peerSlots` are
+            deliberately NOT filtered: they are the record of what somebody
+            marked, and hiding that would misstate the state.
         mySlots:
           type: array
           items: { type: string, format: date-time }

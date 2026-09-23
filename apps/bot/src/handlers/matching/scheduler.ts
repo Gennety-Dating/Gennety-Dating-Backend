@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
-import { DEFAULT_TIME_ZONE, t, type Language } from "@gennety/shared";
+import { DATE_ALERT_HOURS, DEFAULT_TIME_ZONE, t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
@@ -21,6 +21,7 @@ import {
   primeTimeUnlockReason,
   shouldPersistUnlock,
 } from "../../services/prime-time.js";
+import { apnsConfigured } from "../../services/apns.js";
 
 /**
  * Calendar-only scheduler.
@@ -76,30 +77,43 @@ export const CALENDAR_TIME_ZONE = DEFAULT_TIME_ZONE;
 
 /**
  * Запас, на который слот обязан отстоять от «сейчас», чтобы его ещё можно
- * было выбрать.
+ * было предложить и выбрать. Пять часов — `DATE_ALERT_HOURS`.
  *
- * Минута — не продуктовое правило, а защита от гонки: слот не должен
- * протухнуть между проверкой и фиксацией в соседнем запросе. Настоящий
- * инвариант здесь один — свидание не может быть в прошлом, — и сознательно
- * не превращён в «за N часов до встречи»: сетка начинается «завтра», но
- * зафиксировать её слот за несколько часов до самой встречи это законный
- * сценарий, и запрет был бы уже продуктовым решением, а не починкой.
+ * **Это продуктовое правило, и оно отменяет половину решения 2026-09-07.** Тогда
+ * запас был минутой и сознательно НЕ был превращён в «за N часов до встречи»:
+ * инвариант формулировался как «свидание не может быть в прошлом», а сетка и так
+ * начиналась «завтра». Основатель решил иначе 2026-09-22 (галерея v3 экрана
+ * согласования времени): сегодняшний день входит в окно, пока в нём остаётся хоть
+ * один слот дальше пяти часов, и ни один слот ближе пяти часов не предлагается и
+ * не принимается. Пять часов — не круглое число, а `DATE_ALERT_HOURS`: ровно та
+ * граница, за которой успевают сработать все пред-свиданческие рельсы (ледоколы,
+ * Wingman, координация, safety-note, карточка дня свидания).
+ *
+ * Гонка «слот протух между проверкой и фиксацией», ради которой держалась минута,
+ * пятью часами покрыта с запасом, поэтому отдельной константы под неё больше нет.
+ * Последняя подстраховка перед необратимой записью `agreedTime` осталась на месте
+ * — `startVenueNegotiation` сравнивает с `Date.now()` напрямую.
  */
-export const MIN_SLOT_LEAD_MS = 60_000;
+export const CALENDAR_MIN_LEAD_MS = DATE_ALERT_HOURS * 60 * 60 * 1000;
 
-/** Слот ещё можно выбрать: он в будущем с запасом на гонку. */
+/** Слот ещё можно выбрать: до него больше пяти часов. */
 export function isSlotSelectable(slot: Date, now: Date = new Date()): boolean {
-  return slot.getTime() > now.getTime() + MIN_SLOT_LEAD_MS;
+  return slot.getTime() > now.getTime() + CALENDAR_MIN_LEAD_MS;
 }
 
 /**
- * Generate the calendar grid: the next `dayCount` consecutive days starting
- * tomorrow (in Europe/Kyiv), with fourteen exact time options per day (every
- * 30 min from 13:00 through 19:30 Kyiv local). No weekday filter — past UX
- * feedback was that skipping Sun/Mon pruned dates users actually preferred
- * (e.g. Sunday brunches, Monday holidays). 6 days is "next week's worth of
- * options"; the Mini App groups the exact DateTime allowlist into date → time
- * steps.
+ * Generate the calendar grid: `dayCount` consecutive days (in Europe/Kyiv) with
+ * fourteen exact time options per day (every 30 min from 13:00 through 19:30
+ * Kyiv local). No weekday filter — past UX feedback was that skipping Sun/Mon
+ * pruned dates users actually preferred (e.g. Sunday brunches, Monday
+ * holidays). 6 days is "next week's worth of options"; the Mini App groups the
+ * exact DateTime allowlist into date → time steps.
+ *
+ * **The window starts TODAY while today still has a slot outside the five-hour
+ * lead, otherwise tomorrow** (founder, 2026-09-22). It is always `dayCount`
+ * days long either way: a pair that opens the calendar at breakfast gets today
+ * 13:00–19:30 plus five more days, a pair that opens it in the evening gets six
+ * days starting tomorrow — the same amount of choice, not one day less.
  *
  * Exported so tests can assert the shape — the Mini App reads the grid
  * from the server via `GET /v1/calendar/state`, no client-side mirror.
@@ -113,19 +127,28 @@ export function generateProposalSlots(
   // slot's exact instant for that Kyiv date (DST-correct per day).
   const today = zonedParts(now, CALENDAR_TIME_ZONE);
   const anchor = Date.UTC(today.year, today.month - 1, today.day, 12, 0, 0);
-  const out: Date[] = [];
-  for (let day = 1; day <= dayCount; day++) {
+  const dayOfGrid = (offset: number): Date[] => {
     const d = new Date(anchor);
-    d.setUTCDate(d.getUTCDate() + day); // day = 1 → tomorrow (Kyiv)
-    const year = d.getUTCFullYear();
-    const month = d.getUTCMonth() + 1;
-    const dayOfMonth = d.getUTCDate();
-    for (const slot of CALENDAR_TIME_SLOTS) {
-      out.push(
-        wallToUtc(year, month, dayOfMonth, slot.hour, slot.minute, CALENDAR_TIME_ZONE),
-      );
-    }
-  }
+    d.setUTCDate(d.getUTCDate() + offset); // offset = 0 → today (Kyiv)
+    return CALENDAR_TIME_SLOTS.map((slot) =>
+      wallToUtc(
+        d.getUTCFullYear(),
+        d.getUTCMonth() + 1,
+        d.getUTCDate(),
+        slot.hour,
+        slot.minute,
+        CALENDAR_TIME_ZONE,
+      ),
+    );
+  };
+
+  // Today earns its place only if something on it is still offerable. Written
+  // as "any slot" rather than "the last slot" so a future change to
+  // CALENDAR_TIME_SLOTS (a non-ascending or sparser grid) cannot silently make
+  // this wrong.
+  const firstDay = dayOfGrid(0).some((slot) => isSlotSelectable(slot, now)) ? 0 : 1;
+  const out: Date[] = [];
+  for (let day = 0; day < dayCount; day++) out.push(...dayOfGrid(firstDay + day));
   return out;
 }
 
@@ -477,6 +500,31 @@ export type CalendarPickResult =
  * Empty `pickedIsos` is allowed — that's the user clearing their
  * availability before reopening the picker.
  */
+/**
+ * Re-derive both sides' time-agreement lock-screen card (the iOS
+ * `time_agreement` Live Activity) after a calendar write.
+ *
+ * Fire-and-forget, exactly like the venue board's twin: the card mirrors the
+ * calendar and is never a gate on it, so an APNs round trip must not hold the
+ * response the Mini App or the app is waiting on. The service serializes per
+ * match and diffs against what it last sent, so calling it after a write that
+ * changed nothing visible costs one read and no push. Imported lazily (the
+ * service reads this module for `isSlotSelectable`) and skipped outright where
+ * APNs is not configured — there is nothing to drive.
+ *
+ * Placed on every write path of THIS function rather than in the two routers:
+ * the Mini App, the native calendar and the legacy `web_app_data` handler all
+ * funnel through here, and so does the `overlapCandidates` re-POST.
+ */
+function syncTimeAgreementCards(matchId: string): void {
+  if (!apnsConfigured()) return;
+  void import("../../services/time-agreement-activity.js")
+    .then((m) => m.syncTimeAgreementActivities(matchId))
+    .catch((err) => {
+      console.warn(`[scheduler] time-agreement activity sync failed match=${matchId}:`, err);
+    });
+}
+
 export async function processCalendarSlotsUpdate(
   api: Api<RawApi>,
   telegramId: bigint,
@@ -535,11 +583,14 @@ export async function processCalendarSlotsUpdate(
   }
   // Принадлежности сетке мало. Сетка составляется один раз, а живёт пара в
   // фазе планирования до 48 часов — часть слотов к моменту выбора уже
-  // наступила. Принятый прошлый слот не выглядит сломанным: он тихо
-  // отключает ВСЕ пред-свиданческие рельсы (они фильтруют `agreedTime > now`)
-  // и через сутки доводит матч до `completed` с опросом «как прошло
-  // свидание», которого не было; билеты при этом не возвращаются, потому что
-  // отмены не происходило.
+  // подошла ближе пятичасового запаса (`CALENDAR_MIN_LEAD_MS`), а то и
+  // наступила. Принятый слишком близкий слот не выглядит сломанным: он тихо
+  // отключает пред-свиданческие рельсы (они срабатывают за `DATE_ALERT_HOURS`
+  // до встречи, а прошедшие ещё и фильтруют `agreedTime > now`) и через сутки
+  // доводит матч до `completed` с опросом «как прошло свидание», которого не
+  // было; билеты при этом не возвращаются, потому что отмены не происходило.
+  // Причина отказа по-прежнему называется `slot-in-past` — контракт обеих
+  // поверхностей, менять её значило бы ломать клиентов ради названия.
   const now = new Date();
   for (const p of picks) {
     if (!isSlotSelectable(p, now)) return { ok: false, reason: "slot-in-past" };
@@ -615,6 +666,9 @@ export async function processCalendarSlotsUpdate(
     },
   });
   if (!current || current.status !== "negotiating") {
+    // This side's marks WERE written before the row moved on, so the cards may
+    // now be stale (most often: the match was cancelled between the two reads).
+    syncTimeAgreementCards(matchId);
     return { ok: false, reason: "wrong-state" };
   }
 
@@ -645,6 +699,9 @@ export async function processCalendarSlotsUpdate(
         messageId: match.calendarMessageIdB,
       },
     ]);
+    // After `startVenueNegotiation`, so both cards end on the locked time
+    // rather than on a phase the row has already left.
+    syncTimeAgreementCards(matchId);
     return {
       ok: true,
       mySlots: dedupedSorted.map((d) => d.toISOString()),
@@ -659,6 +716,7 @@ export async function processCalendarSlotsUpdate(
     // Multiple shared slots — let the actor pick the final one via the
     // Mini App confirm card. Don't DM yet; the actor is still in the
     // Mini App and the next POST will resolve to a single overlap.
+    syncTimeAgreementCards(matchId);
     return {
       ok: true,
       mySlots: dedupedSorted.map((d) => d.toISOString()),
@@ -738,6 +796,7 @@ export async function processCalendarSlotsUpdate(
     await Promise.all(sends);
   }
 
+  syncTimeAgreementCards(matchId);
   return {
     ok: true,
     mySlots: dedupedSorted.map((d) => d.toISOString()),

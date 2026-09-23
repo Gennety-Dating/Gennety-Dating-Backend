@@ -183,4 +183,19 @@ undelivered update restores the old hash so the 2-minute sweep retries; a card s
 applying 7.5 h after its start is ended and push-started afresh (iOS caps an activity at
 8 h). An end always carries a `dismissal-date` — "now" for a closed board, +15 min for a
 resolved round — because an end without one lingers on the lock screen for up to four hours.
+**`time_agreement` (since 2026-09-23)** is that same machine for the §3.6 time step
+(`services/time-agreement-activity.ts`, attributes type `TimeAgreementActivity`, attributes
+`{ matchId }`; content-state `phase` · `partnerFirstName` · `partnerGender` · `mySlots` ·
+`partnerSlots` · `agreedTime` · `timeZone` — every key always present; times are unix
+SECONDS, ascending, at most two per side, and `timeZone` is the RECIPIENT's). It differs
+from every other activity here in one way: **its update push can carry an alert**
+(`LiveActivityUpdateInput.alert` → `aps.alert`; optional, absent for `date_day` and
+`venue_change`, `apns-priority` unchanged at 10). It rings only when the card becomes or
+stays "your move" because the PARTNER marked a time — which is why the partner's slots are
+hashed apart from the content (`time_agreement_activities.partner_hash`): inside one content
+hash, "they added a time" and "I added a time" are the same event. The end that carries the
+locked time rings only for the side whose stored phase was `waiting`. It sets no
+`stale-date`: nothing here expires at a known instant — marks slip inside the five-hour lead
+one at a time, and the 2-minute sweep re-derives. Without this card a native, non-Telegram
+user hears nothing at all during the time step.
 `apns-collapse-id` is available per send (`ApnsSendOptions.collapseId`) and used by the drop push, where the dispatcher's retry can legitimately fire the same event twice. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |

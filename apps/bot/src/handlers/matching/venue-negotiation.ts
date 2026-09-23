@@ -57,6 +57,7 @@ import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
+import { apnsConfigured } from "../../services/apns.js";
 import {
   returnLapsedVenueStageToCalendar,
   venueLapseThreshold,
@@ -216,6 +217,19 @@ export async function startVenueNegotiation(
     },
   });
   if (claim.count === 0) return;
+
+  // The time step is over: end both sides' `time_agreement` lock-screen cards on
+  // the locked time (decision 2026-09-23). Here rather than only in
+  // `processCalendarSlotsUpdate` because THIS is the moment the row moves, and
+  // the claim above guarantees it happens exactly once. Fire-and-forget, lazily
+  // imported, skipped where APNs is not configured.
+  if (apnsConfigured()) {
+    void import("../../services/time-agreement-activity.js")
+      .then((m) => m.syncTimeAgreementActivities(matchId))
+      .catch((err) => {
+        console.warn(`[venue-negotiation] time-agreement card sync failed match=${matchId}:`, err);
+      });
+  }
 
   const match = await prisma.match.findUnique({
     where: { id: matchId },

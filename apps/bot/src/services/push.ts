@@ -154,7 +154,11 @@ export async function sendPushToUsers(
   );
 }
 
-export type LiveActivityType = "match_decision" | "date_day" | "venue_change";
+export type LiveActivityType =
+  | "match_decision"
+  | "date_day"
+  | "venue_change"
+  | "time_agreement";
 
 /**
  * Which registered update token may receive a push — for an activity type that

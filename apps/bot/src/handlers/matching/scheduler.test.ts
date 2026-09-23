@@ -62,9 +62,12 @@ import {
   handleCalendarWebAppData,
   processCalendarSlotsUpdate,
   getCalendarState,
+  isSlotSelectable,
   CALENDAR_DAY_COUNT,
+  CALENDAR_MIN_LEAD_MS,
   CALENDAR_SLOT_COUNT,
   CALENDAR_TIME_SLOTS,
+  CALENDAR_TIME_ZONE,
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 
@@ -194,6 +197,67 @@ describe("scheduler: pure slot helpers", () => {
   it("lets tests request a smaller number of calendar days", () => {
     const slots = generateProposalSlots(new Date("2026-04-09T12:00:00Z"), 2);
     expect(slots.length).toBe(2 * CALENDAR_TIME_SLOTS.length);
+  });
+
+  /**
+   * Пятичасовое правило (основатель, 2026-09-22) — отмена половины решения
+   * 2026-09-07, где запас был минутой «защиты от гонки». Сегодняшний день
+   * входит в окно, пока в нём остаётся хоть один слот дальше пяти часов.
+   */
+  describe("пятичасовой запас", () => {
+    const kyiv = (iso: string) => new Date(iso);
+    // 9 апреля 2026 Киев в EEST (UTC+3): 13:00 местных = 10:00 UTC,
+    // последний слот 19:30 местных = 16:30 UTC.
+    const firstSlotToday = wallToUtc(2026, 4, 9, 13, 0, CALENDAR_TIME_ZONE);
+    const lastSlotToday = wallToUtc(2026, 4, 9, 19, 30, CALENDAR_TIME_ZONE);
+
+    it("запас равен DATE_ALERT_HOURS, и граница строгая", () => {
+      expect(CALENDAR_MIN_LEAD_MS).toBe(5 * 60 * 60 * 1000);
+      const slot = new Date("2026-04-09T18:00:00Z");
+      expect(isSlotSelectable(slot, new Date(slot.getTime() - CALENDAR_MIN_LEAD_MS - 1))).toBe(true);
+      // Ровно пять часов — уже нельзя: правило «дальше пяти часов», не «пять и ближе».
+      expect(isSlotSelectable(slot, new Date(slot.getTime() - CALENDAR_MIN_LEAD_MS))).toBe(false);
+      expect(isSlotSelectable(slot, new Date(slot.getTime() - 60_000))).toBe(false);
+    });
+
+    it("сетка начинается СЕГОДНЯ, пока сегодня остаётся слот дальше пяти часов", () => {
+      // 06:00 Киев — до 19:30 сегодня далеко.
+      const slots = generateProposalSlots(kyiv("2026-04-09T03:00:00Z"));
+      expect(slots.length).toBe(CALENDAR_SLOT_COUNT);
+      expect(slots[0]!.toISOString()).toBe(firstSlotToday.toISOString());
+      // Окно всё те же шесть дней: последний слот — шестой день, а не пятый.
+      const spanDays =
+        (slots[slots.length - 1]!.getTime() - slots[0]!.getTime()) / (24 * 60 * 60 * 1000);
+      expect(Math.round(spanDays)).toBe(CALENDAR_DAY_COUNT - 1);
+    });
+
+    it("на самой границе: 14:29 Киев — сегодня ещё в окне, 14:30 — уже нет", () => {
+      const justInside = new Date(lastSlotToday.getTime() - CALENDAR_MIN_LEAD_MS - 60_000);
+      const justOutside = new Date(lastSlotToday.getTime() - CALENDAR_MIN_LEAD_MS);
+
+      expect(generateProposalSlots(justInside)[0]!.toISOString()).toBe(
+        firstSlotToday.toISOString(),
+      );
+      const tomorrowFirst = wallToUtc(2026, 4, 10, 13, 0, CALENDAR_TIME_ZONE);
+      expect(generateProposalSlots(justOutside)[0]!.toISOString()).toBe(
+        tomorrowFirst.toISOString(),
+      );
+      // И там и там ровно шесть дней — вечерняя пара не теряет день выбора.
+      expect(generateProposalSlots(justInside).length).toBe(CALENDAR_SLOT_COUNT);
+      expect(generateProposalSlots(justOutside).length).toBe(CALENDAR_SLOT_COUNT);
+    });
+
+    it("сегодняшние слоты внутри запаса в сетку не попадают", () => {
+      // 11:00 Киев: 13:00 и 15:00 уже внутри пяти часов, 16:30 и дальше — нет.
+      const slots = generateProposalSlots(kyiv("2026-04-09T08:00:00Z"));
+      const today = slots.filter((d) => d.getTime() < lastSlotToday.getTime() + 1);
+      expect(today[0]!.toISOString()).toBe(firstSlotToday.toISOString());
+      // Сетка их всё же содержит — она пишется один раз; отсекает их выдача
+      // (`getCalendarState`) и отказ `slot-in-past`. Здесь важно лишь то, что
+      // день сегодняшний, потому что ОДИН его слот ещё дальше пяти часов.
+      expect(today.filter((d) => isSlotSelectable(d, kyiv("2026-04-09T08:00:00Z"))).length)
+        .toBeGreaterThan(0);
+    });
   });
 
   it("formatSlotLabel yields a non-empty label", () => {
@@ -501,6 +565,70 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     // Ничего не записано и никакая фиксация не запущена.
     expect(mMatch.update).not.toHaveBeenCalled();
     expect(mStartVenue).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Пятичасовое правило (основатель, 2026-09-22). Причина отказа осталась
+   * прежней — `slot-in-past`: это контракт обеих поверхностей, и переименование
+   * сломало бы клиентов ради названия.
+   */
+  it("отвергает слот, до которого меньше пяти часов", async () => {
+    const soon = new Date(Date.now() + 4 * 3_600_000);
+    mockMatchInState({ proposedTimes: [soon] });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const result = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      soon.toISOString(),
+    ]);
+
+    expect(result).toEqual({ ok: false, reason: "slot-in-past" });
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mStartVenue).not.toHaveBeenCalled();
+  });
+
+  it("принимает слот ровно за пределами пяти часов", async () => {
+    const ok = new Date(Date.now() + 5 * 3_600_000 + 60_000);
+    mockMatchInState({ proposedTimes: [ok] });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [ok],
+      availableTimesA: [],
+      availableTimesB: [],
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+    mMatch.findUnique.mockResolvedValueOnce({
+      status: "negotiating",
+      availableTimesA: [ok],
+      availableTimesB: [],
+    });
+
+    const result = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      ok.toISOString(),
+    ]);
+
+    expect(result.ok).toBe(true);
+    expect(mMatch.update).toHaveBeenCalled();
+  });
+
+  it("не отдаёт в состоянии календаря слот внутри пяти часов", async () => {
+    const soon = new Date(Date.now() + 4 * 3_600_000);
+    const live = new Date(Date.now() + 26 * 3_600_000);
+    mockMatchInState({ proposedTimes: [soon, live] });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const state = await getCalendarState(1001n, "match-1");
+
+    expect(state.ok).toBe(true);
+    if (!state.ok) return;
+    expect(state.proposedTimes).toEqual([live.toISOString()]);
   });
 
   it("не отдаёт наступившие слоты в состоянии календаря", async () => {

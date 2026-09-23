@@ -394,9 +394,15 @@ export const PROXY_MAX_MESSAGE_LEN = 1000;
  * Half an hour rather than hours, deliberately. The pre-date rails catch up on
  * any date still in the future (the safety brief fires inside its window, not
  * at an exact instant), so the lead only has to cover "can the pair still see
- * the card and get there". A longer lead would overrule the calendar's own
- * rule that a same-day slot a few hours out is legitimate (`MIN_SLOT_LEAD_MS`
- * in `handlers/matching/scheduler.ts`).
+ * the card and get there".
+ *
+ * **Deliberately NOT raised to the calendar's five hours** (`CALENDAR_MIN_LEAD_MS`
+ * in `handlers/matching/scheduler.ts`, founder 2026-09-22). The calendar decides
+ * what may be OFFERED, and five hours before a date is the earliest a pair may
+ * agree to meet; the venue step is what a pair does with a time they already
+ * agreed to, and by then the date is legitimately closer than that. A pair that
+ * locked 18:30 at 13:00 and settled the venue at 15:00 has done nothing wrong —
+ * raising this to five hours would send them back to the calendar for it.
  */
 export const VENUE_FINALIZE_MIN_LEAD_MS = 30 * 60 * 1000;
 /**
@@ -497,6 +503,40 @@ export const VENUE_CHANGE_ACTIVITY_PICK_NAMES_MAX = 3;
  * here and frozen by a test rather than trusted.
  */
 export const VENUE_CHANGE_ACTIVITY_NAME_MAX_CHARS = 80;
+
+/**
+ * The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+ * decision 2026-09-23) — the §3.6 twin of the four above.
+ *
+ * Deliberately its OWN constants rather than a reuse of the venue-change ones.
+ * The numbers are the same and for the same reasons (iOS freezes a Live Activity
+ * at 8 h; a resolved card wants a moment on screen to be read), but they belong
+ * to two different cards on two different steps: tying them together would mean
+ * a future tweak to one silently moves the other, and nobody reading either
+ * would see it coming.
+ */
+export const TIME_AGREEMENT_ACTIVITY_RESTART_HOURS = 7.5;
+/**
+ * How long the card lingers after the time LOCKED — long enough to read that it
+ * is settled. Nothing else lingers: a calendar that merely closed (cancelled,
+ * expired, the grid reset) has nothing to read.
+ */
+export const TIME_AGREEMENT_ACTIVITY_RESOLVED_DISMISS_MINUTES = 15;
+/**
+ * Slots sent per side on the card — the earliest two.
+ *
+ * Two because that is what the iOS screen shows and what a lock-screen line can
+ * hold; the Mini App has never capped how many a person may MARK, and this does
+ * not start capping it. It caps what the card carries, which is why it is a
+ * presentation constant and not a rule the calendar enforces.
+ */
+export const TIME_AGREEMENT_ACTIVITY_SLOTS_MAX = 2;
+/**
+ * Longest partner first name put on the card. Apple drops a Live Activity
+ * payload over 4096 bytes WITHOUT an error, so the worst case is capped here
+ * and frozen by a test rather than trusted.
+ */
+export const TIME_AGREEMENT_ACTIVITY_NAME_MAX_CHARS = 80;
 
 /** Gennety Premium (§Premium, feature-flagged). */
 /**

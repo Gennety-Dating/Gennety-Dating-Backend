@@ -8,7 +8,8 @@ import { releaseLiveActivityTokenFromOtherUsers } from "../../services/device-to
  * (IOS_APP_ROADMAP task 0.3). ActivityKit hands the app a `start` token
  * (push-to-start, per activity type) and an `update` token (per running
  * activity); both are POSTed here so `services/push.ts` can drive the
- * "match decision", "date day" and "venue change" activities remotely via APNs.
+ * "match decision", "date day", "venue change" and "time agreement" activities
+ * remotely via APNs.
  *
  * One row per (user, activityType, kind) — the single-live-match invariant
  * guarantees a user never runs two activities of the same type, so
@@ -18,7 +19,12 @@ export const liveActivityRouter: Router = Router();
 
 liveActivityRouter.use(requireAuth);
 
-const ACTIVITY_TYPES = new Set(["match_decision", "date_day", "venue_change"]);
+const ACTIVITY_TYPES = new Set([
+  "match_decision",
+  "date_day",
+  "venue_change",
+  "time_agreement",
+]);
 const KINDS = new Set(["start", "update"]);
 const TOKEN_MAX_LENGTH = 200;
 

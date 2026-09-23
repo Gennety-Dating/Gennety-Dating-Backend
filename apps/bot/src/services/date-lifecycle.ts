@@ -32,6 +32,7 @@ import {
 } from "./date-day-activity.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
 import { sweepVenueChangeActivities } from "./venue-change-activity.js";
+import { sweepTimeAgreementActivities } from "./time-agreement-activity.js";
 import { sendDateTerminalBeats } from "./date-terminal-invite.js";
 import { buildAttendanceKeyboard } from "./post-date-keyboards.js";
 import { attendanceQuestionKey } from "./attendance.js";
@@ -207,6 +208,16 @@ export async function runDateLifecycleTick(
   // lapsed ends in this same tick. Never lets the rest of the tick fail.
   await sweepVenueChangeActivities(now).catch((err) => {
     console.warn("[date-lifecycle] venue-change activity sweep failed:", err);
+  });
+
+  // 0c. The time-agreement lock-screen cards (iOS `time_agreement` Live
+  // Activity): the §3.6 twin of the sweep above. End the ones whose calendar
+  // closed (a cancelled or expired match, the grid reset by the venue lapse),
+  // re-derive the ones whose marks have slipped inside the five-hour lead,
+  // renew the ones iOS is about to freeze (~7.5h), retry updates that could not
+  // be delivered yet. Never lets the rest of the tick fail.
+  await sweepTimeAgreementActivities(now).catch((err) => {
+    console.warn("[date-lifecycle] time-agreement activity sweep failed:", err);
   });
 
   // 1 & 2. Ice-breakers + Emergency window — 5h before agreed_time

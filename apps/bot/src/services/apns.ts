@@ -198,6 +198,22 @@ export interface LiveActivityUpdateInput {
   staleDate?: number;
   /** Unix seconds when an `end` event removes the activity from the lock screen. */
   dismissalDate?: number;
+  /**
+   * Make this update (or end) ring.
+   *
+   * **Optional, and absent by default on purpose.** An update is normally the
+   * card quietly redrawing itself on a screen the person can already see, and a
+   * notification per redraw would be the product buzzing at somebody about its
+   * own bookkeeping. It is set only where an update carries news the person has
+   * not been told any other way — the time-agreement card when the PARTNER moved
+   * (`time-agreement-activity.ts`), which is otherwise the one moment a native
+   * user hears nothing at all. `venue_change` and `date_day` pass nothing and
+   * their payloads are byte-for-byte what they were.
+   *
+   * `apns-priority` stays 10 either way: an alert the person is waiting on is
+   * exactly the push that must not be held back for power saving.
+   */
+  alert?: { title: string; body: string };
 }
 
 /** ActivityKit remote-update payload (`apns-push-type: liveactivity`). */
@@ -212,6 +228,7 @@ export function buildLiveActivityPayload(
       ...(input.contentState ? { "content-state": input.contentState } : {}),
       ...(input.staleDate ? { "stale-date": input.staleDate } : {}),
       ...(input.dismissalDate ? { "dismissal-date": input.dismissalDate } : {}),
+      ...(input.alert ? { alert: { title: input.alert.title, body: input.alert.body } } : {}),
     },
   };
 }
