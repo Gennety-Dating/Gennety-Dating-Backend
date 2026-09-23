@@ -208,6 +208,31 @@ describe("payload builders", () => {
       },
     });
   });
+
+  /**
+   * An update may ring, and only when it is asked to (decision 2026-09-23). The
+   * absent case is the one worth freezing: `date_day` and `venue_change` pass no
+   * alert and their payloads must stay byte-for-byte what they were.
+   */
+  it("puts an alert on an update or end only when one is given", () => {
+    const loud = buildLiveActivityPayload(
+      { event: "end", dismissalDate: 1_800_000_000, alert: { title: "T", body: "B" } },
+      1_700_000_000_000,
+    );
+    expect(loud).toEqual({
+      aps: {
+        timestamp: 1_700_000_000,
+        event: "end",
+        "dismissal-date": 1_800_000_000,
+        alert: { title: "T", body: "B" },
+      },
+    });
+
+    const quiet = buildLiveActivityPayload({ event: "end" }, 1_700_000_000_000) as {
+      aps: Record<string, unknown>;
+    };
+    expect("alert" in quiet.aps).toBe(false);
+  });
 });
 
 describe("isProviderCredentialFailure", () => {

@@ -95,6 +95,30 @@ describe("/v1/me/live-activity-token", () => {
     expect(del.status).toBe(204);
   });
 
+  it("accepts the time-agreement card's tokens (decision 2026-09-23)", async () => {
+    const start = await request(buildApp())
+      .post("/v1/me/live-activity-token")
+      .send({ activityType: "time_agreement", kind: "start", token: "tok-start" });
+    expect(start.status).toBe(200);
+    const update = await request(buildApp())
+      .post("/v1/me/live-activity-token")
+      .send({ activityType: "time_agreement", kind: "update", token: "tok-upd", matchId: "m-1" });
+    expect(update.status).toBe(200);
+    expect(upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        create: {
+          userId: "user-1",
+          activityType: "time_agreement",
+          kind: "update",
+          token: "tok-upd",
+          matchId: "m-1",
+        },
+      }),
+    );
+    const del = await request(buildApp()).delete("/v1/me/live-activity-token/time_agreement/start");
+    expect(del.status).toBe(204);
+  });
+
   it("rejects unknown activity types and kinds", async () => {
     const res = await request(buildApp())
       .post("/v1/me/live-activity-token")

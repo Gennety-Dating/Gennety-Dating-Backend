@@ -24,15 +24,36 @@ inline keyboards before falling back to the calendar) was removed
 better UX than three separate retries.
 
 - **Server-side slot grid.** When the match enters `negotiating` the
-  bot writes **6 consecutive dates** (next 6 days starting tomorrow)
-  with **14 time slots per date** into `Match.proposedTimes`: every 30
-  minutes from 13:00 through 19:30 local. Both users see the same exact
-  DateTime allowlist; the public API rejects any submission whose ISO
-  isn't on it. Pre-2026-05-10 the grid was 12 slots with Sun/Mon
-  pre-skipped; pre-2026-05-11 it was 6 dates at only 18:00; the earliest
+  bot writes **6 consecutive dates** with **14 time slots per date** into
+  `Match.proposedTimes`: every 30 minutes from 13:00 through 19:30 local. Both
+  users see the same exact DateTime allowlist; the public API rejects any
+  submission whose ISO isn't on it. Pre-2026-05-10 the grid was 12 slots with
+  Sun/Mon pre-skipped; pre-2026-05-11 it was 6 dates at only 18:00; the earliest
   slot was 17:30 until 2026-07-07, then a 6-slot 17:00–19:30 evening band
   until 2026-07-18, when the start was pulled forward to 13:00 (14 slots
-  per date) so afternoon dates are offered, not just evening ones.
+  per date) so afternoon dates are offered, not just evening ones. It started
+  TOMORROW until 2026-09-22 — see the five-hour rule below.
+- **The five-hour rule (founder, 2026-09-22).** **A date may not be agreed less
+  than five hours from now** — `DATE_ALERT_HOURS`, the line every pre-date rail
+  starts at (ice-breakers, Wingman, the coordination offer, the safety brief,
+  the date-day card). Two consequences of the one rule
+  (`CALENDAR_MIN_LEAD_MS`, `isSlotSelectable`):
+  - **The window starts TODAY** while today still has a slot beyond that line,
+    otherwise tomorrow. It is six days long either way, so an evening pair gets
+    the same amount of choice, shifted — never five days instead of six. With
+    19:30 as the last slot, today is in the window until 14:29 local.
+  - **A slot inside five hours is neither offered nor accepted.** The state
+    reads (`getCalendarState`, the native GET) drop it from `proposedTimes`, so
+    no client draws a cell the server must refuse; a submission containing one
+    is refused whole with `slot-in-past` (409, both surfaces). `mySlots` /
+    `peerSlots` are NOT filtered — those are the record of what somebody
+    marked, and hiding it would misstate the state; the cell simply stops being
+    drawable.
+
+  This **reverses** the deliberate "one minute — a race guard, not a product
+  rule" of 2026-09-07; see the decision journal, 2026-09-23. There is NO
+  server-side cap on how many slots a side may mark: two picks is the iOS
+  screen's rule, and the Mini App has never had one.
 - **The last three times of each day are a paid band (2026-08-26, feature-flagged
   `PRIME_TIME_ENABLED`).** 18:30 / 19:00 / 19:30 Kyiv are the slots people
   actually want, so they open with Gennety Premium — or, for a pair with no
@@ -178,6 +199,39 @@ better UX than three separate retries.
   keep the localized date phrase + `date_time` entity (with no card there is
   nothing else stating when the date is); the departure-point prompt goes out
   either way. Mobile users are skipped (they render their own scheduling UI).
+- **The lock-screen card (iOS Live Activity `time_agreement`, since
+  2026-09-23).** The §3.7b twin, for this step
+  (`services/time-agreement-activity.ts`). One card per person per match,
+  showing the calendar from THAT person's side, and it exists only from the
+  first mark by either side. Three phases, highest first:
+  - `match` — the time just locked. Sent as the card's END with the agreed time
+    and a 15-minute linger, so it can be read.
+  - `partner` — the calendar is open and the partner has marked a time this
+    side has not ("your move"). Carries up to two of those times plus my own.
+  - `waiting` — the calendar is open, I have marked and the partner has not
+    (`isSideWaitingOnPeer`, the §3.6b shimmer predicate).
+
+  Anything else ends the card at once: no grid yet, nobody has marked, the
+  match is cancelled / expired / finished, an overlap is waiting on a final
+  pick (nobody is blocked there — either side can close it in the app), or
+  every mark has slipped inside the five-hour lead.
+
+  **Why it exists, and why it is louder than the venue card.** A native user
+  previously got NOTHING when their partner proposed a time or when the time
+  locked — the whole step was announced over Telegram, which a mobile-first
+  account does not have. So this card's UPDATE can ring, under one rule: only
+  when it becomes (or stays) "your move" *because the partner moved*. My own
+  edits never ring at me. The END that carries the locked time rings only for
+  the side that was waiting on it — the other side is the one who just tapped
+  it. Everything else is the venue card verbatim: diff against what was last
+  sent (`time_agreement_activities`), push-to-start / update / end / nothing,
+  a 7.5 h renewal ahead of the iOS 8-hour freeze, and the 2-minute
+  `date-lifecycle` sweep for what no write announces — including a mark
+  crossing the five-hour line. **The lock screen names the partner** (first
+  name, nominative; no photo, no age), the same founder exception §3.7b
+  carries. Telegram is unchanged: it has the calendar card and the shimmer.
+  Demo mode: nothing to do — the demo bot is Telegram-only and its users
+  register no Live Activity tokens, so every sync is a lookup and no push.
 - **Backwards-compat.** `Match.schedulingIteration` and
   `pickedTimeA/B` are retained as deprecated columns until a follow-up
   cleanup migration drops them; mid-deploy taps on legacy

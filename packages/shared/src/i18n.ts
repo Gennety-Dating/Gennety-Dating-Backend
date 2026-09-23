@@ -977,6 +977,19 @@ const translations = {
     venueActivityStartWaiting: "Waiting to hear back about the place",
     venueActivityStartMatch: "You both picked {venue}",
     venueActivityPartnerFallback: "Your match",
+    // The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+    // decision 2026-09-23): the alert a push-to-start carries, and the one an
+    // update carries when the PARTNER moved. `{when}` is a weekday + HH:mm in the
+    // RECIPIENT's timezone (the weekday is dropped when the slot is today); the
+    // partner name is only ever the SUBJECT — the server declines no names, which
+    // is also why waiting has a nameless twin rather than reusing
+    // `venueActivityPartnerFallback` ("Ждём, когда Твой мэтч ответит" would
+    // capitalise mid-sentence).
+    timeActivityStartTitle: "Picking a time",
+    timeActivityStartPartner: "{name} suggests {when}",
+    timeActivityStartWaiting: "Waiting for {name} to reply",
+    timeActivityStartWaitingNoName: "Waiting to hear back about the time",
+    timeActivityStartMatch: "Time set: {when}",
     emergencyUnlocked:
       "Plans changed and you really can't make it? You can still cancel below.\n" +
       "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
@@ -2258,6 +2271,19 @@ const translations = {
     venueActivityStartWaiting: "Ждём ответ по месту",
     venueActivityStartMatch: "Общий выбор: {venue}",
     venueActivityPartnerFallback: "Твой мэтч",
+    // The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+    // decision 2026-09-23): the alert a push-to-start carries, and the one an
+    // update carries when the PARTNER moved. `{when}` is a weekday + HH:mm in the
+    // RECIPIENT's timezone (the weekday is dropped when the slot is today); the
+    // partner name is only ever the SUBJECT — the server declines no names, which
+    // is also why waiting has a nameless twin rather than reusing
+    // `venueActivityPartnerFallback` ("Ждём, когда Твой мэтч ответит" would
+    // capitalise mid-sentence).
+    timeActivityStartTitle: "Выбираем время",
+    timeActivityStartPartner: "{name} предлагает {when}",
+    timeActivityStartWaiting: "Ждём, когда {name} ответит",
+    timeActivityStartWaitingNoName: "Ждём ответ по времени",
+    timeActivityStartMatch: "Время назначено: {when}",
     emergencyUnlocked:
       "Планы поменялись и совсем не можешь прийти? Отменить можно кнопкой ниже.\n" +
       "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
@@ -3471,6 +3497,19 @@ const translations = {
     venueActivityStartWaiting: "Чекаємо на відповідь щодо місця",
     venueActivityStartMatch: "Спільний вибір: {venue}",
     venueActivityPartnerFallback: "Твій метч",
+    // The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+    // decision 2026-09-23): the alert a push-to-start carries, and the one an
+    // update carries when the PARTNER moved. `{when}` is a weekday + HH:mm in the
+    // RECIPIENT's timezone (the weekday is dropped when the slot is today); the
+    // partner name is only ever the SUBJECT — the server declines no names, which
+    // is also why waiting has a nameless twin rather than reusing
+    // `venueActivityPartnerFallback` ("Ждём, когда Твой мэтч ответит" would
+    // capitalise mid-sentence).
+    timeActivityStartTitle: "Обираємо час",
+    timeActivityStartPartner: "{name} пропонує {when}",
+    timeActivityStartWaiting: "Чекаємо, коли {name} відповість",
+    timeActivityStartWaitingNoName: "Чекаємо на відповідь щодо часу",
+    timeActivityStartMatch: "Час призначено: {when}",
     emergencyUnlocked:
       "Плани змінилися і зовсім не можеш прийти? Скасувати можна кнопкою нижче.\n" +
       "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
@@ -4653,6 +4692,19 @@ const deTranslations: TranslationTable = {
   venueActivityStartWaiting: "Wir warten auf eine Antwort zum Ort",
   venueActivityStartMatch: "Ihr habt beide {venue} gewählt",
   venueActivityPartnerFallback: "Dein Match",
+  // The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+  // decision 2026-09-23): the alert a push-to-start carries, and the one an
+  // update carries when the PARTNER moved. `{when}` is a weekday + HH:mm in the
+  // RECIPIENT's timezone (the weekday is dropped when the slot is today); the
+  // partner name is only ever the SUBJECT — the server declines no names, which
+  // is also why waiting has a nameless twin rather than reusing
+  // `venueActivityPartnerFallback` ("Ждём, когда Твой мэтч ответит" would
+  // capitalise mid-sentence).
+  timeActivityStartTitle: "Zeit wählen",
+  timeActivityStartPartner: "{name} schlägt {when} vor",
+  timeActivityStartWaiting: "Wir warten auf eine Antwort von {name}",
+  timeActivityStartWaitingNoName: "Wir warten auf eine Antwort zur Zeit",
+  timeActivityStartMatch: "Termin steht: {when}",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
     "Pläne geändert und du kannst wirklich nicht? Du kannst unten absagen.\n" +
@@ -5835,6 +5887,19 @@ const plTranslations: TranslationTable = {
   venueActivityStartWaiting: "Czekamy na odpowiedź w sprawie miejsca",
   venueActivityStartMatch: "Wspólny wybór: {venue}",
   venueActivityPartnerFallback: "Twój match",
+  // The time-agreement lock-screen card (iOS `time_agreement` Live Activity,
+  // decision 2026-09-23): the alert a push-to-start carries, and the one an
+  // update carries when the PARTNER moved. `{when}` is a weekday + HH:mm in the
+  // RECIPIENT's timezone (the weekday is dropped when the slot is today); the
+  // partner name is only ever the SUBJECT — the server declines no names, which
+  // is also why waiting has a nameless twin rather than reusing
+  // `venueActivityPartnerFallback` ("Ждём, когда Твой мэтч ответит" would
+  // capitalise mid-sentence).
+  timeActivityStartTitle: "Wybieramy czas",
+  timeActivityStartPartner: "{name} proponuje {when}",
+  timeActivityStartWaiting: "Czekamy, aż {name} odpowie",
+  timeActivityStartWaitingNoName: "Czekamy na odpowiedź w sprawie czasu",
+  timeActivityStartMatch: "Czas ustalony: {when}",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
     "Plany się zmieniły i naprawdę nie możesz przyjść? Możesz odwołać poniżej.\n" +
