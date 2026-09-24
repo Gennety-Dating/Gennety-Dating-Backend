@@ -1,7 +1,6 @@
 import { InlineKeyboard, type Api, type RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import {
-  magicContextPrompt,
   DEFAULT_SESSION,
   type SessionData,
   type Language,
@@ -19,24 +18,10 @@ import {
   RADAR_MINI_APP_CLOSE_LEAD_MS,
 } from "../../services/radar-thinking.js";
 
-/**
- * Type Radar onboarding gate wiring (§Type Radar, step 5B). The agent raises
- * `typeRadarRequested`; this module sends the invite (web_app + Skip), handles
- * the Skip callback, and resumes the onboarding agent after the picker is
- * submitted (from the Mini App route) or skipped (from the callback) — moving
- * the user on to the Magic Prompt / photos step exactly as if the gate hadn't
- * been there. Off by default (`TYPE_RADAR_ENABLED`).
- */
+
 
 /** Callback data for the inline Skip button on the radar invite. */
 export const RADAR_SKIP_CALLBACK = "radar:skip";
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
 
 /**
  * Send the radar invite to a Telegram chat: the intro text + a `web_app` button
@@ -90,20 +75,11 @@ export async function markTypeRadarSkipped(telegramId: bigint): Promise<void> {
 
 /** Session fields to apply after the resume, derived from the agent result. */
 export function sessionPatchAfterRadar(result: AgentTurnResult): Partial<SessionData> {
-  if (result.contextDumpStarted || result.contextPromptRequested) {
-    // Accepted path: the Magic Prompt was just shown — buffer the paste next.
-    return { awaitingContextDump: true, contextDumpBuffer: "", expectingPhoto: false };
-  }
   // Declined path (or anything else): photos, or nothing special.
-  return { expectingPhoto: result.expectingPhoto, awaitingContextDump: false };
+  return { expectingPhoto: result.expectingPhoto };
 }
 
-/**
- * Resume the onboarding agent after the radar is submitted/skipped and dispatch
- * the next step to the chat: the Magic Prompt (accepted) or the photo request
- * (declined). Returns the session patch the caller must apply (to `ctx.session`
- * for the Skip callback, or the persisted session for the Mini App route).
- */
+
 export async function resumeOnboardingAfterRadar(
   api: Api<RawApi>,
   telegramId: bigint,
@@ -111,39 +87,9 @@ export async function resumeOnboardingAfterRadar(
 ): Promise<{ sessionPatch: Partial<SessionData> }> {
   const result = await runAgentTurn(telegramId, { kind: "resume" });
 
-  // Send the Magic Prompt above the reply, mirroring the conversational handler.
-  if (result.contextPromptRequested) {
-    const prompt = magicContextPrompt(
-      (await userLanguage(telegramId)) ?? "en",
-    );
-    try {
-      await api.sendMessage(chatId, `<pre>${escapeHtml(prompt)}</pre>`, {
-        parse_mode: "HTML",
-      });
-    } catch {
-      await api.sendMessage(chatId, prompt).catch(() => {});
-    }
-  }
-
   const sessionPatch = sessionPatchAfterRadar(result);
 
   if (result.reply) {
-    // On the declined path this reply IS the photo request — i.e. the upload
-    // stage's first plain-text message, which is where the persistent bottom
-    // panel attaches (PRODUCT_SPEC §1.3). The radar gate intercepts the photos
-    // question before `handleConversational` ever sends it, so without doing it
-    // here the panel simply never appears while TYPE_RADAR_ENABLED is on —
-    // which is every environment since 2026-07-23.
-    //
-    // The flag is set only after the send actually succeeds: marking the panel
-    // shown when its message was lost would suppress every later attempt to
-    // establish it, leaving the user with no way into the editor at all.
-    // A radar resume lands on ai_memory or photos, never on the voice prompt
-    // (that question sits after photos), so this branch is unreachable today.
-    // It is here anyway because the alternative is an exception in the
-    // one-sender rule, and an exception is how the eight bare senders happened:
-    // the reply is delivered from nine places and only the rule keeps them
-    // agreeing. This function owns no session, so the claim rides the patch.
     if (result.voicePromptRequested === true) {
       const language = (await userLanguage(telegramId)) ?? "en";
       const ask = voicePromptAskPayload(language, result.reply);
@@ -183,25 +129,7 @@ export interface RadarThinkingOptions {
   rng?: () => number;
 }
 
-/**
- * Play the Type Radar "thinking state" sequence, then resume onboarding —
- * the completion path for a user who actually rated the deck
- * (`TYPE_RADAR_PRODUCT_SPEC.md`).
- *
- * Ordering matters. The caller has already answered the Mini App's submit
- * request, so this runs detached while the Mini App finishes its own ✓ screen;
- * we wait {@link RADAR_MINI_APP_CLOSE_LEAD_MS} for it to close, play the status
- * beats in the now-visible chat, and only then resume the agent — whose next
- * message (Magic Prompt or photo request) lands in the deleted status's place.
- *
- * The sequence is cosmetic and must never cost the user their next onboarding
- * step: everything up to the resume is caught, and `runStatusSequence` already
- * swallows send/edit/delete failures on its own. A resume failure still
- * propagates so the caller logs it exactly as before.
- *
- * NOT used by the Skip path — nothing was rated there, so "Checking your
- * ratings" would be a straight-up lie.
- */
+
 export async function runRadarThinkingThenResume(
   api: Api<RawApi>,
   telegramId: bigint,
@@ -245,14 +173,6 @@ export async function handleRadarSkip(ctx: BotContext): Promise<void> {
   Object.assign(ctx.session, sessionPatch);
 }
 
-async function userLanguage(telegramId: bigint): Promise<Language | null> {
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { language: true },
-  });
-  return (user?.language ?? null) as Language | null;
-}
-
 /**
  * Persist a session patch directly to the `bot_sessions` store, for callers
  * without a live grammY `ctx` (the Mini App submit route). Session key is the
@@ -271,4 +191,12 @@ export async function patchOnboardingSession(
     create: { key, data: next as unknown as object },
     update: { data: next as unknown as object },
   });
+}
+
+async function userLanguage(telegramId: bigint): Promise<Language | null> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { language: true },
+  });
+  return (user?.language ?? null) as Language | null;
 }

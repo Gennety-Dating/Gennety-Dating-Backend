@@ -79,12 +79,6 @@ export interface OnboardingStrings {
   waitlistMeta: string;
   waitlistChangeCity: string;
   waitlistChanging: string;
-  aiMemoryTitle: string;
-  aiMemoryAria: string;
-  aiMemoryAccept: string;
-  aiMemoryAccepting: string;
-  aiMemoryLater: string;
-  aiMemorySaving: string;
   // Referral welcome gift (§Referral) — the wow screen for an invited user.
   referralGiftTitle: string;
   referralGiftBody: string;
@@ -253,12 +247,6 @@ const en: OnboardingStrings = {
   waitlistMeta: "Nothing else to do for now. We'll message you right here in Telegram.",
   waitlistChangeCity: "Choose another city",
   waitlistChanging: "One moment...",
-  aiMemoryTitle: "Would you like to import memory from other AI apps to give your personal AI matchmaker more context about you?",
-  aiMemoryAria: "ChatGPT, Claude and Gemini",
-  aiMemoryAccept: "Yes, connect",
-  aiMemoryAccepting: "Connecting...",
-  aiMemoryLater: "Later",
-  aiMemorySaving: "Saving...",
   referralGiftTitle: "A friend gifted you Premium",
   referralGiftBody:
     "Because {name} invited you, your first {monthsPhrase} of Gennety Premium is on us — active right now.",
@@ -319,11 +307,9 @@ const en: OnboardingStrings = {
     "otp-send-failed": "We couldn't send the email. Try again.",
     "terms-required": "Accept the terms first.",
     "language-required": "Choose a language first.",
-    "ai-memory-preference-required": "Choose whether to connect memory from AI apps first.",
     invalid_name: "Use letters only — 2 characters or more.",
     age_out_of_range: "Gennety is for people aged 18-55 right now.",
     height_out_of_range: "Pick a height between 140 and 220 cm.",
-    "invalid-ai-memory-preference": "We couldn't save your choice. Try again.",
     "email-required": "Verify your university email first.",
     "location-required": "Choose your matching city first.",
     "city-not-supported": "Gennety isn't live in that city yet. Choose Kyiv to continue.",
@@ -443,12 +429,6 @@ const ru: OnboardingStrings = {
   waitlistMeta: "Пока делать ничего не нужно. Напишем тебе прямо здесь, в Telegram.",
   waitlistChangeCity: "Выбрать другой город",
   waitlistChanging: "Секунду...",
-  aiMemoryTitle: "Хочешь импортировать память из других AI-приложений, чтобы дать личному AI-матчмейкеру больше контекста о тебе?",
-  aiMemoryAria: "ChatGPT, Claude и Gemini",
-  aiMemoryAccept: "Да, подключить",
-  aiMemoryAccepting: "Подключаю...",
-  aiMemoryLater: "Позже",
-  aiMemorySaving: "Сохраняю...",
   referralGiftTitle: "Друг подарил тебе Premium",
   referralGiftBody:
     "{name} пригласил(а) тебя — поэтому первый {monthsPhrase} Gennety Premium за наш счёт. Уже активен.",
@@ -509,11 +489,9 @@ const ru: OnboardingStrings = {
     "otp-send-failed": "Не удалось отправить письмо. Попробуй ещё раз.",
     "terms-required": "Сначала нужно принять условия.",
     "language-required": "Сначала выбери язык.",
-    "ai-memory-preference-required": "Сначала выбери, хочешь ли подключить память из AI-приложений.",
     invalid_name: "Только буквы — от 2 символов.",
     age_out_of_range: "Сейчас Gennety доступен для возраста 18-55.",
     height_out_of_range: "Выбери рост от 140 до 220 см.",
-    "invalid-ai-memory-preference": "Не получилось сохранить выбор. Попробуй ещё раз.",
     "email-required": "Сначала подтверди университетскую почту.",
     "location-required": "Сначала выбери город для мэтчей.",
     "city-not-supported": "В этом городе Gennety пока не работает. Выбери Киев, чтобы продолжить.",
@@ -633,12 +611,6 @@ const uk: OnboardingStrings = {
   waitlistMeta: "Поки робити нічого не треба. Напишемо тобі просто тут, у Telegram.",
   waitlistChangeCity: "Обрати інше місто",
   waitlistChanging: "Секунду...",
-  aiMemoryTitle: "Хочеш імпортувати пам'ять з інших AI-застосунків, щоб дати особистому AI-матчмейкеру більше контексту про тебе?",
-  aiMemoryAria: "ChatGPT, Claude і Gemini",
-  aiMemoryAccept: "Так, підключити",
-  aiMemoryAccepting: "Підключаю...",
-  aiMemoryLater: "Пізніше",
-  aiMemorySaving: "Зберігаю...",
   referralGiftTitle: "Друг подарував тобі Premium",
   referralGiftBody:
     "{name} запросив(ла) тебе — тому перший {monthsPhrase} Gennety Premium за наш рахунок. Уже активний.",
@@ -700,11 +672,9 @@ const uk: OnboardingStrings = {
     "otp-send-failed": "Не вдалося надіслати лист. Спробуй ще раз.",
     "terms-required": "Спочатку прийми умови.",
     "language-required": "Спочатку обери мову.",
-    "ai-memory-preference-required": "Спочатку обери, чи підключати пам'ять з AI-застосунків.",
     invalid_name: "Лише літери — від 2 символів.",
     age_out_of_range: "Зараз Gennety доступний для віку 18-55.",
     height_out_of_range: "Обери зріст від 140 до 220 см.",
-    "invalid-ai-memory-preference": "Не вдалося зберегти вибір. Спробуй ще раз.",
     "email-required": "Спочатку підтвердь університетську пошту.",
     "location-required": "Спочатку обери місто для метчів.",
     "city-not-supported": "У цьому місті Gennety ще не працює. Обери Київ, щоб продовжити.",
@@ -824,12 +794,6 @@ const de: OnboardingStrings = {
   waitlistMeta: "Du musst jetzt nichts weiter tun. Wir melden uns direkt hier in Telegram.",
   waitlistChangeCity: "Andere Stadt wählen",
   waitlistChanging: "Einen Moment...",
-  aiMemoryTitle: "Möchtest du Erinnerungen aus anderen KI-Apps importieren, damit dein persönlicher KI-Matchmaker mehr Kontext über dich hat?",
-  aiMemoryAria: "ChatGPT, Claude und Gemini",
-  aiMemoryAccept: "Ja, verbinden",
-  aiMemoryAccepting: "Verbinden...",
-  aiMemoryLater: "Später",
-  aiMemorySaving: "Speichern...",
   referralGiftTitle: "Ein Freund hat dir Premium geschenkt",
   referralGiftBody:
     "Weil {name} dich eingeladen hat, geht dein erster {monthsPhrase} Gennety Premium auf uns — ab sofort aktiv.",
@@ -891,11 +855,9 @@ const de: OnboardingStrings = {
     "otp-send-failed": "Die E-Mail konnte nicht gesendet werden. Versuch es erneut.",
     "terms-required": "Akzeptiere zuerst die Bedingungen.",
     "language-required": "Wähle zuerst eine Sprache.",
-    "ai-memory-preference-required": "Wähle zuerst, ob du Erinnerungen aus AI-Apps verbinden möchtest.",
     invalid_name: "Nur Buchstaben — mindestens 2 Zeichen.",
     age_out_of_range: "Gennety ist derzeit für 18- bis 55-Jährige.",
     height_out_of_range: "Wähle eine Größe zwischen 140 und 220 cm.",
-    "invalid-ai-memory-preference": "Deine Auswahl konnte nicht gespeichert werden. Versuch es erneut.",
     "email-required": "Bestätige zuerst deine Universitäts-E-Mail.",
     "location-required": "Wähle zuerst deine Match-Stadt.",
     "city-not-supported": "In dieser Stadt gibt es Gennety noch nicht. Wähle Kyjiw, um fortzufahren.",
@@ -1015,12 +977,6 @@ const pl: OnboardingStrings = {
   waitlistMeta: "Na razie nie musisz nic robić. Napiszemy do Ciebie tutaj, na Telegramie.",
   waitlistChangeCity: "Wybierz inne miasto",
   waitlistChanging: "Chwileczkę...",
-  aiMemoryTitle: "Chcesz zaimportować pamięć z innych aplikacji AI, aby Twój osobisty AI-matchmaker miał więcej kontekstu o Tobie?",
-  aiMemoryAria: "ChatGPT, Claude i Gemini",
-  aiMemoryAccept: "Tak, połącz",
-  aiMemoryAccepting: "Łączenie...",
-  aiMemoryLater: "Później",
-  aiMemorySaving: "Zapisywanie...",
   referralGiftTitle: "Znajomy podarował ci Premium",
   referralGiftBody:
     "Ponieważ {name} cię zaprosił(a), twój pierwszy {monthsPhrase} Gennety Premium jest na nasz koszt — już aktywny.",
@@ -1082,11 +1038,9 @@ const pl: OnboardingStrings = {
     "otp-send-failed": "Nie udało się wysłać e-maila. Spróbuj ponownie.",
     "terms-required": "Najpierw zaakceptuj warunki.",
     "language-required": "Najpierw wybierz język.",
-    "ai-memory-preference-required": "Najpierw wybierz, czy połączyć pamięć z aplikacji AI.",
     invalid_name: "Tylko litery — co najmniej 2 znaki.",
     age_out_of_range: "Gennety jest teraz dla osób w wieku 18-55 lat.",
     height_out_of_range: "Wybierz wzrost od 140 do 220 cm.",
-    "invalid-ai-memory-preference": "Nie udało się zapisać wyboru. Spróbuj ponownie.",
     "email-required": "Najpierw potwierdź uczelniany e-mail.",
     "location-required": "Najpierw wybierz miasto dopasowań.",
     "city-not-supported": "W tym mieście Gennety jeszcze nie działa. Wybierz Kijów, aby kontynuować.",

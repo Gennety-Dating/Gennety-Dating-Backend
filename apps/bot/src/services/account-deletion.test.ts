@@ -216,10 +216,6 @@ describe("deleteUserAccount", () => {
   it("erases the chat session, which no cascade can reach", async () => {
     await deleteUserAccount(USER_ID, null);
 
-    // Keyed by Telegram CHAT id, with no relation to `users` — so it survives
-    // the cascade unless deleted explicitly. It carries pendingPhotos,
-    // contextDumpBuffer and activeMatchId, and whatever it still says is
-    // inherited by the NEXT account created in the same chat.
     expect(mocks.botSessionDeleteMany).toHaveBeenCalledWith({
       where: { key: "42" },
     });

@@ -110,7 +110,6 @@ export async function reEngagementTick(
       age: true,
       gender: true,
       preference: true,
-      aiMemoryExportPreference: true,
       profile: { select: { homeCityKey: true, height: true } },
       onboardingProgress: { select: { currentQuestion: true } },
     },

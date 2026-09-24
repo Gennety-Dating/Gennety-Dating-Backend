@@ -454,12 +454,7 @@ export const PROFILER_PENALTY_COEFFICIENTS = {
   dayRhythmMismatch: -0.4,
 };
 
-/**
- * Max total characters accepted for a Magic-Prompt response. The cap bounds
- * session-row growth and stops abuse loops while leaving ample headroom for
- * the structured profile payload.
- */
-export const MAX_DUMP_BUFFER_CHARS = 32_000;
+
 
 /** History management — controls memory window sent to the LLM */
 /** Max total messages to send to the LLM API in a single call (safety cap) */

@@ -3,32 +3,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/**
- * One question, nine senders.
- *
- * An onboarding agent turn is delivered to Telegram from `/start`'s resume, the
- * photo-batch flush, the photo editor, two context-dump paths, the radar
- * resume, the voice step's own resume and `handleConversational`. For a while
- * exactly ONE of them knew the reply might be the voice-prompt ask; the other
- * eight sent it as a plain message. That is not a cosmetic gap:
- *
- *  - no skip button, so the copy names an exit the chat does not have;
- *  - no claim, so `voiceHandler` — mounted ahead of every router — transcribes
- *    the recording and the fact collector mines it. `voice_prompt` is a
- *    synthetic field that text cannot satisfy, so `currentQuestion` never
- *    moves and the agent asks again. Forever, while the rest of the transcript
- *    is written into the profile.
- *
- * Both were live in production code and neither was visible to any test,
- * because every unit of the feature passed in isolation. So the rule is
- * structural rather than remembered: a file that delivers `result.reply` on the
- * bot surface must also know about this step.
- *
- * The check is deliberately coarse — presence of the helper, not a parse of
- * control flow. It cannot prove a given branch is routed; it can only fail the
- * case that actually happened, which is a whole file learning to send agent
- * replies while knowing nothing about the voice prompt.
- */
+
 const HANDLERS_DIR = fileURLToPath(new URL("../", import.meta.url));
 
 /** Delivers a reply from a DIFFERENT agent — the post-onboarding concierge. */

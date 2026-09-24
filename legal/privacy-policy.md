@@ -325,13 +325,6 @@ moderation, and visual scoring.
 - AI outputs can be wrong. Nothing our AI produces is advice; see the
   [Terms of Service](https://gennety.com/terms).
 
-**Retired: the personal AI export.** Earlier versions of the Service invited you
-to paste in a psychological analysis produced by your own AI assistant (the
-"Magic Prompt"). **That feature is no longer offered and we no longer accept
-such an export.** If you provided one while it was available, the raw text was
-never retained — only the redacted signal summary and its embedding, which are
-erased with your account like everything else.
-
 ---
 
 ## 10. Photos, Video, and Biometric Data

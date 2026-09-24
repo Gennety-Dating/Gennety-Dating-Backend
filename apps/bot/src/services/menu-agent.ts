@@ -679,11 +679,7 @@ export function toolReportedSuccess(result: string): boolean {
 // Tool Executors
 // ---------------------------------------------------------------------------
 
-/**
- * A bio this long is treated as real accumulated signal rather than a line the
- * user typed — in practice it is the redacted AI-memory analysis plus the
- * folded-in vibe answers written at finalization.
- */
+
 const SUBSTANTIAL_BIO_LENGTH = 200;
 
 /** Below this fraction of the existing text, a rewrite is a deletion. */

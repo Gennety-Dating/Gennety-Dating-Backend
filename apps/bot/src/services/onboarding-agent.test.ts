@@ -20,8 +20,6 @@ vi.mock("../config.js", () => ({
     BOT_TOKEN: "test",
     DATABASE_URL: "test",
     OPENAI_API_KEY: "test-key",
-    // AI-memory export kill switch — these suites exercise the enabled flow.
-    AI_MEMORY_EXPORT_ENABLED: true,
     SMTP_HOST: "test",
     SMTP_PORT: 587,
     SMTP_USER: "test",
@@ -39,17 +37,10 @@ vi.mock("./email.js", () => ({
 }));
 
 vi.mock("./profile-analysis.js", () => ({
-  analyseAndSaveProfile: vi.fn().mockResolvedValue({
-    parsed: { schema_version: 2 },
-    embeddingSaved: false,
-  }),
-  extractJsonSummary: vi.fn(() => null),
-  isValidFastPathSummary: vi.fn(() => false),
-  saveFallbackProfileAnalysis: vi.fn().mockResolvedValue({
+  saveQuestionnaireProfileAnalysis: vi.fn().mockResolvedValue({
     summary: "fallback",
     embeddingSaved: false,
   }),
-  appendVibeToSummary: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./vibe-axes.js", () => ({
@@ -63,7 +54,6 @@ vi.mock("../public/otp.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { contextDumpInstruction } from "@gennety/shared";
 import { env } from "../config.js";
 import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { createAndSendOtp, verifyOtp } from "../public/otp.js";
@@ -115,28 +105,6 @@ function toolCallResponse(
     }),
     text: async () => "",
   };
-}
-
-function contextDumpSavedHistory(): ChatMessage[] {
-  return [
-    { role: "system", content: "system prompt..." },
-    {
-      role: "assistant",
-      content: null,
-      tool_calls: [
-        {
-          id: "call-save-context",
-          type: "function",
-          function: { name: "save_context_dump", arguments: "{}" },
-        },
-      ],
-    },
-    {
-      role: "tool",
-      tool_call_id: "call-save-context",
-      content: JSON.stringify({ success: true }),
-    },
-  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -263,12 +231,11 @@ describe("onboarding-agent", () => {
     );
   });
 
-  it("sets expectingPhoto=true when request_photos is called and the context dump is already saved", async () => {
+  it("sets expectingPhoto=true when request_photos is called after the questionnaire", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "uuid-1",
-      messageHistory: contextDumpSavedHistory(),
+      messageHistory: [],
       language: "en",
-      aiMemoryExportPreference: "accepted",
       email: "alice@stanford.edu",
       isEmailVerified: true,
       universityDomain: "stanford.edu",
@@ -304,112 +271,6 @@ describe("onboarding-agent", () => {
     expect(result.reply).toContain("photos");
   });
 
-  it("allows request_photos when the collector already completed context_dump (no tool-result marker)", async () => {
-    // Regression: a typed context dump is saved by the collector, which records
-    // success only in onboardingProgress.completedFields and pushes a receipt
-    // marker (not the CONTEXT_DUMP_SAVED tool marker). If the tool-loop path
-    // then runs (e.g. ONBOARDING_FACT_COLLECTOR_ENABLED off), request_photos
-    // must not be blocked into a paste loop.
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "uuid-1",
-      messageHistory: [],
-      language: "en",
-      aiMemoryExportPreference: "accepted",
-      email: "alice@stanford.edu",
-      isEmailVerified: true,
-      universityDomain: "stanford.edu",
-      firstName: "Alice",
-      age: 21,
-      gender: "female",
-      preference: "men",
-      onboardingProgress: { completedFields: ["context_dump"] },
-      profile: {
-        height: 165,
-        hobbies: ["tennis"],
-        partnerPreferences: "someone kind",
-        photos: [],
-        homeCityKey: "ua:kyiv",
-      },
-    });
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        toolCallResponse([{ id: "call-1", name: "request_photos", args: {} }]),
-      )
-      .mockResolvedValueOnce(textResponse("Now send me your photos!"));
-
-    const result = await runAgentTurn(telegramId, "ready for photos", {
-      fetchFn: mockFetch,
-    });
-
-    expect(result.expectingPhoto).toBe(true);
-  });
-
-  it("stops immediately after request_context_dump so the model cannot synthesize the user's dump", async () => {
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "uuid-1",
-      messageHistory: [],
-      language: "ru",
-      email: null,
-      universityDomain: null,
-      isEmailVerified: false,
-      profile: {
-        height: 180,
-        hobbies: ["reading"],
-        partnerPreferences: "someone kind",
-        photos: [],
-      },
-    });
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        toolCallResponse([
-          { id: "call-ctx", name: "request_context_dump", args: {} },
-          {
-            id: "call-save",
-            name: "save_context_dump",
-            args: { raw_dump: "x".repeat(1000) },
-          },
-          { id: "call-photos", name: "request_photos", args: {} },
-        ]),
-      )
-      .mockResolvedValueOnce(textResponse("This response must never be used."));
-    const mockAnalyse = vi.fn().mockResolvedValue({
-      parsed: { schema_version: 2 },
-      embeddingSaved: true,
-    });
-
-    const result = await runAgentTurn(telegramId, "готово, дай промпт", {
-      fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
-    });
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockAnalyse).not.toHaveBeenCalled();
-    expect(result.contextPromptRequested).toBe(true);
-    expect(result.contextDumpStarted).toBe(true);
-    expect(result.expectingPhoto).toBe(false);
-    expect(result.reply).toBe(contextDumpInstruction("ru"));
-
-    const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    const systemPrompt = requestBody.messages.find(
-      (message: { role: string }) => message.role === "system",
-    )?.content as string;
-    expect(systemPrompt).not.toContain("Telegram");
-
-    const updateCalls = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls;
-    const persistedHistory = updateCalls.at(-1)?.[0].data.messageHistory as Array<{
-      role: string;
-      tool_calls?: Array<{ function: { name: string } }>;
-    }>;
-    const persistedToolNames = persistedHistory.flatMap((m) =>
-      m.tool_calls?.map((call) => call.function.name) ?? [],
-    );
-    expect(persistedToolNames).toEqual(["request_context_dump"]);
-  });
-
 
 
   describe("Type Radar gate (step 5B)", () => {
@@ -432,6 +293,7 @@ describe("onboarding-agent", () => {
         hobbies: ["готовка"],
         partnerPreferences: "девушка",
         photos: [],
+        homeCityKey: "ua:kyiv",
         typeRadarCompletedAt,
       },
     });
@@ -440,52 +302,47 @@ describe("onboarding-agent", () => {
       (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = false;
     });
 
-    it("intercepts request_context_dump before the Magic Prompt when enabled and not completed", async () => {
-      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(null));
-      const mockFetch = vi
-        .fn()
-        .mockResolvedValueOnce(
-          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
-        );
-
-      const result = await runAgentTurn(telegramId, "ок дальше", { fetchFn: mockFetch });
-
-      expect(result.typeRadarRequested).toBe(true);
-      expect(result.contextPromptRequested).toBe(false);
-      expect(result.contextDumpStarted).toBe(false);
-      expect(result.reply).toBe(typeRadarInviteCopy("ru").intro);
-    });
-
-    it("lets request_context_dump through once the radar is completed", async () => {
-      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
-        radarUser(new Date()),
-      );
-      const mockFetch = vi
-        .fn()
-        .mockResolvedValueOnce(
-          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
-        );
-
-      const result = await runAgentTurn(telegramId, "ок дальше", { fetchFn: mockFetch });
-
-      expect(result.typeRadarRequested).toBe(false);
-      expect(result.contextPromptRequested).toBe(true);
-    });
-
     // The radar Mini App authenticates with Telegram initData, so a caller that
     // has no Telegram surface cannot present it. Gating such a caller produced
     // a gate nobody could pass: the invite was re-emitted on every turn and the
     // native client's onboarding never advanced past this point.
+    it("offers Type Radar before opening photo upload after the questionnaire", async () => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(null));
+      const mockFetch = vi.fn().mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-photo", name: "request_photos", args: {} }]),
+      );
+
+      const result = await runAgentTurn(telegramId, "готово", { fetchFn: mockFetch });
+
+      expect(result.typeRadarRequested).toBe(true);
+      expect(result.expectingPhoto).toBe(false);
+      expect(result.reply).toBe(typeRadarInviteCopy("ru").intro);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens photo upload after Type Radar is complete", async () => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(new Date()));
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce(toolCallResponse([{ id: "call-photo", name: "request_photos", args: {} }]))
+        .mockResolvedValueOnce(textResponse("Send your photos."));
+
+      const result = await runAgentTurn(telegramId, "готово", { fetchFn: mockFetch });
+
+      expect(result.typeRadarRequested).toBe(false);
+      expect(result.expectingPhoto).toBe(true);
+    });
+
     it("does not gate a caller that cannot present the radar", async () => {
       (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
       (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(null));
       const mockFetch = vi
         .fn()
         .mockResolvedValueOnce(
-          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
-        );
+          toolCallResponse([{ id: "call-ctx", name: "request_photos", args: {} }]),
+        )
+        .mockResolvedValueOnce(textResponse("Send your photos."));
 
       const result = await runAgentTurn(telegramId, "ок дальше", {
         fetchFn: mockFetch,
@@ -494,152 +351,8 @@ describe("onboarding-agent", () => {
 
       expect(result.typeRadarRequested).toBe(false);
       expect(result.reply).not.toBe(typeRadarInviteCopy("ru").intro);
-      expect(result.contextPromptRequested).toBe(true);
+      expect(result.expectingPhoto).toBe(true);
     });
-  });
-
-  it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {
-    // Real bug: LLMs auto-correct one or two characters when they pass long
-    // text through tool args (e.g. "том" → "то"), which used to fail strict
-    // verbatim grounding and reject the user's perfectly valid paste.
-    // The fix: treat raw_dump as advisory and use the user's actual paste.
-    const userPaste = JSON.stringify({
-      personality_traits: ["curious", "calm", "warm", "direct", "romantic"],
-      communication_style: "Direct and reflective.",
-      interests: ["music", "piano", "dating"],
-      values: ["honesty", "warmth", "stability"],
-      attachment_style: "secure",
-      social_energy: "ambivert",
-      humor_style: "warm",
-      ideal_partner: "Someone emotionally present and sincere.",
-      dealbreakers: ["dishonesty", "coldness"],
-      summary:
-        "A warm, music-oriented person who wants grounded closeness without performance. He values simple honesty, tenderness, and a relationship that feels calm rather than dramatic.",
-    });
-    const llmRephrased = userPaste.replace("warm,", "warm and"); // single-char drift
-    const mockAnalyse = vi.fn().mockResolvedValue({
-      parsed: { schema_version: 2 },
-      embeddingSaved: true,
-    });
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        id: "uuid-1",
-        messageHistory: [],
-        language: "en",
-      })
-      .mockResolvedValueOnce({
-        id: "uuid-1",
-        firstName: "Alice",
-        language: "en",
-      });
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        toolCallResponse([
-          {
-            id: "call-save",
-            name: "save_context_dump",
-            args: { raw_dump: llmRephrased },
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(textResponse("Profile saved. Send photos next."));
-
-    const result = await runAgentTurn(telegramId, userPaste, {
-      fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
-    });
-
-    // Server uses the user's actual paste, not the LLM's rephrased copy.
-    expect(mockAnalyse).toHaveBeenCalledWith("uuid-1", userPaste, undefined, {
-      firstName: "Alice",
-      language: "en",
-    });
-    expect(result.reply).toContain("Profile saved");
-    const persisted = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
-      .data.messageHistory as ChatMessage[];
-    expect(persisted.some((message) => message.content === userPaste)).toBe(false);
-    expect(
-      persisted.some((message) =>
-        message.content?.includes("raw content intentionally not retained"),
-      ),
-    ).toBe(true);
-    // The advisory raw_dump tool argument must not smuggle a copy of the paste
-    // into persisted history (the LLM echoed `llmRephrased` there).
-    const persistedToolArgs = persisted
-      .flatMap((message) => message.tool_calls ?? [])
-      .map((call) => call.function.arguments)
-      .join("\n");
-    expect(persistedToolArgs).not.toContain("music-oriented");
-    expect(persistedToolArgs).not.toContain(llmRephrased);
-  });
-
-  it("rejects save_context_dump when the user's latest message is too short to be a real dump", async () => {
-    // Hallucination guard: if the LLM calls save_context_dump while the user
-    // hasn't actually pasted anything substantial (< 200 chars), reject —
-    // even if the LLM tries to fabricate content via raw_dump.
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
-    const fabricatedDump =
-      "A".repeat(220) +
-      " fabricated psychological analysis that was never pasted by the user.";
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        toolCallResponse([
-          {
-            id: "call-save",
-            name: "save_context_dump",
-            args: { raw_dump: fabricatedDump },
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(textResponse("Please paste the actual AI response first."));
-
-    await runAgentTurn(telegramId, "да, давай дальше", {
-      fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
-    });
-
-    expect(mockAnalyse).not.toHaveBeenCalled();
-    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
-    const toolMessage = secondCallBody.messages.find(
-      (m: { role: string }) => m.role === "tool",
-    );
-    expect(JSON.parse(toolMessage.content).error).toContain("too short");
-  });
-
-  it("blocks request_photos when the context dump has not been saved yet (LLM ordering violation)", async () => {
-    // Defense-in-depth: even though the system prompt forbids it, an LLM may
-    // skip straight to photos. The guard must require a successful
-    // save_context_dump tool result, not merely a Profile.psychologicalSummary
-    // row, because save_profile_data used to generate a synthetic summary.
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "uuid-1",
-      messageHistory: [],
-      language: "en",
-      profile: { psychologicalSummary: "Synthetic field summary" },
-    });
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        toolCallResponse([
-          { id: "call-1", name: "request_photos", args: {} },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        textResponse("Sorry, please paste your AI analysis first."),
-      );
-
-    const result = await runAgentTurn(telegramId, "anything", {
-      fetchFn: mockFetch,
-    });
-
-    expect(result.expectingPhoto).toBe(false);
-    // The second OpenAI request will see the tool error message; we don't
-    // assert exact reply text since the model is mocked, but expectingPhoto
-    // staying false is the load-bearing check — photo upload mode is gated.
   });
 
   it("also blocks request_photos when the user has no profile row at all", async () => {
@@ -668,12 +381,11 @@ describe("onboarding-agent", () => {
     expect(result.expectingPhoto).toBe(false);
   });
 
-  it("allows request_photos without a context dump when AI memory export was declined", async () => {
+  it("allows request_photos after the questionnaire", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "uuid-1",
       messageHistory: [],
       language: "en",
-      aiMemoryExportPreference: "declined",
       email: "alice@stanford.edu",
       isEmailVerified: true,
       firstName: "Alice",
@@ -703,12 +415,11 @@ describe("onboarding-agent", () => {
     expect(result.expectingPhoto).toBe(true);
   });
 
-  it("blocks request_photos after AI memory decline when required profile fields are missing", async () => {
+  it("blocks request_photos when required profile fields are missing", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "uuid-1",
       messageHistory: [],
       language: "en",
-      aiMemoryExportPreference: "declined",
       email: "alice@stanford.edu",
       isEmailVerified: true,
       firstName: "Alice",
@@ -742,7 +453,7 @@ describe("onboarding-agent", () => {
   });
 
   it("sets onboardingComplete=true when finalize_onboarding is called with complete data", async () => {
-    const saveFallbackProfile = vi.fn().mockResolvedValue({
+    const saveQuestionnaireProfile = vi.fn().mockResolvedValue({
       summary: "fallback",
       embeddingSaved: true,
     });
@@ -750,9 +461,8 @@ describe("onboarding-agent", () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
-        messageHistory: contextDumpSavedHistory(),
+        messageHistory: [],
         language: "en",
-        aiMemoryExportPreference: "accepted",
       })
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -763,7 +473,6 @@ describe("onboarding-agent", () => {
         email: "alice@stanford.edu",
         isEmailVerified: true,
         termsAccepted: true,
-        aiMemoryExportPreference: "accepted",
         profile: {
           height: 165,
           hobbies: ["tennis", "reading"],
@@ -787,7 +496,7 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "looks good, finish up", {
       fetchFn: mockFetch,
-      saveFallbackProfile,
+      saveQuestionnaireProfile,
     });
 
     expect(result.onboardingComplete).toBe(true);
@@ -810,9 +519,9 @@ describe("onboarding-agent", () => {
         reEngagementNextAt: null,
       }),
     );
-    expect(saveFallbackProfile).toHaveBeenCalledWith(
+    expect(saveQuestionnaireProfile).toHaveBeenCalledWith(
       "uuid-1",
-      expect.objectContaining({ source: "no_relevant_ai_memory" }),
+      expect.objectContaining({ hobbies: expect.any(Array) }),
     );
   });
 
@@ -823,9 +532,8 @@ describe("onboarding-agent", () => {
         messageHistory: [],
         onboardingStep: "conversational",
         language: "en",
-        aiMemoryExportPreference: "accepted",
         onboardingProgress: {
-          completedFields: ["context_dump", "photos"],
+          completedFields: ["photos"],
         },
       })
       .mockResolvedValueOnce({
@@ -837,7 +545,6 @@ describe("onboarding-agent", () => {
         email: "alice@stanford.edu",
         isEmailVerified: true,
         termsAccepted: true,
-        aiMemoryExportPreference: "accepted",
         profile: {
           height: 165,
           hobbies: ["tennis"],
@@ -927,8 +634,8 @@ describe("onboarding-agent", () => {
     expect(toolContent.error).toContain("photos");
   });
 
-  it("finalizes without context dump and saves fallback analysis when export was declined", async () => {
-    const saveFallbackProfile = vi.fn().mockResolvedValue({
+  it("finalizes and builds the profile from questionnaire answers", async () => {
+    const saveQuestionnaireProfile = vi.fn().mockResolvedValue({
       summary: "fallback",
       embeddingSaved: true,
     });
@@ -937,7 +644,6 @@ describe("onboarding-agent", () => {
         id: "uuid-1",
         messageHistory: [],
         language: "en",
-        aiMemoryExportPreference: "declined",
       })
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -948,7 +654,6 @@ describe("onboarding-agent", () => {
         email: "alice@stanford.edu",
         isEmailVerified: true,
         termsAccepted: true,
-        aiMemoryExportPreference: "declined",
         profile: {
           height: 165,
           hobbies: ["tennis", "reading"],
@@ -973,11 +678,11 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "finish", {
       fetchFn: mockFetch,
-      saveFallbackProfile,
+      saveQuestionnaireProfile,
     });
 
     expect(result.onboardingComplete).toBe(true);
-    expect(saveFallbackProfile).toHaveBeenCalledWith("uuid-1", {
+    expect(saveQuestionnaireProfile).toHaveBeenCalledWith("uuid-1", {
       firstName: "Alice",
       age: 21,
       gender: "female",
@@ -988,7 +693,6 @@ describe("onboarding-agent", () => {
       homeCityKey: "ua:kyiv",
       fridayVibe: "quiet dinner at home with one close friend",
       vibeFocus: "who's there",
-      source: "declined",
     });
   });
 
@@ -996,7 +700,7 @@ describe("onboarding-agent", () => {
     // A finalize that runs after vibe axes were already stamped must NOT call
     // the extractor again — a transient LLM failure would return null and wipe
     // the good axes. Guard: `profile.vibeExtractedAt` is set.
-    const saveFallbackProfile = vi.fn().mockResolvedValue({
+    const saveQuestionnaireProfile = vi.fn().mockResolvedValue({
       summary: "fallback",
       embeddingSaved: true,
     });
@@ -1005,7 +709,6 @@ describe("onboarding-agent", () => {
         id: "uuid-1",
         messageHistory: [],
         language: "en",
-        aiMemoryExportPreference: "declined",
       })
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -1016,7 +719,6 @@ describe("onboarding-agent", () => {
         email: "alice@stanford.edu",
         isEmailVerified: true,
         termsAccepted: true,
-        aiMemoryExportPreference: "declined",
         profile: {
           height: 165,
           hobbies: ["tennis"],
@@ -1042,7 +744,7 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "finish", {
       fetchFn: mockFetch,
-      saveFallbackProfile,
+      saveQuestionnaireProfile,
     });
 
     expect(result.onboardingComplete).toBe(true);
@@ -1264,7 +966,6 @@ describe("onboarding-agent", () => {
       age: 21,
       gender: "female",
       preference: "men",
-      aiMemoryExportPreference: "accepted",
       profile: {
         height: 165,
         hobbies: ["tennis"],
@@ -1287,7 +988,7 @@ describe("onboarding-agent", () => {
     );
     expect(snapshot).toBeDefined();
     expect(snapshot?.content).toContain("height=165");
-    expect(snapshot?.content).toContain("Missing next: context_dump");
+    expect(snapshot?.content).toContain("Missing next: photos_0/4");
 
     const persisted = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
       .data.messageHistory as ChatMessage[];
@@ -1302,7 +1003,6 @@ describe("onboarding-agent", () => {
     // own voice. The collector requires `/^[\p{L}'-]{2,40}$/u`; this tool's
     // schema said `{ type: "string" }` and the column has no length, so the
     // agent was a second and much wider writer of the same field.
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
       .mockResolvedValueOnce({ id: "uuid-1", profile: null });
@@ -1326,7 +1026,6 @@ describe("onboarding-agent", () => {
 
     await runAgentTurn(telegramId, "call me whatever", {
       fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
     });
 
     // The turn still persists its own bookkeeping (message history); what must
@@ -1341,7 +1040,6 @@ describe("onboarding-agent", () => {
   });
 
   it("handles save_profile_data tool correctly", async () => {
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "uuid-1",
       messageHistory: [],
@@ -1378,7 +1076,6 @@ describe("onboarding-agent", () => {
       "I'm Alice, 21, female, into men. I'm Asian, 165 cm, I like tennis and reading, and I want someone kind and funny.",
       {
       fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
       },
     );
 
@@ -1410,7 +1107,6 @@ describe("onboarding-agent", () => {
     // the user explicitly said "180 см" in a prior message, refuse — the
     // LLM was about to silently drop a value the user already volunteered.
     // The guidance message nudges the LLM to re-extract from history.
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     const priorHistory = [
       { role: "system", content: "system prompt..." },
       {
@@ -1447,7 +1143,6 @@ describe("onboarding-agent", () => {
 
     await runAgentTurn(telegramId, "yes save it", {
       fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
     });
 
     // Profile must NOT have been written: the guard rejected the save.
@@ -1471,7 +1166,6 @@ describe("onboarding-agent", () => {
         id: "uuid-1",
         messageHistory: [],
         language: "en",
-        aiMemoryExportPreference: "declined",
         email: "alice@stanford.edu",
         isEmailVerified: true,
         profile: {
@@ -1488,7 +1182,6 @@ describe("onboarding-agent", () => {
         age: null,
         gender: null,
         preference: null,
-        aiMemoryExportPreference: "declined",
         profile: {
           height: null,
           hobbies: [],
@@ -1545,7 +1238,6 @@ describe("onboarding-agent", () => {
   it("save_profile_data succeeds when height is supplied even though it was also in history", async () => {
     // Negative control for the guard above: the LLM extracted height
     // correctly, so the save must proceed normally.
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     const priorHistory = [
       { role: "system", content: "system prompt..." },
       {
@@ -1590,7 +1282,6 @@ describe("onboarding-agent", () => {
       "Меня зовут Руслан, мне 21. Я мужчина, ищу женщин. Рост у меня 180 см. Хочу красивую и женственную девушку.",
       {
       fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
       },
     );
 
@@ -1601,8 +1292,7 @@ describe("onboarding-agent", () => {
     );
   });
 
-  it("does not generate a synthetic deep context summary during save_profile_data", async () => {
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+  it("saves questionnaire facts without synthesizing a summary before finalization", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "uuid-1",
       messageHistory: [],
@@ -1638,11 +1328,12 @@ describe("onboarding-agent", () => {
       "I'm Alice, 21, female, into men. I'm 165 cm, I like tennis, and I want someone kind.",
       {
       fetchFn: mockFetch,
-      analyseProfile: mockAnalyse,
       },
     );
 
-    expect(mockAnalyse).not.toHaveBeenCalled();
+    expect(prisma.profile.upsert).toHaveBeenCalled();
+    const savedProfile = (prisma.profile.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(savedProfile.create).not.toHaveProperty("psychologicalSummary");
   });
 });
 

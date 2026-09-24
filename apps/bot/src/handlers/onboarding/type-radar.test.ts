@@ -27,27 +27,20 @@ function result(overrides: Record<string, unknown>) {
     expectingPhoto: false,
     onboardingComplete: false,
     verificationRequired: false,
-    contextPromptRequested: false,
-    contextDumpStarted: false,
-    contextDumpSaved: false,
     ...overrides,
   } as Parameters<typeof sessionPatchAfterRadar>[0];
 }
 
 describe("sessionPatchAfterRadar", () => {
-  it("buffers the paste on the accepted path (Magic Prompt shown)", () => {
-    expect(sessionPatchAfterRadar(result({ contextPromptRequested: true, contextDumpStarted: true })))
-      .toEqual({ awaitingContextDump: true, contextDumpBuffer: "", expectingPhoto: false });
-  });
 
   it("expects photos on the declined path", () => {
     expect(sessionPatchAfterRadar(result({ expectingPhoto: true })))
-      .toEqual({ expectingPhoto: true, awaitingContextDump: false });
+      .toEqual({ expectingPhoto: true });
   });
 
   it("stays idle when the resume neither shows the prompt nor asks for photos", () => {
     expect(sessionPatchAfterRadar(result({})))
-      .toEqual({ expectingPhoto: false, awaitingContextDump: false });
+      .toEqual({ expectingPhoto: false });
   });
 });
 
@@ -106,24 +99,6 @@ describe("resumeOnboardingAfterRadar — photo-stage bottom panel", () => {
       keyboard: { text: string }[][];
     };
     expect(markup.keyboard[0]![0]!.text).toContain("Fotos");
-  });
-
-  it("does NOT attach the panel on the accepted path (Magic Prompt, not photos)", async () => {
-    agentMocks.runAgentTurn.mockResolvedValue(result({
-      reply: "Paste the analysis back here",
-      contextPromptRequested: true,
-      contextDumpStarted: true,
-    }));
-
-    const { sessionPatch } = await resumeOnboardingAfterRadar(
-      api as never,
-      BigInt(500),
-      500,
-    );
-
-    const replyCall = api.sendMessage.mock.calls.at(-1)!;
-    expect(replyCall[2] ?? {}).toEqual({});
-    expect(sessionPatch.photoStagePanelShown).toBeUndefined();
   });
 
   it("leaves the flag unset when the message could not be delivered", async () => {

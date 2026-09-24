@@ -55,31 +55,6 @@ function containsPreVerifiedEmailGate(
   });
 }
 
-function containsToolCall(
-  history: Array<{
-    role: string;
-    tool_calls?: Array<{ function?: { name?: string } }>;
-  }>,
-  toolName: string,
-): boolean {
-  return history.some((message) =>
-    message.tool_calls?.some((call) => call.function?.name === toolName),
-  );
-}
-
-function looksLikeContextDumpInstruction(content: string): boolean {
-  const lower = content.toLowerCase();
-  return (
-    lower.includes("copy the prompt") ||
-    lower.includes("paste it into chatgpt") ||
-    lower.includes("скопируй промпт") ||
-    lower.includes("вставь его в chatgpt") ||
-    lower.includes("скопіюй промпт") ||
-    lower.includes("skopiuj prompt") ||
-    lower.includes("kopiere den prompt")
-  );
-}
-
 /**
  * Entry point for a user whose onboarding is already `completed`: unfreeze a
  * soft-deleted account, hold anyone still behind the mandatory Persona gate,
@@ -297,27 +272,7 @@ start.command("start", async (ctx) => {
       verifiedEmailOnFile &&
       ((lastAssistant?.content ? looksLikeEmailPrompt(lastAssistant.content) : false) ||
         containsPreVerifiedEmailGate(history));
-    const profile = await prisma.profile.findUnique({
-      where: { userId: user.id },
-      select: { height: true, partnerPreferences: true },
-    });
-    const profileReadyForContextDump = Boolean(
-      user.firstName &&
-        user.age &&
-        user.gender &&
-        user.preference &&
-        profile?.height &&
-        profile.partnerPreferences,
-    );
-    const contextPromptAlreadyShown =
-      containsToolCall(history, "request_context_dump") ||
-      (lastAssistant?.content
-        ? looksLikeContextDumpInstruction(lastAssistant.content)
-        : false);
-    const staleProfilePrompt =
-      profileReadyForContextDump && !contextPromptAlreadyShown;
-
-    if (lastAssistant?.content && !staleEmailGate && !staleProfilePrompt) {
+    if (lastAssistant?.content && !staleEmailGate) {
       const lang = ctx.session.language ?? "en";
       const welcomeBack =
         lang === "ru"

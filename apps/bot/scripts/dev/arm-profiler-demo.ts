@@ -89,7 +89,6 @@ await prisma.botSession.upsert({
       matchFlow: "idle",
       menuState: "idle",
       expectingPhoto: false,
-      awaitingContextDump: false,
     },
   },
 });

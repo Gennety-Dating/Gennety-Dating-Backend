@@ -24,7 +24,6 @@ when columns diverge, Prisma wins.
 | `MatchStatus` | `proposed`, `negotiating`, `negotiating_venue`, `scheduled`, `cancelled`, `completed`, `expired` |
 | `MatchEventActionType` | `PROPOSAL_SHOWN`, `ACCEPTED`, `DECLINED`, `DATE_COMPLETED`, `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`, `EXPIRED_SILENT`, `EXPIRED_PEER_IGNORED` |
 | `MessageRole` | `user`, `assistant`, `system` |
-| `AiMemoryExportPreference` | `undecided`, `accepted`, `declined` |
 | `ProfilerPriority` | `high`, `medium`, `low` |
 
 ### `users`
@@ -34,11 +33,11 @@ Columns (≈ 35; grouped by purpose):
 | Group | Columns |
 |---|---|
 | Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `telegramUsername` (public `@handle`, captured opportunistically for `t.me/` coordination links), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform`. `id` is the only immutable identity: `telegramId` is **re-pointable** by the phone-based login (`services/account-linking.ts`) — a `User.phone` unique collision transfers the sharing Telegram account's id/username onto the row that owns the number, deletes the empty registration row it came from, promotes `platform` `mobile` → `both`, and clears the now-stale `statusMessageId`. Anything caching a `telegramId` must resolve through the DB rather than assume permanence. **A positive `telegramId` no longer implies the bot can message that user (2026-08-02).** `POST /v1/auth/telegram` stores the REAL Telegram id on an app-only account, and a bot cannot initiate a chat with someone who never pressed Start — so `platform` is the only canonical reachability check, and a `telegramId: { gt: 0 }` filter must be paired with `platform in (telegram, both)`. `workers/profiler.ts` and `workers/re-engagement.ts` were filtering on the id alone and are fixed; such a row is promoted to `both` when it actually starts the bot. |
-| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `policyVersion`, `researchOptIn`, `createdAt`, `updatedAt`. `policyVersion` records WHICH version of the Terms + Privacy Policy was accepted (`LEGAL_DOCS_VERSION` from `packages/shared`), because GDPR Art. 7(1) puts the burden on us to demonstrate what was agreed to and a timestamp alone cannot once the documents change. Null for consents recorded before 2026-08-01. |
+| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `policyVersion`, `researchOptIn`, `createdAt`, `updatedAt`. `policyVersion` records WHICH version of the Terms + Privacy Policy was accepted (`LEGAL_DOCS_VERSION` from `packages/shared`), because GDPR Art. 7(1) puts the burden on us to demonstrate what was agreed to and a timestamp alone cannot once the documents change. Null for consents recorded before 2026-08-01. |
 | UI theme | `theme` (`Theme`, default `dark`) — the EFFECTIVE light/dark theme, honored by every Mini App (via the shared `theme.css` tokens) and both server-rendered PNG cards. `themeMode` (`ThemeMode`, default `dark`) records how it was picked: the bot's two-state toggle writes mode = theme, the iOS picker can also write `system`, and then the client keeps `theme` in step with the phone by re-PATCHing on every appearance flip — that re-report is the only reason a Telegram card matches an app set to follow the device. `themeChosenAt` marks the explicit pick (stamped by iOS too) so the onboarding theme step shows once. |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Registration v2 | `phone` (unique E.164, written from a trusted Telegram `message.contact` or a verified native-app code), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits the union of track-valid cohorts: `general + phoneVerifiedAt`, or `student`/legacy + `isEmailVerified` and a stored email. `phone` is also the **cross-rail login key**: both rails resolve an existing account through it — the mobile side in `findOrCreateMobileUserByPhone` (`public/mobile-user.ts`, which also promotes `telegram` → `both`), the Telegram side in `services/account-linking.ts` (PRODUCT_SPEC §1.1). A collision where both the sharing row and the owning row carry real data is the one case neither rail resolves automatically. |
-| Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt`. AI-memory response bodies are deliberately not retained here: a typed `context_dump` is replaced by a non-sensitive receipt marker after parsing, and on the legacy tool-loop path the advisory `raw_dump` tool argument is stripped from the persisted assistant turn for the same reason. |
+| Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt`. Profile facts are stored in canonical questionnaire fields. |
 | Re-engagement | `reEngagementStep` (0–5), `reEngagementNextAt` |
 | Trust & safety | `strikes`, `suspendedUntil` |
 | Telegram UI | `statusMessageId` (pinned banner) |
@@ -67,7 +66,7 @@ Server-owned traversal metadata for incomplete onboarding:
 
 Canonical answers remain in `users` and `profiles`. `messageHistory` is an
 interface/audit log, not a profile database. Only `user_text` may enter fact
-extraction; `resume`, `context_dump`, and `photos_updated` are typed synthetic
+extraction; `resume` and `photos_updated` are typed synthetic
 events. Backfill reads canonical columns and raw user-authored messages, never
 AI summaries, assistant messages, or historical tool arguments.
 
@@ -92,7 +91,7 @@ Columns (≈ 25):
 
 | Group | Columns |
 |---|---|
-| Demographics | `userId` (unique), `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary` (redacted signal-only AI-memory summary or onboarding fallback; never the raw pasted export), `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](../product/product-spec.md) §3.2) |
+| Demographics | `userId` (unique), `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary` (summary built from questionnaire answers), `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](../product/product-spec.md) §3.2) |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to liveness-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
@@ -329,8 +328,7 @@ Prisma cascade reaches it. Two consequences, and the second is what actually
 broke a flow:
 
 - **GDPR.** `SessionData` holds `pendingPhotos` (Telegram `file_id`s of the
-  erased profile), `contextDumpBuffer` (a pasted AI-memory export) and
-  `activeMatchId`. A hard delete that left them behind was not erasure.
+  erased profile), `activeMatchId`. A hard delete that left them behind was not erasure.
 - **The next account in that chat inherited the state.** A session left with
   `expectingPhoto: true` put a brand-new account into the photo stage while the
   onboarding collector was still several questions away, so three uploads
@@ -479,9 +477,7 @@ message on purpose: an inline `\d{4}` would also swallow a year, a price or a
 house number and make the timeline lie about ordinary conversation. Redaction
 runs inside `recordChatEvent`, not at the call sites, so no recorder path can
 forget it. The phone number is still never stored — the contact share is
-recorded as the event, not the digits. The AI-memory export branch is retired
-(`AI_MEMORY_EXPORT_ENABLED=false` and the feature is not offered), so no pasted
-export reaches this table; if it is ever revived it must be masked here first.
+recorded as the event, not the digits.
 
 ### `client_events`
 
@@ -1614,7 +1610,7 @@ tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
 (unique crypto-random URL token = the page's sole authorization, never logged),
 `weekOf` (UTC day of the batch), `dataJson` (the assembled `WeeklyMatchesReport`
 snapshot — pairs + user cards + photo refs; **never** `psychologicalSummary` /
-AI-memory dumps), `expiresAt`, `createdAt`. Indexed `(createdAt)`.
+private profile summaries), `expiresAt`, `createdAt`. Indexed `(createdAt)`.
 `expiresAt` (added 2026-07-26) bounds how long a leaked link is worth anything:
 the token is the sole authorization AND rides in the URL, so it also lands in
 reverse-proxy access logs and browser history. New rows get 90 days; a **null**

@@ -145,7 +145,6 @@ async function main() {
     firstName: "Max", gender: "male", preference: "women", age: 27,
     language: lang, status: "onboarding", onboardingStep: "conversational",
     email: `dev+${inviteeTg}@${DOMAIN}`, universityDomain: DOMAIN, isEmailVerified: true,
-    aiMemoryExportPreference: "undecided", themeChosenAt: now,
     hasConsented: true, consentedAt: now, termsAccepted: true, termsAcceptedAt: now,
     referralInviteePremiumAt: null, referralCountedAt: null,
     lastMessageAt: now,

@@ -1,9 +1,4 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
-import {
-  effectiveAiMemoryPreference,
-  isAiMemoryExportDeclined,
-  isAiMemoryExportEnabled,
-} from "./ai-memory-export.js";
 import { openaiFetch } from "./openai-fetch.js";
 import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
@@ -20,8 +15,6 @@ import {
   KEEP_RECENT_MESSAGES,
   ageBandFor,
   radarBandLive,
-  contextDumpInstruction,
-  magicContextPrompt,
   t,
   PROFILER_ENTRY_DELAY_MS,
   VOICE_SELF_GENDER,
@@ -29,13 +22,7 @@ import {
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
-import {
-  analyseAndSaveProfile,
-  appendVibeToSummary,
-  extractJsonSummary,
-  isValidFastPathSummary,
-  saveFallbackProfileAnalysis,
-} from "./profile-analysis.js";
+import { saveQuestionnaireProfileAnalysis } from "./profile-analysis.js";
 import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
 import { invalidateChatTarget } from "./chat-events.js";
 import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
@@ -57,8 +44,6 @@ import {
 } from "./onboarding-collector.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
 
-const AI_MEMORY_RECEIVED_MARKER =
-  "[AI memory response received; raw content intentionally not retained]";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,15 +89,7 @@ export interface AgentTurnResult {
    * dev) — in that case onboardingComplete implies the user is already active.
    */
   verificationRequired: boolean;
-  /** When true, the handler must send MAGIC_CONTEXT_PROMPT in a code block after the reply */
-  contextPromptRequested: boolean;
-  /**
-   * Type Radar gate (§Type Radar, step 5B). When true, the visual type picker
-   * must be completed (or skipped) before the Magic Prompt / photos step: the
-   * handler sends `reply` with the radar `web_app` button + a Skip button and
-   * waits. Optional so the many `AgentTurnResult` return sites stay untouched;
-   * only set on the conversational path that hits the gate.
-   */
+
   typeRadarRequested?: boolean;
   /**
    * The collector's next question is the voice prompt, so the caller owes the
@@ -120,45 +97,18 @@ export interface AgentTurnResult {
    * the agent names the state, the surface renders the affordance.
    */
   voicePromptRequested?: boolean;
-  /**
-   * When true, the handler must switch the session into context-dump-buffering
-   * mode so that the pasted response can be acknowledged and then sent to the
-   * agent after a short processing delay.
-   */
-  contextDumpStarted: boolean;
-  /**
-   * When true, a context dump was parsed and saved in THIS turn. The handler
-   * uses it to play the "analysing your profile" status sequence before the
-   * follow-up reply (the photo request). Distinct from `contextDumpStarted`,
-   * which fires when the Magic Prompt is first shown.
-   */
-  contextDumpSaved: boolean;
 }
 
 /** Injectable dependencies for testing */
 export interface AgentDeps {
-  /**
-   * Whether THIS caller can actually put the Type Radar in front of the user.
-   * Default true (Telegram, where the handler attaches the `web_app` + Skip
-   * buttons to the invite copy this agent returns).
-   *
-   * The native client passes `false`, and that is not a preference — the radar
-   * Mini App authenticates with Telegram `initData` (`public/routes/radar.ts`),
-   * so a mobile-only account (synthetic negative `telegramId`, never pressed
-   * Start) cannot call it at all. Emitting the invite there produced a gate
-   * nobody could pass: every answer re-sent the same copy, the collector never
-   * advanced past `context_dump`/`photos`, and native onboarding dead-ended
-   * with a duplicated message and no affordance.
-   */
+
   canPresentTypeRadar?: boolean;
   fetchFn?: typeof fetch;
   sendOtp?: (to: string, otp: string) => Promise<void>;
-  analyseProfile?: typeof analyseAndSaveProfile;
-  saveFallbackProfile?: typeof saveFallbackProfileAnalysis;
+  saveQuestionnaireProfile?: typeof saveQuestionnaireProfileAnalysis;
   extractOnboardingFacts?: CollectorDeps["extractFacts"];
   extractVibeAxes?: typeof extractVibeAxes;
   saveVibeAxes?: typeof saveVibeAxes;
-  appendVibeToSummary?: typeof appendVibeToSummary;
 }
 
 function normalizedOnboardingInput(input: string | OnboardingInput): OnboardingInput {
@@ -169,7 +119,6 @@ async function appendCollectorHistory(
   telegramId: bigint,
   input: OnboardingInput,
   reply: string,
-  includeMagicPrompt: boolean,
   onboardingComplete: boolean,
 ): Promise<void> {
   const user = await prisma.user.findUnique({
@@ -181,14 +130,6 @@ async function appendCollectorHistory(
   );
   if (input.kind === "user_text") {
     history.push({ role: "user", content: input.text });
-  } else if (input.kind === "context_dump") {
-    history.push({ role: "system", content: AI_MEMORY_RECEIVED_MARKER });
-  }
-  if (includeMagicPrompt) {
-    history.push({
-      role: "assistant",
-      content: magicContextPrompt(user?.language ?? "en"),
-    });
   }
   history.push({ role: "assistant", content: reply });
   const now = new Date();
@@ -211,7 +152,6 @@ export async function recordOnboardingAssistantReply(
     telegramId,
     { kind: "resume" },
     reply,
-    false,
     false,
   );
 }
@@ -281,46 +221,9 @@ async function runCollectorTurn(
     | { age: number | null; profile: { typeRadarCompletedAt: Date | null } | null }
     | null,
 ): Promise<AgentTurnResult> {
-  let contextDumpSaved = false;
   let snapshot;
 
-  // AI-memory export off: a `context_dump` input can only be a paste that was
-  // already in flight when the flag flipped (a stale buffered session). Drop it
-  // instead of persisting a Magic Prompt response the feature no longer accepts,
-  // and resume on the ordinary next question — which is already `photos`,
-  // because the collector treats the export as declined.
-  if (input.kind === "context_dump" && !isAiMemoryExportEnabled()) {
-    input = { kind: "resume" };
-  }
-
-  if (input.kind === "context_dump") {
-    const saved = await execSaveContextDump(
-      telegramId,
-      {},
-      deps,
-      input.text,
-    );
-    const parsed = parseJsonObject(saved);
-    if (parsed?.success !== true) {
-      const fallback =
-        typeof parsed?.error === "string"
-          ? parsed.error
-          : "I couldn't process that AI context. Please send the full response again.";
-      await appendCollectorHistory(telegramId, input, fallback, false, false);
-      return {
-        reply: fallback,
-        expectingPhoto: false,
-        onboardingComplete: false,
-        verificationRequired: false,
-        acceptedOnboardingFields: [],
-        contextPromptRequested: false,
-        contextDumpStarted: true,
-        contextDumpSaved: false,
-      };
-    }
-    contextDumpSaved = true;
-    snapshot = await markOnboardingField(telegramId, "context_dump");
-  } else {
+  {
     snapshot = await collectOnboardingInput(telegramId, input, {
       ...(deps.fetchFn ? { fetchFn: deps.fetchFn } : {}),
       ...(deps.extractOnboardingFacts
@@ -334,7 +237,6 @@ async function runCollectorTurn(
       snapshot = await markOnboardingField(telegramId, "photos");
     }
   }
-
   // The user asked a clarifying question instead of answering. Nothing was
   // recorded and the question did not advance — answer briefly (short LLM),
   // then re-pose the exact same canonical question.
@@ -352,7 +254,7 @@ async function runCollectorTurn(
       snapshot.completedFields,
     );
     const reply = clarification ? `${clarification}\n\n${question}` : question;
-    await appendCollectorHistory(telegramId, input, reply, false, false);
+    await appendCollectorHistory(telegramId, input, reply, false);
     return {
       reply,
       // The question is re-posed verbatim, so its affordances are owed again —
@@ -362,39 +264,22 @@ async function runCollectorTurn(
       onboardingComplete: false,
       verificationRequired: false,
       acceptedOnboardingFields: [],
-      contextPromptRequested: false,
-      contextDumpStarted: false,
-      contextDumpSaved: false,
     };
   }
 
-  // Type Radar gate (§Type Radar, step 5B): the visual "choose your type" picker
-  // must precede the Magic Prompt (accepted) or the photo step (declined). The
-  // gate is wired into the legacy tool-loop below, but the collector path — which
-  // owns onboarding whenever ONBOARDING_FACT_COLLECTOR_ENABLED is on — bypasses
-  // that switch entirely, so without this the invite is never sent. Mirror the
-  // tool-loop: emit the deterministic invite copy (the caller attaches the
-  // web_app + Skip buttons) and stop this turn. Submit/skip resumes here with the
-  // gate cleared (typeRadarCompletedAt set) and continues to the Magic Prompt or
-  // photos exactly as if the gate hadn't been there.
   if (
     deps.canPresentTypeRadar !== false &&
-    input.kind !== "context_dump" &&
-    (snapshot.currentQuestion === "context_dump" ||
-      snapshot.currentQuestion === "photos") &&
+    (snapshot.currentQuestion === "photos" || snapshot.currentQuestion === "complete") &&
     typeRadarGatePending(radarGateUser)
   ) {
     const invite = typeRadarInviteCopy(snapshot.language).intro;
-    await appendCollectorHistory(telegramId, input, invite, false, false);
+    await appendCollectorHistory(telegramId, input, invite, false);
     return {
       reply: invite,
       expectingPhoto: false,
       onboardingComplete: false,
       verificationRequired: false,
       acceptedOnboardingFields: snapshot.acceptedFields,
-      contextPromptRequested: false,
-      contextDumpStarted: false,
-      contextDumpSaved: false,
       typeRadarRequested: true,
     };
   }
@@ -402,8 +287,6 @@ async function runCollectorTurn(
   let expectingPhoto = snapshot.currentQuestion === "photos";
   let onboardingComplete = false;
   let verificationRequired = false;
-  let contextPromptRequested = snapshot.currentQuestion === "context_dump";
-  let contextDumpStarted = contextPromptRequested;
   let reply = onboardingQuestionText(
     snapshot.language,
     snapshot.currentQuestion,
@@ -429,7 +312,6 @@ async function runCollectorTurn(
   if (snapshot.currentQuestion === "complete") {
     const finalized = await execFinalizeOnboarding(
       telegramId,
-      snapshot.completedFields.includes("context_dump"),
       deps,
     );
     const parsed = parseJsonObject(finalized);
@@ -437,8 +319,6 @@ async function runCollectorTurn(
       onboardingComplete = true;
       verificationRequired = parsed.verificationRequired === true;
       expectingPhoto = false;
-      contextPromptRequested = false;
-      contextDumpStarted = false;
       reply = onboardingQuestionText(
         snapshot.language,
         "complete",
@@ -469,7 +349,6 @@ async function runCollectorTurn(
     telegramId,
     input,
     reply,
-    contextPromptRequested,
     onboardingComplete,
   );
 
@@ -479,9 +358,6 @@ async function runCollectorTurn(
     onboardingComplete,
     verificationRequired,
     acceptedOnboardingFields: snapshot.acceptedFields,
-    contextPromptRequested,
-    contextDumpStarted,
-    contextDumpSaved,
     // `onboardingComplete` is checked because the finalize branch above runs in
     // the same turn: a snapshot that reached `complete` must not also ask for a
     // recording, or the user gets the skip button under "you're all set".
@@ -505,15 +381,11 @@ async function runCollectorTurn(
  */
 function buildSystemPrompt(
   emailAlreadyVerified: boolean,
-  aiMemoryExportDeclined: boolean,
 ): string {
   const emailRule = emailAlreadyVerified
     ? "- Email verification has ALREADY been completed for this user before this conversation began. DO NOT ask the user for their email under ANY circumstances. DO NOT mention email verification. Skip step 1 of the Onboarding Flow entirely. Move directly to step 2 (profile basics)."
     : `- The user MUST provide a corporate university email (domains: ${ALLOWED_EMAIL_DOMAINS.join(", ")}). Do NOT skip email verification.`;
 
-  const aiMemoryRule = aiMemoryExportDeclined
-    ? "- The user explicitly declined AI memory export. Do NOT call request_context_dump or save_context_dump, and do NOT ask them to paste anything from another AI app. After profile fields are collected, move directly to request_photos. Context dump is NOT required for this user."
-    : "- The user accepted AI memory export. The Magic Prompt context dump is required before photo upload and finalization.";
 
   return `You are the onboarding assistant for Gennety Dating — an AI-first matchmaking service for university students.
 
@@ -525,7 +397,6 @@ ${VOICE_SELF_NAME}
 
 ## Strict Rules
 ${emailRule}
-${aiMemoryRule}
 - Age MUST be between ${MIN_AGE} and ${MAX_AGE}. If the user gives an age outside this range, explain the restriction kindly.
 - NEVER create an in-app chat between users. This is a "Zero-Chat" philosophy app — we match people and schedule their first date, no messaging.
 - NEVER skip or shortcut any of the required information fields.
@@ -568,7 +439,6 @@ What you MUST do next: ONE short bubble acknowledging what you got, then ask onl
 - After ANY first hobby reply (one hobby, several, or "no hobbies") → DO NOT ask for another hobby. The first reply IS the answer.
 - After a height like "180 см" / 5′10″ / "180" appears in any user message → DO NOT re-ask height.
 - After a partner-preferences sentence is given → DO NOT ask the user to elaborate or "tell me more".
-- After save_context_dump succeeds → move straight to request_photos. DO NOT re-ask any profile field.
 
 If you catch yourself drafting one of these forbidden questions, STOP, re-read the conversation history, and ask only for fields that are GENUINELY absent.
 
@@ -578,16 +448,8 @@ You MUST collect ALL of the following before finalizing:
 1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
 3. **Extended profile**: Height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
-4. **Deep context extraction**: ${aiMemoryExportDeclined ? "SKIP this entire step because the user declined AI memory export. Never mention or request the Magic Prompt." : "After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself."}
-
-   STRICT BOUNDARIES for the reply that accompanies request_context_dump:
-   - Your ONLY job in that turn is the paste-it-back instruction. Tell the user to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send the AI's full response back.
-   - Do NOT mention photos. Do NOT mention "next step". Do NOT preview anything that comes after this. From the user's point of view, step 5 does not exist yet.
-   - Do NOT call request_photos in the same turn as request_context_dump under any circumstances. Wait for the user to actually paste back the analysis and for save_context_dump to succeed first.
-
-   When the user pastes back a long psychological analysis, call save_context_dump with the full text. If the dump is too short or clearly not a real analysis, ask them to try again. Do NOT skip this step.
-5. **Photos**: Call request_photos ${aiMemoryExportDeclined ? "after the ordinary profile fields are collected." : "but ONLY after save_context_dump has been called and returned success. Never call request_photos in the same turn as request_context_dump."} The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
-6. **Finalize**: Once ALL fields are collected, ${aiMemoryExportDeclined ? "AI memory export is marked declined," : "context dump is saved,"} and at least ${MIN_PHOTOS} photos uploaded, call save_profile_data with all extracted data, then call finalize_onboarding.
+4. **Photos**: Call request_photos after the ordinary profile fields are collected. The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
+5. **Finalize**: Once ALL fields are collected, and at least ${MIN_PHOTOS} photos uploaded, call save_profile_data with all extracted data, then call finalize_onboarding.
 
 ## CRITICAL: Answer Validation Rules
 
@@ -618,7 +480,7 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 
 ### Tracking what you've collected:
 Before calling save_profile_data, mentally verify you have ALL of these with concrete values:
-- Email verified, First name, Age, Gender, Preference, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), ${aiMemoryExportDeclined ? "AI memory export declined (no context dump needed)" : "Context dump saved (via save_context_dump)"}, Photos (${MIN_PHOTOS}+)
+- Email verified, First name, Age, Gender, Preference, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), Photos (${MIN_PHOTOS}+)
 
 If ANY required field is missing or vague, go back and collect it before saving.
 
@@ -641,18 +503,6 @@ If ANY required field is missing or vague, go back and collect it before saving.
 - If the user goes off-topic, gently nudge them back — don't lecture.
 - If a photo is rejected (no clear face), explain briefly and ask for another.
 - NEVER use robotic transitions like "Отлично! Переходим к следующему шагу." or fake enthusiasm: "Невероятно!", "Потрясающе!"
-
-## Handling Questions While Awaiting the Pasted AI Analysis
-
-Once you have called \`request_context_dump\`, the Magic Prompt is visible in the chat above the user. They will sometimes reply with a short clarifying question or comment instead of immediately pasting the AI's response — e.g. "why do I need to do this?", "is this safe?", "what's this analysis for?", "can you explain?".
-
-When that happens:
-- Answer warmly and briefly in the user's language. One short paragraph is enough.
-- Do NOT call \`request_context_dump\` again — the prompt is already shown above your previous message and re-issuing it just clutters the chat.
-- Do NOT call any other tools in this turn. Just reply.
-- End by inviting them to paste the AI's response when they're ready.
-
-Reference framing (adapt freely to the user's language and tone): it's a quick read on their psychological profile that helps you match them with someone genuinely compatible. We do the same for everyone, so when they meet their match the obvious red flags are already filtered out. Once they've pasted what their AI returned, you'll move on to photos.
 
 ## Important
 - Do NOT hallucinate or assume values. If the answer is ambiguous, ASK AGAIN — never guess.
@@ -717,40 +567,8 @@ const TOOLS = [
   {
     type: "function" as const,
     function: {
-      name: "request_context_dump",
-      description:
-        "Present the Magic Prompt for deep context extraction. Call this AFTER collecting all extended profile data (hobbies, preferences, height) and BEFORE requesting photos. Returns the prompt text — you MUST display it inside a markdown code block so the user can copy it.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "save_context_dump",
-      description:
-        "Process the complete AI-memory response the user just pasted. Prefer the V2 JSON with schema_version, relationships, emotions_and_conflict, needs_and_boundaries, values_in_action, sustained_interests, partner_fit, likely_friction, and grounded_summary; legacy profile JSON is also supported. Empty V2 sections are valid and must not be filled with guesses. The server reads the user's actual message; raw_dump is only a hint. Do NOT call this for a question or one-liner.",
-      parameters: {
-        type: "object",
-        properties: {
-          raw_dump: {
-            type: "string",
-            description:
-              "Optional hint — first ~200 chars of the dump or empty. The server uses the user's actual latest message verbatim, so don't bother re-typing the whole thing here.",
-          },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
       name: "request_photos",
-      description: `Open photo upload. Ask the user for at least ${MIN_PHOTOS} photos (hard minimum). Anything beyond ${MIN_PHOTOS} is optional — do NOT pressure for more. Call this when you're ready to collect photos — AFTER context dump has been saved.`,
+      description: `Open photo upload. Ask the user for at least ${MIN_PHOTOS} photos (hard minimum). Anything beyond ${MIN_PHOTOS} is optional — do NOT pressure for more. Call this when you're ready to collect photos after profile answers have been saved.`,
       parameters: {
         type: "object",
         properties: {},
@@ -813,7 +631,6 @@ const TOOLS = [
   },
 ];
 
-const CONTEXT_DUMP_SAVED_MARKER = "[CONTEXT_DUMP_SAVED]";
 const CURRENT_ONBOARDING_STATE_MARKER = "[CURRENT_SAVED_ONBOARDING_STATE]";
 
 interface PersistedOnboardingState {
@@ -827,7 +644,6 @@ interface PersistedOnboardingState {
   phoneVerifiedAt?: Date | null;
   registrationTrack?: string | null;
   termsAccepted?: boolean | null;
-  aiMemoryExportPreference?: "undecided" | "accepted" | "declined" | null;
   profile?: {
     height?: number | null;
     hobbies?: string[] | null;
@@ -851,104 +667,6 @@ function parseJsonObject(content: string | null): Record<string, unknown> | null
 
 function toolResultSucceeded(content: string | null): boolean {
   return parseJsonObject(content)?.success === true;
-}
-
-function hasSuccessfulToolResult(
-  history: ChatMessage[],
-  toolName: string,
-): boolean {
-  const toolNamesById = new Map<string, string>();
-
-  for (const message of history) {
-    if (message.role !== "assistant") continue;
-    for (const call of message.tool_calls ?? []) {
-      toolNamesById.set(call.id, call.function.name);
-    }
-  }
-
-  return history.some((message) => {
-    if (message.role !== "tool" || !message.tool_call_id) return false;
-    return (
-      toolNamesById.get(message.tool_call_id) === toolName &&
-      toolResultSucceeded(message.content)
-    );
-  });
-}
-
-function conversationSummarySaysContextDumpSaved(content: string): boolean {
-  if (!content.includes("[Conversation Summary]")) return false;
-  const lower = content.toLowerCase();
-  const mentionsContext =
-    lower.includes("save_context_dump") ||
-    lower.includes("context dump") ||
-    lower.includes("ai analysis") ||
-    lower.includes("psychological analysis");
-  const mentionsSuccess =
-    lower.includes("saved") ||
-    lower.includes("success") ||
-    lower.includes("analysed") ||
-    lower.includes("analyzed");
-  const mentionsMissing =
-    lower.includes("not saved") ||
-    lower.includes("has not") ||
-    lower.includes("missing") ||
-    lower.includes("still needs");
-
-  return mentionsContext && mentionsSuccess && !mentionsMissing;
-}
-
-function hasContextDumpSaved(history: ChatMessage[]): boolean {
-  if (
-    history.some(
-      (message) =>
-        message.role === "system" &&
-        typeof message.content === "string" &&
-        (message.content.includes(CONTEXT_DUMP_SAVED_MARKER) ||
-          conversationSummarySaysContextDumpSaved(message.content)),
-    )
-  ) {
-    return true;
-  }
-
-  return hasSuccessfulToolResult(history, "save_context_dump");
-}
-
-/**
- * Remove the advisory `raw_dump` argument from a persisted `save_context_dump`
- * tool call so a copy of the pasted AI-memory export does not linger in the
- * stored chat history. Mutates the assistant message that owns `toolCallId` in
- * place; other arguments (if any) are preserved. The server never reads
- * `raw_dump`, so blanking it is behaviour-preserving.
- */
-function stripRawDumpArgument(history: ChatMessage[], toolCallId: string): void {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const message = history[i];
-    if (message?.role !== "assistant" || !message.tool_calls) continue;
-    const call = message.tool_calls.find((c) => c.id === toolCallId);
-    if (!call) continue;
-    let args: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(call.function.arguments || "{}");
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        args = parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Unparseable args: the whole string may be raw text — drop it entirely.
-      args = {};
-    }
-    delete args.raw_dump;
-    call.function.arguments = JSON.stringify(args);
-    return;
-  }
-}
-
-function contextDumpSavedSystemMessage(): ChatMessage {
-  return {
-    role: "system",
-    content:
-      `${CONTEXT_DUMP_SAVED_MARKER}: The user pasted the Magic Prompt / AI analysis, ` +
-      "save_context_dump succeeded, and the deep context is persisted. Do not ask for it again.",
-  };
 }
 
 function normalizeForRepeatDetection(text: string): string {
@@ -992,13 +710,11 @@ function status(value: unknown): "saved" | "missing" {
 
 function buildCurrentSavedStateSnapshot(
   user: PersistedOnboardingState | null | undefined,
-  contextDumpSaved: boolean,
 ): ChatMessage {
   const profile = user?.profile ?? null;
   const hobbies = Array.isArray(profile?.hobbies) ? profile.hobbies : [];
   const photos = Array.isArray(profile?.photos) ? profile.photos : [];
   const contactVerified = hasTrackVerifiedContact(user ?? {});
-  const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
 
   const missing: string[] = [];
   if (!contactVerified) missing.push("email_verification");
@@ -1009,7 +725,6 @@ function buildCurrentSavedStateSnapshot(
   if (!profile?.height) missing.push("height");
   if (!profile?.partnerPreferences) missing.push("partner_preferences");
   if (!profile?.homeCityKey) missing.push("home_city");
-  if (!contextDumpSaved && !aiMemoryExportDeclined) missing.push("context_dump");
   if (photos.length < MIN_PHOTOS) missing.push(`photos_${photos.length}/${MIN_PHOTOS}`);
 
   const lines = [
@@ -1026,19 +741,9 @@ function buildCurrentSavedStateSnapshot(
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
     `Extended profile: height=${profile?.height ?? "missing"}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
     `Dating city: ${profile?.homeCityKey ? `saved:${profile.homeCityKey}` : "missing"}`,
-    `AI memory export: ${effectiveAiMemoryPreference(user?.aiMemoryExportPreference)}`,
-    `Context dump: ${contextDumpSaved ? "saved" : aiMemoryExportDeclined ? "skipped_by_user" : "missing"}`,
     `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
-    aiMemoryExportDeclined
-      ? "The user declined AI memory export. Never call request_context_dump or save_context_dump; proceed directly to photos once profile fields are complete."
-      : "",
-    aiMemoryExportDeclined
-      ? "If Photos are missing, call request_photos. Finalize after profile and photos are complete."
-      : "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
-    aiMemoryExportDeclined
-      ? "A fallback psychological summary and embedding will be generated server-side during finalization."
-      : "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
+    "Request photos after profile fields are saved. Finalize after profile and photos are complete.",
   ];
 
   // `filter(Boolean)` so a branch that resolves to no instruction contributes
@@ -1049,7 +754,6 @@ function buildCurrentSavedStateSnapshot(
 function withCurrentSavedStateSnapshot(
   messages: ChatMessage[],
   user: PersistedOnboardingState | null | undefined,
-  fullHistory: ChatMessage[],
 ): ChatMessage[] {
   const cleaned = messages.filter(
     (message) =>
@@ -1059,7 +763,7 @@ function withCurrentSavedStateSnapshot(
         message.content.startsWith(CURRENT_ONBOARDING_STATE_MARKER)
       ),
   );
-  const snapshot = buildCurrentSavedStateSnapshot(user, hasContextDumpSaved(fullHistory));
+  const snapshot = buildCurrentSavedStateSnapshot(user);
   let insertAt = 0;
   while (insertAt < cleaned.length && cleaned[insertAt]?.role === "system") {
     insertAt++;
@@ -1215,66 +919,6 @@ async function execVerifyOtp(
   });
 }
 
-async function execSaveContextDump(
-  telegramId: bigint,
-  _args: { raw_dump?: unknown },
-  deps: AgentDeps,
-  latestUserMessage: string,
-): Promise<string> {
-  // Truth source is the user's actual latest message, not the LLM-supplied
-  // `raw_dump`. LLMs reliably auto-correct / rephrase long text passed
-  // through tool args (single-character drift broke the previous strict
-  // grounding check on real pastes). Hallucination is still blocked: a short
-  // non-JSON message rejects, while a complete structured payload may be
-  // shorter than the old heuristic threshold.
-  const raw = latestUserMessage.trim();
-  const structured = extractJsonSummary(raw);
-  if (raw.length < 200 && !isValidFastPathSummary(structured)) {
-    return JSON.stringify({
-      success: false,
-      error:
-        "The user's latest message is too short to be a real context dump. Ask them to paste the FULL output from their ChatGPT/Claude — not a summary or paraphrase.",
-    });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true, firstName: true, language: true },
-  });
-  if (!user) {
-    return JSON.stringify({ success: false, error: "User not found." });
-  }
-
-  const analyse = deps.analyseProfile ?? analyseAndSaveProfile;
-  try {
-    const analysis = await analyse(user.id, raw, undefined, {
-      firstName: user.firstName ?? "User",
-      language: user.language ?? "en",
-    });
-    if (!analysis.parsed) {
-      return JSON.stringify({
-        success: false,
-        error:
-          "I couldn't verify this as a complete AI-memory response. Ask the user to paste the full JSON output again; do not summarize or fill it in for them.",
-      });
-    }
-  } catch (err) {
-    console.error("Context dump analysis failed:", err);
-    return JSON.stringify({
-      success: false,
-      error: "Failed to analyse the context dump. The user can try pasting it again.",
-    });
-  }
-
-  return JSON.stringify({
-    success: true,
-    message:
-      "AI memory processed and supported signals saved. If no supported signals were present, onboarding answers will supply the fallback profile. Proceed to photo upload.",
-    next_instruction:
-      "Context dump is now saved. Do not ask for profile fields again; call request_photos unless photos are already complete.",
-  });
-}
-
 /**
  * Scan user-authored messages for a clearly-stated height (cm). Used as a
  * defense-in-depth check inside `execSaveProfileData`: if the user said
@@ -1403,7 +1047,6 @@ function ungroundedProfileFields(
 
 function missingBeforePhoto(
   user: PersistedOnboardingState | null | undefined,
-  contextDumpSaved: boolean,
 ): string[] {
   const missing: string[] = [];
   const profile = user?.profile ?? null;
@@ -1417,9 +1060,6 @@ function missingBeforePhoto(
     missing.push("partner_preferences");
   }
   if (!profile?.homeCityKey) missing.push("home_city");
-  if (!isAiMemoryExportDeclined(user?.aiMemoryExportPreference) && !contextDumpSaved) {
-    missing.push("context_dump");
-  }
   return missing;
 }
 
@@ -1445,7 +1085,6 @@ async function execSaveProfileData(
       age: true,
       gender: true,
       preference: true,
-      aiMemoryExportPreference: true,
       profile: {
         select: {
           height: true,
@@ -1579,16 +1218,12 @@ async function execSaveProfileData(
       hobbies_count: hobbies.length,
       partner_preferences: true,
     },
-    next_instruction:
-      isAiMemoryExportDeclined(user.aiMemoryExportPreference)
-        ? "Do not ask for saved profile fields again. AI memory export was declined, so call request_photos now and never request a context dump."
-        : "Do not ask for saved profile fields again. If context_dump is not saved, call request_context_dump now. If context_dump is saved, continue to photos/finalization as appropriate.",
+    next_instruction: "Do not ask for saved fields again. Continue to photos/finalization as appropriate.",
   });
 }
 
 async function execFinalizeOnboarding(
   telegramId: bigint,
-  contextDumpSaved: boolean,
   deps: AgentDeps,
 ): Promise<string> {
   // Guard: verify all required profile data exists before finalizing
@@ -1606,7 +1241,6 @@ async function execFinalizeOnboarding(
       registrationTrack: true,
       termsAccepted: true,
       language: true,
-      aiMemoryExportPreference: true,
       profile: {
         select: {
           height: true,
@@ -1637,9 +1271,6 @@ async function execFinalizeOnboarding(
     missing.push("partner_preferences");
   if (!user?.profile?.homeCityKey)
     missing.push("home_city");
-  const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
-  if (!contextDumpSaved && !aiMemoryExportDeclined)
-    missing.push("context_dump (deep profile not yet saved)");
   if (!user?.profile?.photos?.length || user.profile.photos.length < MIN_PHOTOS)
     missing.push(`photos (need at least ${MIN_PHOTOS})`);
 
@@ -1675,11 +1306,8 @@ async function execFinalizeOnboarding(
     }
   }
 
-  const importedSummaryAvailable = Boolean(
-    user?.profile?.psychologicalSummary?.trim(),
-  );
-  if ((aiMemoryExportDeclined || !importedSummaryAvailable) && user?.profile) {
-    const saveFallback = deps.saveFallbackProfile ?? saveFallbackProfileAnalysis;
+  if (user?.profile) {
+    const saveFallback = deps.saveQuestionnaireProfile ?? saveQuestionnaireProfileAnalysis;
     try {
       await saveFallback(user.id, {
         firstName: user.firstName!,
@@ -1692,7 +1320,6 @@ async function execFinalizeOnboarding(
         homeCityKey: user.profile.homeCityKey!,
         fridayVibe,
         vibeFocus,
-        source: aiMemoryExportDeclined ? "declined" : "no_relevant_ai_memory",
       });
     } catch (err) {
       console.error("Fallback profile analysis failed:", err);
@@ -1701,16 +1328,7 @@ async function execFinalizeOnboarding(
         error: "Could not build the fallback profile analysis. Please try finalizing again.",
       });
     }
-  } else if (user?.profile) {
-    // Accepted Magic Prompt: the summary already exists (saved at context-dump
-    // time) without the vibe — fold it in and re-mark the embedding dirty so
-    // the refresh worker re-embeds with the vibe included. Best-effort.
-    const foldVibe = deps.appendVibeToSummary ?? appendVibeToSummary;
-    try {
-      await foldVibe(user.id, fridayVibe, vibeFocus);
-    } catch (err) {
-      console.warn("Vibe summary fold failed (non-blocking):", err);
-    }
+
   }
 
   // Gate activation on liveness verification (Phase 6.3). The master kill
@@ -1886,18 +1504,9 @@ export async function summarizeHistory(
 
   const json = (await res.json()) as ChatCompletionResponse;
   const summary = json.choices[0]?.message?.content ?? "";
-  const alreadyHasLeadingMarker = systemMessages.some(
-    (message) =>
-      typeof message.content === "string" &&
-      message.content.includes(CONTEXT_DUMP_SAVED_MARKER),
-  );
-  const contextDumpMarker = hasContextDumpSaved(history) && !alreadyHasLeadingMarker
-    ? [contextDumpSavedSystemMessage()]
-    : [];
 
   return [
     ...systemMessages,
-    ...contextDumpMarker,
     { role: "system", content: `[Conversation Summary]: ${summary}` },
     ...recentMessages,
   ];
@@ -1917,13 +1526,7 @@ export async function summarizeHistory(
  *
  * Returns the assistant's reply and flags for the bot handler.
  */
-/**
- * Type Radar gate (§Type Radar, step 5B). The visual type picker is shown once,
- * right before the Magic Prompt / photos step, to EVERY user. It is pending only
- * while the feature is enabled and the user hasn't yet completed OR skipped it
- * (`Profile.typeRadarCompletedAt` stamps both outcomes). Off by default, so this
- * is a no-op for the current production flow.
- */
+
 export function typeRadarGatePending(
   user:
     | { age: number | null; profile: { typeRadarCompletedAt: Date | null } | null }
@@ -1944,7 +1547,7 @@ export async function runAgentTurn(
 ): Promise<AgentTurnResult> {
   const onboardingInput = normalizedOnboardingInput(input);
   const userMessage =
-    onboardingInput.kind === "user_text" || onboardingInput.kind === "context_dump"
+    onboardingInput.kind === "user_text"
       ? onboardingInput.text
       : onboardingInput.kind === "photos_continue"
         ? "[The user chose Continue after the optional photo/video offer. Finalize onboarding now and do not ask for more media.]"
@@ -1963,7 +1566,6 @@ export async function runAgentTurn(
       phoneVerifiedAt: true,
       registrationTrack: true,
       termsAccepted: true,
-      aiMemoryExportPreference: true,
       firstName: true,
       age: true,
       gender: true,
@@ -1993,19 +1595,9 @@ export async function runAgentTurn(
       expectingPhoto: false,
       onboardingComplete: false,
       verificationRequired: false,
-      contextPromptRequested: false,
-      contextDumpStarted: false,
-      contextDumpSaved: false,
     };
   }
 
-  if (onboardingInput.kind === "context_dump") {
-    // Telegram's paste buffer and the native interview endpoint both send a
-    // typed context dump. Process it directly regardless of the legacy
-    // collector flag: this avoids a redundant agent round, preserves the
-    // photo gate, and keeps the raw payload out of stored chat history.
-    return runCollectorTurn(telegramId, onboardingInput, deps, user);
-  }
 
   if (onboardingInput.kind === "photos_continue") {
     // "Continue" ends the photo stage — it must never be a back door around the
@@ -2025,16 +1617,8 @@ export async function runAgentTurn(
     ) {
       return runCollectorTurn(telegramId, onboardingInput, deps, user);
     }
-    const history = ((user?.messageHistory ?? []) as unknown[]).map(
-      (message) => message as ChatMessage,
-    );
-    const contextDumpSaved =
-      isAiMemoryExportDeclined(user?.aiMemoryExportPreference) ||
-      user?.onboardingProgress?.completedFields.includes("context_dump") ||
-      hasContextDumpSaved(history);
     const finalized = await execFinalizeOnboarding(
       telegramId,
-      contextDumpSaved,
       deps,
     );
     const parsed = parseJsonObject(finalized);
@@ -2059,7 +1643,6 @@ export async function runAgentTurn(
       telegramId,
       onboardingInput,
       reply,
-      false,
       onboardingComplete,
     );
     return {
@@ -2067,9 +1650,6 @@ export async function runAgentTurn(
       expectingPhoto: !onboardingComplete,
       onboardingComplete,
       verificationRequired,
-      contextPromptRequested: false,
-      contextDumpStarted: false,
-      contextDumpSaved: false,
     };
   }
 
@@ -2104,7 +1684,6 @@ export async function runAgentTurn(
       user?.registrationTrack === "general" && user?.phoneVerifiedAt,
     );
     const emailAlreadyVerified = hasTrackVerifiedContact(user ?? {});
-    const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
     const verifiedNote = emailVerified
       ? `[VERIFIED EMAIL ON FILE: ${user!.email}] DO NOT ask the user for their email. DO NOT mention email verification. Skip step 1 of the onboarding flow entirely and move directly to profile basics (step 2). Briefly acknowledge in the user's language (e.g. "your @${user!.universityDomain ?? user!.email!.split("@")[1]} email is already verified"), then ask for first name + age. Do NOT add a ✅ or any "Complete"-style emoji to this acknowledgement.`
       : phoneVerified
@@ -2113,7 +1692,7 @@ export async function runAgentTurn(
     history.push({
       role: "system",
       content: [
-        buildSystemPrompt(emailAlreadyVerified, aiMemoryExportDeclined),
+        buildSystemPrompt(emailAlreadyVerified),
         langNote,
         verifiedNote,
       ]
@@ -2138,9 +1717,6 @@ export async function runAgentTurn(
   let expectingPhoto = false;
   let onboardingComplete = false;
   let verificationRequired = false;
-  let contextPromptRequested = false;
-  let contextDumpStarted = false;
-  let contextDumpSaved = false;
   let profileDataSavedThisTurn = false;
   let typeRadarRequested = false;
 
@@ -2148,7 +1724,7 @@ export async function runAgentTurn(
   const MAX_TOOL_ROUNDS = 8;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await callOpenAI(
-      withCurrentSavedStateSnapshot(truncateForApi(history), user, history),
+      withCurrentSavedStateSnapshot(truncateForApi(history), user),
       fetchFn,
     );
 
@@ -2157,17 +1733,9 @@ export async function runAgentTurn(
 
     const assistantMsg = choice.message;
     const assistantContent = dedupeRepeatedAssistantText(assistantMsg.content);
-    const rawToolCalls = assistantMsg.tool_calls ?? [];
-    const contextDumpToolCall = rawToolCalls.find(
-      (call) => call.function.name === "request_context_dump",
-    );
-    const toolCalls = contextDumpToolCall ? [contextDumpToolCall] : rawToolCalls;
+    const toolCalls = assistantMsg.tool_calls ?? [];
     let stopAfterToolRound = false;
 
-    // Push assistant message to history. If the model bundled request_context_dump
-    // with later tools, keep only that boundary call; unexecuted tool calls would
-    // make future OpenAI requests invalid and, more importantly, would represent
-    // side effects that must wait for the user's pasted dump.
     history.push({
       role: "assistant",
       content: assistantContent,
@@ -2206,102 +1774,7 @@ export async function runAgentTurn(
           case "resend_otp":
             result = await execResendOtp(telegramId, deps);
             break;
-          case "request_context_dump":
-            if (isAiMemoryExportDeclined(user?.aiMemoryExportPreference)) {
-              result = JSON.stringify({
-                success: false,
-                error:
-                  "The user declined AI memory export. Do not show the Magic Prompt. " +
-                  "Continue with the remaining profile fields, then call request_photos.",
-              });
-            } else if (deps.canPresentTypeRadar !== false && typeRadarGatePending(user)) {
-              // Visual type picker must come first. The server sends it (web_app
-              // button + Skip) and stops; the Magic Prompt follows on resume.
-              typeRadarRequested = true;
-              stopAfterToolRound = true;
-              result = JSON.stringify({
-                success: false,
-                reason: "type_radar_required",
-                message:
-                  "The user must complete the quick visual type picker first. The server is sending it now and stopping this turn — do not call any more tools.",
-              });
-            } else {
-              contextPromptRequested = true;
-              contextDumpStarted = true;
-              result = JSON.stringify({
-                success: true,
-                message:
-                  "Magic Prompt has been sent. The server is stopping this turn and waiting for the user's pasted LLM response.",
-              });
-              stopAfterToolRound = true;
-            }
-            break;
-          case "save_context_dump":
-            if (isAiMemoryExportDeclined(user?.aiMemoryExportPreference)) {
-              result = JSON.stringify({
-                success: false,
-                error:
-                  "The user declined AI memory export. Do not save or request a context dump; continue to photos.",
-              });
-            } else {
-              result = await execSaveContextDump(
-                telegramId,
-                args as { raw_dump?: unknown },
-                deps,
-                userMessage,
-              );
-            }
-            break;
           case "request_photos": {
-            // Type Radar gate for the DECLINED path (no Magic Prompt): the visual
-            // picker still comes before photos. For accepted users this is a
-            // no-op here — they already cleared the gate at request_context_dump.
-            if (deps.canPresentTypeRadar !== false && typeRadarGatePending(user)) {
-              typeRadarRequested = true;
-              stopAfterToolRound = true;
-              result = JSON.stringify({
-                success: false,
-                reason: "type_radar_required",
-                message:
-                  "The user must complete the quick visual type picker first. The server is sending it now and stopping this turn — do not call any more tools.",
-              });
-              break;
-            }
-            // Defense-in-depth: the system prompt forbids calling request_photos
-            // before save_context_dump succeeds, but LLMs occasionally violate
-            // it — chaining request_context_dump → request_photos in the same
-            // turn, which leaves the user stranded mid-step. Enforce the
-            // ordering server-side by requiring a successful save_context_dump
-            // tool result, not just any psychologicalSummary row.
-            // A typed context dump (Telegram paste buffer / native interview)
-            // is processed by the collector, which records success in
-            // `onboardingProgress.completedFields` and pushes only a receipt
-            // marker into history — it never emits the tool-result / marker
-            // that `hasContextDumpSaved(history)` looks for. Honour that path
-            // too, otherwise a user who already pasted a valid dump gets
-            // wedged in a paste loop whenever this tool-loop path runs (e.g.
-            // ONBOARDING_FACT_COLLECTOR_ENABLED off, the documented rollback).
-            const contextDumpAlreadySaved =
-              hasContextDumpSaved(history) ||
-              (user?.onboardingProgress?.completedFields.includes(
-                "context_dump",
-              ) ??
-                false);
-            if (
-              !isAiMemoryExportDeclined(user?.aiMemoryExportPreference) &&
-              !contextDumpAlreadySaved
-            ) {
-              result = JSON.stringify({
-                success: false,
-                error:
-                  "Cannot start photo upload yet — the user has not pasted their AI analysis. " +
-                  "Wait for them to paste the long psychological analysis from their ChatGPT/Claude/etc., " +
-                  "and only call save_context_dump (and then request_photos AFTER it succeeds). " +
-                  "If you just called request_context_dump in this same turn, end your reply now with the " +
-                  "paste-it-back instruction; do NOT call any more tools until the user replies.",
-              });
-              break;
-            }
             const photoGateUser = profileDataSavedThisTurn
               ? await prisma.user.findUnique({
                   where: { telegramId },
@@ -2315,10 +1788,9 @@ export async function runAgentTurn(
                     phoneVerifiedAt: true,
                     registrationTrack: true,
                     termsAccepted: true,
-                    aiMemoryExportPreference: true,
                     profile: {
                       select: {
-                                      height: true,
+                        height: true,
                         hobbies: true,
                         partnerPreferences: true,
                         photos: true,
@@ -2330,7 +1802,6 @@ export async function runAgentTurn(
               : user;
             const missingForPhotos = missingBeforePhoto(
               photoGateUser,
-              contextDumpAlreadySaved,
             );
             if (missingForPhotos.length > 0) {
               result = JSON.stringify({
@@ -2338,6 +1809,17 @@ export async function runAgentTurn(
                 error:
                   `Cannot start photo upload yet — missing or unconfirmed onboarding fields: ${missingForPhotos.join(", ")}. ` +
                   "Ask only for these fields now.",
+              });
+              break;
+            }
+            if (deps.canPresentTypeRadar !== false && typeRadarGatePending(user)) {
+              typeRadarRequested = true;
+              stopAfterToolRound = true;
+              result = JSON.stringify({
+                success: false,
+                reason: "type_radar_required",
+                message:
+                  "The user must complete the quick visual type picker first. The server is sending it now and stopping this turn — do not call any more tools.",
               });
               break;
             }
@@ -2358,9 +1840,22 @@ export async function runAgentTurn(
             if (toolResultSucceeded(result)) profileDataSavedThisTurn = true;
             break;
           case "finalize_onboarding":
+            if (
+              deps.canPresentTypeRadar !== false &&
+              missingBeforePhoto(user).length === 0 &&
+              typeRadarGatePending(user)
+            ) {
+              typeRadarRequested = true;
+              stopAfterToolRound = true;
+              result = JSON.stringify({
+                success: false,
+                reason: "type_radar_required",
+                message: "The visual type picker must be completed or skipped first.",
+              });
+              break;
+            }
             result = await execFinalizeOnboarding(
               telegramId,
-              hasContextDumpSaved(history),
               deps,
             );
             {
@@ -2393,51 +1888,9 @@ export async function runAgentTurn(
         tool_call_id: toolCall.id,
         content: result,
       });
-
-      if (fnName === "save_context_dump") {
-        // Defense for legacy/untyped clients: after the parser has consumed
-        // the payload, replace the raw turn before persisting history or
-        // making another agent call.
-        let rawIndex = -1;
-        for (let i = history.length - 1; i >= 0; i--) {
-          const message = history[i];
-          if (message?.role === "user" && message.content === userMessage) {
-            rawIndex = i;
-            break;
-          }
-        }
-        if (rawIndex >= 0) {
-          history.splice(rawIndex, 1, {
-            role: "system",
-            content: AI_MEMORY_RECEIVED_MARKER,
-          });
-        }
-        // The LLM often echoes a near-verbatim copy of the pasted AI-memory
-        // export into the advisory `raw_dump` tool argument. The server never
-        // reads it (the user's actual message is the truth source), so strip
-        // it before this assistant turn is persisted — otherwise a copy of
-        // the raw export (potentially with third-party details) would survive
-        // in `messageHistory` despite the user turn being scrubbed above.
-        stripRawDumpArgument(history, toolCall.id);
-        if (toolResultSucceeded(result)) {
-          contextDumpSaved = true;
-          history.push(contextDumpSavedSystemMessage());
-        }
-      }
-
-      // Persist the Magic Prompt as an assistant turn so non-Telegram clients
-      // (mobile chat) can render it. Telegram still sends ctx.reply(prompt)
-      // separately; this just records what was already shown. Skipped when the
-      // Type Radar gate intercepted this request_context_dump — no prompt yet.
-      if (fnName === "request_context_dump" && !typeRadarRequested) {
-        history.push({
-          role: "assistant",
-          content: magicContextPrompt(user?.language ?? "en"),
-        });
-        history.push({
-          role: "assistant",
-          content: contextDumpInstruction(user?.language),
-        });
+      if (stopAfterToolRound) {
+        // Persist only executed tool calls so resuming keeps a valid history.
+        toolCalls.splice(toolCalls.indexOf(toolCall) + 1);
         break;
       }
     }
@@ -2486,9 +1939,6 @@ export async function runAgentTurn(
     expectingPhoto,
     onboardingComplete,
     verificationRequired,
-    contextPromptRequested,
-    contextDumpStarted,
-    contextDumpSaved,
     typeRadarRequested,
   };
 }

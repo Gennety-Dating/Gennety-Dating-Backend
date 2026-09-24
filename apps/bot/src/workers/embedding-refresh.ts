@@ -1,11 +1,9 @@
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import {
-  buildEmbeddingInput,
   createOpenAIEmbeddingClient,
   toPgVectorLiteral,
   type EmbeddingClient,
-  type ParsedProfileSummary,
 } from "../services/profile-analysis.js";
 
 /**
@@ -194,24 +192,12 @@ async function refreshDirtyEmbeddings(
 
   type Row = (typeof dirty)[number];
 
-  /**
-   * The text one profile is embedded from.
-   *
-   * `partnerPreferences` and `negativeConstraints` are appended here because
-   * `buildEmbeddingInput` only knows the structured `ParsedProfileSummary`, and
-   * the voice transcript is read from its own column rather than folded into
-   * `psychologicalSummary`: that field is replaced wholesale by the About-me
-   * editor, so folding it in would silently wipe the voice on every bio edit —
-   * and unlike the vibe answers a transcript CHANGES on every re-record, so
-   * `appendVibeToSummary`'s `includes()` idempotency would append rather than
-   * replace, tripling the voice's weight after three re-records. Composed at
-   * refresh time, the weight is constant by construction.
-   */
+
   const composeInput = (row: Row): string => {
-    const baseSummary: ParsedProfileSummary = {};
-    if (row.psychologicalSummary) baseSummary.summary = row.psychologicalSummary;
-    if (row.hobbies.length) baseSummary.interests = row.hobbies;
-    let text = buildEmbeddingInput(baseSummary, row.psychologicalSummary ?? "");
+    let text = [
+      row.psychologicalSummary ? `Summary: ${row.psychologicalSummary}` : "",
+      row.hobbies.length ? `Interests: ${row.hobbies.join(", ")}` : "",
+    ].filter(Boolean).join("\n").slice(0, 8000);
     if (row.partnerPreferences) {
       text += `\nPartner preferences: ${row.partnerPreferences}`;
     }

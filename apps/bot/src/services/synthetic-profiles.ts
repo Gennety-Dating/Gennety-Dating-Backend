@@ -61,13 +61,7 @@ export interface SyntheticProfileDefinition {
   height: number;
   hobbies: string[];
   partnerPreferences: string;
-  /**
-   * The dominant matching input (`V_explicit`, weight 0.65) and what the pitch
-   * generator actually reads. Written the way a declined-AI-memory user's
-   * fallback summary is written: open-ended psychological prose with no
-   * demographics, because age/height/city are `V_research`'s job and repeating
-   * them here would double-count them.
-   */
+
   psychologicalSummary: string;
   fridayVibeText: string;
   vibeFocusText: string;

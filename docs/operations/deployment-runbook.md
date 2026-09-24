@@ -541,34 +541,6 @@ Required/high-impact env keys:
 - AI/email/onboarding: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
   `OTP_LOG_TO_CONSOLE`, `ONBOARDING_FACT_COLLECTOR_ENABLED` (default `false`;
   enable only after schema push and backfill verification)
-  - **AI-memory export kill switch:** `AI_MEMORY_EXPORT_ENABLED` (default
-    **`true`** — `config.ts` reads `!== "false"`, so the Magic Prompt branch
-    stays on unless explicitly disabled). Set `AI_MEMORY_EXPORT_ENABLED=false`
-    to hide the whole feature (PRODUCT_SPEC §1.3): the onboarding Mini App skips
-    the AI-memory choice screen, `POST /v1/telegram-onboarding/ai-memory` 404s,
-    and onboarding runs vibe → photos with the deterministic fallback summary —
-    i.e. every user takes the existing "declined" path. **No schema change, no
-    backfill, no Mini App rebuild required to flip it** (the bundle reads the
-    server's `aiMemoryExportEnabled` from `/state`; redeploying the Mini App is
-    only needed to pick up the client-side skip for *cached* older bundles,
-    which are already safe because the server 404s the write). Toggle live with
-    `pm2 restart gennety-bot --update-env`. Rollback = remove the line (or set
-    `true`); `User.aiMemoryExportPreference` is never rewritten by the flag, so
-    the branch returns exactly as it was. In-flight effects when turning it
-    off: users parked on the choice screen / Magic Prompt step advance straight
-    to photos, and a paste already buffered is dropped instead of saved.
-    **Current state (2026-07-30): OFF in production AND off in dev.** Prod has
-    carried `AI_MEMORY_EXPORT_ENABLED=false` in `/opt/gennety/.env` since
-    2026-07-26; `.env.local` (+ `.env.local.example`) now sets the same, because
-    the default is `true` and a dev box without the line walks an onboarding
-    flow no production user can reach — choice screen → Magic Prompt paste →
-    an AI-derived `psychologicalSummary` feeding `V_explicit`. Nothing in the
-    production pool is AI-memory-derived: audited 2026-07-30, **zero** users
-    have ever held `aiMemoryExportPreference = accepted` (15 rows: 14
-    `undecided`, 1 `declined`), so the five populated `psychologicalSummary`
-    values are all the deterministic vibe fallback. **Rollback trap:** four env
-    backups predating 2026-07-26 (`.env.bak.20260713`…`20260725`) have no such
-    line, so restoring one silently turns the feature back on.
   - **Vibe onboarding questions (no flag of their own).** The two §1.3 vibe
     questions (`friday_vibe` / `vibe_focus`) and their matching signal live in
     the collector, so they are active only when
@@ -603,7 +575,7 @@ Required/high-impact env keys:
   below the preview, and that tradeoff must be chosen deliberately per flow.
   Two categories of stream exist:
   - **Thinking-status beats** (`runStatusSequence`, the "agent is analysing /
-    working" lines): AI-memory analysis, liveness verify check, verification
+    working" lines): questionnaire analysis, liveness verify check, verification
     soft-skip, profile-video upload check, onboarding photo-burst check
     (`photoReviewSteps`), concierge venue selection, date-card
     render + share, plus the Profiler batch boundary, the Profiler in-batch
@@ -1124,7 +1096,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   match multiplier is a pure no-op even when enabled; launch value ≈ `0.7`,
   the weakest factor — read directly by the match engine, mirroring
   `AGE_RANGE_PREF_*`). When on, the conversational onboarding shows a skippable
-  visual "choose your type" step **before** the Magic Prompt (a `web_app` button
+  visual "choose your type" step before photos (a `web_app` button
   into `radar.html` + an inline Skip); submit/skip resumes the flow. The
   compiled per-set preference vector (`Profile.typePrefTags`) scores a partner's
   `Profile.appearanceTags` — the candidate side is tagged by an **isolated**
@@ -1162,7 +1134,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
     App's own close animation) before their next onboarding question. That is
     real added time in the funnel — watch
     `GET /admin/analytics/onboarding-funnel` for a drop-off bump at the
-    AI-memory / photos step after enabling it.
+    photos step after enabling it.
 
   Set `RADAR_THINKING_ENABLED=false` + `pm2 restart gennety-bot --update-env`
   to drop straight to the next question; nothing else changes. That kill switch
@@ -1170,7 +1142,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
 - Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
   — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
   When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's
-  full profile + photos on first activation (no AI-memory dump), (2) a tokenized
+  full profile + photos on first activation (questionnaire-based profile), (2) a tokenized
   weekly-matches report link after the Thursday batch, (3) both date cards + venue
   when a date locks in, (4) the full profile + **phone number** + photos when a
   user freezes or hard-deletes their account (bot Settings→Delete/Freeze and mobile

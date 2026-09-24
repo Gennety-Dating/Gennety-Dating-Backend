@@ -1,33 +1,5 @@
 #!/usr/bin/env node
-/**
- * Dev-only helper (local @gennetytestbot + localhost dev DB only).
- *
- * Sends YOU the exact Type Radar onboarding invite that production sends a user
- * mid-onboarding, right before the Magic Prompt / photos step (§Type Radar,
- * step 5B). It reuses the real production send path `sendTypeRadarInvite(...)`,
- * so the message body, the `web_app` "Choose my type" button (opening
- * radar.html with the viewer's lang+theme), the inline "Skip for now" button,
- * and the callback data (`radar:skip`) are byte-for-byte what a real user gets.
- *
- * This does NOT run the onboarding agent — it hands you the finished invite so
- * you can open the picker and go through it as a user. To actually load the
- * deck + submit from the Mini App you additionally need (see the printed notes):
- *   • TYPE_RADAR_ENABLED=true in .env.local, then restart `pnpm dev:bot`
- *     (otherwise /v1/radar/deck + /submit 404 and the picker can't load),
- *   • the tester account has age (≤ 28 → band A, the only live band) + a gender
- *     preference set (the deck derives band from age, set(s) from preference),
- *   • WEBAPP_URL is a real HTTPS host served by `pnpm dev:webapp` (the ngrok
- *     tunnel in .env.local), else the web_app button is omitted and only Skip
- *     shows — exactly as the production code degrades without a tunnel.
- *
- * Usage:
- *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-type-radar-demo.mjs --to=<tester tg> [--lang=ru]
- *
- * The tester must have pressed Start on @gennetytestbot at least once (a bot
- * can't initiate a chat). --lang, when given, also updates that account's
- * `language` in the dev DB so the whole message (text + button + picker URL) is
- * consistently that language, mirroring a real user of that locale.
- */
+
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 

@@ -27,8 +27,7 @@
   `cityCatalog` / `cityWaitlist` in `/state`), a **light/dark theme picker** (right after the city gate, before the
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
   records it), the **six profile screens** (name / age / gender / who you're
-  looking for / height / what you're looking for — §1.3), and the final AI
-  memory export choice, using
+  looking for / height / what you're looking for — §1.3), using
   Telegram `initData` HMAC auth for all writes (`POST /track` persists the
   re-choosable fork pick).
 - **The Mini App collects the first six profile facts itself (2026-08-05; the
@@ -37,8 +36,7 @@
   correct answer out of a
   finite set, and a Telegram chat has no way to ask for that: the bot asked in
   prose and then recovered the value with a regex or an LLM classifier. They now
-  sit on their own screens between the welcome-gift screen and the AI-memory
-  choice — one bold question, one control (a text field, a slider, tinted choice
+  sit on their own screens between the welcome-gift screen and the chat handoff — one bold question, one control (a text field, a slider, tinted choice
   buttons, a two-column photo fork, a scroll-snap drum), nothing else — and the
   chat resumes at
   `hobbies`. **The name screen carries no question at all** (founder decision
@@ -374,10 +372,7 @@
   58% who leave before touching anything never heard a word about the product.
   Two smaller things ride along. The intro no longer opens on "we see these
   problems", a line that referred to problems no screen states any more. And
-  How-it-works stops promising an import of ChatGPT memory: that branch is
-  behind `AI_MEMORY_EXPORT_ENABLED`, off in production since 2026-07-26, so the
-  screen was making a promise the flow never keeps — a guard now holds the copy
-  ChatGPT-free until re-enabling the feature earns the sentence back.
+  How-it-works describes direct questionnaire-based profile intake.
   **The intro's position in the flow is deliberately unchanged.** Moving the
   hook ahead of the gates is a separate decision the founder has not taken; the
   three surviving scenes still play where the nine did.
@@ -736,8 +731,7 @@
   `/v1/telegram-onboarding/state`; the bot immediately resumes the chat through
   the onboarding collector. This does **not** mark onboarding complete by
   itself — required profile fields, photos, and verification CTA still follow
-  the normal product rules. Magic Prompt context is required only when
-  `aiMemoryExportPreference = accepted`.
+  the normal product rules.
 - The user MUST flip `termsAccepted` (legal click) and MAY opt into
   `researchOptIn` (analytics use of anonymised data, default false per GDPR
   norms).
@@ -757,7 +751,7 @@
   a user who typed anything instead of tapping the button entered a second,
   divergent onboarding: it skipped the sign-up fork (a general-track user was
   never offered the phone rail), the dating city, the theme pick and the
-  AI-memory choice, then dead-ended at the finalize gate, which requires a
+  chat handoff, then dead-ended at the finalize gate, which requires a
   `homeCityKey` the chat flow cannot collect. Both screens are deleted; every
   touch on either step — `/start`, a stray message, a stale inline button from a
   previous account — answers with the one current Mini App entry card
@@ -783,14 +777,13 @@ fact collector owns profile capture:
 | `extract + validate` | Require exact user-message evidence; validate age, height, enums, and placeholders |
 | `partial save` | Transactionally persist each accepted fact to `User` / `Profile` after every text or voice answer |
 | `advance` | Choose the first actually missing field from the canonical order |
-| `context gate` | Surface and save the Magic Prompt only when AI memory export was accepted |
 | `photo gate` | Preserve early photos but do not skip unfinished profile questions |
-| `finalize gate` | Activate only after required profile data, AI-memory branch, city, a verified contact rail (email or phone, per track), and minimum photos are complete |
+| `finalize gate` | Activate only after required profile data, city, a verified contact rail (email or phone, per track), and minimum photos are complete |
 
 Canonical order: name + age → gender → preference → height → **relationship
 intent** → hobbies → partner
 requirements → **vibe (ideal Friday night →
-process-vs-who follow-up)** → AI memory → photos. (An optional
+process-vs-who follow-up)** → Type Radar → photos. (An optional
 nationality/ethnicity step used to sit before the vibe questions; it was
 **removed 2026-08-01** — see the note under the hard rules below.) Questions come from server
 templates for `en`, `ru`, `uk`, `de`, and `pl`.
@@ -815,8 +808,7 @@ on `@gennety/shared` and a bound in two places eventually disagrees with
 itself.
 
 **Vibe questions (matching signal, asked of everyone).** Two short free-text
-questions sit right before the Magic Prompt step so *every* user — including
-those who decline AI-memory export — supplies real psychological signal, not
+questions precede Type Radar so every user supplies psychological signal, not
 just demographics:
 
 - `friday_vibe` — "describe your ideal Friday night, money/logistics no object,
@@ -904,7 +896,7 @@ relaunch: the client routes on `cityWaitlist` before it looks at `homeLocation`,
 the bot's `/start` card says "you're on the list" instead of "let's finish
 signing up", and — the part that actually enforces it — every onboarding step
 past the city gate requires a home location this account does not have, so
-`/theme`, `/profile`, `/ai-memory` and `/complete` all answer
+`/theme`, `/profile` and `/complete` all answer
 `409 location-required`. They can never be matched, because
 `buildCandidateSql` requires `onboarding_step = 'completed'` and they can
 never reach it.
@@ -963,46 +955,9 @@ promising them a match it cannot deliver, and gives them a one-tap way into a
 launched market — the conditional menu row and the honest weekly DM in §2.1 /
 §3.1. On iOS the same move is `POST /v1/me/home-location` with a supported city.
 
-**Kill switch (`AI_MEMORY_EXPORT_ENABLED`, default on).** The whole AI-memory
-branch can be turned off with one env var while it is reworked, without a
-schema change, a backfill, or any other flow moving. When off, every surface
-behaves exactly as it already does for a user who **declined**: the onboarding
-Mini App skips the AI-memory choice screen (the server mirrors the flag as
-`aiMemoryExportEnabled` in `/state`), `POST /v1/telegram-onboarding/ai-memory`
-404s, the collector marks `ai_memory` + `context_dump` complete/skipped so the
-canonical order runs vibe → photos, the legacy onboarding agent never requests
-or accepts a Magic Prompt paste (a paste still in flight when the flag flips is
-dropped rather than saved), and finalization uses the deterministic fallback
-summary + embedding. The flag never writes to the database:
-`User.aiMemoryExportPreference` keeps whatever it held (including `accepted`),
-so flipping it back on restores the branch for everyone as-is.
-
-The final Mini App screen records `User.aiMemoryExportPreference` through
-`POST /v1/telegram-onboarding/ai-memory`:
-
-- `accepted` keeps the existing Magic Prompt flow and server-side ordering
-  guards (`save_context_dump` before photos/finalization).
-- The pasted AI response is processed automatically after a short idle pause;
-  there is no separate paste-confirmation button.
-- The Magic Prompt uses the evidence-first V2 JSON contract. It asks the
-  personal AI for dating-relevant signals only when backed by an explicit
-  disclosure, repeated pattern, or concrete episode; generic AI-use
-  preferences, forced personality/attachment labels, and gap-filling are
-  forbidden. Every section may be `[]`, and `grounded_summary` may be `null`.
-- Complete legacy V1 Magic Prompt JSON remains accepted so an already-copied
-  prompt never strands a user. Partial/prose responses get one server-side
-  evidence-only repair pass; unparseable long text is rejected instead of
-  being stored as a profile.
-- The raw pasted response is transient. Only the redacted signal summary and
-  its embedding are persisted; onboarding history records a non-sensitive
-  receipt marker. If V2 contains no supported dating signal, finalization uses
-  the ordinary onboarding answers + vibe as the fallback profile rather than
-  inventing context.
-- `declined` suppresses the Magic Prompt for the current onboarding run,
-  permits photo collection directly after the ordinary profile fields, and
-  generates `Profile.psychologicalSummary` + embedding from those fields at
-  finalization.
-- `undecided` cannot pass `/v1/telegram-onboarding/complete`.
+Profile synthesis uses questionnaire answers and structured intake exclusively.
+Finalization builds `psychologicalSummary` and its embedding from hobbies, partner
+preferences and the two vibe answers. Type Radar precedes photo collection.
 
 Hard rules enforced by the collector:
 - Required fields (`firstName`, `age`, `gender`, `preference`,
@@ -1011,7 +966,7 @@ Hard rules enforced by the collector:
   name.
 - Multiple explicit fields in one message are all saved. The last explicit
   correction replaces the previous canonical value.
-- Real user text is distinct from `resume`, `context_dump`, and
+- Real user text is distinct from `resume` and
   `photos_updated`; synthetic events, assistant text, summaries, and tool
   arguments are never mined as profile facts.
 - **Relationship intent never reaches the embedding.** It is scored by its own
@@ -1239,13 +1194,8 @@ Hard rules enforced by the collector:
   and never grants the ticket bonus. Accepted video metadata stores only
   validation version/time; extracted frames, audio, and transcripts are
   temporary and never persisted.
-- For accepted export, photos MAY NOT start until the context dump is saved.
-  Declined export skips context collection and uses the fallback analysis.
-- After a pasted AI memory dump is parsed and saved, the bot plays a
-  self-replacing "analysing" status line (one message edited in place through
-  a few steps, each held a beat, then deleted before the photo request) to
-  surface the psychological-summary + embedding work that just ran. The same
-  `runStatusSequence` primitive (`services/ai-stream.ts`,
+- Photos follow questionnaire completion and the Type Radar gate. The existing
+  `runStatusSequence` primitive  `runStatusSequence` primitive (`services/ai-stream.ts`,
   `services/analysis-status.ts`) backs the equivalent "agent is working"
   beats at verification submission, the verification soft-skip, each Profiler
   batch boundary, every Profiler question's compose beat (§Phase 1b),
@@ -1307,7 +1257,7 @@ Hard rules enforced by the collector:
   The pause runs strictly first: the "typing…" indicator and the next-question
   generation only start after the shimmer is torn down, so the thinking beat is
   never preceded by a typing indicator. Photo-stage continues, photo/video
-  uploads, and context-dump pastes do not count toward the cadence.
+  uploads, and synthetic events do not count toward the cadence.
 
   **A recording used as an ANSWER is never narrated, on any step (founder
   decision 2026-08-29, reversing 2026-08-24).** It gets the plain
@@ -1352,7 +1302,7 @@ Hard rules enforced by the collector:
 ### 1.3b Voice prompt (feature-flagged, the last onboarding question)
 
 Gated by `VOICE_PROMPT_ENABLED` (default **off** → the collector marks the step
-complete+skipped, exactly as it masks `ai_memory`, and the canonical order runs
+complete+skipped, and the canonical order runs
 `photos → complete` with nothing changed). Full design:
 [VOICE_PROMPT_PRODUCT_SPEC.md](voice-prompts.md).
 
@@ -1461,7 +1411,7 @@ product bounds and its own wording.
 **The claim has two layers, and the second one is what makes it true.** The
 session flag is armed by whoever sent the ask — and the ask has NINE senders,
 because an onboarding agent reply reaches Telegram from `/start`'s resume, the
-photo-batch flush, the photo editor, both context-dump paths, the radar resume,
+photo-batch flush, the photo editor, the radar resume,
 the voice step's own resume, and the conversational handler. Eight shipped
 without arming it, **including the photo-batch flush, which is what asks this
 question first in the ordinary flow**: the user got a bare message with no skip
@@ -1945,7 +1895,7 @@ nulls `reEngagementNextAt` permanently.
 Mini App (§1.1) collapses into ONE of them: `/consent` and `/language` both
 write `language`, and nothing moves it again until `/complete` writes
 `conversational`. So the sign-up fork, the email/phone gate, the city step, the
-theme pick, the five profile screens and the AI-memory choice — half the
+theme pick, the five profile screens and the chat handoff — half the
 registration — all read as *"agreed to the privacy policy but hasn't picked
 their language yet"*, which is what the worker fed into its prompt. Every Mini
 App drop-off was therefore told to go and choose a language it had already
@@ -1959,7 +1909,7 @@ The stage is now derived from the state the Mini App itself routes on
 because `apps/webapp` deliberately does not depend on `@gennety/shared` and the
 two cannot share code. It resolves the concrete next action — the fork, the
 unconfirmed email code, the unshared phone, the city, the theme, *which* of the
-five profile screens is unanswered, the AI-memory choice, the un-tapped
+five profile screens is unanswered, the chat handoff, the un-tapped
 handoff — and past the handoff reads the collector's own `currentQuestion`, so
 a chat-phase drop-off is described by the question actually pending rather than
 by "email, name, photos, etc.". The prompt's standing rule is that a concrete

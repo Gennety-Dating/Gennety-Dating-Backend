@@ -238,7 +238,6 @@ describe("notifyFounderNewUser", () => {
     const caption = (media as Array<{ caption?: string }>)[0]!.caption ?? "";
     expect(caption).toContain("Alice");
     expect(caption).toContain("80/100");
-    // The AI-memory dump / psychological summary must never leak.
     expect(caption).not.toContain("SECRET AI DUMP");
   });
 

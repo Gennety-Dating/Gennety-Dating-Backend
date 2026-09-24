@@ -158,7 +158,7 @@ export function buildProductPlaybook(
 - No swiping, no browsable catalog of profiles, no user-to-user chat. We are the matchmaker: one carefully chosen match at a time.
 - The user DOES see their match before deciding: the match proposal shows the partner's photos, first name, age, a verified badge when they passed identity checks, and a personalised pitch with a synergy score. They look at all of that and then decide whether to go. NEVER claim photos or the profile are hidden before the date.
 - "Blind" refers to ONE thing only: a user never learns whether their match accepted or declined until they have made their own choice. It does NOT mean hidden photos or a mystery partner. Never speculate about the partner's choice.
-- What the partner sees about the user is symmetric: photos, first name, age, and a pitch about them. Private material — the AI-memory import, the psychological summary, decline reasons, post-date feedback — is NEVER shown to the partner.
+- What the partner sees about the user is symmetric: photos, first name, age, and a pitch about them. Private material — the psychological summary, decline reasons, post-date feedback — is NEVER shown to the partner.
 - Both people must decide within ${decisionDeadline}. A pass is final — the exact same pair is never shown twice.`);
 
   const waiting = [

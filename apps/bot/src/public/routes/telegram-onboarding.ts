@@ -3,7 +3,6 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import {
   prisma,
-  type AiMemoryExportPreference,
   type Gender,
   type GenderPreference,
   type Language,
@@ -23,7 +22,6 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { DEMO_MODE_ENABLED } from "../../demo/config.js";
-import { effectiveAiMemoryPreference } from "../../services/ai-memory-export.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
 import {
   createAndSendOtp,
@@ -85,8 +83,6 @@ type MiniUser = {
   theme: Theme;
   themeChosenAt: Date | null;
   onboardingStep: "consent" | "language" | "conversational" | "completed";
-  aiMemoryExportPreference: AiMemoryExportPreference;
-  aiMemoryExportPreferenceAt: Date | null;
   termsAccepted: boolean;
   researchOptIn: boolean;
   isEmailVerified: boolean;
@@ -621,7 +617,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
     // Same readiness the screens themselves sit behind: terms, language, a
     // verified contact rail, and a launched dating city.
-    const gate = ensureReadyForAiMemoryChoice(user);
+    const gate = ensureReadyForProfileIntake(user);
     if (gate) {
       res.status(409).json({ error: gate });
       return;
@@ -662,48 +658,6 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
-  router.post("/ai-memory", async (req: Request, res: Response): Promise<void> => {
-    // AI-memory export kill switch: with the feature off the Mini App never
-    // renders the choice screen, so a request here is a stale client. 404 the
-    // route (same shape as the phone-rail gate) rather than persisting a
-    // preference the flag would mask anyway.
-    if (!env.AI_MEMORY_EXPORT_ENABLED) {
-      res.status(404).json({ error: "ai-memory-export-disabled" });
-      return;
-    }
-    const auth = authenticate(req);
-    if (!auth.ok) {
-      res.status(401).json(auth.body);
-      return;
-    }
-
-    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
-    const gate = ensureReadyForAiMemoryChoice(user);
-    if (gate) {
-      res.status(409).json({ error: gate });
-      return;
-    }
-
-    const preference = req.body?.preference;
-    if (preference !== "accepted" && preference !== "declined") {
-      res.status(400).json({ error: "invalid-ai-memory-preference" });
-      return;
-    }
-
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        aiMemoryExportPreference: preference,
-        aiMemoryExportPreferenceAt: new Date(),
-        ...onboardingActivityPatch(),
-      },
-      select: miniUserSelect,
-    });
-
-    logTelegramOnboarding("ai-memory-selected", updated, { preference });
-    res.json(await serializeState(updated));
-  });
-
   // Theme picker (onboarding step after the city gate; also reused by the
   // Settings "Change theme" flow). Records the explicit choice + stamps
   // `themeChosenAt` so the onboarding picker shows exactly once.
@@ -735,10 +689,6 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
-  // Referral welcome gift (§Referral): claim the invitee's one-time Premium
-  // month, shown on the onboarding wow screen (2nd-to-last, before AI-memory).
-  // Idempotent — `grantInviteePremium` is a no-op once the marker is set or when
-  // the user wasn't genuinely invited, so a replayed tap can't double-grant.
   router.post("/referral-gift", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -767,12 +717,6 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
-  // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): claim the promo-attributed
-  // new user's one-time Date Ticket + Premium months, shown on the richer promo
-  // wow screen (2nd-to-last, before AI-memory). Idempotent —
-  // `grantPromoRewardsForUser` no-ops once redeemed / when not a valid promo
-  // attribution / when the code is no longer redeemable, so a replayed tap can't
-  // double-grant.
   router.post("/promo-gift", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -836,12 +780,6 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       res.status(409).json({ error: "location-required" });
       return;
     }
-    // Masked to `declined` while `AI_MEMORY_EXPORT_ENABLED` is off, so the
-    // handoff no longer waits on a choice screen the client never shows.
-    if (effectiveAiMemoryPreference(user.aiMemoryExportPreference) === "undecided") {
-      res.status(409).json({ error: "ai-memory-preference-required" });
-      return;
-    }
 
     if (user.onboardingStep === "completed") {
       await api.sendMessage(Number(user.telegramId), alreadyCompleteCopy(user.language));
@@ -888,8 +826,6 @@ const miniUserSelect = {
   theme: true,
   themeChosenAt: true,
   onboardingStep: true,
-  aiMemoryExportPreference: true,
-  aiMemoryExportPreferenceAt: true,
   termsAccepted: true,
   researchOptIn: true,
   isEmailVerified: true,
@@ -1033,11 +969,6 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
     flowToken: issueOnboardingFlowToken(user.telegramId),
     user: {
       onboardingStep: user.onboardingStep,
-      aiMemoryExportPreference: user.aiMemoryExportPreference,
-      aiMemoryExportPreferenceAt: user.aiMemoryExportPreferenceAt?.toISOString() ?? null,
-      // AI-memory export kill switch (PRODUCT_SPEC §1.1). False → the Mini App
-      // skips the choice screen entirely and goes straight to the handoff.
-      aiMemoryExportEnabled: env.AI_MEMORY_EXPORT_ENABLED,
       termsAccepted: user.termsAccepted,
       researchOptIn: user.researchOptIn,
       language: user.language,
@@ -1124,10 +1055,7 @@ interface TelegramOnboardingStateDto {
   flowToken: string;
   user: {
     onboardingStep: MiniUser["onboardingStep"];
-    aiMemoryExportPreference: MiniUser["aiMemoryExportPreference"];
-    aiMemoryExportPreferenceAt: string | null;
-    /** `AI_MEMORY_EXPORT_ENABLED` — false hides the AI-memory choice screen. */
-    aiMemoryExportEnabled: boolean;
+
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: Language | null;
@@ -1239,7 +1167,7 @@ function ensureReadyForLocation(
   return unresolvedContactGate(user);
 }
 
-function ensureReadyForAiMemoryChoice(
+function ensureReadyForProfileIntake(
   user: MiniUser,
 ):
   | "terms-required"

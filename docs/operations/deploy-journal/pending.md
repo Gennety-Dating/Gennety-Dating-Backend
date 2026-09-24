@@ -3975,7 +3975,7 @@ including the review loop. Record the cutover date before comparing
   bottom panel is gated on `isAwaitingVoicePrompt`, which reads the flag first,
   so a stale `expectingVoicePrompt` on an old session cannot raise it. The
   collector marks `voice_prompt` complete+skipped — the same masking
-  `ai_memory` already uses — so the canonical order stays `photos → complete`.
+  other optional steps use — so the canonical order stays `photos → complete`.
   The pitch sender returns before touching Telegram, `/v1/me/voice-prompt`
   404s, and `SerializedMatch.partnerVoicePrompt` is null. The full suite passes
   identically either way.

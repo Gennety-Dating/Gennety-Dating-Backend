@@ -16,8 +16,6 @@ function user(
 ): TelegramOnboardingState["user"] {
   return {
     onboardingStep: "language",
-    aiMemoryExportPreference: "undecided",
-    aiMemoryExportPreferenceAt: null,
     termsAccepted: true,
     researchOptIn: false,
     language: "en",
@@ -186,38 +184,18 @@ describe("theme picker routing (after the city gate)", () => {
     });
   });
 
-  it("still gates on the theme picker post-visual before AI-memory", () => {
-    expect(postVisualPhaseFromRemote(visualReadyUser({ themeChosen: false }))).toEqual({
-      kind: "theme",
-    });
-  });
-
-  it("shows the referral gift screen (before AI-memory) for an invited user", () => {
-    expect(
-      postVisualPhaseFromRemote(
-        visualReadyUser({ invitedByReferral: true, referralGiftSeen: false }),
-      ),
-    ).toEqual({ kind: "referralGift" });
-  });
-
   it("skips the referral gift once it has been seen/claimed", () => {
     expect(
       postVisualPhaseFromRemote(
         visualReadyUser({ invitedByReferral: true, referralGiftSeen: true }),
       ),
-    ).toEqual({ kind: "aiMemoryExport" });
-  });
-
-  it("shows the promo gift screen (before AI-memory) for a promo user", () => {
-    expect(
-      postVisualPhaseFromRemote(visualReadyUser({ invitedByPromo: true, promoGiftSeen: false })),
-    ).toEqual({ kind: "promoGift" });
+    ).toEqual({ kind: "loading" });
   });
 
   it("skips the promo gift once it has been seen/claimed", () => {
     expect(
       postVisualPhaseFromRemote(visualReadyUser({ invitedByPromo: true, promoGiftSeen: true })),
-    ).toEqual({ kind: "aiMemoryExport" });
+    ).toEqual({ kind: "loading" });
   });
 
   it("prefers the promo gift over the referral gift when both are set", () => {
@@ -273,45 +251,10 @@ describe("bootPhaseFromRemote — visual animation resume", () => {
     });
   });
 
-  it("jumps to the AI-memory phase once the animation was completed (undecided)", () => {
-    expect(
-      bootPhaseFromRemote(
-        visualReadyUser({ aiMemoryExportPreference: "undecided" }),
-        VISUAL_DONE,
-      ),
-    ).toEqual({ kind: "aiMemoryExport" });
-  });
-
-  it("skips the AI-memory screen entirely when the server disables the feature", () => {
-    // `AI_MEMORY_EXPORT_ENABLED=false`: undecided must NOT strand the user on a
-    // choice screen the server no longer accepts (`POST /ai-memory` 404s).
-    expect(
-      bootPhaseFromRemote(
-        visualReadyUser({
-          aiMemoryExportPreference: "undecided",
-          aiMemoryExportEnabled: false,
-        }),
-        VISUAL_DONE,
-      ),
-    ).toEqual({ kind: "loading" });
-  });
-
-  it("still shows the AI-memory screen when the server reports it enabled", () => {
-    expect(
-      bootPhaseFromRemote(
-        visualReadyUser({
-          aiMemoryExportPreference: "undecided",
-          aiMemoryExportEnabled: true,
-        }),
-        VISUAL_DONE,
-      ),
-    ).toEqual({ kind: "aiMemoryExport" });
-  });
-
   it("jumps to the loading phase once the animation was completed (decided)", () => {
     expect(
       bootPhaseFromRemote(
-        visualReadyUser({ aiMemoryExportPreference: "accepted" }),
+        visualReadyUser({ }),
         VISUAL_DONE,
       ),
     ).toEqual({ kind: "loading" });
@@ -405,7 +348,7 @@ describe("optional 'Подробнее' date-flow walkthrough", () => {
 
   it("does not change post-visual routing (detail is entered only via the button)", () => {
     expect(postVisualPhaseFromRemote(visualReadyUser())).toEqual({
-      kind: "aiMemoryExport",
+      kind: "loading",
     });
   });
 });
@@ -422,7 +365,6 @@ describe("Telegram onboarding profile screens", () => {
       locationUpdatedAt: null,
     },
     isEmailVerified: true,
-    aiMemoryExportPreference: "declined" as const,
   };
 
   it("asks the first unanswered profile question after the intro", () => {
@@ -460,35 +402,6 @@ describe("Telegram onboarding profile screens", () => {
 
   it("skips the screens once every field is answered", () => {
     expect(postVisualPhaseFromRemote(user(ready))).toEqual({ kind: "loading" });
-  });
-
-  it("sits after the welcome gift and before the AI-memory choice", () => {
-    const invited = user({
-      ...ready,
-      aiMemoryExportPreference: "undecided",
-      aiMemoryExportEnabled: true,
-      invitedByReferral: true,
-      referralGiftSeen: false,
-      profileBasics: { ...NO_BASICS },
-    });
-    // Gift first…
-    expect(postVisualPhaseFromRemote(invited)).toEqual({ kind: "referralGift" });
-    // …then the profile screens…
-    expect(
-      postVisualPhaseFromRemote({ ...invited, referralGiftSeen: true }),
-    ).toEqual({ kind: "basics", step: "name" });
-    // …and the AI-memory choice is still the last thing the Mini App asks.
-    expect(
-      postVisualPhaseFromRemote(
-        user({
-          ...ready,
-          aiMemoryExportPreference: "undecided",
-          aiMemoryExportEnabled: true,
-          invitedByReferral: true,
-          referralGiftSeen: true,
-        }),
-      ),
-    ).toEqual({ kind: "aiMemoryExport" });
   });
 
   it("routes past the screens against a server that predates them", () => {

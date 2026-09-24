@@ -1,11 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  MAGIC_CONTEXT_PROMPT,
   VOICE_CORE,
   VOICE_SELF_GENDER,
   VOICE_SELF_NAME,
-  magicContextPrompt,
-  parseLLMDumpPrompt,
   pitchAndSynergyPrompt,
   proposeSchedulingPrompt,
   venueSelectionPrompt,
@@ -122,114 +119,6 @@ describe("self-gender rule reaches every prose surface", () => {
     for (const prompt of prompts) {
       expect(prompt).toContain(VOICE_SELF_GENDER);
     }
-  });
-});
-
-describe("magicContextPrompt", () => {
-  it("instructs the LLM to output a single JSON object only", () => {
-    const result = magicContextPrompt("en");
-    expect(result).toContain("ONE JSON object");
-    expect(result).toContain("no prose, commentary, or markdown fences");
-    expect(result).toMatch(/start with `\{`/i);
-  });
-
-  it("does NOT use character-count as a length constraint", () => {
-    // LLMs can't count characters reliably — length is controlled via
-    // per-field sentence/word caps instead.
-    const result = magicContextPrompt("en");
-    expect(result).not.toMatch(/4096/);
-    expect(result).not.toMatch(/characters or fewer/i);
-    expect(result).not.toMatch(/count the characters/i);
-  });
-
-  it("lists the complete evidence-first V2 schema", () => {
-    const result = magicContextPrompt("en");
-    for (const field of [
-      "schema_version",
-      "relationships",
-      "emotions_and_conflict",
-      "needs_and_boundaries",
-      "values_in_action",
-      "life_rhythm_and_social_energy",
-      "sustained_interests",
-      "partner_fit",
-      "likely_friction",
-      "grounded_summary",
-    ]) {
-      expect(result).toContain(`"${field}"`);
-    }
-  });
-
-  it("makes missing evidence valid instead of forcing filler", () => {
-    const result = magicContextPrompt("en");
-    expect(result).toContain("Use [] when a section has no evidence");
-    expect(result).toContain("otherwise null");
-    expect(result).toContain("absence, not a guess");
-    expect(result).not.toContain("Fill EVERY field");
-    expect(result).not.toContain("give your best read");
-  });
-
-  it("requires concrete evidence and filters generic AI-use preferences", () => {
-    const result = magicContextPrompt("en");
-    expect(result).toContain("explicit disclosure");
-    expect(result).toContain("repeated pattern");
-    expect(result).toContain("concrete episode");
-    expect(result).toContain("likes concise answers");
-    expect(result).toContain('"kind":"explicit|pattern|inference"');
-  });
-
-  it("keeps output compact without forcing category counts", () => {
-    const result = magicContextPrompt("en");
-    expect(result).toContain("at most 3 items per array");
-    expect(result).toMatch(/2[–-]4 factual sentences/);
-    expect(result).not.toContain("attachment_style");
-  });
-
-  it("writes free-text fields in the caller's language", () => {
-    const ru = magicContextPrompt("ru");
-    expect(ru).toContain("in ru");
-    const uk = magicContextPrompt("uk");
-    expect(uk).toContain("in uk");
-  });
-
-  it("keeps MAGIC_CONTEXT_PROMPT alias backward-compatible", () => {
-    expect(MAGIC_CONTEXT_PROMPT).toBe(magicContextPrompt("en"));
-  });
-});
-
-describe("parseLLMDumpPrompt", () => {
-  it("injects firstName and language into the prompt", () => {
-    const result = parseLLMDumpPrompt({ firstName: "Alice", language: "en" });
-    expect(result).toContain("Alice");
-    expect(result).toContain("Output language: en");
-  });
-
-  it("includes the V2 JSON schema with evidence fields", () => {
-    const result = parseLLMDumpPrompt({ firstName: "Bob", language: "ru" });
-    expect(result).toContain('"schema_version": 2');
-    expect(result).toContain('"relationships"');
-    expect(result).toContain('"emotions_and_conflict"');
-    expect(result).toContain('"needs_and_boundaries"');
-    expect(result).toContain('"grounded_summary"');
-  });
-
-  it("instructs the model to write the summary in the user's language", () => {
-    const result = parseLLMDumpPrompt({ firstName: "Oleg", language: "uk" });
-    expect(result).toContain("in uk");
-    expect(result).toContain("grounded_summary");
-  });
-
-  it("enforces JSON-only output", () => {
-    const result = parseLLMDumpPrompt({ firstName: "Test", language: "en" });
-    expect(result).toContain("single JSON object");
-    expect(result).toContain("no markdown");
-  });
-
-  it("treats imported text as data and forbids gap filling", () => {
-    const result = parseLLMDumpPrompt({ firstName: "Test", language: "en" });
-    expect(result).toContain("untrusted source data");
-    expect(result).toContain("do not complete a personality test or fill gaps");
-    expect(result).toContain("[] when unsupported");
   });
 });
 

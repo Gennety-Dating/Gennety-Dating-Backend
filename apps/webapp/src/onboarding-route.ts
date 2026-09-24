@@ -15,11 +15,7 @@ type RemoteUser = TelegramOnboardingState["user"];
  * by the time someone presses Start; what stays is what the product IS.
  */
 export const VISUAL_LAST_INDEX = 2;
-/**
- * Sentinel persisted once the user has clicked past the last visual scene.
- * On the next launch it means "skip the animation, resume the post-visual
- * phase (AI-memory export / handoff loading)".
- */
+
 export const VISUAL_DONE = VISUAL_LAST_INDEX + 1;
 
 /**
@@ -62,16 +58,8 @@ export type OnboardingPhase =
   // a promo-code user (ticket + N months + special status), shown once as the
   // second-to-last screen. Takes precedence over the referral screen.
   | { kind: "promoGift" }
-  // Referral welcome gift (§Referral): a wow screen for an invited user,
-  // shown once as the second-to-last screen (right before the AI-memory
-  // choice). Skipped entirely for non-referred users.
   | { kind: "referralGift" }
-  // The Mini App's own profile screens — name / age / gender / preference /
-  // height (PRODUCT_SPEC §1.3). Placed after the welcome-gift screen so the
-  // gift stays the arrival reward, and before the AI-memory choice, which is
-  // the last thing the Mini App asks.
   | { kind: "basics"; step: BasicsStep }
-  | { kind: "aiMemoryExport" }
   | { kind: "loading" }
   | { kind: "done" };
 
@@ -121,14 +109,6 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   // reopened session resumes in place and an already-answered set is skipped.
   const basicsStep = nextBasicsStep(user.profileBasics);
   if (basicsStep) return { kind: "basics", step: basicsStep };
-  // `aiMemoryExportEnabled === false` is the server kill switch: skip the
-  // choice screen entirely (an older server omits the field → treat as on).
-  if (
-    user.aiMemoryExportEnabled !== false &&
-    user.aiMemoryExportPreference === "undecided"
-  ) {
-    return { kind: "aiMemoryExport" };
-  }
   return { kind: "loading" };
 }
 

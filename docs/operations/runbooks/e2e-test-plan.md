@@ -32,7 +32,7 @@
 **Роли:**
 - **Оператор (человек)** выполняет ВСЕ реальные действия в Telegram и Mini
   Apps: `/start`, онбординг (язык / согласие / трек регистрации / город /
-  тема / AI-memory / фото / видео), Face Liveness Mini App, тапы
+  тема / фото / видео), Face Liveness Mini App, тапы
   Accept/Decline, оплату (Stars-инвойсы), календарь, departure-origin + vibe +
   чипы, кнопки coordination / emergency / venue-change, фидбэк. Агент за него
   это НЕ делает.
@@ -169,10 +169,10 @@ Registration v2 (не через email-обход). Placeholder существу
 ## Каталог функций (что должно быть покрыто)
 
 - **Онбординг:** `/start`, Onboarding Mini App (интро/язык/согласие/**трек
-  регистрации**/город/тема/AI-memory), conversational fact-collector
+  регистрации**/город/тема), conversational fact-collector
   (имя+возраст→пол→предпочтение→рост→хобби→требования→нац/этнос→**vibe
-  (friday_vibe/vibe_focus)**→**Type Radar (опц., скипаемо)**→AI-memory→фото),
-  голосовой ввод (Whisper), ветки AI-memory `accepted`/`declined`/`undecided`,
+  (friday_vibe/vibe_focus)**→**Type Radar (опц., скипаемо)**→фото),
+  голосовой ввод (Whisper), прямой переход анкета → Type Radar → фото,
   фото `MIN_PHOTOS=4`/`MAX_PHOTOS=10` + дедуп + usable-face/obstruction гейт +
   альбомы, Live Photos + видео, тикет-бонусы (6+ фото, видео), студенческий
   бонус (+2 тикета при верификации email), re-engagement.
@@ -272,8 +272,7 @@ Registration v2 (не через email-обход). Placeholder существу
 
 ### Pass 1 — Онбординг
 - [ ] A (`@GN01001`, **student-трек**): полный email-OTP (реальный
-      корпоративный), Mini App все экраны, город, тема, **AI-memory =
-      accepted** (Magic Prompt → анимация анализа), фото 3..10
+      корпоративный), Mini App все экраны, город, тема, анкета → Type Radar → фото (от `MIN_PHOTOS` до `MAX_PHOTOS`)
 - [ ] A: дедуп — отправить копию/скрин/кроп → отклонение с объяснением
 - [ ] A: тикет-бонус за 6+ фото; добавить видео → второй бонус
 - [ ] A: во время загрузки фото открыть панель «🗂 Мои фото» (reply-клавиатура
@@ -281,7 +280,7 @@ Registration v2 (не через email-обход). Placeholder существу
       «← Назад к загрузке» → отправить замену — экран не должен «прыгать»
 - [ ] B (`@gennetysupport`, **general-трек**): вместо email — Telegram
       one-tap «поделиться контактом» (`message.contact`, трастед Telegram),
-      **AI-memory = declined** (fallback-summary + эмбеддинг), фото, видео
+      **questionnaire complete** (fallback-summary + эмбеддинг), фото, видео
 - [ ] Type Radar: на одном из аккаунтов пройти шаг «выбери свой тип» (24
       портрета, `radar.html`), на другом — Skip; проверить
       `Profile.typeRadarCompletedAt`/`appearanceTags`

@@ -31,7 +31,7 @@ date."*
 - **Invitee** — a fixed **1 month of Gennety Premium**
   (`REFERRAL_INVITEE_PREMIUM_MONTHS`), granted + active immediately at a wow
   screen shown as the **second-to-last screen** of the first onboarding Mini App
-  (right before the AI-memory choice). Granting pre-verification is safe:
+  (before the handoff). Granting pre-verification is safe:
   Premium's only benefit (venue-change) needs a *scheduled date*, so it is
   practically worthless until the invitee verifies and matches.
 - **Referrer** — a **milestone ladder** (`REFERRAL_LADDER`, default

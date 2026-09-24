@@ -189,7 +189,7 @@ fail-closed, receives no stale match, and does not gain a false standby penalty.
 The embedding write clears the flag only when `embeddingDirtyAt` still matches,
 so a concurrent edit is retried rather than overwritten. Pre-M-2 the embedding silently went stale on
 every profile edit, slowly degrading match quality. Initial embedding failures
-during either AI-memory analysis or fallback-profile finalization also leave
+during either questionnaire analysis or fallback-profile finalization also leave
 the profile dirty, so the same worker retries them instead of silently
 excluding an otherwise-complete user from matching.
 
@@ -200,7 +200,7 @@ excluding an otherwise-complete user from matching.
   reach: the grammY chat session** (`bot_sessions`, keyed by Telegram chat id
   with no relation to `users`; erased explicitly since 2026-08-08). It holds
   `pendingPhotos` — Telegram `file_id`s of the profile being erased — plus a
-  buffered AI-memory paste and the current match id, so leaving it behind was
+  current match id, so leaving it behind was
   not erasure. See ARCHITECTURE.md → `bot_sessions` for why a Telegram caller
   must also reset the live session. That erasure is **forward-only**, so the
   `retention` cron additionally sweeps sessions whose chat id matches no user
@@ -237,7 +237,7 @@ excluding an otherwise-complete user from matching.
     and the agent reads 12 events per turn, so a month is already far past
     anything it uses. Since 2026-07-31 it also covers onboarding (§2.1), so the
     30-day sweep is additionally what bounds the retention of a typed OTP code
-    and of the ≤300-char AI-memory excerpt.
+    and of the ≤300-char profile excerpt.
   - `client_events` is swept by **`receivedAt`, not `occurredAt`** — the second
     is the device clock, so a phone with a wrong date would otherwise either
     outlive the window or be erased on the day it was received. Its 90 days are

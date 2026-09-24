@@ -93,8 +93,6 @@ for (const u of users) {
     data: {
       status: "onboarding",
       onboardingStep: "consent",
-      aiMemoryExportPreference: "undecided",
-      aiMemoryExportPreferenceAt: null,
       hasConsented: false,
       consentedAt: null,
       termsAccepted: false,

@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vi } from "vitest";
 
-vi.mock("../config.js", () => ({
-  env: { PHONE_AUTH_ENABLED: true, AI_MEMORY_EXPORT_ENABLED: false },
-}));
+vi.mock("../config.js", () => ({ env: { PHONE_AUTH_ENABLED: true } }));
 
 import { MIN_PHOTOS } from "@gennety/shared";
 import {
@@ -14,7 +12,6 @@ import {
 
 const FLAGS: OnboardingStageFlags = {
   phoneAuthEnabled: true,
-  aiMemoryExportEnabled: false,
 };
 
 /** A brand-new row: `/start` created it and nothing has been answered. */
@@ -32,7 +29,6 @@ function fresh(over: Partial<OnboardingStageState> = {}): OnboardingStageState {
     age: null,
     gender: null,
     preference: null,
-    aiMemoryExportPreference: "undecided",
     profile: null,
     onboardingProgress: null,
     ...over,
@@ -52,7 +48,6 @@ function miniAppDone(over: Partial<OnboardingStageState> = {}): OnboardingStageS
     age: 24,
     gender: "male",
     preference: "women",
-    aiMemoryExportPreference: "declined",
     profile: { homeCityKey: "ua:kyiv", height: 180 },
     ...over,
   });
@@ -124,7 +119,7 @@ describe("resolveOnboardingStage — Mini App order", () => {
 
   it("falls back to the email rail when the phone rail is off", () => {
     const noTrack = fresh({ language: "ru", termsAccepted: true });
-    const emailOnly = { phoneAuthEnabled: false, aiMemoryExportEnabled: false };
+    const emailOnly = { phoneAuthEnabled: false };
     expect(resolveOnboardingStage(noTrack, emailOnly).id).toBe("email_otp");
     // A general-track row predating the flag flip must not be sent to a phone
     // screen the client will not render.
@@ -175,14 +170,6 @@ describe("resolveOnboardingStage — Mini App order", () => {
       /their height/,
     );
   });
-
-  it("only offers the AI-memory step while the kill switch is on", () => {
-    const undecided = miniAppDone({ aiMemoryExportPreference: "undecided" });
-    expect(stage(undecided)).toBe("handoff");
-    expect(
-      resolveOnboardingStage(undecided, { ...FLAGS, aiMemoryExportEnabled: true }).id,
-    ).toBe("ai_memory_choice");
-  });
 });
 
 describe("resolveOnboardingStage — conversational phase", () => {
@@ -197,8 +184,6 @@ describe("resolveOnboardingStage — conversational phase", () => {
     expect(chat("partner_preferences").id).toBe("chat_partner_preferences");
     expect(chat("friday_vibe").id).toBe("chat_vibe");
     expect(chat("vibe_focus").id).toBe("chat_vibe");
-    expect(chat("ai_memory").id).toBe("chat_ai_memory");
-    expect(chat("context_dump").id).toBe("chat_context_dump");
     expect(chat("photos").id).toBe("chat_photos");
     expect(chat("complete").id).toBe("chat_finalize");
   });

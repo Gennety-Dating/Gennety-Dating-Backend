@@ -82,28 +82,7 @@ export const CHAT_EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
  */
 export const CLIENT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-/**
- * Chat sessions whose account no longer exists.
- *
- * `bot_sessions` is keyed by Telegram CHAT id with no relation to `users`, so
- * it is the one store a Prisma cascade cannot reach. `deleteUserAccount` erases
- * it directly (2026-08-08), but that is forward-only: production still carried
- * five orphans from before it, and any future path that removes a user without
- * going through that service would make more.
- *
- * Worth sweeping rather than leaving, on both counts the direct fix was made
- * for: the row holds `pendingPhotos` (Telegram file_ids of an erased profile),
- * a buffered AI-memory paste and `activeMatchId` — so leaving it is incomplete
- * erasure — and the NEXT account in that chat inherits the state, which is how
- * a stale `expectingPhoto: true` once dropped a brand-new user into the photo
- * stage several questions early.
- *
- * The age floor is not decoration. `sessionMiddleware` runs before the handler
- * that creates the `User` row, so a chat mid-`/start` legitimately has a session
- * and no user for a moment; without a floor this sweep would race registration
- * and delete a live session. A week is far past that and far short of mattering
- * for cleanup.
- */
+
 export const ORPHAN_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

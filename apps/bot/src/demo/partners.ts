@@ -94,12 +94,7 @@ export interface DemoPartnerPersona {
   height: number;
   hobbies: string[];
   partnerPreferences: string;
-  /**
-   * The dominant matching input (`V_explicit`, weight 0.65) and what the pitch
-   * generator actually reads. Written as the fallback summary a declined-AI-memory
-   * user would get: open-ended psychological prose, no demographics — those are
-   * `V_research`'s job and duplicating them here would double-count.
-   */
+
   psychologicalSummary: string;
   fridayVibeText: string;
   vibeFocusText: string;

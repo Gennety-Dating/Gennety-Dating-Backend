@@ -62,17 +62,7 @@ export const profilerRouter = new Composer<BotContext>();
 // Free-text answer coalescing
 // ---------------------------------------------------------------------------
 
-/**
- * Per-chat accumulator for a free-text Profiler answer.
- *
- * People routinely split one answer across several messages. Because updates
- * for a chat are processed serially and the reply to an answer is a *new*
- * question, handling each message immediately meant message 2 was recorded as
- * the answer to the question that message 1 had just triggered — burning
- * several questions in seconds and mis-attributing the text. Buffering for a
- * short window and flushing once fixes both. Mirrors the onboarding photo /
- * context-dump batchers.
- */
+
 interface AnswerAccumulator {
   chatId: number;
   userId: string;
@@ -184,7 +174,6 @@ profilerRouter.use(async (ctx, next) => {
   const idle =
     ctx.session.matchFlow === "idle" &&
     ctx.session.menuState === "idle" &&
-    !ctx.session.awaitingContextDump &&
     !ctx.session.expectingPhoto;
 
   if (text && !isCommand && idle) {

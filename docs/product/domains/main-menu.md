@@ -266,17 +266,15 @@ user's own tap. Rows are swept after 30 days (§GDPR).
 
 **The whole chat is recorded, from `/start` (founder decision 2026-07-31).**
 Recording used to begin only at `onboardingStep = 'completed'`, which kept the
-typed OTP code and a pasted AI-memory export out of the table by construction.
+typed OTP code out of the table by construction.
 The cost was that **registration — the funnel most worth being able to read —
 was the one stretch of the conversation the admin dialog reader could not
 see**: no photos, no buttons, no Mini App steps, nothing but the onboarding
 agent's own turns. The founder owns that data and reads it in a
 single-operator dashboard, so the tradeoff was taken deliberately. What it
 costs, stated rather than discovered later: a typed OTP code lands in
-`summary` (expired long before anyone reads it, gone in 30 days), and a pasted
-AI-memory export lands as a **≤300-character excerpt** via the existing
-summary truncation — so §1.3's "the raw pasted response is transient" now
-means "except for that excerpt". The phone number itself still never lands
+`summary` (expired long before anyone reads it, gone in 30 days). The phone
+number itself still never lands
 there: the contact share is recorded as the event, not the digits. Onboarding
 rows are subject to the same untrusted-data fence as everything else in the
 timeline. The same change stops the agent replaying onboarding-era
@@ -374,7 +372,7 @@ caption but the profile's accumulated psychological signal and the dominant
 embedding input (`V_explicit`, 0.65), so a rewrite that collapses a substantial
 existing text is **refused** and the user is handed the editor, where they can
 read what they would be replacing. "Add that I like coffee" used to be enough
-for the model to send a one-line bio and wipe the AI-memory analysis, with
+for the model to send a one-line bio and wipe the questionnaire analysis, with
 nothing to restore from.
 
 **Voice comes free.** A voice note is transcribed by Whisper into the same

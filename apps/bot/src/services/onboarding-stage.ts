@@ -2,40 +2,7 @@ import { MIN_PHOTOS } from "@gennety/shared";
 import { env } from "../config.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
 
-/**
- * Where an unfinished onboarding actually stopped.
- *
- * `User.onboardingStep` cannot answer this, and that is the whole reason this
- * module exists. The column has four values, and the entry Mini App
- * (PRODUCT_SPEC §1.1) collapses into ONE of them: `/consent` and `/language`
- * both write `language`, and nothing moves it again until `/complete` writes
- * `conversational`. So the sign-up fork, the email/phone gate, the city step,
- * the theme pick, the five profile screens and the AI-memory choice — half the
- * registration — all read as "hasn't picked a language yet".
- *
- * The re-engagement worker fed that column straight into its prompt, so every
- * Mini App drop-off was told to go and choose a language they had already
- * chosen. Confirmed in production: a user with `language = uk` and terms
- * accepted received all five touches about picking a language.
- *
- * The stage is therefore derived from the state the Mini App itself routes on
- * — the server-side twin of `postVisualPhaseFromRemote`
- * (`apps/webapp/src/onboarding-route.ts`). The two live in different packages
- * because `apps/webapp` deliberately does not depend on `@gennety/shared`, so
- * they cannot literally share code; keep the ORDER below identical to that
- * file, or a nudge will name a screen the user has already passed.
- *
- * Two deliberate imprecisions, neither of which can misdescribe a task:
- *
- * - **The visual intro is invisible here.** Its position lives in the client's
- *   DeviceStorage and nowhere on the server. A user parked mid-animation reads
- *   as whatever comes after it, which is the next thing they actually owe.
- * - **The welcome-gift screens are not stages.** They ask for nothing (one tap
- *   on a reward), and resolving them needs the referral/promo flags plus a
- *   promo-code lookup. Someone who stopped there is reported as
- *   `profile_basics`, i.e. one screen further along — an under-, never an
- *   over-statement of what is left.
- */
+
 
 export type OnboardingStageId =
   // Entry Mini App (§1.1), in the order the client presents them.
@@ -47,15 +14,12 @@ export type OnboardingStageId =
   | "city"
   | "theme"
   | "profile_basics"
-  | "ai_memory_choice"
   | "handoff"
   // Conversational collector (§1.3), keyed off the deterministic next question.
   | "chat_basics"
   | "chat_hobbies"
   | "chat_partner_preferences"
   | "chat_vibe"
-  | "chat_ai_memory"
-  | "chat_context_dump"
   | "chat_photos"
   | "chat_finalize";
 
@@ -88,19 +52,16 @@ export interface OnboardingStageState {
   age: number | null;
   gender: string | null;
   preference: string | null;
-  aiMemoryExportPreference: string | null;
   profile: { homeCityKey: string | null; height: number | null } | null;
   onboardingProgress: { currentQuestion: string | null } | null;
 }
 
 export interface OnboardingStageFlags {
   phoneAuthEnabled: boolean;
-  aiMemoryExportEnabled: boolean;
 }
 
 const DEFAULT_FLAGS: OnboardingStageFlags = {
   phoneAuthEnabled: env.PHONE_AUTH_ENABLED,
-  aiMemoryExportEnabled: env.AI_MEMORY_EXPORT_ENABLED,
 };
 
 export function resolveOnboardingStage(
@@ -151,12 +112,6 @@ function miniAppStage(
     return profile(
       "profile_basics",
       `Registration is finished and they're on the short profile screens (name, age, gender, who they want to meet, height). The first one still unanswered is: ${missingBasic}.`,
-    );
-  }
-  if (flags.aiMemoryExportEnabled && user.aiMemoryExportPreference === "undecided") {
-    return profile(
-      "ai_memory_choice",
-      "Their profile screens are answered. They stopped on the last question of the Mini App: whether to enrich the profile from their personal AI (ChatGPT/Claude/etc.).",
     );
   }
   return profile(
@@ -230,16 +185,6 @@ function chatStage(currentQuestion: string | null): OnboardingStage {
       return profile(
         "chat_vibe",
         "They're in the chat and stopped at the questions about their ideal Friday night / what matters more, the experience or the company.",
-      );
-    case "ai_memory":
-      return profile(
-        "chat_ai_memory",
-        "They're in the chat and stopped at the choice about importing context from their personal AI.",
-      );
-    case "context_dump":
-      return profile(
-        "chat_context_dump",
-        "They agreed to bring the analysis from their personal AI and never pasted it.",
       );
     case "photos":
       return profile(

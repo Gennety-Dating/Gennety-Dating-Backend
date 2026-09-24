@@ -280,7 +280,7 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref 
   open-ended psychological prose: demographics (age/gender/height/city) that
   duplicate `V_research`/hard filters were stripped from the declined-profile
   fallback text, and the §1.3 vibe answers were folded in, so the embedding
-  finally has real signal for users who skip the Magic Prompt.
+  finally has real signal for all users.
 - `V_research` (structured compatibility heuristics), weight 0.35 (raised from
   0.20). Sub-factors (weighted, renormalised over whichever are present):
   **vibe quadrant proximity** 0.40 (PRIMARY), age gradient 0.20, height norm

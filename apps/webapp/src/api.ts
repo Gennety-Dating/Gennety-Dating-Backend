@@ -355,7 +355,6 @@ export async function confirmVenueIntentTma(
 export type OnboardingLanguage = "en" | "ru" | "uk" | "de" | "pl";
 export type OnboardingTheme = "light" | "dark";
 export type TelegramOnboardingStep = "consent" | "language" | "conversational" | "completed";
-export type AiMemoryExportPreference = "undecided" | "accepted" | "declined";
 export type EmailVerificationStatus = "none" | "pending" | "expired" | "exhausted";
 
 export interface EmailVerificationState {
@@ -370,13 +369,6 @@ export interface TelegramOnboardingState {
   flowToken: string;
   user: {
     onboardingStep: TelegramOnboardingStep;
-    aiMemoryExportPreference: AiMemoryExportPreference;
-    aiMemoryExportPreferenceAt: string | null;
-    // AI-memory export kill switch (`AI_MEMORY_EXPORT_ENABLED`). False → the
-    // choice screen is skipped entirely and onboarding hands off directly.
-    // Optional so an older cached bundle keeps working against a new server
-    // and vice versa; absent is read as "on", the historical behavior.
-    aiMemoryExportEnabled?: boolean;
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: OnboardingLanguage | null;
@@ -409,16 +401,7 @@ export interface TelegramOnboardingState {
      * without a bundle redeploy.
      */
     supportedCities: TelegramCityHit[];
-    /**
-     * Every city the picker offers — launched markets first, then the cities on
-     * the expansion list, grouped by country in display order. Each hit carries
-     * a `status`: `active` continues registration, `waitlist` records the demand
-     * and ends it on the waitlist screen.
-     *
-     * Optional so an older cached bundle keeps working against a new server and
-     * vice versa (same rule as `aiMemoryExportEnabled`); absent falls back to
-     * `supportedCities`, i.e. exactly the pre-waitlist picker.
-     */
+
     cityCatalog?: TelegramCityHit[];
     /**
      * Set while this user is waiting for their city to open. Checked BEFORE
@@ -427,15 +410,7 @@ export interface TelegramOnboardingState {
      * step past the city gate needs a home location this user does not have).
      */
     cityWaitlist?: TelegramCityWaitlist | null;
-    /**
-     * The five facts the Mini App's own profile screens collect. The client
-     * routes to the first `null`, so a reopened session resumes exactly where
-     * it stopped and a user who already answered in chat skips the screens.
-     *
-     * Optional so an older cached bundle keeps working against a new server and
-     * vice versa (same rule as `aiMemoryExportEnabled`); absent is read as
-     * "server doesn't know about these screens", which routes straight past them.
-     */
+
     profileBasics?: TelegramProfileBasics;
     /** Server-owned bounds for the age slider and the height drum. */
     profileLimits?: TelegramProfileLimits;
@@ -784,22 +759,6 @@ export async function leaveTelegramOnboardingCityWaitlist(
       "Content-Type": "application/json",
       Authorization: `tma ${initData}`,
     },
-  });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as TelegramOnboardingState;
-}
-
-export async function setTelegramOnboardingAiMemoryPreference(
-  initData: string,
-  preference: Exclude<AiMemoryExportPreference, "undecided">,
-): Promise<TelegramOnboardingState> {
-  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/ai-memory`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `tma ${initData}`,
-    },
-    body: JSON.stringify({ preference }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

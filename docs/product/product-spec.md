@@ -86,12 +86,9 @@ out of Telegram-only workers.
   every message logged to `ProxyMessage`, an in-line Report button on each
   relayed message, and off by default (`COORDINATION_FEATURE_ENABLED`). It
   exists to solve "find each other at the venue", not conversation.
-- **Deep Context over Questionnaires** — At the end of the Telegram entry Mini
-  App the user chooses whether to enrich onboarding from ChatGPT, Claude,
-  Gemini, or another personal LLM. Accepted users paste the *Magic Prompt* and
-  return the long psychological analysis. Declined users continue without it;
-  the backend generates a deterministic fallback summary + embedding from
-  their ordinary onboarding answers.
+- **Direct profile intake** — Build the profile from questionnaire answers and
+  structured intake. Onboarding proceeds through Questionnaire → Type Radar →
+  Photos → Verification, preserving the existing optional voice step.
 - **Identity-Verified, Mandatory at Launch** — Liveness (AWS Rekognition Face
   Liveness, migrated off Persona 2026-07-26) + photo↔selfie face-match (AWS
   Rekognition `CompareFaces`) gate full match eligibility. With

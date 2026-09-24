@@ -34,7 +34,6 @@ vi.mock("../config.js", () => ({
     // Read by services/onboarding-stage.ts to resolve which screen a Mini App
     // drop-off is sitting on. Mirrors production.
     PHONE_AUTH_ENABLED: true,
-    AI_MEMORY_EXPORT_ENABLED: false,
   },
 }));
 
@@ -262,7 +261,6 @@ describe("re-engagement worker", () => {
         age: null,
         gender: null,
         preference: null,
-        aiMemoryExportPreference: "undecided",
         profile: null,
         onboardingProgress: null,
       },
@@ -296,7 +294,6 @@ describe("re-engagement worker", () => {
       "age",
       "gender",
       "preference",
-      "aiMemoryExportPreference",
     ]) {
       expect(select[field]).toBe(true);
     }

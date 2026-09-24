@@ -32,7 +32,6 @@ export type UiHintControl =
   | "height_wheel"
   | "text"
   | "multiline_text"
-  | "magic_prompt" // context_dump: copy-prompt CTA + large paste field
   | "photo_upload"
   // voice_prompt: hold-to-record button, live level meter, preview + re-record.
   // `min`/`max` are SECONDS here rather than a count, which is the one place
@@ -62,8 +61,6 @@ const QUESTION_HINTS: Partial<Record<OnboardingQuestion, UiHint>> = {
   partner_preferences: { control: "multiline_text" },
   friday_vibe: { control: "multiline_text" },
   vibe_focus: { control: "text" },
-  ai_memory: { control: "choice_chips", options: ["accepted", "declined"] },
-  context_dump: { control: "magic_prompt" },
   photos: { control: "photo_upload", min: MIN_PHOTOS, max: MAX_PHOTOS },
   voice_prompt: {
     control: "voice_record",

@@ -4,24 +4,7 @@ import type { Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
-/**
- * The single entry point into onboarding (PRODUCT_SPEC §1.1).
- *
- * Every user whose onboarding has not been handed off to the chat collector
- * yet lands here, no matter how they touched the bot — `/start`, a stray text
- * message, or a stale inline button from a previous account. Before this the
- * chat carried its own consent card and language picker, which duplicated the
- * Mini App's first two screens and, because the router's step switch had no
- * Mini App gate at all, could be entered by anyone who typed instead of
- * tapping the button — skipping the sign-up fork, the dating city, the theme
- * pick and the AI-memory choice, and dead-ending at the finalize gate that
- * requires a city the chat flow cannot collect.
- *
- * The prompt is self-healing for an account with no `User` row: the Mini App's
- * `GET /v1/telegram-onboarding/state` resolves the caller through
- * `findOrCreateTelegramUser`, so tapping the button creates the row and starts
- * the current flow rather than erroring.
- */
+
 
 type OnboardingEntryUser = Pick<User, "language" | "theme" | "isEmailVerified"> & {
   /** Non-null while the user is waiting for their city to open. */

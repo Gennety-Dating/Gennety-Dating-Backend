@@ -60,12 +60,6 @@ enum OnboardingStep {
   completed
 }
 
-enum AiMemoryExportPreference {
-  undecided
-  accepted
-  declined
-}
-
 enum Gender {
   male
   female
@@ -152,11 +146,6 @@ model User {
   themeMode                  ThemeMode                @default(dark) @map("theme_mode")
   status                     UserStatus               @default(onboarding)
   onboardingStep             OnboardingStep           @default(consent) @map("onboarding_step")
-  /// Whether the user wants to enrich onboarding with memory exported from
-  /// their existing AI assistant. `declined` skips the Magic Prompt for this
-  /// onboarding run and uses a deterministic fallback profile analysis.
-  aiMemoryExportPreference   AiMemoryExportPreference @default(undecided) @map("ai_memory_export_preference")
-  aiMemoryExportPreferenceAt DateTime?                @map("ai_memory_export_preference_at")
   hasConsented               Boolean                  @default(false) @map("has_consented")
   consentedAt                DateTime?                @map("consented_at")
   /// Explicit Terms of Service acceptance from the Initialization & Consent
@@ -796,7 +785,7 @@ model OnboardingStepEvent {
   userId    String   @map("user_id") @db.Uuid
   /// Step key: an `ONBOARDING_QUESTIONS` value (first_name_age, gender, …,
   /// photos), the trailing `verification` CTA, or a Mini-App macro step
-  /// (consent/language/city/theme/ai_memory).
+  /// (consent/language/city/theme).
   step      String
   /// `asked` | `answered` | `skipped`.
   kind      String
@@ -829,8 +818,7 @@ model OnboardingStepEvent {
 /// `services/prompt-builder.ts` as the agent's "Recent chat timeline".
 ///
 /// Deliberately NOT a second copy of the conversation: `summary` is truncated,
-/// only post-onboarding users are recorded (which keeps OTP codes, phone
-/// numbers and AI-memory pastes out by construction), ephemeral status
+/// chat summaries are redacted before storage, ephemeral status
 /// shimmers and per-minute banner/countdown re-renders are skipped, and rows
 /// are swept after 30 days by `workers/retention.ts`.
 model ChatEvent {
@@ -1122,10 +1110,8 @@ model Profile {
   photoBonusTicketAt        DateTime?                    @map("photo_bonus_ticket_at")
   videoBonusTicketAt        DateTime?                    @map("video_bonus_ticket_at")
   /// Vibe signal (PRODUCT_SPEC §1.3 / §3.2). Collected as two short free-text
-  /// onboarding answers right before the Magic Prompt step, asked of EVERY user
-  /// regardless of AI-memory export choice. The raw text feeds icebreakers and
-  /// is folded into `psychologicalSummary` so the embedding (V_explicit) carries
-  /// real psychological signal even when the Magic Prompt is declined.
+  /// onboarding answers before Type Radar, asked of every user. The raw text feeds
+  /// icebreakers and is folded into `psychologicalSummary` and its embedding.
   ///   - `fridayVibeText`: "describe your ideal Friday night, honestly".
   ///   - `vibeFocusText`: "what matters more — the process, or who's with you?".
   fridayVibeText            String?                      @map("friday_vibe_text")
@@ -1146,12 +1132,12 @@ model Profile {
   /// nature, ideas, humor, …). Icebreaker fuel + future shared-anchor scoring;
   /// the embedding stays authoritative for anchor similarity in v1.
   anchorTags                String[]                     @default([]) @map("anchor_tags")
-  /// Idempotency/audit marker: when the vibe-axis extraction last ran. Guards
-  /// the accepted-path summary append so finalize retries don't double-append.
+  /// Audit marker: when vibe-axis extraction last ran. Prevents re-extraction
+  /// and accidental overwrites on finalize retries.
   vibeExtractedAt           DateTime?                    @map("vibe_extracted_at")
   /// Type Radar (PRODUCT_SPEC §Type Radar / TYPE_RADAR_PRODUCT_SPEC.md). A fast
   /// visual appearance-preference calibration shown in onboarding right BEFORE
-  /// the Magic Prompt: the user reacts "My Type" / "Not My Type" to ~12
+  /// photos: the user reacts "My Type" / "Not My Type" to ~12
   /// contrasting portraits (band chosen from the viewer's own age via
   /// `ageBandFor`), optionally tapping one reason chip. Pure math lives in
   /// `@gennety/shared` (`type-radar.ts`); feature-flagged by `TYPE_RADAR_ENABLED`
@@ -2840,7 +2826,7 @@ model ClientEvent {
 /// Built after the Thursday batch (`notifyFounderWeeklyMatches`), stored so the
 /// tokenized report page (`GET /v1/founder/report/:token`) renders a stable view
 /// regardless of later profile edits. Contains PII (names, cities, photo refs,
-/// attractiveness scores) but never `psychologicalSummary`/AI-memory dumps. The
+/// attractiveness scores) but never `psychologicalSummary`. The
 /// `token` is a cryptographically-random unguessable string = the page's only
 /// authorization (no login), so it must never be logged.
 model FounderReport {

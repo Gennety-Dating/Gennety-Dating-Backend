@@ -27,20 +27,6 @@ export function onboardingThinkingSteps(lang: Language): StatusStep[] {
 }
 
 /**
- * Shown after a user pastes their AI memory dump, before the photo request
- * (`aiMemoryExportPreference = accepted`). Deleted at the end; the real
- * "send your photos" reply lands in its place.
- */
-export function profileAnalysisSteps(lang: Language): StatusStep[] {
-  return [
-    { text: t(lang, "onbAnalyzeStep1"), holdMs: 2500, emojiId: AI_EMOJI.scan },
-    { text: t(lang, "onbAnalyzeStep1b"), holdMs: 4000, emojiId: AI_EMOJI.think },
-    { text: t(lang, "onbAnalyzeStep2"), holdMs: 2500, emojiId: AI_EMOJI.spark },
-    { text: t(lang, "onbAnalyzeStep3"), holdMs: 3000, emojiId: AI_EMOJI.spark },
-  ];
-}
-
-/**
  * Shown the moment a user finishes the Persona selfie flow. Outcome-neutral on
  * purpose — the real verified/rejected/review verdict is delivered later by the
  * verification pipeline, so these lines only describe the work in progress.

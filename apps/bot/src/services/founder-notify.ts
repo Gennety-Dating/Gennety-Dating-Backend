@@ -375,17 +375,7 @@ async function sendHeaderWithPhotos(
 // Feature 1 — new registration
 // ───────────────────────────────────────────────────────────────────────────
 
-/**
- * DM the founder the full profile of a newly-activated user, once. Idempotent
- * via `User.founderNotifiedAt` — an atomic `updateMany(where: { id, status:
- * "active", founderNotifiedAt: null })` claims the notification, so repeated
- * activations (verified-after-skip, unfreeze on `/start`) never re-send.
- *
- * Deliberately EXCLUDES `psychologicalSummary` / the AI-memory dump (the
- * answer to the exported-AI prompt) — only the ordinary onboarding facts and
- * photos are relayed. Attractiveness score is included when the vision seed
- * has already run (verified users).
- */
+
 export async function notifyFounderNewUser(userId: string): Promise<void> {
   const api = getFounderApi();
   if (!api) return;

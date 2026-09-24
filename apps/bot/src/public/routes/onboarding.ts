@@ -3,7 +3,6 @@ import multer from "multer";
 import { prisma } from "@gennety/db";
 import {
   LEGAL_DOCS_VERSION,
-  MAX_DUMP_BUFFER_CHARS,
   SUPPORTED_LANGUAGES,
   type Language,
 } from "@gennety/shared";
@@ -74,17 +73,14 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
   }
   const user = await loadUser(req.userId!);
   if (!ensureInterviewAllowed(user, res)) return;
-  const before = await loadStateContext(req.userId!);
-  const isContextDump = before.currentQuestion === "context_dump";
-  const maxLength = isContextDump ? MAX_DUMP_BUFFER_CHARS : 4_000;
-  if (text.length > maxLength) {
+  if (text.length > 4_000) {
     res.status(400).json({ error: "Text is too long" });
     return;
   }
 
   const result = await runAgentTurn(
     user.telegramId,
-    isContextDump ? { kind: "context_dump", text } : text,
+    text,
     // The Type Radar is a Telegram Mini App behind `initData` auth, so this
     // client cannot open it — see `AgentDeps.canPresentTypeRadar`.
     { canPresentTypeRadar: false },

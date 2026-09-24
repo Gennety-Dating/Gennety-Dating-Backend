@@ -78,9 +78,6 @@ PRODUCT that the documents now reflect — not a wording pass:
   provider changed on 2026-07-26 but the documents still named Persona and
   still described a provider webhook that no longer exists. Privacy §5.3, §10,
   §12.4, §17 and ToS §4 are corrected.
-- **The personal AI export ("Magic Prompt") is retired** (founder decision).
-  Privacy §9 no longer describes it; §3, §4.1, §6, §12.1 and §12.4 no longer
-  reference it.
 - **Deleting your account no longer sends your profile, phone, email and photos
   to the internal operations feed** — it sends an anonymous lifecycle event.
   Freezing keeps the profile card but drops the phone number. Privacy §12.2.

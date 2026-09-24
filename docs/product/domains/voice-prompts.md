@@ -29,7 +29,7 @@
 
 | # | Question | Decision |
 |---|---|---|
-| 4 | Ask in a Mini App screen, like the AI-memory gate? | **No — in the chat**, as the last onboarding question. One message with recommendations plus one quiet skip button; the recording IS the acceptance. |
+| 4 | Ask in a Mini App screen? | **No — in the chat**, as the last onboarding question. One message with recommendations plus one quiet skip button; the recording IS the acceptance. |
 | 5 | A curated prompt catalog, like Hinge? | **No — free-form.** The message carries recommendations instead. This reverses §3.1 of the first draft; the reasoning is below. |
 | 6 | Where does the transcript live? | **In its own column**, composed into the embedding input at refresh time. It is NOT folded into `psychologicalSummary`. Reverses §5.5 of the first draft; see §5.5 for why the repo already settles this. |
 | 7 | Does the demo puppet have one? | **No.** The demo shows the recording step and not the playback. |
@@ -67,7 +67,7 @@ Consequences, so they are not rediscovered later:
 
 | Hinge concept | Repo analog that already exists |
 |---|---|
-| An optional profile step, asked once | The `ai_memory` slot in `ONBOARDING_QUESTIONS` — a skippable question the collector owns |
+| An optional profile step, asked once | The `voice_prompt` slot in `ONBOARDING_QUESTIONS` — a skippable question the collector owns |
 | Display-only profile media | `services/profile-video.ts` — safety-only validation, never enters `photos[]` |
 | Audio safety pipeline | `transcribeVideoAudio` → `moderateTextWithOpenAI` (already used for profile video audio) |
 | Transcription | `services/whisper.ts` (`transcribeVoice`, 25 MB ceiling) |
@@ -332,11 +332,10 @@ end of the collector's own order
 ([`ONBOARDING_QUESTIONS`](../../../apps/bot/src/services/onboarding-collector.ts)):
 
 ```
-… friday_vibe → vibe_focus → ai_memory → context_dump → photos → voice_prompt → complete
+… friday_vibe → vibe_focus → photos → voice_prompt → complete
 ```
 
-`ai_memory`/`context_dump` are skipped in production (`AI_MEMORY_EXPORT_ENABLED=false`),
-so in practice it reads `vibe_focus → photos → voice_prompt → complete`. Two
+Two
 things fall out for free: the photo stage's **Continue** button already resolves
 through `nextOnboardingQuestion`, so "done with photos" leads into the ask
 without a new mechanism; and the ask is the message that takes the chat's bottom

@@ -1732,7 +1732,7 @@ AND complimentary Premium months, so it rides the already-on
 - **Invitee reward.** A fixed **1 month of Gennety Premium**
   (`REFERRAL_INVITEE_PREMIUM_MONTHS`), granted + active at a wow screen shown as
   the second-to-last screen of the first onboarding Mini App (before the
-  AI-memory choice). Safe pre-verification because Premium's only benefit
+  chat handoff). Safe pre-verification because Premium's only benefit
   (venue-change) requires a scheduled date.
 - **Referrer reward.** A milestone ladder (`REFERRAL_LADDER`, default cumulative
   1/1, 2/2, 3/3, 5/5 tickets+months at 1/3/5/10 verified friends), each rung

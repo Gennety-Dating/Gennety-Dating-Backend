@@ -24,19 +24,7 @@ import {
   patchOnboardingSession,
 } from "../../handlers/onboarding/type-radar.js";
 
-/**
- * Type Radar Mini App API (PRODUCT_SPEC §Type Radar). A fast visual
- * appearance-preference calibration opened mid-onboarding (conversational
- * phase, right before the Magic Prompt) via a `web_app` button. The viewer
- * reacts "My Type" / "Not My Type" to a deck of contrasting portraits — the
- * age band is derived from the viewer's OWN age, the set(s) from their
- * gender preference — optionally tapping one reason chip. The server compiles
- * the verdicts into a per-set preference vector (`Profile.typePrefTags`) that
- * the match engine reads as the soft `V_type` multiplier.
- *
- * Auth: Telegram `initData` HMAC (same boundary as calendar/verification).
- * Feature-flagged: every route 404s when `TYPE_RADAR_ENABLED` is off.
- */
+
 
 type AuthOk = { ok: true; telegramId: bigint };
 type AuthErr = { ok: false; status: number; body: { error: string } };

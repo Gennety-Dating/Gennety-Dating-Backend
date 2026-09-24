@@ -26,7 +26,6 @@ vi.mock("@gennety/db", () => ({
 vi.mock("../config.js", () => ({
   env: {
     ONBOARDING_FACT_COLLECTOR_ENABLED: true,
-    AI_MEMORY_EXPORT_ENABLED: false,
     OPENAI_API_KEY: "test-key",
     WEBAPP_URL: "https://test.invalid/app",
     TYPE_RADAR_ENABLED: false,
@@ -47,6 +46,7 @@ vi.mock("./type-radar.js", () => ({
 }));
 
 import { runAgentTurn } from "./onboarding-agent.js";
+import { env } from "../config.js";
 
 const TELEGRAM_ID = 782065541n;
 
@@ -61,7 +61,6 @@ function collectorOwnedUser() {
     phoneVerifiedAt: new Date(),
     isEmailVerified: false,
     termsAccepted: true,
-    aiMemoryExportPreference: "undecided",
     firstName: "Гліб",
     age: 24,
     gender: "male",
@@ -88,6 +87,39 @@ beforeEach(() => {
 });
 
 describe("photo-stage Continue", () => {
+  it("shows Type Radar before finalizing when photos arrived early", async () => {
+    (env as { TYPE_RADAR_ENABLED: boolean }).TYPE_RADAR_ENABLED = true;
+    mocks.userFindUnique.mockResolvedValue({
+      ...collectorOwnedUser(),
+      profile: {
+        ...collectorOwnedUser().profile,
+        photos: ["a", "b", "c", "d"],
+        typeRadarCompletedAt: null,
+      },
+    });
+    mocks.collect.mockResolvedValue({
+      userId: "uuid-1",
+      language: "uk",
+      currentQuestion: "complete",
+      completedFields: ["first_name", "age", "gender", "preference", "height", "hobbies", "partner_preferences", "friday_vibe", "vibe_focus", "photos"],
+      skippedFields: [],
+      askedFields: [],
+      revision: 8,
+      acceptedFields: [],
+      rejectedFields: [],
+      needsClarification: false,
+      unparsedAnswer: false,
+    });
+    try {
+      const result = await runAgentTurn(TELEGRAM_ID, { kind: "photos_continue" });
+      expect(result.typeRadarRequested).toBe(true);
+      expect(result.onboardingComplete).toBe(false);
+      expect(result.expectingPhoto).toBe(false);
+    } finally {
+      (env as { TYPE_RADAR_ENABLED: boolean }).TYPE_RADAR_ENABLED = false;
+    }
+  });
+
   it("asks the question that is actually next instead of finalizing early", async () => {
     // Three photos are on file, but the collector is still several questions
     // away — exactly what a stale `expectingPhoto` session produces, and what
@@ -133,7 +165,7 @@ describe("photo-stage Continue", () => {
     mocks.collect.mockResolvedValue({
       userId: "uuid-1",
       language: "uk",
-      completedFields: ["photos", "context_dump"],
+      completedFields: ["photos"],
       skippedFields: [],
       askedFields: [],
       currentQuestion: "complete",
