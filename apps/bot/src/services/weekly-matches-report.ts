@@ -1,18 +1,7 @@
 import { prisma } from "@gennety/db";
 import { MAX_PHOTOS } from "@gennety/shared";
 
-/**
- * Weekly founder matches report (PII, ops-only). The single assembler shared by
- * the tokenized report page (`GET /v1/founder/report/:token`) and the admin
- * dashboard view (`GET /admin/analytics/weekly-matches`). Deliberately excludes
- * `psychologicalSummary` / the AI-memory dump — only ordinary facts, photo
- * refs, and the vision attractiveness score.
- *
- * Photo `refs` are Telegram `file_id`s or Supabase paths; each surface streams
- * them through its own authenticated media proxy (report page:
- * `/v1/founder/report/:token/media?ref=`, dashboard: `/admin/media?type=
- * telegram&ref=`), so no image bytes are embedded in the snapshot.
- */
+
 
 export interface WeeklyMatchesUserCard {
   userId: string;

@@ -29,7 +29,7 @@ import {
 /**
  * Type Radar API (PRODUCT_SPEC §Type Radar). A fast visual
  * appearance-preference calibration. In Telegram it opens mid-onboarding
- * (conversational phase, right before the Magic Prompt) via a `web_app`
+ * (conversational phase, right before photos) via a `web_app`
  * button; the native iOS client opens it from the profile. The viewer
  * reacts "My Type" / "Not My Type" to a deck of contrasting portraits — the
  * age band is derived from the viewer's OWN age, the set(s) from their

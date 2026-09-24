@@ -155,10 +155,6 @@ export async function handleEditBioStart(ctx: BotContext): Promise<void> {
   const current = user?.profile?.psychologicalSummary?.trim();
   if (!current) return;
 
-  // Sent as its own plain message (no `parse_mode`) so the text is quotable and
-  // cannot be mangled — or turned into markup — by whatever the AI-memory pass
-  // happened to write. An analysis can run to several thousand characters, so
-  // it is capped well inside Telegram's 4096 limit rather than failing the send.
   const shown =
     current.length > BIO_PREVIEW_MAX_CHARS
       ? `${current.slice(0, BIO_PREVIEW_MAX_CHARS)}…`

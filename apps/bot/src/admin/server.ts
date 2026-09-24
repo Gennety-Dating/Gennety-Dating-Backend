@@ -585,7 +585,6 @@ const USER_DETAIL_SELECT = {
   theme: true,
   researchOptIn: true,
   termsAcceptedAt: true,
-  aiMemoryExportPreference: true,
   referralSource: true,
   ticketBalance: true,
   premiumUntil: true,

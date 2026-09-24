@@ -62,13 +62,7 @@ describe("menuClaimIsLive", () => {
     ).toBe(false);
   });
 
-  /**
-   * THE regression this module exists for. A user taps "About me", walks away,
-   * and comes back weeks later to ask the concierge something. That message
-   * used to be written verbatim into `Profile.psychologicalSummary` — the
-   * dominant embedding input — replacing an AI-memory analysis with no snapshot
-   * to restore from, while their actual question went unanswered.
-   */
+
   it("does not let a forgotten bio edit swallow a message sent weeks later", () => {
     const s = session();
     claimMenuText(s, "edit_bio", NOW);

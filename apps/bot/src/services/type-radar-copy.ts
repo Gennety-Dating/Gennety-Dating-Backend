@@ -1,11 +1,6 @@
 import type { Language } from "@gennety/shared";
 
-/**
- * Copy for the Type Radar onboarding gate (§Type Radar, step 5B): the chat
- * message that carries the `web_app` "choose your type" button + a Skip button,
- * shown once right before the Magic Prompt / photos step. Kept as plain strings
- * (not in the big shared i18n bundle) so the feature stays self-contained.
- */
+
 export interface TypeRadarInviteCopy {
   /** Message body sent with the buttons. */
   intro: string;

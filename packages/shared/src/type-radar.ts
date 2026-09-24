@@ -1,24 +1,6 @@
 import type { Gender, GenderPreference } from "./types.js";
 
-/**
- * Type Radar — machine dataset + pure preference math (TYPE_RADAR_PRODUCT_SPEC.md).
- *
- * The radar is a visual appearance-type calibration shown once in onboarding,
- * right before the AI-memory import. The user reacts binary "my type" /
- * "not my type" to a balanced set of contrasting portraits; the server
- * decomposes each photo into pre-authored categorical attribute tags and
- * learns a preference vector that feeds the soft `V_type` match multiplier
- * (launched in shadow mode).
- *
- * This module is the single source of truth for the attribute space, the
- * photo→attribute map, the reason chips, and the pure math. It is deliberately
- * photo-agnostic: photo ids here must match the generated image assets, but no
- * image bytes are referenced. Compiled from
- * `scripts/type-radar.dataset.draft.json` (the human review/generation draft).
- *
- * NOT yet wired into any live path — the feature is behind `TYPE_RADAR_ENABLED`
- * and the match-engine integration lands separately with the schema.
- */
+
 
 // ── Attribute space ────────────────────────────────────────────────────────
 // ONE primary axis — `archetype` (4 values, 3 cards each) — plus three

@@ -1,13 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const { env } = vi.hoisted(() => ({ env: { AI_MEMORY_EXPORT_ENABLED: true } }));
-vi.mock("../config.js", () => ({ env }));
+
 
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 
-beforeEach(() => {
-  env.AI_MEMORY_EXPORT_ENABLED = true;
-});
 
 const readyUser = {
   onboardingStep: "conversational" as const,
@@ -17,7 +13,6 @@ const readyUser = {
   registrationTrack: null,
   email: "a@uni.edu",
   phoneVerifiedAt: null,
-  aiMemoryExportPreference: "accepted" as const,
 };
 
 describe("shouldUseOnboardingMiniApp", () => {
@@ -32,7 +27,6 @@ describe("shouldUseOnboardingMiniApp", () => {
           language: null,
           isEmailVerified: false,
           email: null,
-          aiMemoryExportPreference: "undecided",
         },
         false,
       ),
@@ -44,7 +38,7 @@ describe("shouldUseOnboardingMiniApp", () => {
     expect(
       shouldUseOnboardingMiniApp(
         true,
-        { ...readyUser, aiMemoryExportPreference: "undecided" },
+        { ...readyUser, termsAccepted: false },
         true,
       ),
     ).toBe(true);
@@ -98,20 +92,6 @@ describe("shouldUseOnboardingMiniApp", () => {
         true,
       ),
     ).toBe(true);
-  });
-
-  it("hands off without an AI-memory choice while the feature is disabled", () => {
-    // With `AI_MEMORY_EXPORT_ENABLED=false` the Mini App never renders that
-    // screen, so requiring the choice here would bounce the user back into the
-    // Mini App forever instead of handing off to the bot.
-    env.AI_MEMORY_EXPORT_ENABLED = false;
-    expect(
-      shouldUseOnboardingMiniApp(
-        true,
-        { ...readyUser, aiMemoryExportPreference: "undecided" },
-        true,
-      ),
-    ).toBe(false);
   });
 
   it("does not let a general-track user's stray email satisfy the gate", () => {

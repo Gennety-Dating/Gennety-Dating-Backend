@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  contextDumpInstruction,
   MAX_AGE,
   MIN_AGE,
 } from "@gennety/shared";
@@ -392,7 +391,6 @@ describe("not-understood feedback", () => {
 
   it("returns null for stages that do not expect free text", () => {
     expect(onboardingNotUnderstoodText("en", "photos")).toBeNull();
-    expect(onboardingNotUnderstoodText("en", "context_dump")).toBeNull();
     expect(onboardingNotUnderstoodText("en", "complete")).toBeNull();
   });
 
@@ -407,8 +405,7 @@ describe("not-understood feedback", () => {
       "relationship_intent",
         "hobbies",
         "partner_preferences",
-        "ai_memory",
-      ] as const) {
+        ] as const) {
         expect(onboardingNotUnderstoodText(language, question)).toBeTruthy();
       }
     },
@@ -458,8 +455,6 @@ describe("onboarding collector routing", () => {
       "height",
       "relationship_intent",
       "partner_preferences",
-      "ai_memory",
-      "context_dump",
       "photos",
     ]);
     expect(
@@ -471,7 +466,7 @@ describe("onboarding collector routing", () => {
     ).toBe("hobbies");
   });
 
-  it("asks the vibe questions after the profile fields and before the Magic Prompt", () => {
+  it("asks the vibe questions after the profile fields and before photos", () => {
     const completedThroughProfile = new Set<OnboardingField>([
       "first_name",
       "age",
@@ -502,14 +497,11 @@ describe("onboarding collector routing", () => {
         skipped: new Set(),
         asked: new Set(),
       }),
-    ).toBe("ai_memory");
+    ).toBe("photos");
   });
 
-  it("skips the Magic Prompt straight to photos when AI-memory is declined", () => {
-    // Regression: a declined AI-memory turn must land on `photos`, not stall
-    // on `context_dump` — the mobile hybrid-chat photo stage keys off
-    // currentQuestion === "photos" (expectingPhoto + photo_upload uiHint).
-    const throughAiMemory = new Set<OnboardingField>([
+  it("routes directly from the questionnaire to photos", () => {
+    const throughQuestionnaire = new Set<OnboardingField>([
       "first_name",
       "age",
       "gender",
@@ -520,16 +512,8 @@ describe("onboarding collector routing", () => {
       "partner_preferences",
       "friday_vibe",
       "vibe_focus",
-      "ai_memory",
-      "context_dump",
     ]);
-    expect(
-      nextOnboardingQuestion({
-        completed: throughAiMemory,
-        skipped: new Set<OnboardingField>(["context_dump"]),
-        asked: new Set(),
-      }),
-    ).toBe("photos");
+    expect(nextOnboardingQuestion({ completed: throughQuestionnaire, skipped: new Set(), asked: new Set() })).toBe("photos");
   });
 
   it("captures and validates free-text vibe answers", () => {
@@ -573,23 +557,6 @@ describe("onboarding collector routing", () => {
       expect(onboardingQuestionText(language, "photos")).not.toHaveLength(0);
     },
   );
-
-  it("explains why the Magic Prompt is needed before asking for the AI response", () => {
-    const text = onboardingQuestionText("en", "context_dump");
-
-    expect(text).toContain("Gennety analyzes your conversations");
-    expect(text).toContain("psychological profile");
-    expect(text).toContain("We interview all other users in exactly the same way");
-  });
-
-  it.each(["en", "ru", "uk", "de", "pl"] as const)(
-    "uses the shared canonical context prompt instruction in %s",
-    (language) => {
-      expect(onboardingQuestionText(language, "context_dump")).toBe(
-        contextDumpInstruction(language),
-      );
-    },
-  );
 });
 
 /**
@@ -611,7 +578,6 @@ describe("applyOnboardingFacts", () => {
       age: null,
       gender: null,
       preference: null,
-      aiMemoryExportPreference: "declined",
       messageHistory: [],
       profile: {
         height: null,
@@ -862,9 +828,6 @@ describe("validateFactValue", () => {
 
   it("refuses the synthetic fields a client must never set directly", () => {
     expect(validateFactValue("photos", 3).reason).toBe("synthetic_field_not_extractable");
-    expect(validateFactValue("context_dump", "x").reason).toBe(
-      "synthetic_field_not_extractable",
-    );
   });
 });
 

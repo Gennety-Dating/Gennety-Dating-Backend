@@ -25,8 +25,8 @@
 >   /v1/radar/submit` (feature-flag-gated 404). Telegram `initData` HMAC OR a
 >   JWT bearer since 2026-09-14 — see "Mobile parity" below; `/state` was added
 >   the same day for the native client. The onboarding gate lives in the
->   conversational agent (`typeRadarGatePending` at the request_context_dump /
->   request_photos boundary); the invite (web_app + Skip) and resume are in
+>   conversational agent (`typeRadarGatePending` at the request_photos
+>   boundary); the invite (web_app + Skip) and resume are in
 >   `handlers/onboarding/type-radar.ts`. 24 band-A portraits ship at
 >   `apps/webapp/public/radar/a/*.jpg`; the Mini App is `radar.html`.
 > - **Schema (additive):** `Profile.typeRadarAnswers/typePrefTags/
@@ -42,9 +42,7 @@
 >
 > **Original design draft below (updated 2026-07-20).**
 > Feature-flagged (`TYPE_RADAR_ENABLED`, default off), Telegram-only in v1
-> (explicit decision — see Mobile parity). The AI-memory export (Magic Prompt)
-> **stays**; the radar runs in the conversational phase immediately **before**
-> the Magic Prompt is delivered — so `age`/`gender`/`preference` are already
+> (explicit decision — see Mobile parity). The radar runs immediately before photos — so `age`/`gender`/`preference` are already
 > collected (age bands + gender set are read, not asked).
 > Photo dataset briefs + generation prompts:
 > [`scripts/type-radar.dataset.draft.json`](../../../scripts/type-radar.dataset.draft.json).
@@ -68,16 +66,12 @@ radar never scores "how attractive", preventing double-counting with Elo.
 
 ## Placement in onboarding
 
-The radar is a Mini App **launched from the conversational onboarding flow**,
-at the **AI-memory step boundary — right before the Magic Prompt is
-delivered** (the moment the user paste-imports their ChatGPT memory). That is
-where AI-memory import sits in the canonical collector order. For users who
-declined AI-memory export, the same slot sits right before photos.
+The radar is a Mini App launched after questionnaire completion, before photos.
 
 ```
 conversational collector:
-name+age → gender → preference → height → hobbies → partner → nationality
-        → vibe → [TYPE RADAR] → AI-memory import (Magic Prompt) → photos
+name+age → gender → preference → height → hobbies → partner → relationship intent
+        → vibe → [TYPE RADAR] → photos
 ```
 
 **`age`, `gender`, and `preference` are ALL already collected by this point**
@@ -88,11 +82,10 @@ band (see *Age bands* under Dataset). `preference = both` serves an
 interleaved 8+8 subset of both sets (marked lower-confidence). (This corrects
 an earlier draft that placed the radar inside the onboarding Mini App before
 the conversational phase, where age was not yet known — it isn't: the radar
-runs after profile capture, right before the Magic Prompt.)
+runs after profile capture, right before photos.)
 
 The bot opens the radar Mini App from chat ("before we go further, let's
-calibrate your type"); on completion it proceeds to the Magic Prompt (or, for
-decliners, to photos). The Mini App still authenticates with
+calibrate your type"); on completion it proceeds to photos. The Mini App still authenticates with
 `tma <initData>`.
 
 ### Close → "thinking state" → next question
@@ -138,7 +131,7 @@ Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe),
 with a one-tap **reason-chip** question after the first 2 verdicts and after
 model-surprising verdicts (cap 4/session, always skippable) → optional
 contrast-pair fallback ("Which is closer to your type?") only for a confound
-chips failed to resolve → done → `aiMemoryExport` phase as today. Unresolved
+chips failed to resolve → done → `loading` phase as today. Unresolved
 ambiguity after the caps is recorded as "no expressed preference" (neutral
 weight) — never re-asked.
 
@@ -441,7 +434,7 @@ re-scanned legacy profiles) are neutral on the candidate side.
    `telegram-onboarding.ts`, `/state` mirror, elo-seed tag extraction +
    rerun-path refresh.
 4. **Mini App** — radar Mini App launched from the conversational flow right
-   before the Magic Prompt (reads gender/preference/age from the `User` row —
+   before photos (reads gender/preference/age from the `User` row —
    no intent screen, no age capture): card stack with preload, reason-chip
    sheet, contrast-pair fallback screen; i18n for all five languages, theme-aware.
 5. **Engine** — `V_type` in `scorePair` + `scoreType` logging (shadow).
@@ -489,7 +482,7 @@ iOS adopts the radar, add the task to `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN
 surfaces — while only the Telegram handler consumed its `typeRadarRequested`
 result and attached the `web_app` + Skip buttons that clear it. So a native
 caller received the invite copy as a bare question, on **every** turn, with
-nothing to tap: the collector never advanced past `context_dump`/`photos`, and
+nothing to tap: the collector never advanced past `photos`, and
 the app's chat feed filled with the same message repeated. Since
 `TYPE_RADAR_ENABLED=true` in production, this made iOS onboarding impassable
 from the moment the flag was flipped — found by reading the simulator's chat
@@ -507,7 +500,7 @@ cannot present the radar".
 
 ## Docs impact (on implementation, not now)
 
-- PRODUCT_SPEC §1.3: new radar step before the AI-memory screen.
+- PRODUCT_SPEC §1.3: new radar step before photos.
 - ARCHITECTURE: Profile columns, `scoreType`, radar routes.
 - deploy.md: flag block (`TYPE_RADAR_ENABLED`, `TYPE_PREF_FLOOR`, db:push
   prereq, webapp bundle + photo assets, Caddy jpg note).

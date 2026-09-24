@@ -271,34 +271,7 @@ export function invalidateChatTarget(telegramId: bigint | number): void {
   targetCache.delete(String(telegramId));
 }
 
-/**
- * Resolve a Telegram chat id to the user whose timeline it belongs to.
- *
- * **Every real Telegram chat is recorded, from `/start` onward (founder
- * decision 2026-07-31).** This used to be scoped to `onboardingStep =
- * 'completed'`, which kept onboarding-era content — the typed OTP code, a
- * pasted AI-memory export — out of the table by construction. The cost was
- * that registration, the single most important funnel to be able to read, was
- * the one stretch of the conversation the admin dialog reader could not see:
- * no photos, no buttons, no Mini App steps, nothing but the onboarding agent's
- * own turns. The founder owns that data and reads it in a single-operator
- * dashboard, so the tradeoff was taken deliberately.
- *
- * What that means concretely, since it is not free:
- *   - a typed OTP code is MASKED before storage by `redactSensitiveSummary`
- *     (2026-08-01): the operator sees that a code was entered, never which
- *     one, matching the bcrypt hashing `email_otps` / `phone_otps` already do;
- *   - the phone number itself still never lands here: the contact share is
- *     recorded as the event, not the digits;
- *   - the AI-memory export branch is retired (`AI_MEMORY_EXPORT_ENABLED` is
- *     off and the feature is not offered), so no pasted export reaches this
- *     table. If it is ever revived, a ≤300-char excerpt WOULD land here and
- *     would contradict the transience promise — mask it here first.
- *
- * The rows also reach the menu agent's prompt, where they are already fenced
- * as untrusted data — so onboarding text is subject to the same handling as
- * everything else in the timeline.
- */
+
 export async function resolveChatTarget(
   telegramId: bigint | number,
 ): Promise<ChatTarget> {

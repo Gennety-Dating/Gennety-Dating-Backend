@@ -1,19 +1,16 @@
 import {
-  type AiMemoryExportPreference,
   type Gender,
   type GenderPreference,
   type Language,
   Prisma,
   prisma,
 } from "@gennety/db";
-import { effectiveAiMemoryPreference } from "./ai-memory-export.js";
 import { openaiFetch } from "./openai-fetch.js";
 import {
   platformFromTelegramId,
   recordStepTransition,
 } from "./onboarding-analytics.js";
 import {
-  contextDumpInstruction,
   MAX_AGE,
   MAX_HEIGHT_CM,
   MIN_AGE,
@@ -39,8 +36,6 @@ export const ONBOARDING_FIELDS = [
   "partner_preferences",
   "friday_vibe",
   "vibe_focus",
-  "ai_memory",
-  "context_dump",
   "photos",
   "voice_prompt",
 ] as const;
@@ -57,8 +52,6 @@ export const ONBOARDING_QUESTIONS = [
   "partner_preferences",
   "friday_vibe",
   "vibe_focus",
-  "ai_memory",
-  "context_dump",
   "photos",
   "voice_prompt",
   "complete",
@@ -69,7 +62,6 @@ export type OnboardingQuestion = (typeof ONBOARDING_QUESTIONS)[number];
 export type OnboardingInput =
   | { kind: "user_text"; text: string }
   | { kind: "resume" }
-  | { kind: "context_dump"; text: string }
   | { kind: "photos_updated"; count?: number }
   | { kind: "photos_continue" };
 
@@ -151,7 +143,6 @@ interface CollectorUser {
   age: number | null;
   gender: Gender | null;
   preference: GenderPreference | null;
-  aiMemoryExportPreference: AiMemoryExportPreference;
   messageHistory: Prisma.JsonValue[];
   profile: {
     height: number | null;
@@ -190,7 +181,6 @@ const USER_SELECT = {
   age: true,
   gender: true,
   preference: true,
-  aiMemoryExportPreference: true,
   messageHistory: true,
   profile: {
     select: {
@@ -373,19 +363,7 @@ function progressFromUser(user: CollectorUser): MutableProgress {
   if (user.profile?.fridayVibeText) completed.add("friday_vibe");
   if (user.profile?.vibeFocusText) completed.add("vibe_focus");
   if ((user.profile?.hobbies.length ?? 0) > 0) completed.add("hobbies");
-  // While `AI_MEMORY_EXPORT_ENABLED` is off the stored preference is masked to
-  // `declined`, so both steps resolve as already-handled and the canonical
-  // order runs vibe → photos with no Magic Prompt (PRODUCT_SPEC §1.3).
-  const aiMemory = effectiveAiMemoryPreference(user.aiMemoryExportPreference);
-  if (aiMemory !== "undecided") completed.add("ai_memory");
-  if (aiMemory === "declined" || user.profile?.psychologicalSummary) {
-    completed.add("context_dump");
-    if (aiMemory === "declined") skipped.add("context_dump");
-  }
   if ((user.profile?.photos.length ?? 0) >= MIN_PHOTOS) completed.add("photos");
-  // Same masking the AI-memory branch above uses: with the feature off the
-  // question resolves as already-handled, so the canonical order runs
-  // photos → complete and nothing about an existing recording is rewritten.
   if (!env.VOICE_PROMPT_ENABLED) {
     completed.add("voice_prompt");
     skipped.add("voice_prompt");
@@ -413,12 +391,8 @@ export function nextOnboardingQuestion(
   if (!progress.completed.has("partner_preferences")) {
     return "partner_preferences";
   }
-  // Vibe questions sit right before the Magic Prompt step so every user — even
-  // those who decline AI-memory export — supplies the signal (PRODUCT_SPEC §1.3).
   if (!progress.completed.has("friday_vibe")) return "friday_vibe";
   if (!progress.completed.has("vibe_focus")) return "vibe_focus";
-  if (!progress.completed.has("ai_memory")) return "ai_memory";
-  if (!progress.completed.has("context_dump")) return "context_dump";
   if (!progress.completed.has("photos")) return "photos";
   if (!progress.completed.has("voice_prompt")) return "voice_prompt";
   return "complete";
@@ -666,19 +640,6 @@ function preferenceCandidate(
   return null;
 }
 
-function aiMemoryCandidate(
-  text: string,
-  question: OnboardingQuestion,
-): FactCandidate | null {
-  if (question !== "ai_memory") return null;
-  if (/^(?:yes|accept|connect|да|так|ja|yes please|давай)[\s.!?]*$/iu.test(text.trim())) {
-    return { field: "ai_memory", evidence: text.trim(), value: "accepted" };
-  }
-  if (/^(?:no|decline|skip|нет|ні|nein|nie)[\s.!?]*$/iu.test(text.trim())) {
-    return { field: "ai_memory", evidence: text.trim(), value: "declined" };
-  }
-  return null;
-}
 
 export function deterministicCandidates(
   text: string,
@@ -691,7 +652,6 @@ export function deterministicCandidates(
     genderCandidate(text, question),
     preferenceCandidate(text, question),
     heightCandidate(text),
-    aiMemoryCandidate(text, question),
   ].filter((candidate): candidate is FactCandidate => candidate !== null);
 
   const trimmed = text.trim();
@@ -805,7 +765,6 @@ const EXTRACTOR_ALLOWED_VALUES: Partial<
 > = {
   gender: ["male", "female"],
   preference: ["men", "women", "both"],
-  ai_memory: ["accepted", "declined"],
   // The chat fallback for the Mini App's intent screen. The question text
   // lists the same four labels the buttons carry, so the extractor has
   // something to map a colloquial answer onto.
@@ -1036,12 +995,6 @@ export function validateFactValue(
       }
       return { value };
     }
-    case "ai_memory":
-      if (raw !== "accepted" && raw !== "declined") {
-        return { reason: "invalid_ai_memory_preference" };
-      }
-      return { value: raw };
-    case "context_dump":
     case "photos":
     case "voice_prompt":
       return { reason: "synthetic_field_not_extractable" };
@@ -1060,8 +1013,7 @@ export function validateFactCandidate(
   if (
     (candidate.field === "gender" ||
       candidate.field === "preference" ||
-      candidate.field === "relationship_intent" ||
-      candidate.field === "ai_memory") &&
+      candidate.field === "relationship_intent") &&
     normalizedPlaceholder(text)
   ) {
     return { reason: "placeholder_answer" };
@@ -1134,11 +1086,6 @@ function updatesForCandidates(
         profileCreate.vibeFocusText = candidate.value as string;
         profileUpdate.vibeFocusText = candidate.value as string;
         break;
-      case "ai_memory":
-        user.aiMemoryExportPreference = candidate.value as AiMemoryExportPreference;
-        user.aiMemoryExportPreferenceAt = new Date();
-        break;
-      case "context_dump":
       case "photos":
       case "voice_prompt":
         break;
@@ -1343,17 +1290,6 @@ export async function collectOnboardingInput(
     for (const candidate of accepted) {
       progress.completed.add(candidate.field);
       progress.skipped.delete(candidate.field);
-    }
-    // Declining AI-memory export skips the Magic Prompt (context_dump) step
-    // entirely. `buildProgress` already encodes this from the persisted user
-    // state, but the in-memory `progress` used to pick the NEXT question only
-    // saw `ai_memory` flip this turn — so mark context_dump here too, or
-    // `nextOnboardingQuestion` stalls on context_dump and `currentQuestion`
-    // never reaches `photos` (breaking the mobile hybrid-chat photo stage:
-    // wrong uiHint + expectingPhoto stuck false).
-    if (accepted.some((c) => c.field === "ai_memory" && c.value === "declined")) {
-      progress.completed.add("context_dump");
-      progress.skipped.add("context_dump");
     }
     const updates = updatesForCandidates(accepted);
     const next = nextOnboardingQuestion(progress);
@@ -1574,7 +1510,7 @@ export async function applyOnboardingFacts(
 
 export async function markOnboardingField(
   telegramId: bigint,
-  field: "context_dump" | "photos" | "voice_prompt",
+  field: "photos" | "voice_prompt",
   skipped = false,
 ): Promise<CollectorSnapshot> {
   const user = (await prisma.user.findUniqueOrThrow({
@@ -1651,8 +1587,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     partner_preferences: "What matters most to you in a partner? One short sentence is enough.",
     friday_vibe: "Describe your ideal Friday night — money and logistics no object. Be honest — not what sounds “right”.",
     vibe_focus: "And what matters most in that night — the experience itself, or who's with you?",
-    ai_memory: "Would you like to import context from an AI chat? Answer yes or no.",
-    context_dump: contextDumpInstruction("en"),
     photos: `Send at least ${MIN_PHOTOS} clear photos of yourself.`,
     voice_prompt:
       "Last thing — optional, you can skip this step.\n\nRecord about 15 seconds. Whoever I find for you hears it before they decide, and a voice carries what writing can't: how you joke, the tempo you live at.\n\nOne rule: don't read your profile aloud — it's already on their screen. Say what's got you hooked right now. And don't rehearse: the first take is always the most alive.",
@@ -1669,8 +1603,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     partner_preferences: "Что для тебя важнее всего в партнёре? Достаточно одного короткого предложения.",
     friday_vibe: "Опиши идеальный вечер пятницы — без ограничений по деньгам и логистике. Только честно — а не так, как «правильно» звучало бы.",
     vibe_focus: "А что в этом вечере главное — сам процесс или кто рядом?",
-    ai_memory: "Хочешь импортировать контекст из AI-чата? Ответь да или нет.",
-    context_dump: contextDumpInstruction("ru"),
     photos: `Пришли минимум ${MIN_PHOTOS} чёткие фотографии, где хорошо видно тебя.`,
     voice_prompt:
       "И последнее — по желанию, этот шаг можно пропустить.\n\nЗапиши секунд на 15. Человек, которого я тебе найду, услышит это до того, как решит, — голос выдаёт то, что не пишется: как ты шутишь, в каком темпе живёшь.\n\nОдно правило: не пересказывай анкету — она и так будет на экране. Скажи, что тебя сейчас затянуло. И не репетируй: первый дубль всегда живее.",
@@ -1687,8 +1619,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     partner_preferences: "Що для тебе найважливіше в партнері? Достатньо одного короткого речення.",
     friday_vibe: "Опиши ідеальний вечір п’ятниці — без обмежень щодо грошей і логістики. Тільки чесно — а не так, як «правильно» звучало б.",
     vibe_focus: "А що в цьому вечорі головне — сам процес чи хто поруч?",
-    ai_memory: "Хочеш імпортувати контекст з AI-чату? Відповідай так або ні.",
-    context_dump: contextDumpInstruction("uk"),
     photos: `Надішли щонайменше ${MIN_PHOTOS} чіткі фотографії, де добре видно тебе.`,
     voice_prompt:
       "І останнє — за бажанням, цей крок можна пропустити.\n\nЗапиши секунд на 15. Людина, яку я тобі знайду, почує це до того, як вирішить, — голос видає те, що не пишеться: як ти жартуєш, у якому темпі живеш.\n\nОдне правило: не переказуй анкету — вона й так буде на екрані. Скажи, що тебе зараз затягнуло. І не репетируй: перший дубль завжди живіший.",
@@ -1705,8 +1635,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     partner_preferences: "Was ist dir bei einem Partner am wichtigsten? Ein kurzer Satz reicht.",
     friday_vibe: "Beschreib deinen idealen Freitagabend — ohne Geld- oder Logistikgrenzen. Sei ehrlich — nicht das, was „richtig“ klingt.",
     vibe_focus: "Und was ist an diesem Abend am wichtigsten — das Erlebnis selbst oder wer dabei ist?",
-    ai_memory: "Möchtest du Kontext aus einem AI-Chat importieren? Antworte mit Ja oder Nein.",
-    context_dump: contextDumpInstruction("de"),
     photos: `Sende mindestens ${MIN_PHOTOS} klare Fotos von dir.`,
     voice_prompt:
       "Zum Schluss — freiwillig, du kannst diesen Schritt überspringen.\n\nNimm etwa 15 Sekunden auf. Die Person, die ich für dich finde, hört sie, bevor sie entscheidet — eine Stimme trägt, was sich nicht schreiben lässt: wie du witzelst, in welchem Tempo du lebst.\n\nEine Regel: lies nicht dein Profil vor — das steht ohnehin schon da. Erzähl, was dich gerade packt. Und probe nicht: der erste Take ist immer der lebendigste.",
@@ -1723,8 +1651,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     partner_preferences: "Co jest dla Ciebie najważniejsze u partnera? Wystarczy jedno krótkie zdanie.",
     friday_vibe: "Opisz swój idealny piątkowy wieczór — bez ograniczeń finansowych i logistycznych. Szczerze — a nie tak, jak „wypada”.",
     vibe_focus: "A co w tym wieczorze jest najważniejsze — samo przeżycie czy to, kto jest obok?",
-    ai_memory: "Chcesz zaimportować kontekst z czatu AI? Odpowiedz tak lub nie.",
-    context_dump: contextDumpInstruction("pl"),
     photos: `Wyślij co najmniej ${MIN_PHOTOS} wyraźne zdjęcia, na których dobrze Cię widać.`,
     voice_prompt:
       "I ostatnia rzecz — nieobowiązkowa, ten krok można pominąć.\n\nNagraj jakieś 15 sekund. Osoba, którą ci znajdę, usłyszy to, zanim zdecyduje — głos niesie to, czego nie da się napisać: jak żartujesz, w jakim tempie żyjesz.\n\nJedna zasada: nie czytaj profilu na głos — i tak będzie na ekranie. Powiedz, co cię teraz wciągnęło. I nie ćwicz: pierwsze podejście jest zawsze najbardziej żywe.",
@@ -1800,7 +1726,7 @@ type NotUnderstoodHintKey =
   | "name_only"
   | Exclude<
       OnboardingQuestion,
-      "first_name_age" | "context_dump" | "photos" | "voice_prompt" | "complete"
+      "first_name_age" | "photos" | "voice_prompt" | "complete"
     >;
 
 const NOT_UNDERSTOOD_LEAD: Record<Language, string> = {
@@ -1828,7 +1754,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     partner_preferences: "One short sentence about what matters to you is enough.",
     friday_vibe: "Tell me in a sentence or two how you'd actually spend it.",
     vibe_focus: "Is it more about the experience itself, or who you're with?",
-    ai_memory: "Just a yes or no works.",
   },
   ru: {
     name_age: "Можно ответить так: «Максим, 21».",
@@ -1843,7 +1768,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     partner_preferences: "Достаточно одного короткого предложения о том, что для тебя важно.",
     friday_vibe: "Опиши в паре предложений, как бы ты его реально провёл.",
     vibe_focus: "Тебе важнее сам процесс или компания рядом?",
-    ai_memory: "Ответь, пожалуйста, «да» или «нет».",
   },
   uk: {
     name_age: "Можна відповісти так: «Максим, 21».",
@@ -1858,7 +1782,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     partner_preferences: "Достатньо одного короткого речення про те, що для тебе важливо.",
     friday_vibe: "Опиши в кількох реченнях, як би ти його реально провів.",
     vibe_focus: "Тобі важливіший сам процес чи компанія поруч?",
-    ai_memory: "Відповідай, будь ласка, «так» або «ні».",
   },
   de: {
     name_age: "Du kannst zum Beispiel antworten: „Alex, 21“.",
@@ -1873,7 +1796,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     partner_preferences: "Ein kurzer Satz darüber, was dir wichtig ist, reicht.",
     friday_vibe: "Beschreib in ein, zwei Sätzen, wie du ihn wirklich verbringen würdest.",
     vibe_focus: "Geht es dir mehr um das Erlebnis oder um die Leute dabei?",
-    ai_memory: "Ein Ja oder Nein reicht.",
   },
   pl: {
     name_age: "Możesz odpowiedzieć na przykład: „Alex, 21”.",
@@ -1888,7 +1810,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     partner_preferences: "Wystarczy jedno krótkie zdanie o tym, co jest dla Ciebie ważne.",
     friday_vibe: "Opisz w jednym–dwóch zdaniach, jak naprawdę byś go spędził.",
     vibe_focus: "Chodzi bardziej o samo przeżycie czy o to, z kim jesteś?",
-    ai_memory: "Odpowiedz proszę „tak” lub „nie”.",
   },
 };
 
@@ -1904,7 +1825,6 @@ export function onboardingNotUnderstoodText(
   completedFields: readonly OnboardingField[] = [],
 ): string | null {
   if (
-    question === "context_dump" ||
     question === "photos" ||
     question === "voice_prompt" ||
     question === "complete"

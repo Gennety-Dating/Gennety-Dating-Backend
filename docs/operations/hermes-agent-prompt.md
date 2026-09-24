@@ -245,8 +245,7 @@ tail: finalizedOnboarding / verified / pendingVerification / rejectedOrReview / 
 
 ```
 first_name_age → gender → preference → height → hobbies →
-partner_preferences → friday_vibe → vibe_focus → ai_memory →
-context_dump → photos → verification
+partner_preferences → friday_vibe → vibe_focus → photos → verification
 ```
 
 Что нужно знать, чтобы читать эти шаги правильно:
@@ -257,11 +256,6 @@ context_dump → photos → verification
   `dwellMs` здесь — это время на экране приложения, а не раздумья над вопросом
   бота. Высокий dwell на экране выбора «кого ищешь» — скорее про две колонки с
   фотографиями, чем про формулировку.
-- **`ai_memory` и `context_dump` сейчас пропускаются у ВСЕХ.** Флаг
-  `AI_MEMORY_EXPORT_ENABLED=false` в проде, ветка выгрузки из личного ChatGPT
-  выключена целиком: коллектор помечает оба шага пройденными и порядок идёт
-  `vibe_focus → photos`. Массовый `skipped` тут — конфигурация, **не утечка**.
-  Не ставь их в `topDropOffSteps` разбора.
 - **`partner_preferences`** — свободный текст «кого хочешь видеть»,
   обязательный. Высокий dwell нормален: человек реально пишет.
 - **`friday_vibe` / `vibe_focus`** — «идеальная пятница» и «важнее процесс или
@@ -896,7 +890,6 @@ curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
 | Каденс матчинга | **daily** (батч каждый вечер 18:00 Kyiv) | «дроп» ≠ «неделя»; рассылка «нет пары» всё равно недельная |
 | Верификация | **обязательная, включена** | Низкий pass rate — теперь настоящая проблема, а не «ещё не включили» |
 | Провайдер liveness | AWS Rekognition Face Liveness | Persona больше нет нигде |
-| Выгрузка AI-памяти | **выключена** | Шаги `ai_memory` / `context_dump` пропускаются у всех |
 | Синтетические профили | **включены** | Часть матчей — заглушки, они всегда отказывают и исключены из конверсии |
 | Билеты + Stars | включены | Платный гейт живой |
 | Premium | включён | Подписок пока не было |
@@ -928,7 +921,6 @@ attributionWindowDays]`, прежде чем звать это багом.
 ### Что ИГНОРИРОВАТЬ
 
 - Разовые всплески на выборке < 20 — шум.
-- Массовый `skipped` на `ai_memory` / `context_dump` — выключенная фича.
 - Высокий dwell на `photos` — люди реально грузят фото.
 - Микро-колебания acceptance при 1–2 матчах за неделю.
 - Синтетические матчи в счётчиках `matches.byStatus` — партнёр-заглушка всегда

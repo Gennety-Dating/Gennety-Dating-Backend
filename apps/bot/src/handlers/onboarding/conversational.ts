@@ -8,8 +8,6 @@ import {
   MAX_PHOTOS,
   PHOTO_BONUS_TICKET_THRESHOLD,
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
-  MAX_DUMP_BUFFER_CHARS,
-  magicContextPrompt,
   DEFAULT_SESSION,
   normalizeProfileMedia,
   t,
@@ -62,7 +60,6 @@ import {
 import {
   onboardingThinkingSteps,
   photoReviewSteps,
-  profileAnalysisSteps,
 } from "../../services/analysis-status.js";
 import { env } from "../../config.js";
 import {
@@ -93,11 +90,7 @@ import {
   onboardingReactionFor,
   reactToMessage,
 } from "../../services/message-reactions.js";
-
-/** Backward compatibility for confirmation buttons sent before auto-flush. */
-const DUMP_DONE_CALLBACK = "dump:done";
 export { ONBOARDING_PHOTOS_CONTINUE_CALLBACK };
-const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
 
 /**
  * Cadence of the periodic "thinking" pause during the profile survey: a short
@@ -120,59 +113,12 @@ export function earnsThinkingPause(answered: number): boolean {
 }
 
 
-/**
- * Heuristic split between a real LLM dump and a clarifying question while
- * awaitingContextDump is true. Real ChatGPT/Claude responses to the Magic
- * Prompt run 2,000–15,000 chars; user questions almost never exceed 400.
- * A long-but-borderline question (> 400) lands in the buffer and is
- * surfaced by execSaveContextDump's 200-char minimum on Done.
- */
-const SHORT_MESSAGE_THRESHOLD = 400;
-
-/** A sparse but valid V2 export can be shorter than a normal user question. */
-function looksLikeStructuredAiMemory(text: string): boolean {
-  // Look for the schema-key signature anywhere inside a JSON object, so a
-  // compliant paste still counts even if the model prepended a stray line
-  // like "Here's your JSON:" before the opening brace.
-  const stripped = text.replace(/```(?:json)?/gi, "");
-  const start = stripped.indexOf("{");
-  if (start === -1) return false;
-  return /"(?:schema_version|relationships|grounded_summary|personality_traits|attachment_style)"\s*:/.test(
-    stripped.slice(start),
-  );
-}
-
-/**
- * Handle all messages during the `conversational` onboarding step.
- *
- * Text messages are forwarded to the LLM agent. Photo messages are
- * validated via the vision service and the result is injected into the
- * conversation history before triggering another agent turn.
- *
- * When the agent has requested the context dump (awaitingContextDump = true),
- * incoming text is accumulated in contextDumpBuffer instead of being sent to
- * the agent immediately. The pasted response is acknowledged, then the full
- * buffer is sent to the agent automatically after a short processing delay.
- */
 export async function handleConversational(ctx: BotContext): Promise<void> {
   const telegramId = BigInt(ctx.from!.id);
-
-  // ---- Legacy confirmation buttons already present in older chats ----
-  if (ctx.callbackQuery?.data === DUMP_DONE_CALLBACK) {
-    await ctx.answerCallbackQuery();
-    cancelContextDumpFlush(ctx.chat?.id);
-    await flushContextDump(ctx, telegramId);
-    return;
-  }
 
   // ---- Live Photo message ----
   const livePhoto = getMessageLivePhoto(ctx.message);
   if (livePhoto) {
-    if (ctx.session.awaitingContextDump) {
-      ctx.session.expectingPhoto = false;
-      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
-      return;
-    }
     const extracted = incomingLivePhotoMedia(livePhoto);
     if (!extracted.ok) {
       await ctx.reply(livePhotoRejectionMessage(ctx.session.language, extracted.reason));
@@ -190,11 +136,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // ---- Video message (display-only profile media; earns a ticket bonus) ----
   const video = getMessageVideo(ctx.message);
   if (video) {
-    if (ctx.session.awaitingContextDump) {
-      ctx.session.expectingPhoto = false;
-      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
-      return;
-    }
     const extracted = incomingVideoMedia(video);
     if (!extracted.ok) {
       void logTelegramMediaRejection(
@@ -220,11 +161,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // ---- Photo message (compressed or sent as document) ----
   const photo = ctx.message?.photo;
   if (photo && photo.length > 0) {
-    if (ctx.session.awaitingContextDump) {
-      ctx.session.expectingPhoto = false;
-      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
-      return;
-    }
     const incoming = incomingPhotoMedia(photo);
     if (!incoming) return;
     await handleProfileMediaMessage(
@@ -238,11 +174,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
 
   const doc = ctx.message?.document;
   if (doc && doc.mime_type?.startsWith("image/")) {
-    if (ctx.session.awaitingContextDump) {
-      ctx.session.expectingPhoto = false;
-      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
-      return;
-    }
     // Telegram sends uncompressed photos as documents — treat them the same
     const incoming = incomingPhotoMedia([
       { file_id: doc.file_id, file_unique_id: doc.file_unique_id, width: 0, height: 0 },
@@ -347,44 +278,10 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     return;
   }
 
-  // ---- Context dump buffering mode ----
-  // When awaitingContextDump is true the Magic Prompt has already been shown.
-  // Substantial pasted responses are forwarded after a short idle pause.
-  //
-  // Routing: a short message arriving while the buffer is still empty is
-  // almost certainly a question ("why do I need to do this?"), not the LLM
-  // dump — real ChatGPT/Claude responses to the Magic Prompt run thousands
-  // of chars. Threshold lets the LLM answer the question without trapping
-  // the user in buffer mode.
-  if (ctx.session.awaitingContextDump) {
-    const bufferEmpty = ctx.session.contextDumpBuffer.length === 0;
-    const looksLikeQuestion =
-      bufferEmpty &&
-      text.length < SHORT_MESSAGE_THRESHOLD &&
-      !looksLikeStructuredAiMemory(text);
-    if (looksLikeQuestion) {
-      // Fall through to the normal runAgentTurn call below — buffer stays
-      // empty, awaitingContextDump stays true, the user can paste afterwards.
-    } else {
-      await handleContextDumpChunk(ctx, telegramId, text);
-      return;
-    }
-  }
-
-  // ---- Periodic "thinking" pause during the profile survey ----
-  // Every ONBOARDING_THINKING_EVERY answered questions, hold a short "thinking"
-  // shimmer BEFORE the next question is composed. This must run before any
-  // typing indicator: the typing action only starts inside withTyping below,
-  // strictly after this status is torn down, and question generation does not
-  // start until the pause completes. Only real survey answers count — not
-  // photo-stage continues, photo uploads, or context-dump pastes. A spoken
-  // answer arrives here as its transcript (`voiceHandler` writes it into
-  // `ctx.message.text`) and is treated exactly like a typed one.
   const isSurveyAnswer =
     Boolean(ctx.message?.text) &&
     !continuePhotoStage &&
-    !ctx.session.expectingPhoto &&
-    !ctx.session.awaitingContextDump;
+    !ctx.session.expectingPhoto;
   if (isSurveyAnswer) {
     const answered = (ctx.session.onboardingAnswerCount ?? 0) + 1;
     ctx.session.onboardingAnswerCount = answered;
@@ -419,14 +316,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     );
   }
 
-  if (result.contextDumpStarted) {
-    ctx.session.awaitingContextDump = true;
-    ctx.session.contextDumpBuffer = "";
-    ctx.session.expectingPhoto = false;
-  } else {
-    ctx.session.expectingPhoto = result.expectingPhoto;
-  }
-
   if (result.onboardingComplete) {
     ctx.session.onboardingStep = "completed";
     ctx.session.menuState = "idle";
@@ -436,25 +325,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     ctx.session.pendingPhotoUniqueIds = [];
     ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
-  }
-
-  // Send the Magic Prompt BEFORE the agent reply so it appears above
-  // the instructions in the chat — user sees prompt first, then explanation.
-  if (result.contextPromptRequested) {
-    const prompt = magicContextPrompt(ctx.session.language);
-    try {
-      await ctx.reply(`<pre>${escapeHtml(prompt)}</pre>`, {
-        parse_mode: "HTML",
-      });
-    } catch (err) {
-      console.error("Failed to send Magic Prompt as HTML <pre>, falling back to plain text:", err);
-      try {
-        await ctx.reply(prompt);
-      } catch (err2) {
-        console.error("Failed to send Magic Prompt as plain text:", err2);
-        await ctx.reply("⚠️ Couldn't send the prompt. Please try again — type anything and I'll resend it.");
-      }
-    }
   }
 
   // Type Radar gate: the agent asked for the visual picker before the Magic
@@ -474,12 +344,6 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     (await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
   ) {
     return;
-  }
-
-  if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
-    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language), {
-      rich: true,
-    });
   }
 
   await sendAgentReply(ctx, result.reply);
@@ -516,250 +380,6 @@ export async function finishOnboarding(
 }
 
 // ---------------------------------------------------------------------------
-// Context dump buffer accumulation
-// ---------------------------------------------------------------------------
-
-/**
- * Append a text chunk to `contextDumpBuffer` while awaitingContextDump=true.
- * Caller has already decided this message is a paste, not a question.
- */
-async function handleContextDumpChunk(
-  ctx: BotContext,
-  telegramId: bigint,
-  text: string,
-): Promise<void> {
-  const current = ctx.session.contextDumpBuffer;
-
-  // Hard cap: if the paste is already at/over the cap, stop accepting new
-  // chunks and auto-flush what we have. Prevents an abusive/looped paste
-  // from growing the session row without bound.
-  if (current.length >= MAX_DUMP_BUFFER_CHARS) {
-    await ctx.reply(
-      "That's more than I can store — let me work with what you've pasted so far.",
-    );
-    cancelContextDumpFlush(ctx.chat?.id);
-    await flushContextDump(ctx, telegramId);
-    return;
-  }
-
-  const separator = current.length > 0 ? "\n" : "";
-  const room = MAX_DUMP_BUFFER_CHARS - current.length - separator.length;
-  const truncated = text.length > room;
-  const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
-  ctx.session.contextDumpBuffer = current + separator + chunk;
-
-  // No "received" ack here — the paste is acknowledged by the analysing
-  // status sequence (profileAnalysisSteps) that plays after the debounce
-  // flush, so an extra "processing…" line would just be chat noise.
-  // Additional text arriving before the flush silently extends the debounce.
-
-  // If this chunk filled the buffer, auto-flush so we don't silently drop
-  // the rest of the user's paste into the void.
-  if (truncated) {
-    await ctx.reply(
-      "That's all I can store — processing what we have now.",
-    );
-    cancelContextDumpFlush(ctx.chat?.id);
-    await flushContextDump(ctx, telegramId);
-    return;
-  }
-
-  scheduleContextDumpFlush(ctx, telegramId);
-}
-
-// ---------------------------------------------------------------------------
-// Context dump flush
-// ---------------------------------------------------------------------------
-
-interface ContextDumpAccumulator {
-  chatId: number;
-  telegramId: bigint;
-  api: Api;
-  timer: NodeJS.Timeout;
-}
-
-const contextDumpAccumulators = new Map<number, ContextDumpAccumulator>();
-
-function scheduleContextDumpFlush(ctx: BotContext, telegramId: bigint): void {
-  const chatId = ctx.chat?.id;
-  if (!chatId) return;
-
-  cancelContextDumpFlush(chatId);
-  const acc: ContextDumpAccumulator = {
-    chatId,
-    telegramId,
-    api: ctx.api,
-    timer: setTimeout(() => {
-      if (contextDumpAccumulators.get(chatId) !== acc) return;
-      contextDumpAccumulators.delete(chatId);
-      dispatchToChat(chatId, () => flushPersistedContextDump(acc)).catch((err) =>
-        console.error("Context dump auto-flush failed:", err),
-      );
-    }, CONTEXT_DUMP_DEBOUNCE_MS),
-  };
-  contextDumpAccumulators.set(chatId, acc);
-}
-
-function cancelContextDumpFlush(chatId: number | undefined): void {
-  if (!chatId) return;
-  const acc = contextDumpAccumulators.get(chatId);
-  if (!acc) return;
-  clearTimeout(acc.timer);
-  contextDumpAccumulators.delete(chatId);
-}
-
-/**
- * Flush the current update's accumulated contextDumpBuffer as a single turn.
- * Used for the size cap and backward-compatible clicks on old Done buttons.
- */
-async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<void> {
-  const buffer = ctx.session.contextDumpBuffer.trim();
-
-  if (!buffer) {
-    await ctx.reply("Hmm, I don't have anything buffered yet. Paste the AI response first.");
-    return;
-  }
-
-  // Clear buffering mode before the agent call so any re-entry is clean
-  ctx.session.awaitingContextDump = false;
-  ctx.session.contextDumpBuffer = "";
-
-  const result = await withTyping(ctx, () =>
-    runAgentTurn(telegramId, { kind: "context_dump", text: buffer }),
-  );
-
-  if (result.contextDumpStarted) {
-    ctx.session.awaitingContextDump = true;
-    ctx.session.contextDumpBuffer = "";
-    ctx.session.expectingPhoto = false;
-  } else {
-    ctx.session.expectingPhoto = result.expectingPhoto;
-  }
-
-  if (result.onboardingComplete) {
-    ctx.session.onboardingStep = "completed";
-    ctx.session.menuState = "idle";
-    ctx.session.expectingPhoto = false;
-    ctx.session.pendingPhotos = [];
-    ctx.session.pendingProfileMedia = [];
-    ctx.session.pendingPhotoUniqueIds = [];
-    ctx.session.pendingPhotoHashes = [];
-    ctx.session.pendingPhotoScores = [];
-  }
-
-  if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
-    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language), {
-      rich: true,
-    });
-  }
-
-  if (
-    ctx.chat?.id === undefined ||
-    !(await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
-  ) {
-    await sendAgentReply(ctx, result.reply);
-  }
-
-  if (result.onboardingComplete) {
-    // When verification is required (Sumsub configured), send the liveness
-    // CTA instead of the main menu — the user is not yet `active` and
-    // showing the "next match" banner would be misleading. The webhook
-    // flips them to active + pins the banner on GREEN.
-    if (result.verificationRequired) {
-      const sent = await sendVerificationCTA(ctx);
-      if (sent) return;
-      // Fall through to the normal flow if CTA couldn't be sent (misconfig,
-      // Sumsub outage) — better to let the user into the app than to stall.
-    }
-    await showMainMenu(ctx);
-    await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
-  }
-}
-
-/**
- * Auto-flush runs outside the Telegram update lifecycle, so it reloads and
- * persists the Prisma-backed session instead of mutating a stale ctx.session.
- */
-async function flushPersistedContextDump(
-  acc: ContextDumpAccumulator,
-): Promise<void> {
-  const key = acc.chatId.toString();
-
-  try {
-    const row = await prisma.botSession.findUnique({ where: { key } });
-    const session: SessionData = {
-      ...DEFAULT_SESSION,
-      ...((row?.data ?? {}) as Partial<SessionData>),
-    };
-    const buffer = session.contextDumpBuffer.trim();
-    if (!session.awaitingContextDump || !buffer) return;
-
-    session.awaitingContextDump = false;
-    session.contextDumpBuffer = "";
-
-    const result = await runAgentTurn(acc.telegramId, {
-      kind: "context_dump",
-      text: buffer,
-    });
-
-    if (result.contextDumpStarted) {
-      session.awaitingContextDump = true;
-      session.contextDumpBuffer = "";
-      session.expectingPhoto = false;
-    } else {
-      session.expectingPhoto = result.expectingPhoto;
-    }
-
-    if (result.onboardingComplete) {
-      markOnboardingComplete(session);
-    }
-
-    await prisma.botSession.upsert({
-      where: { key },
-      create: { key, data: session as unknown as object },
-      update: { data: session as unknown as object },
-    });
-
-    if (result.contextDumpSaved) {
-      await runStatusSequence(acc.api, acc.chatId, profileAnalysisSteps(session.language), {
-        rich: true,
-      });
-    }
-
-    if (!(await sendVoicePromptAskIfRequested(acc.api, acc.chatId, session, result))) {
-      await replyText(acc.api, acc.chatId, result.reply, session);
-    }
-
-    if (result.onboardingComplete) {
-      const language = session.language;
-      if (result.verificationRequired) {
-        const { sendVerificationCTABare } = await import("./verification.js");
-        const sent = await sendVerificationCTABare(
-          acc.api,
-          acc.chatId,
-          acc.telegramId,
-          language,
-        );
-        if (sent) return;
-      }
-      const { sendMainMenu } = await import("../menu/main.js");
-      await sendMainMenu(acc.api, acc.chatId, language, acc.telegramId);
-      await pinStatusBanner(acc.api, acc.telegramId, language);
-    }
-  } catch (err) {
-    console.error("Context dump auto-flush failed:", err);
-    try {
-      await acc.api.sendMessage(
-        acc.chatId,
-        "I couldn't process that response. Please send it again.",
-      );
-    } catch {
-      // ignore
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -783,29 +403,6 @@ async function sendAgentReply(ctx: BotContext, reply: string): Promise<void> {
   } catch {
     // Strip Markdown markers and send as plain text
     await ctx.reply(reply.replace(/[*_`[\]]/g, ""), panel);
-  }
-}
-
-/** Escape HTML special characters for Telegram HTML parse mode */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function contextDumpPhotoNudge(language: string): string {
-  switch (language) {
-    case "ru":
-      return "Сначала скинь ответ из AI-чата на промпт выше. Фото будут следующим шагом.";
-    case "uk":
-      return "Спочатку надішли відповідь з AI-чату на промпт вище. Фото будуть наступним кроком.";
-    case "de":
-      return "Schick zuerst die Antwort aus dem AI-Chat zum Prompt oben. Fotos kommen danach.";
-    case "pl":
-      return "Najpierw wyślij odpowiedź z czatu AI na prompt powyżej. Zdjęcia będą następnym krokiem.";
-    default:
-      return "Send the AI-chat response to the prompt above first. Photos come after that.";
   }
 }
 

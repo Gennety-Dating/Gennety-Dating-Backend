@@ -1,5 +1,4 @@
-import type { AiMemoryExportPreference, Language, OnboardingStep } from "@gennety/db";
-import { effectiveAiMemoryPreference } from "../services/ai-memory-export.js";
+import type { Language, OnboardingStep } from "@gennety/db";
 import { hasTrackVerifiedContact } from "../services/contact-verification.js";
 
 interface OnboardingMiniAppGateUser {
@@ -15,7 +14,6 @@ interface OnboardingMiniAppGateUser {
   email: string | null;
   isEmailVerified: boolean;
   phoneVerifiedAt: Date | null;
-  aiMemoryExportPreference: AiMemoryExportPreference;
 }
 
 export function shouldUseOnboardingMiniApp(
@@ -25,15 +23,11 @@ export function shouldUseOnboardingMiniApp(
 ): boolean {
   if (!webAppConfigured || user.onboardingStep === "completed") return false;
 
-  // The AI-memory choice only gates the handoff while the feature is on;
-  // with `AI_MEMORY_EXPORT_ENABLED=false` the Mini App never shows that screen,
-  // so requiring it here would bounce every user back into the Mini App.
   const miniAppHandoffReady =
     user.termsAccepted &&
     user.language !== null &&
     hasTrackVerifiedContact(user) &&
-    hasHomeLocation &&
-    effectiveAiMemoryPreference(user.aiMemoryExportPreference) !== "undecided";
+    hasHomeLocation;
 
   return !miniAppHandoffReady;
 }

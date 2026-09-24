@@ -277,14 +277,8 @@ export interface SessionData {
   activeMatchId: string | null;
   /** Selected structured report category while waiting for optional details */
   pendingReportCategory: string | null;
-  /**
-   * True after the Magic Prompt has been sent to the user.
-   * A substantial pasted response is briefly buffered in contextDumpBuffer
-   * before being forwarded to the LLM agent.
-   */
-  awaitingContextDump: boolean;
-  /** Buffered text from the user's LLM context dump paste */
-  contextDumpBuffer: string;
+
+
   /**
    * Count of profile-survey answers given during conversational onboarding.
    * Drives the periodic "thinking" pause shown every few answers before the
@@ -319,7 +313,5 @@ export const DEFAULT_SESSION: SessionData = {
   menuClaimUntil: null,
   activeMatchId: null,
   pendingReportCategory: null,
-  awaitingContextDump: false,
-  contextDumpBuffer: "",
   onboardingAnswerCount: 0,
 };

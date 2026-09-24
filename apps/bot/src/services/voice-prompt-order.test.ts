@@ -28,8 +28,6 @@ const ANSWERED = [
   "partner_preferences",
   "friday_vibe",
   "vibe_focus",
-  "ai_memory",
-  "context_dump",
   "photos",
 ];
 
@@ -79,15 +77,6 @@ describe("voice_prompt in the canonical order", () => {
   });
 
   it("is a PURE function of progress — the feature flag is not read here", async () => {
-    // Worth pinning, because the obvious assumption is the opposite. The
-    // ships-dark masking lives in `progressFromUser`, which marks the field
-    // complete+skipped when the flag is off — exactly where `ai_memory`'s own
-    // mask lives (`effectiveAiMemoryPreference`). `nextOnboardingQuestion`
-    // stays pure and just reads the set it is handed.
-    //
-    // The guarantee itself is proved by the rest of the suite rather than
-    // here: every one of the 82 tests in `onboarding-collector.test.ts` runs
-    // with the flag unset and expects the untouched `photos → complete` order.
     const off = await loadCollector(false);
     expect(off.nextOnboardingQuestion(progress(off, ANSWERED))).toBe("voice_prompt");
 
