@@ -34,6 +34,15 @@ repo). To go live, the text here must be transcribed into the website's
 `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, and a new
 `src/app/cookies/page.tsx`, and linked from the footer.
 
+## Pending draft — Tempo Sync (Apple Health)
+
+[tempo-sync-draft.md](tempo-sync-draft.md) holds the exact text Tempo Sync adds
+to the Privacy Policy (→ v4.2), the ROPA (activity 2.5c) and the DPIA (R11). It
+is **not applied** on purpose: the feature ships behind `TEMPO_SYNC_ENABLED=false`
+and these documents must describe what runs. Applying it (with the
+`LEGAL_DOCS_VERSION` bump) and publishing it is the precondition for switching
+the flag on — the order is written at the top of the draft.
+
 ## ⚠️ Not legal advice
 
 These drafts were written to be **technically accurate** to what the product

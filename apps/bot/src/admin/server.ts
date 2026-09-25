@@ -17,6 +17,7 @@ import {
 } from "../services/storage.js";
 import { audienceRouter } from "./routes/audience.js";
 import { algorithmRouter } from "./routes/algorithm.js";
+import { rhythmOutcomesRouter } from "./routes/rhythm-outcomes.js";
 import { genderRouter } from "./routes/gender.js";
 import { retentionRouter } from "./routes/retention.js";
 import { datesRouter } from "./routes/dates.js";
@@ -178,6 +179,9 @@ app.use(requireApiKey);
 // section-by-section UI loads independent data without one fat handler.
 app.use(audienceRouter);
 app.use(algorithmRouter);
+// Tempo Sync: outcomes by life-rhythm similarity bucket — aggregates only,
+// cells under 20 pairs suppressed; the one analytics read of rhythm.
+app.use(rhythmOutcomesRouter);
 app.use(genderRouter);
 app.use(retentionRouter);
 app.use(datesRouter);
