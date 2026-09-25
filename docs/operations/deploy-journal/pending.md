@@ -11,6 +11,48 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
+Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`. **Миграция + рестарт бота:**
+`20260925090000_tempo_sync_life_rhythm` — чисто аддитивная (таблица `user_rhythm_profiles`,
+колонки `match_score_logs.score_rhythm/rhythm_similarity`, `curated_venues.transit_walk_m/
+pedestrian_nearby/osm_enriched_at`, `matches.after_date_place`), через `db:deploy` ДО рестарта. Mini App
+не пересобирать. **Env — ничего не выставлять:** по умолчанию `TEMPO_SYNC_ENABLED=false`,
+`RHYTHM_MATCH_WEIGHT=0`, `VENUE_TIER2_WEIGHT=0.5`. Решения — журнал решений, 2026-09-24 и 2026-09-25.
+
+**Что изменится на проде сразу:** ничего видимого. Флаг выключен: `/v1/me/rhythm` → 404,
+`features.tempoSync: false`, ни одного чтения таблицы ритма. Скоринг пишет в `match_score_logs`
+`score_rhythm = 1` и `rhythm_similarity = null` (профилей нет). В `/v1/matches/current` появляется
+необязательное `afterDatePlace` — всегда `null`, пока нет профилей. Новый админ-маршрут
+`/admin/analytics/rhythm-outcomes` (агрегаты, пока все ячейки `<20`). Ночной ретеншен получает
+строку `rhythmProfiles=0`. Rematch теперь видит `relationshipIntents` ищущего — при `INTENT_FLOOR=1`
+на проде без эффекта.
+
+**Проверка после выката:**
+
+```
+curl -s https://dating-api.gennety.com/v1/app/config | jq '.features.tempoSync'        # → false
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $JWT" \
+  https://dating-api.gennety.com/v1/me/rhythm                                            # → 404
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/matches/current \
+  | jq '.match.afterDatePlace // "null"'                                                 # → "null"
+curl -s -H "Authorization: Bearer $ADMIN_API_KEY" https://dating-api.gennety.com/admin/analytics/rhythm-outcomes \
+  | jq '.outcomes'                                                                       # → 4 корзины, pairs "<20"
+psql "$DATABASE_URL" -c "select count(*) from user_rhythm_profiles;"                     # → 0
+```
+
+**Включение — НЕ часть этого выката** (порядок в `legal/tempo-sync-draft.md`): политика v4.2 +
+`LEGAL_DOCS_VERSION` → App Privacy (Health & Fitness → Fitness) → `tsx
+scripts/enrich-venues-osm.mjs --city=ua:kyiv --prod --apply` → `TEMPO_SYNC_ENABLED=true` → и только
+после публикации политики `RHYTHM_MATCH_WEIGHT=0.05`.
+**Откат:** `git revert` четырёх коммитов + рестарт; миграция остаётся (старый код новые колонки не
+читает). Если флаг уже включали — `TEMPO_SYNC_ENABLED=false` гасит и сбор, и чтение без релиза.
+**Влияние на iOS:** новые `GET/PUT/DELETE /v1/me/rhythm`, `features.tempoSync`, необязательное
+`afterDatePlace` в `SerializedMatch` — клиент перегенерировать. Старые сборки не затронуты; новая
+сборка на старом сервере видит `tempoSync` отсутствующим → false и ничего не показывает.
+**Demo-mode:** своего поведения нет; демо-драйвер пишет нейтральный `breakdown` (`rhythm: 1`).
+
+---
+
 **PENDING — лист места на доске смены места: `profile` у карточек и у `original` (2026-09-22).**
 Коммит `009461b9`. **Только код бота:** без миграций, без env, без зависимостей; Mini App не
 пересобирать (поле он не читает). Каждая карточка `GET /v1/venue-change/catalog` и

@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-25 | 09-25 — Tempo Sync (Apple Health) (`07323761`…`517b10e8`): `/v1/me/rhythm`, V_rhythm с весом 0 + лог сходства, Tier 2 мест в полосе 5 %, пост-сценарий, `/admin/analytics/rhythm-outcomes`; **миграция** `20260925090000_tempo_sync_life_rhythm` (`db:deploy` до рестарта); флаги по умолчанию выключены — без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — лист места на доске смены места (`009461b9`): `profile` = `ShowcaseVenue` гида у каждой карточки `/v1/venue-change/catalog` и у `original` в `/state`, `null` без строки каталога; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — Live Activity смены места на iOS (`e7bb0906`, `633ee715`, `9b1cb060`): тип `venue_change`, карточка по фазам match > partner > waiting с каждой стороны; **миграция** `20260922180000_venue_change_activity` (`db:deploy` до рестарта), без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — медиана времени ответа в дашборде здоровья (`07d424fa`): `user_id = ANY(…::uuid[])` вместо `IN (text…)`, с 09-07 была пуста у всех; только рестарт бота, без миграций и env | [pending](./pending.md) |
