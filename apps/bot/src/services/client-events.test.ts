@@ -171,6 +171,7 @@ describe("ingestClientEvents — что отбрасывается, не рон�
       ticket_gate_shown: { surface: "match_ticket_gate" },
       ticket_gate_dismissed: { surface: "tickets_tab" },
       fatal_client_error: { domain: "store_kit" },
+      tempo_sync: { step: "row_tapped" },
     };
     // Перечень закрыт с обеих сторон: новый тип на клиенте без записи здесь
     // будет молча отброшен, поэтому список проверяется целиком.

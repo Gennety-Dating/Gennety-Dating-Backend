@@ -2886,6 +2886,7 @@ paths:
                           - ticket_gate_shown
                           - ticket_gate_dismissed
                           - fatal_client_error
+                          - tempo_sync
                       at:
                         type: string
                         format: date-time

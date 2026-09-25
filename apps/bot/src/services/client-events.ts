@@ -33,6 +33,11 @@ export const CLIENT_EVENT_TYPES = [
   "ticket_gate_shown",
   "ticket_gate_dismissed",
   "fatal_client_error",
+  // Tempo Sync funnel (decision journal 2026-09-25): which step of connecting
+  // Apple Health a person reached — `row_shown`, `row_tapped`,
+  // `sheet_continued`, `uploaded`, `insufficient`, `disconnected`. The funnel
+  // only: never an activity level, a chronotype or a step count.
+  "tempo_sync",
 ] as const;
 
 export type ClientEventType = (typeof CLIENT_EVENT_TYPES)[number];
@@ -53,6 +58,7 @@ const PROP_KEY: Record<ClientEventType, string> = {
   ticket_gate_shown: "surface",
   ticket_gate_dismissed: "surface",
   fatal_client_error: "domain",
+  tempo_sync: "step",
 };
 
 /**
