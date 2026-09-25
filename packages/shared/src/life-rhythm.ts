@@ -148,7 +148,10 @@ export function parseRhythmUpload(body: unknown): RhythmUploadParse {
   if (!oneOf(RHYTHM_ACTIVITY_LEVELS, fields.activity)) {
     return { ok: false, error: `activity must be one of ${RHYTHM_ACTIVITY_LEVELS.join(", ")}` };
   }
-  if (fields.chronotype !== null && !oneOf(RHYTHM_CHRONOTYPES, fields.chronotype)) {
+  // Absent means null: the iOS client's generated `Encodable` omits a nil
+  // optional rather than writing `null`, and both say "could not be placed".
+  const chronotype = fields.chronotype === undefined ? null : fields.chronotype;
+  if (chronotype !== null && !oneOf(RHYTHM_CHRONOTYPES, chronotype)) {
     return {
       ok: false,
       error: `chronotype must be null or one of ${RHYTHM_CHRONOTYPES.join(", ")}`,
@@ -167,7 +170,7 @@ export function parseRhythmUpload(body: unknown): RhythmUploadParse {
       windowDays: RHYTHM_WINDOW_DAYS,
       coverageDays: coverage,
       activity: fields.activity,
-      chronotype: (fields.chronotype as RhythmChronotype | null) ?? null,
+      chronotype: chronotype as RhythmChronotype | null,
       source: fields.source,
       consentVersion: fields.consentVersion,
     },

@@ -52,6 +52,12 @@ describe("parseRhythmUpload", () => {
     expect(parsed.ok && parsed.value.chronotype).toBeNull();
   });
 
+  it("reads an absent chronotype as null — Swift's synthesized Encodable omits nil", () => {
+    const { chronotype: _omitted, ...withoutChronotype } = validBody;
+    const parsed = parseRhythmUpload(withoutChronotype);
+    expect(parsed).toEqual({ ok: true, value: { ...validBody, chronotype: null } });
+  });
+
   it("refuses an unknown field instead of dropping it — raw numbers must fail loudly", () => {
     const parsed = parseRhythmUpload({ ...validBody, medianSteps: 11_234 });
     expect(parsed).toEqual({ ok: false, error: "unknown field: medianSteps" });
@@ -74,7 +80,6 @@ describe("parseRhythmUpload", () => {
     expect(parseRhythmUpload({ ...validBody, chronotype: "night" }).ok).toBe(false);
     expect(parseRhythmUpload({ ...validBody, source: "coremotion" }).ok).toBe(false);
     expect(parseRhythmUpload({ ...validBody, consentVersion: "2099-01-01" }).ok).toBe(false);
-    expect(parseRhythmUpload({ ...validBody, chronotype: undefined }).ok).toBe(false);
   });
 
   it("refuses non-objects", () => {

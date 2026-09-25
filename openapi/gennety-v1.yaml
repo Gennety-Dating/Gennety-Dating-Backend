@@ -5150,7 +5150,7 @@ components:
     RhythmUpload:
       type: object
       additionalProperties: false
-      required: [algoVersion, windowDays, coverageDays, activity, chronotype, source, consentVersion]
+      required: [algoVersion, windowDays, coverageDays, activity, source, consentVersion]
       properties:
         algoVersion: { type: integer, const: 1 }
         windowDays: { type: integer, const: 28 }
@@ -5163,8 +5163,8 @@ components:
         chronotype:
           type: [string, "null"]
           description: >-
-            `early` | `intermediate` | `late`, or null when fewer than six days
-            could place a midpoint. The midpoint of the day's movement (10 %–90 %
+            `early` | `intermediate` | `late`, or null (or absent) when fewer than
+            six days could place a midpoint. The midpoint of the day's movement (10 %–90 %
             of cumulative steps), median over weekend days when there are ≥ 4,
             else all days: early < 13:30, intermediate 13:30–15:59, late ≥ 16:00.
         source: { type: string, enum: [healthkit] }
