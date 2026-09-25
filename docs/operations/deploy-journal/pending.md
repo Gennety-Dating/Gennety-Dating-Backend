@@ -13,7 +13,8 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 **PENDING — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
 Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`, `39062ca0` (тип клиентского события
-`tempo_sync` — воронка подключения). **Миграция + рестарт бота:**
+`tempo_sync` — воронка подключения), `0fcd7d15` (отсутствующий `chronotype` = `null`: iOS-клиент
+опускает nil-поле). **Миграция + рестарт бота:**
 `20260925090000_tempo_sync_life_rhythm` — чисто аддитивная (таблица `user_rhythm_profiles`,
 колонки `match_score_logs.score_rhythm/rhythm_similarity`, `curated_venues.transit_walk_m/
 pedestrian_nearby/osm_enriched_at`, `matches.after_date_place`), через `db:deploy` ДО рестарта. Mini App
