@@ -28,6 +28,7 @@ import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
 import { scratchMapRouter } from "./routes/scratch-map.js";
 import { frequentPlacesRouter } from "./routes/frequent-places.js";
+import { rhythmRouter } from "./routes/rhythm.js";
 import { venuesRouter } from "./routes/venues.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
@@ -606,6 +607,9 @@ app.use("/v1/integrations/spotify", (req, res, next) => {
 app.use("/v1/me/verification", verificationRouter);
 // Live Activity token registration (same more-specific-prefix rule).
 app.use("/v1/me/live-activity-token", liveActivityRouter);
+// Tempo Sync — the Apple Health life rhythm (decision journal 2026-09-24).
+// Mounted ahead of the catch-all `/v1/me` routers; 404s while the flag is off.
+app.use("/v1/me/rhythm", rhythmRouter);
 // Blocked-users list (6.8). Same more-specific-prefix rule as the mounts above.
 app.use("/v1/me/blocks", createUserBlocksRouter());
 // Wallet movements for the native Tickets tab (TH1). Same rule again.

@@ -72,6 +72,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // sheet offers Premium only, exactly as before the pass existed; the
       // report route answers 404 anyway.
       primeTimePass,
+      // Tempo Sync (Apple Health life rhythm). False → the iOS client shows no
+      // "Connect Apple Health" row and no "Твой темп" card, and never asks
+      // HealthKit for anything; `/v1/me/rhythm` 404s either way.
+      tempoSync: env.TEMPO_SYNC_ENABLED,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides

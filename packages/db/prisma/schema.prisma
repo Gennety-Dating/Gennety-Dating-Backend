@@ -435,6 +435,7 @@ model User {
   scratchMap                UserScratchMap?
   placeVisits               UserPlaceVisit[]
   hiddenPlaces              UserHiddenPlace[]
+  rhythmProfile             UserRhythmProfile?
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
@@ -1615,6 +1616,43 @@ model UserPlaceVisit {
   @@map("user_place_visits")
 }
 
+/// Life rhythm — "Tempo Sync" (decision journal 2026-09-24, variant B). Two
+/// coarse tags an iOS client derived ON THE DEVICE from 28 days of Apple Health
+/// step history; no raw number ever reaches the server (`@gennety/shared`
+/// `life-rhythm.ts` refuses unknown fields).
+///
+/// Health-derived, i.e. GDPR Art. 9 special-category data. Read ONLY by the
+/// files allow-listed in `apps/bot/src/services/rhythm/boundary.test.ts`: never
+/// a prompt, never the partner, never an admin per-user read, never a founder
+/// DM. One row per person, replaced on every sync; `DELETE /v1/me/rhythm`
+/// removes it, account deletion cascades, and the retention sweep removes a
+/// row not synced for `RHYTHM_STALE_AFTER_DAYS` (readers treat it as absent
+/// from that moment anyway).
+model UserRhythmProfile {
+  userId         String   @id @map("user_id") @db.Uuid
+  /// calm | moderate | active
+  activity       String
+  /// early | intermediate | late — null when the device could not place it.
+  chronotype     String?
+  coverageDays   Int      @map("coverage_days")
+  algoVersion    Int      @map("algo_version")
+  /// healthkit
+  source         String
+  /// Version of the consent sheet the person accepted, and when it was FIRST
+  /// accepted (a re-sync keeps it; a new version re-stamps it).
+  consentVersion String   @map("consent_version")
+  consentedAt    DateTime @map("consented_at")
+  /// Server receive time of the last sync — the device clock is never trusted.
+  syncedAt       DateTime @map("synced_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The retention sweep reads oldest-first across everyone.
+  @@index([syncedAt])
+  @@map("user_rhythm_profiles")
+}
+
 /// A place its owner took off their frequently-visited block. Hiding stops the
 /// SHOWING, not the counting: un-hiding brings the place back at the rank it
 /// earned, the same "a toggle never silently deletes" rule the Scratch Map
@@ -1801,6 +1839,13 @@ model Match {
   /// search response; curated venues have theirs resolved from their stored
   /// `placeId` at assignment (`fetchPlacePhotoName`). Null until `scheduled`.
   venuePhotoName            String?   @map("venue_photo_name")
+  /// The "if you want to keep going" place next to the date venue (Tempo Sync
+  /// Tier 2 post-date scenario, decision journal 2026-09-24): `{ placeId, name,
+  /// lat, lng, walkMinutes }` of a curated park or café that is open when the
+  /// date ends. Chosen at venue lock ONLY when at least one side has a life
+  /// rhythm on file, and stored WITHOUT the reason — the row must not say which
+  /// rhythm led to it, because the partner sees the place. Null otherwise.
+  afterDatePlace            Json?     @map("after_date_place")
   /// Telegram photo `file_id` of the rendered date-card PNG, captured per side
   /// the first time the `scheduled` confirmation card is sent
   /// (`DATE_CARD_FEATURE_ENABLED`). Lets the "My date" menu hub re-open the card
@@ -2343,6 +2388,15 @@ model MatchScoreLog {
   /// rows logged before it existed, and every row while `INTENT_FLOOR` is 1.0,
   /// read as neutral.
   scoreIntent       Float    @default(1) @map("score_intent")
+  /// Life-rhythm multiplier in [1-w..1+w] (Tempo Sync, `@gennety/shared`
+  /// `life-rhythm.ts`), CENTRED on 1. Defaults to 1 so rows logged before it
+  /// existed, and every row while `RHYTHM_MATCH_WEIGHT` is 0, read as neutral.
+  scoreRhythm       Float    @default(1) @map("score_rhythm")
+  /// Raw rhythm similarity in [0..1] of the pair, written even at weight 0 —
+  /// this is the shadow log the weight decision is made from. Null when either
+  /// side had no fresh profile. A PAIR number only: never a person's tags.
+  /// Special-category-derived: read only where `rhythm/boundary.test.ts` allows.
+  rhythmSimilarity  Float?   @map("rhythm_similarity")
   /// Final composite (after weights + starvation bonus).
   scoreTotal        Float    @map("score_total")
   /// Pairwise embedding L2 distance, kept for debugging / re-ranking.
@@ -2987,6 +3041,14 @@ model CuratedVenue {
   /// row the fallback derives one (the most central eligible cafe), so this is
   /// a pin, not a precondition.
   isHubFallback    Boolean   @default(false) @map("is_hub_fallback")
+  /// Walking metres from the nearest metro / rail entrance, from OpenStreetMap
+  /// (`scripts/enrich-venues-osm.mjs`). Read by venue Tier 2 only. Null until
+  /// enriched — Tier 2 treats null as "no signal", never as "far".
+  transitWalkM     Int?      @map("transit_walk_m")
+  /// A pedestrian street, park or embankment within ~250 m (OSM). Null until
+  /// enriched.
+  pedestrianNearby Boolean?  @map("pedestrian_nearby")
+  osmEnrichedAt    DateTime? @map("osm_enriched_at")
   /// Set when the row was last confirmed live against Places (by the seeder
   /// import, or the re-validation cron). Oldest-first is the cron's scan order.
   lastVerifiedAt   DateTime? @map("last_verified_at")

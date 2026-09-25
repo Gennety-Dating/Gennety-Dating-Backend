@@ -884,6 +884,83 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/me/rhythm:
+    get:
+      tags: [me]
+      operationId: getOwnRhythm
+      summary: The owner's own life rhythm (Tempo Sync) for the "Твой темп" card
+      description: |
+        Tempo Sync (decision journal 2026-09-24, variant B). Returns the two
+        coarse tags the iOS client last derived from Apple Health, with the
+        coverage and dates — or `profile: null` when there is none, or it has
+        not been refreshed for 35 days (treated as absent everywhere).
+
+        The whole path answers 404 while `features.tempoSync` is false.
+      responses:
+        "200":
+          description: The owner's profile, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile:
+                    description: Null (or absent) when there is no fresh profile.
+                    $ref: "#/components/schemas/OwnRhythm"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    put:
+      tags: [me]
+      operationId: putOwnRhythm
+      summary: Replace the life rhythm with a fresh on-device reduction
+      description: |
+        The body is the ENTIRE contract between the phone and the server:
+        two tags and how many days of step data they rest on. Everything is
+        computed on the device from 28 days of Apple Health steps; no raw
+        number ever leaves it. Strict — an unknown field, a string where a
+        number belongs, coverage under 10 days or an unknown consent version is
+        a 400, never silently dropped.
+
+        Send only when the device found at least 10 days with data. Below that
+        send nothing: the person stays on the base algorithm, exactly like
+        someone who declined Health access (iOS does not say which it was).
+
+        The first successful PUT under a consent version records the consent
+        time; re-syncs keep it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RhythmUpload" }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, profile]
+                properties:
+                  ok: { type: boolean, const: true }
+                  profile: { $ref: "#/components/schemas/OwnRhythm" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    delete:
+      tags: [me]
+      operationId: deleteOwnRhythm
+      summary: Forget the life rhythm now ("Отключить")
+      description: >-
+        Idempotent: 204 whether or not a profile existed. The client should also
+        stop syncing; revoking Health access itself happens in iOS Settings.
+      responses:
+        "204": { description: Forgotten }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/me/live-activity-token:
     post:
       tags: [me]
@@ -5063,6 +5140,48 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    RhythmActivity:
+      type: string
+      enum: [calm, moderate, active]
+      description: >-
+        Median daily steps over the covered days: calm < 5 000, moderate
+        5 000–9 999, active ≥ 10 000 (wheelchair pushes count as steps).
+    RhythmUpload:
+      type: object
+      additionalProperties: false
+      required: [algoVersion, windowDays, coverageDays, activity, chronotype, source, consentVersion]
+      properties:
+        algoVersion: { type: integer, const: 1 }
+        windowDays: { type: integer, const: 28 }
+        coverageDays:
+          type: integer
+          minimum: 10
+          maximum: 28
+          description: Days in the window that carried step data.
+        activity: { $ref: "#/components/schemas/RhythmActivity" }
+        chronotype:
+          type: [string, "null"]
+          description: >-
+            `early` | `intermediate` | `late`, or null when fewer than six days
+            could place a midpoint. The midpoint of the day's movement (10 %–90 %
+            of cumulative steps), median over weekend days when there are ≥ 4,
+            else all days: early < 13:30, intermediate 13:30–15:59, late ≥ 16:00.
+        source: { type: string, enum: [healthkit] }
+        consentVersion:
+          type: string
+          enum: ["2026-09-25"]
+          description: The consent sheet version the person accepted.
+    OwnRhythm:
+      type: object
+      required: [activity, chronotype, coverageDays, syncedAt, consentedAt]
+      properties:
+        activity: { $ref: "#/components/schemas/RhythmActivity" }
+        chronotype:
+          type: [string, "null"]
+          description: "`early` | `intermediate` | `late`, or null."
+        coverageDays: { type: integer }
+        syncedAt: { type: string, format: date-time }
+        consentedAt: { type: string, format: date-time }
     Ok:
       type: object
       required: [ok]
@@ -6023,6 +6142,13 @@ components:
                 (`POST /v1/prime-time/appstore/transaction`). False → the
                 locked-slot sheet offers Premium only; the report route answers
                 404. Absent on an older server — treat as false.
+            tempoSync:
+              type: boolean
+              description: >-
+                Tempo Sync (Apple Health life rhythm). False → show no "Connect
+                Apple Health" row and no "Твой темп" card, and never ask
+                HealthKit for anything; `/v1/me/rhythm` answers 404. Absent on an
+                older server — treat as false.
         venueChangeProduct:
           type: [string, "null"]
           description: >-

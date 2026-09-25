@@ -65,6 +65,13 @@ describe("GET /v1/app/config", () => {
     expect(res.body.primeTimeProduct).toBeNull();
   });
 
+  // Tempo Sync must stay invisible until the policy that discloses Health data
+  // is published: off by default means the iOS row never renders.
+  it("reports Tempo Sync off by default", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.features.tempoSync).toBe(false);
+  });
+
   it("serves the pass product only once the whole rail is live", async () => {
     const mutable = env as unknown as Record<string, unknown>;
     const saved = { ...mutable };

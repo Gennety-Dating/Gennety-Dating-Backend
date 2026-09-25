@@ -699,6 +699,21 @@ export const env = {
   /// outage must not be able to withhold a venue. Off → multiplier is a
   /// constant 1.0 and no forecast is ever requested.
   VENUE_SEASON_WEATHER_ENABLED: process.env.VENUE_SEASON_WEATHER_ENABLED === "true",
+  /// Tempo Sync — the Apple Health life rhythm (decision journal 2026-09-24).
+  /// Default OFF, and it must stay off until the new privacy policy covering
+  /// Health data is PUBLISHED: collecting it at all is a disclosure the current
+  /// policy does not make. Off → `/v1/me/rhythm` 404s, `/v1/app/config`
+  /// reports `tempoSync: false` (the iOS row never shows), and nothing reads
+  /// stored rows. Flippable with `pm2 restart --update-env`.
+  TEMPO_SYNC_ENABLED: process.env.TEMPO_SYNC_ENABLED === "true",
+  /// Strength of venue Tier 2 inside the 5 % sampling band: a venue's draw
+  /// weight is multiplied by `1 ± w` by how well it suits the pair's lead
+  /// rhythm. 0 disables Tier 2; clamped to [0, 0.9] so a weight stays positive.
+  /// It can never move a venue into or out of the band.
+  VENUE_TIER2_WEIGHT: Math.min(
+    0.9,
+    Math.max(0, Number(process.env.VENUE_TIER2_WEIGHT ?? "0.5") || 0),
+  ),
   /// Upper bound on how long a venue selection may wait for the forecast. The
   /// run continues weather-blind past it rather than making the pair wait.
   VENUE_WEATHER_TIMEOUT_MS: Math.max(

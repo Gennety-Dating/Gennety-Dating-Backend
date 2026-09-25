@@ -478,6 +478,18 @@ export const musicSearchLimiter = make({
   message: { error: "Too many searches, slow down for a bit." },
 });
 
+/**
+ * Life rhythm (Tempo Sync) — 60/hour per user. The client syncs at most once a
+ * day and reads its own card when Settings opens; anything near this ceiling is
+ * a loop, not a person.
+ */
+export const rhythmLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => `rhythm:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many requests, try again later." },
+});
+
 /** Spotify top-tracks import start — 10/hour per user; each is a trip to Spotify. */
 export const spotifyImportLimiter = make({
   windowMs: 3_600_000,
