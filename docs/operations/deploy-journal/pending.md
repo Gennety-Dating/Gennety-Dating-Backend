@@ -12,7 +12,8 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 # Gennety Dating Deploy
 
 **PENDING — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
-Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`. **Миграция + рестарт бота:**
+Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`, `39062ca0` (тип клиентского события
+`tempo_sync` — воронка подключения). **Миграция + рестарт бота:**
 `20260925090000_tempo_sync_life_rhythm` — чисто аддитивная (таблица `user_rhythm_profiles`,
 колонки `match_score_logs.score_rhythm/rhythm_similarity`, `curated_venues.transit_walk_m/
 pedestrian_nearby/osm_enriched_at`, `matches.after_date_place`), через `db:deploy` ДО рестарта. Mini App
@@ -24,7 +25,7 @@ pedestrian_nearby/osm_enriched_at`, `matches.after_date_place`), через `db:
 `score_rhythm = 1` и `rhythm_similarity = null` (профилей нет). В `/v1/matches/current` появляется
 необязательное `afterDatePlace` — всегда `null`, пока нет профилей. Новый админ-маршрут
 `/admin/analytics/rhythm-outcomes` (агрегаты, пока все ячейки `<20`). Ночной ретеншен получает
-строку `rhythmProfiles=0`. Rematch теперь видит `relationshipIntents` ищущего — при `INTENT_FLOOR=1`
+строку `rhythmProfiles=0`. `POST /v1/client/events` принимает тип `tempo_sync` (props: `step`). Rematch теперь видит `relationshipIntents` ищущего — при `INTENT_FLOOR=1`
 на проде без эффекта.
 
 **Проверка после выката:**
