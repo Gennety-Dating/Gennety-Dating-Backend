@@ -141,3 +141,17 @@ export async function loadRhythmTags(
   }
   return tags;
 }
+
+/**
+ * Data minimisation: a profile nobody refreshed for `RHYTHM_STALE_AFTER_DAYS`
+ * is already invisible to every reader, so keeping it serves no purpose — the
+ * nightly retention sweep deletes it. One row per person at most, on an
+ * indexed column, so a single statement is enough. Runs regardless of the
+ * feature flag: switching Tempo Sync off must not freeze health data in place.
+ */
+export async function deleteStaleRhythms(now: Date = new Date()): Promise<number> {
+  const result = await prisma.userRhythmProfile.deleteMany({
+    where: { syncedAt: { lt: rhythmFreshCutoff(now) } },
+  });
+  return result.count;
+}

@@ -55,6 +55,7 @@ import {
 import { ticketGateFor } from "./ticket-gate-state.js";
 import { recordRejectionFeedback } from "../services/rejection-feedback.js";
 import { partnerFrequentPlaces, type PartnerPlace } from "../services/frequent-places.js";
+import { afterDatePlaceView, type AfterDatePlaceView } from "../services/venue-after-date.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -109,6 +110,14 @@ export interface SerializedMatch {
   venueLng: number | null;
   venueGoogleMapsUri: string | null;
   venueSelectionReason: string | null;
+  /**
+   * "If you feel like keeping going" — a park or café a few minutes' walk from
+   * the venue, open when the date ends (Tempo Sync post-date scenario). Null
+   * for almost every pair: it exists only when one of the two has a life
+   * rhythm on file. Deliberately carries no reason — both sides see it, and
+   * why it was picked is the one thing neither may learn.
+   */
+  afterDatePlace: AfterDatePlaceView | null;
   myVenueIntentStatus: "none" | "draft" | "confirmed";
   partnerVenueIntentSubmitted: boolean;
   venueIntentMode: "off" | "shadow" | "live";
@@ -346,6 +355,8 @@ export async function getCurrentMatchForUser(
       venueLng: true,
       venueGoogleMapsUri: true,
       venueSelectionReason: true,
+      venuePlaceId: true,
+      afterDatePlace: true,
       venueIntentA: true,
       venueIntentB: true,
       parsedCategoryA: true,
@@ -484,6 +495,7 @@ export async function getCurrentMatchForUser(
     venueLng: match.venueLng,
     venueGoogleMapsUri: match.venueGoogleMapsUri,
     venueSelectionReason: match.venueSelectionReason,
+    afterDatePlace: afterDatePlaceView(match.afterDatePlace, match.venuePlaceId),
     myVenueIntentStatus,
     partnerVenueIntentSubmitted: partnerVenueIntent?.state === "confirmed",
     venueIntentMode: venueIntentMode(match.id),

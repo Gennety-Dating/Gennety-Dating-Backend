@@ -4,6 +4,7 @@ import {
   INBOX_RETENTION_DAYS,
   SAFETY_TOMBSTONE_RETENTION_MONTHS,
 } from "@gennety/shared";
+import { deleteStaleRhythms } from "../services/rhythm/store.js";
 
 /**
  * Data-retention sweep (audit DATA-1).
@@ -185,6 +186,8 @@ export interface RetentionSweepResult {
   clientEvents: number;
   eventFeedback: number;
   placeVisits: number;
+  /** Life-rhythm profiles not synced for 35 days (Tempo Sync). */
+  rhythmProfiles: number;
   inboxItems: number;
   orphanBotSessions: number;
   safetyTombstones: number;
@@ -357,6 +360,11 @@ export async function retentionTick(
   // anything on it stays relevant — a proposal expires in a day, a party is
   // over in a week — and the chip in a chat transcript keeps its own title
   // snapshot, so sweeping the row never blanks a conversation.
+  // Tempo Sync life rhythm: invisible to every reader after 35 days without a
+  // sync, so it is deleted too — health-derived data kept for nothing is the
+  // worst kind to keep (decision journal 2026-09-24).
+  const rhythmProfiles = await deleteStaleRhythms(now);
+
   const inboxCutoff = new Date(now.getTime() - INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const inboxItems = await deleteOldest(
     "inbox_items",
@@ -456,6 +464,7 @@ export async function retentionTick(
     clientEvents +
     eventFeedback +
     placeVisits +
+    rhythmProfiles +
     inboxItems +
     orphanBotSessions +
     safetyTombstones +
@@ -466,7 +475,8 @@ export async function retentionTick(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
         `clientEvents=${clientEvents} eventFeedback=${eventFeedback} ` +
-        `placeVisits=${placeVisits} inboxItems=${inboxItems} orphanBotSessions=${orphanBotSessions} ` +
+        `placeVisits=${placeVisits} rhythmProfiles=${rhythmProfiles} inboxItems=${inboxItems} ` +
+        `orphanBotSessions=${orphanBotSessions} ` +
         `safetyTombstones=${safetyTombstones} orphanReports=${orphanReports} orphanBlocks=${orphanBlocks}`,
     );
   }
@@ -479,6 +489,7 @@ export async function retentionTick(
     clientEvents,
     eventFeedback,
     placeVisits,
+    rhythmProfiles,
     inboxItems,
     orphanBotSessions,
     safetyTombstones,

@@ -10,6 +10,7 @@ const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
 const inboxItem = { findMany: vi.fn(), deleteMany: vi.fn() };
 const safetyTombstone = { findMany: vi.fn(), deleteMany: vi.fn() };
+const userRhythmProfile = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -24,6 +25,7 @@ vi.mock("@gennety/db", () => ({
     userPlaceVisit,
     inboxItem,
     safetyTombstone,
+    userRhythmProfile,
     $executeRaw,
   },
 }));
@@ -61,6 +63,9 @@ beforeEach(() => {
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
   $executeRaw.mockReset().mockResolvedValue(0);
+  // One statement, not the batched select-then-delete the tables above use —
+  // so it sits outside ALL_MODELS and its batching assertions.
+  userRhythmProfile.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
@@ -118,6 +123,7 @@ describe("retentionTick", () => {
       clientEvents: 0,
       eventFeedback: 0,
       placeVisits: 0,
+      rhythmProfiles: 0,
       inboxItems: 0,
       orphanBotSessions: 0,
       safetyTombstones: 0,
@@ -278,6 +284,7 @@ describe("retentionTick", () => {
       clientEvents: 0,
       eventFeedback: 0,
       placeVisits: 0,
+      rhythmProfiles: 0,
       inboxItems: 0,
       orphanBotSessions: 0,
       safetyTombstones: 0,
@@ -386,5 +393,15 @@ describe("retentionTick", () => {
       expect(rawSql(1)).not.toMatch(/reported_id IS NOT NULL/);
       expect(rawSql(2)).not.toMatch(/blocked_id IS NOT NULL/);
     });
+  });
+});
+
+describe("retentionTick — Tempo Sync life rhythm", () => {
+  it("deletes profiles not synced for 35 days, by the synced-at cutoff", async () => {
+    userRhythmProfile.deleteMany.mockResolvedValue({ count: 2 });
+    const result = await retentionTick(NOW);
+    expect(result.rhythmProfiles).toBe(2);
+    const where = userRhythmProfile.deleteMany.mock.calls[0]![0].where;
+    expect(where.syncedAt.lt).toEqual(new Date(NOW.getTime() - 35 * 86_400_000));
   });
 });

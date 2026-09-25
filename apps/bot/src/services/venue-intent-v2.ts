@@ -17,6 +17,11 @@ import {
   findMarketByCityKey,
   mapVibeTagsToFacets,
   isConfirmedVenueIntent,
+  pairChoseMovement,
+  pairLeadActivity,
+  venueTier2Fit,
+  venueTier2Multiplier,
+  type RhythmTags,
   normalizeVenueIntent,
   rankVenueCandidates,
   resolveVenueBridge,
@@ -77,6 +82,8 @@ import { deliverScheduledConfirmation } from "./scheduled-confirmation.js";
 import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from "./initial-venue-policy.js";
 import { runStatusSequence } from "./ai-stream.js";
 import { applyVenueDiversity, loadVenueUsage } from "./venue-diversity.js";
+import { loadRhythmTags } from "./rhythm/store.js";
+import { afterDatePlaceWrite, findAfterDatePlace } from "./venue-after-date.js";
 import { venueSearchSteps } from "./analysis-status.js";
 import {
   returnLapsedVenueStageToCalendar,
@@ -864,6 +871,12 @@ interface SelectionRecord {
    * once the venue is actually chosen (one request per scheduled date).
    */
   photoName: string | null;
+  /**
+   * OpenStreetMap facts venue Tier 2 reads (`scripts/enrich-venues-osm.mjs`).
+   * Curated rows carry whatever the enrichment wrote; Places rows carry none,
+   * which Tier 2 reads as "no signal", never as "far".
+   */
+  tier2: { transitWalkM: number | null; pedestrianNearby: boolean | null };
 }
 
 function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueIntentV2): SelectionRecord | null {
@@ -890,6 +903,7 @@ function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueInte
     name: row.name, address: row.address, lat: row.lat, lng: row.lng,
     mapsUri: row.googleMapsUri, source: "places", category: row.category,
     placeId: row.placeId, photoName: row.photos[0] ?? null,
+    tier2: { transitWalkM: null, pedestrianNearby: null },
   };
 }
 
@@ -1173,6 +1187,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       // it. Null only for a row the scan has not reached, which is the one case
       // that still costs the Place Details request below (`!chosen.photoName`).
       placeId: row.placeId, photoName: row.photoRefs?.[0] ?? null,
+      tier2: { transitWalkM: row.transitWalkM, pedestrianNearby: row.pedestrianNearby },
     }];
   });
   // No `.slice()` here on purpose. It used to cut the eligible set to 20 by
@@ -1340,6 +1355,30 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // back to the plain argmax.
   let best = contextRanked[0]?.row;
   let diversityReason = "argmax-unfiltered";
+  // Tempo Sync Tier 2: the pair's lead rhythm (the calmer known side), read
+  // through the one sanctioned reader — nothing at all while the feature is
+  // off. Only ever becomes a draw weight inside the diversity band; it is
+  // never logged, never stored on the match and never reaches the venue blurb.
+  const rhythms = await loadRhythmTags([match.userA.id, match.userB.id]).catch(
+    () => new Map<string, RhythmTags>(),
+  );
+  const rhythmLead = pairLeadActivity(rhythms.get(match.userA.id), rhythms.get(match.userB.id));
+  const movementChosen = pairChoseMovement(a, b);
+  const recordByPlaceId = new Map(deduped.map((row) => [row.rank.placeId, row]));
+  const tier2WeightFor = (candidate: VenueRankCandidate): number => {
+    if (rhythmLead === null || env.VENUE_TIER2_WEIGHT === 0) return 1;
+    const record = recordByPlaceId.get(candidate.placeId);
+    const fit = venueTier2Fit(
+      rhythmLead,
+      {
+        transitWalkM: record?.tier2.transitWalkM ?? null,
+        pedestrianNearby: record?.tier2.pedestrianNearby ?? null,
+        formats: candidate.facets.formats,
+      },
+      movementChosen,
+    );
+    return venueTier2Multiplier(fit, env.VENUE_TIER2_WEIGHT);
+  };
   if (contextRanked.length > 0) {
     try {
       const usage = await loadVenueUsage({
@@ -1356,6 +1395,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
           // adjusted: it gates the vibe floor, and weather has no bearing on
           // whether a venue matches what the pair asked for.
           pairFit: row.score.pairFit,
+          tier2Weight: tier2WeightFor(row.candidate),
           row,
         })),
         usage,
@@ -1391,6 +1431,15 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
    * about what "scheduled" writes or who hears about it.
    */
   const lockVenue = async (record: SelectionRecord, confidence: number, reason: string): Promise<void> => {
+    // The post-date continuation (Tempo Sync Tier 2) — null for a pair with no
+    // lead rhythm, which is nearly everyone; never able to fail the lock.
+    const afterDate = await findAfterDatePlace({
+      lead: rhythmLead,
+      venue: { placeId: record.rank.placeId, lat: record.lat, lng: record.lng },
+      cityKey,
+      agreedTime: match.agreedTime!,
+      openAt: hoursEvidenceAdmits,
+    });
     const committed = await prisma.match.updateMany({
       // The runway is re-asserted in the lock itself: a selection that started
       // just inside it must not schedule a date that ran out during the search.
@@ -1403,6 +1452,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
         venueSource: record.source, venueSelectionVersion: VENUE_SELECTION_VERSION,
         venueSelectionConfidence: confidence, venueSelectionReason: reason,
         venuePhotoName: record.photoName,
+        afterDatePlace: afterDatePlaceWrite(afterDate),
         venueSelectionError: null, venueSelectionNextRetryAt: null,
       },
     });
@@ -1472,6 +1522,8 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       mapsUri: hub.googleMapsUri ?? "", source: "curated",
       category: hub.category as VenueCategory,
       placeId: hub.placeId, photoName: hub.photoRefs[0] ?? null,
+      // No draw happens on this path, so Tier 2 has nothing to weigh.
+      tier2: { transitWalkM: null, pedestrianNearby: null },
     };
     if (!record.photoName) record.photoName = await fetchPlacePhotoName(apiKey, record.placeId);
     console.warn(

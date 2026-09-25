@@ -19,6 +19,9 @@
  *   4. sampling          — only among candidates within `samplingBand` of the
  *      best remaining score, and only when that best clears the vibe floor.
  *      A clear winner is always taken as-is.
+ *   5. Tier 2 (rhythm)   — reweights the draw INSIDE that band and nowhere
+ *      else. What a pair asked for (Tier 1) decides the band; how they live
+ *      only decides between options already within 5 % of each other.
  *
  * Everything here is pure except `loadVenueUsage`, so the policy is testable
  * without a database.
@@ -32,6 +35,14 @@ export interface DiversityCandidate {
   score: number;
   /** Pair fit from the score breakdown — gates the diversity mechanics. */
   pairFit: number;
+  /**
+   * Tempo Sync Tier 2 (decision journal 2026-09-24): a multiplier on this
+   * venue's DRAW weight inside the sampling band, from how well it suits the
+   * pair's life rhythm. Absent = 1. It never touches `score`, so it cannot
+   * move a venue into or out of the band, change which venue is "top", or act
+   * at all when the band holds a single winner.
+   */
+  tier2Weight?: number;
 }
 
 export interface VenueUsage {
@@ -327,11 +338,16 @@ export function applyVenueDiversity<T extends DiversityCandidate>(
   }
 
   // Weight by score inside the band. They are near-ties by construction, so
-  // this stays close to uniform while never preferring the weaker one.
-  const total = band.reduce((sum, row) => sum + row.score, 0);
+  // this stays close to uniform while never preferring the weaker one — until
+  // Tier 2 leans the draw toward the venues that suit the pair's rhythm.
+  const drawWeight = (row: (typeof band)[number]): number => {
+    const tier2 = row.row.tier2Weight;
+    return row.score * (tier2 !== undefined && Number.isFinite(tier2) && tier2 > 0 ? tier2 : 1);
+  };
+  const total = band.reduce((sum, row) => sum + drawWeight(row), 0);
   let ticket = seededUnit(seed) * total;
   for (const row of band) {
-    ticket -= row.score;
+    ticket -= drawWeight(row);
     if (ticket <= 0) {
       return { chosen: row.row, reason: "sampled", pool: rescored.map((r) => r.row) };
     }

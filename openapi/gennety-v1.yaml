@@ -5171,6 +5171,14 @@ components:
           type: string
           enum: ["2026-09-25"]
           description: The consent sheet version the person accepted.
+    AfterDatePlace:
+      type: object
+      required: [name, lat, lng, walkMinutes]
+      properties:
+        name: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        walkMinutes: { type: integer, minimum: 1 }
     OwnRhythm:
       type: object
       required: [activity, chronotype, coverageDays, syncedAt, consentedAt]
@@ -7441,6 +7449,14 @@ components:
         venueLng: { type: [number, "null"] }
         venueGoogleMapsUri: { type: [string, "null"], format: uri }
         venueSelectionReason: { type: [string, "null"] }
+        afterDatePlace:
+          description: >-
+            Tempo Sync post-date scenario: a place a few minutes' walk from the
+            venue, open when the date ends. Null (or absent) for almost every
+            pair — it exists only when one side has a life rhythm on file. Show
+            it with the SAME neutral wording for every place ("if you feel like
+            keeping going…"); never say why it was chosen — the partner sees it too.
+          $ref: "#/components/schemas/AfterDatePlace"
         myVenueIntentStatus: { type: string, enum: [none, draft, confirmed] }
         partnerVenueIntentSubmitted: { type: boolean }
         venueIntentMode: { type: string, enum: [off, shadow, live] }

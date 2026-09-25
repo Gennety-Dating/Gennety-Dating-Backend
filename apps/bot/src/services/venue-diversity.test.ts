@@ -221,3 +221,56 @@ describe("applyVenueDiversity — reputation", () => {
     expect(out.chosen?.id).toBe("better");
   });
 });
+
+describe("applyVenueDiversity — Tempo Sync Tier 2", () => {
+  const withTier2 = (id: string, score: number, tier2Weight: number): DiversityCandidate => ({
+    ...cand(id, score),
+    tier2Weight,
+  });
+  // Every venue has been used, so the exploration bonus is out of the picture.
+  const used = (ids: string[]) => usage({ everUsed: new Set(ids) });
+
+  it("leans the draw toward the venue that suits the rhythm, without making it certain", () => {
+    const ranked = [withTier2("suits", 0.9, 1.5), withTier2("does-not", 0.9, 0.5)];
+    let suits = 0;
+    const runs = 400;
+    for (let i = 0; i < runs; i += 1) {
+      if (applyVenueDiversity(ranked, used(["suits", "does-not"]), `m-${i}`).chosen!.id === "suits") {
+        suits += 1;
+      }
+    }
+    // 1.5 : 0.5 → ~75 %. Diversity survives: the other one still wins sometimes.
+    expect(suits / runs).toBeGreaterThan(0.65);
+    expect(suits / runs).toBeLessThan(0.85);
+  });
+
+  it("can never reach below the band, however well a venue suits the rhythm", () => {
+    // 0.8 is more than 5 % under 0.9: outside the band decided on Tier 1 alone.
+    const ranked = [withTier2("asked-for", 0.9, 0.1), withTier2("rhythm-pick", 0.8, 10)];
+    for (let i = 0; i < 100; i += 1) {
+      const out = applyVenueDiversity(ranked, used(["asked-for", "rhythm-pick"]), `m-${i}`);
+      expect(out.chosen!.id).toBe("asked-for");
+      expect(out.reason).toBe("argmax-single");
+    }
+  });
+
+  it("is the old draw exactly when every weight is neutral", () => {
+    const plain = [cand("a", 0.9), cand("b", 0.89), cand("c", 0.88)];
+    const neutral = plain.map((row) => ({ ...row, tier2Weight: 1 }));
+    for (let i = 0; i < 50; i += 1) {
+      const ids = ["a", "b", "c"];
+      expect(applyVenueDiversity(neutral, used(ids), `m-${i}`).chosen!.id).toBe(
+        applyVenueDiversity(plain, used(ids), `m-${i}`).chosen!.id,
+      );
+    }
+  });
+
+  it("ignores a nonsensical weight rather than letting it zero a venue out", () => {
+    const ranked = [withTier2("a", 0.9, Number.NaN), withTier2("b", 0.9, -3)];
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i += 1) {
+      seen.add(applyVenueDiversity(ranked, used(["a", "b"]), `m-${i}`).chosen!.id);
+    }
+    expect(seen).toEqual(new Set(["a", "b"]));
+  });
+});
