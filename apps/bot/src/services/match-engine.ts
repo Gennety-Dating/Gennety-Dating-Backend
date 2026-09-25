@@ -3,10 +3,14 @@ import {
   CADENCE,
   typePreferenceMultiplier,
   intentMultiplier,
+  rhythmMultiplier,
+  rhythmSimilarity,
   setForGender,
+  RHYTHM_MATCH_WEIGHT_MAX,
   type PreferenceVector,
   type PhotoAttrs,
   type RadarSet,
+  type RhythmTags,
 } from "@gennety/shared";
 
 /** Per-radar-set preference vectors stored on `Profile.typePrefTags`. A hetero
@@ -21,6 +25,7 @@ import { demoPuppetIdsAmong } from "../demo/partners.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
 import { loadBlockedPairKeys } from "./user-block.js";
+import { loadRhythmTags } from "./rhythm/store.js";
 import {
   hasTrackVerifiedContact,
   TRACK_VERIFIED_CONTACT_SQL,
@@ -324,6 +329,29 @@ export const INTENT_FLOOR = Math.min(
   Math.max(0, Number(process.env.INTENT_FLOOR ?? "1")),
 );
 
+// ---------------------------------------------------------------------------
+// Life rhythm (V_rhythm multiplier) — Tempo Sync
+// ---------------------------------------------------------------------------
+
+/**
+ * Half-width of the `V_rhythm` multiplier, `[1 − w, 1 + w]` (decision journal
+ * 2026-09-24: rhythm is a real matching factor). `0` — the default and the
+ * launch value — makes it a pure no-op while `rhythmSimilarity` is still
+ * written to `MatchScoreLog`: the shadow log the weight is decided from.
+ *
+ * Centred, NOT `[floor, 1]` like `V_intent`: a factor that can only damp pairs
+ * where both sides have data would make connecting Apple Health a loss against
+ * everyone who did not. It must stay at 0 until the privacy policy that
+ * discloses Health-based matching is published — the current one promises
+ * the opposite (`legal/privacy-policy.md` §6). The founder's eventual value is
+ * 0.05. Read straight from env like `INTENT_FLOOR`; clamped to
+ * `[0, RHYTHM_MATCH_WEIGHT_MAX]`.
+ */
+export const RHYTHM_MATCH_WEIGHT = Math.min(
+  RHYTHM_MATCH_WEIGHT_MAX,
+  Math.max(0, Number(process.env.RHYTHM_MATCH_WEIGHT ?? "0") || 0),
+);
+
 /**
  * `V_agePref`: how well a candidate's *actual* age satisfies the seeker's
  * stated **preferred-partner age band** (`Profile.ageRangeMin/Max`). Returns a
@@ -422,6 +450,8 @@ export interface RichCandidateRow extends CandidateRow {
    *  a SET, since the answer is multi-select. Empty on legacy rows and any
    *  client without the screen → `V_intent` stays neutral for the pair. */
   relationshipIntents?: string[] | null;
+  /** Fresh life-rhythm tags (Tempo Sync), or null → `V_rhythm` neutral. */
+  rhythm?: RhythmTags | null;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -445,6 +475,8 @@ export interface SeekerProfile {
   /** This seeker's own relationship intents. Scored as agreement against the
    *  candidate's, so the same column serves both directions. */
   relationshipIntents?: string[] | null;
+  /** This seeker's fresh life-rhythm tags, or null → `V_rhythm` neutral. */
+  rhythm?: RhythmTags | null;
 }
 
 /**
@@ -486,6 +518,10 @@ export interface ScoredCandidate {
     intent: number;
     /** Type Radar appearance-preference multiplier (`V_type`), 1 = neutral. */
     type: number;
+    /** Life-rhythm multiplier (`V_rhythm`), 1 = neutral. */
+    rhythm: number;
+    /** Raw rhythm similarity in [0, 1]; null when either side has none. */
+    rhythmSimilarity: number | null;
   };
 }
 
@@ -963,6 +999,7 @@ export function scoreCandidate(
   weights = SCORING_WEIGHTS,
   typeFloor: number = EFFECTIVE_TYPE_FLOOR,
   intentFloor: number = INTENT_FLOOR,
+  rhythmWeight: number = RHYTHM_MATCH_WEIGHT,
 ): ScoredCandidate {
   const vExplicit = explicitScore(candidate.distance);
   const vResearch = researchScore(
@@ -1022,6 +1059,13 @@ export function scoreCandidate(
     intentFloor,
   );
 
+  // V_rhythm: life-rhythm similarity (Tempo Sync). A tie-breaker, centred on
+  // 1: exactly 1.0 unless BOTH sides have a fresh profile and the weight is
+  // above 0. The similarity itself is computed regardless, so the shadow log
+  // has it while the weight is still 0.
+  const simRhythm = rhythmSimilarity(seeker.rhythm, candidate.rhythm);
+  const vRhythm = rhythmMultiplier(simRhythm, rhythmWeight);
+
   const score = composeScore(
     {
       explicit: vExplicit,
@@ -1031,6 +1075,7 @@ export function scoreCandidate(
       agePref: vAgePref,
       type: vType,
       intent: vIntent,
+      rhythm: vRhythm,
     },
     weights,
   );
@@ -1048,6 +1093,8 @@ export function scoreCandidate(
       agePref: vAgePref,
       type: vType,
       intent: vIntent,
+      rhythm: vRhythm,
+      rhythmSimilarity: simRhythm,
     },
   };
 }
@@ -1061,6 +1108,8 @@ export interface ScoreParts {
   agePref: number;
   type: number;
   intent: number;
+  /** Life-rhythm multiplier (`V_rhythm`), 1 = neutral. */
+  rhythm: number;
   /** Only the pair-level composition carries this; per-candidate scoring does not. */
   starvationBonus?: number;
 }
@@ -1082,7 +1131,8 @@ export function composeScore(
     parts.league *
     parts.agePref *
     parts.type *
-    parts.intent;
+    parts.intent *
+    parts.rhythm;
   return positive - weights.penalty * parts.penalty + (parts.starvationBonus ?? 0);
 }
 
@@ -1157,6 +1207,7 @@ export async function findCandidatesFor(
           ageRangeMin: true,
           ageRangeMax: true,
           typePrefTags: true,
+          relationshipIntents: true,
           embeddingDirty: true,
         },
       },
@@ -1228,9 +1279,18 @@ export async function findCandidatesFor(
     ageRangeMax: seeker.profile?.ageRangeMax ?? null,
     typePrefTags:
       (seeker.profile?.typePrefTags as unknown as TypePrefTags | null) ?? null,
+    // Was missing until 2026-09-25, so a Rematch seeker's `V_intent` was always
+    // neutral — the same drift the rhythm below would have repeated.
+    relationshipIntents: seeker.profile?.relationshipIntents ?? [],
   };
 
-  return rankCandidates(seekerProfile, pool, limit);
+  // Life rhythm for the seeker and the whole pool in one indexed read (none at
+  // all while Tempo Sync is off).
+  const rhythms = await loadRhythmTags([seekerUserId, ...pool.map((row) => row.userId)]);
+  seekerProfile.rhythm = rhythms.get(seekerUserId) ?? null;
+  const pooled = pool.map((row) => ({ ...row, rhythm: rhythms.get(row.userId) ?? null }));
+
+  return rankCandidates(seekerProfile, pooled, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -1330,6 +1390,7 @@ export async function createProposedMatch(
     const currentParticipants = await loadEligibleUsersForIds(tx, participantIds, {
       synthetic: "any",
       ignoreLiveMatchesFor: puppetIds,
+      rhythm: false,
     });
     if (currentParticipants.length !== participantIds.length) return null;
     if (expectedAllocationFingerprints) {
@@ -1396,6 +1457,8 @@ export async function createProposedMatch(
           scoreAgePref: breakdown.agePref,
           scoreType: breakdown.type,
           scoreIntent: breakdown.intent,
+          scoreRhythm: breakdown.rhythm,
+          rhythmSimilarity: breakdown.rhythmSimilarity,
           scoreTotal,
           embeddingDistance: breakdown.embeddingDistance,
           starvationBonus: breakdown.starvationBonus,
@@ -1471,6 +1534,11 @@ export interface BatchUser {
    *  both scoring directions, since the factor scores agreement rather than a
    *  preference over the other person. Empty → `V_intent` neutral. */
   relationshipIntents: string[];
+  /** Fresh life-rhythm tags (Tempo Sync), null when none. Deliberately NOT part
+   *  of `allocationFingerprint`: a phone re-syncing between preview and
+   *  allocation would otherwise make the pair refuse itself for the day. The
+   *  preview's snapshot is what ranks the pair and what `MatchScoreLog` keeps. */
+  rhythm: RhythmTags | null;
   /** Immutable snapshot of every eligibility and scoring input used by the
    * batch. Allocation compares it under row locks before writing a match. */
   allocationFingerprint?: string;
@@ -1492,6 +1560,8 @@ export interface ScoredPair {
     agePref: number;
     type: number;
     intent: number;
+    rhythm: number;
+    rhythmSimilarity: number | null;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1560,6 +1630,8 @@ export interface PairScoreResult {
     agePref: number;
     type: number;
     intent: number;
+    rhythm: number;
+    rhythmSimilarity: number | null;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1583,6 +1655,7 @@ export function scorePair(
     ageRangeMax: a.ageRangeMax,
     typePrefTags: a.typePrefTags ?? null,
     relationshipIntents: a.relationshipIntents ?? [],
+    rhythm: a.rhythm ?? null,
   };
 
   const candidateB: RichCandidateRow = {
@@ -1602,6 +1675,7 @@ export function scorePair(
     homeCityKey: b.homeCityKey,
     appearanceTags: b.appearanceTags ?? null,
     relationshipIntents: b.relationshipIntents ?? [],
+    rhythm: b.rhythm ?? null,
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -1620,6 +1694,7 @@ export function scorePair(
     ageRangeMax: b.ageRangeMax,
     typePrefTags: b.typePrefTags ?? null,
     relationshipIntents: b.relationshipIntents ?? [],
+    rhythm: b.rhythm ?? null,
   };
 
   const candidateA: RichCandidateRow = {
@@ -1639,6 +1714,7 @@ export function scorePair(
     homeCityKey: a.homeCityKey,
     appearanceTags: a.appearanceTags ?? null,
     relationshipIntents: a.relationshipIntents ?? [],
+    rhythm: a.rhythm ?? null,
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -1660,6 +1736,9 @@ export function scorePair(
       // the value itself — kept in the same shape as its neighbours.
       intent: (scored.breakdown.intent + scoredReverse.breakdown.intent) / 2,
       type: (scored.breakdown.type + scoredReverse.breakdown.type) / 2,
+      // Symmetric by construction as well (a distance between two profiles).
+      rhythm: (scored.breakdown.rhythm + scoredReverse.breakdown.rhythm) / 2,
+      rhythmSimilarity: scored.breakdown.rhythmSimilarity,
       embeddingDistance,
       starvationBonus: bonus,
     },
@@ -1715,7 +1794,9 @@ type MatchReadClient = Pick<Prisma.TransactionClient, "user" | "$queryRawUnsafe"
  * dirty-embedding refresh changes the semantic signal and must invalidate a
  * plan calculated from the preceding vector.
  */
-function allocationFingerprint(user: Omit<BatchUser, "allocationFingerprint">): string {
+function allocationFingerprint(
+  user: Omit<BatchUser, "allocationFingerprint" | "rhythm">,
+): string {
   return JSON.stringify(user);
 }
 
@@ -1748,6 +1829,12 @@ interface LoadEligibleOptions {
    * so the production query and the guard test pinning it are untouched.
    */
   ignoreLiveMatchesFor?: readonly string[];
+  /**
+   * Read life rhythm (default true). `createProposedMatch`'s locked re-check
+   * passes false: it re-validates eligibility and the fingerprint, neither of
+   * which includes rhythm, and ranking already happened in the preview.
+   */
+  rhythm?: boolean;
 }
 
 /**
@@ -1936,10 +2023,13 @@ async function loadEligibleUsersForIds(
     embeddingMap.set(row.user_id, row.embedding);
   }
 
+  const rhythms =
+    options.rhythm === false ? new Map<string, RhythmTags>() : await loadRhythmTags(ids);
+
   return deduped
     .filter((u) => embeddingMap.get(u.id)) // Must have an embedding
     .map((u) => {
-      const snapshot: Omit<BatchUser, "allocationFingerprint"> = {
+      const snapshot: Omit<BatchUser, "allocationFingerprint" | "rhythm"> = {
         id: u.id,
         age: u.age,
         gender: u.gender,
@@ -1963,7 +2053,11 @@ async function loadEligibleUsersForIds(
           (u.profile?.appearanceTags as unknown as PhotoAttrs | null) ?? null,
         relationshipIntents: u.profile?.relationshipIntents ?? [],
       };
-      return { ...snapshot, allocationFingerprint: allocationFingerprint(snapshot) };
+      return {
+        ...snapshot,
+        rhythm: rhythms.get(u.id) ?? null,
+        allocationFingerprint: allocationFingerprint(snapshot),
+      };
     });
 }
 

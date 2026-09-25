@@ -56,6 +56,7 @@ function user(overrides: Partial<BatchUser> = {}): BatchUser {
     typePrefTags: null,
     appearanceTags: null,
     relationshipIntents: [],
+    rhythm: null,
     ...overrides,
   };
 }

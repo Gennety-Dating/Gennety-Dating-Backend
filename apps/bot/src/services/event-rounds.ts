@@ -49,6 +49,7 @@ import {
   type BatchUser,
   type ScoredPair,
 } from "./match-engine.js";
+import { loadRhythmTags } from "./rhythm/store.js";
 import { parseNumberedLines } from "./date-bump.js";
 import { callOpenAIText } from "./openai.js";
 import { sendPushToUser } from "./push.js";
@@ -342,6 +343,9 @@ export async function loadAttendees(userIds: readonly string[]): Promise<BatchUs
     rows.map((r) => r.id),
   );
   const embeddings = new Map(embeddingRows.map((r) => [r.user_id, r.embedding]));
+  // Life rhythm (Tempo Sync) through the one sanctioned reader — the room is
+  // scored by the same `scorePair` as the drop, so it carries the same inputs.
+  const rhythms = await loadRhythmTags(rows.map((r) => r.id));
 
   const attendees: BatchUser[] = [];
   for (const row of rows) {
@@ -369,6 +373,7 @@ export async function loadAttendees(userIds: readonly string[]): Promise<BatchUs
       appearanceTags:
         (row.profile?.appearanceTags as unknown as BatchUser["appearanceTags"]) ?? null,
       relationshipIntents: row.profile?.relationshipIntents ?? [],
+      rhythm: rhythms.get(row.id) ?? null,
     });
   }
   return attendees;

@@ -1043,6 +1043,8 @@ async function startDemoMatch(
     agePref: 1,
     type: 1,
     intent: 1,
+    rhythm: 1,
+    rhythmSimilarity: null,
     embeddingDistance: 0.24,
     starvationBonus: 0,
   });

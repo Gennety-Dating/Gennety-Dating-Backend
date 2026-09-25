@@ -45,6 +45,7 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     typePrefTags: null,
     appearanceTags: null,
     relationshipIntents: [],
+    rhythm: null,
     ...overrides,
   };
 }
@@ -812,6 +813,7 @@ describe("composeScore", () => {
     agePref: 0.95,
     type: 0.9,
     intent: 0.85,
+    rhythm: 0.97,
   };
 
   it("is the exact expression scoreCandidate ranks on", () => {
@@ -856,7 +858,7 @@ describe("composeScore", () => {
 
   it("counts every multiplier, so dropping one changes the total", () => {
     const full = composeScore(parts);
-    for (const factor of ["league", "agePref", "type", "intent"] as const) {
+    for (const factor of ["league", "agePref", "type", "intent", "rhythm"] as const) {
       expect(composeScore({ ...parts, [factor]: 1 })).toBeGreaterThan(full);
     }
     expect(composeScore({ ...parts, penalty: 0 })).toBeGreaterThan(full);
