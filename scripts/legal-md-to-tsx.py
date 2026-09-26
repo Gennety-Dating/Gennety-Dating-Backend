@@ -13,24 +13,6 @@ Usage:
 Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
 July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
 terms v2.0 reproduces byte for byte after whitespace normalisation.
-"""Legal markdown (the subset legal/*.md uses) -> the JSX body the website pages carry.
-
-Usage: md2tsx.py <file.md> [--from-line N]   (prints JSX for the body, from line N on)
-Class names copied from the website's July transcription (privacy v3.0, commit f074243).
-"""Legal markdown (the subset legal/*.md uses) -> the JSX body of the website's legal pages.
-
-The website (`gennetydating-website`, Vercel) carries each document as a hand-written
-`src/app/<privacy|terms|cookies>/page.tsx`; this prints the part between the version line and
-the closing `</div>` of the prose block, with the same class names. Header (H1, "Last Updated ·
-Version" line) stays hand-written in the page.
-
-Usage:
-  python3 scripts/legal-md-to-tsx.py legal/privacy-policy.md --from-line <first body line>
-  (first body line = the paragraph after the version blurb, e.g. "This Privacy Policy explains")
-
-Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
-July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
-terms v2.0 reproduces byte for byte after whitespace normalisation.
 """
 import re
 import sys
@@ -53,35 +35,7 @@ TBODY = '<tbody className="divide-y divide-gray-800">'
 
 
 def esc(text: str) -> str:
-    """Legal markdown (the subset legal/*.md uses) -> the JSX body of the website's legal pages.
-
-The website (`gennetydating-website`, Vercel) carries each document as a hand-written
-`src/app/<privacy|terms|cookies>/page.tsx`; this prints the part between the version line and
-the closing `</div>` of the prose block, with the same class names. Header (H1, "Last Updated ·
-Version" line) stays hand-written in the page.
-
-Usage:
-  python3 scripts/legal-md-to-tsx.py legal/privacy-policy.md --from-line <first body line>
-  (first body line = the paragraph after the version blurb, e.g. "This Privacy Policy explains")
-
-Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
-July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
-terms v2.0 reproduces byte for byte after whitespace normalisation.
-"""Escape plain text for JSX children."""Legal markdown (the subset legal/*.md uses) -> the JSX body of the website's legal pages.
-
-The website (`gennetydating-website`, Vercel) carries each document as a hand-written
-`src/app/<privacy|terms|cookies>/page.tsx`; this prints the part between the version line and
-the closing `</div>` of the prose block, with the same class names. Header (H1, "Last Updated ·
-Version" line) stays hand-written in the page.
-
-Usage:
-  python3 scripts/legal-md-to-tsx.py legal/privacy-policy.md --from-line <first body line>
-  (first body line = the paragraph after the version blurb, e.g. "This Privacy Policy explains")
-
-Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
-July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
-terms v2.0 reproduces byte for byte after whitespace normalisation.
-"""
+    """Escape plain text for JSX children."""
     text = html.escape(text, quote=False)  # & < >
     text = text.replace('"', '&quot;').replace("'", '&apos;')
     return text.replace('{', '&#123;').replace('}', '&#125;')
@@ -108,35 +62,7 @@ def inline(text: str) -> str:
 
 
 def join(parts):
-    """Legal markdown (the subset legal/*.md uses) -> the JSX body of the website's legal pages.
-
-The website (`gennetydating-website`, Vercel) carries each document as a hand-written
-`src/app/<privacy|terms|cookies>/page.tsx`; this prints the part between the version line and
-the closing `</div>` of the prose block, with the same class names. Header (H1, "Last Updated ·
-Version" line) stays hand-written in the page.
-
-Usage:
-  python3 scripts/legal-md-to-tsx.py legal/privacy-policy.md --from-line <first body line>
-  (first body line = the paragraph after the version blurb, e.g. "This Privacy Policy explains")
-
-Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
-July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
-terms v2.0 reproduces byte for byte after whitespace normalisation.
-"""Join wrapped source lines; a line ending in letter+hyphen continues the word."""Legal markdown (the subset legal/*.md uses) -> the JSX body of the website's legal pages.
-
-The website (`gennetydating-website`, Vercel) carries each document as a hand-written
-`src/app/<privacy|terms|cookies>/page.tsx`; this prints the part between the version line and
-the closing `</div>` of the prose block, with the same class names. Header (H1, "Last Updated ·
-Version" line) stays hand-written in the page.
-
-Usage:
-  python3 scripts/legal-md-to-tsx.py legal/privacy-policy.md --from-line <first body line>
-  (first body line = the paragraph after the version blurb, e.g. "This Privacy Policy explains")
-
-Calibrated 2026-09-26: privacy v3.0 (264bb97a) reproduces the site's page (f074243) except the
-July page's literal `*…*` in one blockquote (rendered as <em> here) and one hand-shortened cell;
-terms v2.0 reproduces byte for byte after whitespace normalisation.
-"""
+    """Join wrapped source lines; a line ending in letter+hyphen continues the word."""
     out = ''
     for part in parts:
         if not part:
