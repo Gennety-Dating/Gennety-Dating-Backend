@@ -343,66 +343,40 @@ does not weaken it, it simply has a partner who is reliably keen.
 
 `runDateLifecycleTick(api, now)` accepts an injected clock and every step claims
 its own idempotency column, so the driver replays it at shifted gates and the
-real ice-breakers, emergency window, safety brief, wingman hint and feedback
+real ice-breakers, cancel reminder, safety brief, wingman hint and feedback
 prompt fire in order.
 
 **`runCoordinationTick` is a SEPARATE sweep and has to be replayed too.** It is
 called from `index.ts` on the real clock, so a replay that shifted only the
-lifecycle silently skipped the hours before the date: the T-3h "how do we
-find each other" offer, the T-1h anonymous chat, and all five coordination
-cards — with `COORDINATION_FEATURE_ENABLED` on the entire time. The first demo
-ever to reach a scheduled date is what surfaced it; `coordOfferSentAt` and
-`proxyOpenedAt` were both still null when the run finished. It takes an injected
-clock as well, so the fix is to call both at every gate, plus one extra gate at
-T-45m so the offer and the chat opening read as two beats instead of arriving
-together.
+lifecycle silently skipped the hours before the date: the T-1h anonymous chat
+and its card — with `COORDINATION_FEATURE_ENABLED` on the entire time. The first
+demo ever to reach a scheduled date is what surfaced it; `proxyOpenedAt` was
+still null when the run finished. It takes an injected clock as well, so the fix
+is to call both at every gate.
 
 Gates: `agreedTime − 2h`, `− 45m`, `− 30m`, `+ 25h`.
 
-**They are replayed in three stretches, not one run, because two of them are
-real decisions.** Running every gate back to back put `+ 25h` four seconds after
-`− 30m`, so `closeProxies` shut the anonymous chat before anyone could open it:
-the visitor was handed a live "Enter chat" button that was dead by the time they
-reached it. The replay now stops at the coordination fork and again at the open
-relay, and each stretch resumes on the visitor's own tap or on a floor timer
-(`decide.ts` → `decidePredateAction`). The floors are what keep a demo from
-stalling in front of an audience; the buttons are the intended path.
+**They are replayed in three stretches, not one run.** Running every gate back
+to back put `+ 25h` four seconds after `− 30m`, so `closeProxies` shut the
+anonymous chat before anyone could open it: the visitor was handed a live "Enter
+chat" button that was dead by the time they reached it. The replay now plays
+`− 45m`/`− 30m` a beat after the pre-date content (`open_proxy` — nothing is
+chosen first, see below) and stops again at the open relay, which resumes on
+the visitor's own tap or on a floor timer (`decide.ts` →
+`decidePredateAction`). The floor is what keeps a demo from stalling in front of
+an audience; the button is the intended path.
 
-### The coordination fork is the demo's own screen
+### There is no coordination fork any more (2026-09-26)
 
-The card the visitor sees at the fork is production's — `sendCoordCard`,
-`variant: "offer"`, the partner's photo in the polaroid, `coordOfferIntro` as the
-caption, `coordBtnShareSelf` / `coordBtnRequestPartner` / `coordBtnProxy` as the
-labels. What is demo-owned is the **sending** of it and its callback data
-(`demo:coord:*`), and that is the whole point of the arrangement:
-
-- production sends nothing at all here — `resolveCoordRecipients` needs both
-  sides reachable on Telegram and the puppet never is, so `sendOffers` silently
-  selects the anonymous chat and asks no question;
-- production's keyboard could not show the two contact-exchange buttons anyway:
-  it hides them without a public `@username`, and the puppet has none;
-- and production's `handleCoordMethod` would refuse the tap, because the visitor
-  is not an eligible offer recipient — except for variant A, which would
-  **succeed** for a visitor who does have a username, writing
-  `coordMethod: "share_self"` and permanently blocking the anonymous chat in
-  exchange for a contact reveal that reaches nobody.
-
-So the demo owns all three taps. **A and B are explained rather than performed**
-(founder decision — DECISIONS.md): the visitor is told what the button would do
-in production, what it costs (A is irreversible, B asks the other person), and
-why it cannot run here, and the choice is handed straight back with the
-remaining buttons. Nothing is written, so `coordMethod` stays null and the fork
-simply stays open — which is what lets someone read both before choosing. **C is
-performed**, and its four-field write mirrors `handleCoordMethod`'s own `proxy`
-branch, guarded on `coordMethod: null` so the tap and the floor timer cannot both
-fire.
-
-Because the method is set before the coordination sweep ever runs, production's
-auto-select for an unreachable pair is a no-op (it is guarded on the same
-column). Giving the puppet a fake `@username` to make A and B "work" was
-rejected: it would put a dead `t.me/` link in front of an investor. The full
-three-variant flow with a live partner is tested on `@gennetytestbot` with
-`scripts/dev-coord-offer-demo.mjs`.
+Production retired its T-3h questionnaire (share my Telegram / ask for theirs /
+anonymous chat — founder decision: handles never change hands, every scheduled
+date gets the chat at T-1h), so the demo's staged copy of it went too: the
+demo-owned offer card, the `demo:coord:*` callbacks, the two
+explained-not-performed variants and the four-field `coordMethod` write. The
+demo now plays the chat gates straight after the pre-date content. A
+`demo:coord:*` button left in a chat by an older build is answered and stripped,
+nothing else (`demo/commands.ts`); `scripts/dev-coord-offer-demo.mjs`, the
+three-variant playground on `@gennetytestbot`, was deleted with it.
 
 ### The puppet talks in the anonymous chat
 
@@ -453,16 +427,11 @@ design. Covering those needs a second run from the other side.
 
 ### What is held in memory (and why nothing is in the schema)
 
-Five maps in `driver.ts`: which narration beats a visitor has read, when the
-currently-owed action was first observed, which visitors are being acted on,
-which finished match a visitor has already been offered a way back from, and
-which of the two impossible coordination variants have already been explained.
-
-That last one is the only piece here that genuinely *cannot* be derived: tapping
-"share my Telegram" or "ask for theirs" writes nothing to the match — that is
-what keeps the fork open — so the product carries no trace of it. It only thins
-the re-offer keyboard, so losing it on restart shows a button that has already
-been read.
+Four maps in `driver.ts`: which narration beats a visitor has read, when the
+currently-owed action was first observed, which visitors are being acted on, and
+which finished match a visitor has already been offered a way back from. (A
+fifth — which coordination variants had been explained — went with the fork on
+2026-09-26.)
 
 **No table was added to `packages/db/prisma/schema.prisma` for demo mode**, and
 none should be — the schema is shared with production, and a demo-only table

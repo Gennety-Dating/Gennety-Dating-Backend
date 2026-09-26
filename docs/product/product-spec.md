@@ -78,9 +78,13 @@ out of Telegram-only workers.
 - **NO IN-APP CHAT** — Users NEVER message each other through our platform. Do
   not build chat interfaces between users. The only chats are user↔bot,
   user↔chat agent (mobile), and the structured pitch / scheduling /
-  emergency flows. **Narrow exception (feature-flagged):** the Variant C
-  pre-date *anonymous proxy chat* (§Phase 4 — Pre-date coordination) relays
-  text between an already-matched, already-scheduled pair. It is deliberately
+  emergency flows. **Narrow exception (feature-flagged):** the pre-date
+  *anonymous proxy chat* (§Phase 4 — Pre-date coordination) relays text
+  between an already-matched, already-scheduled pair — every such pair since
+  2026-09-26, and it is the ONLY way they reach each other before the date:
+  contacts (Telegram handles, numbers) are never exchanged; the T-3h
+  questionnaire that used to offer a handle swap is retired (founder
+  decision). It is deliberately
   scoped so it does not reopen general user-to-user chat: post-match only,
   time-boxed (opens T-1h, auto-closes T+2h), text-only (media rejected),
   every message logged to `ProxyMessage`, an in-line Report button on each

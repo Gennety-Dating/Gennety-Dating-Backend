@@ -277,11 +277,10 @@ null-штамп идемпотентности. Проверено по коду
 
 | Гейт | Условие выборки | Штамп |
 |---|---|---|
-| Ice-breakers + emergency | `agreedTime > now` и `≤ now+5h` | `icebreakersSentAt` |
+| Ice-breakers + напоминание об отмене | `agreedTime > now` и `≤ now+5h` | `icebreakersSentAt` |
 | Safety brief (женщине) | `agreedTime > now` и `≤ now+1.5h` | `safetyNoteSentAt` |
 | Wingman reveal | `agreedTime > now` и `≤ now+1.5h` | `wingmanSentAt` |
-| Coordination offer | `agreedTime > now` и `≤ now+60m` | `coordOfferSentAt` |
-| Proxy open | `agreedTime > now` и `≤ now+30m` | `proxyOpenedAt` |
+| Proxy open (у каждого назначенного свидания; опросника T-3ч нет с 2026-09-26) | `agreedTime > now` и `≤ now+1h` | `proxyOpenedAt` |
 | Proxy close | `now ≥ agreedTime + 2h` | `proxyClosedAt` |
 | Feedback | `agreedTime ≤ now − 24h` | `feedbackPromptedAt` |
 

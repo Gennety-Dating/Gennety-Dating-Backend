@@ -11,6 +11,37 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING (2026-09-26) — до свидания только анонимный чат, у каждой пары; опросник T-3ч и обмен Telegram-хэндлами удалены; отмена — в любой момент (копия).**
+Коммиты 2026-09-26 «координация: …» (этот блок в том же пуше). **Только код бота:** без миграций (колонки `coord*`
+оставлены, в схеме правка только комментариев), без env, Mini App не пересобирать. Флаг `COORDINATION_FEATURE_ENABLED`
+на проде уже `true` (проверено `/v1/app/config` 2026-09-26) — остаётся как рубильник чата.
+
+**Что изменится на проде:** в T-3ч больше не приходит карточка «как найти друг друга» (поделиться Telegram / попросить
+контакт / анонимный чат); в T-1ч «Войти в чат» получают ОБЕ стороны КАЖДОГО назначенного свидания — включая
+Telegram-пары, которые раньше без выбора C оставались без чата. Тап по кнопке старой карточки опросника только снимает
+клавиатуру. Сообщение T-5ч больше не говорит «окно экстренной отмены открыто» (напоминание + кнопка, 5 языков); агент
+не говорит «отмена с ~5ч до свидания». `/v1/matches/current` отдаёт `proxyChatOpensAt/ClosesAt` каждой `scheduled`-паре
+(раньше — только с `coordMethod = proxy`, т. е. приложение и так их получало для пар с приложением). Логика отмены,
+возвраты билетов, Prime Time, буст Elo — без изменений (гейта T-5ч в коде не было и нет).
+
+**Проверка после выката:**
+```
+curl -s https://dating-api.gennety.com/v1/app/config | jq .features.coordination   # true
+# в логах бота после ближайшего свидания: строка "[coordination] proxyOpened=1 …", без "offers="
+ssh root@167.172.178.229 "grep -c COORD_OFFER_HOURS /opt/gennety/packages/shared/src/constants.ts"   # 0
+```
+В прод-БД (только чтение): у свиданий, назначенных после выката, `coord_offer_sent_at IS NULL`, а
+`proxy_opened_at` появляется в окне T-1ч:
+`SELECT id, agreed_time, coord_offer_sent_at, proxy_opened_at FROM matches WHERE status='scheduled' ORDER BY agreed_time;`
+**Откат:** снимок `/opt/gennety-prev-<ts>` из вывода скрипта выката; выключить чат целиком —
+`COORDINATION_FEATURE_ENABLED=false` + `pm2 restart gennety-bot --update-env`.
+**Демо:** своего «форка» координации больше нет, чат играется сразу после предсвиданной части; старые `demo:coord:*`
+кнопки снимаются. Демо не выкачено — войдёт со следующим выкатом демо.
+**iOS:** без обязательных правок — клиент берёт окно чата из `proxyChatOpensAt/ClosesAt` и уже показывает отмену всё
+время `scheduled`; в спеке поменялись только описания (`proxyChatOpensAt`, `getProxyChat`).
+
+---
+
 **Deployed 2026-09-26 — сводный выкат всего `main` (`c372883f`) на прод 08:43–08:46 UTC; Tempo Sync включён 08:56 UTC.**
 Скрипт `~/gennety-backups/deploy-tempo-sync.sh` (прод до этого — `4315bc66`). **`deploy c372883f`** (запустил
 основатель): git archive → сухой rsync (141 файл, удалений нет) → снимок `/opt/gennety-prev-20260926-084315` →

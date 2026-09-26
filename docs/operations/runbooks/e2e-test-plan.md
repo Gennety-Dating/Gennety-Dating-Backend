@@ -399,9 +399,9 @@ Registration v2 (не через email-обход). Placeholder существу
 - [ ] Meme Unlock (T-5ч, сразу после icebreakers, flag ON): тизер НЕ показывает мем →
       счёт в Stars → картинка + подсказка; повторный тап по старой карточке не списывает
       второй раз; у партнёра-текстового ответа карточка не приходит вовсе
-- [ ] Coordination offer (T-1ч): Variant A (share self) / B (request partner + consent) / C (proxy)
-- [ ] Proxy chat open (T-30м): relay text-only, media отклоняется, Report-кнопка, `ProxyMessage`-лог; close (T+2ч)
-- [ ] Emergency protocol: confirmation guard → verbatim relay (blockquote) → cancel + peer Elo-bump
+- [ ] Опросника координации НЕТ (с 2026-09-26): ни в T-3ч, ни раньше не приходит «поделиться Telegram / попросить контакт»; старая карточка с такими кнопками на тап только снимает клавиатуру
+- [ ] Proxy chat open (T-1ч, у КАЖДОЙ пары, без выбора): relay text-only, media отклоняется, Report-кнопка, `ProxyMessage`-лог; close (T+2ч)
+- [ ] Emergency protocol: кнопка отмены есть с момента назначения (хаб «Моё свидание», за сутки до свидания тоже), не только с T-5ч; confirmation guard → verbatim relay (blockquote) → cancel + peer Elo-bump
 - [ ] Feedback (T+24ч): Feedback Mini App (slider/segmented/textarea) + голосовой fallback → `feedbackByA/B` + LLM-анализ → constraints
 
 ### Pass 9 — Trust & Safety

@@ -10,18 +10,17 @@ columns on `matches`.
 | When | Action | Idempotency marker |
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
-| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full set of starters as the plain final `sendMessage` — the emergency-window DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
-| T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`). The window **closes at `agreedTime`**: from the start of the date the service refuses (`date-started`, 409 `date_started` on the app) — "they didn't show up" is the T+24h did-you-meet question, not a cancellation that refunds both tickets (2026-09-14, audit A13-M20) | shared with above |
+| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full set of starters as the plain final `sendMessage` — the cancel-reminder DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
+| T − 5 h | **Cancel reminder** — DM both sides the cancel button (callback `emerg:start:{matchId}`). A reminder, NOT a gate: a `scheduled` date can be cancelled from the moment it is booked (My Date hub, the agent's `propose_cancel_date`, the app's date card — founder decision 2026-09-26; nothing ever checked the clock before T-5h, only the copy said "the window is open"). Cancelling **closes at `agreedTime`**: from the start of the date the service refuses (`date-started`, 409 `date_started` on the app) — "they didn't show up" is the T+24h did-you-meet question, not a cancellation that refunds both tickets (2026-09-14, audit A13-M20) | shared with above |
 | T − 5 h | **Start the native «date day» Live Activity** on both sides (`services/date-day-activity.ts`, iOS §4.2) — APNs *push-to-start*, so the card appears on a locked phone whose owner has not opened the app, which is the entire reason the gate is at T-5h. No-op for anyone with no registered start token, i.e. every Telegram-only account. | shared with above |
 | T − 1.5 h | **Advance the Live Activity to the `wingman` stage.** | shared with `wingmanSentAt` |
 | T − 1 h | **Advance the Live Activity to the `chat_open` stage** — fired by `openProxies` in `services/coordination.ts`, not by the lifecycle tick. Declared since the four-stage card and deliberately dark until the native chat screen existed; live since it did. | shared with `proxyOpenedAt` |
 | T − 30 min | **Advance the Live Activity to the `spotter` stage** — the shared sign, the partner's arrival flag, and (expanded Dynamic Island only) their first name. | time window (`dateDayBeatFor`) |
 | T + 2 h | **Advance the Live Activity to `vibe_check`** — three buttons asking how the evening went, answered from the lock screen without opening the app. | time window (`dateDayBeatFor`) |
 | T + 3 h | **End the Live Activity.** An hour after the question, not at the same moment as it: ending at T+2h would take the question away in the tick that posed it. A time window (T+3h … T+3h30) rather than an idempotency column: ending an activity that is already gone is a no-op, so a repeated sweep costs one wasted push. | — (idempotent by nature) |
-| T − 3 h | **Pre-date coordination offer** (feature-flagged) — DM the initiator the contact-exchange / anonymous-chat menu (see below). Moved out from T−1h on 2026-09-04: Variant B needs the *partner* to notice a card and tap it, and an hour was not enough runway for a two-sided exchange. | `coordOfferSentAt` |
 | T − 1.5 h | **Pre-date safety brief** to the female user, on whichever rails reach her — Telegram DM and/or APNs push (`safety.brief`, **time-sensitive**, §Phase 4 → Pre-date safety brief). Gender selects the recipient; `platform` selects the rail. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently, through `preDateBriefingVisibility`) | `wingmanSentAt` |
-| T − 1 h | **Anonymous proxy chat opens** (feature-flagged, Variant C — including a Variant B request declined or left unanswered) — DM both the "Enter chat" button, and advance the Live Activity to `chat_open`. Moved out from T−30m on 2026-09-04 alongside the offer, which also lifted it clear of the spotter beat — the two used to push the same card from two different sweeps in the same tick. | `proxyOpenedAt` |
+| T − 1 h | **Anonymous proxy chat opens** (feature-flagged) for **every** scheduled date — no questionnaire precedes it since 2026-09-26 — and each side is told on its own rail (the "Enter chat" card on Telegram, a push on the app); the Live Activity advances to `chat_open`. Moved out from T−30m on 2026-09-04, which also lifted it clear of the spotter beat — the two used to push the same card from two different sweeps in the same tick. | `proxyOpenedAt` |
 | T − 45 min | **Date Terminal invite** (Telegram-only) — one DM per side with a single `web_app` button, "🎟 Open the Date Terminal" (Contact Sync, §6.4a). Step 2d of the tick, `sendDateTerminalBeats` (`services/date-terminal-invite.ts`); anchored on `DATE_RADAR_LEAD_MINUTES`. See below. | `terminalInviteSentAt` |
 | T − 15 min (until T + 30 min) | **Date Terminal reminder** — the same button, anchored on `DATE_BUMP_OPENS_MINUTES`, still sent up to `DATE_TERMINAL_REMINDER_GRACE_MINUTES` (30) after the date time. See below. | `terminalReminderSentAt` |
 | Date moment | (no automated action — users meet in person) | — |
@@ -240,35 +239,26 @@ Gated by `COORDINATION_FEATURE_ENABLED` (default **off**). Solves the "find each
 other at the venue / signal a delay" gap. Driven by `services/coordination.ts`
 on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
 
-**The anonymous chat (Variant C) reaches both surfaces since 2026-08-07;
-contact exchange (A/B) stays Telegram-only.** This section used to say the whole
-flow was Telegram-only, and the gap was not one missing endpoint but a missing
-*initiation*: the offer requires both sides in a bot chat, and `openProxies`
-only opens a window for a match whose `coordMethod` was set by tapping an inline
-keyboard — so a pair with an app participant never got the offer, never got a
-method, and never got a window. Two changes close it:
+**One rail for every pair (founder decision 2026-09-26).** Every scheduled
+date gets the anonymous chat at T-1h, on both surfaces, and nothing else:
+handles never change hands before the date. Until then a T-3h questionnaire
+(`sendOffers`, `COORD_OFFER_HOURS`) offered the female participant — or both
+sides of a same-sex pair — three ways to find each other: share her Telegram
+(A), ask for the partner's (B), or this chat (C), and the chat opened only for a
+pair that ended up on C. The app already skipped the question (2026-09-07: any
+pair with the app in it was put on C without asking), so the pair it still
+failed was the Telegram-only one whose initiator picked a handle, or never
+tapped the offer — no chat at all in the last hour before meeting. The offer,
+its handlers and its four contact cards are gone; the `coord*` columns stay on
+`Match` for the rows written before and are no longer read. Buttons on offer
+cards already sitting in chats (`coord:m:*`, `coord:approve:*`,
+`coord:decline:*`) are answered and stripped, nothing else
+(`handleRetiredCoordCard`).
 
-- A pair the Telegram fork cannot reach has **variant C selected for them** at
-  T-3h. That is the right default rather than a second menu, because the other
-  two variants exchange `t.me/` handles — meaningless to someone who has none —
-  and the MVP scope already keeps only variant C on the app.
-- **Since 2026-09-07 that default covers any pair with the app in it** (founder
-  decision), not only one the fork cannot reach: `sendOffers` checks
-  `pushReachable` on EITHER side and, if it holds, writes `coordMethod: "proxy"`
-  without asking. The fork is not removed — a pair that is Telegram-only on both
-  sides still gets all three buttons. What changed is the reasoning: a `t.me/`
-  handle moves the pair onto Telegram three hours before they meet, so the
-  winning branch of the question would leave the surface the question was asked
-  about, and the app's chat screen — built for exactly that hour — would sit
-  empty. One rail per pair beats a choice whose answer takes the pair away.
-  It takes only ONE participant on the app for that split to happen, which is
-  why the check is `||` and not `&&`.
-- The relay moved into `services/proxy-chat.ts`, shared by the Telegram handler
-  and `GET/POST /v1/matches/{id}/chat` (JWT), so the two surfaces cannot drift
-  on the window, the log, or what the partner receives. Delivery follows the
-  partner's OWN rail — a DM, an APNs push carrying the message text, or both.
-  Before this the relay only ever DM'd, so a mobile partner learned of a message
-  by opening the app.
+The relay lives in `services/proxy-chat.ts`, shared by the Telegram handler and
+`GET/POST /v1/matches/{id}/chat` (JWT), so the two surfaces cannot drift on the
+window, the log, or what the partner receives. Delivery follows the partner's
+OWN rail — a DM, an APNs push carrying the message text, or both.
 
 **Delivery states (2026-09-07).** A sender is told how far their own message
 got, and every state is a fact the server holds rather than an inference:
@@ -300,36 +290,18 @@ The window is derived from `agreedTime` (T-1h … T+2h) rather than read from
 `proxyOpenedAt`/`proxyClosesAt`: those are written by the 2-minute tick, which
 would open the window up to two minutes late. The stamps keep their
 real job — the pair was told — and `proxyClosedAt` is still a force-close.
+`/v1/matches/current` exposes the window (`proxyChatOpensAt/ClosesAt`) only
+while the flag is on and the date is `scheduled`: the window itself asks for
+nothing but a time now, and without those two checks the app would be handed
+an Enter button into a 404 with the flag off.
 
-**Reachability is `platform`, not `telegramId > 0`.** The offer used to filter
-on the id alone, which stopped being a reachability test when Telegram login
-shipped: that rail stores a REAL id on an app-only account the bot cannot
-message. It would have offered an inline keyboard to someone who could never
-see it, then read the silence as a choice.
+**Reachability is `platform`, not `telegramId > 0`.** The open and close
+notices go to Telegram only where `telegramReachable` holds: a Telegram-login
+app account carries a REAL id the bot cannot message, and the 403 it returns
+would read as that person blocking the bot.
 
-- **Initiator (T-3h).** ~3h before the date the bot offers the **female**
-  participant three ways to coordinate. A same-sex pair with no female
-  participant is offered to both sides, and whoever taps first becomes the
-  initiator (first-tap-wins; the second tap gets an "already chosen" notice).
-  Idempotent via `Match.coordOfferSentAt`.
-- **Username-aware menu.** Contact exchange uses a `t.me/<username>` link
-  (Telegram gives bots no phone number, and `text_mention` to a stranger is
-  unreliable). The captured `User.telegramUsername` therefore gates which
-  options appear: **A** only if the initiator has a username, **B** only if the
-  partner has one, **C** always. If neither has a username the offer says
-  contact exchange isn't possible and only C is shown.
-- **Variant A — share my contact.** Initiator reveals her own Telegram; the
-  partner is DM'd her `t.me/` link. Single consent (her tap).
-- **Variant B — request partner's contact.** Bot asks the partner's consent
-  (`coordPartnerConsent`); on **approve** the initiator is DM'd the partner's
-  `t.me/` link, on **decline** she's told and the pair is moved onto C. A
-  request still unanswered when the chat would open (T-1h) is moved onto C the
-  same way — no contact changed hands, and they still have to find each other
-  (2026-09-14, audit A13-M13). Both moves are compare-and-set on the request
-  still being unconsented, so an approve that lands first keeps its exchange.
-  Only B asks for partner consent.
-- **Variant C — anonymous proxy chat.** Opens **unconditionally** at T-1h
-  (no partner consent — an offline partner must never strand the initiator),
+- **The anonymous chat.** Opens at T-1h for every scheduled date (no choice,
+  no consent — an offline partner must never strand the other side),
   auto-closes at agreed time **+ 2h**. The cron DMs both an **Enter chat**
   button; tapping it sets the `coordination_chat` session state (entry is
   explicit, so normal bot use — `/menu`, settings, photos — is never hijacked
@@ -346,44 +318,26 @@ see it, then read the silence as a choice.
   called-off date's window is stamped closed silently. See the "NO IN-APP CHAT"
   carve-out in Core Principles.
 
-**Every step of this flow is a rendered PNG card, not a bare text DM
-(2026-08-01, `services/coordination-card`).** The hours before the date were the
-product's most visually silent stretch, on the one flow that is entirely about
-a next step. Five cards, one per real send — the T-3h offer, the Variant B
-consent ask, a revealed contact (Variant A, or B after approval), a Variant B
-decline, and the Variant C window opening. They ship as ONE message each:
-the card, the existing localized copy as its **caption**, and the step's own
-inline keyboard, exactly like the date card (§3.7a) and the venue wish card
-(§3.7b). The Variant C **close** notice keeps its plain text — there is no card
-for "it's over".
-
-Two rules give the family its meaning:
-
-- **Every variant renders the same white polaroid frame in the same place;
-  only its contents change.** `offer`/`ask`/`shared` hold a real profile photo —
-  the partner on the offer ("this is who you're about to meet"), the *asker* on
-  the consent card (so the partner sees who wants their contact), the contact
-  owner on the reveal. `declined` holds a clock instead of a face, because that
-  card is about a decision rather than a person, and the clock points at the
-  anonymous chat an hour out. `proxy` holds the portrait **withheld** behind
-  a burgundy halftone with the brand mark reading through it — the anonymity of
-  the relay stated in the exact frame the contact cards use for a face, which is
-  also why that one card carries no photo at all.
-- **The card carries the beat; the message carries what you act on.** Nothing on
-  a PNG is tappable, selectable, or reachable by a screen reader, so the `t.me/`
-  link, the instructions and the buttons all stay in the caption and the
-  keyboard. `shared` and `declined` therefore print no sub-line on the card at
-  all — theirs already exists verbatim in `coordRevealToInitiator` /
-  `coordSharedToPartner` and `coordPartnerDeclined` — and the card spends that
-  height on air instead of on a duplicate.
+**The chat's opening is a rendered PNG card, not a bare text DM
+(2026-08-01, `services/coordination-card`).** One message: the card, the
+localized copy as its **caption**, and the "Enter chat" keyboard, exactly like
+the date card (§3.7a). The card holds a white polaroid frame with the portrait
+**withheld** behind a burgundy halftone and the brand mark reading through it —
+the anonymity of the relay made visual. The **close** notice keeps its plain
+text — there is no card for "it's over". (Until 2026-09-26 the family had four
+more cards — the T-3h offer, the contact ask, a revealed contact and a declined
+ask — three of them carrying a real face; they went with the questionnaire.)
+**The card carries the beat; the message carries what you act on:** nothing on
+a PNG is tappable or reachable by a screen reader, so instructions and buttons
+stay in the caption and the keyboard.
 
 Cards render in the **recipient's** `User.theme` and language, like the other
 PNG cards. Delivery is fail-open by construction (`coordination-card/send.ts`):
 a null render, a caption over Telegram's 1024-char photo limit, or a rejected
 `sendPhoto` all fall through to the plain text DM the flow sent before. This is
-not decoration-grade tolerance — the DM lands ~3h before the date and is the
+not decoration-grade tolerance — the DM lands ~1h before the date and is the
 only way the pair can find each other, so it must degrade rather than fail.
-Telegram-only, and inert with `COORDINATION_FEATURE_ENABLED` off.
+Inert with `COORDINATION_FEATURE_ENABLED` off.
 
 ### Emergency Protocol
 
@@ -404,6 +358,16 @@ their date was off only by opening the app. The service now pushes the peer on
 either rail — **without the reason**, which is someone else's free text and
 does not belong on a lock screen; it is shown where the recipient chose to look.
 
+- **Any time while the date is on — from the moment it is booked.** There is
+  no opening: `DATE_ALERT_HOURS` (T-5h) only times the reminder DM, and neither
+  the service, the REST route, the Telegram handler nor the app ever checked the
+  clock before it (founder decision 2026-09-26, which also retired the "window
+  is open" copy). The cancel button is in the My Date hub for the whole
+  `scheduled` period, the agent can surface it (`propose_cancel_date`), and the
+  app's date card carries it; every consequence — the peer's boost, both ticket
+  refunds, the Prime Time refund, the partner's push — runs the same however
+  early. There is deliberately NO cancel button on the Telegram "date booked"
+  confirmation card (founder decision 2026-09-26).
 - **Only before the date starts.** `cancelScheduledDate` refuses once
   `agreedTime <= now` (the check is also in its compare-and-set), on the tap, the
   confirm and a late-arriving reason alike. It used to accept a cancel up to T+24h,
