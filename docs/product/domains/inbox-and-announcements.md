@@ -115,8 +115,7 @@ planning scenes — F7).
 |---|---|---|---|
 | `drop_batch` | processing | `[previous batch, +20 min)`, until the person's match or no-match notice exists; `active` accounts only | Today |
 | `venue_search` | processing | `negotiating_venue` with a scheduled `venueSelectionNextRetryAt`, attempts < 3; deadline = the retry's due time | Map |
-| `event_application` | active | Own `waitlist_applications` row for an upcoming/live event; `status` approved / pending / waitlisted | The announcement about it, else chat |
-| `announcement` | active → past | Own inbox rows of type `announcement`, last 7 days; hidden when an event row already opens the same item | Detail |
+| `announcement` | active → past | Own inbox rows of type `announcement`, last 7 days | Detail |
 | `date_past` | past | Own `completed` match, last 14 days | Its inbox row, else chat |
 | `chat_topic` | past | Two newest chat topics | Chat, scrolled to the topic |
 
@@ -136,7 +135,5 @@ from the demo's own state are true answers there. The demo `.env` must name
 
 - **Telegram delivery of announcements** (F9) — iOS only for now.
 - **WebSockets** — polling plus APNs stays the house pattern.
-- **An iOS event screen** — `/v1/events` is not in the contract; the only CTA
-  is the agent.
 - **Editing a sent announcement** — what people were sent stays what they were
   sent.

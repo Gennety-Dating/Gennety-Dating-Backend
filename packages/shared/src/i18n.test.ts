@@ -62,15 +62,11 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   // allowlisted — "Синергия" and "Синергія" genuinely differ).
   "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
-  // Two interpolations, a separator and one word — and that word is "код" in
-  // both languages. Inventing a difference to satisfy this guard would be
-  // worse than recording that there is none.
-  "eventRoundPushBody",
   "referralCardFooter",
   // Вариант ответа опроса HDYHAU. «Реклама» — одно слово, и оно совпадает в
   // обоих языках. Выдумывать различие, чтобы удовлетворить эту проверку, было
-  // бы хуже, чем записать, что различия нет (тот же довод, что у
-  // `eventRoundPushBody`). Остальные семь вариантов НЕ в списке и различаются.
+  // бы хуже, чем записать, что различия нет. Остальные семь вариантов НЕ в
+  // списке и различаются.
   "hdyhauAd",
   "photoReceived",
   // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).

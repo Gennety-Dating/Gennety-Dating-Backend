@@ -48,30 +48,10 @@ const prismaMock = {
         ticketDiscountPct?: { gt: number };
         ticketDiscountConsumedAt?: null;
         ticketDiscountExpiresAt?: { gt: Date };
-        OR?: Array<Record<string, unknown>>;
       };
       data: Partial<UserRow>;
     }) => {
       if (where.id !== db.user.id) return { count: 0 };
-      // `onlyIfFree` (the event-feedback grant): the row must NOT hold an
-      // active discount. Written as an OR of the four ways it can be free,
-      // because in SQL a NULL comparison is neither true nor false.
-      if (where.OR) {
-        const free = where.OR.some((clause) => {
-          if ("ticketDiscountPct" in clause) {
-            return db.user.ticketDiscountPct <= (clause.ticketDiscountPct as { lte: number }).lte;
-          }
-          if ("ticketDiscountConsumedAt" in clause) {
-            return db.user.ticketDiscountConsumedAt !== null;
-          }
-          const exp = clause.ticketDiscountExpiresAt as { lte: Date } | null;
-          if (exp === null) return db.user.ticketDiscountExpiresAt === null;
-          return (
-            db.user.ticketDiscountExpiresAt !== null && db.user.ticketDiscountExpiresAt <= exp.lte
-          );
-        });
-        if (!free) return { count: 0 };
-      }
       // Apply the CAS guards used by consumeActiveDiscount.
       if (where.ticketDiscountPct && !(db.user.ticketDiscountPct > where.ticketDiscountPct.gt)) {
         return { count: 0 };

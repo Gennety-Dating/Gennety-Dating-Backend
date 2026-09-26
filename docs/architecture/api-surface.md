@@ -405,7 +405,7 @@ Announcements (`routes/announcements.ts`, same gate) — the composer for rich i
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/admin/announcements` | Newest 100, each with `readCount` / `pendingPushCount` |
-| POST | `/admin/announcements` | Create a draft (`title`, `teaser`, `body`, `agentBrief?`, `suggestedQuestions?` ≤3, `eventId?`, `audience { cityKeys?, languages? }`, `sendPush`) |
+| POST | `/admin/announcements` | Create a draft (`title`, `teaser`, `body`, `agentBrief?`, `suggestedQuestions?` ≤3, `audience { cityKeys?, languages? }`, `sendPush`) |
 | POST | `/admin/announcements/audience-count` | `{ audience }` → `{ count }` — app users in `active`/`paused`, token or not |
 | GET | `/admin/announcements/:id` | One, with 1-hour signed media URLs |
 | PATCH | `/admin/announcements/:id` | Edit a draft; 409 once it is not one |

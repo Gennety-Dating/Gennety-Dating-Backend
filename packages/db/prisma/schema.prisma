@@ -345,10 +345,11 @@ model User {
   ticketDiscountGrantedAt    DateTime?                @map("ticket_discount_granted_at")
   ticketDiscountExpiresAt    DateTime?                @map("ticket_discount_expires_at")
   ticketDiscountConsumedAt   DateTime?                @map("ticket_discount_consumed_at")
-  /// Which mechanism granted the discount currently in the slot — `famine`
-  /// (§3.5b) or `event_feedback` (LAUNCH_EVENTS §11). There is ONE slot per
-  /// user, so the two mechanisms share it and this column is what tells them
-  /// apart afterwards. Analytics/audit only: pricing reads `pct`, never this.
+  /// Which mechanism granted the discount currently in the slot. Since Launch
+  /// Events were removed (2026-09-16) the only writer is `famine` (§3.5b); the
+  /// column stays so a future second mechanism needs no migration, and older
+  /// rows may still read `event_feedback`. Analytics/audit only: pricing reads
+  /// `pct`, never this.
   ticketDiscountSource       String?                  @map("ticket_discount_source")
   /// Gennety Premium subscription (gated by `PREMIUM_FEATURE_ENABLED`).
   /// Channel-agnostic per-user entitlement owned by `services/premium.ts`; the
