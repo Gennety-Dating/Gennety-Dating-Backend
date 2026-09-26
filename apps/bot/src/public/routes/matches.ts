@@ -3,7 +3,7 @@ import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { isUuid } from "../../utils/uuid.js";
 import { getBotApi } from "../server.js";
-import { blockMatchPartner } from "../../services/user-block.js";
+import { blockMatchPartner, normalizeBlockReason } from "../../services/user-block.js";
 import { agentTextLimiter } from "../rate-limit.js";
 import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
 import { partnerPhotoUrls, resolvePartnerMedia } from "../partner-photos.js";
@@ -422,9 +422,30 @@ matchesRouter.post("/:id/report", async (req: Request, res: Response): Promise<v
  *
  * Idempotent by design — re-blocking answers 200 with the same body, because a
  * client that never saw its first response must be able to retry.
+ *
+ * The body is optional: `{ reason?: string }`, the blocker's own words for
+ * moderation only (founder decision 2026-09-26), never shown to the blocked
+ * side. A block never fails over it — no body, `{}`, null or blank all block
+ * without a reason, and an over-long one is clamped, not refused. Only a
+ * non-string `reason` is a 400: that is a client bug, not a person.
  */
 matchesRouter.post("/:id/block", async (req: Request, res: Response): Promise<void> => {
-  const result = await blockMatchPartner(paramId(req), req.userId!, getBotApi());
+  const body: unknown = req.body;
+  const rawReason =
+    body !== null && typeof body === "object" && !Array.isArray(body)
+      ? (body as { reason?: unknown }).reason
+      : undefined;
+  const normalized = normalizeBlockReason(rawReason);
+  if (!normalized.ok) {
+    res.status(400).json({ error: "reason must be a string" });
+    return;
+  }
+  const result = await blockMatchPartner(
+    paramId(req),
+    req.userId!,
+    getBotApi(),
+    normalized.reason,
+  );
   if (result.outcome === "forbidden") {
     res.status(403).json({ error: "Not a participant of this match" });
     return;

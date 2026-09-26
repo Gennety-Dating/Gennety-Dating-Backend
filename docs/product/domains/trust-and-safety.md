@@ -65,7 +65,7 @@ Other safeguards:
 A **block is not a report**, and the separation is the design. A report is an
 accusation addressed to moderation: it carries text, gets triaged into a tier,
 and can cost the reported person a strike, a suspension or their account. A
-block carries nothing, accuses nobody, and reaches no queue. A person who is
+block requires nothing, accuses nobody, and reaches no queue. A person who is
 frightened of the human being they just met must be able to make them go away
 without first building a case — and App Store guideline 1.2 requires the
 product to offer both.
@@ -91,6 +91,16 @@ the client is never handed a bare user id. Three effects, in order:
 **The blocked side is never told.** No DM, no push, no visible state change
 beyond the ordinary "your date was cancelled". That is what makes the button
 safe to press.
+
+**An optional reason, for moderation only (founder decision 2026-09-26).** The
+request may carry `{ reason?: string }` — the blocker's own words, stored on
+`user_blocks.reason`, never shown to the blocked person and never returned by
+`GET /v1/me/blocks`. It stays optional (a frightened person must still be able
+to block without explaining), so the block never fails over it: missing, null
+or blank is no reason, over 1000 characters is clamped, and only a non-string
+is a 400. A repeat block writes it only when one is given. It files no report,
+triggers no triage and costs the blocked person nothing — the separation above
+holds.
 
 **On matching the block is redundant today and load-bearing tomorrow.** The
 lifetime pair ban already guarantees two people who have matched are never

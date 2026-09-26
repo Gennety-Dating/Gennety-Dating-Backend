@@ -2570,6 +2570,14 @@ model UserBlock {
   /// gone. Cleared when the block is relinked to a returning account.
   blockedFormerId String?  @map("blocked_former_id") @db.Uuid
   matchId         String?  @map("match_id") @db.Uuid
+  /// Why the blocker blocked, in their own words — OPTIONAL, and for
+  /// moderation only (founder decision 2026-09-26). Never shown to the blocked
+  /// side, never returned by `GET /v1/me/blocks` or any public serializer, and
+  /// never required: a frightened person must be able to block without
+  /// explaining (decision 2026-08-23). Trimmed, blank → null, clamped to 1000
+  /// characters by `normalizeBlockReason`. A re-block writes it only when one
+  /// is given, so a later block without words never erases earlier ones.
+  reason          String?  @map("reason")
   createdAt       DateTime @default(now()) @map("created_at")
 
   blocker User   @relation("UserBlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)

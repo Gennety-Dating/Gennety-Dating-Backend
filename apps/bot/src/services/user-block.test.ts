@@ -25,6 +25,8 @@ import {
 } from "./cancel-in-flight-matches.js";
 import {
   blockMatchPartner,
+  normalizeBlockReason,
+  BLOCK_REASON_MAX_LENGTH,
   isPairBlocked,
   listBlockedUsers,
   loadBlockedPairKeys,
@@ -74,7 +76,7 @@ describe("blockMatchPartner", () => {
     expect(mBlock.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { blockerId_blockedId: { blockerId: BLOCKER, blockedId: PARTNER } },
-        create: { blockerId: BLOCKER, blockedId: PARTNER, matchId: MATCH },
+        create: { blockerId: BLOCKER, blockedId: PARTNER, matchId: MATCH, reason: null },
         update: {},
       }),
     );
@@ -144,6 +146,58 @@ describe("blockMatchPartner", () => {
 
     expect(mBlock.upsert).toHaveBeenCalledTimes(2);
     expect(mBlock.upsert.mock.calls.every(([arg]) => arg.update)).toBe(true);
+  });
+});
+
+describe("block reason (founder decision 2026-09-26: optional, moderation-only)", () => {
+  it("stores a given reason on the new row and on a repeat block", async () => {
+    mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
+
+    await blockMatchPartner(MATCH, BLOCKER, null, "угрожал");
+
+    expect(mBlock.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { blockerId: BLOCKER, blockedId: PARTNER, matchId: MATCH, reason: "угрожал" },
+        update: { reason: "угрожал" },
+      }),
+    );
+  });
+
+  it("a repeat block without a reason leaves an earlier one alone", async () => {
+    mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
+
+    await blockMatchPartner(MATCH, BLOCKER, null, null);
+
+    expect(mBlock.upsert.mock.calls[0]![0].update).toEqual({});
+  });
+});
+
+describe("normalizeBlockReason", () => {
+  it.each([[undefined], [null]])("treats %j as no reason", (raw) => {
+    expect(normalizeBlockReason(raw)).toEqual({ ok: true, reason: null });
+  });
+
+  it("trims, and treats whitespace as no reason", () => {
+    expect(normalizeBlockReason("  тихо  ")).toEqual({ ok: true, reason: "тихо" });
+    expect(normalizeBlockReason(" \n\t ")).toEqual({ ok: true, reason: null });
+  });
+
+  it("clamps rather than refuses an over-long reason", () => {
+    const res = normalizeBlockReason("я".repeat(BLOCK_REASON_MAX_LENGTH + 500));
+    expect(res.ok && res.reason?.length).toBe(BLOCK_REASON_MAX_LENGTH);
+    expect(BLOCK_REASON_MAX_LENGTH).toBe(1000);
+  });
+
+  it("clamps by characters, never splitting an emoji in half", () => {
+    const res = normalizeBlockReason("🙂".repeat(BLOCK_REASON_MAX_LENGTH + 1));
+    expect(res.ok).toBe(true);
+    const reason = res.ok ? res.reason! : "";
+    expect(Array.from(reason)).toHaveLength(BLOCK_REASON_MAX_LENGTH);
+    expect(reason.endsWith("🙂")).toBe(true);
+  });
+
+  it.each([[42], [true], [{}], [["x"]]])("refuses a non-string (%j)", (raw) => {
+    expect(normalizeBlockReason(raw)).toEqual({ ok: false });
   });
 });
 

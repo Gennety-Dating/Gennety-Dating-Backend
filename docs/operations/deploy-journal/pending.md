@@ -11,6 +11,33 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING (2026-09-26) — необязательная причина блокировки, только для модерации: `user_blocks.reason` + тело `{ reason?: string }` у `POST /v1/matches/:id/block`. НУЖНА МИГРАЦИЯ.**
+Коммит 2026-09-26 «блокировка: необязательная причина…» (этот блок в том же пуше). **Миграция
+`20260926120000_user_block_reason`** — `ALTER TABLE "user_blocks" ADD COLUMN "reason" TEXT;`, чисто аддитивная
+(nullable, без дефолта, строки не переписываются). **Порядок: `db:deploy` ДО рестарта бота** — новый клиент Prisma
+выбирает колонку при каждом upsert блока, и без неё блок упадёт с P2022. Без env, Mini App не пересобирать. Едет тем же
+выкатом, что и блок «анонимный чат у каждой пары» ниже (тот — только код).
+
+**Выкат (скриптом, весь `main`):** `bash ~/gennety-backups/deploy-<…>.sh deploy <коммит>` — скрипт делает `db:deploy`
+перед рестартом и `migrate status` после; drift-гейт терпит чужие `canvas_*`, как и раньше.
+
+**Что изменится на проде:** блок из приложения может нести причину; она пишется в `user_blocks.reason` и больше
+никуда не выходит (ни заблокированному, ни в `GET /v1/me/blocks`). Блок без тела ведёт себя ровно как раньше.
+
+**Проверка после выката:**
+```
+ssh root@167.172.178.229 "cd /opt/gennety/packages/db && npx prisma migrate status"   # Database schema is up to date
+# прод-БД, только чтение: колонка есть и пуста до первого блока с причиной
+SELECT column_name, data_type, is_nullable FROM information_schema.columns
+ WHERE table_name = 'user_blocks' AND column_name = 'reason';        -- reason | text | YES
+SELECT count(*) FILTER (WHERE reason IS NOT NULL) FROM user_blocks;
+```
+**Откат:** код — снимок `/opt/gennety-prev-<ts>`; колонку можно оставить (старый код её не читает и не пишет).
+**Демо:** то же, что прод (миграция при выкате демо).
+**iOS:** шлёт `{ reason }` из листа блокировки; старые сборки шлют пустое тело — это «без причины».
+
+---
+
 **PENDING (2026-09-26) — до свидания только анонимный чат, у каждой пары; опросник T-3ч и обмен Telegram-хэндлами удалены; отмена — в любой момент (копия).**
 Коммиты 2026-09-26 «координация: …» (этот блок в том же пуше). **Только код бота:** без миграций (колонки `coord*`
 оставлены, в схеме правка только комментариев), без env, Mini App не пересобирать. Флаг `COORDINATION_FEATURE_ENABLED`

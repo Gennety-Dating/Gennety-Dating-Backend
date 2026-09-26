@@ -43,17 +43,60 @@ export type BlockPartnerOutcome =
   | { outcome: "forbidden" };
 
 /**
+ * Longest block reason kept, in characters. The same cap as the emergency
+ * cancellation reason (`EMERGENCY_REASON_MAX_LENGTH`), for the same reason: a
+ * free-text field somebody types under stress.
+ */
+export const BLOCK_REASON_MAX_LENGTH = 1000;
+
+/**
+ * The optional block reason, as the route receives it, made storable
+ * (founder decision 2026-09-26).
+ *
+ * **A block must never fail because of its reason.** The reason is optional on
+ * purpose — a frightened person must be able to block without explaining
+ * (decision 2026-08-23) — so every shape a human can produce is accepted and
+ * made harmless: missing or null is no reason, whitespace is no reason, and an
+ * over-long one is clamped rather than refused. Only a value that is not a
+ * string at all is refused, because that is a client bug, not a person.
+ *
+ * Clamped by code points, not UTF-16 units, so a cut can never split an emoji
+ * into half a surrogate pair — and so the cap agrees with the spec's
+ * `maxLength`, which JSON Schema counts in characters.
+ */
+export function normalizeBlockReason(
+  raw: unknown,
+): { ok: true; reason: string | null } | { ok: false } {
+  if (raw === undefined || raw === null) return { ok: true, reason: null };
+  if (typeof raw !== "string") return { ok: false };
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return { ok: true, reason: null };
+  const chars = Array.from(trimmed);
+  return {
+    ok: true,
+    reason: chars.length > BLOCK_REASON_MAX_LENGTH
+      ? chars.slice(0, BLOCK_REASON_MAX_LENGTH).join("")
+      : trimmed,
+  };
+}
+
+/**
  * Block the other participant of `matchId` on behalf of `blockerUserId`.
  *
  * `api` is a parameter rather than a lookup so this module stays free of the
  * public Express server (where the injected bot handle lives) and testable
  * without one — the same split `rematch.ts` uses. Pass `null` and the partner's
  * Telegram notice is skipped; their push still goes out.
+ *
+ * `reason` is already normalised (`normalizeBlockReason`) and is for
+ * moderation only: it is stored on the row and read by nobody on the public
+ * side — not the blocked person, not `GET /v1/me/blocks`.
  */
 export async function blockMatchPartner(
   matchId: string,
   blockerUserId: string,
   api: Api<RawApi> | null,
+  reason: string | null = null,
 ): Promise<BlockPartnerOutcome> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -79,8 +122,11 @@ export async function blockMatchPartner(
       // Re-blocking is a no-op, not a second row and not an error — the client
       // may retry a request whose response it never saw.
       where: { blockerId_blockedId: { blockerId: blockerUserId, blockedId: blockedUserId } },
-      create: { blockerId: blockerUserId, blockedId: blockedUserId, matchId },
-      update: {},
+      create: { blockerId: blockerUserId, blockedId: blockedUserId, matchId, reason },
+      // A repeat block writes a reason only when it brings one: a retry, or a
+      // second block filed without words, must never erase what the person
+      // said the first time.
+      update: reason === null ? {} : { reason },
     });
     return claimMatchCancellation(matchId, blockerUserId, tx, { strict: true });
   });

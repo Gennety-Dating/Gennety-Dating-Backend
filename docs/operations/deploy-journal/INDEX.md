@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 204 entries
+# Deploy journal index — 205 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-26 | 09-26 — необязательная причина блокировки (только модерация): `user_blocks.reason` + `{ reason? }` у `POST /v1/matches/:id/block`; **миграция `20260926120000_user_block_reason` — `db:deploy` до рестарта**, без env | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-26 — до свидания только анонимный чат у каждой пары (T-1ч, без выбора); опросник T-3ч и обмен хэндлами удалены, старые кнопки снимаются; копия T-5ч и агента: отмена в любой момент; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | Deployed | 2026-09-26 | 09-26 08:43–08:56 UTC — сводный выкат всего `main` (`c372883f`) скриптом `deploy-tempo-sync.sh`: 3 миграции, Mini App, 0 рестартов; Tempo Sync включён (`TEMPO_SYNC_ENABLED=true`, вес 0.05, OSM 1231 место Киева); все PENDING-блоки ниже уехали им | [pending](./pending.md) |
 | Deployed | 2026-09-26 | 09-26 (was PENDING; сводный выкат `c372883f` 09-26) — политика v4.2 + условия v3.0 (`0baa406a`): `LEGAL_DOCS_VERSION` → `2026-09-26`, сайт уже опубликован (`b46d5d6`); выкат всего `main` и включение Tempo Sync — `~/gennety-backups/deploy-tempo-sync.sh deploy <коммит>`, затем `enable` (шлюз: сайт v4.2 + штамп на проде) | [pending](./pending.md) |

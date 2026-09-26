@@ -252,8 +252,12 @@ report list returns `reporter: null` / `reported: null` for a deleted side.
 ### `user_blocks`
 
 One user's block of another (App Store guideline 1.2). Sibling of `reports` and
-deliberately unlike it: no text, no tier, no moderation queue, no consequence
-for the blocked account. Unique `(blockerId, blockedId)` makes a retry the same
+deliberately unlike it: no required text, no tier, no moderation queue, no
+consequence for the blocked account. `reason` (text, nullable, since
+2026-09-26) is the blocker's OPTIONAL own words, for moderation only — never
+shown to the blocked side, never returned by `GET /v1/me/blocks`; trimmed, blank
+→ null, clamped to 1000 characters, and a repeat block writes it only when one is
+given (never erases an earlier one). Migration `20260926120000_user_block_reason`. Unique `(blockerId, blockedId)` makes a retry the same
 row rather than a second one or an error. `matchId` is the surface the block was
 filed from, kept for moderation context, nullable with `SetNull` — a block must
 outlive the match that produced it.

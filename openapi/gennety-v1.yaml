@@ -3938,6 +3938,26 @@ paths:
         Idempotent: re-blocking answers 200 with the same body.
       parameters:
         - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 1000
+                  description: |
+                    Optional — why the caller is blocking, in their own words
+                    (founder decision 2026-09-26). Read by moderation only:
+                    never shown to the blocked person and never returned by
+                    `GET /v1/me/blocks`. The block never depends on it — no
+                    body, `{}`, null or a blank string all block without a
+                    reason. Trimmed; longer than 1000 characters is clamped,
+                    not refused. On a repeat block it is written only when
+                    given, so an earlier reason is never erased. A `reason`
+                    that is not a string is a client bug and answers 400.
       responses:
         "200":
           description: Block recorded

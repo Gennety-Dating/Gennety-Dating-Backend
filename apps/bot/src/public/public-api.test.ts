@@ -255,6 +255,7 @@ type UserBlockRow = {
   blockerId: string;
   blockedId: string;
   matchId: string | null;
+  reason: string | null;
   createdAt: Date;
 };
 
@@ -707,18 +708,23 @@ vi.mock("@gennety/db", async () => {
 
       // ----- userBlock -----
       userBlock: {
-        upsert: vi.fn(async ({ where, create }: any) => {
+        upsert: vi.fn(async ({ where, create, update }: any) => {
           const key = where.blockerId_blockedId;
           const existing = db.userBlocks.find(
             (row) => row.blockerId === key.blockerId && row.blockedId === key.blockedId,
           );
-          // `update: {}` — a repeat block is the same row, untouched.
-          if (existing) return existing;
+          // A repeat block is the same row; `update` carries only what it
+          // changes (a reason, when one is given).
+          if (existing) {
+            Object.assign(existing, update ?? {});
+            return existing;
+          }
           const row: UserBlockRow = {
             id: crypto.randomUUID(),
             blockerId: create.blockerId,
             blockedId: create.blockedId,
             matchId: create.matchId ?? null,
+            reason: create.reason ?? null,
             createdAt: new Date(),
           };
           db.userBlocks.push(row);
@@ -2704,6 +2710,31 @@ describe("/v1/me/blocks", () => {
     expect(res.body.blocks[0]).toHaveProperty("blockedAt");
   });
 
+  /**
+   * The reason is for moderation only (founder decision 2026-09-26). The row
+   * carries it — this mock hands the full row to the route, reason included —
+   * so what keeps it off the wire is the serializer, and that is what is
+   * pinned here.
+   */
+  it("never returns the block reason", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+    const auth = `Bearer ${signAccess(alice.id)}`;
+    await request(app)
+      .post(`/v1/matches/${match.id}/block`)
+      .set("Authorization", auth)
+      .send({ reason: "только для модерации" });
+    expect(db.userBlocks[0]!.reason).toBe("только для модерации");
+
+    const res = await request(app).get("/v1/me/blocks").set("Authorization", auth);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocks).toHaveLength(1);
+    expect(Object.keys(res.body.blocks[0]).sort()).toEqual(["blockedAt", "firstName", "userId"]);
+    expect(JSON.stringify(res.body)).not.toContain("только для модерации");
+  });
+
   it("lifts one block and answers 404 the second time", async () => {
     const alice = await seedUser();
     const bob = await seedUser();
@@ -4015,6 +4046,115 @@ describe("/v1/matches/*", () => {
     // nothing in flight — and says so rather than claiming a fresh cancellation.
     expect(again.body).toEqual({ ok: true, dateCancelled: false });
     expect(db.userBlocks).toHaveLength(1);
+  });
+
+  // Founder decision 2026-09-26: an OPTIONAL reason, for moderation only. A
+  // block must never fail because of it — only a non-string is refused.
+  describe("POST /:id/block reason", () => {
+    async function blockWith(body?: unknown, contentType = true) {
+      const alice = await seedUser();
+      const bob = await seedUser();
+      const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+      let req = request(app)
+        .post(`/v1/matches/${match.id}/block`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      if (body !== undefined) {
+        req = contentType ? req.send(body as object) : req;
+      }
+      const res = await req;
+      return { res, alice, bob, match };
+    }
+
+    it("blocks with no body at all, and stores no reason", async () => {
+      const { res } = await blockWith();
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, dateCancelled: false });
+      expect(db.userBlocks).toHaveLength(1);
+      expect(db.userBlocks[0]!.reason).toBeNull();
+    });
+
+    it("blocks with an empty object, and stores no reason", async () => {
+      const { res } = await blockWith({});
+      expect(res.status).toBe(200);
+      expect(db.userBlocks[0]!.reason).toBeNull();
+    });
+
+    it("blocks with null, and stores no reason", async () => {
+      const { res } = await blockWith({ reason: null });
+      expect(res.status).toBe(200);
+      expect(db.userBlocks[0]!.reason).toBeNull();
+    });
+
+    it("stores a given reason trimmed", async () => {
+      const { res } = await blockWith({ reason: "  писал угрозы в чате  " });
+      expect(res.status).toBe(200);
+      expect(db.userBlocks[0]!.reason).toBe("писал угрозы в чате");
+    });
+
+    it("treats a blank reason as none", async () => {
+      const { res } = await blockWith({ reason: " \n\t " });
+      expect(res.status).toBe(200);
+      expect(db.userBlocks[0]!.reason).toBeNull();
+    });
+
+    it("clamps an over-long reason to 1000 characters instead of refusing the block", async () => {
+      const { res } = await blockWith({ reason: "x".repeat(1500) });
+      expect(res.status).toBe(200);
+      expect(db.userBlocks[0]!.reason).toHaveLength(1000);
+    });
+
+    // Each case wrapped in its own tuple so the array case reaches the test as
+    // an array — `it.each` spreads a bare array into arguments.
+    it.each([[42], [true], [{ text: "x" }], [["x"]]])(
+      "refuses a non-string reason (%j) with 400 and blocks nobody",
+      async (reason: unknown) => {
+        const { res } = await blockWith({ reason });
+        expect(res.status).toBe(400);
+        expect(db.userBlocks).toHaveLength(0);
+      },
+    );
+
+    it("a re-block with a reason stays an idempotent 200 and adds the reason", async () => {
+      const alice = await seedUser();
+      const bob = await seedUser();
+      const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+      const auth = `Bearer ${signAccess(alice.id)}`;
+
+      await request(app).post(`/v1/matches/${match.id}/block`).set("Authorization", auth);
+      expect(db.userBlocks[0]!.reason).toBeNull();
+
+      const again = await request(app)
+        .post(`/v1/matches/${match.id}/block`)
+        .set("Authorization", auth)
+        .send({ reason: "передумала молчать" });
+
+      expect(again.status).toBe(200);
+      expect(again.body).toEqual({ ok: true, dateCancelled: false });
+      expect(db.userBlocks).toHaveLength(1);
+      expect(db.userBlocks[0]!.reason).toBe("передумала молчать");
+    });
+
+    it("a re-block without a reason never erases the earlier one", async () => {
+      const alice = await seedUser();
+      const bob = await seedUser();
+      const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+      const auth = `Bearer ${signAccess(alice.id)}`;
+
+      await request(app)
+        .post(`/v1/matches/${match.id}/block`)
+        .set("Authorization", auth)
+        .send({ reason: "первая причина" });
+      const again = await request(app)
+        .post(`/v1/matches/${match.id}/block`)
+        .set("Authorization", auth)
+        .send({ reason: "   " });
+      const third = await request(app).post(`/v1/matches/${match.id}/block`).set("Authorization", auth);
+
+      expect(again.status).toBe(200);
+      expect(third.status).toBe(200);
+      expect(db.userBlocks).toHaveLength(1);
+      expect(db.userBlocks[0]!.reason).toBe("первая причина");
+    });
   });
 
   it("POST /:id/block never touches the blocker's OTHER live match", async () => {
