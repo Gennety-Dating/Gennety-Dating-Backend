@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 201 entries
+# Deploy journal index — 202 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-26 | 09-26 — политика v4.2 + условия v3.0 (`0baa406a`): `LEGAL_DOCS_VERSION` → `2026-09-26`, сайт уже опубликован (`b46d5d6`); выкат всего `main` и включение Tempo Sync — `~/gennety-backups/deploy-tempo-sync.sh deploy <коммит>`, затем `enable` (шлюз: сайт v4.2 + штамп на проде) | [pending](./pending.md) |
 | PENDING | 2026-09-25 | 09-25 — Tempo Sync (Apple Health) (`07323761`…`517b10e8`, `39062ca0`, `0fcd7d15`): `/v1/me/rhythm`, V_rhythm с весом 0 + лог сходства, Tier 2 мест в полосе 5 %, пост-сценарий, `/admin/analytics/rhythm-outcomes`; **миграция** `20260925090000_tempo_sync_life_rhythm` (`db:deploy` до рестарта); флаги по умолчанию выключены — без env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — лист места на доске смены места (`009461b9`): `profile` = `ShowcaseVenue` гида у каждой карточки `/v1/venue-change/catalog` и у `original` в `/state`, `null` без строки каталога; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-22 | 09-22 — Live Activity смены места на iOS (`e7bb0906`, `633ee715`, `9b1cb060`): тип `venue_change`, карточка по фазам match > partner > waiting с каждой стороны; **миграция** `20260922180000_venue_change_activity` (`db:deploy` до рестарта), без env | [pending](./pending.md) |

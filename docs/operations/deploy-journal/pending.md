@@ -11,6 +11,33 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — политика v4.2 и условия v3.0: `LEGAL_DOCS_VERSION` → `2026-09-26`; включение Tempo Sync (2026-09-26).**
+Коммит `0baa406a` (штамп + тексты `legal/`); `7461944e`/`ac293d5a` — `scripts/legal-md-to-tsx.py`, в рантайме
+не участвует. **Только код бота:** без миграций, без env, Mini App не пересобирать. Сайт уже опубликован
+(`gennetydating-website` `b46d5d6`, Vercel success 2026-09-26: privacy v4.2, terms v3.0 — до этого сайт стоял
+на v3.0 / v2.0).
+
+**Выкат — скриптом, весь `main` разом** (этот блок и все PENDING ниже, 3 миграции, Mini App рефералки):
+`bash ~/gennety-backups/deploy-tempo-sync.sh deploy <коммит>` → потом `… enable`. `enable` сам проверяет, что
+`gennety.com/privacy` показывает «Version 4.2» и что на проде штамп `2026-09-26`, иначе ничего не меняет;
+делает OSM Киева (`enrich-venues-osm.mjs --city=ua:kyiv --prod --apply`), `TEMPO_SYNC_ENABLED=true`,
+`RHYTHM_MATCH_WEIGHT=0.05`, рестарт с health-гейтом и откатом `.env`.
+
+**Что изменится на проде:** новые согласия пишут `policyVersion = "2026-09-26"`; старые записи не
+трогаются, повторного согласия никто не увидит. После `enable` — `features.tempoSync: true`, строка
+«Connect Apple Health» в iOS-сборках с Tempo Sync (сейчас — только сборки основателя), ритм в мэтчинге с
+весом 0.05, Tier 2 мест по фактам OSM.
+
+**Проверка:** `ssh root@167.172.178.229 "grep LEGAL_DOCS_VERSION /opt/gennety/packages/shared/src/constants.ts"`
+→ `2026-09-26`; `curl -s https://dating-api.gennety.com/v1/app/config | jq .features.tempoSync` → `true` после
+`enable`; `select count(*) from curated_venues where city_key='ua:kyiv' and active and osm_enriched_at is null`
+→ 0.
+**Откат:** флаги — `TEMPO_SYNC_ENABLED=false` (или `.env.bak.<ts>` из вывода) + `pm2 restart gennety-bot
+--update-env`; штамп откатывать незачем — тексты опубликованы. **Влияние на iOS:** нового контракта нет.
+**Demo-mode:** не затронут.
+
+---
+
 **PENDING — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
 Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`, `39062ca0` (тип клиентского события
 `tempo_sync` — воронка подключения), `0fcd7d15` (отсутствующий `chronotype` = `null`: iOS-клиент
