@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 366 entries
+# Decision index — all 367 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-26 | сведение веток: три забытых решения основателя посажены на ствол (Launch Events вырезаны, чистка Magic Prompt, согласование времени — миграции `20260926200000/200100/200200`, выкат B: рестарт, потом `db:deploy`); `matchRadius` сознательно НЕ посажен (iOS снова требует поле — сперва необязательное в спеке); остальные ветки уже были в стволе — вершины в тегах `archive/*`, на GitHub одна ветка `main` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-26 | stale match actions resolve against current server state | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-26 | необязательная причина блокировки, только для модерации: `{ reason?: string }` у `POST /v1/matches/:id/block` → `user_blocks.reason`; блок никогда не падает из-за неё (нет/пусто → без причины, >1000 обрезается), 400 только на не-строку; не видна заблокированному и не отдаётся `/v1/me/blocks`; повторный блок не стирает прежнюю | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-26 | до свидания только анонимный чат у каждой пары (T-1ч, без выбора): опросник T-3ч и обмен Telegram-хэндлами удалены, старые кнопки только снимаются; отмена `scheduled` — в любой момент до начала (гейта T-5ч не было, врали тексты — переписаны); кнопки отмены на карточке «свидание назначено» нет; колонки `coord*` оставлены deprecated | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
