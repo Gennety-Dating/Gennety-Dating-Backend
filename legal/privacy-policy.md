@@ -1,17 +1,20 @@
 # Gennety — Privacy Policy
 
-**Last Updated: 27 August 2026**
+**Last Updated: 26 September 2026**
 
-**Version: 4.1** — adds one disclosure: the optional map-colouring feature
-("explored areas"), which is off unless you switch it on. Everything else is
-unchanged from version 4.0, which was rewritten after a full audit of the
-running code. The substantive changes: we no longer collect nationality or
-ethnic origin at all; identity verification moved from Persona to Amazon
-Rekognition Face Liveness; the optional "personal AI export" feature has been
-retired; and we now disclose the short-lived chat timeline and the promo-code
-attribution that earlier versions did not mention. Section 12.2 has also been
-rewritten to state far more directly what our internal operations feed receives
-when an account is deleted, and what you can do about it.
+**Version: 4.2** — adds one optional feature: **Tempo Sync**, which reads your
+step count from Apple Health on your iPhone, reduces it on the phone to two
+coarse labels, and uses them to plan the date and as one small factor in
+matching. It is off unless you switch it on, and you can switch it off at any
+time. Everything else is unchanged from version 4.1 (27 August 2026), which
+added the optional map-colouring feature ("explored areas") to version 4.0.
+Version 4.0 was rewritten after a full audit of the running code: we no longer
+collect nationality or ethnic origin at all; identity verification moved from
+Persona to Amazon Rekognition Face Liveness; the optional "personal AI export"
+feature has been retired; we disclose the short-lived chat timeline and the
+promo-code attribution that earlier versions did not mention; and Section 12.2
+states directly what our internal operations feed receives when an account is
+deleted, and what you can do about it.
 
 This Privacy Policy explains how Gennety ("**Gennety**", "**we**", "**us**", or
 "**our**") collects, uses, shares, and protects your personal data when you use
@@ -59,7 +62,6 @@ The data controller responsible for your personal data is:
 - **Gennety**, a service operated by **Gleb Gosha**, an individual established
   in Kyiv, Ukraine. There is no separate legal entity; the operator is the data
   controller personally.
-- Postal address: *[to be completed before publication]*
 - Privacy contact: **legal@gennety.com**
 
 > *Article 27 GDPR representative: not yet appointed. Because we offer the
@@ -152,6 +154,7 @@ the Service, and data we derive or generate to power matchmaking.
 | **Face-match scores** | Similarity scores between your verification selfie and each of your profile photos. |
 | **Safety signals** | Strikes, reports about you, suspension/investigation status, and records of media we rejected at upload (reason and time only — never the rejected media itself). |
 | **Venue selection logs** | A structured, raw-text-free record of how a venue was chosen for your date, used to debug and improve the concierge. |
+| **Life rhythm (Tempo Sync)** — two labels: your usual activity level (calm / moderate / active) and when your day tends to be most active (earlier / middle / later, or unknown), plus how many days of data they are based on | Computed **on your iPhone** from the last 28 days of your step count in Apple Health, only if you connect it. Only the labels reach us — never step counts, sleep, workouts, heart rate or any other Health data |
 
 We **do not** create per-message embeddings of your conversations. **We do not
 sell your data**, and we do not use your data for third-party advertising or
@@ -192,6 +195,14 @@ IP address** (we do not store the raw IP). This record exists to prove that a
 valid consent was given, as consent laws require. Details are in the
 [Cookie Policy](https://gennety.com/cookies).
 
+### 5.5 From Apple Health (iPhone app, optional)
+
+If you connect Apple Health (Section 6), the iPhone app reads your step count
+for the last 28 days — including wheelchair pushes, if your iPhone records
+them — and turns it **on the phone** into the two life-rhythm labels described
+in Section 4.3. Only those labels are sent to us; the step counts never leave
+your device.
+
 ---
 
 ## 6. Special-Category Data (GDPR Article 9)
@@ -206,12 +217,28 @@ and you can withdraw it at any time (Section 18).
 | **Biometric data** — a liveness selfie and face-comparison scores used to uniquely identify you | When you complete identity verification. Verification is **mandatory** to be matched. | You are not matched. You may delete your account instead. See Section 10. |
 | **Dietary requirements** — if you confirm halal or kosher (which can reveal religious belief), or a medical requirement such as gluten-free | Only if you explicitly confirm one when telling the concierge what kind of date you want. | The concierge simply does not filter venues on that requirement. Nothing else changes. |
 | **Accessibility needs** — a step-free venue requirement, which can reveal health data | Only if you explicitly confirm it in the same flow. | As above. |
+| **Life rhythm from Apple Health** — derived from your step count, which can reveal health | Only if you tap "Connect Apple Health" and allow access in the iOS permission sheet. Refreshed when you open the iPhone app, at most once a day. | Nothing changes: you are matched and dates are planned exactly as for everyone else. |
 | **Free-text you write** — you may voluntarily reveal special-category information in a vibe answer, a chat message, a report, or feedback | Only if you choose to write it. | We ask you not to share more than you need to. |
 
-Dietary and accessibility requirements are used **only** to filter and rank date
-venues. They are never used to rank you, to score you, or to decide who you are
-matched with, and they are never shown to your match as a category — your match
-sees only the venue we chose.
+Dietary and accessibility requirements are used **only** to filter and rank
+date venues. They are never used to rank you, to score you, or to decide who
+you are matched with, and they are never shown to your match as a category —
+your match sees only the venue we chose.
+
+**Life rhythm is different, and we say so plainly.** If you connect Apple
+Health, your two rhythm labels are used (a) to plan the date — for example
+preferring a venue close to the metro, or suggesting a park or café nearby for
+afterwards — and (b) as **one small factor in matching**: when both people
+have a rhythm, a similar rhythm raises the pair's score slightly and a very
+different one lowers it slightly, by at most a few percent. It never excludes
+anyone, it does nothing when either person has not connected Apple Health,
+and it is far weaker than the other factors (Section 8). Your match never
+sees your labels or learns that rhythm played any part. The labels are never
+sent to our AI provider, never used in any text written about you, and never
+shown to our staff one person at a time — only as statistics over many pairs.
+Disconnect in the app (Settings → Your tempo → Disconnect) erases them from
+our servers immediately; revoke Health access in iOS Settings → Health → Data
+Access & Devices → Gennety.
 
 **Racial and ethnic origin: not collected.** Until 1 August 2026 onboarding
 asked an optional "nationality or ethnic background" question, and the answer
@@ -289,6 +316,9 @@ Matchmaking is **automated**. We use algorithms and AI to:
   or rejected;
 - triage a report about you into a severity tier, which can produce a warning, a
   suspension, or an investigation;
+- where you have connected Apple Health, compare your two life-rhythm labels
+  with another person's as a minor factor in the match score, and use the
+  calmer of the two to lean the venue choice (Section 6);
 - select the venue for your date.
 
 These automated steps can affect **whether and with whom you are matched, and
@@ -427,6 +457,11 @@ your contact details, your email or phone, your exact location or departure
 point, your psychological summary, your ratings or scores, or
 your safety history. Telegram contact details are exchanged only if you both
 explicitly choose to, through the pre-date coordination flow (Section 13).
+
+Your match never receives your life-rhythm labels, or any statement that
+rhythm influenced the match, the venue or an after-date suggestion. An
+after-date suggestion, when there is one, is shown to both of you with the
+same neutral wording.
 
 ### 12.2 Internal operations feed
 
@@ -603,6 +638,7 @@ We keep personal data only as long as necessary for the purposes above.
 | Chat timeline | **30 days**, then automatically deleted |
 | Promo attribution fingerprint | Up to **1 hour**, held in memory only |
 | Explored areas (map colouring) | While your account exists; erased on account deletion. Switching the feature off stops new recording and keeps what you have uncovered |
+| Life rhythm (Tempo Sync) | While connected. Replaced on every refresh; **deleted 35 days after the last refresh**, immediately on "Disconnect", and on account deletion |
 | Match records, score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |

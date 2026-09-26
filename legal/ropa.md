@@ -1,6 +1,7 @@
 # Gennety — Record of Processing Activities (GDPR Article 30)
 
-**Version 1.0 — 1 August 2026.** Internal document. Not published; produced to a
+**Version 1.1 — 26 September 2026** (adds §2.5c, Tempo Sync; v1.0 — 1 August
+2026). Internal document. Not published; produced to a
 supervisory authority on request.
 
 **Why this exists.** Article 30(5) exempts organisations under 250 employees
@@ -101,6 +102,17 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Recipients** | None. Not shared with the match, not shared with a processor |
 | **Retention** | While the account exists; erased on deletion. Withdrawing consent stops collection and retains the tiles already uncovered (they are the user's own map) |
 | **Note** | Written only from a foreground ping while the map screen is open, and from a verified Date Bump. There is no background-location entitlement and no such permission is requested, so "we do not run background collection" is structural rather than a policy promise |
+
+### 2.5c Life rhythm from Apple Health ("Tempo Sync") — optional, off by default
+
+| | |
+|---|---|
+| **Purpose** | Plan the date around the pair's usual pace (venue access, an after-date suggestion); a minor, centred factor in the match score |
+| **Legal basis** | Art. 9(2)(a) **explicit consent** (and Art. 6(1)(a)): a dedicated in-app sheet naming what is read and what it is used for, then Apple's own permission sheet. Recorded per user as `consentVersion` + `consentedAt` on the first upload. Withdrawable in-app ("Disconnect") and in iOS Settings |
+| **Data categories** | Two labels — activity (calm/moderate/active) and chronotype (early/intermediate/late/unknown) — and coverage days. **Derived on the device** from 28 days of Apple Health step counts (incl. wheelchair pushes). No raw Health value is transmitted or stored |
+| **Recipients** | None beyond hosting (Supabase, DigitalOcean). Never OpenAI, never Telegram, never the match, never the operations feed |
+| **Retention** | Replaced on each refresh; deleted after 35 days without one, on "Disconnect", and on account deletion (cascade) |
+| **Note** | Only the iOS app can read Apple Health; Telegram-only accounts never have a rhythm and are matched exactly as before. Analytics see only pair-level aggregates with cells under 20 suppressed (`/admin/analytics/rhythm-outcomes`) |
 
 ### 2.6 Communications with the AI, and the chat timeline
 
@@ -223,6 +235,8 @@ they are, Privacy Policy §15's assurance runs ahead of the paperwork.
    Used only to match; never shared beyond the match.
 4. **Free text the user volunteers** — a vibe answer, a report, feedback.
    Unsolicited; users are asked not to share more than they need to.
+5. **Life rhythm derived from Apple Health** (§2.5c) — Art. 9(2)(a) explicit
+   consent, captured as a distinct act with version and time.
 
 **Not collected:** racial or ethnic origin (removed 2026-08-01), political
 opinions, trade-union membership, genetic data.

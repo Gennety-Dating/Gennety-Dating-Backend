@@ -1,6 +1,7 @@
 # Gennety — Data Protection Impact Assessment (GDPR Article 35)
 
-**Version 1.0 — 1 August 2026.** Internal document. Living: revisit on any
+**Version 1.1 — 26 September 2026** (adds R11, Tempo Sync; v1.0 — 1 August
+2026). Internal document. Living: revisit on any
 material change to matching, verification, or the data model, and before any
 significant growth in user numbers.
 
@@ -104,6 +105,10 @@ Proportionality is easier to demonstrate by what was removed:
 - **Continuous location.** Coordinates are captured for a chosen dating city and
   a per-date departure point only; there is no background collection.
 - **Advertising and data sales.** Neither exists, and neither is planned.
+- **Sleep, workouts, heart rate or any Health value other than steps.** Sleep
+  without an Apple Watch is only a bedtime schedule the person typed; workout
+  types can reveal rehabilitation. Not read at all.
+- **Background Health delivery.** Refresh happens only when the app is opened.
 
 ---
 
@@ -244,6 +249,25 @@ pinning inside the EEA for the database and both AWS services. Places receives
 coordinates but never identity; CARTO never receives the user's IP.
 **Residual: moderate**, pending the signed DPAs recorded as open in the RoPA.
 
+### R11 — Health-derived data steering who you meet *(medium · low)*
+
+Step counts can reveal disability, pregnancy, illness or recovery; a "calm"
+label on a wheelchair user is, in effect, a health label. Used in matching, it
+could systematically disadvantage people who move less.
+
+*Mitigations.* Only two coarse labels leave the phone; the multiplier is
+**centred** (similar rhythms up, very different down, average effect ≈ 0) and
+capped at ±10 % in code, set at ±5 % (`RHYTHM_MATCH_WEIGHT=0.05`), against an
+attractiveness multiplier spanning ×0.05–×1 — it reorders neighbours, it cannot
+exclude. Exactly neutral when either side has no rhythm, so not connecting
+carries no penalty. The code shipped at weight 0 with the similarity logged,
+and the weight was switched to 0.05 only once Privacy Policy v4.2 disclosing it
+was published. Wheelchair pushes count as steps. Labels are fenced in code
+(`apps/bot/src/services/rhythm/boundary.test.ts`): no prompt, no partner, no
+per-user admin read. For venues the calmer side leads, which protects rather
+than excludes. **Residual: low.** *Re-assess* before raising the weight above
+0.05, using `/admin/analytics/rhythm-outcomes`.
+
 ---
 
 ## 5. Consultation
@@ -285,6 +309,7 @@ at any meaningful scale, not for the current handful of accounts.
 | 8 | Re-assess the DPO requirement | At growth | RoPA §6 |
 | 9 | Disparate-impact analysis of matching outcomes | At scale | R4 |
 | 10 | Re-run this DPIA on any material change to matching or verification | Ongoing | — |
+| 11 | Re-assess R11 from `/admin/analytics/rhythm-outcomes` before raising `RHYTHM_MATCH_WEIGHT` above 0.05 | Before any raise | R11 |
 
 ---
 

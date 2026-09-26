@@ -2,9 +2,11 @@
 
 ## Tempo Sync — life rhythm from Apple Health
 
-Decisions: journal 2026-09-24 (variant B, rhythm is a matching factor) and
-2026-09-25 (implementation). Ships dark: `TEMPO_SYNC_ENABLED=false` until the
-policy in `legal/tempo-sync-draft.md` is published.
+Decisions: journal 2026-09-24 (variant B, rhythm is a matching factor),
+2026-09-25 (implementation) and 2026-09-26 (policy v4.2 published). Shipped dark
+(`TEMPO_SYNC_ENABLED=false`); switched on by `~/gennety-backups/deploy-tempo-sync.sh
+enable`, which refuses until gennety.com shows privacy v4.2 and prod stamps
+`LEGAL_DOCS_VERSION` 2026-09-26.
 
 ### What reaches the server
 

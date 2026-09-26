@@ -4,7 +4,7 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 
 | File | Publish to | Live version to publish |
 |---|---|---|
-| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.1 — "Last Updated: 27 August 2026" |
+| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.2 — "Last Updated: 26 September 2026" |
 | [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.0 — "Last Updated: 1 August 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
 
@@ -23,7 +23,7 @@ processor**, exactly like the published documents above.
 **The Terms and the Privacy Policy share one version stamp**, because the
 consent screen accepts them with a single checkbox. That stamp lives in code as
 `LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
-`"2026-08-27"`) and is written to `User.policyVersion` at the moment of the
+`"2026-09-26"`) and is written to `User.policyVersion` at the moment of the
 click, so we can demonstrate WHICH text any given user agreed to (GDPR Art.
 7(1)). **Bump the constant in the same commit as any material edit to either
 document.**
@@ -34,14 +34,23 @@ repo). To go live, the text here must be transcribed into the website's
 `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, and a new
 `src/app/cookies/page.tsx`, and linked from the footer.
 
-## Pending draft — Tempo Sync (Apple Health)
+## Applied draft — Tempo Sync (Apple Health)
 
-[tempo-sync-draft.md](tempo-sync-draft.md) holds the exact text Tempo Sync adds
-to the Privacy Policy (→ v4.2), the ROPA (activity 2.5c) and the DPIA (R11). It
-is **not applied** on purpose: the feature ships behind `TEMPO_SYNC_ENABLED=false`
-and these documents must describe what runs. Applying it (with the
-`LEGAL_DOCS_VERSION` bump) and publishing it is the precondition for switching
-the flag on — the order is written at the top of the draft.
+[tempo-sync-draft.md](tempo-sync-draft.md) was the text Tempo Sync adds to the
+Privacy Policy, the ROPA and the DPIA. **Applied 2026-09-26** (privacy v4.2, ROPA
+v1.1, DPIA v1.1); the file stays as the record of what was moved in and of the
+switch-on order.
+
+## Website state (checked 2026-09-26)
+
+Until 2026-09-26 the website still showed **privacy v3.0 and terms v2.0** (both
+23 July 2026): v4.0, v4.1 and terms v3.0 had been written here and stamped by
+`LEGAL_DOCS_VERSION`, but never transcribed. They went live together with v4.2
+on 2026-09-26. The website's §2 had meanwhile been edited by hand to "operated by
+sverkaus labs"; the founder confirmed the text here ("Gleb Gosha, an individual")
+is the correct one, and the site now carries it. Transcription tool:
+`scripts/legal-md-to-tsx.py` (the page header — H1 and the "Last Updated ·
+Version" line — stays hand-written, as in July).
 
 ## ⚠️ Not legal advice
 
@@ -52,6 +61,26 @@ legal review.** Have a qualified lawyer review them before publishing —
 especially the biometric-data (GDPR Art. 9), dietary/accessibility special-
 category (Art. 9), automated-decision (Art. 22), payment/refund/subscription,
 and Apple App Store sections.
+
+## What changed in v4.2 (2026-09-26)
+
+One optional feature, **Tempo Sync**: the iPhone app reads 28 days of Apple Health
+step counts (wheelchair pushes included), reduces them on the phone to two coarse
+labels (activity level, time of day most active) and uploads only those. The
+text is the draft in [tempo-sync-draft.md](tempo-sync-draft.md), moved in as
+written, plus what applying it turned up:
+
+- **Privacy §5.5** (new) names Apple Health as a data source — §5 lists where
+  data comes from and the draft had not touched it.
+- **The version line** keeps the v4.0/v4.1 summary: the website still showed
+  v3.0 until this release, so v4.2 is the first published version carrying them.
+- **§2 loses the "Postal address: [to be completed before publication]" line**
+  rather than publish a placeholder. The address is still owed — ROPA §6 item 1,
+  DPIA action 2 — and goes back into §2 when there is one.
+- Privacy §4.3, §6 (row + paragraph), §8, §12.1 and §16 as drafted; ROPA gains
+  activity 2.5c and §5 item 5; DPIA gains R11, two §3.2 exclusions and action 11.
+  R11 states the weight as it is actually run: shipped at 0 with the similarity
+  logged, switched to 0.05 once this version was published.
 
 ## What changed in v4.1 (2026-08-27)
 

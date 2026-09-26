@@ -1,7 +1,13 @@
 # Tempo Sync (Apple Health) — draft changes to the legal documents
 
-**Status: DRAFT, not applied.** Written 2026-09-25 with the code (decision
-journal 2026-09-24, variant B). The live documents in this directory still
+**Status: APPLIED 2026-09-26** — to `privacy-policy.md` v4.2, `ropa.md` v1.1 and
+`dpia.md` v1.1, `LEGAL_DOCS_VERSION` → `2026-09-26`; published on gennety.com the
+same day (what differs from the text below: `legal/README.md` → "What changed in
+v4.2"). Step 1 (lawyer review) was not done — the founder's call. Kept as the
+record of the switch-on order; the rest of this header describes the state
+before applying.
+
+Written 2026-09-25 with the code (decision journal 2026-09-24, variant B). The live documents in this directory still
 describe the product WITHOUT Apple Health, and that is correct: the feature
 ships behind `TEMPO_SYNC_ENABLED=false`, so nothing is collected yet.
 
