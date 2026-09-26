@@ -11,7 +11,32 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING — политика v4.2 и условия v3.0: `LEGAL_DOCS_VERSION` → `2026-09-26`; включение Tempo Sync (2026-09-26).**
+**Deployed 2026-09-26 — сводный выкат всего `main` (`c372883f`) на прод 08:43–08:46 UTC; Tempo Sync включён 08:56 UTC.**
+Скрипт `~/gennety-backups/deploy-tempo-sync.sh` (прод до этого — `4315bc66`). **`deploy c372883f`** (запустил
+основатель): git archive → сухой rsync (141 файл, удалений нет) → снимок `/opt/gennety-prev-20260926-084315` →
+`pnpm install --frozen-lockfile`, `db:generate`, сборка Mini App → `db:deploy` — 3 миграции
+(`20260922120000_referral_ticket_rewards`, `20260922180000_venue_change_activity`,
+`20260925090000_tempo_sync_life_rhythm`), `migrate status` up to date → drift-гейт OK (5 чужих `canvas_*`
+терпятся) → рестарт, `online 4 → online 4` → Mini App в `/var/www/dating-app` (прежний —
+`/var/www/dating-app.prev-20260926-084315`). Публично: `/v1/ping` ok, 8 страниц Mini App — 200,
+`/v1/me/profiler` — 401, `features.tempoSync` — false, `user_rhythm_profiles` — 0 строк.
+**`enable`** (запустил агент по правилу `Bash(bash ~/gennety-backups/deploy-*.sh:*)` в
+`settings.local.json`): шлюз — сайт «Version 4.2» + штамп `2026-09-26` на проде; OSM Киева — один запрос
+Overpass (один 504 и повтор), 341 вход в метро, записаны факты 1231 места (≤400 м — 593, 401–800 — 404,
+801–1200 — 133, >1200 — 91, без метро в 2,5 км — 10; прогулочное место в 150 м — 767); 5 строк дальше
+40 км от центра не тронуты (выбросы каталога, Tier 2 читает их как «нет сигнала»); `.env`:
+`TEMPO_SYNC_ENABLED=true`, `RHYTHM_MATCH_WEIGHT=0.05` (снимок `.env.bak.<ts>` рядом), рестарт `online 5 →
+online 5`. Проверено снаружи: `features.tempoSync` — `true`, `/v1/me/rhythm` без токена — 401 (было 404).
+**Ложные тревоги скрипта, исправлены в нём же:** (1) `printf | grep -q` под `pipefail` не видел «Version 4.2»
+на странице в 227 КБ (SIGPIPE 141) — первый `enable` остановился на шлюзе, ничего не меняя; (2) Node под
+`FORCE_COLOR=3` вывел `true` с цветом, и финальная сверка написала CHECK FAILED при включённом флаге.
+**Не проверено — нужен телефон основателя:** строка «Connect Apple Health» на «Сегодня», загрузка меток,
+`afterDatePlace` на карточке свидания. **Откат:** флаги — `TEMPO_SYNC_ENABLED=false` + `pm2 restart gennety-bot
+--update-env`; код — снимок `/opt/gennety-prev-20260926-084315` (миграции только добавляют). Демо не выкачено.
+
+---
+
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — политика v4.2 и условия v3.0: `LEGAL_DOCS_VERSION` → `2026-09-26`; включение Tempo Sync (2026-09-26).**
 Коммит `0baa406a` (штамп + тексты `legal/`); `7461944e`/`ac293d5a` — `scripts/legal-md-to-tsx.py`, в рантайме
 не участвует. **Только код бота:** без миграций, без env, Mini App не пересобирать. Сайт уже опубликован
 (`gennetydating-website` `b46d5d6`, Vercel success 2026-09-26: privacy v4.2, terms v3.0 — до этого сайт стоял
@@ -38,7 +63,7 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
-**PENDING — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — Tempo Sync (Apple Health): ритм, Tier 2 мест, пост-сценарий, аналитика (2026-09-25).**
 Коммиты `07323761`, `6bdb9f49`, `5ea43d76`, `517b10e8`, `39062ca0` (тип клиентского события
 `tempo_sync` — воронка подключения), `0fcd7d15` (отсутствующий `chronotype` = `null`: iOS-клиент
 опускает nil-поле). **Миграция + рестарт бота:**
@@ -82,7 +107,7 @@ scripts/enrich-venues-osm.mjs --city=ua:kyiv --prod --apply` → `TEMPO_SYNC_ENA
 
 ---
 
-**PENDING — лист места на доске смены места: `profile` у карточек и у `original` (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — лист места на доске смены места: `profile` у карточек и у `original` (2026-09-22).**
 Коммит `009461b9`. **Только код бота:** без миграций, без env, без зависимостей; Mini App не
 пересобирать (поле он не читает). Каждая карточка `GET /v1/venue-change/catalog` и
 `original` в `GET /v1/venue-change/state` получают необязательное `profile` — объект
@@ -120,7 +145,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "$LINK"             # �
 
 ---
 
-**PENDING — Live Activity смены места на iOS: `venue_change` (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — Live Activity смены места на iOS: `venue_change` (2026-09-22).**
 Коммиты `e7bb0906` (таблица + миграция), `633ee715` (регистрация токенов, OpenAPI),
 `9b1cb060` (карточка). **Миграция + рестарт бота:** `20260922180000_venue_change_activity` —
 чисто аддитивная (новая таблица `venue_change_activities`, старый код её не читает), через
@@ -162,7 +187,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -H "Authorization: Bearer $JW
 
 ---
 
-**PENDING — медиана времени ответа в дашборде здоровья снова считается (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — медиана времени ответа в дашборде здоровья снова считается (2026-09-22).**
 Коммит `07d424fa`. **Только код бота:** без миграций, без env; Mini App не пересобирать.
 `medianResponseSeconds` (`admin/utils/user-health-source.ts`) с `a232ee20` (09-07) падал на
 `uuid = text` и тихо отдавал «ни одного ответа» каждому пользователю; теперь
@@ -185,7 +210,7 @@ ssh root@167.172.178.229 'pm2 logs gennety-bot --lines 2000 --nostream | grep -c
 
 ---
 
-**PENDING — время в промпте агента в `RENDER_TZ`, а не в поясе хоста (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — время в промпте агента в `RENDER_TZ`, а не в поясе хоста (2026-09-22).**
 Коммит `9fda38f0`. **Только код бота:** без миграций, без env, без зависимостей; Mini App не
 пересобирать. `formatClock` / `formatWhen` / `formatEventClock` в `services/prompt-builder.ts`
 теперь форматируют явно в `RENDER_TZ` (Europe/Kyiv) — как карточка свидания. Решение — журнал
@@ -208,7 +233,7 @@ ssh root@167.172.178.229 'timedatectl | grep "Time zone"'
 
 ---
 
-**PENDING — вопросы Profiler'а в iOS: `GET /v1/me/profiler` + `POST /v1/me/profiler/answer` (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — вопросы Profiler'а в iOS: `GET /v1/me/profiler` + `POST /v1/me/profiler/answer` (2026-09-22).**
 Коммит `bc196757`. **Только код бота:** без миграций (все колонки `profiler_*` давно есть),
 без env, без новых зависимостей; Mini App не пересобирать — он эти маршруты не читает.
 Два новых JWT-маршрута (`services/profiler-native.ts`): GET отдаёт живой вопрос или открывает
@@ -250,7 +275,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT"
 
 ---
 
-**PENDING — галерея профиля места «Городского гида»: до 10 фото вместо 5 (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — галерея профиля места «Городского гида»: до 10 фото вместо 5 (2026-09-22).**
 Коммит `afc88e07`. **Только код бота:** без миграций, без env, без новых
 зависимостей; Mini App не пересобирать — витрину он не читает. Правка чтения:
 каталог и так хранит до десяти ссылок на место (`CURATED_PHOTO_REFS_MAX = 10`),
@@ -285,7 +310,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<photoUrls[9] из о�
 
 ---
 
-**PENDING — обложка места свидания в `/v1/date/state`: `venue.photoUrl` / `venue.thumbnailUrl` (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — обложка места свидания в `/v1/date/state`: `venue.photoUrl` / `venue.thumbnailUrl` (2026-09-22).**
 Коммит `49b8bc35`. **Только код бота:** без миграций (колонка `venue_photo_name`
 давно есть), без env, без новых зависимостей; Mini App не пересобирать — он новые
 поля не читает. Ответ аддитивный: `DateStateVenue` получил два НЕОБЯЗАТЕЛЬНЫХ поля —
@@ -308,7 +333,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<photoUrl из отв�
 
 ---
 
-**PENDING — реферальная программа платит только билетами; приглашение убрано из воронок Premium (2026-09-22).**
+**Deployed 2026-09-26 (was PENDING; сводный выкат `c372883f`) — реферальная программа платит только билетами; приглашение убрано из воронок Premium (2026-09-22).**
 **Бот + СХЕМА + Mini App.** Флаг `REFERRAL_FEATURE_ENABLED` в проде выключен и
 остаётся выключенным — пользователи ничего не увидят, пока основатель его не
 включит. Решение: `docs/architecture/decisions/` → 2026-09-22.
