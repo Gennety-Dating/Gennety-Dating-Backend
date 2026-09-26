@@ -39,6 +39,15 @@ afterEach(() => {
 const BOT_TOKEN = "123456:test-bot-token-for-calendar-suite";
 const VALID_UUID = "11111111-1111-4111-8111-111111111111";
 
+vi.mock("@gennety/db", () => ({
+  prisma: {
+    user: { findUnique: vi.fn().mockResolvedValue({ id: "uid-A" }) },
+    match: { findUnique: vi.fn().mockResolvedValue({
+      status: "cancelled", userAId: "uid-A", userBId: "uid-B",
+    }) },
+  },
+}));
+
 vi.mock("../config.js", () => ({
   env: {
     BOT_TOKEN,
@@ -237,7 +246,7 @@ describe("POST /v1/calendar/pick", () => {
     expect(res.status).toBe(403);
   });
 
-  it("maps wrong-state, invalid-slot, invalid-iso → 400", async () => {
+  it("maps wrong-state to a normalized 409 and invalid input to 400", async () => {
     const initData = signInitData(BOT_TOKEN);
     for (const reason of ["wrong-state", "invalid-slot", "invalid-iso"] as const) {
       processSlots.mockResolvedValueOnce({ ok: false, reason });
@@ -245,8 +254,9 @@ describe("POST /v1/calendar/pick", () => {
         .post("/v1/calendar/pick")
         .set("Authorization", `tma ${initData}`)
         .send({ matchId: VALID_UUID, pickedIsos: [] });
-      expect(res.status, `for ${reason}`).toBe(400);
-      expect(res.body.error).toBe(reason);
+      expect(res.status, `for ${reason}`).toBe(reason === "wrong-state" ? 409 : 400);
+      expect(res.body.error).toBe(reason === "wrong-state" ? "stale_action" : reason);
+      if (reason === "wrong-state") expect(res.body.currentMatchStatus).toBe("cancelled");
     }
   });
 });
@@ -313,12 +323,13 @@ describe("GET /v1/calendar/state", () => {
     expect(res.status).toBe(403);
   });
 
-  it("maps wrong-state → 400", async () => {
+  it("maps wrong-state → normalized 409", async () => {
     getState.mockResolvedValueOnce({ ok: false, reason: "wrong-state" });
     const initData = signInitData(BOT_TOKEN);
     const res = await request(buildApp())
       .get(`/v1/calendar/state?matchId=${VALID_UUID}`)
       .set("Authorization", `tma ${initData}`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "stale_action", currentMatchStatus: "cancelled" });
   });
 });

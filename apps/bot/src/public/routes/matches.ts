@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
+import { t, type Language } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { isUuid } from "../../utils/uuid.js";
 import { getBotApi } from "../server.js";
@@ -39,6 +40,11 @@ import {
   venueOriginRefusal,
 } from "../../services/venue-origin.js";
 import { recordDateVibe } from "../../services/date-vibe.js";
+import { currentMatchStatusForUser, staleActionBody } from "../match-conflict.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
+import { buildEmergencyCancellationNotice } from "../../handlers/date/emergency.js";
+import { ticketRefundNoticeKey } from "../../services/ticket-refund.js";
+import { withRedactedSummary } from "../../services/outbound-recorder.js";
 
 export const matchesRouter: Router = Router();
 
@@ -194,7 +200,16 @@ matchesRouter.post("/:id/decision", async (req: Request, res: Response): Promise
 
   const result = await applyMatchDecision(id, req.userId!, decision, reason);
   if (!result) {
+    const status = await currentMatchStatusForUser(id, req.userId!);
+    if (status) {
+      res.status(409).json(staleActionBody(status));
+      return;
+    }
     res.status(404).json({ error: "Match not found or not actionable" });
+    return;
+  }
+  if (result.status === "resolved") {
+    res.status(204).end();
     return;
   }
   res.json(result);
@@ -226,7 +241,9 @@ matchesRouter.post(
       return;
     }
     if (!intent) {
-      res.status(409).json({ error: "Match not in venue negotiation" });
+      const status = await currentMatchStatusForUser(id, req.userId!);
+      if (status) res.status(409).json(staleActionBody(status));
+      else res.status(404).json({ error: "Match not found" });
       return;
     }
     res.json({ intent });
@@ -249,7 +266,9 @@ matchesRouter.put("/:id/venue-intent", async (req: Request, res: Response): Prom
     return;
   }
   if (!result) {
-    res.status(409).json({ error: "Draft not found or match not actionable" });
+    const status = await currentMatchStatusForUser(id, req.userId!);
+    if (status) res.status(409).json(staleActionBody(status));
+    else res.status(404).json({ error: "Match not found" });
     return;
   }
   res.json(result);
@@ -282,7 +301,9 @@ matchesRouter.post("/:id/vibe-location", async (req: Request, res: Response): Pr
 
   const result = await submitVibeLocation(id, req.userId!, { vibe, lat, lng });
   if (!result) {
-    res.status(409).json({ error: "Match not in a negotiating state" });
+    const status = await currentMatchStatusForUser(id, req.userId!);
+    if (status) res.status(409).json(staleActionBody(status));
+    else res.status(404).json({ error: "Match not found" });
     return;
   }
   res.json(result);
@@ -308,8 +329,13 @@ matchesRouter.post("/:id/vibe-telemetry", async (req: Request, res: Response): P
 
   const result = await recordDateVibe({ matchId: id, userId: req.userId!, rating });
   if (!result.ok) {
-    const status = result.error === "not-found" ? 404 : result.error === "wrong-state" ? 409 : 400;
-    res.status(status).json({ error: result.error });
+    if (result.error === "wrong-state") {
+      const status = await currentMatchStatusForUser(id, req.userId!);
+      if (status) res.status(409).json(staleActionBody(status));
+      else res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    res.status(result.error === "not-found" ? 404 : 400).json({ error: result.error });
     return;
   }
   res.json({ ok: true });
@@ -319,7 +345,9 @@ matchesRouter.post("/:id/safety-ack", async (req: Request, res: Response): Promi
   const id = paramId(req);
   const result = await acknowledgeSafetyBrief(id, req.userId!);
   if (!result) {
-    res.status(404).json({ error: "Match not found" });
+    const status = await currentMatchStatusForUser(id, req.userId!);
+    if (status) res.status(409).json(staleActionBody(status));
+    else res.status(404).json({ error: "Match not found" });
     return;
   }
   res.json(result);
@@ -373,12 +401,41 @@ matchesRouter.post("/:id/cancel", async (req: Request, res: Response): Promise<v
     }
     // Already cancelled, or never got as far as a scheduled date. 409 rather
     // than 404: the match exists and the caller is on it.
-    res.status(409).json({ error: "Match is not a scheduled date" });
+    const status = await currentMatchStatusForUser(id, req.userId!);
+    if (!status) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    res.status(409).json(staleActionBody(status));
     return;
   }
 
   const refunded =
     result.outcome.refunds.find((entry) => entry.userId === req.userId!)?.refunded ?? 0;
+  try {
+    const api = getBotApi();
+    const peer = api ? await prisma.user.findUnique({
+      where: { id: result.outcome.peerUserId },
+      select: { telegramId: true, platform: true, language: true },
+    }) : null;
+    if (api && peer && telegramReachable(peer)) {
+      const lang = (peer.language ?? "en") as Language;
+      const notice = buildEmergencyCancellationNotice(lang, result.outcome.reason);
+      const peerRefund = result.outcome.refunds.find(
+        (entry) => entry.userId === result.outcome.peerUserId,
+      )?.refunded ?? 0;
+      const refundKey = ticketRefundNoticeKey(peerRefund);
+      await withRedactedSummary(
+        "(partner sent a reason for cancelling the date — the full text was shown to the user)",
+        () => api.sendMessage(Number(peer.telegramId),
+          `${notice.text}${refundKey ? `\n\n${t(lang, refundKey)}` : ""}`,
+          { entities: notice.entities },
+        ),
+      );
+    }
+  } catch (err) {
+    console.warn("[matches] cancellation Telegram notice failed:", err instanceof Error ? err.message : err);
+  }
   res.json({ ok: true, ticketsRefunded: refunded });
 });
 

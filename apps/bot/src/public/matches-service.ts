@@ -591,15 +591,15 @@ export async function serializePartnerVoicePrompt(
  * neighbour in Telegram tuned their matching from the first decline. Optional,
  * because a decline without an explanation is still a decline.
  *
- * Returns the reloaded `SerializedMatch` or `null` if the user isn't on
- * this match / the match is already terminal.
+ * Returns the reloaded active match, `resolved` when this decision closed it,
+ * or `null` when the action was not claimed (stale or not a participant).
  */
 export async function applyMatchDecision(
   matchId: string,
   userId: string,
   decision: MatchDecision,
   reason?: string,
-): Promise<SerializedMatch | null> {
+): Promise<SerializedMatch | { status: "resolved" } | null> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
@@ -649,7 +649,7 @@ export async function applyMatchDecision(
     side,
     decision: decision === "accept",
   });
-  if (!claimed.claimed) return getCurrentMatchForUser(userId);
+  if (!claimed.claimed) return null;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 
   if (decision === "accept") {
@@ -754,7 +754,7 @@ export async function applyMatchDecision(
       if (!syntheticPair) {
         await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
       }
-      return getCurrentMatchForUser(userId);
+      return { status: "resolved" };
     }
 
     // First decider accepted → keep the row `proposed` (blind invariant) and
@@ -839,7 +839,7 @@ export async function applyMatchDecision(
   if (!syntheticPair) {
     await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
   }
-  return getCurrentMatchForUser(userId);
+  return { status: "resolved" };
 }
 
 /**
@@ -904,7 +904,11 @@ export async function submitVibeLocation(
       ? { ...base, status: "negotiating_venue" as const, venuePromptAskedAt: new Date() }
       : base;
 
-  await prisma.match.update({ where: { id: matchId }, data });
+  const saved = await prisma.match.updateMany({
+    where: { id: matchId, status: { in: ["negotiating", "negotiating_venue"] } },
+    data,
+  });
+  if (saved.count === 0) return null;
 
   const venueMode = venueIntentMode(matchId);
   if (venueMode === "live") await tryFinalizeVenueIntentV2(matchId);
@@ -1033,10 +1037,11 @@ export async function acknowledgeSafetyBrief(
 ): Promise<SerializedMatch | null> {
   const side = await sideFor(matchId, userId);
   if (!side) return null;
-  await prisma.match.update({
-    where: { id: matchId },
+  const saved = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled" },
     data: side === "A" ? { safetyAckA: true } : { safetyAckB: true },
   });
+  if (saved.count === 0) return null;
   return getCurrentMatchForUser(userId);
 }
 

@@ -6,6 +6,7 @@ import type { BotContext } from "../../session.js";
 import { withRedactedSummary } from "../../services/outbound-recorder.js";
 import { cancelScheduledDate } from "../../services/emergency-cancel.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
+import { retireStaleCallback } from "../matching/stale-action.js";
 import { ticketRefundNoticeKey } from "../../services/ticket-refund.js";
 import {
   claimMatchFlow,
@@ -116,10 +117,12 @@ export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
   const matchId = data.slice("emerg:start:".length);
   if (!matchId) return;
 
-  await ctx.answerCallbackQuery();
-
   const participant = await loadCancellableParticipant(ctx, matchId);
-  if (!participant) return;
+  if (!participant) {
+    await retireStaleCallback(ctx, "emergencyStaleAction");
+    return;
+  }
+  await ctx.answerCallbackQuery();
   if (participant.kind === "date-started") {
     await replyDateStarted(ctx);
     return;
@@ -147,10 +150,12 @@ export async function handleEmergencyConfirm(ctx: BotContext): Promise<void> {
   const matchId = data.slice("emerg:confirm:".length);
   if (!matchId) return;
 
-  await ctx.answerCallbackQuery();
-
   const participant = await loadCancellableParticipant(ctx, matchId);
-  if (!participant) return;
+  if (!participant) {
+    await retireStaleCallback(ctx, "emergencyStaleAction");
+    return;
+  }
+  await ctx.answerCallbackQuery();
   if (participant.kind === "date-started") {
     await ctx.editMessageReplyMarkup().catch(() => {});
     await replyDateStarted(ctx);
@@ -233,9 +238,11 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     reason,
   });
   if (!result.ok) {
-    // The reason was typed before the start and sent after it. Nothing was
-    // cancelled, and silence would read as if it had been.
+    // Nothing was cancelled, and silence would read as if it had been. A reason
+    // typed before the start and sent after it gets the "date started" answer;
+    // any other refusal means the date changed under the typed reason.
     if (result.error === "date-started") await replyDateStarted(ctx);
+    else await ctx.reply(t(ctx.session.language, "emergencyStaleAction")).catch(() => {});
     return;
   }
   const { peerUserId: otherUserId, reason: forwardedReason, refunds } = result.outcome;

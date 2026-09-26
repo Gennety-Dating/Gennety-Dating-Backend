@@ -20,6 +20,18 @@ const applyMatchDecision = vi.fn();
 const getCurrentMatchForUser = vi.fn();
 const resolvePartnerMedia = vi.fn();
 const getVenueIntentState = vi.fn();
+const cancelScheduledDate = vi.fn();
+const matchState = vi.hoisted(() => ({ status: "scheduled" }));
+
+vi.mock("@gennety/db", () => ({
+  prisma: {
+    match: { findUnique: vi.fn(async () => ({
+      status: matchState.status,
+      userAId: "11111111-1111-4111-8111-111111111111",
+      userBId: "22222222-2222-4222-8222-222222222222",
+    })) },
+  },
+}));
 
 vi.mock("../public/matches-service.js", () => ({
   applyMatchDecision,
@@ -48,7 +60,7 @@ vi.mock("../services/venue-intent-v2.js", () => ({
 vi.mock("../services/user-block.js", () => ({ blockMatchPartner: vi.fn() }));
 vi.mock("../services/decision-intent.js", () => ({ classifyMatchDecisionForUser: vi.fn() }));
 vi.mock("../services/emergency-cancel.js", () => ({
-  cancelScheduledDate: vi.fn(),
+  cancelScheduledDate,
   EMERGENCY_REASON_MAX_LENGTH: 500,
 }));
 vi.mock("../services/venue-origin.js", () => ({
@@ -69,6 +81,7 @@ vi.mock("./rate-limit.js", () => ({
 }));
 
 const { matchesRouter } = await import("./routes/matches.js");
+const { handleEmergencyStart } = await import("../handlers/date/emergency.js");
 
 function buildApp() {
   const app = express();
@@ -84,6 +97,51 @@ beforeEach(() => {
   resolvePartnerMedia.mockReset().mockResolvedValue(null);
   getVenueIntentState.mockReset().mockResolvedValue(null);
   getCurrentMatchForUser.mockReset().mockResolvedValue(null);
+  cancelScheduledDate.mockReset();
+  matchState.status = "scheduled";
+});
+
+describe("mixed-client cancellation conflict", () => {
+  it("cancels from iOS, rejects a repeat with 409, and retires the stale Telegram button", async () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    cancelScheduledDate.mockImplementationOnce(async () => {
+      matchState.status = "cancelled";
+      return { ok: true, outcome: {
+        peerUserId: "22222222-2222-4222-8222-222222222222",
+        reason: "Cannot make it",
+        refunds: [],
+      } };
+    }).mockResolvedValueOnce({ ok: false, error: "wrong-state" });
+
+    const app = buildApp();
+    await request(app).post(`/v1/matches/${id}/cancel`)
+      .send({ reason: "Cannot make it" }).expect(200);
+    const stale = await request(app).post(`/v1/matches/${id}/cancel`)
+      .send({ reason: "Cannot make it" });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toEqual({ error: "stale_action", currentMatchStatus: "cancelled" });
+
+    const ctx = {
+      session: { language: "en" },
+      from: { id: 1001 },
+      callbackQuery: { data: `emerg:start:${id}`, message: { text: "Cancel this date?" } },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+    await handleEmergencyStart(ctx as never);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ show_alert: true }),
+    );
+    expect(ctx.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining("no longer active"),
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    );
+    expect(ctx.reply).not.toHaveBeenCalled();
+    expect(cancelScheduledDate).toHaveBeenCalledTimes(2);
+    expect(matchState.status).toBe("cancelled");
+  });
 });
 
 describe("/v1/matches/:id — UUID shape guard", () => {

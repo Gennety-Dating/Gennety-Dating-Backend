@@ -12,6 +12,7 @@ import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { primeTimeFeatureLive } from "../../services/prime-time.js";
 import { createPrimeInvoiceLink } from "../../services/prime-time-purchase.js";
+import { currentMatchStatusForUser, staleActionBody } from "../match-conflict.js";
 
 /**
  * RFC 4122 UUID shape. We pre-validate `matchId` here because Prisma rejects a
@@ -81,6 +82,17 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
     );
 
     if (!result.ok) {
+      if (result.reason === "wrong-state" || result.reason === "slot-in-past") {
+        const caller = await prisma.user.findUnique({
+          where: { telegramId: BigInt(validation.user.id) },
+          select: { id: true },
+        });
+        const status = caller ? await currentMatchStatusForUser(matchId, caller.id) : null;
+        if (status) {
+          res.status(409).json(staleActionBody(status));
+          return;
+        }
+      }
       const status =
         result.reason === "match-not-found" || result.reason === "user-not-found"
           ? 404
@@ -134,6 +146,17 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
     const result = await getCalendarState(BigInt(validation.user.id), matchId);
 
     if (!result.ok) {
+      if (result.reason === "wrong-state") {
+        const caller = await prisma.user.findUnique({
+          where: { telegramId: BigInt(validation.user.id) },
+          select: { id: true },
+        });
+        const status = caller ? await currentMatchStatusForUser(matchId, caller.id) : null;
+        if (status) {
+          res.status(409).json(staleActionBody(status));
+          return;
+        }
+      }
       const status =
         result.reason === "match-not-found" || result.reason === "user-not-found"
           ? 404

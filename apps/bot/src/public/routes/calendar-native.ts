@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
+import { currentMatchStatusForUser, staleActionBody } from "../match-conflict.js";
 import {
   getCalendarState,
   processCalendarSlotsUpdate,
@@ -48,6 +49,13 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
     }
     const result = await getCalendarState(caller.telegramId, matchId);
     if (!result.ok) {
+      if (result.reason === "wrong-state") {
+        const status = await currentMatchStatusForUser(matchId, req.userId!);
+        if (status) {
+          res.status(409).json(staleActionBody(status));
+          return;
+        }
+      }
       answerFailure(res, result.reason);
       return;
     }
@@ -78,6 +86,13 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
 
     const result = await processCalendarSlotsUpdate(api, caller.telegramId, matchId, slots);
     if (!result.ok) {
+      if (result.reason === "wrong-state" || result.reason === "slot-in-past") {
+        const status = await currentMatchStatusForUser(matchId, req.userId!);
+        if (status) {
+          res.status(409).json(staleActionBody(status));
+          return;
+        }
+      }
       answerFailure(res, result.reason);
       return;
     }

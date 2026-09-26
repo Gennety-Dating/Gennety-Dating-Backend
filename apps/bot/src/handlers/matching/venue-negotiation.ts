@@ -182,7 +182,7 @@ export async function startVenueNegotiation(
   api: Api<RawApi>,
   matchId: string,
   agreedTime: Date,
-): Promise<void> {
+): Promise<boolean> {
   // Atomic claim: only the first caller flips `negotiating → negotiating_venue`.
   // Two concurrent calendar picks can each independently compute the same single
   // overlap (`processCalendarSlotsUpdate`) and both call this in the same tick;
@@ -202,7 +202,7 @@ export async function startVenueNegotiation(
       matchId,
       agreedTime.toISOString(),
     );
-    return;
+    return false;
   }
 
   const claim = await prisma.match.updateMany({
@@ -215,7 +215,7 @@ export async function startVenueNegotiation(
       calendarMessageIdB: null,
     },
   });
-  if (claim.count === 0) return;
+  if (claim.count === 0) return false;
 
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -225,7 +225,7 @@ export async function startVenueNegotiation(
       userB: { select: { telegramId: true, platform: true, language: true, theme: true } },
     },
   });
-  if (!match) return;
+  if (!match) return false;
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
@@ -256,6 +256,7 @@ export async function startVenueNegotiation(
     sends.push(sendSide(match.userB.telegramId, langB, match.userB.theme));
   }
   await Promise.all(sends);
+  return true;
 }
 
 /**

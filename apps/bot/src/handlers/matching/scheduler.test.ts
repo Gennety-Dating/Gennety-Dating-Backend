@@ -79,6 +79,7 @@ import { startVenueNegotiation } from "./venue-negotiation.js";
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-04-30T12:00:00.000Z"));
+  mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
 });
 
 afterEach(() => {
@@ -127,6 +128,7 @@ function createCtx(overrides: {
       : undefined,
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
     api: createApi(),
   } as any;
 }
@@ -421,10 +423,13 @@ describe("scheduler: handleSchedulePick (legacy callback fallback)", () => {
     mStartVenue.mockResolvedValue(undefined);
   });
 
-  it("acknowledges a stale `sched:pick:*` tap and re-delivers the calendar button instead of silently failing", async () => {
+  it("re-delivers the calendar button for a still-active legacy `sched:pick:*` tap", async () => {
+    const matchId = "11111111-1111-4111-8111-111111111111";
+    mMatch.findUnique.mockResolvedValueOnce({ status: "negotiating", userAId: "uid-A", userBId: "uid-B" });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", theme: "dark" });
     const ctx = createCtx({
       session: { onboardingStep: "completed", language: "en" },
-      callbackData: "sched:pick:match-1:0",
+      callbackData: `sched:pick:${matchId}:0`,
     });
 
     await handleSchedulePick(ctx);
@@ -434,9 +439,9 @@ describe("scheduler: handleSchedulePick (legacy callback fallback)", () => {
     const replyArgs = ctx.reply.mock.calls[0]!;
     const markup = (replyArgs[1] as { reply_markup: { inline_keyboard: any[][] } }).reply_markup;
     const btn = markup.inline_keyboard[0]![0] as { web_app?: { url: string } };
-    expect(btn.web_app?.url).toContain("match=match-1");
+    expect(btn.web_app?.url).toContain(`match=${matchId}`);
     // Critically: we do NOT touch the DB on this fallback path.
-    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -499,7 +504,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
 
     expect(result).toEqual({ ok: false, reason: "slot-in-past" });
     // Ничего не записано и никакая фиксация не запущена.
-    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
     expect(mStartVenue).not.toHaveBeenCalled();
   });
 
@@ -533,7 +538,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("invalid-slot");
-    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it("locks in the *earliest* common slot and hands off to venue negotiation when both arrays now intersect", async () => {
@@ -806,7 +811,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       a.toISOString(), // duplicate
     ]);
 
-    const written = (mMatch.update.mock.calls[0]![0] as { data: { availableTimesA: Date[] } })
+    const written = (mMatch.updateMany.mock.calls[0]![0] as { data: { availableTimesA: Date[] } })
       .data.availableTimesA;
     expect(written.length).toBe(2);
     expect(written[0]!.getTime()).toBe(b.getTime()); // earliest first
@@ -825,11 +830,28 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       userA: { telegramId: 1001n, language: "en" },
       userB: { telegramId: 1002n, language: "en" },
     });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
     const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", []);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("wrong-state");
+  });
+
+  it("rejects a save when cancellation wins after the calendar read", async () => {
+    mockMatchInState({});
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+    mMatch.updateMany.mockReset().mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    const result = await processCalendarSlotsUpdate(api, 1001n, "match-1", []);
+
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(mMatch.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "match-1", status: "negotiating" },
+    }));
+    expect(mStartVenue).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -840,7 +862,7 @@ describe("scheduler: getCalendarState", () => {
     // some tests intentionally don't consume their mUser queue, and
     // a leftover would silently feed the next test.
     mMatch.findUnique.mockReset();
-    mMatch.update.mockReset();
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
@@ -916,7 +938,7 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
     // some tests intentionally don't consume their mUser queue, and
     // a leftover would silently feed the next test.
     mMatch.findUnique.mockReset();
-    mMatch.update.mockReset();
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
@@ -948,7 +970,7 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
 
     await handleCalendarWebAppData(ctx);
 
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ availableTimesA: expect.any(Array) }),
       }),
@@ -977,7 +999,7 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
     });
 
     await handleCalendarWebAppData(ctx);
-    expect(mMatch.update).toHaveBeenCalled();
+    expect(mMatch.updateMany).toHaveBeenCalled();
   });
 
   it("ignores malformed JSON payloads", async () => {
@@ -1013,7 +1035,7 @@ describe("scheduler: Prime Time band", () => {
 
   beforeEach(() => {
     mMatch.findUnique.mockReset();
-    mMatch.update.mockReset();
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
@@ -1058,7 +1080,7 @@ describe("scheduler: Prime Time band", () => {
     ]);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("prime-time-locked");
-    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it("still accepts the rest of the day", async () => {
@@ -1067,7 +1089,7 @@ describe("scheduler: Prime Time band", () => {
       ORDINARY.toISOString(),
     ]);
     expect(res.ok).toBe(true);
-    expect(mMatch.update).toHaveBeenCalled();
+    expect(mMatch.updateMany).toHaveBeenCalled();
   });
 
   it("refuses a MIXED submission — one locked slot poisons the whole save", async () => {
@@ -1079,7 +1101,7 @@ describe("scheduler: Prime Time band", () => {
       PRIME.toISOString(),
     ]);
     expect(res.ok).toBe(false);
-    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it("opens the band for the PAIR when the PARTNER subscribes, not just the subscriber", async () => {
@@ -1094,19 +1116,19 @@ describe("scheduler: Prime Time band", () => {
   it("stamps the unlock on the first premium mark, so a lapse cannot re-lock it", async () => {
     mockMatch({ userA: { premiumUntil: future } });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
-    const data = mMatch.update.mock.calls[0]![0].data;
+    const data = mMatch.updateMany.mock.calls[0]![0].data;
     expect(data.primeTimeUnlockedAt).toBeInstanceOf(Date);
   });
 
   it("does NOT stamp on an ordinary mark, or when already unlocked", async () => {
     mockMatch({ userA: { premiumUntil: future } });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [ORDINARY.toISOString()]);
-    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
 
-    mMatch.update.mockReset();
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mockMatch({ userA: { premiumUntil: future }, primeTimeUnlockedAt: new Date() });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
-    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
   });
 
   it("does NOT stamp when the pair is merely grandfathered — a condition is not a purchase", async () => {
@@ -1115,7 +1137,7 @@ describe("scheduler: Prime Time band", () => {
       PRIME.toISOString(),
     ]);
     expect(res.ok).toBe(true);
-    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
   });
 
   it("honours a paid pass with no subscription anywhere", async () => {

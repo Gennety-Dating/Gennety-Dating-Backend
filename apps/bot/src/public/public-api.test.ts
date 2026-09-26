@@ -3638,7 +3638,7 @@ describe("/v1/matches/*", () => {
       .post(`/v1/matches/${match.id}/decision`)
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ decision: "decline" });
-    expect(res.status).toBe(404); // current match is now cancelled → null
+    expect(res.status).toBe(204); // decision succeeded; no active match remains
     expect(db.matches.get(match.id)?.status).toBe("cancelled");
     expect(db.matches.get(match.id)?.acceptedByA).toBe(false);
     // Bob (who accepted, then got declined on) is compensated.
@@ -3659,7 +3659,7 @@ describe("/v1/matches/*", () => {
       .post(`/v1/matches/${match.id}/decision`)
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ decision: "accept" });
-    expect(res.status).toBe(404); // cancelled → no current match
+    expect(res.status).toBe(204); // decision succeeded; no active match remains
     expect(db.matches.get(match.id)?.status).toBe("cancelled");
     expect(db.matches.get(match.id)?.acceptedByA).toBe(true);
   });
@@ -3675,8 +3675,9 @@ describe("/v1/matches/*", () => {
       .post(`/v1/matches/${match.id}/decision`)
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ decision: "decline" });
-    // No-op: her decision was final; still her open proposed match → 200.
-    expect(res.status).toBe(200);
+    // Her first decision remains final; the stale tap is a conflict.
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "stale_action", currentMatchStatus: "proposed" });
     expect(db.matches.get(match.id)?.status).toBe("proposed");
     expect(db.matches.get(match.id)?.acceptedByA).toBe(true);
   });
@@ -3761,7 +3762,8 @@ describe("/v1/matches/*", () => {
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ decision: "decline" });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "stale_action", currentMatchStatus: "negotiating" });
     expect(db.matches.get(match.id)?.status).toBe("negotiating");
   });
 
@@ -3800,6 +3802,13 @@ describe("/v1/matches/*", () => {
     expect(row?.emergencyCancelledBy).toBe(alice.id);
     // Verbatim, not paraphrased: the partner is owed the actual sentence.
     expect(row?.emergencyReason).toBe("Прости, заболел");
+    // Treat the peer push as dropped: the next ordinary Today poll must still
+    // read the cancelled state from /current without any notification delivery.
+    const peerPoll = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(bob.id)}`);
+    expect(peerPoll.status).toBe(200);
+    expect(peerPoll.body.match).toBeNull();
   });
 
   // Founder decision 2026-09-26: cancelling is open for the whole time a date

@@ -164,7 +164,7 @@ beforeEach(() => {
 describe("interpretVenueIntent (VENUE-1)", () => {
   it("writes a fresh draft when nothing is stored yet for this side", async () => {
     matchFindUnique.mockResolvedValue(baseMatch());
-    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: null });
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: null, venueIntentB: null });
 
     const draft = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", ORIGIN);
 
@@ -184,7 +184,7 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     const existing = confirmedIntent();
     matchFindUnique.mockResolvedValue(baseMatch({ venueIntentA: existing }));
     // Re-read inside the lock sees the same confirmed value.
-    txMatchFindUnique.mockResolvedValue({ venueIntentA: existing, venueIntentB: null });
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: existing, venueIntentB: null });
 
     const result = await interpretVenueIntent(MATCH_ID, USER_A, "actually let's do drinks", ORIGIN);
 
@@ -199,7 +199,7 @@ describe("interpretVenueIntent (VENUE-1)", () => {
   it("still writes a draft for OWN side when the OTHER side is confirmed (guard is per-side)", async () => {
     const partnerConfirmed = confirmedIntent();
     matchFindUnique.mockResolvedValue(baseMatch({ venueIntentB: partnerConfirmed }));
-    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: partnerConfirmed });
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: null, venueIntentB: partnerConfirmed });
 
     const draft = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", ORIGIN);
 
@@ -219,6 +219,16 @@ describe("interpretVenueIntent (VENUE-1)", () => {
 
     expect(result).toBeNull();
     expect(prismaTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not write if the match closes after the initial read but before the row lock", async () => {
+    matchFindUnique.mockResolvedValue(baseMatch());
+    txMatchFindUnique.mockResolvedValue({ status: "cancelled", venueIntentA: null, venueIntentB: null });
+
+    const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", ORIGIN);
+
+    expect(result).toBeNull();
+    expect(txMatchUpdate).not.toHaveBeenCalled();
   });
 
   it("returns null for a non-participant", async () => {
@@ -251,7 +261,7 @@ describe("interpretVenueIntent — departure-point gate (PRODUCT_SPEC §3.7)", (
     // A legacy account: blocking someone over a gap in OUR data is never right.
     profileFindUnique.mockResolvedValue({ homeCityKey: "de:berlin" });
     matchFindUnique.mockResolvedValue(baseMatch());
-    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: null });
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: null, venueIntentB: null });
 
     const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", BERLIN);
 
@@ -260,7 +270,7 @@ describe("interpretVenueIntent — departure-point gate (PRODUCT_SPEC §3.7)", (
 
   it("does not gate a call that carries no origin at all", async () => {
     matchFindUnique.mockResolvedValue(baseMatch());
-    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: null });
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: null, venueIntentB: null });
 
     const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", null);
 

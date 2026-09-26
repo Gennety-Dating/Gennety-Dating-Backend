@@ -3068,7 +3068,7 @@ paths:
             caller is on it.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
         "503":
           description: Calendar not ready (bot API unavailable)
           content:
@@ -3148,7 +3148,7 @@ paths:
           description: The calendar is closed for this match
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
         "503":
           description: Calendar not ready (bot API unavailable)
           content:
@@ -3598,13 +3598,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SerializedMatch" }
+        "204": { description: Decision applied and match resolved; no active match remains }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
-          description: Match not found or not actionable
+          description: Match not found or caller is not a participant
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The match changed or this side already decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/vibe-location:
     post:
@@ -3645,7 +3651,7 @@ paths:
           description: Match not in a negotiating state
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/venue-intent:
     get:
@@ -3689,7 +3695,11 @@ paths:
                   - $ref: "#/components/schemas/VenueOriginOutsideMarket"
                   - $ref: "#/components/schemas/Error"
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409":
+          description: Match state changed before venue intent confirmation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/venue-intent/interpret:
     post:
@@ -3727,7 +3737,11 @@ paths:
                   - $ref: "#/components/schemas/VenueOriginOutsideMarket"
                   - $ref: "#/components/schemas/Error"
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409":
+          description: Match state changed before venue intent interpretation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/safety-ack:
     post:
@@ -3744,6 +3758,11 @@ paths:
               schema: { $ref: "#/components/schemas/SerializedMatch" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Match is no longer scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/vibe-telemetry:
     post:
@@ -3815,12 +3834,12 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: >
-            `wrong-state` — the date has not happened yet. A card that somehow
+            `stale_action` — the date has not happened yet. A card that somehow
             asked early must not be able to write an answer about an evening
             that has not occurred.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
 
   /v1/matches/{id}/cancel:
     post:
@@ -3878,7 +3897,7 @@ paths:
             409 rather than 404: the match exists and the caller is on it.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema: { $ref: "#/components/schemas/StaleActionConflict" }
         "413":
           description: Reason too long
           content:
@@ -5223,6 +5242,15 @@ components:
       properties:
         error: { type: string }
       additionalProperties: true
+
+    StaleActionConflict:
+      type: object
+      required: [error, currentMatchStatus]
+      properties:
+        error: { type: string, enum: [stale_action] }
+        currentMatchStatus:
+          type: string
+          enum: [proposed, negotiating, negotiating_venue, scheduled, cancelled, completed, expired]
 
     RadarState:
       type: object

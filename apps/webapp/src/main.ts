@@ -267,6 +267,7 @@ async function boot(): Promise<void> {
     applyState(state, /* firstLoad */ true);
   } catch (err) {
     if (err instanceof CalendarApiError) {
+      if (retireStaleCalendar(err)) return;
       app?.showAlert(errorMessage(err));
     } else {
       app?.showAlert(tr(lang, "errNetwork"));
@@ -1353,6 +1354,7 @@ async function handleSave(): Promise<void> {
     render();
   } catch (err) {
     saving = false;
+    if (retireStaleCalendar(err)) return;
     const msg = err instanceof CalendarApiError ? errorMessage(err) : tr(lang, "errNetwork");
     app.showAlert(msg);
     updateCtaForPicker();
@@ -1392,6 +1394,7 @@ async function handleConfirmOverlap(): Promise<void> {
     render();
   } catch (err) {
     saving = false;
+    if (retireStaleCalendar(err)) return;
     const msg = err instanceof CalendarApiError ? errorMessage(err) : tr(lang, "errNetwork");
     app.showAlert(msg);
     showCta(tr(lang, "btnConfirm"), { disabled: multiOverlapChoice === null });
@@ -1445,8 +1448,9 @@ async function poll(): Promise<void> {
       view = "dates";
     }
     render();
-  } catch {
-    // Polling errors are swallowed; the next save will surface a real one.
+  } catch (err) {
+    if (retireStaleCalendar(err)) return;
+    // Network errors can recover on the next poll.
   }
   schedulePoll();
 }
@@ -1530,12 +1534,19 @@ function errorMessage(err: CalendarApiError): string {
     case "invalid-slot":
       return tr(lang, "errInvalidSlot");
     case "wrong-state":
+    case "stale_action":
       return tr(lang, "errWrongState");
     case "not-participant":
       return tr(lang, "errNotParticipant");
     default:
       return `${tr(lang, "errGeneric")} (HTTP ${err.status})`;
   }
+}
+
+function retireStaleCalendar(err: unknown): boolean {
+  if (!(err instanceof CalendarApiError) || err.reason !== "stale_action") return false;
+  app?.showAlert(errorMessage(err), () => app?.close());
+  return true;
 }
 
 // ── Confetti (success only) ────────────────────────────────────

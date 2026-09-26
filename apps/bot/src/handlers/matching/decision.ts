@@ -14,6 +14,8 @@ import {
   outcomeRevealKey,
 } from "../../services/match-decision-shared.js";
 import { claimMatchDecision } from "../../services/match-decision-claim.js";
+import type { MatchDecisionClaimResult } from "../../services/match-decision-claim.js";
+import { retireStaleCallback } from "./stale-action.js";
 import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 import { offerRematchAfterCancellation } from "./rematch.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
@@ -194,13 +196,19 @@ export async function promptDeclineConfirm(ctx: BotContext): Promise<void> {
   const matchId = data.slice("match:decline:".length);
   if (!matchId) return;
 
-  await ctx.answerCallbackQuery();
-
   const match = await loadMatch(matchId);
   // Only a still-live proposal can be passed on; a resolved/expired row no-ops.
-  if (!match || match.status !== "proposed") return;
+  if (!match || match.status !== "proposed") {
+    await retireStaleCallback(ctx, "matchCardExpiredAlert");
+    return;
+  }
   const side = await sideForCaller(ctx, match);
-  if (!side) return;
+  if (!side) {
+    await retireStaleCallback(ctx, "matchCardExpiredAlert");
+    return;
+  }
+
+  await ctx.answerCallbackQuery();
 
   const lang = ctx.session.language;
   await ctx.reply(t(lang, "matchDeclineConfirmPrompt"), {
@@ -266,8 +274,6 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   }
   if (!matchId) return;
 
-  const lang = ctx.session.language;
-
   // The confirmation card carries a single live button. Strip its keyboard the
   // moment it's tapped so a double-tap can't re-enter the commit path (which is
   // already idempotent, but this keeps the chat clean).
@@ -292,20 +298,30 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   // make this alert impossible.
   const side = match && match.status === "proposed" ? await sideForCaller(ctx, match) : null;
   if (!match || !side) {
-    await ctx.answerCallbackQuery({ text: t(lang, "matchCardExpiredAlert"), show_alert: true });
-    await ctx.editMessageReplyMarkup().catch(() => {});
+    await retireStaleCallback(ctx, "matchCardExpiredAlert");
     return;
   }
+
+  const claimed = await claimMatchDecision({
+    matchId: match.id,
+    side,
+    decision: action === "accept",
+  });
+  if (!claimed.claimed) {
+    await retireStaleCallback(ctx, "matchCardExpiredAlert");
+    return;
+  }
+  await answerDecisionTap(ctx, action);
 
   if (action === "accept") {
     // Capture the public Telegram username on the path to every scheduled date,
     // so the pre-date coordination offer can build a `t.me/<username>` link
     // without a fresh /start. Best-effort, never blocks the decision.
     void syncTelegramUsername(BigInt(ctx.from!.id), ctx.from?.username).catch(() => {});
-    await handleAccept(ctx, match, side);
+    await handleAccept(ctx, match, side, claimed);
     return;
   }
-  await handleDecline(ctx, match, side);
+  await handleDecline(ctx, match, side, claimed);
 }
 
 /**
@@ -314,22 +330,14 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
  * The toast used to go out before `claimMatchDecision`, so a tap that lost the
  * claim — a double tap, or a row that left `proposed` between the load and the
  * write — still said "Accepted!" over a decision that was never saved. A query
- * can be answered once, so the answer waits for the claim, and a lost claim gets
- * the same inactive-card alert the load-time guard uses, with the dead keyboard.
+ * can be answered once, so the answer waits for the claim; a lost claim is
+ * retired in `handleMatchDecision` with the same alert the load-time guard uses.
  */
 async function answerDecisionTap(
   ctx: BotContext,
-  claimed: boolean,
   action: "accept" | "decline",
 ): Promise<void> {
   const lang = ctx.session.language;
-  if (!claimed) {
-    await ctx
-      .answerCallbackQuery({ text: t(lang, "matchCardExpiredAlert"), show_alert: true })
-      .catch(() => {});
-    await ctx.editMessageReplyMarkup().catch(() => {});
-    return;
-  }
   await ctx
     .answerCallbackQuery({
       text: t(lang, action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast"),
@@ -448,17 +456,11 @@ async function handleAccept(
   ctx: BotContext,
   match: MatchView,
   side: Side,
+  claimed: Extract<MatchDecisionClaimResult, { claimed: true }>,
 ): Promise<void> {
   const lang = ctx.session.language;
   const actorId = side === "A" ? match.userAId : match.userBId;
   const targetId = side === "A" ? match.userBId : match.userAId;
-  const claimed = await claimMatchDecision({
-    matchId: match.id,
-    side,
-    decision: true,
-  });
-  await answerDecisionTap(ctx, claimed.claimed, "accept");
-  if (!claimed.claimed) return;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
   await createMatchEventBestEffort({
     matchId: match.id,
@@ -612,17 +614,11 @@ async function handleDecline(
   ctx: BotContext,
   match: MatchView,
   side: Side,
+  claimed: Extract<MatchDecisionClaimResult, { claimed: true }>,
 ): Promise<void> {
   const lang = ctx.session.language;
   const actorId = side === "A" ? match.userAId : match.userBId;
   const targetId = side === "A" ? match.userBId : match.userAId;
-  const claimed = await claimMatchDecision({
-    matchId: match.id,
-    side,
-    decision: false,
-  });
-  await answerDecisionTap(ctx, claimed.claimed, "decline");
-  if (!claimed.claimed) return;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 
   await createMatchEventBestEffort({

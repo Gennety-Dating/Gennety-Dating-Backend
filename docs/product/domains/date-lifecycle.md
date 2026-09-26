@@ -347,9 +347,12 @@ Inert with `COORDINATION_FEATURE_ENABLED` off.
 compare-and-set, the peer's priority boost, the ticket refunds — lives in
 `services/emergency-cancel.ts`, shared by the Telegram handler and the native
 `POST /v1/matches/{id}/cancel` (JWT). Each surface owns only how it *asks* and
-how it *tells the partner*: Telegram quotes the reason verbatim into a chat,
-iOS has no chat to quote into and shows it in the app. They must not disagree
-about anything else, which is why the split is where it is.
+how it *tells the partner*: either surface quotes the reason verbatim in a
+Telegram chat for a reachable Telegram peer; iOS also shows the outcome in the
+app. They must not disagree about anything else, which is why the split is
+where it is. A stale Telegram cancel button now answers with an alert and
+retires its keyboard; a native caller sees 409 `stale_action` with the current
+match status and refreshes Today immediately.
 
 The same change fixed something that had been quietly false: the Telegram
 handler's comment claimed a mobile peer got "a push notification dispatched

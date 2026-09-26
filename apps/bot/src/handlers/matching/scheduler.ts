@@ -14,6 +14,8 @@ import {
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { env } from "../../config.js";
+import { isUuid } from "../../utils/uuid.js";
+import { retireStaleCallback } from "./stale-action.js";
 import {
   isPrimeTimeSlot,
   lockedSlotsOf,
@@ -527,8 +529,6 @@ export async function processCalendarSlotsUpdate(
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
-  if (match.status !== "negotiating") return { ok: false, reason: "wrong-state" };
-
   const allowed = new Set(match.proposedTimes.map((d) => d.getTime()));
   for (const p of picks) {
     if (!allowed.has(p.getTime())) return { ok: false, reason: "invalid-slot" };
@@ -567,6 +567,7 @@ export async function processCalendarSlotsUpdate(
   const isA = user.id === match.userAId;
   const isB = user.id === match.userBId;
   if (!isA && !isB) return { ok: false, reason: "not-participant" };
+  if (match.status !== "negotiating") return { ok: false, reason: "wrong-state" };
 
   // Deduplicate + sort ascending so the array on disk is stable and the
   // "earliest common slot" rule is straight-forward downstream.
@@ -593,8 +594,8 @@ export async function processCalendarSlotsUpdate(
   const stampUnlock =
     wantsPrime && match.primeTimeUnlockedAt === null && shouldPersistUnlock(primeReason);
 
-  await prisma.match.update({
-    where: { id: match.id },
+  const saved = await prisma.match.updateMany({
+    where: { id: match.id, status: "negotiating" },
     data: {
       ...(isA
         ? { availableTimesA: dedupedSorted }
@@ -602,6 +603,7 @@ export async function processCalendarSlotsUpdate(
       ...(stampUnlock ? { primeTimeUnlockedAt: new Date() } : {}),
     },
   });
+  if (saved.count === 0) return { ok: false, reason: "wrong-state" };
 
   // Re-read the peer side after our write. The initial row may be stale if
   // both users saved concurrently; using it can miss a real overlap and
@@ -632,7 +634,8 @@ export async function processCalendarSlotsUpdate(
 
   if (intersection.length === 1) {
     const agreed = intersection[0]!;
-    await startVenueNegotiation(api, match.id, agreed);
+    const started = await startVenueNegotiation(api, match.id, agreed);
+    if (started === false) return { ok: false, reason: "wrong-state" };
     await deleteCalendarMessages(api, [
       {
         telegramId: match.userA.telegramId,
@@ -874,19 +877,34 @@ export async function getCalendarState(
 export async function handleSchedulePick(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("sched:pick:")) return;
-  await ctx.answerCallbackQuery();
-
   const matchId = data.split(":")[2];
   if (!matchId) return;
 
+  const [match, actor] = await Promise.all([
+    isUuid(matchId)
+      ? prisma.match.findUnique({
+          where: { id: matchId },
+          select: { status: true, userAId: true, userBId: true },
+        })
+      : Promise.resolve(null),
+    ctx.from?.id
+      ? prisma.user.findUnique({
+          where: { telegramId: BigInt(ctx.from.id) },
+          select: { id: true, theme: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  if (!match || match.status !== "negotiating" || !actor ||
+      (actor.id !== match.userAId && actor.id !== match.userBId)) {
+    await retireStaleCallback(ctx, "calendarStaleAction");
+    return;
+  }
+  await ctx.answerCallbackQuery();
+
   const lang = ctx.session.language;
-  const user = await prisma.user.findUnique({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    select: { theme: true },
-  });
   await ctx.reply(t(lang, "matchScheduleIter3"), {
     reply_markup: buildCalendarKeyboard(
-      calendarUrl(matchId, lang, user?.theme ?? "dark"),
+      calendarUrl(matchId, lang, actor.theme ?? "dark"),
       lang,
     ),
   });

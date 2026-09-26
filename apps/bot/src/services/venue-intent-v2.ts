@@ -391,8 +391,9 @@ export async function interpretVenueIntent(
     );
     const fresh = await tx.match.findUnique({
       where: { id: matchId },
-      select: { venueIntentA: true, venueIntentB: true },
+      select: { status: true, venueIntentA: true, venueIntentB: true },
     });
+    if (fresh?.status !== "negotiating_venue") return null;
     const currentRaw = own.side === "A" ? fresh?.venueIntentA ?? null : fresh?.venueIntentB ?? null;
     const current = parseStored(currentRaw);
     if (current?.state === "confirmed") {
@@ -463,8 +464,8 @@ export async function confirmVenueIntent(
     manualConfirmationRequired: false,
   });
   const legacyCategory = experienceToLegacyCategory(confirmed.experiences[0]);
-  await prisma.match.update({
-    where: { id: matchId },
+  const saved = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating_venue" },
     data: own.side === "A"
       ? {
           venueIntentA: asJson(confirmed), vibeTextA: confirmed.rawText,
@@ -477,6 +478,7 @@ export async function confirmVenueIntent(
           parsedCategoryB: legacyCategory,
         },
   });
+  if (saved.count === 0) return null;
   if (venueIntentMode(matchId) === "live") {
     if (opts?.awaitFinalization === false) {
       void tryFinalizeVenueIntentV2(matchId).catch((err) => {
