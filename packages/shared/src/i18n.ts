@@ -980,8 +980,7 @@ const translations = {
     venueActivityStartMatch: "You both picked {venue}",
     venueActivityPartnerFallback: "Your match",
     emergencyUnlocked:
-      "Emergency cancel window is open.\n" +
-      "If you really can't make it, tap below.\n" +
+      "Plans changed and you really can't make it? You can still cancel below.\n" +
       "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
     emergencyBtn: "Cancel Date",
     emergencyConfirmPrompt:
@@ -1241,29 +1240,9 @@ const translations = {
       "You've been super active today 🙂 Let's pick this up again tomorrow — we've reached today's limit so I can keep things running smoothly for everyone.",
 
     // --- Pre-date coordination (feature-flagged) ---
-    coordOfferIntro:
-      "Your date is in about three hours 🕐\n\n" +
-      "Want a way to find each other at the spot — flag a delay, or say where you're sitting? Pick one:",
-    coordOfferNoContactNote:
-      "Your date is in about three hours 🕐\n\n" +
-      "Heads up: your match has no public Telegram username, so direct contact isn't possible. You can still use a private anonymous chat through me:",
-    coordBtnShareSelf: "📲 Share my Telegram",
-    coordBtnRequestPartner: "🙋 Ask them for theirs",
-    coordBtnProxy: "🕶 Anonymous chat",
-    coordSharedToPartner:
-      "Your date shared their Telegram so you can find each other 💬\n\n" +
-      "{name}: {link}\n\nTap to say hi — see you there!",
-    coordRequestAck: "On it — I've asked them. I'll ping you the moment they say yes ✨",
-    coordPartnerAskApprove:
-      "Your date in ~3h would love a way to find you at the spot 💬\n\n" +
-      "Share your Telegram with {name}?",
-    coordPartnerBtnApprove: "✨ Share",
-    coordPartnerBtnDecline: "Not now",
-    coordRevealToInitiator:
-      "{name} shared their Telegram so you can find each other 💬\n\n" +
-      "{link}\n\nTap to say hi — have a great date!",
-    coordPartnerDeclined:
-      "Your match would rather not share contacts right now — no worries. The anonymous chat opens ~1h before, if you'd like to use that instead.",
+    // The anonymous chat only, for every scheduled date. The T-3h questionnaire
+    // and its handle-exchange copy were removed on 2026-09-26 (founder decision:
+    // contacts never change hands before the date).
     coordProxyOpenedEnterPrompt:
       "Your anonymous chat is open 🕶\n\n" +
       "Messages go through me — no contacts shared. Use it to find each other or flag a delay. It closes a couple hours after the date.",
@@ -1281,30 +1260,11 @@ const translations = {
     // The chat of a date that is no longer on. Deliberately says nothing about
     // why: the reason can be a block, and the blocked side must not learn it.
     coordProxyUnavailable: "This anonymous chat isn't available any more.",
-    coordAlreadyChosen: "You've already picked a coordination option for this date.",
-    coordSharedAck: "Done — they can find you now 💬 Have a great date!",
-    coordProxyChosenAck:
-      "Got it 🕶 Your anonymous chat opens about an hour before the date — I'll send you the button then.",
     // Coordination card copy (services/coordination-card). Rendered INSIDE the
     // PNG, so: no emoji (the bundled fonts have no color-emoji glyphs and satori
     // drops them), and each `Head` line stays short (~18 Latin / ~14 Cyrillic
     // chars) — the display faces are wide and a wrapped third line breaks the
-    // card's vertical rhythm. `Shared`/`Declined` carry no `Sub`: their line is
-    // the chat caption's job, where it is tappable and selectable.
-    coordCardOfferKicker: "THREE HOURS TO GO",
-    coordCardOfferHead1: "Find each",
-    coordCardOfferHead2: "other.",
-    coordCardOfferSub: "Pick how you'll connect at the spot — contacts, or an anonymous chat.",
-    coordCardAskKicker: "CONTACT REQUEST",
-    coordCardAskHead1: "Share your",
-    coordCardAskHead2: "Telegram?",
-    coordCardAskSub: "{name} wants a way to find you at the spot. Your call.",
-    coordCardSharedKicker: "CONTACT UNLOCKED",
-    coordCardSharedHead1: "You're",
-    coordCardSharedHead2: "connected.",
-    coordCardDeclinedKicker: "NO CONTACTS",
-    coordCardDeclinedHead1: "Not this",
-    coordCardDeclinedHead2: "time.",
+    // card's vertical rhythm.
     coordCardProxyKicker: "ANONYMOUS CHAT",
     coordCardProxyHead1: "The line",
     coordCardProxyHead2: "is open.",
@@ -2323,8 +2283,7 @@ const translations = {
     venueActivityStartMatch: "Общий выбор: {venue}",
     venueActivityPartnerFallback: "Твой мэтч",
     emergencyUnlocked:
-      "Окно экстренной отмены открыто.\n" +
-      "Совсем не можешь прийти — жми кнопку ниже.\n" +
+      "Планы поменялись и совсем не можешь прийти? Отменить можно кнопкой ниже.\n" +
       "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
     emergencyBtn: "Отменить свидание",
     emergencyConfirmPrompt:
@@ -2529,29 +2488,6 @@ const translations = {
       "Ты сегодня супер активн(а) 🙂 Давай продолжим завтра — на сегодня лимит исчерпан, чтобы всё работало стабильно для всех.",
 
     // --- Pre-date coordination (feature-flagged) ---
-    coordOfferIntro:
-      "Свидание примерно через три часа 🕐\n\n" +
-      "Хочешь способ найти друг друга на месте — предупредить об опоздании или сказать, где сидишь? Выбери:",
-    coordOfferNoContactNote:
-      "Свидание примерно через три часа 🕐\n\n" +
-      "Важно: у твоего мэтча нет публичного Telegram-юзернейма, поэтому обмен контактами невозможен. Но можно использовать анонимный чат через меня:",
-    coordBtnShareSelf: "📲 Поделиться своим Telegram",
-    coordBtnRequestPartner: "🙋 Попросить его контакт",
-    coordBtnProxy: "🕶 Анонимный чат",
-    coordSharedToPartner:
-      "Твой мэтч поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
-      "{name}: {link}\n\nНапиши пару слов — до встречи!",
-    coordRequestAck: "Готово — я спросил. Сообщу сразу, как только согласятся ✨",
-    coordPartnerAskApprove:
-      "Твоему свиданию через ~3ч пригодится способ найти тебя на месте 💬\n\n" +
-      "Поделиться своим Telegram с {name}?",
-    coordPartnerBtnApprove: "✨ Поделиться",
-    coordPartnerBtnDecline: "Не сейчас",
-    coordRevealToInitiator:
-      "{name} поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
-      "{link}\n\nНапиши пару слов — хорошего свидания!",
-    coordPartnerDeclined:
-      "Твой мэтч пока не хочет делиться контактами — это окей. Примерно за час до встречи откроется анонимный чат, если захочешь.",
     coordProxyOpenedEnterPrompt:
       "Анонимный чат открыт 🕶\n\n" +
       "Сообщения идут через меня — контакты не раскрываются. Используй его, чтобы найти друг друга или предупредить об опоздании. Закроется через пару часов после свидания.",
@@ -2567,24 +2503,6 @@ const translations = {
     coordProxyTextOnly: "В этом чате работают только текстовые сообщения — фото и голосовые не передаются.",
     coordProxyClosed: "Анонимный чат закрылся. Надеюсь, свидание прошло отлично — загляну завтра ✨",
     coordProxyUnavailable: "Этот анонимный чат больше недоступен.",
-    coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
-    coordSharedAck: "Готово — теперь тебя смогут найти 💬 Хорошего свидания!",
-    coordProxyChosenAck:
-      "Принято 🕶 Анонимный чат откроется примерно за час до свидания — тогда пришлю кнопку.",
-    coordCardOfferKicker: "ТРИ ЧАСА ДО ВСТРЕЧИ",
-    coordCardOfferHead1: "Найдите",
-    coordCardOfferHead2: "друг друга.",
-    coordCardOfferSub: "Выбери, как связаться на месте — контакты или анонимный чат.",
-    coordCardAskKicker: "ЗАПРОС КОНТАКТА",
-    coordCardAskHead1: "Поделиться",
-    coordCardAskHead2: "Telegram?",
-    coordCardAskSub: "{name} хочет найти тебя на месте. Решать тебе.",
-    coordCardSharedKicker: "КОНТАКТ ОТКРЫТ",
-    coordCardSharedHead1: "Теперь вы",
-    coordCardSharedHead2: "на связи.",
-    coordCardDeclinedKicker: "БЕЗ КОНТАКТОВ",
-    coordCardDeclinedHead1: "Не в этот",
-    coordCardDeclinedHead2: "раз.",
     coordCardProxyKicker: "АНОНИМНЫЙ ЧАТ",
     coordCardProxyHead1: "Линия",
     coordCardProxyHead2: "открыта.",
@@ -3590,8 +3508,7 @@ const translations = {
     venueActivityStartMatch: "Спільний вибір: {venue}",
     venueActivityPartnerFallback: "Твій метч",
     emergencyUnlocked:
-      "Вікно екстреного скасування відкрите.\n" +
-      "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
+      "Плани змінилися і зовсім не можеш прийти? Скасувати можна кнопкою нижче.\n" +
       "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
     emergencyBtn: "Скасувати побачення",
     emergencyConfirmPrompt:
@@ -3796,29 +3713,6 @@ const translations = {
       "Ти сьогодні дуже активний(на) 🙂 Продовжимо завтра — на сьогодні ліміт вичерпано, щоб усе працювало стабільно для всіх.",
 
     // --- Pre-date coordination (feature-flagged) ---
-    coordOfferIntro:
-      "Побачення приблизно за три години 🕐\n\n" +
-      "Хочеш спосіб знайти одне одного на місці — попередити про запізнення чи сказати, де сидиш? Обери:",
-    coordOfferNoContactNote:
-      "Побачення приблизно за три години 🕐\n\n" +
-      "Важливо: у твого метчу немає публічного Telegram-юзернейму, тож обмін контактами неможливий. Але можна скористатись анонімним чатом через мене:",
-    coordBtnShareSelf: "📲 Поділитися своїм Telegram",
-    coordBtnRequestPartner: "🙋 Попросити його контакт",
-    coordBtnProxy: "🕶 Анонімний чат",
-    coordSharedToPartner:
-      "Твій метч поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
-      "{name}: {link}\n\nНапиши пару слів — до зустрічі!",
-    coordRequestAck: "Готово — я запитав. Повідомлю одразу, щойно погодяться ✨",
-    coordPartnerAskApprove:
-      "Твоєму побаченню за ~3год знадобиться спосіб знайти тебе на місці 💬\n\n" +
-      "Поділитися своїм Telegram з {name}?",
-    coordPartnerBtnApprove: "✨ Поділитися",
-    coordPartnerBtnDecline: "Не зараз",
-    coordRevealToInitiator:
-      "{name} поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
-      "{link}\n\nНапиши пару слів — гарного побачення!",
-    coordPartnerDeclined:
-      "Твій метч поки не хоче ділитися контактами — це окей. Приблизно за годину до зустрічі відкриється анонімний чат, якщо захочеш.",
     coordProxyOpenedEnterPrompt:
       "Анонімний чат відкрито 🕶\n\n" +
       "Повідомлення йдуть через мене — контакти не розкриваються. Користуйся, щоб знайти одне одного чи попередити про запізнення. Закриється за пару годин після побачення.",
@@ -3834,24 +3728,6 @@ const translations = {
     coordProxyTextOnly: "У цьому чаті працюють лише текстові повідомлення — фото й голосові не передаються.",
     coordProxyClosed: "Анонімний чат закрився. Сподіваюсь, побачення пройшло чудово — зазирну завтра ✨",
     coordProxyUnavailable: "Цей анонімний чат більше недоступний.",
-    coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
-    coordSharedAck: "Готово — тепер тебе зможуть знайти 💬 Гарного побачення!",
-    coordProxyChosenAck:
-      "Прийнято 🕶 Анонімний чат відкриється приблизно за годину до побачення — тоді надішлю кнопку.",
-    coordCardOfferKicker: "ТРИ ГОДИНИ ДО ЗУСТРІЧІ",
-    coordCardOfferHead1: "Знайдіть",
-    coordCardOfferHead2: "одне одного.",
-    coordCardOfferSub: "Обери, як звʼязатися на місці — контакти або анонімний чат.",
-    coordCardAskKicker: "ЗАПИТ КОНТАКТУ",
-    coordCardAskHead1: "Поділитися",
-    coordCardAskHead2: "Telegram?",
-    coordCardAskSub: "{name} хоче знайти тебе на місці. Вирішувати тобі.",
-    coordCardSharedKicker: "КОНТАКТ ВІДКРИТО",
-    coordCardSharedHead1: "Тепер ви",
-    coordCardSharedHead2: "на звʼязку.",
-    coordCardDeclinedKicker: "БЕЗ КОНТАКТІВ",
-    coordCardDeclinedHead1: "Не цього",
-    coordCardDeclinedHead2: "разу.",
     coordCardProxyKicker: "АНОНІМНИЙ ЧАТ",
     coordCardProxyHead1: "Лінія",
     coordCardProxyHead2: "відкрита.",
@@ -4827,8 +4703,7 @@ const deTranslations: TranslationTable = {
   venueActivityPartnerFallback: "Dein Match",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
-    "Das Notfall-Storno-Fenster ist offen.\n" +
-    "Wenn du wirklich nicht kannst, tippe unten.\n" +
+    "Pläne geändert und du kannst wirklich nicht? Du kannst unten absagen.\n" +
     "*Du musst einen Grund schreiben - er wird exakt so an dein Match weitergeleitet.*",
   emergencyBtn: "Date absagen",
   emergencyConfirmPrompt:
@@ -5039,29 +4914,6 @@ const deTranslations: TranslationTable = {
     "🎟️ Beide von dir bezahlten Date-Tickets liegen wieder in deiner Wallet — für das nächste Date.",
 
   // --- Pre-date coordination ---
-  coordOfferIntro:
-    "Dein Date ist in etwa drei Stunden.\n\n" +
-    "Wie wollt ihr euch am Ort finden? Wähl eine Option:",
-  coordOfferNoContactNote:
-    "Dein Date ist in etwa drei Stunden.\n\n" +
-    "Dein Match hat keinen öffentlichen Telegram-Namen, direkter Kontakt geht also nicht. Über mich läuft aber ein anonymer Chat:",
-  coordBtnShareSelf: "📲 Mein Telegram teilen",
-  coordBtnRequestPartner: "🙋 Kontakt anfragen",
-  coordBtnProxy: "🕶 Anonymer Chat",
-  coordSharedToPartner:
-    "Dein Date hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
-    "{name}: {link}\n\nKurz Hallo sagen — bis gleich!",
-  coordRequestAck: "Gefragt — sobald eine Zusage da ist, sag ich dir Bescheid ✨",
-  coordPartnerAskApprove:
-    "Dein Date in ~3 Std. sucht einen Weg, dich am Ort zu finden 💬\n\n" +
-    "Dein Telegram mit {name} teilen?",
-  coordPartnerBtnApprove: "✨ Teilen",
-  coordPartnerBtnDecline: "Jetzt nicht",
-  coordRevealToInitiator:
-    "{name} hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
-    "{link}\n\nKurz Hallo sagen — viel Spaß beim Date!",
-  coordPartnerDeclined:
-    "Dein Match teilt gerade lieber keine Kontakte — kein Stress. Der anonyme Chat öffnet ~1 Std. vorher, falls du den nutzen willst.",
   coordProxyOpenedEnterPrompt:
     "Dein anonymer Chat ist offen 🕶\n\n" +
     "Nachrichten laufen über mich, Kontakte bleiben privat. Gut, um euch zu finden oder kurz Bescheid zu geben. Schließt ein paar Stunden nach dem Date.",
@@ -5078,24 +4930,6 @@ const deTranslations: TranslationTable = {
   coordProxyClosed:
     "Der anonyme Chat ist zu. Ich hoffe, das Date war gut — morgen melde ich mich ✨",
   coordProxyUnavailable: "Dieser anonyme Chat ist nicht mehr verfügbar.",
-  coordAlreadyChosen: "Du hast für dieses Date schon eine Option gewählt.",
-  coordSharedAck: "Erledigt — jetzt findet dich dein Date 💬 Viel Spaß!",
-  coordProxyChosenAck:
-    "Alles klar 🕶 Dein anonymer Chat öffnet etwa eine Stunde vor dem Date — den Button schick ich dir dann.",
-  coordCardOfferKicker: "NOCH DREI STUNDEN",
-  coordCardOfferHead1: "Findet",
-  coordCardOfferHead2: "einander.",
-  coordCardOfferSub: "Wähle, wie ihr euch vor Ort erreicht — Kontakte oder anonymer Chat.",
-  coordCardAskKicker: "KONTAKTANFRAGE",
-  coordCardAskHead1: "Telegram",
-  coordCardAskHead2: "teilen?",
-  coordCardAskSub: "{name} möchte dich vor Ort finden können. Deine Entscheidung.",
-  coordCardSharedKicker: "KONTAKT FREI",
-  coordCardSharedHead1: "Ihr seid",
-  coordCardSharedHead2: "verbunden.",
-  coordCardDeclinedKicker: "KEINE KONTAKTE",
-  coordCardDeclinedHead1: "Diesmal",
-  coordCardDeclinedHead2: "nicht.",
   coordCardProxyKicker: "ANONYMER CHAT",
   coordCardProxyHead1: "Die Leitung",
   coordCardProxyHead2: "ist offen.",
@@ -6063,8 +5897,7 @@ const plTranslations: TranslationTable = {
   venueActivityPartnerFallback: "Twój match",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
-    "Okno awaryjnego odwołania jest otwarte.\n" +
-    "Jeśli naprawdę nie możesz przyjść, kliknij poniżej.\n" +
+    "Plany się zmieniły i naprawdę nie możesz przyjść? Możesz odwołać poniżej.\n" +
     "*Musisz napisać powód - przekażemy go dopasowaniu dokładnie tak, jak go napiszesz.*",
   emergencyBtn: "Odwołaj randkę",
   emergencyConfirmPrompt:
@@ -6279,29 +6112,6 @@ const plTranslations: TranslationTable = {
     "🎟️ Oba bilety, które opłaciłeś, wróciły do twojego portfela — wykorzystasz je na następnej randce.",
 
   // --- Pre-date coordination ---
-  coordOfferIntro:
-    "Twoja randka jest za jakieś trzy godziny.\n\n" +
-    "Jak chcecie się znaleźć na miejscu? Wybierz opcję:",
-  coordOfferNoContactNote:
-    "Twoja randka jest za jakieś trzy godziny.\n\n" +
-    "Twój match nie ma publicznej nazwy na Telegramie, więc bezpośredni kontakt odpada. Zostaje anonimowy czat przeze mnie:",
-  coordBtnShareSelf: "📲 Udostępnij mój Telegram",
-  coordBtnRequestPartner: "🙋 Poproś o kontakt",
-  coordBtnProxy: "🕶 Anonimowy czat",
-  coordSharedToPartner:
-    "Twój match udostępnił swój Telegram, żebyście się znaleźli 💬\n\n" +
-    "{name}: {link}\n\nNapisz cześć — do zobaczenia!",
-  coordRequestAck: "Pytanie poszło. Dam znać, gdy tylko będzie zgoda ✨",
-  coordPartnerAskApprove:
-    "Twoja randka za ~3 godz. — przydałby się sposób, żeby Cię znaleźć na miejscu 💬\n\n" +
-    "Udostępnić Twój Telegram dla {name}?",
-  coordPartnerBtnApprove: "✨ Udostępnij",
-  coordPartnerBtnDecline: "Nie teraz",
-  coordRevealToInitiator:
-    "{name} udostępnia swój Telegram, żebyście się znaleźli 💬\n\n" +
-    "{link}\n\nNapisz cześć — udanej randki!",
-  coordPartnerDeclined:
-    "Twój match woli teraz nie wymieniać się kontaktami — bez stresu. Anonimowy czat otwiera się ~1 godz. wcześniej, jeśli wolisz tak.",
   coordProxyOpenedEnterPrompt:
     "Anonimowy czat jest otwarty 🕶\n\n" +
     "Wiadomości idą przeze mnie, kontakty zostają prywatne. Przyda się, żeby się znaleźć albo dać znać o spóźnieniu. Zamyka się parę godzin po randce.",
@@ -6318,24 +6128,6 @@ const plTranslations: TranslationTable = {
   coordProxyClosed:
     "Anonimowy czat zamknięty. Mam nadzieję, że randka wyszła — odezwę się jutro ✨",
   coordProxyUnavailable: "Ten anonimowy czat nie jest już dostępny.",
-  coordAlreadyChosen: "Opcja dla tej randki jest już wybrana.",
-  coordSharedAck: "Gotowe — teraz można Cię znaleźć 💬 Udanej randki!",
-  coordProxyChosenAck:
-    "Jasne 🕶 Anonimowy czat otworzy się jakąś godzinę przed randką — wtedy wyślę przycisk.",
-  coordCardOfferKicker: "TRZY GODZINY DO SPOTKANIA",
-  coordCardOfferHead1: "Znajdźcie",
-  coordCardOfferHead2: "się.",
-  coordCardOfferSub: "Wybierz, jak się skontaktować na miejscu — kontakt albo anonimowy czat.",
-  coordCardAskKicker: "PROŚBA O KONTAKT",
-  coordCardAskHead1: "Udostępnić",
-  coordCardAskHead2: "Telegram?",
-  coordCardAskSub: "{name} chce cię znaleźć na miejscu. Twoja decyzja.",
-  coordCardSharedKicker: "KONTAKT OTWARTY",
-  coordCardSharedHead1: "Jesteście",
-  coordCardSharedHead2: "w kontakcie.",
-  coordCardDeclinedKicker: "BEZ KONTAKTÓW",
-  coordCardDeclinedHead1: "Nie tym",
-  coordCardDeclinedHead2: "razem.",
   coordCardProxyKicker: "ANONIMOWY CZAT",
   coordCardProxyHead1: "Linia",
   coordCardProxyHead2: "otwarta.",

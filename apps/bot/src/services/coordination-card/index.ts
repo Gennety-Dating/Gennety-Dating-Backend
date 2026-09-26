@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Api, RawApi } from "grammy";
 import satori from "satori";
 import type { Language } from "@gennety/shared";
-import { downloadProfileImage } from "../storage.js";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
-import { toPngBuffer, grainPng, svgToPng} from "../date-card/image.js";
+import { grainPng, svgToPng } from "../date-card/image.js";
 import { coordCardCopy, type CoordCardVariant } from "./copy.js";
 import {
   buildCoordCardElement,
@@ -16,14 +14,9 @@ import {
 } from "./template.js";
 
 /**
- * Pre-date coordination card renderer (PRODUCT_SPEC §Phase 4).
- *
- * DESIGN STAGE: the renderer is complete and production-shaped, but nothing in
- * the live coordination handlers calls it yet — the family is still being
- * reviewed (see `scripts/dev-coord-cards-demo.mjs`, which renders every variant
- * and DMs them). Wiring it into `handlers/date/coordination.ts` +
- * `services/coordination.ts` is the follow-up step, at which point the copy
- * moves into shared i18n (see `copy.ts`).
+ * Pre-date coordination card renderer (PRODUCT_SPEC §Phase 4): the card that
+ * rides the T-1h "your anonymous chat is open" DM (`services/coordination.ts`).
+ * `scripts/dev-coord-cards-demo.mjs` renders it for design review.
  *
  * Same pure satori → resvg stack as the date / match / referral cards (no
  * headless browser). Never throws: returns `null` on any failure so a caller
@@ -37,15 +30,8 @@ export type { CoordCardTheme } from "./template.js";
 
 export interface CoordCardInput {
   variant: CoordCardVariant;
-  /** Person in the frame and named in the sub line (the asker, or the contact). */
+  /** Interpolated as `{name}` into the sub-line, if the copy asks for one. */
   personName: string;
-  /**
-   * Their first profile photo (Telegram `file_id` or Supabase path). Ignored by
-   * the `declined` / `proxy` variants, which render an emblem instead.
-   */
-  personPhotoRef?: string | null;
-  /** Already-decoded photo bytes; skips the download when a caller has them. */
-  personPhoto?: Buffer | null;
   language: Language;
   /** Recipient's chosen theme, exactly like the date card. */
   theme: CoordCardTheme;
@@ -102,35 +88,16 @@ async function brandMark(width: number, tint: string): Promise<ButterflyMark | n
   return mark;
 }
 
-export async function renderCoordinationCard(
-  input: CoordCardInput,
-  api: Api<RawApi>,
-): Promise<Buffer | null> {
+export async function renderCoordinationCard(input: CoordCardInput): Promise<Buffer | null> {
   try {
-    const needsPhoto = input.variant !== "declined" && input.variant !== "proxy";
-
-    // Photo is best-effort: the template keeps the frame and fills it with the
-    // brand ground when it is missing, so a dead file_id costs a face, not the card.
-    let photo: Buffer | null = null;
-    if (needsPhoto) {
-      if (input.personPhoto) {
-        photo = await toPngBuffer(input.personPhoto);
-      } else if (input.personPhotoRef) {
-        const downloaded = await downloadProfileImage(input.personPhotoRef, api);
-        // Telegram serves JPEG; normalize so the data URI's `image/png` is honest.
-        if (downloaded) photo = await toPngBuffer(downloaded);
-      }
-    }
-
     const [logo, logoCream] = await Promise.all([
       brandMark(220, input.theme === "light" ? "#8B253B" : "#F7ECEC"),
-      input.variant === "proxy" ? brandMark(320, "#F7ECEC") : Promise.resolve(null),
+      brandMark(320, "#F7ECEC"),
     ]);
 
     const element = buildCoordCardElement({
       variant: input.variant,
       copy: coordCardCopy(input.language, input.variant, input.personName),
-      photo,
       logo,
       logoCream,
       // The dark film grain would dirty the light card's cream ground.

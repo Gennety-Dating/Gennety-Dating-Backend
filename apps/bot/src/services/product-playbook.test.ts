@@ -60,11 +60,14 @@ describe("buildProductPlaybook", () => {
   });
 
   describe("coordination flag", () => {
-    it("describes the proxy chat + contact share when ON", () => {
+    it("describes the proxy chat, and no contact exchange, when ON", () => {
       const text = buildProductPlaybook({ ...ALL_OFF, coordination: true });
       expect(text).toContain("Enter chat");
       expect(text).toContain("1 hour before");
-      expect(text).toMatch(/share my Telegram contact/i);
+      // Founder decision 2026-09-26: the T-3h questionnaire and its handle
+      // swap are gone — the agent must say contacts are never exchanged.
+      expect(text).not.toMatch(/share my Telegram contact|~3h before|coordination offer/i);
+      expect(text).toContain("Contacts are never exchanged");
     });
 
     it("never promises coordination tools when OFF", () => {
@@ -72,6 +75,18 @@ describe("buildProductPlaybook", () => {
       expect(text).not.toContain("Enter chat");
       expect(text).toMatch(/Do not promise contact-sharing/i);
     });
+  });
+
+  /**
+   * Founder decision 2026-09-26 made explicit what the code already did: a
+   * scheduled date can be cancelled from the moment it is booked. The agent
+   * used to tell people the cancel button only exists "from ~5h before".
+   */
+  it("says a booked date can be cancelled any time, with no window to wait for", () => {
+    const text = buildProductPlaybook(ALL_OFF);
+    expect(text).toContain("can be cancelled at any time before it");
+    expect(text).not.toMatch(/From ~5h before the date there's an emergency-cancel button/);
+    expect(text).not.toContain("emergency-cancel window opens");
   });
 
   describe("tickets flag", () => {

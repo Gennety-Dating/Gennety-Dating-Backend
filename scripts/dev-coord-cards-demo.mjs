@@ -2,24 +2,21 @@
 /**
  * Dev-only helper (local DEV bot only).
  *
- * Renders EVERY card in the pre-date coordination family
+ * Renders the pre-date coordination card
  * (`apps/bot/src/services/coordination-card`, PRODUCT_SPEC §Phase 4) and DMs
- * them one by one, each captioned with the exact moment it fires — a design
- * review surface for the whole flow in one pass.
+ * it, captioned with the moment it fires — a design review surface.
  *
  * Pure render + send: it touches no database, stages no match, and calls no
  * production handler, so it is safe to re-run as often as you like while
- * iterating on the layout. The cards are NOT wired into the live coordination
- * DMs yet — that is the follow-up step once the design is settled.
+ * iterating on the layout.
  *
- * Usage (sends the five RU dark cards to the default dev chat):
+ * Usage (sends the RU dark card to the default dev chat):
  *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-coord-cards-demo.mjs
  *
  * Options:
  *   --chat=782065541      who receives them
  *   --lang=ru|en|uk|de|pl card language (default ru)
  *   --theme=dark|light|both   (default dark)
- *   --only=shared,proxy   render a subset
  *   --out=./tmp/cards     also write the PNGs to disk
  *   --no-send             render (and optionally --out) without DMing
  *   --force               bypass the gennetytestbot guard
@@ -64,53 +61,18 @@ const send = argv.get("no-send") !== "true";
 const force = argv.get("force") === "true";
 
 /**
- * One entry per real send in the flow. `photo` is a bundled brand portrait so
- * the demo needs no seeded profile and no network — the production caller
- * passes a `personPhotoRef` (Telegram file_id / Supabase path) instead.
+ * One entry per real send in the flow. Since 2026-09-26 that is a single card:
+ * the contact-exchange cards (offer / ask / shared / declined) were retired
+ * with the T-3h questionnaire.
  */
 const SCENARIOS = [
   {
-    id: "offer",
-    photo: "1.jpg",
-    input: { variant: "offer", personName: "Максим" },
-    caption:
-      "1/5 · T-60 мин — предложение выбрать способ координации.\nПолучает инициатор (девушка). В кадре — партнёр.",
-  },
-  {
-    id: "ask",
-    photo: "2.jpg",
-    input: { variant: "ask", personName: "Алина" },
-    caption:
-      "2/5 · Вариант B — у партнёра спрашивают согласие поделиться Telegram.\nПолучает парень. В кадре — та, кто просит. Под карточкой — зелёная «Поделиться» и красная «Не сейчас».",
-  },
-  {
-    id: "shared",
-    photo: "3.jpg",
-    input: { variant: "shared", personName: "Максим" },
-    caption:
-      "3/5 · Контакт открыт — вариант A (она поделилась сама) и вариант B после согласия. В кадре владелец контакта.\n\nКарточка — только момент. Сама ссылка идёт текстом рядом, потому что на PNG её не нажать:\n«Максим поделился своим Telegram, чтобы вы нашли друг друга 💬 — t.me/maksym — напиши пару слов, хорошего свидания!»",
-  },
-  {
-    id: "declined",
-    photo: null,
-    input: { variant: "declined", personName: "Максим" },
-    caption:
-      "4/5 · Отказ поделиться контактом. Фото намеренно нет — карточка не про человека, а про решение; часы = «не сейчас».\n\nОбъяснение тоже ушло в текст сообщения:\n«Твой мэтч пока не хочет делиться контактами — это окей. За ~30 минут до встречи откроется анонимный чат, если захочешь.»",
-  },
-  {
     id: "proxy",
-    photo: null,
-    input: { variant: "proxy", personName: "Максим" },
+    input: { variant: "proxy", personName: "" },
     caption:
-      "5/5 · Анонимный чат открыт (T-30 мин), получают оба.\nТа же рамка полароида, но портрет намеренно скрыт растром — это и есть анонимность.",
+      "Анонимный чат открыт (T-1 ч), получают оба — для каждого назначенного свидания.\nРамка полароида, портрет намеренно скрыт растром — это и есть анонимность.",
   },
 ];
-
-function portrait(file) {
-  if (!file) return null;
-  const path = resolve(root, "apps/bot/src/assets/referral-portraits", file);
-  return existsSync(path) ? readFileSync(path) : null;
-}
 
 async function main() {
   if (process.env.BOT_USERNAME !== "gennetytestbot" && !force) {
@@ -140,10 +102,7 @@ async function main() {
     }
     for (const scenario of picked) {
       const started = Date.now();
-      const png = await renderCoordinationCard(
-        { ...scenario.input, language: lang, theme, personPhoto: portrait(scenario.photo) },
-        api,
-      );
+      const png = await renderCoordinationCard({ ...scenario.input, language: lang, theme });
       if (!png) {
         console.warn(`✗ ${scenario.id} (${theme}) — render returned null`);
         continue;

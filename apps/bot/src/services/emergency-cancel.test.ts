@@ -25,6 +25,9 @@ vi.mock("./main-bot-api.js", () => ({ getMainBotApi }));
 const refreshStatusBanners = vi.fn();
 vi.mock("./status-banner-refresh.js", () => ({ refreshStatusBanners }));
 
+const refundPrimeTimeForDeadMatch = vi.fn();
+vi.mock("./prime-time-purchase.js", () => ({ refundPrimeTimeForDeadMatch }));
+
 const { cancelScheduledDate } = await import("./emergency-cancel.js");
 
 const ACTOR = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -54,6 +57,7 @@ beforeEach(() => {
   ]);
   getMainBotApi.mockReset().mockReturnValue(null);
   refreshStatusBanners.mockReset().mockResolvedValue(undefined);
+  refundPrimeTimeForDeadMatch.mockReset().mockResolvedValue(undefined);
 });
 
 describe("cancelScheduledDate", () => {
@@ -81,6 +85,36 @@ describe("cancelScheduledDate", () => {
     // The canceller is refunded too — charging them on top of the Elo penalty
     // would make an honest cancellation cost more than a silent no-show.
     expect(refundMatchTickets).toHaveBeenCalledWith("m1");
+  });
+
+  /**
+   * Founder decision 2026-09-26: a scheduled date can be cancelled at ANY
+   * point before it starts. `DATE_ALERT_HOURS` (T-5h) only times the
+   * ice-breaker message and its reminder button — it was never a gate here,
+   * and this pins that it never becomes one. Every consequence runs unchanged
+   * however early the cancel is: the peer's boost, both ticket refunds, the
+   * Prime Time refund, the partner's push.
+   */
+  it.each([
+    ["T-24h", 24],
+    ["T-6h", 6],
+    ["T-2h", 2],
+  ])("cancels at %s with every consequence settled", async (_label, hoursBefore) => {
+    const now = new Date("2026-10-01T12:00:00Z");
+    const agreedTime = new Date(now.getTime() + hoursBefore * 60 * 60 * 1000);
+    matchFindUnique.mockResolvedValue(scheduledRow({ agreedTime }));
+
+    const result = await cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x", now });
+
+    expect(result.ok).toBe(true);
+    expect(matchUpdateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", emergencyCancelledBy: null, agreedTime: { gt: now } },
+      data: { status: "cancelled", emergencyCancelledBy: ACTOR, emergencyReason: "x" },
+    });
+    expect(applyEmergencyCancellationPeerBoost).toHaveBeenCalledWith(PEER);
+    expect(refundMatchTickets).toHaveBeenCalledWith("m1");
+    expect(refundPrimeTimeForDeadMatch).toHaveBeenCalledWith("m1");
+    expect(sendPushToUser).toHaveBeenCalledWith(PEER, expect.anything());
   });
 
   it("claims the row with a compare-and-set so a race cancels once", async () => {

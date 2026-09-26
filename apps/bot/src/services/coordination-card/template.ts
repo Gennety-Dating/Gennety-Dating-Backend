@@ -2,15 +2,11 @@
  * Pre-date coordination card layout, as a plain satori element tree (no JSX, so
  * the bot's tsconfig needs no React/JSX support).
  *
- * One skeleton, five variants (see `copy.ts`). Every variant renders the SAME
- * white polaroid frame in the same place — only what sits inside it changes:
- *
- *   offer / ask / shared → a real profile photo
- *   declined             → a clock face  ("not now, but soon")
- *   proxy                → a burgundy halftone field + the brand butterfly,
- *                          i.e. the portrait deliberately withheld — the
- *                          anonymity of the relay made visual, in the exact
- *                          frame the contact cards use for a face.
+ * One variant since 2026-09-26 (see `copy.ts`): the anonymous chat opening. A
+ * white polaroid frame holds a burgundy halftone field and the brand butterfly
+ * — the portrait deliberately withheld, the anonymity of the relay made
+ * visual. (The frame used to hold a real face on the contact-exchange cards
+ * and a clock on the declined one; both went with the questionnaire.)
  *
  * Composition follows the newest brand card (services/referral-card): centred
  * column, brand lockup at the top, display headline whose LAST line takes the
@@ -19,7 +15,7 @@
  * Rendered text is emoji-free on purpose — the bundled fonts carry no
  * color-emoji glyphs and satori drops them. Emoji live in the Telegram caption.
  *
- * Pure layout: photo decoding, grain, and the butterfly raster happen upstream
+ * Pure layout: grain and the butterfly raster happen upstream
  * in `index.ts` and arrive here as ready PNG buffers.
  */
 
@@ -122,86 +118,6 @@ function polaroid(children: CardNode): CardNode {
   );
 }
 
-function photoInner(photo: Buffer): CardNode {
-  return el(
-    "img",
-    { width: `${PHOTO_W}px`, height: `${PHOTO_H}px`, objectFit: "cover", borderRadius: "4px" },
-    undefined,
-    { src: dataUri(photo) },
-  );
-}
-
-/**
- * "Not now, but soon" — a clock reading 3 o'clock, drawn from divs.
- *
- * The hands point straight up and straight right SPECIFICALLY so no rotation is
- * needed: satori rotates an element about its own centre, which cannot pivot a
- * hand around the dial's centre, so any other hour would need a transform-origin
- * satori doesn't fully honour.
- */
-function clockInner(accent: string): CardNode {
-  const ringBorder = 10;
-  const dial = 148;
-  // `position: absolute` offsets are measured from the parent's padding edge,
-  // i.e. INSIDE the ring's own border — so the usable dial is the content box.
-  const inner = dial - ringBorder * 2;
-  const c = inner / 2;
-  return el(
-    "div",
-    {
-      width: `${PHOTO_W}px`,
-      height: `${PHOTO_H}px`,
-      borderRadius: "4px",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundImage: "linear-gradient(160deg, #F6EAEC 0%, #E7D2D7 100%)",
-    },
-    [
-      el(
-        "div",
-        {
-          position: "relative",
-          width: `${dial}px`,
-          height: `${dial}px`,
-          borderRadius: "999px",
-          border: `${ringBorder}px solid ${accent}`,
-        },
-        [
-          // Minute hand → 12.
-          el("div", {
-            position: "absolute",
-            left: `${c - 4.5}px`,
-            top: `${c - 44}px`,
-            width: "9px",
-            height: "44px",
-            borderRadius: "5px",
-            backgroundColor: accent,
-          }),
-          // Hour hand → 3.
-          el("div", {
-            position: "absolute",
-            left: `${c}px`,
-            top: `${c - 4.5}px`,
-            width: "36px",
-            height: "9px",
-            borderRadius: "5px",
-            backgroundColor: accent,
-          }),
-          el("div", {
-            position: "absolute",
-            left: `${c - 8}px`,
-            top: `${c - 8}px`,
-            width: "16px",
-            height: "16px",
-            borderRadius: "999px",
-            backgroundColor: accent,
-          }),
-        ],
-      ),
-    ],
-  );
-}
-
 /**
  * The withheld portrait: a burgundy halftone field where the face would be,
  * with the brand mark reading through it. Dots are emitted as divs because
@@ -269,8 +185,6 @@ function redactedInner(logo: LogoMark | null): CardNode {
 export interface CoordCardElementInput {
   variant: CoordCardVariant;
   copy: CoordCardCopy;
-  /** Profile photo PNG for the photo variants; null → the frame stays empty. */
-  photo: Buffer | null;
   /** Brand butterfly, tinted for the header lockup. */
   logo: LogoMark | null;
   /** Brand butterfly tinted cream, for the redacted (`proxy`) frame. */
@@ -286,21 +200,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
   const p = palette(input.theme);
   const centered = { width: "100%", justifyContent: "center", textAlign: "center" } as const;
 
-  const frameContent =
-    input.variant === "declined"
-      ? clockInner(BURGUNDY)
-      : input.variant === "proxy"
-        ? redactedInner(input.logoCream)
-        : input.photo
-          ? photoInner(input.photo)
-          : // No photo available for a photo variant: keep the frame, fill it with
-            // the brand ground rather than collapsing the layout.
-            el("div", {
-              width: `${PHOTO_W}px`,
-              height: `${PHOTO_H}px`,
-              borderRadius: "4px",
-              backgroundImage: `linear-gradient(150deg, #2A0E17 0%, ${BURGUNDY} 100%)`,
-            });
+  const frameContent = redactedInner(input.logoCream);
 
   // The mark keeps its natural aspect ratio — a square box squishes the
   // butterfly (the source SVG's canvas is square with transparent margins,
@@ -413,8 +313,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
           el("div", { ...centered, color: p.accent }, input.copy.head[1]),
         ],
       ),
-      // Absent on `shared` / `declined`, whose line lives in the chat message
-      // instead (see copy.ts) — the headline then simply ends the card.
+      // Optional in the layout: a card with no sub-line ends on its headline.
       ...(input.copy.sub
         ? [
             el("div", { flexGrow: 1, minHeight: "28px" }),

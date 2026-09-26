@@ -424,7 +424,6 @@ describe("describeActiveMatch", () => {
       venueAddress: "Velyka Vasylkivska 12",
       venueGoogleMapsUri: "https://maps.google.com/?cid=1",
       ticketStatus: "completed",
-      coordOfferSentAt: null,
       proxyOpenedAt: null,
       proxyClosesAt: null,
       proxyClosedAt: null,
@@ -482,6 +481,9 @@ describe("describeActiveMatch", () => {
     // assertion pins: a date at 19:00 opens its chat at 18:00. Naming the
     // wrong hour here is worse than the vague fallback the null branch gives.
     expect(text).toContain("around 18:00");
+    // Founder decision 2026-09-26: no questionnaire and no handle swap before
+    // the chat — the agent must not promise either.
+    expect(text).not.toMatch(/contact-share|~3h|coordination offer/i);
   });
 
   it("describes the venue-selection sub-stage", () => {

@@ -3169,6 +3169,47 @@ describe("/v1/matches/*", () => {
     expect(res.body.match.status).toBe("scheduled");
   });
 
+  // Founder decision 2026-09-26: every scheduled date gets the anonymous chat
+  // at T-1h — the pair below never chose anything (no coordination method at
+  // all), and the app still gets both edges of the window. The flag and the
+  // status now gate it here, since the window itself only asks for a time.
+  describe("GET /current proxy chat window", () => {
+    const AGREED = new Date("2026-07-20T19:00:00Z");
+    afterEach(() => {
+      envMock.COORDINATION_FEATURE_ENABLED = undefined;
+    });
+
+    async function current(status: string) {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      await seedMatch(alice.id, bob.id, { status: status as never, agreedTime: AGREED });
+      return request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    }
+
+    it("is T-1h … T+2h for a scheduled date nobody chose a method for", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const res = await current("scheduled");
+      expect(res.status).toBe(200);
+      expect(res.body.match.proxyChatOpensAt).toBe("2026-07-20T18:00:00.000Z");
+      expect(res.body.match.proxyChatClosesAt).toBe("2026-07-20T21:00:00.000Z");
+    });
+
+    it("is null while the coordination flag is off — no Enter button into a 404", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = false;
+      const res = await current("scheduled");
+      expect(res.body.match.proxyChatOpensAt).toBeNull();
+      expect(res.body.match.proxyChatClosesAt).toBeNull();
+    });
+
+    it("is null for a date still being planned, even with a time agreed", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const res = await current("negotiating_venue");
+      expect(res.body.match.proxyChatOpensAt).toBeNull();
+    });
+  });
+
   // `agreedTime` is an instant; the native date card (§3.8) has to draw it on
   // some wall clock, and the device's is the wrong one for a traveller. The
   // zone is the CALLER's own — not the partner's, and not a constant.
@@ -3729,6 +3770,32 @@ describe("/v1/matches/*", () => {
     // Verbatim, not paraphrased: the partner is owed the actual sentence.
     expect(row?.emergencyReason).toBe("Прости, заболел");
   });
+
+  // Founder decision 2026-09-26: cancelling is open for the whole time a date
+  // is `scheduled`, not from T-5h (`DATE_ALERT_HOURS` only times a message).
+  // Pinned on the native rail at three distances, the earliest a full day out.
+  it.each([24, 6, 2])(
+    "POST /:id/cancel calls off a scheduled date %i hours before it",
+    async (hoursBefore) => {
+      const alice = await seedUser();
+      const bob = await seedUser();
+      const match = await seedMatch(alice.id, bob.id, {
+        status: "scheduled",
+        agreedTime: new Date(Date.now() + hoursBefore * 60 * 60 * 1000),
+      });
+
+      const res = await request(app)
+        .post(`/v1/matches/${match.id}/cancel`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+        .send({ reason: "планы поменялись" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      const row = db.matches.get(match.id);
+      expect(row?.status).toBe("cancelled");
+      expect(row?.emergencyCancelledBy).toBe(alice.id);
+    },
+  );
 
   it("POST /:id/cancel requires a reason — an empty one is refused, nothing is cancelled", async () => {
     const alice = await seedUser();

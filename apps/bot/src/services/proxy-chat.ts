@@ -16,7 +16,7 @@ import { telegramReachable } from "./telegram-reach.js";
 
 /**
  * Anonymous pre-date proxy chat — the mechanics, shared by both surfaces
- * (PRODUCT_SPEC §Phase 4, Variant C).
+ * (PRODUCT_SPEC §Phase 4).
  *
  * This is the same split that `emergency-cancel.ts` settled on: everything
  * that decides WHETHER a message may be relayed, writes it, and delivers it
@@ -124,7 +124,6 @@ const matchSelect = {
   userAId: true,
   userBId: true,
   agreedTime: true,
-  coordMethod: true,
   proxyOpenedAt: true,
   proxyClosesAt: true,
   proxyClosedAt: true,
@@ -152,14 +151,14 @@ function loadMatch(matchId: string) {
  * `proxyOpenedAt` records that both sides were TOLD, and `proxyClosedAt` is a
  * force-close that still wins here.
  *
- * Returns null when this pair has no window at all — the coordination method
- * is not the proxy variant, or the date has no agreed time.
+ * Every scheduled date has one (founder decision 2026-09-26): the window no
+ * longer depends on anyone having picked the anonymous chat, because there is
+ * nothing left to pick between. Null only when the date has no agreed time.
  */
 export function proxyChatWindow(match: {
   agreedTime: Date | null;
-  coordMethod: string | null;
 }): { opensAt: Date; closesAt: Date } | null {
-  if (match.coordMethod !== "proxy" || !match.agreedTime) return null;
+  if (!match.agreedTime) return null;
   const at = match.agreedTime.getTime();
   return {
     opensAt: new Date(at - PROXY_OPEN_HOURS * 60 * 60 * 1000),
@@ -169,7 +168,7 @@ export function proxyChatWindow(match: {
 
 /** Whether a message may be relayed right now. */
 export function proxyChatIsOpen(
-  match: { agreedTime: Date | null; coordMethod: string | null; proxyClosedAt: Date | null },
+  match: { agreedTime: Date | null; proxyClosedAt: Date | null },
   now: Date,
 ): boolean {
   if (match.proxyClosedAt) return false;
@@ -203,14 +202,12 @@ export function proxyChatIsOpen(
  * (`docs/product/demo-mode.md`), so a visitor typing on the real clock is
  * inside the announced window and outside the scheduled one.
  *
- * Neither overrides a match that is no longer `scheduled`, a force-close, or a
- * pair whose coordination is not the anonymous chat.
+ * Neither overrides a match that is no longer `scheduled` or a force-close.
  */
 export function proxyChatAcceptsMessages(
   match: {
     status: string;
     agreedTime: Date | null;
-    coordMethod: string | null;
     proxyOpenedAt: Date | null;
     proxyClosesAt: Date | null;
     proxyClosedAt: Date | null;
@@ -219,7 +216,7 @@ export function proxyChatAcceptsMessages(
 ): boolean {
   if (match.status !== "scheduled") return false;
   if (proxyChatIsOpen(match, now)) return true;
-  return match.coordMethod === "proxy" && isProxyOpen(match, now);
+  return isProxyOpen(match, now);
 }
 
 function sidesOf(match: ProxyMatch, callerId: string) {

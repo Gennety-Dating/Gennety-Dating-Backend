@@ -28,9 +28,6 @@ export type DemoBeat =
   | "matchmaking"
   | "date_ready"
   | "predate"
-  | "coord_offer"
-  | "coord_share_self"
-  | "coord_request_partner"
   | "chat_open"
   | "after_date"
   | "declined"
@@ -285,101 +282,12 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "what shows up. 👇",
   },
 
-  // ── 7. An hour before the date: how will the two of you find each other? ──
+  // ── 7. An hour before the date: the anonymous relay is open ─────────────
   //
-  // The card that follows this beat is production's own (`sendCoordCard`,
-  // variant `offer`) with production's own copy and button labels — but it is
-  // sent BY THE DEMO with demo callback data, because in demo the puppet is
-  // unreachable on Telegram and production would send nothing at all and
-  // silently select the anonymous chat. See DEMO_MODE.md.
-  //
-  // Deliberately does NOT say up front which of the three are impossible here:
-  // the visitor is meant to press one and be told what it does. That IS the
-  // demo of this screen.
-  coord_offer: {
-    ru:
-      "🕐 До свидания час — и здесь продукт задаёт вопрос, который в обычном " +
-      "приложении решается сам собой: как вы найдёте друг друга на месте?\n\n" +
-      "Способов три, и карточка ниже настоящая. Нажмите любой — я по ходу " +
-      "расскажу, что именно он делает.",
-    uk:
-      "🕐 До побачення година — і тут продукт ставить питання, яке у звичайному " +
-      "застосунку вирішується саме собою: як ви знайдете одне одного на місці?\n\n" +
-      "Способів три, і картка нижче справжня. Натисніть будь-який — я дорогою " +
-      "розкажу, що саме він робить.",
-    en:
-      "🕐 An hour to go — and here the product asks the question an ordinary app " +
-      "leaves to you: how will the two of you actually find each other?\n\n" +
-      "There are three ways, and the card below is the real one. Press any of " +
-      "them and I'll tell you what it does.",
-  },
-
-  // ── 7a. Variant A, explained instead of performed ───────────────────────
-  coord_share_self: {
-    ru:
-      "📲 Это «поделиться своим Telegram».\n\n" +
-      "В продакшене: партнёру приходит карточка с вашим именем и ссылкой " +
-      "t.me/… — одно нажатие, и он пишет вам напрямую. Разрешения у него никто " +
-      "не спрашивает: контакт ваш, вы им и распорядились. И это единственный " +
-      "необратимый из трёх способов — отданный контакт обратно не забрать.\n\n" +
-      "Здесь отдавать ссылку некому: ваша пара — демо-профиль, аккаунта в " +
-      "Telegram у неё нет.\n\n" +
-      "Выберите ещё раз 👇",
-    uk:
-      "📲 Це «поділитися своїм Telegram».\n\n" +
-      "У продакшені: партнерові приходить картка з вашим ім'ям і посиланням " +
-      "t.me/… — одне натискання, і він пише вам напряму. Дозволу в нього ніхто " +
-      "не питає: контакт ваш, ви ним і розпорядилися. І це єдиний незворотний " +
-      "із трьох способів — відданий контакт назад не забрати.\n\n" +
-      "Тут віддавати посилання нікому: ваша пара — демо-профіль, акаунта в " +
-      "Telegram у неї немає.\n\n" +
-      "Оберіть ще раз 👇",
-    en:
-      "📲 That's \"share my Telegram\".\n\n" +
-      "In production: your match gets a card with your name and a t.me/… link — " +
-      "one tap and they message you directly. Nobody asks their permission: the " +
-      "contact is yours to give. It's also the only irreversible one of the " +
-      "three — a shared contact can't be taken back.\n\n" +
-      "Here there is nobody to give it to: your match is a demo profile with no " +
-      "Telegram account.\n\n" +
-      "Pick again 👇",
-  },
-
-  // ── 7b. Variant B, explained instead of performed ───────────────────────
-  coord_request_partner: {
-    ru:
-      "🙋 Это «попросить его контакт».\n\n" +
-      "В продакшене: партнёру приходит карточка с фото того, кто спрашивает, и " +
-      "двумя кнопками — зелёной «поделиться» и красной «не сейчас». " +
-      "Согласится — вы получаете ссылку на его Telegram. Откажет — я скажу об " +
-      "этом мягко, без объяснений с его стороны, и предложу анонимный чат. Это " +
-      "единственный из трёх способов, который спрашивает разрешение у второй " +
-      "стороны.\n\n" +
-      "Здесь спрашивать некого — партнёра нет в Telegram.\n\n" +
-      "Выберите ещё раз 👇",
-    uk:
-      "🙋 Це «попросити його контакт».\n\n" +
-      "У продакшені: партнерові приходить картка з фото того, хто питає, і " +
-      "двома кнопками — зеленою «поділитися» і червоною «не зараз». " +
-      "Погодиться — ви отримуєте посилання на його Telegram. Відмовить — я " +
-      "скажу про це м'яко, без пояснень з його боку, і запропоную анонімний " +
-      "чат. Це єдиний із трьох способів, який питає дозволу в другої " +
-      "сторони.\n\n" +
-      "Тут питати нікого — партнера немає в Telegram.\n\n" +
-      "Оберіть ще раз 👇",
-    en:
-      "🙋 That's \"ask them for theirs\".\n\n" +
-      "In production: your match gets a card with the asker's photo and two " +
-      "buttons — a green \"share\" and a red \"not now\". If they agree, you get " +
-      "a link to their Telegram. If they decline, I tell you gently, with no " +
-      "explanation owed on their side, and offer the anonymous chat instead. " +
-      "It's the only one of the three that asks the other person's " +
-      "permission.\n\n" +
-      "Here there is nobody to ask — your match isn't on Telegram.\n\n" +
-      "Pick again 👇",
-  },
-
-  // ── 8. Variant C, for real: the anonymous relay is open ─────────────────
+  // Every scheduled date gets it (founder decision 2026-09-26). Until then a
+  // T-3h fork came first — share a Telegram handle, ask for the partner's, or
+  // this chat — and the demo staged it with two explained-not-performed
+  // variants; both went with the questionnaire.
   chat_open: {
     ru:
       "🕶 Анонимный чат открыт — карточка выше, и она рабочая.\n\n" +
@@ -560,38 +468,6 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
 export const DEMO_CONTINUE_CALLBACK = "demo:continue";
 export const DEMO_PREDATE_CALLBACK = "demo:predate";
 export const DEMO_AFTER_DATE_CALLBACK = "demo:after-date";
-
-/**
- * The demo's own coordination fork.
- *
- * Deliberately NOT production's `coord:m:{matchId}:{method}` data, even though
- * the card, its caption and its button labels are all production's. Two reasons,
- * both load-bearing:
- *
- *   - production's `handleCoordMethod` refuses a caller who is not an eligible
- *     offer recipient, and in demo `resolveCoordRecipients` returns nobody (the
- *     puppet is unreachable on Telegram), so every tap would be a silent no-op;
- *   - variant A would otherwise genuinely SUCCEED for a visitor who has a public
- *     `@username` — writing `coordMethod: "share_self"`, which permanently
- *     blocks the anonymous chat and hands the visitor a contact reveal that
- *     reaches nobody.
- *
- * So the demo owns all three taps: A and B are explained, C is performed.
- */
-export const DEMO_COORD_PREFIX = "demo:coord:";
-export type DemoCoordChoice = "share_self" | "request_partner" | "proxy";
-
-export function demoCoordCallback(choice: DemoCoordChoice): string {
-  return `${DEMO_COORD_PREFIX}${choice}`;
-}
-
-export function parseDemoCoordChoice(data: string): DemoCoordChoice | null {
-  if (!data.startsWith(DEMO_COORD_PREFIX)) return null;
-  const choice = data.slice(DEMO_COORD_PREFIX.length);
-  return choice === "share_self" || choice === "request_partner" || choice === "proxy"
-    ? choice
-    : null;
-}
 
 /**
  * Button labels.

@@ -1,113 +1,28 @@
 import { prisma } from "@gennety/db";
-import { t, type Language, PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
+import { t, PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
-import {
-  resolveCoordRecipients,
-  buildChatControlsKeyboard,
-  type CoordMethod,
-} from "../../services/coordination.js";
+import { buildChatControlsKeyboard } from "../../services/coordination.js";
 import {
   proxyChatSendRefusal,
   relayProxyMessage,
   type ProxyChatRefusal,
 } from "../../services/proxy-chat.js";
-import { telegramReachable } from "../../services/telegram-reach.js";
-import { InlineKeyboard } from "grammy";
-import {
-  sendCoordCard,
-  type SendCoordCardOptions,
-} from "../../services/coordination-card/send.js";
-import type {
-  CoordCardInput,
-  CoordCardTheme,
-} from "../../services/coordination-card/index.js";
 
 /**
  * Pre-date coordination handlers (PRODUCT_SPEC.md §Phase 4, feature-flagged).
  *
  * Routed inside `dateRouter` (runs before the menu LLM router, gates on
  * completed onboarding). Callback families:
- *   - `coord:m:{matchId}:{share_self|request_partner|proxy}` — initiator picks
- *   - `coord:approve|decline:{matchId}` — partner consent (Variant B ONLY)
- *   - `coord:enter:{matchId}` — join the anonymous proxy chat (Variant C)
+ *   - `coord:enter:{matchId}` — join the anonymous proxy chat
  *   - `coord:exit` — leave the proxy chat
+ *   - `coord:m:*`, `coord:approve:*`, `coord:decline:*` — buttons of the retired
+ *     T-3h questionnaire; acknowledged and stripped, nothing else (see
+ *     `handleRetiredCoordCard`)
  * Plus the free-text relay leg for users in the `coordination_chat` session
  * state. Whether that chat is open, what gets logged and how the partner is
  * reached all belong to `services/proxy-chat.ts`, shared with the app; this
  * file keeps only Telegram's idiom of entering and leaving a chat session.
- *
- * The contact reveal (A/B) is a plain `t.me/<username>` link — Telegram
- * auto-linkifies it. We deliberately avoid `text_mention` (`tg://user?id=`):
- * to a stranger with no shared chat it renders as "User not found" or a dead
- * link under common privacy settings.
  */
-
-interface CoordMatch {
-  id: string;
-  status: string;
-  coordInitiatorId: string | null;
-  coordMethod: string | null;
-  coordPartnerConsent: boolean | null;
-  userAId: string;
-  userBId: string;
-  userA: CoordUser;
-  userB: CoordUser;
-}
-
-interface CoordUser {
-  id: string;
-  telegramId: bigint;
-  /**
-   * Load-bearing, and it was missing.
-   *
-   * `resolveCoordRecipients` decides who can be offered the contact-exchange
-   * fork by `telegramReachable`, whose whole point is that `telegramId > 0` is
-   * not the test — a Telegram-login account carries a real positive id and no
-   * bot chat. With `platform` absent from the select the predicate read
-   * `undefined`, fell back to "assume Telegram", and the offer went to someone
-   * who can never see it. That module's own header cites this file as the place
-   * that learned the lesson in §4.5; the `select` had never caught up.
-   */
-  platform: string | null;
-  language: string | null;
-  theme: string | null;
-  firstName: string | null;
-  gender: string | null;
-  telegramUsername: string | null;
-  profile: { photos: string[] } | null;
-}
-
-const coordUserSelect = {
-  id: true,
-  telegramId: true,
-  platform: true,
-  language: true,
-  // Card chrome follows the RECIPIENT's theme, and the first profile photo is
-  // what fills the card's polaroid — both only exist for the coordination
-  // cards (PRODUCT_SPEC §Phase 4).
-  theme: true,
-  firstName: true,
-  gender: true,
-  telegramUsername: true,
-  profile: { select: { photos: true } },
-} as const;
-
-function loadCoordMatch(matchId: string): Promise<CoordMatch | null> {
-  return prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      id: true,
-      status: true,
-      coordInitiatorId: true,
-      coordMethod: true,
-      coordPartnerConsent: true,
-      userAId: true,
-      userBId: true,
-      userA: { select: coordUserSelect },
-      userB: { select: coordUserSelect },
-    },
-  });
-}
 
 async function callerUserId(ctx: BotContext): Promise<string | null> {
   const user = await prisma.user.findUnique({
@@ -115,50 +30,6 @@ async function callerUserId(ctx: BotContext): Promise<string | null> {
     select: { id: true },
   });
   return user?.id ?? null;
-}
-
-function telegramLink(username: string): string {
-  return `https://t.me/${username}`;
-}
-
-function langOf(u: CoordUser): Language {
-  return (u.language ?? "en") as Language;
-}
-
-function themeOf(u: CoordUser): CoordCardTheme {
-  return (u.theme ?? "dark") as CoordCardTheme;
-}
-
-/** First profile photo — the face in the card's polaroid frame. */
-function photoOf(u: CoordUser): string | null {
-  return u.profile?.photos?.[0] ?? null;
-}
-
-/**
- * A coordination card, sent only to someone the bot can actually message.
- *
- * `sendCoordCard` filters on `telegramId > 0n`, and a Telegram-login app
- * account passes that with a REAL id and no bot chat. What comes back is a 403,
- * and a 403 is not merely a lost card: it is how "this person blocked the bot"
- * is detected, and that verdict takes someone out of matching.
- *
- * No push leg, on purpose. The cards sent from this file carry the two
- * contact-exchange variants, which only ever run for a pair whose BOTH sides
- * are Telegram-reachable and neither is on the app: `resolveCoordRecipients`
- * refuses any other pair at tap time, and `sendOffers` moves a pair with the
- * app in it straight onto the anonymous chat. Nothing turns a Telegram account
- * into an app-only one (linking only ever widens it to `both`), so this guards
- * an invariant rather than a branch that runs.
- */
-async function sendCardIfReachable(
-  ctx: BotContext,
-  to: CoordUser,
-  card: CoordCardInput,
-  text: string,
-  opts?: SendCoordCardOptions,
-): Promise<void> {
-  if (!telegramReachable(to)) return;
-  await sendCoordCard(ctx.api, to.telegramId, card, text, opts);
 }
 
 /**
@@ -185,217 +56,30 @@ async function refuseProxyChat(ctx: BotContext, refusal: ProxyChatRefusal): Prom
   await ctx.reply(t(ctx.session.language, key));
 }
 
-/** `coord:m:{matchId}:{method}` — initiator picks a coordination option. */
-export async function handleCoordMethod(ctx: BotContext): Promise<void> {
+/**
+ * `coord:m:*` / `coord:approve:*` / `coord:decline:*` — a button on a card of
+ * the retired T-3h questionnaire (founder decision 2026-09-26: no handle
+ * exchange, no choice — every scheduled date gets the anonymous chat at T-1h).
+ *
+ * Cards sent before the change are still sitting in people's chats, and a tap
+ * on one must neither spin forever nor do what it used to: nothing is written
+ * and no handle is revealed. The tap is answered and the dead keyboard taken
+ * off the card, so the question stops looking open.
+ */
+export async function handleRetiredCoordCard(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("coord:m:")) return;
-  await ctx.answerCallbackQuery();
-
-  const parts = data.split(":"); // coord, m, {matchId}, {method}
-  const matchId = parts[2];
-  const method = parts[3] as CoordMethod;
-  if (!matchId || !["share_self", "request_partner", "proxy"].includes(method)) return;
-
-  const callerId = await callerUserId(ctx);
-  if (!callerId) return;
-
-  const match = await loadCoordMatch(matchId);
-  if (!match || match.status !== "scheduled") return;
-
-  // Only an eligible offer recipient (the female participant, or either side in
-  // a same-sex pair) may pick — and only the first tapper, first-tap-wins.
-  const recipients = resolveCoordRecipients(match.userA, match.userB);
-  if (!recipients.some((r) => r.id === callerId)) return;
-
-  const lang = ctx.session.language;
-  const initiator = callerId === match.userA.id ? match.userA : match.userB;
-  const partner = callerId === match.userA.id ? match.userB : match.userA;
-  const now = new Date();
-
-  // A contact variant whose link cannot exist is refused BEFORE anything is
-  // written, so an impossible tap never locks the method (the button shouldn't
-  // have shown).
-  if (method === "share_self" && !initiator.telegramUsername) return;
-  if (method === "request_partner" && !partner.telegramUsername) return;
-
-  // First tap wins, and the WRITE decides it, not the read above. A same-sex
-  // pair both hold the offer, so two taps can land together having both read
-  // `coordMethod: null`; with a plain update the second overwrote the first's
-  // choice after the first's card had already gone out, leaving the row saying
-  // one thing and the partner's chat another. A and C are settled by the tap;
-  // B stays open until the partner answers.
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", coordMethod: null },
-    data: {
-      coordInitiatorId: callerId,
-      coordMethod: method,
-      coordChosenAt: now,
-      ...(method === "request_partner" ? { coordPartnerConsent: null } : { coordResolvedAt: now }),
-    },
-  });
-  if (claim.count === 0) {
-    await ctx.reply(t(lang, "coordAlreadyChosen"));
-    return;
-  }
-
-  if (method === "share_self" && initiator.telegramUsername) {
-    const partnerLang = langOf(partner);
-    await sendCardIfReachable(
-      ctx,
-      partner,
-      {
-        variant: "shared",
-        personName: initiator.firstName ?? "",
-        personPhotoRef: photoOf(initiator),
-        language: partnerLang,
-        theme: themeOf(partner),
-      },
-      t(partnerLang, "coordSharedToPartner", {
-        name: initiator.firstName ?? "",
-        link: telegramLink(initiator.telegramUsername),
-      }),
-    );
-    await ctx.reply(t(lang, "coordSharedAck"));
-    return;
-  }
-
-  if (method === "request_partner") {
-    const partnerLang = langOf(partner);
-    const kb = new InlineKeyboard()
-      .text(t(partnerLang, "coordPartnerBtnApprove"), `coord:approve:${matchId}`)
-      .success()
-      .text(t(partnerLang, "coordPartnerBtnDecline"), `coord:decline:${matchId}`)
-      .danger();
-    await sendCardIfReachable(
-      ctx,
-      partner,
-      {
-        variant: "ask",
-        // The face in the frame is whoever is ASKING, so the partner sees who
-        // wants their contact before deciding.
-        personName: initiator.firstName ?? "",
-        personPhotoRef: photoOf(initiator),
-        language: partnerLang,
-        theme: themeOf(partner),
-      },
-      t(partnerLang, "coordPartnerAskApprove", { name: initiator.firstName ?? "" }),
-      { keyboard: kb },
-    );
-    await ctx.reply(t(lang, "coordRequestAck"));
-    return;
-  }
-
-  // method === "proxy" (Variant C) — locked in by the claim; the cron opens it
-  // at T-1h unconditionally (no partner consent).
-  await ctx.reply(t(lang, "coordProxyChosenAck"));
-}
-
-/** `coord:approve|decline:{matchId}` — partner consent for Variant B. */
-export async function handleCoordConsent(ctx: BotContext): Promise<void> {
-  const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("coord:approve:") && !data?.startsWith("coord:decline:")) return;
-  await ctx.answerCallbackQuery();
-
-  const approve = data.startsWith("coord:approve:");
-  const matchId = data.slice(approve ? "coord:approve:".length : "coord:decline:".length);
-  if (!matchId) return;
-
-  const callerId = await callerUserId(ctx);
-  if (!callerId) return;
-
-  const match = await loadCoordMatch(matchId);
   if (
-    !match ||
-    match.status !== "scheduled" ||
-    match.coordMethod !== "request_partner" ||
-    match.coordPartnerConsent !== null
+    !data?.startsWith("coord:m:") &&
+    !data?.startsWith("coord:approve:") &&
+    !data?.startsWith("coord:decline:")
   ) {
     return;
   }
-
-  // Caller must be the partner (the side that did NOT initiate).
-  const isParticipant = callerId === match.userAId || callerId === match.userBId;
-  if (!isParticipant || callerId === match.coordInitiatorId) return;
-
-  const partner = callerId === match.userA.id ? match.userA : match.userB;
-  const initiator = callerId === match.userA.id ? match.userB : match.userA;
-  const lang = ctx.session.language;
-
-  // The answer is taken once, by the write: an approve and a decline tapped in
-  // quick succession both read `coordPartnerConsent: null` above, and the
-  // second used to overwrite the first after its card had gone out. The
-  // method is in the guard too, because `openProxies` may have moved an
-  // unanswered request onto the anonymous chat in between.
-  const unanswered = {
-    id: matchId,
-    status: "scheduled",
-    coordMethod: "request_partner",
-    coordPartnerConsent: null,
-  } as const;
-
-  if (!approve) {
-    // Declining to share a contact is not declining to meet: the pair still
-    // has to find each other at the venue, and the card below tells the
-    // initiator the anonymous chat opens about an hour before. So the decline
-    // IS the switch to it. It used to record the refusal and leave the method
-    // on `request_partner` — and `openProxies` opens a window only for
-    // `proxy`, so the chat the card promised never came.
-    const declined = await prisma.match.updateMany({
-      where: unanswered,
-      data: { coordPartnerConsent: false, coordMethod: "proxy", coordResolvedAt: new Date() },
-    });
-    await ctx.editMessageReplyMarkup().catch(() => {});
-    if (declined.count === 0) {
-      await ctx.reply(t(lang, "coordAlreadyChosen"));
-      return;
-    }
-    await sendCardIfReachable(
-      ctx,
-      initiator,
-      {
-        // No face here on purpose: the card is about the decision, not the
-        // person who made it. The clock points at the anonymous chat instead,
-        // which the caption spells out.
-        variant: "declined",
-        personName: partner.firstName ?? "",
-        language: langOf(initiator),
-        theme: themeOf(initiator),
-      },
-      t(langOf(initiator), "coordPartnerDeclined"),
-    );
-    return;
-  }
-
-  if (!partner.telegramUsername) return; // can't reveal without a handle
-
-  const approved = await prisma.match.updateMany({
-    where: unanswered,
-    data: { coordPartnerConsent: true, coordResolvedAt: new Date() },
-  });
+  await ctx.answerCallbackQuery();
   await ctx.editMessageReplyMarkup().catch(() => {});
-  if (approved.count === 0) {
-    await ctx.reply(t(lang, "coordAlreadyChosen"));
-    return;
-  }
-  await sendCardIfReachable(
-    ctx,
-    initiator,
-    {
-      variant: "shared",
-      personName: partner.firstName ?? "",
-      personPhotoRef: photoOf(partner),
-      language: langOf(initiator),
-      theme: themeOf(initiator),
-    },
-    t(langOf(initiator), "coordRevealToInitiator", {
-      name: partner.firstName ?? "",
-      link: telegramLink(partner.telegramUsername),
-    }),
-  );
-  await ctx.reply(t(lang, "coordSharedAck"));
 }
 
-/** `coord:enter:{matchId}` — join the anonymous proxy chat (Variant C). */
+/** `coord:enter:{matchId}` — join the anonymous proxy chat. */
 export async function handleCoordEnter(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("coord:enter:")) return;

@@ -20,10 +20,6 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   // a MessageEntity (the final pitch message has no `parse_mode`).
   "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
-  // A coordination-card headline line that is just the product name plus a
-  // question mark. pl phrases the ask as "Udostępnić / Telegram?", so its
-  // second line lands byte-identical to English — nothing to translate.
-  "coordCardAskHead2",
   // Bare domain on the referral card — a URL, not prose.
   "referralCardFooter",
   // "−{pct}%" on a plan card is a minus sign, a number and a percent sign — a
@@ -76,7 +72,6 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   // бы хуже, чем записать, что различия нет (тот же довод, что у
   // `eventRoundPushBody`). Остальные семь вариантов НЕ в списке и различаются.
   "hdyhauAd",
-  "coordCardAskHead2",
   "photoReceived",
   // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).
   "dateCardSlogan",

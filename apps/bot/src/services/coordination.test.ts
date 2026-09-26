@@ -16,7 +16,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-// The offer and proxy-open DMs ride a rendered PNG (PRODUCT_SPEC §Phase 4).
+// The proxy-open DM rides a rendered PNG (PRODUCT_SPEC §Phase 4).
 // Stub the raster — a real satori render costs seconds per call and says
 // nothing about the sweep; `coordination-card/send.test.ts` covers delivery.
 const { mockRenderCard } = vi.hoisted(() => ({
@@ -24,13 +24,15 @@ const { mockRenderCard } = vi.hoisted(() => ({
 }));
 vi.mock("./coordination-card/index.js", () => ({ renderCoordinationCard: mockRenderCard }));
 
+const { mockSendPush, mockAdvanceActivities } = vi.hoisted(() => ({
+  mockSendPush: vi.fn().mockResolvedValue(true),
+  mockAdvanceActivities: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./push.js", () => ({ sendPushToUser: mockSendPush }));
+vi.mock("./date-day-activity.js", () => ({ advanceDateDayActivities: mockAdvanceActivities }));
+
 import { prisma } from "@gennety/db";
-import {
-  runCoordinationTick,
-  resolveCoordRecipients,
-  buildCoordOfferKeyboard,
-  isProxyOpen,
-} from "./coordination.js";
+import { runCoordinationTick, isProxyOpen } from "./coordination.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn; updateMany: MockFn };
@@ -40,20 +42,6 @@ function makeApi() {
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendPhoto: vi.fn().mockResolvedValue(undefined),
   } as any;
-}
-
-function user(over: Record<string, unknown> = {}): any {
-  return {
-    id: "uid-A",
-    telegramId: 1001n,
-    language: "en",
-    theme: "dark",
-    firstName: "Alice",
-    gender: "female",
-    telegramUsername: "alice",
-    profile: { photos: ["file-alice-1"] },
-    ...over,
-  };
 }
 
 const NOW = new Date("2026-06-04T12:00:00Z");
@@ -70,71 +58,6 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
-describe("resolveCoordRecipients", () => {
-  it("M/F pair → only the female", () => {
-    const a = user({ id: "A", gender: "female" });
-    const b = user({ id: "B", gender: "male", telegramId: 1002n });
-    const r = resolveCoordRecipients(a, b);
-    expect(r.map((u) => u.id)).toEqual(["A"]);
-  });
-
-  it("same-sex pair (no female) → both, first tap wins later", () => {
-    const a = user({ id: "A", gender: "male" });
-    const b = user({ id: "B", gender: "male", telegramId: 1002n });
-    const r = resolveCoordRecipients(a, b);
-    expect(r.map((u) => u.id).sort()).toEqual(["A", "B"]);
-  });
-
-  it("F/F pair → both", () => {
-    const a = user({ id: "A", gender: "female" });
-    const b = user({ id: "B", gender: "female", telegramId: 1002n });
-    expect(resolveCoordRecipients(a, b)).toHaveLength(2);
-  });
-
-  it("mobile-only partner (negative id) → nobody is offered", () => {
-    const a = user({ id: "A", gender: "female" });
-    const b = user({ id: "B", gender: "male", telegramId: -55n });
-    expect(resolveCoordRecipients(a, b)).toEqual([]);
-  });
-});
-
-describe("buildCoordOfferKeyboard", () => {
-  function flat(kb: ReturnType<typeof buildCoordOfferKeyboard>) {
-    return kb.inline_keyboard.flat().map((b: any) => b.callback_data);
-  }
-
-  it("shows all three when both have usernames", () => {
-    const cbs = flat(buildCoordOfferKeyboard("m1", "en", true, true));
-    expect(cbs).toEqual([
-      "coord:m:m1:share_self",
-      "coord:m:m1:request_partner",
-      "coord:m:m1:proxy",
-    ]);
-  });
-
-  it("hides share_self when the recipient has no username", () => {
-    const cbs = flat(buildCoordOfferKeyboard("m1", "en", false, true));
-    expect(cbs).toEqual(["coord:m:m1:request_partner", "coord:m:m1:proxy"]);
-  });
-
-  it("only proxy when neither has a username", () => {
-    const cbs = flat(buildCoordOfferKeyboard("m1", "en", false, false));
-    expect(cbs).toEqual(["coord:m:m1:proxy"]);
-  });
-
-  it("keeps every callback_data within Telegram's 64-byte limit (real UUID matchId)", () => {
-    // Regression: `coord:method:<uuid>:request_partner` was 65 bytes (>64),
-    // so Telegram rejected the whole offer with BUTTON_DATA_INVALID whenever
-    // the partner had a username. Guard against any callback_data overflow.
-    const uuid = "8af1dc4a-6a6a-4fd2-81ba-33c0854b3b38"; // 36-char match id
-    const cbs = flat(buildCoordOfferKeyboard(uuid, "en", true, true));
-    expect(cbs).toHaveLength(3);
-    for (const cb of cbs) {
-      expect(Buffer.byteLength(cb, "utf8")).toBeLessThanOrEqual(64);
-    }
-  });
-});
 
 describe("isProxyOpen", () => {
   it("true inside the window", () => {
@@ -169,145 +92,40 @@ describe("runCoordinationTick — feature flag", () => {
     mockEnv.COORDINATION_FEATURE_ENABLED = false;
     const api = makeApi();
     const res = await runCoordinationTick(api, NOW);
-    expect(res).toEqual({ offers: 0, opened: 0, closed: 0 });
+    expect(res).toEqual({ opened: 0, closed: 0 });
     expect(mMatch.findMany).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.sendPhoto).not.toHaveBeenCalled();
   });
 });
 
-describe("runCoordinationTick — offer (T-3h)", () => {
-  it("DMs only the female and stamps coordOfferSentAt", async () => {
-    mMatch.findMany
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          userA: user({ id: "A", gender: "female", telegramId: 1001n, telegramUsername: "alice" }),
-          userB: user({
-            id: "B",
-            gender: "male",
-            telegramId: 1002n,
-            telegramUsername: "bob",
-            firstName: "Bob",
-            profile: { photos: ["file-bob-1"] },
-          }),
-        },
-      ])
-      .mockResolvedValueOnce([]) // open phase
-      .mockResolvedValueOnce([]); // close phase
-
+/**
+ * Founder decision 2026-09-26: the T-3h questionnaire (share my Telegram / ask
+ * for theirs / anonymous chat) is gone. A date three hours out is not the
+ * tick's business at all — it reads the T-1h open window and the T+2h close
+ * sweep, and nothing else.
+ */
+describe("runCoordinationTick — no coordination offer", () => {
+  it("sends nothing and writes nothing for a date three hours out", async () => {
     const api = makeApi();
     const res = await runCoordinationTick(api, NOW);
 
-    expect(res.offers).toBe(1);
-    // One message: the card with the intro as its caption and the three
-    // coordination options as its keyboard.
-    expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
-    const [chatId, , extra] = api.sendPhoto.mock.calls[0];
-    expect(chatId).toBe(1001);
-    expect(extra.caption).toEqual(expect.any(String));
-    expect(extra.reply_markup).toBeDefined();
-    // The face in the frame is the PARTNER — "this is who you're about to meet".
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "offer",
-        personName: "Bob",
-        personPhotoRef: "file-bob-1",
-        theme: "dark",
-      }),
-      expect.anything(),
+    expect(res).toEqual({ opened: 0, closed: 0 });
+    expect(mMatch.findMany).toHaveBeenCalledTimes(2); // open + close, no offer sweep
+    const openQuery = mMatch.findMany.mock.calls[0]![0];
+    expect(openQuery.where.agreedTime).toEqual({
+      gt: NOW,
+      lte: new Date(NOW.getTime() + 60 * 60 * 1000),
+    });
+    // Neither sweep reads or filters on the retired questionnaire's columns.
+    const queries = JSON.stringify(mMatch.findMany.mock.calls, (_k, v) =>
+      typeof v === "bigint" ? v.toString() : v,
     );
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordOfferSentAt: null },
-      data: { coordOfferSentAt: NOW },
-    });
-  });
-
-  it("stamps the marker even when nobody is eligible (mobile-only partner)", async () => {
-    mMatch.findMany
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          userA: user({ id: "A", gender: "female", telegramId: 1001n }),
-          userB: user({ id: "B", gender: "male", telegramId: -7n }),
-        },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const api = makeApi();
-    const res = await runCoordinationTick(api, NOW);
-
-    expect(res.offers).toBe(0);
-    expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordOfferSentAt: null },
-      data: { coordOfferSentAt: NOW },
-    });
-  });
-
-  /**
-   * Founder decision 2026-09-07. Both sides here are perfectly reachable on
-   * Telegram and both have usernames, so the fork COULD run — and deliberately
-   * does not, because one of them is on the app. The two contact-exchange
-   * variants hand over a `t.me/` link, which would finish the coordination on
-   * the surface the app cannot see, in the hour the app's chat screen exists
-   * for.
-   */
-  it("asks nothing when either side is on the app, and selects the anonymous chat", async () => {
-    mMatch.findMany
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          userA: user({ id: "A", gender: "female", telegramId: 1001n, platform: "both" }),
-          userB: user({ id: "B", gender: "male", telegramId: 1002n, telegramUsername: "bob" }),
-        },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const api = makeApi();
-    const res = await runCoordinationTick(api, NOW);
-
-    expect(res.offers).toBe(0);
+    expect(queries).not.toMatch(/coordOfferSentAt|coordMethod|coordPartnerConsent/);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
     expect(api.sendPhoto).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
-    // The same two columns a tap writes, so `openProxies` and both relays
-    // treat this pair identically — there is no second code path.
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordMethod: null },
-      data: { coordMethod: "proxy", coordChosenAt: NOW },
-    });
-  });
-
-  /**
-   * The guard is `pushReachable`, not "has a mobile id": a pair with no app
-   * between them keeps the fork it has always had.
-   */
-  it("still offers the fork to a pair that is Telegram-only", async () => {
-    mMatch.findMany
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          userA: user({ id: "A", gender: "female", telegramId: 1001n, platform: "telegram" }),
-          userB: user({
-            id: "B",
-            gender: "male",
-            telegramId: 1002n,
-            telegramUsername: "bob",
-            platform: "telegram",
-          }),
-        },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const api = makeApi();
-    const res = await runCoordinationTick(api, NOW);
-
-    expect(res.offers).toBe(1);
-    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(mockSendPush).not.toHaveBeenCalled();
   });
 });
 
@@ -316,7 +134,6 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
   const openRow = (over: Record<string, unknown> = {}) => ({
     id: "m1",
     agreedTime,
-    coordMethod: "proxy",
     userA: { id: "A", telegramId: 1001n, language: "en" },
     userB: { id: "B", telegramId: 1002n, language: "en" },
     ...over,
@@ -324,7 +141,6 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
 
   it("opens for both with no consent gate and sets proxyClosesAt = agreed + 2h", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([]) // offer phase
       .mockResolvedValueOnce([openRow()])
       .mockResolvedValueOnce([]); // close phase
 
@@ -336,13 +152,10 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
     // withheld portrait IS the card, and a face would contradict it.
     expect(api.sendPhoto).toHaveBeenCalledTimes(2);
     expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "proxy" }),
-      expect.anything(),
-    );
+    expect(mockRenderCard).toHaveBeenCalledWith(expect.objectContaining({ variant: "proxy" }));
     expect(mockRenderCard.mock.calls[0]![0]).not.toHaveProperty("personPhotoRef");
     expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordMethod: "proxy", proxyOpenedAt: null },
+      where: { id: "m1", status: "scheduled", proxyOpenedAt: null },
       data: {
         proxyOpenedAt: NOW,
         proxyClosesAt: new Date(agreedTime.getTime() + 2 * 60 * 60 * 1000),
@@ -358,7 +171,6 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
    */
   it("announces nothing when another tick has already claimed the open", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([openRow()])
       .mockResolvedValueOnce([]);
     mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
@@ -372,55 +184,50 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
   });
 
   /**
-   * A Variant B request that ended without a yes. The decline card promises the
-   * anonymous chat, and an unanswered ask leaves the pair with no way to find
-   * each other either — so both open as the chat, the method rewritten under a
-   * guard that an approve landing in between wins.
+   * Founder decision 2026-09-26: every scheduled date gets the chat. The open
+   * query asks for a scheduled date inside the hour and nothing else — no
+   * method, no consent — so a pair that never chose anything (the Telegram-only
+   * pair whose initiator ignored the old offer used to get NO chat) opens like
+   * any other.
    */
-  it("opens the chat for a contact request nobody said yes to", async () => {
+  it("opens for every scheduled date in the hour, whatever was or wasn't chosen", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([openRow({ coordMethod: "request_partner" })])
+      .mockResolvedValueOnce([openRow()])
       .mockResolvedValueOnce([]);
 
     const api = makeApi();
     const res = await runCoordinationTick(api, NOW);
 
-    const openQuery = mMatch.findMany.mock.calls[1]![0];
-    expect(openQuery.where.OR).toEqual([
-      { coordMethod: "proxy" },
-      {
-        coordMethod: "request_partner",
-        OR: [{ coordPartnerConsent: null }, { coordPartnerConsent: false }],
-      },
-    ]);
-    expect(mMatch.updateMany).toHaveBeenNthCalledWith(1, {
-      where: {
-        id: "m1",
-        status: "scheduled",
-        proxyOpenedAt: null,
-        coordMethod: "request_partner",
-        OR: [{ coordPartnerConsent: null }, { coordPartnerConsent: false }],
-      },
-      data: { coordMethod: "proxy" },
+    const openQuery = mMatch.findMany.mock.calls[0]![0];
+    expect(openQuery.where).toEqual({
+      status: "scheduled",
+      proxyOpenedAt: null,
+      agreedTime: { gt: NOW, lte: new Date(NOW.getTime() + 60 * 60 * 1000) },
     });
     expect(res.opened).toBe(1);
-    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+    expect(mockAdvanceActivities).toHaveBeenCalledWith("m1", "chat_open");
   });
 
-  it("leaves a request alone when the partner approved just before the tick", async () => {
+  it("tells each side on its own rail: a push on the app, a card on Telegram", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([openRow({ coordMethod: "request_partner" })])
+      .mockResolvedValueOnce([
+        openRow({
+          userA: { id: "A", telegramId: 1001n, platform: "telegram", language: "en" },
+          userB: { id: "B", telegramId: -7n, platform: "mobile", language: "en" },
+        }),
+      ])
       .mockResolvedValueOnce([]);
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 }); // the move loses to the approve
 
     const api = makeApi();
-    const res = await runCoordinationTick(api, NOW);
+    await runCoordinationTick(api, NOW);
 
-    expect(res.opened).toBe(0);
-    expect(mMatch.updateMany).toHaveBeenCalledTimes(1); // no open claim after it
-    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(api.sendPhoto.mock.calls[0]![0]).toBe(1001);
+    expect(mockSendPush).toHaveBeenCalledTimes(1);
+    expect(mockSendPush).toHaveBeenCalledWith(
+      "B",
+      expect.objectContaining({ data: { type: "proxy.opened", matchId: "m1" } }),
+    );
   });
 });
 
@@ -435,13 +242,18 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
 
   it("stamps proxyClosedAt and DMs both", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([]) // offer
       .mockResolvedValueOnce([]) // open
       .mockResolvedValueOnce([closeRow()]);
 
     const api = makeApi();
     const res = await runCoordinationTick(api, NOW);
 
+    // Closed for any pair whose window was announced — no method filter.
+    expect(mMatch.findMany.mock.calls[1]![0].where).toEqual({
+      proxyOpenedAt: { not: null },
+      proxyClosedAt: null,
+      proxyClosesAt: { lte: NOW },
+    });
     expect(res.closed).toBe(1);
     // The close notice stays plain text — there is no card for "it's over".
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
@@ -460,7 +272,6 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
   it("closes a called-off date's chat silently", async () => {
     mMatch.findMany
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([closeRow({ status: "cancelled" })]);
 
     const api = makeApi();
@@ -477,7 +288,6 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
   it("still tells a pair whose date has already been marked completed", async () => {
     mMatch.findMany
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([closeRow({ status: "completed" })]);
 
     const api = makeApi();
@@ -489,7 +299,6 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
   /** A Telegram-login app account has a real id and no bot chat. */
   it("does not DM an app-only account through its real Telegram id", async () => {
     mMatch.findMany
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         closeRow({ userB: { telegramId: 1002n, platform: "mobile", language: "en" } }),

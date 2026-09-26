@@ -19,7 +19,7 @@
  */
 
 export interface PlaybookFeatures {
-  /** `COORDINATION_FEATURE_ENABLED` — T-3h contact share + T-1h proxy chat. */
+  /** `COORDINATION_FEATURE_ENABLED` — the anonymous T-1h … T+2h proxy chat, for every date. */
   coordination: boolean;
   /** `VENUE_CHANGE_FEATURE_ENABLED` — female-exclusive one-shot venue swap. */
   venueChange: boolean;
@@ -227,11 +227,10 @@ export function buildProductPlaybook(
 
   // ── The hours before the date + the all-important "find each other" ──
   const preDateLines: string[] = [`## Stage — the hours before the date (all automatic DMs)`];
-  preDateLines.push(`- ~5h before: 3 personalised ice-breakers (easy openers) and the emergency-cancel window opens.`);
+  preDateLines.push(`- ~5h before: 3 personalised ice-breakers (easy openers), with a reminder of the cancel button.`);
   preDateLines.push(`- ~1.5h before: the female participant gets a short safety brief.`);
   if (features.coordination) {
-    preDateLines.push(`- ~3h before: a coordination offer (find-each-other options, below).`);
-    preDateLines.push(`- ~1h before: the anonymous coordination chat opens (below).`);
+    preDateLines.push(`- ~1h before: the anonymous coordination chat opens for both of them (below).`);
   }
   preDateLines.push(`These arrive as DMs on their own — the user doesn't request them from you.`);
   preDateLines.push("");
@@ -239,13 +238,13 @@ export function buildProductPlaybook(
   preDateLines.push(`- The first anchor is always the venue pin: open it in Maps from the date card and head to that exact place at the agreed time.`);
   if (features.coordination) {
     preDateLines.push(
-      `- About 3h before, we offer a way to coordinate on-site. Which options appear depends on who has a public Telegram @username: share my Telegram contact, request the partner's, or an anonymous in-app chat. The female participant is offered first (or, in a same-sex pair, whoever taps first).`,
+      `- The anonymous chat opens automatically 1 hour before the date, for every date, and closes 2h after. Both get an "Enter chat" button; inside they can text things like "I'm at the table by the window" or "running 5 min late". It is text-only, every message carries a Report button, and it closes itself. It exists ONLY to help them find each other and sort last-minute logistics — not to chat before the date.`,
     );
     preDateLines.push(
-      `- The anonymous chat opens automatically 1 hour before the date and closes 2h after. Both get an "Enter chat" button; inside they can text things like "I'm at the table by the window" or "running 5 min late". It is text-only, every message carries a Report button, and it closes itself. It exists ONLY to help them find each other and sort last-minute logistics — not to chat before the date.`,
+      `- So when someone asks "how will we find each other?": tell them to head to the venue pin in Maps, and that ~1h before the date an "Enter chat" button appears to coordinate the exact spot (which entrance, which table, "I'm in a green jacket"). Be specific about the timing — check the context for whether it's open yet.`,
     );
     preDateLines.push(
-      `- So when someone asks "how will we find each other?": tell them to head to the venue pin in Maps, and that ~1h before the date an "Enter chat" button appears to coordinate the exact spot (which entrance, which table, "I'm in a green jacket"), plus, ~3h before, an option to share Telegram contacts. Be specific about the timing — check the context for whether it's open yet.`,
+      `- Contacts are never exchanged before the date — no Telegram handles, no phone numbers, and there is no option to share them. If someone asks to swap contacts, say the anonymous chat is how they reach each other, and it opens by itself.`,
     );
   } else {
     preDateLines.push(
@@ -255,7 +254,7 @@ export function buildProductPlaybook(
   sections.push(preDateLines.join("\n"));
 
   sections.push(`## Stage — emergency / can't make it
-- From ~5h before the date there's an emergency-cancel button. Tapping it asks for confirmation, then requires a written reason that we relay to the other person verbatim (no rewriting), and cancels the date.
+- A booked date can be cancelled at any time before it — there is no window to wait for. The cancel button is on their date (the My Date hub, and the app's date card), and you can put it in front of them yourself (\`propose_cancel_date\`). Tapping it asks for confirmation, then requires a written reason that we relay to the other person verbatim (no rewriting), and cancels the date; paid tickets go back to whoever paid.
 - Cancelling for a genuine reason isn't punished, but frequent flaking hurts future match quality. If they're just nervous or a few minutes late, encourage them to still go${
     features.coordination ? ` and use the coordination chat` : ` and use the venue pin`
   } rather than cancel.`);

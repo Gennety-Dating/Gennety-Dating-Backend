@@ -333,7 +333,15 @@ export const MAX_HOBBIES = 10;
 export const MAX_HOBBY_LENGTH = 50;
 
 /** Phase 4: Date lifecycle timing */
-/** How many hours before the date ice-breakers & emergency window unlock */
+/**
+ * How many hours before the date the ice-breakers land, together with a
+ * reminder that the date can still be cancelled (and its button).
+ *
+ * NOT a gate on cancelling: a `scheduled` date can be cancelled from the
+ * moment it is booked (founder decision 2026-09-26 — nothing in the server or
+ * either client ever blocked it before T-5h; only the copy said "the window is
+ * open"). This number times a message and the venue-change cutoff, nothing else.
+ */
 export const DATE_ALERT_HOURS = 5;
 /** How many hours before the date the safety reminder is sent to female users */
 export const PRE_DATE_SAFETY_HOURS = 1.5;
@@ -344,30 +352,15 @@ export const FEEDBACK_DELAY_HOURS = 24;
 
 /** Phase 4: Pre-date coordination timing (feature-flagged) */
 /**
- * How many hours before the date the coordination offer is sent to the initiator.
+ * How many hours before the date the anonymous proxy chat opens for both sides
+ * — for EVERY scheduled date (founder decision 2026-09-26: the T-3h
+ * questionnaire that decided whether a pair got the chat, and offered to swap
+ * Telegram handles instead, is gone).
  *
- * Three hours rather than one (2026-09-04). At T-1h the offer was a decision
- * asked of someone already getting dressed or already on a tram, and Variant B
- * — "ask them for theirs" — needs a SECOND person to notice a card and tap it
- * before it resolves into anything. An hour was not enough runway for a
- * two-sided exchange, so the variant that depends on the partner quietly
- * failed more often than it worked.
- *
- * The gate also has to sit clear of its neighbours, and at T-3h it does: the
- * venue-change board has already closed for good (`DATE_ALERT_HOURS`), and the
- * wingman reveal and safety brief are still 90 minutes away. Nothing else in
- * the product speaks at T-3h.
- */
-export const COORD_OFFER_HOURS = 3;
-/**
- * How many hours before the date the anonymous proxy chat opens for both sides.
- *
- * One hour rather than thirty minutes (2026-09-04), and the two numbers moved
- * together: the window's job is "how do we find each other", and a pair that
- * picks the anonymous chat at T-3h should not then wait two and a half hours
- * holding a button that does nothing. An hour is also the point at which
- * someone starts actually travelling, which is when "I'm running ten minutes
- * late" becomes worth saying.
+ * One hour rather than thirty minutes (2026-09-04): the window's job is "how
+ * do we find each other", and an hour is the point at which someone starts
+ * actually travelling, which is when "I'm running ten minutes late" becomes
+ * worth saying.
  *
  * A side-effect worth naming: this pulls the `chat_open` Live Activity stage
  * off T-30m, where it used to land in the same tick as the spotter beat

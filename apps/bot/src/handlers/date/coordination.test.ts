@@ -44,8 +44,7 @@ vi.mock("../../services/coordination-card/index.js", () => ({
 
 import { prisma } from "@gennety/db";
 import {
-  handleCoordMethod,
-  handleCoordConsent,
+  handleRetiredCoordCard,
   handleCoordEnter,
   handleCoordExit,
   handleProxyRelay,
@@ -145,241 +144,47 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// handleCoordMethod
+// Retired questionnaire buttons (founder decision 2026-09-26)
 // ---------------------------------------------------------------------------
 
-describe("handleCoordMethod", () => {
-  it("share_self (A) DMs the partner a t.me link and locks the method", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(coordMatch());
-
-    const ctx = createCtx({ callbackData: "coord:m:m1:share_self", fromId: 1001 });
-    await handleCoordMethod(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordMethod: null },
-      data: expect.objectContaining({
-        coordMethod: "share_self",
-        coordInitiatorId: "uid-A",
-        coordResolvedAt: expect.any(Date),
-      }),
-    });
-    // Partner (Bob, 1002) receives ONE message: the card, with Alice's link as
-    // its caption. The link has to stay in the caption — nothing on a PNG is
-    // tappable.
-    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
-    const dm = ctx.api.sendPhoto.mock.calls[0];
-    expect(dm[0]).toBe(1002);
-    expect(dm[2].caption).toContain("https://t.me/alice");
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "shared", personPhotoRef: "file-alice-1" }),
-      expect.anything(),
-    );
-    expect(ctx.reply).toHaveBeenCalled();
-  });
-
-  it("request_partner (B) DMs the partner an approve/decline keyboard", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(coordMatch());
-
-    const ctx = createCtx({ callbackData: "coord:m:m1:request_partner", fromId: 1001 });
-    await handleCoordMethod(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordMethod: null },
-      data: expect.objectContaining({ coordMethod: "request_partner", coordPartnerConsent: null }),
-    });
-    const call = ctx.api.sendPhoto.mock.calls[0];
-    expect(call[0]).toBe(1002);
-    // The keyboard rides the photo, so the consent buttons sit under the card
-    // rather than on a second message.
-    const cbs = call[2].reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data);
-    expect(cbs).toEqual(["coord:approve:m1", "coord:decline:m1"]);
-    // The face in the frame is the ASKER, so the partner sees who is asking.
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "ask", personPhotoRef: "file-alice-1" }),
-      expect.anything(),
-    );
-  });
-
-  it("proxy (C) locks the method with NO partner DM (unconditional open later)", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(coordMatch());
-
-    const ctx = createCtx({ callbackData: "coord:m:m1:proxy", fromId: 1001 });
-    await handleCoordMethod(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: { id: "m1", status: "scheduled", coordMethod: null },
-      data: expect.objectContaining({ coordMethod: "proxy", coordResolvedAt: expect.any(Date) }),
-    });
-    expect(ctx.api.sendMessage).not.toHaveBeenCalled(); // partner is not asked
-    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
-    expect(ctx.reply).toHaveBeenCalled();
-  });
-
-  it("rejects a non-recipient (the male in an M/F pair cannot pick)", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" }); // Bob taps
-    mMatch.findUnique.mockResolvedValueOnce(coordMatch());
-
-    const ctx = createCtx({ callbackData: "coord:m:m1:proxy", fromId: 1002 });
-    await handleCoordMethod(ctx);
-
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
-  });
-
-  it("never locks a contact variant whose link cannot exist", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(
-      coordMatch({
-        userA: coordUser({ id: "uid-A", gender: "female", telegramId: 1001n, telegramUsername: null }),
-      }),
-    );
-
-    const ctx = createCtx({ callbackData: "coord:m:m1:share_self", fromId: 1001 });
-    await handleCoordMethod(ctx);
-
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
-  });
-
+describe("handleRetiredCoordCard", () => {
   /**
-   * A same-sex pair both hold the offer, so two taps can both read
-   * `coordMethod: null`. The claim is what decides, and the loser must send
-   * nothing: a plain update used to let the second tap overwrite the first's
-   * choice after the first's card had already reached the partner.
+   * Offer, ask and consent cards sent before the questionnaire was retired are
+   * still in people's chats. A tap on one writes nothing, reveals no handle and
+   * DMs nobody — it only stops the spinner and takes the dead keyboard off.
    */
-  it("a tap that loses the claim gets the already-chosen notice and sends nothing", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(coordMatch()); // read before the winner wrote
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+  it.each([
+    "coord:m:m1:share_self",
+    "coord:m:m1:request_partner",
+    "coord:m:m1:proxy",
+    "coord:approve:m1",
+    "coord:decline:m1",
+  ])("answers %s and strips the keyboard, doing nothing else", async (callbackData) => {
+    const ctx = createCtx({ callbackData, fromId: 1001 });
+    await handleRetiredCoordCard(ctx);
 
-    const ctx = createCtx({ callbackData: "coord:m:m1:share_self", fromId: 1001 });
-    await handleCoordMethod(ctx);
-
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalledTimes(1);
+    expect(mMatch.findUnique).not.toHaveBeenCalled();
     expect(mMatch.update).not.toHaveBeenCalled();
-    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
-    expect(ctx.reply).toHaveBeenCalledWith(t("en", "coordAlreadyChosen"));
+    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+
+  it("ignores callbacks that are not the questionnaire's", async () => {
+    const ctx = createCtx({ callbackData: "coord:enter:m1", fromId: 1001 });
+    await handleRetiredCoordCard(ctx);
+    expect(ctx.answerCallbackQuery).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// handleCoordConsent (Variant B)
-// ---------------------------------------------------------------------------
-
-describe("handleCoordConsent", () => {
-  const base = () =>
-    coordMatch({ coordMethod: "request_partner", coordInitiatorId: "uid-A", coordPartnerConsent: null });
-  const unanswered = {
-    id: "m1",
-    status: "scheduled",
-    coordMethod: "request_partner",
-    coordPartnerConsent: null,
-  };
-
-  it("approve reveals the partner's t.me link to the initiator", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" }); // Bob approves
-    mMatch.findUnique.mockResolvedValueOnce(base());
-
-    const ctx = createCtx({ callbackData: "coord:approve:m1", fromId: 1002 });
-    await handleCoordConsent(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: unanswered,
-      data: { coordPartnerConsent: true, coordResolvedAt: expect.any(Date) },
-    });
-    // Initiator (Alice, 1001) receives Bob's link in the card's caption.
-    const dm = ctx.api.sendPhoto.mock.calls[0];
-    expect(dm[0]).toBe(1001);
-    expect(dm[2].caption).toContain("https://t.me/bob");
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "shared", personPhotoRef: "file-alice-1" }),
-      expect.anything(),
-    );
-  });
-
-  /**
-   * The decline card tells the initiator the anonymous chat opens about an hour
-   * before — and `openProxies` opens a window only for `coordMethod: "proxy"`.
-   * Recording the refusal while leaving the method on `request_partner` made
-   * that promise one nothing kept.
-   */
-  it("decline notifies the initiator, reveals no contact, and moves the pair onto the anonymous chat", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
-    mMatch.findUnique.mockResolvedValueOnce(base());
-
-    const ctx = createCtx({ callbackData: "coord:decline:m1", fromId: 1002 });
-    await handleCoordConsent(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: unanswered,
-      data: { coordPartnerConsent: false, coordMethod: "proxy", coordResolvedAt: expect.any(Date) },
-    });
-    expect(mMatch.update).not.toHaveBeenCalled();
-    expect(ctx.api.sendPhoto).toHaveBeenCalledTimes(1);
-    expect(ctx.api.sendPhoto.mock.calls[0][2].caption).not.toContain("t.me");
-    // No face on the decline card — it is about the decision, not the person.
-    expect(mockRenderCard).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "declined" }),
-      expect.anything(),
-    );
-    expect(mockRenderCard.mock.calls[0]![0]).not.toHaveProperty("personPhotoRef");
-  });
-
-  it("rejects the initiator trying to approve on the partner's behalf", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" }); // initiator taps
-    mMatch.findUnique.mockResolvedValueOnce(base());
-
-    const ctx = createCtx({ callbackData: "coord:approve:m1", fromId: 1001 });
-    await handleCoordConsent(ctx);
-
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
-  });
-
-  /** Approve and decline tapped together both read an unanswered request. */
-  it("an answer that loses the claim sends nothing", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
-    mMatch.findUnique.mockResolvedValueOnce(base());
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    const ctx = createCtx({ callbackData: "coord:approve:m1", fromId: 1002 });
-    await handleCoordConsent(ctx);
-
-    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
-    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
-    expect(ctx.reply).toHaveBeenCalledWith(t("en", "coordAlreadyChosen"));
-  });
-
-  /**
-   * A Telegram-login app account carries a REAL positive id and no bot chat.
-   * `telegramId > 0n` let the card go out; the 403 that came back is read as
-   * the person blocking the bot.
-   */
-  it("sends no Telegram card to an initiator the bot cannot reach", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
-    mMatch.findUnique.mockResolvedValueOnce(
-      coordMatch({
-        coordMethod: "request_partner",
-        coordInitiatorId: "uid-A",
-        userA: coordUser({ id: "uid-A", gender: "female", telegramId: 1001n, platform: "mobile" }),
-      }),
-    );
-
-    const ctx = createCtx({ callbackData: "coord:decline:m1", fromId: 1002 });
-    await handleCoordConsent(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalled();
-    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
-    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Proxy enter / exit / relay (Variant C)
+// Proxy enter / exit / relay
 // ---------------------------------------------------------------------------
 
 const openWindow = {
-  coordMethod: "proxy",
   proxyOpenedAt: new Date("2026-06-04T12:00:00Z"),
   proxyClosesAt: new Date("2030-01-01T00:00:00Z"),
 };
@@ -399,7 +204,7 @@ describe("handleCoordEnter", () => {
   it("refuses entry to a closed window", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(
-      coordMatch({ coordMethod: "proxy", proxyOpenedAt: new Date(), proxyClosedAt: new Date() }),
+      coordMatch({ proxyOpenedAt: new Date(), proxyClosedAt: new Date() }),
     );
 
     const ctx = createCtx({ callbackData: "coord:enter:m1", fromId: 1001 });
@@ -495,6 +300,42 @@ describe("handleProxyRelay", () => {
     });
   });
 
+  /**
+   * Founder decision 2026-09-26: every scheduled date gets the chat. A pair
+   * that never picked anything — no method, no tick stamp yet — is inside the
+   * window on the schedule alone, and so is a pair left over from the retired
+   * questionnaire that swapped handles.
+   */
+  it.each([null, "share_self"])(
+    "relays for a pair whose coordination method is %s, on the schedule alone",
+    async (coordMethod) => {
+      mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+      mMatch.findUnique.mockResolvedValueOnce(
+        coordMatch({ coordMethod, agreedTime: new Date(Date.now() + 30 * 60 * 1000) }),
+      );
+
+      const ctx = createCtx({ messageText: "on my way", session: inChat, fromId: 1001 });
+      await handleProxyRelay(ctx);
+
+      expect(mProxy.create).toHaveBeenCalledTimes(1);
+      expect(mockPartnerSend.mock.calls[0]![0]).toBe(1002);
+      expect(ctx.session.matchFlow).toBe("coordination_chat");
+    },
+  );
+
+  it("refuses a line two hours before the date, before the window opens", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(
+      coordMatch({ agreedTime: new Date(Date.now() + 2 * 60 * 60 * 1000) }),
+    );
+
+    const ctx = createCtx({ messageText: "too early", session: inChat, fromId: 1001 });
+    await handleProxyRelay(ctx);
+
+    expect(mProxy.create).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "coordProxyClosed"));
+  });
+
   it("falls back to the generic prefix when the sender has no first name", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(
@@ -535,7 +376,7 @@ describe("handleProxyRelay", () => {
   it("self-heals a stale session when the window has closed", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(
-      coordMatch({ coordMethod: "proxy", proxyOpenedAt: new Date(), proxyClosedAt: new Date() }),
+      coordMatch({ proxyOpenedAt: new Date(), proxyClosedAt: new Date() }),
     );
 
     const ctx = createCtx({ messageText: "hi", session: inChat, fromId: 1001 });

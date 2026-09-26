@@ -24,7 +24,7 @@ function makeApi() {
 }
 
 const CARD: CoordCardInput = {
-  variant: "shared",
+  variant: "proxy",
   personName: "Alice",
   language: "en",
   theme: "dark",
@@ -40,35 +40,31 @@ describe("sendCoordCard", () => {
     const api = makeApi();
     const keyboard = { inline_keyboard: [] } as never;
 
-    await sendCoordCard(api, 1001n, CARD, "your date shared their Telegram", { keyboard });
+    await sendCoordCard(api, 1001n, CARD, "your anonymous chat is open", { keyboard });
 
     expect(api.sendPhoto).toHaveBeenCalledTimes(1);
     const [chatId, , extra] = api.sendPhoto.mock.calls[0]!;
     expect(chatId).toBe(1001);
     expect(extra).toMatchObject({
-      caption: "your date shared their Telegram",
+      caption: "your anonymous chat is open",
       reply_markup: keyboard,
     });
     // The copy must never be sent twice — the caption IS the message.
     expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
-  // `offer` / `ask` / `shared` render the other person's face. A partner photo
-  // with a clear face must never be forwardable out of the chat — the same rule
-  // the match card and the private date card already enforce at their send site
-  // (PRODUCT_SPEC §3.7a, legal/privacy-policy.md §10). Asserted for EVERY
-  // variant, so a face-carrying card added later cannot ship unprotected.
-  it.each(["offer", "ask", "shared", "declined", "proxy"] as const)(
-    "protects the %s card from forwarding and saving",
-    async (variant) => {
-      const api = makeApi();
+  // A card about the partner must never be forwardable out of the chat — the
+  // same rule the match card and the private date card already enforce at their
+  // send site (PRODUCT_SPEC §3.7a, legal/privacy-policy.md §10). Asserted on
+  // every card, so a face-carrying one added later cannot ship unprotected.
+  it("protects the card from forwarding and saving", async () => {
+    const api = makeApi();
 
-      await sendCoordCard(api, 1001n, { ...CARD, variant }, "copy");
+    await sendCoordCard(api, 1001n, CARD, "copy");
 
-      const [, , extra] = api.sendPhoto.mock.calls[0]!;
-      expect(extra).toMatchObject({ protect_content: true });
-    },
-  );
+    const [, , extra] = api.sendPhoto.mock.calls[0]!;
+    expect(extra).toMatchObject({ protect_content: true });
+  });
 
   it("keeps protect_content when the flow also attaches a keyboard", async () => {
     const api = makeApi();
@@ -99,7 +95,7 @@ describe("sendCoordCard", () => {
 
     await sendCoordCard(api, 1001n, CARD, long);
 
-    // Truncating would drop the contact link, which is the whole payload.
+    // Truncating would drop the instruction, which is the whole payload.
     expect(api.sendPhoto).not.toHaveBeenCalled();
     expect(api.sendMessage).toHaveBeenCalledWith(1001, long, undefined);
     expect(mockRender).not.toHaveBeenCalled();

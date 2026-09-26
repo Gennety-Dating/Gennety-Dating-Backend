@@ -156,8 +156,8 @@ export interface SerializedMatch {
   safetyBriefAck: boolean;
   /**
    * The §Phase 4 anonymous chat window for this pair — T-1h and T+2h — or
-   * null when there is none (feature off, or the pair coordinates another
-   * way). It is what tells the date hub whether to offer the entry at all,
+   * null when there is none (feature off, or the date is not `scheduled` /
+   * has no agreed time). Every scheduled date has one since 2026-09-26. It is what tells the date hub whether to offer the entry at all,
    * so the client does not need a second request on every open.
    *
    * Two nullable SCALARS rather than one nullable object: a
@@ -337,8 +337,6 @@ export async function getCurrentMatchForUser(
       status: true,
       userAId: true,
       userBId: true,
-      // Read only to derive the §Phase 4 chat window below.
-      coordMethod: true,
       pitchForA: true,
       pitchForB: true,
       synergyScore: true,
@@ -445,7 +443,18 @@ export async function getCurrentMatchForUser(
   // The anonymous chat window, derived from `agreedTime` by the same function
   // both the relay and the native route use — so the hub's entry can never
   // appear while the server would refuse a message, or vice versa.
-  const proxyWindow = proxyChatWindow(match);
+  //
+  // Flag and status are checked HERE because the window itself no longer asks
+  // for anything but a time (every scheduled date gets the chat since
+  // 2026-09-26). Before, a pair only had a window once the tick had put it on
+  // the anonymous chat, which it did only for scheduled dates with the flag on
+  // — so dropping that condition without these two would hand the app an
+  // Enter button into a 404 while the flag is off, or onto a date still being
+  // planned.
+  const proxyWindow =
+    env.COORDINATION_FEATURE_ENABLED && match.status === "scheduled"
+      ? proxyChatWindow(match)
+      : null;
 
   // The pre-date briefing gate — the single source of truth for both fields.
   // The wingman column may already contain the string well ahead of T-1.5h

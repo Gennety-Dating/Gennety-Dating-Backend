@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
 import type { MatchStatus } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import type { Language } from "@gennety/shared";
 
 import { env } from "../config.js";
 import { MATCH_COOLDOWN_MS, createProposedMatch } from "../services/match-engine.js";
@@ -30,8 +30,6 @@ import {
 } from "../handlers/matching/venue-change.js";
 import { runDateLifecycleTick } from "../services/date-lifecycle.js";
 import { runCoordinationTick } from "../services/coordination.js";
-import { sendCoordCard } from "../services/coordination-card/send.js";
-import type { CoordCardTheme } from "../services/coordination-card/index.js";
 import { relayProxyMessage } from "../services/proxy-chat.js";
 
 import { createFailureTracker } from "./failure-tracker.js";
@@ -58,11 +56,9 @@ import {
   DEMO_PREDATE_CALLBACK,
   demoAfterDateLabel,
   demoContinueLabel,
-  demoCoordCallback,
   demoPredateLabel,
   demoText,
   type DemoBeat,
-  type DemoCoordChoice,
 } from "./script.js";
 
 const LOG = "[demo]";
@@ -101,18 +97,6 @@ const pendingSince = new Map<string, { key: string; at: number }>();
 const inFlight = new Set<string>();
 const redoOffered = new Map<string, string>();
 /**
- * Which of the two impossible coordination variants a visitor has already had
- * explained (§Phase 4 fork).
- *
- * The only piece of demo state here that genuinely cannot be derived: tapping
- * "share my Telegram" or "ask for theirs" writes NOTHING to the match — that is
- * the point, it leaves the fork open — so the product carries no trace of it.
- * Used purely to thin the re-offer keyboard; losing it on restart shows a button
- * that has already been read, which is the cheapest possible failure.
- */
-const coordExplained = new Map<string, Set<DemoCoordChoice>>();
-
-/**
  * How many times the same action may be refused before the demo stops trying
  * and says so.
  *
@@ -131,7 +115,6 @@ export function forgetDemoVisitor(userId: string): void {
   spokenBeats.delete(userId);
   pendingSince.delete(userId);
   redoOffered.delete(userId);
-  coordExplained.delete(userId);
   failures.clear(userId);
 }
 
@@ -157,12 +140,10 @@ function refused(reason: string): DemoActionOutcome {
  * left alone: they were true the first time and repeating them is noise.
  */
 function forgetMatchBeats(userId: string): void {
-  coordExplained.delete(userId);
   const set = spokenBeats.get(userId);
   if (!set) return;
   set.delete("date_ready");
   set.delete("predate");
-  set.delete("coord_offer");
   set.delete("chat_open");
   set.delete("after_date");
 }
@@ -390,7 +371,6 @@ async function loadDemoMatch(
       venueIntentA: true,
       venueIntentB: true,
       icebreakersSentAt: true,
-      coordMethod: true,
       proxyOpenedAt: true,
       proxyClosedAt: true,
       venueChangeStatus: true,
@@ -466,7 +446,7 @@ async function loadDemoMatch(
       visitorVenueConfirmed: isConfirmedIntent(own(row.venueIntentA, row.venueIntentB)),
       partnerVenueConfirmed: isConfirmedIntent(own(row.venueIntentB, row.venueIntentA)),
       icebreakersSentAt: row.icebreakersSentAt,
-      coordMethod: row.coordMethod,
+      coordinationEnabled: env.COORDINATION_FEATURE_ENABLED,
       proxyState:
         row.proxyOpenedAt === null ? "none" : row.proxyClosedAt === null ? "open" : "closed",
       proxyLastSender: relay.lastSender,
@@ -650,21 +630,8 @@ async function performAction(
         snapshot.match!.agreedTime,
       );
 
-    case "coord_offer": {
-      const sent = await sendDemoCoordOffer(api, userId, telegramId, snapshot.match!);
-      if (sent.ok) markSpoken(userId, "coord_offer");
-      return sent;
-    }
-
-    case "coord_pick_proxy":
-      return chooseDemoProxy(
-        api,
-        userId,
-        telegramId,
-        lang,
-        snapshot.match!.id,
-        snapshot.match!.agreedTime,
-      );
+    case "open_proxy":
+      return openDemoProxy(api, snapshot.match!.id, snapshot.match!.agreedTime);
 
     case "partner_proxy_reply":
       return sendPuppetProxyMessage(userId, snapshot.match!);
@@ -736,146 +703,33 @@ export async function runDemoPredate(
 }
 
 /**
- * The visitor pressed one of the two variants that cannot work here.
+ * Open the anonymous chat, for real: play the two gates around T-1h.
  *
- * Nothing is written: `coordMethod` stays null, so the fork stays open and the
- * driver keeps holding. That is the whole mechanic the founder asked for — the
- * button is answered with what it WOULD do, and the choice is handed back.
+ * Nothing is chosen first — since 2026-09-26 `openProxies` opens the chat for
+ * every scheduled date (founder decision), so the demo only has to move the
+ * clock. It used to stage production's T-3h questionnaire here, with the two
+ * handle-exchange variants explained rather than performed.
  *
- * The re-offer keyboard drops whichever explanations have been read, so a
- * visitor who works through both is left with the anonymous chat as the only
- * remaining button rather than being invited to re-read a paragraph.
+ * Refused when the replay ran and the window is still not stamped: the tick is
+ * a no-op with the feature off (which `decide.ts` already routes around), so
+ * this is the demo telling its failure tracker something is wrong rather than
+ * replaying the same gates every tick forever.
  */
-export async function explainDemoCoordChoice(
+async function openDemoProxy(
   api: Api<RawApi>,
-  userId: string,
-  telegramId: bigint,
-  lang: Language | null,
-  choice: Exclude<DemoCoordChoice, "proxy">,
-): Promise<void> {
-  const explained = coordExplained.get(userId) ?? new Set<DemoCoordChoice>();
-  explained.add(choice);
-  coordExplained.set(userId, explained);
-
-  // Restart the fork's five-minute floor. The tap changes no product state, so
-  // the derived action stays `coord_pick_proxy` and its clock would otherwise
-  // keep running from when the card was sent — meaning a visitor who spends the
-  // window reading both explanations could have the choice made for them
-  // mid-sentence. Pressing a button IS the signal that someone is still here.
-  pendingSince.delete(userId);
-
-  const beat = choice === "share_self" ? "coord_share_self" : "coord_request_partner";
-  const language = lang ?? "en";
-  // Whatever is still worth pressing: the other contact variant if it has not
-  // been read yet (`choice` is in the set by now, so it drops out on its own),
-  // and always the anonymous chat, which is the one that actually runs.
-  const keyboard = new InlineKeyboard();
-  if (!explained.has("share_self")) {
-    keyboard.text(t(language, "coordBtnShareSelf"), demoCoordCallback("share_self")).row();
-  }
-  if (!explained.has("request_partner")) {
-    keyboard.text(t(language, "coordBtnRequestPartner"), demoCoordCallback("request_partner")).row();
-  }
-  keyboard.text(t(language, "coordBtnProxy"), demoCoordCallback("proxy"));
-
-  await say(api, telegramId, demoText(beat, lang), { reply_markup: keyboard });
-}
-
-/**
- * Send the coordination fork — production's card, production's copy, production's
- * button labels, the demo's own callback data.
- *
- * Production would send NOTHING here: `resolveCoordRecipients` needs both sides
- * reachable on Telegram and the puppet never is, so `sendOffers` silently
- * selects the anonymous chat instead. Rather than widen that rule with a ninth
- * `if (DEMO_MODE_ENABLED)` inside `services/coordination.ts` — which still could
- * not show the two contact-exchange buttons, because production hides those
- * without a `@username` — the demo owns this one screen. See `script.ts` →
- * `DEMO_COORD_PREFIX` for why the callback data cannot be production's.
- */
-async function sendDemoCoordOffer(
-  api: Api<RawApi>,
-  userId: string,
-  telegramId: bigint,
-  match: DemoMatchSnapshot,
-): Promise<DemoActionOutcome> {
-  const partnerId = await partnerIdFor(match, userId);
-  const [partner, visitor] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: partnerId },
-      select: { firstName: true, profile: { select: { photos: true } } },
-    }),
-    prisma.user.findUnique({ where: { id: userId }, select: { language: true, theme: true } }),
-  ]);
-  if (!partner) return refused("puppet-row-missing");
-
-  const language = (visitor?.language ?? "en") as Language;
-  const keyboard = new InlineKeyboard()
-    .text(t(language, "coordBtnShareSelf"), demoCoordCallback("share_self"))
-    .row()
-    .text(t(language, "coordBtnRequestPartner"), demoCoordCallback("request_partner"))
-    .row()
-    .text(t(language, "coordBtnProxy"), demoCoordCallback("proxy"));
-
-  // The demo's own framing first, then the real card — same order as every other
-  // beat that introduces a production screen.
-  await say(api, telegramId, demoText("coord_offer", language));
-  await sendCoordCard(
-    api,
-    telegramId,
-    {
-      variant: "offer",
-      personName: partner.firstName ?? "",
-      personPhotoRef: partner.profile?.photos?.[0] ?? null,
-      language,
-      theme: (visitor?.theme ?? "dark") as CoordCardTheme,
-    },
-    t(language, "coordOfferIntro"),
-    { keyboard },
-  );
-  return ACTED;
-}
-
-/**
- * Variant C, for real: lock in the anonymous chat and play the two gates that
- * open it.
- *
- * The four-field write mirrors `handleCoordMethod`'s own `proxy` branch
- * (`handlers/date/coordination.ts`) — the demo cannot route the tap through that
- * handler, because it refuses anyone who is not an eligible offer recipient and
- * in demo there are none. Guarded on `coordMethod: null`, so the visitor's tap
- * and the five-minute floor cannot both fire.
- */
-export async function chooseDemoProxy(
-  api: Api<RawApi>,
-  userId: string,
-  telegramId: bigint,
-  lang: Language | null,
   matchId: string,
   agreedTime: Date | null,
 ): Promise<DemoActionOutcome> {
-  const now = new Date();
-  const claimed = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", coordMethod: null },
-    data: {
-      coordInitiatorId: userId,
-      coordMethod: "proxy",
-      coordChosenAt: now,
-      coordResolvedAt: now,
-    },
-  });
-  // Already chosen — the tap lost to the timer or to itself. Not a failure: the
-  // gates below are idempotent, so just don't say "got it" a second time.
-  if (claimed.count > 0) {
-    await say(api, telegramId, t((lang ?? "en") as Language, "coordProxyChosenAck"));
-  }
-
   try {
-    await replayGates(api, COORD_GATES, agreedTime);
+    await replayGates(api, CHAT_GATES, agreedTime);
   } catch (err) {
-    return refused(`coord-replay:${err instanceof Error ? err.message : String(err)}`);
+    return refused(`chat-replay:${err instanceof Error ? err.message : String(err)}`);
   }
-  return ACTED;
+  const row = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { proxyOpenedAt: true },
+  });
+  return row?.proxyOpenedAt ? ACTED : refused("chat-not-opened");
 }
 
 /**
@@ -1280,16 +1134,15 @@ async function submitPuppetLikes(
  * **`runCoordinationTick` has to be replayed too, and used not to be.** It is a
  * SEPARATE sweep, called from `index.ts` on the real clock — so a demo that
  * replayed only the lifecycle silently skipped the hours before the date: the
- * "how do we find each other" offer at T-3h, the anonymous chat at T-1h, and
- * all five coordination cards, with `COORDINATION_FEATURE_ENABLED` on the
- * entire time. The first demo ever to reach a scheduled date is what surfaced
- * it — `coordOfferSentAt` and `proxyOpenedAt` were both still null at the end.
+ * anonymous chat at T-1h and its card, with `COORDINATION_FEATURE_ENABLED` on
+ * the entire time. The first demo ever to reach a scheduled date is what
+ * surfaced it — `proxyOpenedAt` was still null at the end.
  *
  * **Why three stretches.** Running every gate back to back put T+25h four
  * seconds after the last pre-date gate, so `closeProxies` shut the anonymous chat before anyone
  * could open it: the visitor was handed a live "Enter chat" button that was dead
- * by the time they reached it. Both the coordination fork and the relay are real
- * decisions the visitor makes, so the replay stops at each and waits — see
+ * by the time they reached it. The relay is a real conversation the visitor
+ * has, so the replay stops before it and waits — see
  * `decide.ts` → `decidePredateAction` for the states it waits in.
  */
 interface Gate {
@@ -1297,21 +1150,18 @@ interface Gate {
   minutes: number;
 }
 
-/** T-2h → ice-breakers, the emergency window, the date-day Live Activity. */
+/** T-2h → ice-breakers, the cancel reminder, the date-day Live Activity. */
 const PRE_DATE_GATES: readonly Gate[] = [{ minutes: -120 }];
 /**
- * T-45m → the coordination sweep claims `coordOfferSentAt` and sends nothing
- * (the demo owns that card, see `sendDemoCoordOffer`), the wingman reveal and
- * safety brief land, and `openProxies` opens the relay now that the method is
- * set; T-30m → the spotter beat on the date-day card.
+ * T-45m → the wingman reveal and safety brief land, and `openProxies` opens
+ * the relay (for every scheduled date — nothing to choose first); T-30m → the
+ * spotter beat on the date-day card.
  *
  * The gates stay at the DEMO's own pacing rather than mirroring production's
- * T-3h / T-1h. Both still fall inside the real windows — which is the only
- * thing the sweeps care about — and pushing the first gate out to T-3h would
- * buy the visitor nothing but a longer wait between two cards they are looking
- * at back to back.
+ * T-1h. Both still fall inside the real windows — which is the only thing the
+ * sweeps care about.
  */
-const COORD_GATES: readonly Gate[] = [{ minutes: -45 }, { minutes: -30 }];
+const CHAT_GATES: readonly Gate[] = [{ minutes: -45 }, { minutes: -30 }];
 /** T+25h → the feedback prompt (which flips the row to `completed`) + close. */
 const AFTER_DATE_GATES: readonly Gate[] = [{ minutes: 25 * 60 }];
 

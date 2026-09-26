@@ -64,7 +64,9 @@ function match(over: Record<string, unknown> = {}): any {
     userAId: "uid-A",
     userBId: "uid-B",
     agreedTime: DATE,
-    coordMethod: "proxy",
+    // What every pair looks like since 2026-09-26: nobody chose anything, and
+    // the chat is theirs regardless.
+    coordMethod: null,
     proxyOpenedAt: null,
     proxyClosesAt: null,
     proxyClosedAt: null,
@@ -105,14 +107,19 @@ beforeEach(() => {
 
 describe("proxyChatWindow", () => {
   it("is T-1h … T+2h around the agreed time", () => {
-    const w = proxyChatWindow({ agreedTime: DATE, coordMethod: "proxy" });
+    const w = proxyChatWindow({ agreedTime: DATE });
     expect(w?.opensAt).toEqual(OPENS);
     expect(w?.closesAt).toEqual(CLOSES);
   });
 
-  it("does not exist for a pair that chose to exchange contacts instead", () => {
-    expect(proxyChatWindow({ agreedTime: DATE, coordMethod: "share_self" })).toBeNull();
-    expect(proxyChatWindow({ agreedTime: DATE, coordMethod: null })).toBeNull();
+  /**
+   * Founder decision 2026-09-26: the window used to exist only for a pair that
+   * picked the anonymous chat at T-3h. There is no pick any more — every
+   * scheduled date has it, and only a missing time leaves a pair without one.
+   */
+  it("exists for every date with a time, and only lacks one without a time", () => {
+    expect(proxyChatWindow({ agreedTime: DATE })?.opensAt).toEqual(OPENS);
+    expect(proxyChatWindow({ agreedTime: null })).toBeNull();
   });
 
   /**
@@ -122,7 +129,7 @@ describe("proxyChatWindow", () => {
    * so they cannot disagree about the edges.
    */
   it("is open on time even though no cron has stamped anything", () => {
-    const m = { agreedTime: DATE, coordMethod: "proxy", proxyClosedAt: null };
+    const m = { agreedTime: DATE, proxyClosedAt: null };
     expect(proxyChatIsOpen(m, new Date(OPENS.getTime() - 1))).toBe(false);
     expect(proxyChatIsOpen(m, OPENS)).toBe(true);
     expect(proxyChatIsOpen(m, new Date(CLOSES.getTime() - 1))).toBe(true);
@@ -130,7 +137,7 @@ describe("proxyChatWindow", () => {
   });
 
   it("an explicit close still wins inside the window", () => {
-    const m = { agreedTime: DATE, coordMethod: "proxy", proxyClosedAt: new Date() };
+    const m = { agreedTime: DATE, proxyClosedAt: new Date() };
     expect(proxyChatIsOpen(m, DATE)).toBe(false);
   });
 });
@@ -139,7 +146,6 @@ describe("proxyChatAcceptsMessages — the one gate both rails ask", () => {
   const scheduled = {
     status: "scheduled",
     agreedTime: DATE,
-    coordMethod: "proxy",
     proxyOpenedAt: null,
     proxyClosesAt: null,
     proxyClosedAt: null,
@@ -179,10 +185,9 @@ describe("proxyChatAcceptsMessages — the one gate both rails ask", () => {
     ).toBe(true);
   });
 
-  it("lets neither source override a force-close or a pair that exchanged contacts", () => {
+  it("lets neither source override a force-close", () => {
     const announced = { ...scheduled, proxyOpenedAt: OPENS, proxyClosesAt: CLOSES };
     expect(proxyChatAcceptsMessages({ ...announced, proxyClosedAt: OPENS }, DATE)).toBe(false);
-    expect(proxyChatAcceptsMessages({ ...announced, coordMethod: "share_self" }, DATE)).toBe(false);
   });
 });
 
@@ -355,6 +360,53 @@ describe("relayProxyMessage", () => {
     });
     expect(res).toEqual({ ok: false, error: "closed" });
     expect(mMsg.create).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The whole window, for a pair that never chose anything (founder decision
+   * 2026-09-26) and for one left over from the retired questionnaire that
+   * swapped handles — both get the chat, on the schedule alone.
+   */
+  describe.each([null, "share_self", "request_partner"])("with coordMethod %s", (coordMethod) => {
+    const HOUR = 60 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(DATE.getTime() + offsetMs);
+
+    beforeEach(() => {
+      mMatch.findUnique.mockResolvedValue(match({ coordMethod }));
+    });
+
+    it.each([
+      ["T-2h", -2 * HOUR],
+      ["one ms before T-1h", -HOUR - 1],
+      ["T+2h", 2 * HOUR],
+      ["T+3h", 3 * HOUR],
+    ])("refuses at %s without writing anything", async (_label, offset) => {
+      const res = await relayProxyMessage({
+        matchId: "m-1",
+        senderUserId: "uid-A",
+        body: "hi",
+        now: at(offset),
+      });
+      expect(res).toEqual({ ok: false, error: "closed" });
+      expect(mMsg.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["T-1h", -HOUR],
+      ["T-30m", -HOUR / 2],
+      ["T", 0],
+      ["T+1h", HOUR],
+      ["one ms before T+2h", 2 * HOUR - 1],
+    ])("accepts at %s", async (_label, offset) => {
+      const res = await relayProxyMessage({
+        matchId: "m-1",
+        senderUserId: "uid-A",
+        body: "hi",
+        now: at(offset),
+      });
+      expect(res.ok).toBe(true);
+      expect(mMsg.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("refuses a date that is no longer on without writing anything", async () => {

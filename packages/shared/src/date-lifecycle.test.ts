@@ -11,7 +11,6 @@ import {
   preDateBriefingVisibility,
 } from "./date-lifecycle.js";
 import {
-  COORD_OFFER_HOURS,
   DATE_ALERT_HOURS,
   PRE_DATE_SAFETY_HOURS,
   PRE_DATE_WINGMAN_HOURS,
@@ -112,8 +111,7 @@ describe("dateDayBeatFor", () => {
 describe("the pre-date schedule", () => {
   /** Hours before `agreedTime`, largest first — the order a user lives them. */
   const BEATS: ReadonlyArray<readonly [string, number]> = [
-    ["ice-breakers + emergency window", DATE_ALERT_HOURS],
-    ["coordination offer", COORD_OFFER_HOURS],
+    ["ice-breakers + cancel reminder", DATE_ALERT_HOURS],
     ["wingman reveal", PRE_DATE_WINGMAN_HOURS],
     ["anonymous chat opens", PROXY_OPEN_HOURS],
     ["spotter sign", DATE_DAY_SPOTTER_LEAD_MINUTES / 60],
@@ -130,19 +128,13 @@ describe("the pre-date schedule", () => {
     }
   });
 
-  it("gives the pair real time to answer the coordination offer", () => {
-    // The offer asks a question whose two contact variants need the PARTNER to
-    // notice a card and tap it. If the anonymous-chat fallback opened right
-    // behind it, the fork would resolve before the second person ever looked
-    // at their phone — which is what T-60m/T-30m did.
-    expect(COORD_OFFER_HOURS - PROXY_OPEN_HOURS).toBeGreaterThanOrEqual(1);
-  });
-
-  it("offers coordination only once the venue can no longer move", () => {
+  it("opens the chat only once the venue can no longer move", () => {
     // A venue change must settle by T-5h (`VENUE_CHANGE_TTL_HOURS`' effective
-    // deadline). An offer sent before that could name a place the pair is
-    // still in the middle of swapping.
-    expect(COORD_OFFER_HOURS).toBeLessThan(DATE_ALERT_HOURS);
+    // deadline). The chat's whole job is finding each other AT the venue, so
+    // it must never open on a place the pair is still in the middle of
+    // swapping. (This guarded the T-3h coordination offer until that was
+    // retired on 2026-09-26; the chat inherits it.)
+    expect(PROXY_OPEN_HOURS).toBeLessThan(DATE_ALERT_HOURS);
   });
 
   it("keeps the chat-open beat off the spotter beat", () => {

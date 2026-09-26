@@ -2084,11 +2084,13 @@ model Match {
   ticketExpiresAt     DateTime? @map("ticket_expires_at")
 
   /// --- Pre-date coordination (feature-flagged, PRODUCT_SPEC §Phase 4) ---
-  /// String sub-state machine layered on top of a `scheduled` match — like
-  /// `ticketStatus`, deliberately not a Prisma enum so the scheduling/venue
-  /// lifecycle code is untouched. Inert when `COORDINATION_FEATURE_ENABLED`
-  /// is off. The female participant (or, in same-sex pairs, whoever taps
-  /// first) is offered three ways to find each other at the spot at T-60m.
+  /// **Deprecated 2026-09-26 — the six `coord*` columns below are no longer
+  /// read or written.** They held the T-3h questionnaire (share my Telegram /
+  /// ask for theirs / anonymous chat), retired by founder decision: every
+  /// scheduled date now gets the anonymous chat at T-1h and handles never
+  /// change hands. Kept, not dropped, so the rows written before the change
+  /// stay intact and no migration rides this change; only the `proxy*`
+  /// columns further down are live.
   coordOfferSentAt    DateTime? @map("coord_offer_sent_at")
   /// User who actually picked a method (the offer's first tapper).
   coordInitiatorId    String?   @map("coord_initiator_id") @db.Uuid
@@ -2101,8 +2103,9 @@ model Match {
   coordPartnerConsent Boolean?  @map("coord_partner_consent")
   /// Terminal stamp: contact revealed (A/B) or proxy method locked in (C).
   coordResolvedAt     DateTime? @map("coord_resolved_at")
-  /// Variant C anonymous proxy window. Opened at T-1h by the coordination
-  /// cron, closed at agreed_time + PROXY_CLOSE_AFTER_HOURS.
+  /// Anonymous proxy window — every scheduled date's since 2026-09-26. Opened
+  /// at T-1h by the coordination cron, closed at agreed_time +
+  /// PROXY_CLOSE_AFTER_HOURS.
   proxyOpenedAt       DateTime? @map("proxy_opened_at")
   proxyClosesAt       DateTime? @map("proxy_closes_at")
   proxyClosedAt       DateTime? @map("proxy_closed_at")
@@ -2257,9 +2260,10 @@ model Match {
   /// Drives the ticket-expiry cron's sweep for `partial`/`pending` rows
   /// whose `ticketExpiresAt` has lapsed.
   @@index([ticketStatus, ticketExpiresAt])
-  /// Drives the coordination cron's T-60m offer sweep.
+  /// Drove the retired T-3h offer sweep (deprecated 2026-09-26; nothing reads it now).
   @@index([status, coordOfferSentAt])
-  /// Drives the coordination cron's proxy open/close sweeps.
+  /// Its `coordMethod` half no longer filters anything (2026-09-26): the close
+  /// sweep reads the `proxy*` stamps alone. Kept to avoid a migration.
   @@index([coordMethod, proxyClosedAt])
   /// Drives the venue-change TTL/cutoff expiry sweep on the lifecycle tick.
   @@index([venueChangeStatus, venueChangeExpiresAt])

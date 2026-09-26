@@ -570,9 +570,9 @@ async function dateLifecycleTick(): Promise<void> {
         `[date-lifecycle] icebreakers=${lifecycle.icebreakers} emergencies=${lifecycle.emergencies} feedbacks=${lifecycle.feedbacks} safety=${safety.sent}`,
       );
     }
-    if (coordination.offers > 0 || coordination.opened > 0 || coordination.closed > 0) {
+    if (coordination.opened > 0 || coordination.closed > 0) {
       console.log(
-        `[coordination] offers=${coordination.offers} proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
+        `[coordination] proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
       );
     }
     if (venueRetries > 0) console.log(`[venue-intent-v2] retried=${venueRetries}`);

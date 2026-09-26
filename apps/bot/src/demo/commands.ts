@@ -6,9 +6,7 @@ import type { BotContext } from "../session.js";
 import { deleteUserAccount } from "../services/account-deletion.js";
 import { DEMO_MODE_ENABLED } from "./config.js";
 import {
-  chooseDemoProxy,
   clearDemoMatches,
-  explainDemoCoordChoice,
   forgetDemoVisitor,
   restartDemoPitch,
   runDemoAfterDate,
@@ -17,10 +15,8 @@ import {
 import {
   DEMO_AFTER_DATE_CALLBACK,
   DEMO_CONTINUE_CALLBACK,
-  DEMO_COORD_PREFIX,
   DEMO_PREDATE_CALLBACK,
   demoText,
-  parseDemoCoordChoice,
 } from "./script.js";
 
 /**
@@ -174,52 +170,17 @@ demoRouter.callbackQuery(DEMO_PREDATE_CALLBACK, async (ctx) => {
 });
 
 /**
- * The coordination fork (§Phase 4), owned by the demo.
+ * A button on the demo's retired coordination fork (`demo:coord:*`).
  *
- * Two of the three variants exchange `t.me/` handles and the puppet has none, so
- * they are ANSWERED rather than performed: the visitor is told what the button
- * would do in production and handed the choice back. Only the anonymous chat is
- * carried out. See `script.ts` → `DEMO_COORD_PREFIX` for why this cannot route
- * through production's own `handleCoordMethod`.
+ * The fork went with production's T-3h questionnaire on 2026-09-26 — every
+ * scheduled date gets the anonymous chat, so the demo plays straight into it.
+ * A card sent by an older demo build may still sit in a chat: its tap is
+ * answered and the keyboard taken off, nothing else.
  */
-demoRouter.callbackQuery(new RegExp(`^${DEMO_COORD_PREFIX}`), async (ctx) => {
+demoRouter.callbackQuery(/^demo:coord:/, async (ctx) => {
   if (!DEMO_MODE_ENABLED) return;
   await ctx.answerCallbackQuery();
-  const telegramId = ctx.from?.id;
-  const choice = parseDemoCoordChoice(ctx.callbackQuery.data ?? "");
-  if (telegramId === undefined || !choice) return;
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId: BigInt(telegramId) },
-    select: { id: true, language: true },
-  });
-  if (!user) return;
-
-  // One live keyboard per decision: the explanation below carries its own, with
-  // whatever is still worth pressing.
   await ctx.editMessageReplyMarkup().catch(() => undefined);
-
-  if (choice !== "proxy") {
-    await explainDemoCoordChoice(ctx.api, user.id, BigInt(telegramId), user.language, choice);
-    return;
-  }
-
-  // Read the live row rather than trusting the callback for the agreed time.
-  const match = await prisma.match.findFirst({
-    where: { status: "scheduled", OR: [{ userAId: user.id }, { userBId: user.id }] },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, agreedTime: true },
-  });
-  if (!match) return;
-
-  await chooseDemoProxy(
-    ctx.api,
-    user.id,
-    BigInt(telegramId),
-    user.language,
-    match.id,
-    match.agreedTime,
-  );
 });
 
 /**

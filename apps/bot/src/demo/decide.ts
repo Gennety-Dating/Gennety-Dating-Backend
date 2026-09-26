@@ -40,20 +40,14 @@ export type DemoAction =
   | { kind: "partner_agree_likes" }
   /** The puppet is the payer for the venue change; settle it for free. */
   | { kind: "partner_settle_venue_change" }
-  /** Explain the pre-date days, then play the T-2h gate and offer the fork. */
+  /** Explain the pre-date days, then play the T-2h gate. */
   | { kind: "run_predate" }
   /**
-   * Send the coordination fork — production's own card, with all three buttons
-   * (§Phase 4). Held here until the visitor picks, because the two
-   * contact-exchange variants cannot work against a puppet with no Telegram
-   * account and are explained rather than performed.
+   * Play the gates that open the anonymous chat (§Phase 4). No choice precedes
+   * it any more: since 2026-09-26 every scheduled date gets the chat at T-1h,
+   * and the T-3h questionnaire the demo used to stage is gone.
    */
-  | { kind: "coord_offer" }
-  /**
-   * Nobody tapped: pick the anonymous chat and carry on. The floor under the
-   * fork, so a demo can never stall in front of an audience.
-   */
-  | { kind: "coord_pick_proxy" }
+  | { kind: "open_proxy" }
   /**
    * The puppet's next line in the anonymous chat — an opener before the visitor
    * has written anything, an answer afterwards.
@@ -100,17 +94,12 @@ export interface DemoMatchSnapshot {
   partnerVenueConfirmed: boolean;
   icebreakersSentAt: Date | null;
   /**
-   * Pre-date coordination (§Phase 4). `coordMethod` is null until the visitor
-   * picks, which is what makes the fork's hold DERIVED rather than tracked —
-   * production's own auto-select for an unreachable pair never runs here,
-   * because the demo sets the method itself the moment a choice is made.
+   * `COORDINATION_FEATURE_ENABLED`. With it off the chat can never open, so
+   * the demo must not wait for one — `proxyState` alone cannot say that, since
+   * `none` is also what a chat about to be opened looks like.
    */
-  coordMethod: string | null;
-  /**
-   * Whether the anonymous relay window is open, from the cron's own stamps.
-   * `none` also covers `COORDINATION_FEATURE_ENABLED` being off, in which case
-   * it stays `none` forever and the demo must not wait for a chat.
-   */
+  coordinationEnabled: boolean;
+  /** Whether the anonymous relay window is open, from the cron's own stamps. */
   proxyState: "none" | "open" | "closed";
   /** Who wrote last in the relay — the whole trigger for the puppet's reply. */
   proxyLastSender: "visitor" | "partner" | null;
@@ -221,16 +210,6 @@ export const DEMO_DATE_CARD_WAIT_MS = 25_000;
  * visitor who never taps it, so the demo cannot stall in front of an audience.
  */
 export const DEMO_EXPLORE_WAIT_MS = 7 * 60_000;
-/**
- * How long the coordination fork waits for a tap before the demo picks the
- * anonymous chat itself.
- *
- * Generous, because the two impossible variants exist to be pressed and read:
- * a visitor who taps A, reads the explanation, taps B and reads that one has
- * spent a couple of minutes on this screen legitimately. The floor is only
- * there so an abandoned demo does not sit on a card forever.
- */
-export const DEMO_COORD_CHOICE_WAIT_MS = 5 * 60_000;
 /**
  * How long the anonymous chat is left open before the demo moves to the
  * day-after feedback.
@@ -532,15 +511,16 @@ function decideMatchAction(
  *
  * Three states, all read off the product's own columns rather than tracked:
  *
- *   1. **No method chosen yet** — the fork is on screen and the visitor owes a
- *      tap. Taps on the two contact-exchange variants write nothing (they are
- *      explained, not performed), so this state persists across them, which is
- *      exactly what lets the visitor read both before choosing.
+ *   1. **Chat not open yet** (and the feature is on) — play the gates that
+ *      open it, a beat after the pre-date content so it can be read. There is
+ *      nothing to choose first: every scheduled date gets the chat (founder
+ *      decision 2026-09-26 retired the T-3h questionnaire this state used to
+ *      hold on).
  *   2. **Relay open** — the puppet keeps the conversation alive, and the
  *      day-after feedback waits for the visitor to finish.
- *   3. **Anything else** — a method is set but no window exists (the flag is
- *      off, or the chat has already closed). Nothing to wait for; move on rather
- *      than hold a demo open for a chat that will never appear.
+ *   3. **Anything else** — the flag is off, or the chat has already closed.
+ *      Nothing to wait for; move on rather than hold a demo open for a chat
+ *      that will never appear.
  */
 function decidePredateAction(
   match: DemoMatchSnapshot,
@@ -551,11 +531,8 @@ function decidePredateAction(
     waitMs,
   });
 
-  if (match.coordMethod === null && match.proxyState === "none") {
-    if (!spoken.has("coord_offer")) {
-      return { action: { kind: "coord_offer" }, waitMs: 0 };
-    }
-    return wait({ kind: "coord_pick_proxy" }, DEMO_COORD_CHOICE_WAIT_MS);
+  if (match.coordinationEnabled && match.proxyState === "none") {
+    return wait({ kind: "open_proxy" });
   }
 
   if (match.proxyState === "open") {

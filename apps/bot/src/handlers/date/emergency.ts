@@ -15,8 +15,13 @@ import {
 /**
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
  *
- * Callback `emerg:start:{matchId}` — user taps the "Cancel date" button
- * that was sent by the date-lifecycle cron 5h before the date. Because the
+ * Callback `emerg:start:{matchId}` — user taps a "Cancel date" button: the one
+ * in the My Date hub (there for the whole time the date is `scheduled`), the
+ * one the agent puts in front of them (`propose_cancel_date`), or the reminder
+ * the date-lifecycle cron sends with the ice-breakers at T-5h. There is no
+ * time gate — a booked date can be cancelled from the moment it is booked
+ * (founder decision 2026-09-26), and nothing here or in `cancelScheduledDate`
+ * ever checked the clock. Because the
  * cancellation is irreversible (the match can never be restored), the bot
  * first asks for an explicit confirmation with the lower-risk path first:
  *   - `emerg:abort:{matchId}`   → dismiss, the date stays on

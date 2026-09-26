@@ -10,7 +10,6 @@
 import { prisma } from "@gennety/db";
 import {
   CADENCE,
-  COORD_OFFER_HOURS,
   dropOutpacesNotices,
   premiumPlanDisplayPrice,
   PREMIUM_PLANS,
@@ -300,7 +299,6 @@ export interface ActiveMatchView {
   venueAddress: string | null;
   venueGoogleMapsUri: string | null;
   ticketStatus: string | null;
-  coordOfferSentAt: Date | null;
   proxyOpenedAt: Date | null;
   proxyClosesAt: Date | null;
   proxyClosedAt: Date | null;
@@ -484,14 +482,15 @@ export function describeActiveMatch(
         )}) — tell them to tap "Enter chat" to coordinate the exact spot.`;
       } else if (match.proxyClosedAt != null) {
         coord = `the coordination chat has closed.`;
-      } else if (match.coordOfferSentAt != null) {
-        coord = `the coordination offer was already sent (~${COORD_OFFER_HOURS}h before); the anonymous "Enter chat" opens ~1h before the date.`;
       } else if (match.agreedTime != null) {
+        // One rail since 2026-09-26: no contact exchange, no questionnaire —
+        // the anonymous chat opens for every date, and the prompt must not
+        // promise the handle swap that used to precede it.
         const opensAt = new Date(match.agreedTime.getTime() - PROXY_OPEN_LEAD_MS);
-        coord = `coordination opens automatically before the date — a contact-share option ~${COORD_OFFER_HOURS}h before, and an anonymous "Enter chat" button ~1h before (around ${formatClock(
+        coord = `the anonymous "Enter chat" button appears automatically ~1h before the date (around ${formatClock(
           opensAt,
           locale,
-        )}).`;
+        )}) for both of them. Contacts are never exchanged — that chat is how they find each other.`;
       } else {
         coord = `coordination tools open automatically shortly before the date.`;
       }
@@ -615,7 +614,6 @@ const MATCH_CONTEXT_SELECT = {
   venueAddress: true,
   venueGoogleMapsUri: true,
   ticketStatus: true,
-  coordOfferSentAt: true,
   proxyOpenedAt: true,
   proxyClosesAt: true,
   proxyClosedAt: true,
@@ -729,7 +727,6 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
         venueAddress: raw.venueAddress ?? null,
         venueGoogleMapsUri: raw.venueGoogleMapsUri ?? null,
         ticketStatus: raw.ticketStatus ?? null,
-        coordOfferSentAt: raw.coordOfferSentAt ?? null,
         proxyOpenedAt: raw.proxyOpenedAt ?? null,
         proxyClosesAt: raw.proxyClosesAt ?? null,
         proxyClosedAt: raw.proxyClosedAt ?? null,

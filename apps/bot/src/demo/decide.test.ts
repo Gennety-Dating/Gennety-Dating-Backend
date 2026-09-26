@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEMO_CHAT_WAIT_MS,
-  DEMO_COORD_CHOICE_WAIT_MS,
   DEMO_CONVERGE_WAIT_MS,
   DEMO_DATE_CARD_WAIT_MS,
   DEMO_EXPLORE_WAIT_MS,
@@ -51,7 +50,7 @@ function match(overrides: Partial<DemoMatchSnapshot> = {}): DemoMatchSnapshot {
     visitorVenueConfirmed: false,
     partnerVenueConfirmed: false,
     icebreakersSentAt: null,
-    coordMethod: null,
+    coordinationEnabled: true,
     proxyState: "none",
     proxyLastSender: null,
     proxyPartnerMessageCount: 0,
@@ -531,7 +530,7 @@ describe("pre-date replay", () => {
   });
 });
 
-describe("coordination fork", () => {
+describe("before the anonymous chat opens", () => {
   // Everything here runs after the T-2h gate, which is what `icebreakersSentAt`
   // marks; before it the date card and the pre-date replay own the flow.
   const played = (over: Partial<DemoMatchSnapshot> = {}) =>
@@ -543,52 +542,39 @@ describe("coordination fork", () => {
     });
   const spoken = (...beats: DemoBeat[]) => new Set<DemoBeat>(["intro", "date_ready", "predate", ...beats]);
 
-  it("sends the fork once the pre-date gate has played", () => {
+  /**
+   * Founder decision 2026-09-26: every scheduled date gets the chat, so there
+   * is no fork to put in front of the visitor — the demo plays straight into
+   * the gates that open it, a beat after the pre-date content.
+   */
+  it("opens the chat once the pre-date gate has played, with nothing to choose first", () => {
     const decision = decideDemoAction(snapshot({ match: played(), spokenBeats: spoken() }));
-    expect(decision.action).toEqual({ kind: "coord_offer" });
-    // Narration-grade: the visitor is mid-step and the card belongs under the
-    // ice-breakers that just landed, not a beat later.
-    expect(decision.waitMs).toBe(0);
+    expect(decision.action).toEqual({ kind: "open_proxy" });
+    expect(decision.waitMs).toBe(DEMO_STEP_WAIT_MS);
   });
 
-  it("holds the fork open while the visitor reads the impossible variants", () => {
-    // Tapping "share my Telegram" / "ask for theirs" writes NOTHING, on purpose,
-    // so the snapshot is unchanged and the demo keeps waiting rather than
-    // deciding for them.
-    const decision = decideDemoAction(
-      snapshot({ match: played(), spokenBeats: spoken("coord_offer") }),
-    );
-    expect(decision.action).toEqual({ kind: "coord_pick_proxy" });
-    expect(decision.waitMs).toBe(DEMO_COORD_CHOICE_WAIT_MS);
-    // Long enough to press both explanations and read them.
-    expect(DEMO_COORD_CHOICE_WAIT_MS).toBeGreaterThanOrEqual(5 * 60_000);
-  });
-
-  it("does not re-send the fork once it is on screen", () => {
-    expect(
-      decideDemoAction(snapshot({ match: played(), spokenBeats: spoken("coord_offer") })).action
-        .kind,
-    ).not.toBe("coord_offer");
-  });
-
-  it("moves on when a method is set but no window ever opened", () => {
+  it("moves on when the feature is off and no chat can ever open", () => {
     // COORDINATION_FEATURE_ENABLED off: the sweep stamps nothing, so waiting for
     // a chat would hold the demo open forever.
     const decision = decideDemoAction(
-      snapshot({
-        match: played({ coordMethod: "proxy", proxyState: "none" }),
-        spokenBeats: spoken("coord_offer"),
-      }),
+      snapshot({ match: played({ coordinationEnabled: false }), spokenBeats: spoken() }),
+    );
+    expect(decision.action).toEqual({ kind: "run_after_date" });
+  });
+
+  it("moves on once the chat has closed", () => {
+    const decision = decideDemoAction(
+      snapshot({ match: played({ proxyState: "closed" }), spokenBeats: spoken("chat_open") }),
     );
     expect(decision.action).toEqual({ kind: "run_after_date" });
   });
 
   it("keeps the venue-change board ahead of the whole stretch", () => {
-    // A visitor mid-board must not be interrupted by the coordination fork.
+    // A visitor mid-board must not be interrupted by the chat opening.
     const decision = decideDemoAction(
       snapshot({
         match: played({ venueChangeStatus: "liking", visitorLikeKeys: ["a"] }),
-        spokenBeats: spoken("coord_offer"),
+        spokenBeats: spoken(),
       }),
     );
     expect(decision.action).toEqual({ kind: "partner_counter_likes" });
@@ -601,12 +587,11 @@ describe("anonymous chat", () => {
       status: "scheduled",
       icebreakersSentAt: new Date(),
       agreedTime: new Date("2026-08-20T16:00:00Z"),
-      coordMethod: "proxy",
       proxyState: "open",
       ...over,
     });
   const spoken = (...beats: DemoBeat[]) =>
-    new Set<DemoBeat>(["intro", "date_ready", "predate", "coord_offer", ...beats]);
+    new Set<DemoBeat>(["intro", "date_ready", "predate", ...beats]);
 
   it("explains the window before the puppet writes into it", () => {
     const decision = decideDemoAction(snapshot({ match: open(), spokenBeats: spoken() }));

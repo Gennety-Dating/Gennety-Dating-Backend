@@ -16,9 +16,9 @@
  *                                  (handleVenueVibe / handleVenueLocation) →
  *                                  tryFinalize → real Places venue → scheduled.
  *   4. lifecycle ticks          : runDateLifecycleTick with crafted `now` at
- *                                  T-5h (ice-breakers + emergency window),
+ *                                  T-5h (ice-breakers + cancel reminder),
  *                                  T-1.5h (female safety brief + wingman reveal),
- *                                  T-1h (coordination offer), T-30m (proxy open),
+ *                                  T-1h (anonymous chat opens for both),
  *                                  T+24h (feedback prompt → completed).
  *
  * Does NOT auto-submit feedback — the T+24h prompt lands and you reply for real.
@@ -264,14 +264,13 @@ async function main() {
       runPreDateSafetyTick(api, now),
       runCoordinationTick(api, now),
     ]);
-    const merged = { ...lifecycle, safety: safety.sent, coordOffers: coordination.offers, proxyOpened: coordination.opened, proxyClosed: coordination.closed };
+    const merged = { ...lifecycle, safety: safety.sent, proxyOpened: coordination.opened, proxyClosed: coordination.closed };
     console.log(`  ${label.padEnd(34)} → ${JSON.stringify(merged)}`);
     await sleep(1800);
   }
-  await tick("T-5h  ice-breakers + emergency", -5);
+  await tick("T-5h  ice-breakers + cancel reminder", -5);
   await tick("T-1.5h safety brief + wingman", -1.5);
-  await tick("T-1h  coordination offer", -1);
-  await tick("T-30m proxy chat open", -0.5);
+  await tick("T-1h  proxy chat open", -1);
   await tick("T+24h feedback prompt", 24);
 
   const final = await prisma.match.findUnique({
@@ -279,7 +278,7 @@ async function main() {
     select: {
       status: true, agreedTime: true, venueName: true, venueAddress: true,
       icebreakersSentAt: true, safetyNoteSentAt: true, wingmanSentAt: true,
-      coordOfferSentAt: true, proxyOpenedAt: true, feedbackPromptedAt: true,
+      proxyOpenedAt: true, feedbackPromptedAt: true,
     },
   });
   step("DONE", "Date lifecycle played out");
@@ -292,7 +291,6 @@ async function main() {
       icebreakers: !!final.icebreakersSentAt,
       safety: !!final.safetyNoteSentAt,
       wingman: !!final.wingmanSentAt,
-      coordinationOffer: !!final.coordOfferSentAt,
       proxyOpened: !!final.proxyOpenedAt,
       feedbackPrompt: !!final.feedbackPromptedAt,
     },

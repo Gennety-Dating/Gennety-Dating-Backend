@@ -13,8 +13,7 @@ import {
   handleAttendanceText,
 } from "./attendance.js";
 import {
-  handleCoordMethod,
-  handleCoordConsent,
+  handleRetiredCoordCard,
   handleCoordEnter,
   handleCoordExit,
   handleProxyRelay,
@@ -97,12 +96,17 @@ dateRouter.use(async (ctx, next) => {
 
   // Pre-date coordination callbacks (feature-flagged; inert rows never produce
   // these buttons, so no flag check is needed on the handler side).
-  if (data?.startsWith("coord:m:")) {
-    await handleCoordMethod(ctx);
-    return;
-  }
-  if (data?.startsWith("coord:approve:") || data?.startsWith("coord:decline:")) {
-    await handleCoordConsent(ctx);
+  //
+  // The questionnaire's buttons (method pick, partner approve/decline) are
+  // retired since 2026-09-26 but still routed: cards sent before the change
+  // live on in people's chats, and an unrouted tap would spin and then fall
+  // through to the menu router.
+  if (
+    data?.startsWith("coord:m:") ||
+    data?.startsWith("coord:approve:") ||
+    data?.startsWith("coord:decline:")
+  ) {
+    await handleRetiredCoordCard(ctx);
     return;
   }
   if (data?.startsWith("coord:enter:")) {

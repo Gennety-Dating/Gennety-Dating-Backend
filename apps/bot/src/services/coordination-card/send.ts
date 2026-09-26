@@ -49,13 +49,13 @@ export async function sendCoordCard(
       );
 
   // A caption that would be truncated is worse than no card: the copy carries
-  // the contact link and the instruction, and the card carries neither.
+  // the instruction, and the card does not.
   if (text.length > CAPTION_LIMIT) {
     await sendText();
     return;
   }
 
-  const png = await renderCoordinationCard(card, api);
+  const png = await renderCoordinationCard(card);
   if (!png) {
     await sendText();
     return;
@@ -64,13 +64,13 @@ export async function sendCoordCard(
   try {
     await api.sendPhoto(chatId, new InputFile(png, `coord-${card.variant}.png`), {
       caption: text,
-      // The `offer` / `ask` / `shared` cards render the OTHER person's face, so
-      // this send is bound by the same rule as the match card and the private
-      // date card: a partner photo with a clear face never leaves the chat
-      // forwardable (PRODUCT_SPEC §3.7a, `legal/privacy-policy.md` §10). Set
-      // unconditionally rather than per-variant — `declined` / `proxy` render an
-      // emblem instead of a face, but they still name the partner, and a flag
-      // that is always on cannot be forgotten when a sixth variant is added.
+      // Bound by the same rule as the match card and the private date card: a
+      // card about the partner never leaves the chat forwardable (PRODUCT_SPEC
+      // §3.7a, `legal/privacy-policy.md` §10). The one card left (`proxy`,
+      // since the contact-exchange cards were retired on 2026-09-26) renders
+      // an emblem rather than a face — the flag is set unconditionally anyway,
+      // because a flag that is always on cannot be forgotten when a card that
+      // does carry a face is added.
       // The one exception is demo mode, where the partner is a puppet and the
       // protection only blacks the card out of a screen recording
       // (`PROTECT_PARTNER_MEDIA`, DEMO_MODE.md).

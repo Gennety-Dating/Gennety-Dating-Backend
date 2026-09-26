@@ -2,15 +2,14 @@
 /**
  * Dev-only helper (local dev bot only).
  *
- * Opens the Variant C anonymous **proxy chat** (PRODUCT_SPEC.md §Phase 4,
+ * Opens the anonymous **proxy chat** (PRODUCT_SPEC.md §Phase 4,
  * "Pre-date Coordination") on the most recent in-flight match between the two
  * test accounts, so you can manually test the bot↔partner text relay
  * end-to-end inside Telegram.
  *
- * It faithfully replicates the real T-30m `openProxies` step
- * (apps/bot/src/services/coordination.ts):
- *   - locks the match into Variant C (`coordMethod = "proxy"` + initiator
- *     bookkeeping, mirroring handleCoordMethod's proxy branch), and
+ * It faithfully replicates the real T-1h `openProxies` step
+ * (apps/bot/src/services/coordination.ts) — which since 2026-09-26 opens the
+ * chat for every scheduled date, with no coordination method to pick:
  *   - stamps `proxyOpenedAt` / `proxyClosesAt` (window OPEN), then
  *   - DMs BOTH accounts the real `coordProxyOpenedEnterPrompt` + the real
  *     "Enter chat" button (callback `coord:enter:{matchId}`).
@@ -194,32 +193,22 @@ async function main() {
   console.log(`  proxyClosesAt : ${match.proxyClosesAt?.toISOString() ?? "null"}`);
   console.log(`  proxyClosedAt : ${match.proxyClosedAt?.toISOString() ?? "null"}`);
 
-  // Pick the initiator the way resolveCoordRecipients/handleCoordMethod would:
-  // the female participant if there is exactly one, otherwise userA.
-  const females = [match.userA, match.userB].filter((u) => u.gender === "female");
-  const initiator = females.length === 1 ? females[0] : match.userA;
-
   const now = new Date();
   const closesAt = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
 
   if (!apply) {
     console.log(`\n[DRY RUN] Would, on --apply:`);
-    console.log(`  • set coordMethod=proxy, coordInitiatorId=${initiator.id} (${initiator.firstName ?? "?"})`);
     console.log(`  • set proxyOpenedAt=${now.toISOString()}  proxyClosesAt=${closesAt.toISOString()}  proxyClosedAt=null`);
     console.log(`  • DM BOTH accounts the real "Enter chat" prompt + button (coord:enter:${match.id})`);
     console.log(`\nRe-run with --apply to do it. Make sure \`pnpm dev:bot\` is running first.`);
     return;
   }
 
-  // 1) Lock Variant C + open the window (mirror handleCoordMethod proxy branch
-  //    + openProxies). proxyClosedAt=null so a re-run re-opens a stale window.
+  // 1) Open the window (mirror openProxies). proxyClosedAt=null so a re-run
+  //    re-opens a stale window.
   await prisma.match.update({
     where: { id: match.id },
     data: {
-      coordMethod: "proxy",
-      coordInitiatorId: initiator.id,
-      coordChosenAt: now,
-      coordResolvedAt: now,
       proxyOpenedAt: now,
       proxyClosesAt: closesAt,
       proxyClosedAt: null,
