@@ -1142,6 +1142,7 @@ vi.mock("../services/frequent-places.js", async (importOriginal) => ({
 // ---------------------------------------------------------------------------
 
 const { app } = await import("./server.js");
+const { prisma: prismaMock } = await import("@gennety/db");
 const { runAgentTurn: runAgentTurnMock } = await import(
   "../services/onboarding-agent.js"
 );

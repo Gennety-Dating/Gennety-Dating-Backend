@@ -11,6 +11,57 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — внешний импорт AI-контекста (Magic Prompt / ai-memory export) удалён из онбординга (2026-09-24, на ствол посажено 2026-09-26).**
+**Бот + Mini App + СХЕМА (деструктивная миграция, переписывает данные).** Решение основателя, запись в журнале решений
+2026-09-24. Коммит «refactor(onboarding): purge magic prompt and ai-memory export pipeline» и следующий за ним
+`fix(land)`. Ветка своего блока в очереди не написала — этот блок дописан при посадке. Онбординг теперь: анкета (с двумя
+vibe-ответами) → необязательный Type Radar → фото → верификация; голосовое остаётся после фото. Ушли экран выбора в Mini
+App, `POST /v1/telegram-onboarding/ai-memory` (теперь 404), вставка/парсер дампа, инструмент агента, флаг
+`AI_MEMORY_EXPORT_ENABLED`. В проде ветка и так была выключена (`AI_MEMORY_EXPORT_ENABLED=false`).
+
+**Миграция `20260926200100_retire_external_profile_import`:** ДРОПАЕТ `users.ai_memory_export_preference`,
+`users.ai_memory_export_preference_at` и enum `AiMemoryExportPreference`; убирает ключи `ai_memory`/`context_dump` из
+`onboarding_progress` (`revision + 1`), `awaitingContextDump`/`contextDumpBuffer` из `bot_sessions.data`; обнуляет
+`users.message_history` только у `status = 'onboarding'`, чья история несёт старые инструкции (ответы анкеты и фото
+остаются — коллектор выводит следующий вопрос из них). Переписанное без бэкапа не вернуть.
+
+**Порядок: сначала КОД, потом `db:deploy`.** Работающий сейчас код выбирает обе колонки в каждом `user.findUnique` /
+`findMany` без `select` — миграция раньше рестарта роняет P2022 почти каждую ручку старого процесса. Новый код колонок не
+знает и живёт с ними и без них; в окне до миграции он читает старые ключи прогресса как незнакомые и пропускает их.
+
+0. Бэкап прод-БД. Снять «до» (только чтение):
+```sql
+SELECT ai_memory_export_preference, count(*) FROM users GROUP BY 1;
+SELECT count(*) FROM onboarding_progress
+ WHERE completed_fields && ARRAY['ai_memory','context_dump'] OR skipped_fields && ARRAY['ai_memory','context_dump']
+    OR asked_fields && ARRAY['ai_memory','context_dump'] OR current_question IN ('ai_memory','context_dump');
+SELECT count(*) FROM bot_sessions WHERE data ?| ARRAY['awaitingContextDump','contextDumpBuffer'];
+SELECT count(*) FROM users WHERE status = 'onboarding' AND EXISTS (
+  SELECT 1 FROM unnest(message_history) AS m WHERE m::text ~* 'context_dump|Magic Prompt|AI.memory export|CONTEXT_DUMP_SAVED');
+```
+1. Бот + Mini App: выкладка кода, пересборка Mini App (из онбординга уходит экран выбора), рестарт.
+2. БД: `db:deploy` сразу после рестарта; `migrate status` → up to date.
+3. `.env`: `AI_MEMORY_EXPORT_ENABLED` можно удалить — его больше никто не читает.
+
+**Проверка после выката** (только чтение): три последних запроса из шага 0 → `0`, и
+```sql
+SELECT count(*) FROM information_schema.columns
+ WHERE table_name = 'users' AND column_name LIKE 'ai_memory_export%';   -- 0
+SELECT count(*) FROM pg_type WHERE typname = 'AiMemoryExportPreference';  -- 0
+```
+`POST /v1/telegram-onboarding/ai-memory` → 404; новый пользователь в Telegram проходит анкету → Type Radar → фото без
+экрана «импортировать память из AI».
+
+**Откат:** код — снимок `/opt/gennety-prev-<ts>`, но старый код без колонок не живёт: сначала вернуть колонки руками
+(`CREATE TYPE "AiMemoryExportPreference" AS ENUM ('undecided','accepted','declined')`, обе колонки с дефолтом
+`'undecided'` / `NULL`, как в `0_baseline`), затем код. Переписанные прогресс, сессии и истории — только из бэкапа.
+**Демо:** то же, что прод (миграция при следующем выкате демо).
+**iOS:** правок не требует. В спеке: из `UiHint.control` ушло значение `magic_prompt` (сервер его не шлёт — флаг был
+выключен), у `POST /v1/onboarding/interview/answer` поле `text` теперь `maxLength: 4000` вместо 32000 (сервер и раньше
+пропускал больше 4000 только для `context_dump`). Приложение зеркалит спеку.
+
+---
+
 **PENDING — Launch Events удалены из кода и из схемы (2026-09-16).**
 **Бот + webapp + СХЕМА (деструктивная миграция).** Решение основателя, запись в журнале решений
 2026-09-16. Подсистема офлайн-мероприятий вырезана целиком, а не выключена флагом: ушли сервисы

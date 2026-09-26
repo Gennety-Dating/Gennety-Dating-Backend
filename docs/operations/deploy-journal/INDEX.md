@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 207 entries
+# Deploy journal index — 208 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-26 | 09-24 (посажено на ствол 09-26) — внешний импорт AI-контекста (Magic Prompt / ai-memory export) удалён из онбординга; **деструктивная миграция `20260926200100_retire_external_profile_import` (дроп двух колонок `users` + enum, переписывает прогресс/сессии/истории онбординга) — сначала код, потом `db:deploy`, бэкап до**; Mini App пересобрать; из спеки ушёл `magic_prompt` | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-16 (посажено на ствол 09-26) — Launch Events удалены из кода и из схемы: 8 таблиц + `announcements.event_id`, **деструктивная миграция `20260926200000_drop_launch_events` — сначала код, потом `db:deploy`**, перед выкатом проверить пустоту таблиц; из спеки ушли капсула `event` и строка `event_application` | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-26 — необязательная причина блокировки (только модерация): `user_blocks.reason` + `{ reason? }` у `POST /v1/matches/:id/block`; **миграция `20260926120000_user_block_reason` — `db:deploy` до рестарта**, без env | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-26 — до свидания только анонимный чат у каждой пары (T-1ч, без выбора); опросник T-3ч и обмен хэндлами удалены, старые кнопки снимаются; копия T-5ч и агента: отмена в любой момент; только рестарт бота, без миграций и env | [pending](./pending.md) |

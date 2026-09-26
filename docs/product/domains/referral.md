@@ -79,7 +79,7 @@ referrer themselves gets matched. *"Give a date, get a date."*
   referral screen (both surfaces) and in the hourly sweep
   (`sweepHeldReferralRewards`) for referrers who never do.
 - **Invite screen for the invitee.** The Telegram onboarding shows a screen
-  (second-to-last, before the AI-memory choice) telling the invitee they get a
+  (right before the profile basics) telling the invitee they get a
   ticket once they pass verification. `POST /v1/telegram-onboarding/referral-gift`
   only marks it seen (`User.referralGiftSeenAt`) — it grants nothing. Hidden
   when a promo code owns the attribution or `REFERRAL_INVITEE_TICKETS` is 0.

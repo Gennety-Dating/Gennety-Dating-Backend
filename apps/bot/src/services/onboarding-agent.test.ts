@@ -566,16 +566,15 @@ describe("onboarding-agent", () => {
   // A13-H14: a re-registered person's ban is restored onto the fresh account
   // at its first touch, while onboarding. Finishing onboarding must not lift it.
   it("does not activate a user whose status is a restored moderation lock", async () => {
-    const saveFallbackProfile = vi.fn().mockResolvedValue({
+    const saveQuestionnaireProfile = vi.fn().mockResolvedValue({
       summary: "fallback",
       embeddingSaved: true,
     });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
-        messageHistory: contextDumpSavedHistory(),
+        messageHistory: [],
         language: "en",
-        aiMemoryExportPreference: "accepted",
       })
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -587,7 +586,6 @@ describe("onboarding-agent", () => {
         email: "alice@stanford.edu",
         isEmailVerified: true,
         termsAccepted: true,
-        aiMemoryExportPreference: "accepted",
         profile: {
           height: 165,
           hobbies: ["tennis"],
@@ -603,7 +601,7 @@ describe("onboarding-agent", () => {
       .mockResolvedValueOnce(toolCallResponse([{ id: "call-1", name: "finalize_onboarding", args: {} }]))
       .mockResolvedValueOnce(textResponse("Saved."));
 
-    await runAgentTurn(telegramId, "finish up", { fetchFn: mockFetch, saveFallbackProfile });
+    await runAgentTurn(telegramId, "finish up", { fetchFn: mockFetch, saveQuestionnaireProfile });
 
     const finalize = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0])

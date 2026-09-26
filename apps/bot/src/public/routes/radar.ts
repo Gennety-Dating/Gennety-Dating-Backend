@@ -365,8 +365,8 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     // only reach once it is over.
     res.json({ ok: true, counted: answers.length, completedAt: completedAt.toISOString() });
 
-    // Resume the onboarding conversation past the radar gate (accepted → Magic
-    // Prompt, declined → photos) and persist the resulting session state. Only
+    // Resume the onboarding conversation past the radar gate (on to photos,
+    // taken or skipped) and persist the resulting session state. Only
     // while the user is still onboarding; a post-onboarding retake just saves.
     // Best-effort: a resume hiccup never fails the save the Mini App relies on.
     //
