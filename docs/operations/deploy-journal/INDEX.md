@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 205 entries
+# Deploy journal index — 207 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-26 | 09-16 (посажено на ствол 09-26) — Launch Events удалены из кода и из схемы: 8 таблиц + `announcements.event_id`, **деструктивная миграция `20260926200000_drop_launch_events` — сначала код, потом `db:deploy`**, перед выкатом проверить пустоту таблиц; из спеки ушли капсула `event` и строка `event_application` | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-26 — необязательная причина блокировки (только модерация): `user_blocks.reason` + `{ reason? }` у `POST /v1/matches/:id/block`; **миграция `20260926120000_user_block_reason` — `db:deploy` до рестарта**, без env | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-26 — до свидания только анонимный чат у каждой пары (T-1ч, без выбора); опросник T-3ч и обмен хэндлами удалены, старые кнопки снимаются; копия T-5ч и агента: отмена в любой момент; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | Deployed | 2026-09-26 | 09-26 08:43–08:56 UTC — сводный выкат всего `main` (`c372883f`) скриптом `deploy-tempo-sync.sh`: 3 миграции, Mini App, 0 рестартов; Tempo Sync включён (`TEMPO_SYNC_ENABLED=true`, вес 0.05, OSM 1231 место Киева); все PENDING-блоки ниже уехали им | [pending](./pending.md) |

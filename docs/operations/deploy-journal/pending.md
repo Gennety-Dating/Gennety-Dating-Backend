@@ -19,7 +19,7 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 `EVENTS_FEATURE_ENABLED`, `EVENT_QR_SECRET`, `EVENT_FEEDBACK_DISCOUNT_PCT`,
 `EVENT_FEEDBACK_DISCOUNT_TTL_DAYS`, `EVENT_ROUND_TICK_MS`, `EVENT_RECAP_CRON_SCHEDULE`.
 
-**Миграция `20260916120000_drop_launch_events` ДРОПАЕТ 8 таблиц** (`events`,
+**Миграция `20260926200000_drop_launch_events` ДРОПАЕТ 8 таблиц** (`events`,
 `waitlist_applications`, `event_ticket_tiers`, `event_tickets`, `event_staff_tokens`,
 `event_rounds`, `event_round_pairings`, `event_feedback`) и колонку `announcements.event_id`.
 
@@ -37,16 +37,34 @@ SELECT count(*) FROM announcements WHERE event_id IS NOT NULL;  -- ожидае�
 Если хоть где-то не ноль — **выкат остановить** и вернуться к основателю: миграция удалит эти
 строки безвозвратно.
 
-1. БД: `prisma migrate deploy` (после проверки выше).
-2. Бот: сборка и рестарт (публичный API + админ + воркеры).
-3. Webapp: пересборка — из бандла уходят две точки входа.
-4. Переменные окружения: перечисленные выше ключи можно удалить из прод-`.env`; оставленные
+**Порядок: сначала КОД, потом `db:deploy`** (исправлено при посадке ветки на ствол 2026-09-26 — раньше
+здесь стояло «БД первой»). Работающий сейчас код читает то, что миграция удаляет: `GET /v1/inbox/:id`
+джойнит `announcements.event` → `events`, любой `announcement.findMany` без `select` выбирает
+`event_id`, ретеншен в 03:45 подметает `event_feedback`. Миграция раньше рестарта = P2021/P2022 у
+старого процесса в окне до рестарта. Новый код этих таблиц и колонки не знает, поэтому живёт и до,
+и после миграции.
+
+0. Бэкап прод-БД (как перед каждым деструктивным выкатом) и проверка пустоты выше.
+1. Бот + webapp: выкладка кода, пересборка Mini App (из бандла уходят две точки входа), рестарт.
+2. БД: `db:deploy` — сразу после рестарта; затем `migrate status` → up to date.
+3. Переменные окружения: перечисленные выше ключи можно удалить из прод-`.env`; оставленные
    ни на что не влияют.
+
+Эта миграция едет в одной очереди с другими — общий порядок следующего выката записан в начале
+этого файла.
 
 **Проверка после выката:** `GET /v1/events` и `GET /gk/...` отвечают 404 (роутов нет, а не
 «фича выключена»); `GET /v1/pulse` и `GET /v1/inbox/:id` отвечают как прежде для обычного
 пользователя; в логах старта нет строк `[worker] Party Mode rounds` и `[cron] Event recap`;
-создание и правка анонса в админке проходят без поля `eventId`.
+создание и правка анонса в админке проходят без поля `eventId`. В прод-БД (только чтение):
+
+```sql
+SELECT to_regclass('public.events'), to_regclass('public.event_feedback');   -- обе NULL
+SELECT count(*) FROM information_schema.columns
+ WHERE table_name = 'announcements' AND column_name = 'event_id';            -- 0
+SELECT migration_name, finished_at FROM _prisma_migrations
+ WHERE migration_name = '20260926200000_drop_launch_events';                 -- одна строка, finished_at не NULL
+```
 
 **Откат:** ревертом коммита возвращается код, но НЕ таблицы — миграция односторонняя.
 Откат до состояния «подсистема на месте» = ревертнуть коммит и накатить схему из `a9d1e74d`

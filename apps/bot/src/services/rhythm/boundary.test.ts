@@ -27,7 +27,6 @@ const READERS: Record<string, string> = {
   "services/rhythm/store.ts": "the only module that touches the table",
   "public/routes/rhythm.ts": "the owner's own GET/PUT/DELETE",
   "services/match-engine.ts": "V_rhythm in candidate scoring + MatchScoreLog columns",
-  "services/event-rounds.ts": "the same scorer, for party rounds",
   "services/venue-intent-v2.ts": "venue Tier 2 inside the sampling band + post-date pick",
   "workers/retention.ts": "deletes profiles stale for 35 days",
   "admin/routes/rhythm-outcomes.ts": "pair aggregates, cells < 20 suppressed",
