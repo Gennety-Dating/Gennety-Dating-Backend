@@ -86,12 +86,21 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
 
     const result = await processCalendarSlotsUpdate(api, caller.telegramId, matchId, slots);
     if (!result.ok) {
+      // Both refusals are one 409 on the wire — `StaleActionConflict` with the
+      // match's real status. A slot that slipped inside the five-hour lead
+      // (`slot-in-past`) arrives while the calendar is still open, so it reads
+      // `negotiating` ("that time is gone, pick another"); a closed calendar
+      // (`wrong-state`) reads whatever it closed into. The scheduler checks the
+      // lead BEFORE it knows who is asking, so a status only a participant may
+      // learn is withheld from anyone else — they get the outsider's 403.
       if (result.reason === "wrong-state" || result.reason === "slot-in-past") {
         const status = await currentMatchStatusForUser(matchId, req.userId!);
         if (status) {
           res.status(409).json(staleActionBody(status));
           return;
         }
+        answerFailure(res, "not-participant");
+        return;
       }
       answerFailure(res, result.reason);
       return;
@@ -144,8 +153,9 @@ async function proposedTimesFor(matchId: string): Promise<string[]> {
     where: { id: matchId },
     select: { proposedTimes: true },
   });
-  // Та же фильтрация, что и в `getCalendarState`: наступивший слот сервер
-  // всё равно отклонит (`slot-in-past`), и рисовать его клиенту незачем.
+  // Та же фильтрация, что и в `getCalendarState`: слот внутри пятичасового
+  // запаса сервер всё равно отклонит (409 `stale_action`), и рисовать его
+  // клиенту незачем.
   return (match?.proposedTimes ?? [])
     .filter((d) => isSlotSelectable(d))
     .map((d) => d.toISOString());
@@ -178,7 +188,9 @@ function nativeState(
  * `wrong-state` is a 409 rather than a 404: the match exists and the caller is
  * on it, the calendar is simply closed (cancelled, expired, or already past
  * the venue step). A 404 would read as "no such match" and send the client
- * hunting for a routing bug that isn't there.
+ * hunting for a routing bug that isn't there. The routes answer it — and the
+ * POST's `slot-in-past` — as `StaleActionConflict` before reaching here; this
+ * bare 409 is only the GET's fallback for a match that vanished mid-request.
  */
 function answerFailure(res: Response, reason: string): void {
   const status =
@@ -189,13 +201,9 @@ function answerFailure(res: Response, reason: string): void {
         : // 402: the slot exists and the caller may have it — for a price.
           reason === "prime-time-locked"
           ? 402
-          : // 409, а не 400: слот был настоящим, это мир уехал вперёд, пока
-            // клиент держал сетку. Тот же класс, что и `wrong-state`.
-            reason === "slot-in-past"
-            ? 409
-            : reason === "invalid-iso" || reason === "invalid-slot"
-              ? 400
-              : 404;
+          : reason === "invalid-iso" || reason === "invalid-slot"
+            ? 400
+            : 404;
   res.status(status).json({ error: reason });
 }
 

@@ -377,7 +377,7 @@ allowed to make the card ring on an UPDATE ("your move, because they moved"),
 and inside a single `content_hash` it is indistinguishable from my own edit —
 so it is remembered separately. Written and read only by
 `services/time-agreement-activity.ts`. Migration
-`20260923090000_time_agreement_activity`.
+`20260926200200_time_agreement_activity`.
 
 ### `phone_otps`
 

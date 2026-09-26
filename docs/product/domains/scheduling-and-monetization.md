@@ -35,9 +35,8 @@ better UX than three separate retries.
   TOMORROW until 2026-09-22 — see the five-hour rule below.
 - **The five-hour rule (founder, 2026-09-22).** **A date may not be agreed less
   than five hours from now** — `DATE_ALERT_HOURS`, the line every pre-date rail
-  starts at (ice-breakers, Wingman, the coordination offer, the safety brief,
-  the date-day card). Two consequences of the one rule
-  (`CALENDAR_MIN_LEAD_MS`, `isSlotSelectable`):
+  starts at (ice-breakers, Wingman, the safety brief, the date-day card). Two
+  consequences of the one rule (`CALENDAR_MIN_LEAD_MS`, `isSlotSelectable`):
   - **The window starts TODAY** while today still has a slot beyond that line,
     otherwise tomorrow. It is six days long either way, so an evening pair gets
     the same amount of choice, shifted — never five days instead of six. With
@@ -45,10 +44,11 @@ better UX than three separate retries.
   - **A slot inside five hours is neither offered nor accepted.** The state
     reads (`getCalendarState`, the native GET) drop it from `proposedTimes`, so
     no client draws a cell the server must refuse; a submission containing one
-    is refused whole with `slot-in-past` (409, both surfaces). `mySlots` /
-    `peerSlots` are NOT filtered — those are the record of what somebody
-    marked, and hiding it would misstate the state; the cell simply stops being
-    drawable.
+    is refused whole — internally `slot-in-past`, on the wire the same 409
+    `stale_action` a closed calendar gets, with `currentMatchStatus:
+    negotiating` (both surfaces; 2026-09-26). `mySlots` / `peerSlots` are NOT
+    filtered — those are the record of what somebody marked, and hiding it
+    would misstate the state; the cell simply stops being drawable.
 
   This **reverses** the deliberate "one minute — a race guard, not a product
   rule" of 2026-09-07; see the decision journal, 2026-09-23. There is NO

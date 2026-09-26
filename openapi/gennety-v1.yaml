@@ -3052,7 +3052,8 @@ paths:
         **The five-hour rule (2026-09-22).** No slot closer than five hours to
         now is ever offered or accepted, and the window includes TODAY while
         today still has a slot beyond that line (see `proposedTimes`). So the
-        grid a client holds decays: re-read it, or be ready for the 409 below.
+        grid a client holds decays: re-read it, or be ready for the submit's
+        409 with `currentMatchStatus: negotiating`.
 
         Poll this while the screen is open (~4s, like the Mini App) so the
         partner's marks land live.
@@ -3111,7 +3112,8 @@ paths:
           quietly take the choice away from the person who was offered it.
         - **none** — the partner is told this side proposed times.
 
-        A slot inside the five-hour lead is refused with 409 `slot-in-past`,
+        A slot inside the five-hour lead is refused with a 409
+        `StaleActionConflict` whose `currentMatchStatus` is `negotiating`,
         whatever the grid the client is holding says (see below).
       parameters:
         - $ref: "#/components/parameters/MatchId"
@@ -3163,21 +3165,20 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: |
-            Two distinct refusals, told apart by `error` — the client should
-            read the body, not the status:
+            The submission is stale. Nothing was saved — the whole submission
+            is refused, not the offending entries. `currentMatchStatus` is the
+            match's real status right now, and it is what tells the two cases
+            apart:
 
-            - `wrong-state` — the calendar is closed for this match (cancelled,
+            - `negotiating` — the calendar is still open, but at least one
+              submitted slot is now within the five-hour lead
+              (`DATE_ALERT_HOURS`) or already gone. The slot was real; the world
+              moved on while the client held the grid. Re-read the grid and pick
+              another time.
+            - anything else — the calendar is closed for this match (cancelled,
               expired, or already past the time step). Nothing to retry.
-            - `slot-in-past` — at least one submitted slot is now within the
-              five-hour lead (`DATE_ALERT_HOURS`) or already gone. The slot was
-              real; the world moved on while the client held the grid, which is
-              the same class of refusal as `wrong-state` rather than a 400.
-              Nothing was saved — the whole submission is refused, not the
-              offending entries — so re-read the grid and re-submit without it.
 
-            Documented after the fact: the server has answered `slot-in-past`
-            since 2026-09-07, and the five-hour lead replaced its one-minute
-            guard on 2026-09-22.
+            The five-hour lead replaced the one-minute guard on 2026-09-22.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StaleActionConflict" }
@@ -6490,11 +6491,12 @@ components:
 
             What is returned is that grid minus everything now inside the
             five-hour lead (`DATE_ALERT_HOURS`): the server would refuse those
-            (409 `slot-in-past`), so the client must not draw them. Slots
-            therefore DISAPPEAR from this list over the life of one calendar —
-            re-read rather than caching it for hours. `mySlots` / `peerSlots` are
-            deliberately NOT filtered: they are the record of what somebody
-            marked, and hiding that would misstate the state.
+            (409 `StaleActionConflict`, `currentMatchStatus: negotiating`), so
+            the client must not draw them. Slots therefore DISAPPEAR from this
+            list over the life of one calendar — re-read rather than caching it
+            for hours. `mySlots` / `peerSlots` are deliberately NOT filtered:
+            they are the record of what somebody marked, and hiding that would
+            misstate the state.
         mySlots:
           type: array
           items: { type: string, format: date-time }

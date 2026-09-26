@@ -589,8 +589,9 @@ export async function processCalendarSlotsUpdate(
   // до встречи, а прошедшие ещё и фильтруют `agreedTime > now`) и через сутки
   // доводит матч до `completed` с опросом «как прошло свидание», которого не
   // было; билеты при этом не возвращаются, потому что отмены не происходило.
-  // Причина отказа по-прежнему называется `slot-in-past` — контракт обеих
-  // поверхностей, менять её значило бы ломать клиентов ради названия.
+  // Причина отказа по-прежнему называется `slot-in-past`, но это внутренний
+  // код: обе поверхности отдают её клиенту тем же 409 `stale_action`, что и
+  // закрытый календарь, с `currentMatchStatus: negotiating` (2026-09-26).
   const now = new Date();
   for (const p of picks) {
     if (!isSlotSelectable(p, now)) return { ok: false, reason: "slot-in-past" };

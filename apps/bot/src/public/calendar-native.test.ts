@@ -44,7 +44,7 @@ vi.mock("../handlers/matching/scheduler.js", () => ({
   // Не заглушка: настоящая семантика хелпера. Маршрут фильтрует им сетку,
   // чтобы клиент не рисовал клетку, тап по которой сервер обязан отклонить.
   isSlotSelectable: (slot: Date, now: Date = new Date()) =>
-    slot.getTime() > now.getTime() + 60_000,
+    slot.getTime() > now.getTime() + 5 * 60 * 60 * 1000,
 }));
 
 const userFindUnique = vi.fn();
@@ -211,6 +211,58 @@ describe("POST /v1/matches/:id/calendar", () => {
       expect(res.status).toBe(400);
     }
     expect(processCalendarSlotsUpdate).not.toHaveBeenCalled();
+  });
+
+  // One 409 on the wire for both refusals (2026-09-26, stale match actions):
+  // the client tells "that time is gone" from "the calendar closed" by the
+  // status the body carries, never by an `error` string.
+  it("answers a slot inside the five-hour lead with 409 stale_action while the calendar is open", async () => {
+    processCalendarSlotsUpdate.mockResolvedValue({ ok: false, reason: "slot-in-past" });
+    matchFindUnique.mockResolvedValue({
+      status: "negotiating",
+      userAId: USER_ID,
+      userBId: "22222222-2222-4222-8222-222222222222",
+    });
+
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/calendar`)
+      .send({ slots: [SLOT_A] });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "stale_action", currentMatchStatus: "negotiating" });
+  });
+
+  it("answers a closed calendar with the same 409 and the status it closed into", async () => {
+    processCalendarSlotsUpdate.mockResolvedValue({ ok: false, reason: "wrong-state" });
+    matchFindUnique.mockResolvedValue({
+      status: "negotiating_venue",
+      userAId: "22222222-2222-4222-8222-222222222222",
+      userBId: USER_ID,
+    });
+
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/calendar`)
+      .send({ slots: [SLOT_A] });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "stale_action", currentMatchStatus: "negotiating_venue" });
+  });
+
+  it("never tells an outsider the match status — a stale slot from them is a 403", async () => {
+    // The lead is checked before the scheduler knows who is asking.
+    processCalendarSlotsUpdate.mockResolvedValue({ ok: false, reason: "slot-in-past" });
+    matchFindUnique.mockResolvedValue({
+      status: "negotiating",
+      userAId: "22222222-2222-4222-8222-222222222222",
+      userBId: "44444444-4444-4444-8444-444444444444",
+    });
+
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/calendar`)
+      .send({ slots: [SLOT_A] });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "not-participant" });
   });
 
   it("maps a slot outside the grid to 400", async () => {
