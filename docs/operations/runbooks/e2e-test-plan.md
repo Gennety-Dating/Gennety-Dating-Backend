@@ -34,7 +34,7 @@
   Apps: `/start`, онбординг (язык / согласие / трек регистрации / город /
   тема / фото / видео), Face Liveness Mini App, тапы
   Accept/Decline, оплату (Stars-инвойсы), календарь, departure-origin + vibe +
-  чипы, кнопки coordination / emergency / venue-change, фидбэк. Агент за него
+  чипы, кнопки отмены / venue-change, фидбэк. Агент за него
   это НЕ делает.
 - **Агент (Claude)** поднимает стек, по **команде оператора** триггерит
   серверные стадии через dev-скрипты (свести матч; сдвинуть «часы» матча для
@@ -55,7 +55,7 @@
 5. Date-lifecycle гоняется **по одному гейту**: агент сдвигает `agreedTime`
    (`scripts/dev/advance-match-clock.ts`), реальный тик бота (каждые 2 мин) сам
    отправляет сообщения, а оператор наблюдает и взаимодействует вживую
-   (icebreakers, emergency, safety, wingman, coordination, proxy, feedback).
+   (icebreakers, отмена, safety, wingman, proxy, Radar, Terminal, Bump, feedback).
    Агент после каждого гейта подтверждает по серверным маркерам, что он сработал.
 
 **Обязательные операционные правила (без них прогон флапает):**
@@ -217,12 +217,15 @@ Registration v2 (не через email-обход). Placeholder существу
   milestone-тикеты рефереру при верификации друга.
 - **Promo Codes:** независимая кампания (`pnpm promo:create`), богатый wow-экран
   (1 тикет + 3 месяца Premium), взаимоисключимо с Referral.
-- **Type Radar:** скипаемый визуальный шаг «выбери свой тип» перед Magic
-  Prompt, `Profile.appearanceTags`/`typePrefTags`, реальный вес в скоринге
+- **Type Radar:** скипаемый визуальный шаг «выбери свой тип» перед фото,
+  `Profile.appearanceTags`/`typePrefTags`, реальный вес в скоринге
   (`TYPE_PREF_FLOOR=0.7` локально).
-- **Date lifecycle:** wingman, icebreakers (T-5ч), emergency window, safety
-  brief (T-1.5ч), wingman reveal, coordination offer (T-1ч), proxy chat
-  (T-30м/T+2ч), feedback (T+24ч) + Feedback Mini App + голос.
+- **Date lifecycle:** cancellation is available from booking until `agreedTime`;
+  T-5ч icebreakers and cancel reminder; T-1.5ч safety brief and wingman reveal;
+  anonymous proxy chat T-1ч…T+2ч for every scheduled pair; Date Radar and
+  Terminal invite T-45м; Bump window and Terminal reminder T-15м; feedback
+  T+24ч + Feedback Mini App + голос. The retired T-3ч coordination choice and
+  Telegram handle exchange must not appear.
 - **Trust & Safety:** reports tier 1/2/3 (категория репорта задаёт
   floor/ceiling для LLM-триажа), strikes/suspend/ban, auto-unsuspend,
   emergency-cancel.
@@ -273,6 +276,8 @@ Registration v2 (не через email-обход). Placeholder существу
 ### Pass 1 — Онбординг
 - [ ] A (`@GN01001`, **student-трек**): полный email-OTP (реальный
       корпоративный), Mini App все экраны, город, тема, анкета → Type Radar → фото (от `MIN_PHOTOS` до `MAX_PHOTOS`)
+- [ ] Фото: при 3 принятых снимках Continue/активация недоступны; при 4 доступны;
+      10 принимаются, 11-й отклоняется лимитом. Видео не входит в счёт 4–10.
 - [ ] A: дедуп — отправить копию/скрин/кроп → отклонение с объяснением
 - [ ] A: тикет-бонус за 6+ фото; добавить видео → второй бонус
 - [ ] A: во время загрузки фото открыть панель «🗂 Мои фото» (reply-клавиатура
@@ -385,7 +390,8 @@ Registration v2 (не через email-обход). Placeholder существу
 
 ### Pass 8 — Date lifecycle
 - [ ] `dev-continue-date.mjs` (ticket-aware) ИЛИ вручную `advance-match-clock.ts`
-- [ ] Icebreakers (T-5ч, 3 на сторону) + emergency window
+- [ ] Icebreakers (T-5ч, 3 на сторону) + напоминание об отмене; кнопку отмены
+      проверить и сразу после назначения, до T-5ч, и её отказ после `agreedTime`
 - [ ] Female safety brief (T-1.5ч) + wingman reveal
 - [ ] Ссылка вместо мема (flag ON): на вопрос про юмор отправить рил/тикток →
       в ответе лежит ОПИСАНИЕ ролика, а не URL; повторная отправка того же ролика
@@ -400,8 +406,38 @@ Registration v2 (не через email-обход). Placeholder существу
       второй раз; у партнёра-текстового ответа карточка не приходит вовсе
 - [ ] Опросника координации НЕТ (с 2026-09-26): ни в T-3ч, ни раньше не приходит «поделиться Telegram / попросить контакт»; старая карточка с такими кнопками на тап только снимает клавиатуру
 - [ ] Proxy chat open (T-1ч, у КАЖДОЙ пары, без выбора): relay text-only, media отклоняется, Report-кнопка, `ProxyMessage`-лог; close (T+2ч)
+- [ ] T-45м: Telegram-сторона получает один Date Terminal invite; Radar
+      показывает только `unknown`/`en_route`/`arrived` и маскированный ETA,
+      без координат партнёра. До T-45м Radar недоступен.
+- [ ] T-15м: Telegram-сторона получает один Terminal reminder; Bump становится
+      доступен обеим сторонам. До T-15м сервер отвечает `too-early`.
+- [ ] Bump: GPS дальше 100 м от места → `too-far` и нет подтверждения;
+      две валидные тряски с разрывом больше 10 с не подтверждают пару;
+      две тряски в пределах 100 м и 10 с подтверждают один раз и дают +50
+      reliability каждому. Проверить повтор без второго начисления.
 - [ ] Emergency protocol: кнопка отмены есть с момента назначения (хаб «Моё свидание», за сутки до свидания тоже), не только с T-5ч; confirmation guard → verbatim relay (blockquote) → cancel + peer Elo-bump
 - [ ] Feedback (T+24ч): Feedback Mini App (slider/segmented/textarea) + голосовой fallback → `feedbackByA/B` + LLM-анализ → constraints
+
+### Pass 8a — Смешанная пара iOS ↔ Telegram
+
+1. Создать iOS-first пользователя через `/v1/auth/*` и пройти обязательный
+   трек верификации; убедиться, что у него синтетический отрицательный
+   `telegramId` и `platform=mobile`. Второй участник проходит Telegram-трек.
+2. Провести пару через blind decision, ticket gate, календарь и подтверждение
+   места. Сверить общий `Match.status` и отдельные решения A/B; не отправлять
+   Telegram DM на отрицательный ID.
+3. С T-1ч обменяться текстом через нативный и Telegram proxy chat в обе стороны;
+   проверить закрытие в T+2ч, отказ медиа и отсутствие обмена контактами.
+4. С T-45м проверить Radar на обоих клиентах: только маскированный статус/ETA,
+   без чужих координат. Telegram получает Terminal invite, iOS открывает
+   нативную канву без ожидания Telegram DM.
+5. С T-15м проверить Telegram Terminal reminder и пройти серверные отказы
+   Bump по времени и 100 м, затем взаимную
+   тряску за 10 с с одного iPhone и Telegram Mini App; проверить одну награду
+   +50 каждому и общий подтверждённый результат.
+6. Отменить отдельную назначенную смешанную пару до `agreedTime` с каждого
+   рельса по очереди; проверить уведомление партнёра на доступном рельсе и
+   закрытие proxy chat.
 
 ### Pass 9 — Trust & Safety
 - [ ] Report tier 1 (preference) → constraints, без штрафа

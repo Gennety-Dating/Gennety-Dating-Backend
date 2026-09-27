@@ -1227,8 +1227,8 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   the worker.
 - Onboarding funnel analytics (always-on, no feature flag): step-level
   drop-off + hesitation telemetry feeding `GET /admin/analytics/onboarding-funnel`
-  and the weekly `GET /admin/analytics/founder-digest` (consumed by the external
-  **Hermes** agent — see `HERMES_AGENT_PROMPT.md`). Requires `db:push` of the new
+  and the weekly `GET /admin/analytics/founder-digest` (available to any
+  authorized reporting agent — see `docs/operations/agent-admin-panel-access.md`). Requires `db:push` of the new
   additive `onboarding_step_events` table first (non-destructive; missing table →
   the collector's best-effort telemetry just logs a warning and onboarding still
   works, but the endpoint returns empty until the table exists). No new env, no

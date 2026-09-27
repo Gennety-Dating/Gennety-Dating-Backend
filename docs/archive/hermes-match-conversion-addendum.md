@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: HISTORICAL POINTER ONLY. Its content was merged into docs/operations/hermes-agent-prompt.md. Kept because the 2026-08-15 decision entry links to it. -->
+<!-- WHEN_TO_READ: HISTORICAL POINTER ONLY. Its content now lives in docs/operations/agent-admin-panel-access.md. Kept because the 2026-08-15 decision entry links to it. -->
 <!-- SOURCE: HERMES_MATCH_CONVERSION_ADDENDUM.md (moved unchanged) — migrated 2026-09-01 -->
 
 # Hermes — дополнение про Match → Ticket (слито в основной промпт)
@@ -7,7 +7,7 @@
 > `conversion` в `/admin/stats`, `derived` в `/admin/dashboard`, `genderRatio`,
 > выведенные поля матча, явка, правило про расходы на трафик и две поправки
 > (`telegramId < 0` ≠ тестовый аккаунт; платёжные эндпоинты существуют) —
-> перенесено в **[HERMES_AGENT_PROMPT.md](../operations/hermes-agent-prompt.md)**.
+> перенесено в **[Agent Admin Panel Access](../operations/agent-admin-panel-access.md)**.
 
 Файл оставлен указателем, а не удалён: на него ссылается запись от 2026-08-15 в
 [DECISIONS.md](../architecture/decisions/INDEX.md), и битая ссылка в журнале решений хуже, чем лишний

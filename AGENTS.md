@@ -65,6 +65,17 @@ docs/           ALL project documentation (see routing below)
 7. **Respect dirty working trees.** Never revert unrelated user changes.
 8. Strict TypeScript (no `any` without cause); user-facing strings live in
    shared i18n; limits/timings/thresholds live in shared constants.
+9. **State names come from code.** `packages/db/prisma/schema.prisma` is the
+   authority for stored `MatchStatus` values and column types; ticket payment
+   is a string substate, and `packages/shared/src/date-lifecycle.ts` defines
+   derived date-view states. Do not invent stored states from business labels.
+10. **Date contact and cancellation.** Anonymous proxy chat is the sole
+    person-to-person channel and is derived from `agreedTime` (T-1h…T+2h) for
+    every scheduled pair. Cancellation is available from booking until
+    `agreedTime`; T-5h sends a reminder rather than opening a gate.
+11. **Specification format.** Write new agent-generated specifications as
+    declarative prose, numbered phases, and indented lists. Do not use markdown
+    tables in those specifications.
 
 ## Git journal workflow (single-branch)
 

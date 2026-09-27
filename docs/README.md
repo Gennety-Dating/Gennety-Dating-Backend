@@ -48,7 +48,7 @@ docs/
 │   ├── deployment-runbook.md  ★ CANONICAL deploy/rollback/DB-ops/logs/Caddy procedure.
 │   ├── environments.md        Droplet, paths, PM2, Caddy, env + credential locations, endpoints, dev↔prod isolation.
 │   ├── agent-operating-manual.md  Full coding-agent workflow (was AGENTS.md).
-│   ├── hermes-agent-prompt.md     System prompt for the Hermes analytics agent.
+│   ├── agent-admin-panel-access.md  Shared admin API access and analytics guidance for authorized agents.
 │   ├── deploy-journal/
 │   │   ├── INDEX.md           ★ FIRST STOP: all 161 deploy entries, status + date.
 │   │   └── pending.md         The ACTIVE backlog — blocks marked `**PENDING` have NOT shipped.
@@ -57,7 +57,7 @@ docs/
 └── archive/                   Historical / superseded. Reach for it only when the index sends you.
     ├── deploy-journal/shipped-part1..3.md   121 already-shipped deploy entries
     ├── daily-matching-migration-audit.md    Pre-change audit, superseded by domains/daily-matching.md
-    ├── hermes-match-conversion-addendum.md  Merged into operations/hermes-agent-prompt.md
+    ├── hermes-match-conversion-addendum.md  Historical pointer to operations/agent-admin-panel-access.md
     └── ios-app-roadmap-snapshot.md          2026-07-18 snapshot; live copy is in the iOS repo
 ```
 
