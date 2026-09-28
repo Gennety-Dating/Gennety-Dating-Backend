@@ -1,3 +1,4 @@
+import { BUTTERFLY_PATH } from "./brand-butterfly.js";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -2201,7 +2202,7 @@ function PromoGiftGate(props: {
               </linearGradient>
             </defs>
             <path
-              d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+              d={BUTTERFLY_PATH}
               fill="url(#promo-bf-grad)"
             />
           </svg>
@@ -2302,7 +2303,7 @@ function ReferralGiftGate(props: {
               </linearGradient>
             </defs>
             <path
-              d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+              d={BUTTERFLY_PATH}
               fill="url(#gift-bf-grad)"
             />
           </svg>

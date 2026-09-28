@@ -36,10 +36,7 @@ import {
 import CSS from "./onboarding.css?raw";
 
 describe("body shape", () => {
-  // The whole reason this module carries its own path: the shipped logo joins
-  // its lower wings across a 4-unit bar (`L 52 65`), and the mascot converges
-  // them on a point. If this ever picks the bar back up, the correction has
-  // silently been lost.
+  // The mascot now uses the same pointed silhouette as every brand mark.
   it("converges the lower wings on a single point", () => {
     expect(MASCOT_BODY).not.toMatch(/L\s+52\s+65/);
     expect(MASCOT_BODY).toContain("25 100, 50 65");

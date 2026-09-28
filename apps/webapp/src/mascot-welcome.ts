@@ -1,3 +1,4 @@
+import { BUTTERFLY_PATH } from "./brand-butterfly.js";
 /**
  * The welcome mascot — the Gennety butterfly, with eyes and round hands,
  * shuffling through profiles while the Mini App boots.
@@ -51,12 +52,9 @@
  *
  * ## Body shape
  *
- * `MASCOT_BODY` is the logo with its lower wings converged on a single point.
- * The shipped logo (`brand-butterfly.ts`, and the five other copies) keeps the
- * 4-unit horizontal bar between them and is deliberately NOT changed — founder
- * decision 2026-08-23, DECISIONS.md. The reference copy of the corrected shape
- * lives at `apps/bot/src/assets/brand/butterfly-logo-v2.svg` and nothing
- * imports it; it exists so the two shapes can be compared.
+ * `MASCOT_BODY` is the shared logo silhouette. The earlier split between its
+ * pointed lower lobes and the rest of the product ended with the 2026-09-28
+ * brand unification decision.
  *
  * Sizing, colour and the fade live in `onboarding.css` (`.mw-*`), following the
  * loader's split: this module only answers what moves and where.
@@ -65,15 +63,8 @@
 /** Stage coordinates. The body occupies roughly x 15..85, y 24..77. */
 export const VIEWBOX = { x: -50, y: -28, width: 200, height: 156 } as const;
 
-/**
- * The logo with both lower wings converged on (50, 65).
- *
- * The shipped logo has `L 52 65` there — a 4-unit bar where the top joins at a
- * single point. Only the mascot uses this corrected form today.
- */
-export const MASCOT_BODY =
-  "M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 50 65 " +
-  "C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z";
+/** The shared logo, with both lower wings converged on (50, 65). */
+export const MASCOT_BODY = BUTTERFLY_PATH;
 
 /**
  * Greeting length, measured from the moment `/state` resolves to the curtain

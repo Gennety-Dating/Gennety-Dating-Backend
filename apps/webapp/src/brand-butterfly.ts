@@ -2,12 +2,8 @@
  * The brand butterfly's geometry — one source of truth for every Mini App mark
  * built out of the logo.
  *
- * Two marks consume it today: the loading mark (`butterfly-loader.ts`, three
- * butterflies flying inside a waist) and the success mark
- * (`butterfly-success.ts`, one butterfly flying the checkmark). They are
- * deliberately different pictures — nerves versus their resolution — but they
- * must be the SAME butterfly, and a mark whose silhouette is a hand-copied path
- * string is a mark that drifts from the logo one edit at a time.
+ * The static marks, mascot, loader and success animation all consume the same
+ * iOS-authoritative silhouette. Only the animated marks split it into wings.
  *
  * Nothing here is a rendering decision. Sizing, colour and motion belong to
  * each mark's own stylesheet; this module only answers "what shape is it".
@@ -23,8 +19,13 @@
  * rest the two halves reassemble the logo exactly, so a mark caught mid-fade is
  * still the brand rather than an approximation of it.
  */
-export const WING_LEFT = "M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, -2 15 L 0 15 Z";
-export const WING_RIGHT = "M 0 -15 L 0 15 L 2 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z";
+/** Same geometry as iOS ButterflyMark and AppIcon: lower lobes meet at (50, 65). */
+export const BUTTERFLY_PATH =
+  "M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 50 65 " +
+  "C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z";
+
+export const WING_LEFT = "M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, 0 15 Z";
+export const WING_RIGHT = "M 0 -15 L 0 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z";
 
 /**
  * The butterfly's bounding box in the re-authored (origin-centred) space, i.e.
