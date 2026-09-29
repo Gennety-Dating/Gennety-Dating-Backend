@@ -211,6 +211,17 @@ type MatchRow = {
   safetyAckB: boolean;
   emergencyCancelledBy: string | null;
   emergencyReason: string | null;
+  /** Proxy-chat window stamp and the two read cursors (the unread badge). */
+  proxyOpenedAt: Date | null;
+  proxyReadAtA: Date | null;
+  proxyReadAtB: Date | null;
+  createdAt: Date;
+};
+
+type ProxyMessageRow = {
+  id: string;
+  matchId: string;
+  senderId: string;
   createdAt: Date;
 };
 
@@ -272,6 +283,7 @@ const db = {
   botSessions: [] as { key: string }[],
   /** Rematch purchases a refund sweep still owns (A13-H14 deferral). */
   rematchPurchases: [] as { id: string; userId: string; status: string; createdAt: Date }[],
+  proxyMessages: [] as ProxyMessageRow[],
 };
 
 function resetDb(): void {
@@ -290,6 +302,7 @@ function resetDb(): void {
   db.founderReports.length = 0;
   db.botSessions.length = 0;
   db.rematchPurchases.length = 0;
+  db.proxyMessages.length = 0;
 }
 
 function userById(id: string): UserRow | undefined {
@@ -627,6 +640,18 @@ vi.mock("@gennety/db", async () => {
           for (const m of list) Object.assign(m, applyData(data));
           return { count: list.length };
         }),
+      },
+
+      // ----- proxyMessage ----- (read-only: the unread badge on /current)
+      proxyMessage: {
+        count: vi.fn(async ({ where }: any) =>
+          db.proxyMessages.filter(
+            (p) =>
+              p.matchId === where.matchId &&
+              (where.senderId?.not === undefined || p.senderId !== where.senderId.not) &&
+              (where.createdAt?.gt === undefined || p.createdAt > where.createdAt.gt),
+          ).length,
+        ),
       },
 
       // ----- matchEvent -----
@@ -1239,6 +1264,9 @@ async function seedMatch(
     safetyAckB: false,
     emergencyCancelledBy: null,
     emergencyReason: null,
+    proxyOpenedAt: null,
+    proxyReadAtA: null,
+    proxyReadAtB: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -3195,6 +3223,92 @@ describe("/v1/matches/*", () => {
       envMock.COORDINATION_FEATURE_ENABLED = true;
       const res = await current("negotiating_venue");
       expect(res.body.match.proxyChatOpensAt).toBeNull();
+    });
+
+    // The unread badge (2026-09-29): null exactly where the window is, so "no
+    // chat" reads the same in both fields.
+    it("has no unread count wherever there is no window", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = false;
+      const off = await current("scheduled");
+      expect(off.body.match.proxyChatUnreadCount).toBeNull();
+
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const planning = await current("negotiating_venue");
+      expect(planning.body.match.proxyChatUnreadCount).toBeNull();
+    });
+
+    it("counts the partner's lines after each caller's OWN cursor, and polling marks nothing read", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const at = (hhmm: string) => new Date(`2026-07-20T${hhmm}:00Z`);
+      const readA = at("18:10");
+      const readB = at("18:20");
+      const m = await seedMatch(alice.id, bob.id, {
+        status: "scheduled",
+        agreedTime: AGREED,
+        proxyOpenedAt: at("18:00"),
+        proxyReadAtA: readA,
+        proxyReadAtB: readB,
+      });
+      const line = (senderId: string, hhmm: string) =>
+        db.proxyMessages.push({
+          id: crypto.randomUUID(),
+          matchId: m.id,
+          senderId,
+          createdAt: at(hhmm),
+        });
+      line(bob.id, "18:05"); // before Alice's cursor — read
+      line(alice.id, "18:15"); // before Bob's cursor — read
+      line(bob.id, "18:25"); // unread for Alice
+      line(bob.id, "18:30"); // unread for Alice
+      line(alice.id, "18:40"); // unread for Bob; never counted for Alice
+
+      vi.mocked(prismaMock.match.update).mockClear();
+      vi.mocked(prismaMock.match.updateMany).mockClear();
+
+      const forAlice = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      const forBob = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(bob.id)}`);
+      // Polled again: still unread, because nobody opened the chat.
+      const again = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(forAlice.body.match.proxyChatUnreadCount).toBe(2);
+      expect(forBob.body.match.proxyChatUnreadCount).toBe(1);
+      expect(again.body.match.proxyChatUnreadCount).toBe(2);
+      expect(prismaMock.match.update).not.toHaveBeenCalled();
+      expect(prismaMock.match.updateMany).not.toHaveBeenCalled();
+      expect(db.matches.get(m.id)!.proxyReadAtA).toEqual(readA);
+      expect(db.matches.get(m.id)!.proxyReadAtB).toEqual(readB);
+    });
+
+    it("counts every partner line for a caller who never opened the chat", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const m = await seedMatch(alice.id, bob.id, { status: "scheduled", agreedTime: AGREED });
+      for (const [senderId, iso] of [
+        [bob.id, "2026-07-20T18:05:00Z"],
+        [bob.id, "2026-07-20T18:06:00Z"],
+        [alice.id, "2026-07-20T18:07:00Z"],
+      ] as const) {
+        db.proxyMessages.push({
+          id: crypto.randomUUID(),
+          matchId: m.id,
+          senderId,
+          createdAt: new Date(iso),
+        });
+      }
+
+      const res = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      expect(res.body.match.proxyChatUnreadCount).toBe(2);
     });
   });
 

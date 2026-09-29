@@ -230,6 +230,32 @@ function partnerReadAt(match: ProxyMatch, callerId: string): Date | null {
   return callerId === match.userAId ? match.proxyReadAtB : match.proxyReadAtA;
 }
 
+/** How far `callerId` THEMSELVES has read. Null = never opened the screen. */
+function ownReadAt(
+  match: { userAId: string; proxyReadAtA: Date | null; proxyReadAtB: Date | null },
+  callerId: string,
+): Date | null {
+  return callerId === match.userAId ? match.proxyReadAtA : match.proxyReadAtB;
+}
+
+/**
+ * "The partner said it and the caller has not opened the chat since" — the one
+ * definition of unread, asked by the cursor (`markRead`) and by the badge
+ * (`proxyChatUnreadCount`). Kept in one place so the badge can never count a
+ * line that opening the chat would not mark read, or miss one it would.
+ *
+ * Nothing is excluded beyond that: a message is never deleted or hidden once
+ * logged (the log is the moderation trail), and delivery does not matter — a
+ * line no rail accepted is still waiting on the screen.
+ */
+function unreadFromPartner(matchId: string, callerId: string, cursor: Date | null) {
+  return {
+    matchId,
+    senderId: { not: callerId },
+    ...(cursor ? { createdAt: { gt: cursor } } : {}),
+  };
+}
+
 /**
  * The sender's own three states, from three facts the server actually holds.
  *
@@ -318,7 +344,9 @@ async function buildView(
  * the partner's "read" tick rests entirely on that: this endpoint is called by
  * the app, and the app calls it only while its chat screen is on the phone. A
  * background refresh or a prefetch would turn the cursor into a lie, so if one
- * is ever added it must not come through this function.
+ * is ever added it must not come through this function. The one that exists —
+ * the unread badge polled with `/v1/matches/current` — is
+ * `proxyChatUnreadCount`, which reads the cursor and never writes it.
  */
 export async function readProxyChat(input: {
   matchId: string;
@@ -352,14 +380,9 @@ export async function readProxyChat(input: {
  */
 async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise<void> {
   const mine = callerId === match.userAId;
-  const current = mine ? match.proxyReadAtA : match.proxyReadAtB;
 
   const unread = await prisma.proxyMessage.findFirst({
-    where: {
-      matchId: match.id,
-      senderId: { not: callerId },
-      ...(current ? { createdAt: { gt: current } } : {}),
-    },
+    where: unreadFromPartner(match.id, callerId, ownReadAt(match, callerId)),
     select: { id: true },
   });
   if (!unread) return;
@@ -367,6 +390,52 @@ async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise
   await prisma.match.update({
     where: { id: match.id },
     data: mine ? { proxyReadAtA: now } : { proxyReadAtB: now },
+  });
+}
+
+/**
+ * How many of the partner's lines sit above the caller's own read cursor — the
+ * "3 new" badge on the app's chat entry (`SerializedMatch.proxyChatUnreadCount`),
+ * so the app can say there is something to read without opening the chat.
+ *
+ * **A pure read, and that is its whole contract.** `/v1/matches/current` asks
+ * this on every poll (every 20 s per app user), which is exactly the
+ * "background refresh" `readProxyChat` warns about: routed through there, it
+ * would move the cursor and hand the partner a "read" tick for a screen nobody
+ * opened. So it never touches the cursor, the delivery stamps, or anything else
+ * — one indexed `count` over `(match_id, created_at)`, and only when a line
+ * could exist at all.
+ *
+ * **Skipped only while nothing could have been sent**: before the scheduled
+ * window opens AND before the tick has announced it. Not on `now < opensAt`
+ * alone — the announced window can open before the scheduled one (demo's date
+ * sits days out while its replay stamps the window on a shifted clock; the same
+ * divergence `proxyChatAcceptsMessages` folds in), and a 0 there would hide
+ * lines that are really there.
+ *
+ * **Still counted after the window**, and after a force-close: reading is
+ * ungated, so what the partner said last is still waiting to be read.
+ *
+ * `callerId` must be one of the pair — the caller has already established that.
+ */
+export async function proxyChatUnreadCount(
+  match: {
+    id: string;
+    userAId: string;
+    agreedTime: Date | null;
+    proxyOpenedAt: Date | null;
+    proxyReadAtA: Date | null;
+    proxyReadAtB: Date | null;
+  },
+  callerId: string,
+  now: Date,
+): Promise<number> {
+  const window = proxyChatWindow(match);
+  const announced = match.proxyOpenedAt !== null;
+  if (!announced && (!window || now < window.opensAt)) return 0;
+
+  return prisma.proxyMessage.count({
+    where: unreadFromPartner(match.id, callerId, ownReadAt(match, callerId)),
   });
 }
 

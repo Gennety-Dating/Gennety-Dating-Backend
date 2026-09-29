@@ -278,6 +278,11 @@ Three things about this are load-bearing:
   only while its chat screen is on the phone. That is the whole basis for the
   claim. A background refresh or a prefetch routed through that function would
   turn it into a lie.
+  The one background reader that exists is the unread badge
+  (`SerializedMatch.proxyChatUnreadCount` on `/v1/matches/current`, 2026-09-29):
+  it counts the partner's messages above the caller's OWN cursor through
+  `proxyChatUnreadCount`, a pure `count` that shares its "unread" filter with
+  the cursor's own probe and never writes anything.
 - **A partner on the Telegram rail never reaches `read`.** The Bot API gives
   bots no read receipts, so `delivered` is the honest ceiling there, and the
   third state is in practice a signal that both sides are on the app. Clients

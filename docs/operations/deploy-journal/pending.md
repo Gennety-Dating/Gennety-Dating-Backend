@@ -35,6 +35,32 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-09-29) — счётчик непрочитанного анонимного чата: `SerializedMatch.proxyChatUnreadCount` (DECISIONS 2026-09-29).**
+**Только рестарт бота:** без миграции (запрос покрыт существующим индексом `proxy_messages (match_id, created_at)`),
+без env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций выше не зависит — едет с тем заходом, в
+который попадёт коммит. Что меняется: у `/v1/matches/current` новое поле — число сообщений партнёра после собственного
+курсора вызывающего, null без окна чата. Поле только читает: курсоры `proxy_read_at_*` и отметки доставки двигает
+по-прежнему лишь открытие чата (`GET /v1/matches/{id}/chat`). Нагрузка — один `count` на опрос и только у
+`scheduled`-пары с флагом `COORDINATION_FEATURE_ENABLED`; до открытия чата запроса нет.
+**Демо:** как в проде (поле только читает).
+**iOS:** поле необязательное, старые сборки его не замечают; значок «N новых» на кнопке чата — задача iOS «Chat Hub»,
+которой нужен этот выкат (до него поля в ответе нет — клиент читает как null, значка нет).
+
+Проверка после выката (JWT своего тестового аккаунта в `scheduled`-паре):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/matches/current \
+  | jq '.match | {proxyChatOpensAt, proxyChatUnreadCount}'
+# → до T-1ч: число 0; без пары или вне `scheduled`: оба null
+# прод-БД, только чтение: два опроса /current подряд курсоры не меняют
+SELECT proxy_read_at_a, proxy_read_at_b FROM matches WHERE id = '<matchId>'::uuid;
+# на свидании: партнёр пишет 2 сообщения → поле 2; открыть чат в приложении → на следующем опросе 0
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется, откатывать нечего.
+
+---
+
 **PENDING (2026-09-29) — экран свидания Mini App: удержание вместо встряхивания + церемония встречи (DECISIONS 2026-09-29).**
 **Только Mini App**: нет схемы, env, флагов; дифф — `apps/webapp/**` плюс документация. Путь **Deploy Mini App Only**
 (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё `pnpm demo:deploy` (демо собирает свой бандл из

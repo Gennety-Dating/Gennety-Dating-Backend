@@ -11,8 +11,15 @@ vi.mock("../config.js", () => ({ env: mockEnv }));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: vi.fn(), update: vi.fn() },
-    proxyMessage: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    match: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    proxyMessage: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+    },
   },
 }));
 
@@ -41,16 +48,23 @@ import {
   proxyChatIsOpen,
   proxyChatAcceptsMessages,
   proxyChatSendRefusal,
+  proxyChatUnreadCount,
   PROXY_REACTIONS,
 } from "./proxy-chat.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
+const mMatch = prisma.match as unknown as {
+  findUnique: MockFn;
+  update: MockFn;
+  updateMany: MockFn;
+};
 const mMsg = prisma.proxyMessage as unknown as {
   create: MockFn;
   findMany: MockFn;
   findFirst: MockFn;
   update: MockFn;
+  updateMany: MockFn;
+  count: MockFn;
 };
 
 const DATE = new Date("2026-08-10T18:00:00.000Z");
@@ -98,6 +112,7 @@ beforeEach(() => {
   mMsg.findFirst.mockResolvedValue(null);
   mMsg.create.mockResolvedValue({ id: "pm-1" });
   mMsg.update.mockResolvedValue({});
+  mMsg.count.mockResolvedValue(0);
   mMatch.update.mockResolvedValue({});
 });
 
@@ -343,6 +358,127 @@ describe("readProxyChat", () => {
         where: { matchId: "m-1", createdAt: { gt: new Date(5) } },
       }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The unread badge
+// ---------------------------------------------------------------------------
+
+describe("proxyChatUnreadCount — the badge, a pure read", () => {
+  /** Every write the prisma mock carries — none may fire while counting. */
+  function expectNoWrites(): void {
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mMsg.update).not.toHaveBeenCalled();
+    expect(mMsg.updateMany).not.toHaveBeenCalled();
+    expect(mMsg.create).not.toHaveBeenCalled();
+  }
+
+  /**
+   * Polled with `/v1/matches/current` every 20 s for days before the date:
+   * nothing can have been said before the chat opened, so nothing is asked.
+   */
+  it("is 0 before the window opens, without asking the database", async () => {
+    const n = await proxyChatUnreadCount(match(), "uid-A", new Date(OPENS.getTime() - 1));
+    expect(n).toBe(0);
+    expect(mMsg.count).not.toHaveBeenCalled();
+    expect(mMsg.findFirst).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The announced window can open before the scheduled one — demo's date sits
+   * days out while its replay stamps the window on a shifted clock. Lines sent
+   * there are real, so the shortcut must not hide them.
+   */
+  it("counts an announced window whose schedule has not come round", async () => {
+    const early = new Date(OPENS.getTime() - 24 * 60 * 60 * 1000);
+    mMsg.count.mockResolvedValue(2);
+    const n = await proxyChatUnreadCount(
+      match({ proxyOpenedAt: early, proxyClosesAt: CLOSES }),
+      "uid-A",
+      early,
+    );
+    expect(n).toBe(2);
+    expect(mMsg.count).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts the partner's lines after the A-side caller's own cursor", async () => {
+    const readA = new Date(OPENS.getTime() + 60_000);
+    mMsg.count.mockResolvedValue(3);
+    const n = await proxyChatUnreadCount(
+      // B's cursor is further along and must NOT be the one used.
+      match({ proxyReadAtA: readA, proxyReadAtB: CLOSES }),
+      "uid-A",
+      DATE,
+    );
+    expect(n).toBe(3);
+    expect(mMsg.count).toHaveBeenCalledWith({
+      where: { matchId: "m-1", senderId: { not: "uid-A" }, createdAt: { gt: readA } },
+    });
+    expectNoWrites();
+  });
+
+  it("uses the B side's own cursor for a B-side caller", async () => {
+    const readB = new Date(OPENS.getTime() + 5 * 60_000);
+    mMsg.count.mockResolvedValue(1);
+    const n = await proxyChatUnreadCount(
+      match({ proxyReadAtA: new Date(OPENS.getTime() + 1), proxyReadAtB: readB }),
+      "uid-B",
+      DATE,
+    );
+    expect(n).toBe(1);
+    expect(mMsg.count).toHaveBeenCalledWith({
+      where: { matchId: "m-1", senderId: { not: "uid-B" }, createdAt: { gt: readB } },
+    });
+    expectNoWrites();
+  });
+
+  /** Never opened the chat: everything the partner said is new. */
+  it("counts every partner line when the caller has no cursor yet", async () => {
+    mMsg.count.mockResolvedValue(4);
+    const n = await proxyChatUnreadCount(match({ proxyReadAtA: null }), "uid-A", DATE);
+    expect(n).toBe(4);
+    expect(mMsg.count).toHaveBeenCalledWith({
+      where: { matchId: "m-1", senderId: { not: "uid-A" } },
+    });
+  });
+
+  /**
+   * The caller's own lines are excluded by the query itself — and it is the
+   * SAME filter that decides whether opening the chat moves the cursor, so the
+   * badge and the cursor cannot disagree about what "unread" is.
+   */
+  it("never counts the caller's own lines, by the same filter the cursor uses", async () => {
+    const readA = new Date(OPENS.getTime() + 60_000);
+    const m = match({ proxyReadAtA: readA });
+
+    await proxyChatUnreadCount(m, "uid-A", DATE);
+    const badgeWhere = mMsg.count.mock.calls[0]![0].where;
+    expect(badgeWhere.senderId).toEqual({ not: "uid-A" });
+
+    mMatch.findUnique.mockResolvedValue(m);
+    await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+    // The first findFirst of a read without `since` is `markRead`'s probe.
+    expect(mMsg.findFirst.mock.calls[0]![0].where).toEqual(badgeWhere);
+  });
+
+  /** Reading is ungated, so what was said last is still waiting to be read. */
+  it("still counts after the window has closed and after a force-close", async () => {
+    mMsg.count.mockResolvedValue(2);
+    const late = new Date(CLOSES.getTime() + 60 * 60 * 1000);
+    await expect(proxyChatUnreadCount(match(), "uid-A", late)).resolves.toBe(2);
+    await expect(
+      proxyChatUnreadCount(match({ proxyClosedAt: DATE }), "uid-A", DATE),
+    ).resolves.toBe(2);
+    expect(mMsg.count).toHaveBeenCalledTimes(2);
+    expectNoWrites();
+  });
+
+  it("is 0 for a date with no time, without asking the database", async () => {
+    const n = await proxyChatUnreadCount(match({ agreedTime: null }), "uid-A", DATE);
+    expect(n).toBe(0);
+    expect(mMsg.count).not.toHaveBeenCalled();
   });
 });
 

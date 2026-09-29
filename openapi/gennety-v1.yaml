@@ -7676,6 +7676,26 @@ components:
           description: |
             T+2h. Sent rather than derived so the client never re-implements a
             product constant; the server closes the window regardless.
+        proxyChatUnreadCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Read-only count of the partner's anonymous-chat messages created
+            after the CALLER's own read cursor — the "3 new" badge on the chat
+            entry. A caller who has never opened the chat counts every message
+            the partner sent; the caller's own messages never count.
+
+            Null exactly when `proxyChatOpensAt` is null (this match has no
+            proxy chat), and also when the count could not be read this time —
+            so key the chat entry itself on `proxyChatOpensAt`, never on this
+            field. Absent from servers older than the field: treat as null.
+            0 until the chat has opened. Still counted after `proxyChatClosesAt`
+            and after a force-close, because reading stays allowed.
+
+            Reading this field NEVER marks anything as read and never moves a
+            delivery tick. The caller's cursor moves only when the caller opens
+            the chat (`GET /v1/matches/{id}/chat`); from then on this counts
+            only what the partner sends later.
         proposalDeadlineAt:
           type: [string, "null"]
           format: date-time
