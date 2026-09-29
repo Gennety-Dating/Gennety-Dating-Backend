@@ -56,6 +56,32 @@ curl -s https://dating-calendar.gennety.com/index.html | grep -c 'overscroll-beh
 
 ---
 
+**PENDING — Date Bump: удержание (`hold: true`) и общий старт церемонии встречи (2026-09-29).**
+Коммит «feat(bump): hold gesture with a common ceremony start» на стволе. **Только рестарт бота** — без
+миграций (схема не менялась), без env, без новых зависимостей; Mini App не пересобирать (терминал
+переходит на удержание отдельным коммитом). В сводном выкате порядок безразличен. Решение — журнал
+решений, 2026-09-29.
+
+**Что изменится на проде сразу:** `POST /v1/dates/:matchId/bump` с `hold: true` становится долгим запросом
+(до 10 с) и отвечает `ceremony { startAt, role, serverNow }`. Без `hold` — ответ байт в байт прежний: старые
+сборки iOS и закешированный Mini App не замечают выката. Пользователей удержания до выхода новых клиентов нет.
+
+**Проверка после выката:**
+- `pm2 logs gennety-bot --lines 50 --nostream` — без ошибок `[bump-ceremony]` / `[date-bump]` на старте.
+- Живой смоук (нужна назначенная пара в окне T-15м…T+2ч у заведения — обычно проверяется на свидании
+  основателя): два удержания в пределах 10 с → оба ответа с одинаковым `ceremony.startAt`, роли `A`/`B`;
+  одиночное удержание → через ~10 с `{ ok: true, verified: false, deck: null }`; колода появляется в
+  `GET /v1/date/state` через несколько секунд после подтверждения.
+- Регрессия встряхивания: `pnpm --filter @gennety/bot exec vitest run src/public/date-bump-api.test.ts
+  src/services/date-bump.test.ts` зелёные на выкатываемом коммите.
+
+**Откат:** `git revert` коммита + рестарт бота; данных не пишет ничего нового, откатывать в БД нечего.
+**Демо:** не затронуто — демо не входит в `DATE_BUMP_PENDING`, удержание получает `too-early`.
+**iOS:** клиент переходит на удержание по фазе 5 плана `docs/architecture/meet-ceremony-plan.md` (репо iOS);
+спека — `hold`, `BumpCeremony`, `ceremony` в `openapi/gennety-v1.yaml`. Таймаут запроса клиента > 10 с.
+
+---
+
 **PENDING — время свидания: пятичасовой запас + Live Activity `time_agreement` (2026-09-23, на ствол посажено 2026-09-26).**
 Ветка `time-agreement` посажена на ствол 2026-09-26: коммиты «feat(db): time_agreement_activities …»
 (таблица + миграция), «feat(scheduler): the five-hour rule, and the `time_agreement` lock-screen card»

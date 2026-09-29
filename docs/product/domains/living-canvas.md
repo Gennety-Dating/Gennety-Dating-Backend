@@ -84,6 +84,47 @@ coordinates are inside `BUMP_VENUE_RADIUS_M` (100 m) of the venue, inside the
 window that opens at `DATE_BUMP_OPENS_MINUTES` (15) before `agreedTime` and
 closes `DATE_BUMP_GRACE_HOURS` (2) after it. `POST /v1/dates/:matchId/bump`.
 
+**Since 2026-09-29 the gesture can be a HOLD** (`hold: true` in the body) —
+the meeting ceremony, where the mascot leaves one phone and lands on the other
+at the same moment on both screens. Same checks, same refusals, same
+compare-and-set; what changes is only how the answer is timed:
+
+- **The server's clock, not the device's.** Both holds are live requests, so
+  the body's `at` is ignored and the stamp is the server's `now`.
+- **The first hold waits for the second.** A hold that does not complete the
+  pair keeps its request open up to `BUMP_HOLD_WAIT_MS` (= `BUMP_SHAKE_WINDOW_MS`,
+  10 s: past that the partner's hold could no longer align with it anyway).
+  The wake-up is an in-process event fired by `verifyBump` the moment its
+  compare-and-set commits (the bot is one process); a 250 ms poll of the
+  `DateBumpSession` row is the fallback; the client closing the connection
+  ends the wait. Nothing is held open meanwhile — no transaction, no
+  connection. Timed out → the old `verified: false`.
+- **One start, two roles.** A verified hold answers
+  `ceremony: { startAt, role, serverNow }`. `startAt` = `verifiedAt` +
+  `BUMP_CEREMONY_LEAD_MS` (900 ms) on the server's clock — the same instant for
+  both phones. `role` is `B` for the side whose shake stamp equals
+  `verifiedAt` (its call completed the pair) and `A` for the side that waited;
+  the mascot jumps from A to B. Both are derived from existing columns
+  (`services/bump-ceremony.ts`), so **the schema did not change**. A same-
+  millisecond tie falls back to the match's own sides so the phones never
+  agree on one role; a hold never writes to an already verified pair, so a
+  retry cannot flip its own role.
+- **No replays.** A repeated hold on a verified pair still gets `ceremony`
+  until `startAt` + `BUMP_CEREMONY_REPLAY_MS` (4 s) — a long-poll dropped by
+  the network and retried — and never after.
+- **The deck is not awaited.** The verifying hold answers at once with
+  `deck: null`; the deck and the announcement run after the response, and both
+  sides read the deck from `/v1/date/state` (below).
+
+**The shake still works, unchanged**, for old iOS builds and a cached Mini App:
+without `hold`, the route answers exactly as before, deck awaited. A mixed pair
+— one side holding, the other shaking — verifies as before; only the holding
+side sees the ceremony, as `A` if the shake completed the pair. There is no
+realtime channel: the long-poll covers the one moment in the date where speed
+matters. Demo mode is unaffected — the demo can never reach
+`DATE_BUMP_PENDING` (`demo-mode.md`), and a hold is refused `too-early` there
+exactly like a shake.
+
 **Verification is the only event that does anything**, and everything it does
 rides one compare-and-set: `isVerified`, `Profile.reliabilityScore += 50` for
 both, `Match.dateAttendedA/B = true`, one bonus Date Ticket each, and the
@@ -134,7 +175,8 @@ countdown button can never name different hours for one pitch.
 
 **Both sides read the deck from `/v1/date/state`, not from the bump response.**
 Only one of the two shakes completes the pair, so only one call can answer with
-a deck; the side that shook first would otherwise have the topics as
+a deck — and a hold answers with none at all, because the deck is generated
+after its response; the side that shook first would otherwise have the topics as
 notification text and nothing else — while the notification is deliberately the
 half that says the thing HAPPENED, and the app is the half that draws it. The
 state endpoint resolves the caller's own side, so no client is ever handed its
@@ -297,7 +339,10 @@ Date Terminal (2026-09-11) is the first entry point: its own Mini App page,
 existing `Ticket3D` card, which links on to `canvas.html` ("Map"). **Contact
 Sync is only the UI name for the Date Bump gesture** — nothing new on the
 server: the page reads `GET /v1/date/state` and posts
-`POST /v1/dates/:matchId/bump` over `initData`, like the canvas.
+`POST /v1/dates/:matchId/bump` over `initData`, like the canvas. The server
+accepts a HOLD there since 2026-09-29 (§6.2); **the terminal still shakes** —
+its switch to the hold and the meeting ceremony lands in a separate Mini App
+commit, and until then everything below describes the shake.
 
 **Two ways in.**
 

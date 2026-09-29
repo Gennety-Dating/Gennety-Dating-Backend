@@ -4156,6 +4156,17 @@ paths:
         `verified` is the state of the PAIR, not of this call: the partner's own
         shake also answers true. `deck` is returned only to the call that
         actually completed the pair.
+
+
+        **`hold: true` (added 2026-09-29) is the meeting ceremony's gesture.**
+        Same checks and refusals; three differences. The time is the SERVER's
+        (`at` is ignored). A hold that does not complete the pair is a
+        long-poll: it waits up to 10 s (`BUMP_HOLD_WAIT_MS`) for the partner
+        and answers the moment the pair verifies, or `verified: false` when the
+        wait runs out — so a client's request timeout must exceed 10 s. A
+        verified answer to a hold carries `ceremony` and `deck: null`: the deck
+        is generated after the response, and both sides read it from
+        `GET /v1/date/state`. Without `hold` the answer is exactly as before.
       parameters:
         - $ref: "#/components/parameters/MatchId"
       requestBody:
@@ -4171,10 +4182,20 @@ paths:
                 at:
                   type: string
                   format: date-time
-                  description: When the device registered the shake. Omitted = now.
+                  description: >
+                    When the device registered the shake. Omitted = now.
+                    Ignored for a hold.
+                hold:
+                  type: boolean
+                  description: >
+                    `true` = the gesture is a HOLD (meeting ceremony,
+                    2026-09-29): server-clock timestamp, long-poll for the
+                    partner up to 10 s, `ceremony` in the verified answer, deck
+                    not awaited. Only the literal `true` counts; absent or
+                    anything else is the old shake, answered exactly as before.
       responses:
         "200":
-          description: Shake recorded
+          description: Shake or hold recorded
           content:
             application/json:
               schema:
@@ -4185,6 +4206,16 @@ paths:
                   verified: { type: boolean }
                   deck:
                     $ref: "#/components/schemas/BumpDeck"
+                  ceremony:
+                    $ref: "#/components/schemas/BumpCeremony"
+                    description: >
+                      Only in an answer to a `hold`, only when `verified` is
+                      true, and only while the scene is still worth playing:
+                      the call that verified the pair, a hold woken by the
+                      partner's verification, and a repeated hold on a pair
+                      already verified until 4 s after `startAt` (a dropped
+                      long-poll retried). Absent otherwise — the ceremony is
+                      never replayed, and a shake never gets one.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
@@ -6089,6 +6120,39 @@ components:
             only field here that could be read as "they are there and you are
             not", which is the class of claim the radar's masking exists to
             prevent.
+
+    BumpCeremony:
+      type: object
+      required: [startAt, role, serverNow]
+      description: >
+        The meeting ceremony both phones play together (2026-09-29). Both sides
+        of a pair of holds receive the same `startAt`; each gets its own
+        `role`. The frame to draw is a function of (server time now −
+        `startAt`), with the server time estimated from `serverNow` and the
+        client's own offset to the server clock. A late answer joins the scene
+        at the right frame; one past the end shows the final state.
+      properties:
+        startAt:
+          type: string
+          format: date-time
+          description: >
+            When the scene starts, on the SERVER's clock — verification plus
+            900 ms (`BUMP_CEREMONY_LEAD_MS`).
+        role:
+          type: string
+          description: >
+            `A` or `B`. `A` is the side that waited, `B` the side whose hold
+            completed the pair — the mascot leaves A's phone and lands on B's.
+            Not the match's userA/userB. A documented string rather than an
+            `enum`, like the other state fields here: an `enum` becomes a
+            closed Swift type that throws on an unknown value, so treat any
+            other value as `A`.
+        serverNow:
+          type: string
+          format: date-time
+          description: >
+            The server's clock when this answer was written, for the client's
+            clock-offset estimate.
 
     BumpDeck:
       type: object

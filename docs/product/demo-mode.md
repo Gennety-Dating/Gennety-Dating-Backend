@@ -1000,6 +1000,11 @@ through the public route, which must not grow a demo branch — so making the
 Bump demoable means giving the demo a date that is genuinely minutes away,
 which is a change to how the demo schedules, not to how it puppets.
 
+The HOLD (2026-09-29, the meeting ceremony: `hold: true` on the same route, a
+long-poll for the partner and a common start) changes none of this. It runs
+the same window check before anything else, so a visitor's hold is refused
+`too-early` by days exactly like a shake, and no puppet ever holds.
+
 ## The Date Terminal invite is not sent here
 
 The T-45m invite and T-15m reminder that open the Date Terminal (§6.4a,
