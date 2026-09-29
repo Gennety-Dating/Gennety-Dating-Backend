@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-29 | 09-29 — экран свидания Mini App: удержание капсулы вместо встряхивания + церемония встречи (копия стенда iOS, часы по `serverNow`); **только Mini App** (`deploy-webapp.sh` + `pnpm demo:deploy`); катить вместе с ботом (`hold` + `ceremony`) или после — до выката бота работает запасной путь (сцена локально ролью B) | [pending](./pending.md) |
 | PENDING | 2026-09-29 | 09-29 — Date Bump: удержание (`hold: true`) — долгий запрос до 10 с и `ceremony { startAt, role, serverNow }` для церемонии встречи; встряхивание без изменений; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-29 | 09-29 — Mini App не закрывается вертикальным свайпом ни на одной странице (`keepOpenOnVerticalSwipe`), корень страниц не пружинит; **только Mini App** (`deploy-webapp.sh` + `pnpm demo:deploy`), без сервера, схемы и env; от порядка миграций не зависит | [pending](./pending.md) |
 | Deployed | 2026-09-28 | Единый знак Gennety по iOS: только брендовые файлы поверх `c372883f`, production/demo Mini App, бот, сайт и два аватара; четыре миграции остаются в очереди | [2026-09-28-brand](./2026-09-28-brand.md) |

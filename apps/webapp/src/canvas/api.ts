@@ -52,6 +52,21 @@ export interface BumpResponse {
    * belongs to the call that completed the pair.
    */
   deck: { topicsForA: string[]; topicsForB: string[] } | null;
+  /**
+   * Only on a HOLD (`hold: true`) that verified the pair — this call's or the
+   * partner's while this one waited (2026-09-29). Both phones start the
+   * meeting ceremony at `startAt` on the SERVER's clock; `role` says which
+   * half of the scene this phone plays (A waited, B completed the pair).
+   * Absent when the pair was verified long before this call: the scene is
+   * never replayed. A server without the long-poll never sends it.
+   */
+  ceremony?: BumpCeremony;
+}
+
+export interface BumpCeremony {
+  startAt: string;
+  role: "A" | "B";
+  serverNow: string;
 }
 
 export interface ProximityResponse extends RadarReading {
@@ -108,14 +123,22 @@ export async function postBump(
   initData: string,
   matchId: string,
   at: { lat: number; lng: number; when: Date },
+  options: { hold?: boolean } = {},
 ): Promise<BumpResponse> {
   const res = await apiFetch(`${apiBase}/v1/dates/${matchId}/bump`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...auth(initData) },
-    // The device clock is sent deliberately: the alignment check compares the
-    // two phones' own clocks, so the server cannot substitute its own — it
-    // clamps ours instead when it is implausible.
-    body: JSON.stringify({ lat: at.lat, lng: at.lng, at: at.when.toISOString() }),
+    // `hold: true` is the meeting ceremony's gesture: the server stamps its
+    // own time and keeps the request open (up to 10 s) for the partner's hold.
+    // The device clock still goes along — a server from before holds ignores
+    // `hold` and pairs the two phones by their own clocks, as for a shake,
+    // and clamps ours when it is implausible.
+    body: JSON.stringify({
+      lat: at.lat,
+      lng: at.lng,
+      at: at.when.toISOString(),
+      ...(options.hold ? { hold: true } : {}),
+    }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as BumpResponse;

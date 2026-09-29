@@ -11,7 +11,7 @@ body {
   background: #030303;
 }
 
-/* ── The glass and the wave ─────────────────────────────────────────────── */
+/* ── The glass ──────────────────────────────────────────────────────────── */
 /* NEGATIVE z-index, inside the page's own stacking context. At `z-index: 0`
    a positioned canvas paints OVER every non-positioned block of the page — the
    first build lost its whole header under the glass while the (positioned)
@@ -33,40 +33,6 @@ body {
    the dealt cards paint over its buttons. */
 .terminal-page .action-bar {
   z-index: 5;
-}
-
-/* Over the page: one masked annulus of backdrop blur per travelling wave.
-   `--r`/`--w`/`--blur` are written every frame by Shockwave.tsx. */
-.shock-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-  overflow: hidden;
-}
-.shock-ring {
-  --x: 50%;
-  --y: 50%;
-  --r: 0px;
-  --w: 30px;
-  --blur: 2px;
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.8) brightness(1.25);
-  backdrop-filter: blur(var(--blur)) saturate(1.8) brightness(1.25);
-  -webkit-mask-image: radial-gradient(
-    circle at var(--x) var(--y),
-    transparent calc(var(--r) - var(--w)),
-    #000 var(--r),
-    transparent calc(var(--r) + var(--w))
-  );
-  mask-image: radial-gradient(
-    circle at var(--x) var(--y),
-    transparent calc(var(--r) - var(--w)),
-    #000 var(--r),
-    transparent calc(var(--r) + var(--w))
-  );
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
@@ -311,6 +277,118 @@ body {
 .terminal-locked svg {
   width: 16px;
   height: 16px;
+}
+
+/* ── The hold (2026-09-29) ───────────────────────────────────────────────── */
+/* The placement drawing beside one line of instruction, above the capsule. */
+.hold-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 340px;
+}
+.hold-hint p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+}
+.hold-hint-art {
+  flex: none;
+  width: 64px;
+  height: 124px;
+  margin: -6px 0;
+}
+
+/* The stand's capsule (render.js → capsule): 56 tall, min(280, width − 80)
+   wide, the burgundy gradient — here filling left to right while held. At
+   full fill it is pixel for pixel the capsule the ceremony then draws. */
+.hold-capsule {
+  --hold: 0;
+  position: relative;
+  display: block;
+  width: min(280px, calc(100vw - 80px));
+  height: 56px;
+  margin: 0 auto;
+  padding: 0;
+  border: 0.8px solid rgba(255, 255, 255, 0.22);
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(139, 37, 59, 0.3);
+  box-shadow: 0 6px 16px rgba(79, 12, 30, 0.35);
+  color: #fff;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.hold-capsule:focus-visible {
+  outline: 2px solid rgba(226, 118, 145, 0.9);
+  outline-offset: 3px;
+}
+.hold-capsule-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #9a1f40, #4f0c1e);
+  transform-origin: left center;
+  transform: scaleX(var(--hold));
+}
+.hold-capsule[data-busy] .hold-capsule-fill {
+  transform: none;
+}
+.hold-capsule-label {
+  position: relative;
+}
+.hold-capsule.is-hidden {
+  visibility: hidden;
+}
+
+/* ── The meeting ceremony ───────────────────────────────────────────────── */
+/* Over everything, touching nothing. The veil carries the stand's defocus of
+   the screen under the scene (CeremonyOverlay writes its backdrop blur); the
+   canvas carries the wash, the capsule, the plaque and the mascot. */
+.ceremony-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 1;
+  transition-property: opacity;
+  transition-timing-function: ease;
+}
+.ceremony-layer.is-fading {
+  opacity: 0;
+}
+.ceremony-veil,
+.ceremony-canvas {
+  position: absolute;
+  inset: 0;
+}
+.terminal-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* After a ceremony the ticket is already torn: the scene was the moment, so
+   the tear does not play again — its end state, at once. */
+.terminal-page[data-settled] .ticket-card.is-torn {
+  animation: none;
+  translate: 0 -10px;
+  rotate: -1.4deg;
+}
+.terminal-page[data-settled] .ticket-stub-piece {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

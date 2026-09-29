@@ -10,8 +10,8 @@
  * The shake is NOT here any more (decision 2026-09-11). The Date Terminal
  * (`date-terminal.html`) owns Contact Sync, and the radar and bump states hand
  * the user to it, so the Mini App has one bump surface rather than two that
- * could drift; it reuses `canvas/shake.ts` and `canvas/api.ts` from here, and
- * links back to this map.
+ * could drift; it reuses `canvas/api.ts` from here, and links back to this
+ * map. (Its gesture is a hold of both phones since 2026-09-29.)
  *
  * The Scratch Map's fog is here now that it has an endpoint to fill it
  * (§Scratch Map). It is drawn only once tiles have actually arrived: a
@@ -758,8 +758,8 @@ el.scratchToggle?.addEventListener("click", () => void toggleScratch());
 // ---------------------------------------------------------------------------
 
 /**
- * Hand the user to the Date Terminal — the page that owns the shake since
- * 2026-09-11. Same origin, so a plain navigation keeps the Mini App open, and
+ * Hand the user to the Date Terminal — the page that owns the bump gesture
+ * since 2026-09-11 (a hold since 2026-09-29). Same origin, so a plain navigation keeps the Mini App open, and
  * the terminal carries a link back to this map.
  */
 function openTerminal(): void {

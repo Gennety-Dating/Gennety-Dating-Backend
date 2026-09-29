@@ -47,12 +47,12 @@ export interface CanvasStrings {
   radarPeerEnRoute: string;
   radarPeerArrived: string;
   radarBothArrived: string;
-  /** At the venue, waiting for the two shakes. */
+  /** At the venue, waiting for the two holds (the shake until 2026-09-29). */
   bumpTitle: string;
   bumpBody: string;
   /**
    * The radar and bump states hand the user to the Date Terminal, which owns
-   * the shake and both of its permissions since 2026-09-11.
+   * the gesture since 2026-09-11 — a hold of both phones since 2026-09-29.
    */
   terminalAction: string;
   bumpWaiting: string;
@@ -126,7 +126,7 @@ const en: CanvasStrings = {
   radarPeerArrived: "They're already there.",
   radarBothArrived: "You're both here ✨",
   bumpTitle: "You're at the table",
-  bumpBody: "Shake your phones together to confirm you both made it.",
+  bumpBody: "Put your phones together and hold — that's how I'll know you both made it.",
   terminalAction: "Open the Date Terminal",
   bumpWaiting: "Got yours. Waiting for the other phone.",
   inProgressTitle: "You made it ✨",
@@ -178,7 +178,7 @@ const ru: CanvasStrings = {
   radarPeerArrived: "Уже на месте.",
   radarBothArrived: "Вы оба на месте ✨",
   bumpTitle: "Ты за столиком",
-  bumpBody: "Тряхните телефоны вместе — так я пойму, что вы оба дошли.",
+  bumpBody: "Сложите телефоны вместе и удерживайте — так я пойму, что вы оба дошли.",
   terminalAction: "Открыть Date Terminal",
   bumpWaiting: "Твоё поймал. Жду второй телефон.",
   inProgressTitle: "Вы дошли ✨",
@@ -230,7 +230,7 @@ const uk: CanvasStrings = {
   radarPeerArrived: "Уже на місці.",
   radarBothArrived: "Ви обоє на місці ✨",
   bumpTitle: "Ти за столиком",
-  bumpBody: "Струсіть телефони разом — так я зрозумію, що ви обоє дійшли.",
+  bumpBody: "Складіть телефони разом і утримуйте — так я зрозумію, що ви обоє дійшли.",
   terminalAction: "Відкрити Date Terminal",
   bumpWaiting: "Твоє впіймав. Чекаю на другий телефон.",
   inProgressTitle: "Ви дійшли ✨",
@@ -283,7 +283,7 @@ const de: CanvasStrings = {
   radarPeerArrived: "Schon da.",
   radarBothArrived: "Ihr seid beide da ✨",
   bumpTitle: "Du bist am Tisch",
-  bumpBody: "Schüttelt eure Handys gemeinsam — so weiß ich, dass ihr beide da seid.",
+  bumpBody: "Legt eure Handys zusammen und haltet gedrückt — so weiß ich, dass ihr beide da seid.",
   terminalAction: "Date Terminal öffnen",
   bumpWaiting: "Deins habe ich. Warte auf das andere Handy.",
   inProgressTitle: "Ihr habt es geschafft ✨",
@@ -336,7 +336,7 @@ const pl: CanvasStrings = {
   radarPeerArrived: "Już na miejscu.",
   radarBothArrived: "Oboje jesteście na miejscu ✨",
   bumpTitle: "Jesteś przy stoliku",
-  bumpBody: "Potrząśnijcie telefonami razem — tak się dowiem, że oboje dotarliście.",
+  bumpBody: "Połóżcie telefony razem i przytrzymajcie — tak się dowiem, że oboje dotarliście.",
   terminalAction: "Otwórz Date Terminal",
   bumpWaiting: "Twoje mam. Czekam na drugi telefon.",
   inProgressTitle: "Udało się ✨",

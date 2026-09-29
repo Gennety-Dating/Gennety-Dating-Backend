@@ -340,9 +340,8 @@ existing `Ticket3D` card, which links on to `canvas.html` ("Map"). **Contact
 Sync is only the UI name for the Date Bump gesture** — nothing new on the
 server: the page reads `GET /v1/date/state` and posts
 `POST /v1/dates/:matchId/bump` over `initData`, like the canvas. The server
-accepts a HOLD there since 2026-09-29 (§6.2); **the terminal still shakes** —
-its switch to the hold and the meeting ceremony lands in a separate Mini App
-commit, and until then everything below describes the shake.
+accepts a HOLD there since 2026-09-29 (§6.2), and the terminal holds since the
+same day (below): the shake is gone from the Mini App.
 
 **Two ways in.**
 
@@ -353,30 +352,68 @@ commit, and until then everything below describes the shake.
   in §Phase 4.
 - **The canvas.** In `DATE_RADAR_ACTIVE` and `DATE_BUMP_PENDING` the Mini App
   canvas's sheet action is "Open the Date Terminal" — also after this side has
-  already shaken, because the two shakes must land within 10 s of each other,
-  so shaking again together is legitimate. The Mini App canvas no longer reads
-  motion itself; the iOS native canvas is unchanged and keeps its own shake.
+  already bumped, because the two bumps must land within 10 s of each other,
+  so going again together is legitimate. The Mini App canvas no longer reads
+  motion itself; the iOS native canvas keeps its own gesture (its move to the
+  same hold is the iOS half of the meeting-ceremony plan).
 
 **The lock mirrors the server; it does not replace it.** Contact Sync is usable
 only while the state is `DATE_BUMP_PENDING` (T-15m … T+2h) AND the phone's own
 GPS (`navigator.geolocation.watchPosition`) puts it within 100 m of the venue —
 the client's copy of `BUMP_VENUE_RADIUS_M`. The screen shows "Arrival at
 {venue}: X m" with an arrival ring, and **nothing about the partner**, the same
-rule as a single shake in §6.2. The server still re-checks everything on every
+rule as a single bump in §6.2. The server still re-checks everything on every
 post.
 
-**Motion and haptics.** `DeviceMotionEvent` permission is requested from a tap
-(iOS delivers no motion without a gesture). Every shake impulse fires
-`Telegram.WebApp.HapticFeedback.impactOccurred("medium")` and a "Liquid Glass
-Shockwave" — a canvas refraction of the dark glass plus a masked
-`backdrop-filter` ring over the page; every full shake — as §6.4's detector
-(`canvas/shake.ts`) counts it — posts the bump.
+**The gesture is a hold (2026-09-29; a shake until then).** In `ready` the
+action bar shows the stand's placement drawing (two phones top edge to top
+edge, camera to camera), one line — "Put the phones top edge to top edge and
+hold" — and the stand's burgundy capsule. Each person holds it for 0.6 s (it
+fills left to right; `impactOccurred("light")` on touch); at the mark the hold
+is posted to `POST /v1/dates/:id/bump` with `hold: true` (plus the device `at`,
+which a server without holds pairs on, as for a shake). Lifting the finger
+before the mark cancels; after it, nothing does — the phase is `waiting`, the
+server keeps the request open up to 10 s for the partner's hold, and GPS
+jitter at the 100 m edge no longer drops the screen out of it. The waiting
+capsule reads "Waiting for your date…" with the stand's running sheen (the
+screen's one infinite motion, a loading state); the partner's name is not on
+this screen. No motion permission is asked any more; `canvas/shake.ts` is gone.
 
-**A mutual sync tears the ticket.** When the server confirms the pair:
-`impactOccurred("rigid")` + `notificationOccurred("success")`, the ticket tears
-along its perforation (`--perf-y`), and the at-the-table icebreaker deck
-(`match.deck` from `/v1/date/state`, §6.2) slides out. Opened after the sync,
-the page shows the torn ticket and the deck silently.
+**The meeting ceremony replaces the tear.** A hold that verifies the pair — this
+one, or the partner's while this one waited — answers `ceremony: { startAt,
+role, serverNow }`, and both phones play the approved stand
+(`design/meet-ceremony` in the iOS repo) at `startAt` on the server's clock:
+on A (the side that waited) the mascot gathers out of the capsule, looks up
+at the partner's phone, crouches and leaps off, growing and dissolving; on B
+it appears out of the air, falls onto the glass, glances up at the other
+phone, winks and becomes the mark of the plaque "Meeting confirmed · The next
+ticket is on me" (both phones end on it). The terminal dims and defocuses
+under the scene.
+
+- **The motion is the stand's, not a re-creation:** `date-terminal/ceremony/`
+  holds a verbatim copy of `ceremony.js` and the needed part of `render.js`,
+  held to a subset of the iOS parity fixture by a test. A Telegram viewport is
+  described to the stand as `{ w, h, mm ≈ 0.16 mm per CSS px, home = bottom
+  safe inset }`; the scene's capsule stands where the finger held it (the
+  stand's own capsule sits at 74 % of the height on the iOS sheet).
+- **Clock:** the offset to the server comes from `serverNow` in
+  `/v1/date/state`, NTP-style (shortest round trip of the last 8; two quick
+  reads while the capsule fills). A phone that heard late enters mid-scene;
+  after the end it shows the final plaque.
+- **Haptics** follow the stand's beats for the phone's role: launch →
+  `impact soft` then `light` 80 ms later; landing → `impact rigid`; plaque →
+  `notification success`. `prefers-reduced-motion` gets the stand's reduced
+  branch (the mascot fades in and smiles, no flight).
+- **Degrade path.** A server without the long-poll sends no `ceremony`. When
+  the terminal learns of the sync from a state read after having seen the date
+  unverified, and no scene has played, it plays the scene locally as B from
+  "now" — out of step with the other phone, but complete. A read never starts
+  it while a hold is still with the server, and it never plays twice.
+- **After the scene** the torn ticket (already torn, the tear does not play)
+  and the at-the-table icebreaker deck (`match.deck` from `/v1/date/state`,
+  §6.2). The shockwave, the `rigid` + `success` climax and the tear as the
+  climax are gone. Opened after the sync, the page shows the torn ticket and
+  the deck silently, as before.
 
 **Always dark.** The page is dark in both themes, locks orientation and disables
 vertical swipes while it is open.

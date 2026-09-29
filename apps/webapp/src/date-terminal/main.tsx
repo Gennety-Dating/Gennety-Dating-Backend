@@ -18,8 +18,9 @@ if (tg?.isVersionAtLeast?.("8.0")) {
     // Older client — expand() above already maximised the height.
   }
 }
-// A screen you SHAKE: without the lock the shake itself rotates the WebView
-// (the swipe-to-close that would drag the sheet down is already off above).
+// A screen laid flat on a table (the hold, then the meeting ceremony, which is
+// planned on this viewport): without the lock a phone put down rotates the
+// WebView mid-scene (swipe-to-close is already off above).
 tg?.lockOrientation?.();
 wireContentInsets(tg);
 // Dark glass in both themes (see date-terminal.html), so the chrome is dark too.

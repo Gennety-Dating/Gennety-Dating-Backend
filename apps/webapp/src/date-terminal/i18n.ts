@@ -5,7 +5,7 @@
  * depend on `@gennety/shared`. Held to the two product-wide voice rules the
  * canvas table states: the bot refers to ITSELF in the masculine where the
  * language inflects it («поймал», «впіймав»), and it says «ты» to the user —
- * «вы» only where it genuinely means the two of them («тряхните вместе»).
+ * «вы» only where it genuinely means the two of them («удерживайте вместе»).
  * "Date Terminal" and "Contact Sync" are product names and stay in English.
  */
 
@@ -18,7 +18,8 @@ export interface TerminalStrings {
   titleEarly: string;
   titleApproach: string;
   titleReady: string;
-  titleArmed: string;
+  /** A hold is in; the server is waiting for the other phone. */
+  titleWaiting: string;
   titleSynced: string;
   titleClosed: string;
   titleNoVenue: string;
@@ -26,9 +27,14 @@ export interface TerminalStrings {
   subEarly: string;
   subApproach: string;
   subReady: string;
-  subArmed: string;
-  /** This phone's shake is in; the other one's is not (yet, or not in time). */
+  /** This phone's hold is in; the server is waiting for the other one. */
   subWaiting: string;
+  /**
+   * The hold came back unpaired. Worded for both servers: the long-poll one
+   * (the partner did not hold within 10 s) and the pre-deploy one that answers
+   * at once — where the partner's hold may still complete the pair.
+   */
+  subAlone: string;
   subSynced: string;
   subClosed: string;
   subNoVenue: string;
@@ -41,9 +47,7 @@ export interface TerminalStrings {
   inRange: string;
   geoDenied: string;
   geoUnavailable: string;
-  motionDenied: string;
-  motionUnsupported: string;
-  /** The SERVER refused the shake as too far — said with its own radius. */
+  /** The SERVER refused the hold as too far — said with its own radius. */
   tooFar: string;
   tooEarly: string;
   offline: string;
@@ -53,7 +57,17 @@ export interface TerminalStrings {
    * `offline`, which promises that retrying will get through (A13-M31).
    */
   reopenFromChat: string;
-  activate: string;
+  /** Beside the placement drawing, above the hold capsule. */
+  holdHint: string;
+  /** On the capsule itself. */
+  holdLabel: string;
+  /** The waiting capsule — the partner's name is not on this screen. */
+  ceremonyWaiting: string;
+  /** The capsule of the phone whose hold completed the pair, until the scene starts. */
+  ceremonyReady: string;
+  /** The plaque the scene ends on (the stand's «Встреча подтверждена»). */
+  ceremonyTitle: string;
+  ceremonySub: string;
   locked: string;
   retryLocation: string;
   openMap: string;
@@ -69,15 +83,15 @@ const en: TerminalStrings = {
   titleEarly: "Your date is at {time}",
   titleApproach: "Head to the place",
   titleReady: "You're here",
-  titleArmed: "Shake together",
+  titleWaiting: "Hold together",
   titleSynced: "Contact Sync ✓",
   titleClosed: "This terminal is closed",
   titleNoVenue: "Contact Sync is off",
   subEarly: "Contact Sync opens at {time}, within {radius} m of the place.",
   subApproach: "Contact Sync unlocks within {radius} m of the place.",
-  subReady: "Turn on Contact Sync, then shake your phones together.",
-  subArmed: "Hold both phones and shake them at the same moment.",
-  subWaiting: "Got yours. Now shake together with the other phone.",
+  subReady: "Contact Sync is open — confirm the meeting together.",
+  subWaiting: "Got yours — now the other phone holds too.",
+  subAlone: "Got yours. If the other phone missed it, hold together once more.",
   subSynced: "The date's on me — your next ticket is free. Something to talk about:",
   subClosed: "It opens on the day of a date. Your chat has the details.",
   subNoVenue: "I can't pin this date's place precisely, so there's nothing to sync against.",
@@ -89,13 +103,16 @@ const en: TerminalStrings = {
   inRange: "You're within {radius} m",
   geoDenied: "I need your location to open Contact Sync — allow it and try again.",
   geoUnavailable: "Your phone isn't giving me a location yet. Step outside for a moment.",
-  motionDenied: "I need motion access for this — allow it in your browser settings.",
-  motionUnsupported: "This phone can't feel a shake. The date is still on — enjoy it.",
-  tooFar: "The server sees you more than {radius} m from the place. Get a little closer and shake again.",
+  tooFar: "The server sees you more than {radius} m from the place. Get a little closer and hold again.",
   tooEarly: "Not yet — Contact Sync opens at {time}.",
   offline: "Can't reach me right now. Trying again.",
   reopenFromChat: "This session has expired. Open the Date Terminal again from the chat.",
-  activate: "Turn on Contact Sync",
+  holdHint: "Put the phones top edge to top edge and hold.",
+  holdLabel: "Hold",
+  ceremonyWaiting: "Waiting for your date…",
+  ceremonyReady: "Ready",
+  ceremonyTitle: "Meeting confirmed",
+  ceremonySub: "The next ticket is on me",
   locked: "Contact Sync locked",
   retryLocation: "Allow location",
   openMap: "Map",
@@ -110,15 +127,15 @@ const ru: TerminalStrings = {
   titleEarly: "Свидание в {time}",
   titleApproach: "Иди к месту",
   titleReady: "Ты на месте",
-  titleArmed: "Тряхните вместе",
+  titleWaiting: "Удерживайте вместе",
   titleSynced: "Contact Sync ✓",
   titleClosed: "Терминал закрыт",
   titleNoVenue: "Contact Sync выключен",
   subEarly: "Contact Sync откроется в {time}, в радиусе {radius} м от места.",
   subApproach: "Contact Sync разблокируется в радиусе {radius} м от места.",
-  subReady: "Включи Contact Sync — и тряхните телефоны вместе.",
-  subArmed: "Возьмите оба телефона и тряхните их одновременно.",
-  subWaiting: "Твоё поймал. Теперь тряхните вместе со вторым телефоном.",
+  subReady: "Contact Sync открыт — подтвердите встречу вдвоём.",
+  subWaiting: "Твоё поймал — теперь пусть удержит второй телефон.",
+  subAlone: "Твоё поймал. Если второй телефон не успел — удерживайте вместе ещё раз.",
   subSynced: "Свидание засчитано, билет на следующее — от меня. О чём поговорить:",
   subClosed: "Он открывается в день свидания. Все детали — в чате.",
   subNoVenue: "Не могу точно отметить место этого свидания, так что синхронизировать не с чем.",
@@ -130,13 +147,16 @@ const ru: TerminalStrings = {
   inRange: "Ты в радиусе {radius} м",
   geoDenied: "Мне нужна твоя геолокация, чтобы открыть Contact Sync — разреши её и попробуй ещё раз.",
   geoUnavailable: "Телефон пока не отдаёт геолокацию. Выйди на секунду на открытое место.",
-  motionDenied: "Нужен доступ к движению — разреши его в настройках браузера.",
-  motionUnsupported: "Этот телефон не чувствует тряску. Свидание от этого не хуже — наслаждайся.",
-  tooFar: "Сервер видит тебя дальше {radius} м от места. Подойди чуть ближе и тряхни ещё раз.",
+  tooFar: "Сервер видит тебя дальше {radius} м от места. Подойди чуть ближе и удержи ещё раз.",
   tooEarly: "Ещё рано — Contact Sync откроется в {time}.",
   offline: "Не достучаться до меня. Пробую снова.",
   reopenFromChat: "Сессия устарела. Открой Date Terminal заново из чата.",
-  activate: "Включить Contact Sync",
+  holdHint: "Положите телефоны верхними краями друг к другу и удерживайте.",
+  holdLabel: "Удерживай",
+  ceremonyWaiting: "Ждём партнёра…",
+  ceremonyReady: "Готово",
+  ceremonyTitle: "Встреча подтверждена",
+  ceremonySub: "Следующий билет — за мной",
   locked: "Contact Sync заблокирован",
   retryLocation: "Разрешить геолокацию",
   openMap: "Карта",
@@ -151,15 +171,15 @@ const uk: TerminalStrings = {
   titleEarly: "Побачення о {time}",
   titleApproach: "Прямуй до місця",
   titleReady: "Ти на місці",
-  titleArmed: "Струсіть разом",
+  titleWaiting: "Утримуйте разом",
   titleSynced: "Contact Sync ✓",
   titleClosed: "Термінал закрито",
   titleNoVenue: "Contact Sync вимкнено",
   subEarly: "Contact Sync відкриється о {time}, у радіусі {radius} м від місця.",
   subApproach: "Contact Sync розблокується у радіусі {radius} м від місця.",
-  subReady: "Увімкни Contact Sync — і струсіть телефони разом.",
-  subArmed: "Візьміть обидва телефони й струсіть їх одночасно.",
-  subWaiting: "Твоє впіймав. Тепер струсіть разом із другим телефоном.",
+  subReady: "Contact Sync відкрито — підтвердьте зустріч удвох.",
+  subWaiting: "Твоє впіймав — тепер хай утримає другий телефон.",
+  subAlone: "Твоє впіймав. Якщо другий телефон не встиг — утримуйте разом ще раз.",
   subSynced: "Побачення зараховано, квиток на наступне — від мене. Про що поговорити:",
   subClosed: "Він відкривається в день побачення. Усі деталі — в чаті.",
   subNoVenue: "Не можу точно позначити місце цього побачення, тож синхронізувати нема з чим.",
@@ -171,13 +191,16 @@ const uk: TerminalStrings = {
   inRange: "Ти в радіусі {radius} м",
   geoDenied: "Мені потрібна твоя геолокація, щоб відкрити Contact Sync — дозволь її і спробуй ще раз.",
   geoUnavailable: "Телефон поки не віддає геолокацію. Вийди на секунду на відкрите місце.",
-  motionDenied: "Потрібен доступ до руху — дозволь його в налаштуваннях браузера.",
-  motionUnsupported: "Цей телефон не відчуває струсу. Побачення від цього не гірше — насолоджуйся.",
-  tooFar: "Сервер бачить тебе далі ніж за {radius} м від місця. Підійди трохи ближче і струсни ще раз.",
+  tooFar: "Сервер бачить тебе далі ніж за {radius} м від місця. Підійди трохи ближче і утримай ще раз.",
   tooEarly: "Ще зарано — Contact Sync відкриється о {time}.",
   offline: "Не достукатися до мене. Пробую знову.",
   reopenFromChat: "Сесія застаріла. Відкрий Date Terminal знову з чату.",
-  activate: "Увімкнути Contact Sync",
+  holdHint: "Покладіть телефони верхніми краями один до одного й утримуйте.",
+  holdLabel: "Утримуй",
+  ceremonyWaiting: "Чекаємо партнера…",
+  ceremonyReady: "Готово",
+  ceremonyTitle: "Зустріч підтверджено",
+  ceremonySub: "Наступний квиток — за мною",
   locked: "Contact Sync заблоковано",
   retryLocation: "Дозволити геолокацію",
   openMap: "Мапа",
@@ -192,15 +215,15 @@ const de: TerminalStrings = {
   titleEarly: "Dein Date um {time}",
   titleApproach: "Auf zum Treffpunkt",
   titleReady: "Du bist da",
-  titleArmed: "Gemeinsam schütteln",
+  titleWaiting: "Gemeinsam halten",
   titleSynced: "Contact Sync ✓",
   titleClosed: "Dieses Terminal ist geschlossen",
   titleNoVenue: "Contact Sync ist aus",
   subEarly: "Contact Sync öffnet um {time}, im Umkreis von {radius} m um den Ort.",
   subApproach: "Contact Sync wird im Umkreis von {radius} m um den Ort freigeschaltet.",
-  subReady: "Schalte Contact Sync ein — dann schüttelt eure Handys gemeinsam.",
-  subArmed: "Nehmt beide Handys und schüttelt sie im selben Moment.",
-  subWaiting: "Deins habe ich. Jetzt gemeinsam mit dem anderen Handy schütteln.",
+  subReady: "Contact Sync ist offen — bestätigt euer Treffen gemeinsam.",
+  subWaiting: "Deins habe ich — jetzt hält das andere Handy auch.",
+  subAlone: "Deins habe ich. Hat das andere Handy es verpasst, haltet noch einmal gemeinsam.",
   subSynced: "Das Date geht auf mich — dein nächstes Ticket ist frei. Worüber ihr reden könnt:",
   subClosed: "Es öffnet sich am Tag eines Dates. Alle Details stehen im Chat.",
   subNoVenue: "Ich kann den Ort dieses Dates nicht genau verorten, also gibt es nichts zu synchronisieren.",
@@ -212,13 +235,16 @@ const de: TerminalStrings = {
   inRange: "Du bist im Umkreis von {radius} m",
   geoDenied: "Ich brauche deinen Standort, um Contact Sync zu öffnen — erlaube ihn und versuch es noch mal.",
   geoUnavailable: "Dein Handy liefert noch keinen Standort. Geh kurz ins Freie.",
-  motionDenied: "Dafür brauche ich Bewegungszugriff — erlaube ihn in den Browsereinstellungen.",
-  motionUnsupported: "Dieses Handy spürt kein Schütteln. Das Date findet trotzdem statt — genieß es.",
-  tooFar: "Der Server sieht dich weiter als {radius} m vom Ort entfernt. Geh ein Stück näher und schüttel noch mal.",
+  tooFar: "Der Server sieht dich weiter als {radius} m vom Ort entfernt. Geh ein Stück näher und halte noch mal.",
   tooEarly: "Noch nicht — Contact Sync öffnet um {time}.",
   offline: "Ich bin gerade nicht erreichbar. Versuche es erneut.",
   reopenFromChat: "Diese Sitzung ist abgelaufen. Öffne das Date Terminal erneut aus dem Chat.",
-  activate: "Contact Sync einschalten",
+  holdHint: "Legt die Handys mit den Oberkanten aneinander und haltet gedrückt.",
+  holdLabel: "Gedrückt halten",
+  ceremonyWaiting: "Warte auf dein Date…",
+  ceremonyReady: "Bereit",
+  ceremonyTitle: "Treffen bestätigt",
+  ceremonySub: "Das nächste Ticket geht auf mich",
   locked: "Contact Sync gesperrt",
   retryLocation: "Standort erlauben",
   openMap: "Karte",
@@ -233,15 +259,15 @@ const pl: TerminalStrings = {
   titleEarly: "Randka o {time}",
   titleApproach: "Idź na miejsce",
   titleReady: "Jesteś na miejscu",
-  titleArmed: "Potrząśnijcie razem",
+  titleWaiting: "Przytrzymajcie razem",
   titleSynced: "Contact Sync ✓",
   titleClosed: "Ten terminal jest zamknięty",
   titleNoVenue: "Contact Sync jest wyłączony",
   subEarly: "Contact Sync otworzy się o {time}, w promieniu {radius} m od miejsca.",
   subApproach: "Contact Sync odblokuje się w promieniu {radius} m od miejsca.",
-  subReady: "Włącz Contact Sync — i potrząśnijcie razem telefonami.",
-  subArmed: "Weźcie oba telefony i potrząśnijcie nimi w tej samej chwili.",
-  subWaiting: "Twoje mam. Teraz potrząśnijcie razem z drugim telefonem.",
+  subReady: "Contact Sync jest otwarty — potwierdźcie spotkanie we dwoje.",
+  subWaiting: "Twoje mam — teraz niech przytrzyma drugi telefon.",
+  subAlone: "Twoje mam. Jeśli drugi telefon nie zdążył, przytrzymajcie razem jeszcze raz.",
   subSynced: "Randka zaliczona, bilet na następną ode mnie. O czym pogadać:",
   subClosed: "Otwiera się w dniu randki. Wszystkie szczegóły są w czacie.",
   subNoVenue: "Nie mogę dokładnie wskazać miejsca tej randki, więc nie ma z czym synchronizować.",
@@ -253,13 +279,16 @@ const pl: TerminalStrings = {
   inRange: "Jesteś w promieniu {radius} m",
   geoDenied: "Potrzebuję twojej lokalizacji, żeby otworzyć Contact Sync — zezwól na nią i spróbuj ponownie.",
   geoUnavailable: "Telefon nie podaje jeszcze lokalizacji. Wyjdź na chwilę na otwartą przestrzeń.",
-  motionDenied: "Potrzebuję dostępu do ruchu — zezwól na niego w ustawieniach przeglądarki.",
-  motionUnsupported: "Ten telefon nie wyczuwa potrząśnięcia. Randka i tak trwa — baw się dobrze.",
-  tooFar: "Serwer widzi cię dalej niż {radius} m od miejsca. Podejdź trochę bliżej i potrząśnij jeszcze raz.",
+  tooFar: "Serwer widzi cię dalej niż {radius} m od miejsca. Podejdź trochę bliżej i przytrzymaj jeszcze raz.",
   tooEarly: "Jeszcze nie — Contact Sync otworzy się o {time}.",
   offline: "Nie mogę się teraz połączyć. Próbuję ponownie.",
   reopenFromChat: "Sesja wygasła. Otwórz Date Terminal ponownie z czatu.",
-  activate: "Włącz Contact Sync",
+  holdHint: "Połóżcie telefony górnymi krawędziami do siebie i przytrzymajcie.",
+  holdLabel: "Przytrzymaj",
+  ceremonyWaiting: "Czekamy na twoją randkę…",
+  ceremonyReady: "Gotowe",
+  ceremonyTitle: "Spotkanie potwierdzone",
+  ceremonySub: "Następny bilet stawiam ja",
   locked: "Contact Sync zablokowany",
   retryLocation: "Zezwól na lokalizację",
   openMap: "Mapa",

@@ -1,19 +1,19 @@
 /**
  * The Date Terminal's decisions — pure, so they are tested without a browser,
- * a GPS fix or a phone to shake (the same split `canvas/sheet.ts` makes).
+ * a GPS fix or a finger on the glass (the same split `canvas/sheet.ts` makes).
  *
  * The terminal is ONE ticket for one date, reading the same `/v1/date/state`
  * the canvas reads. What it adds on top is the lock the product asks for:
  * Contact Sync stays shut until the server's window is open AND this phone is
  * within `GEOFENCE_RADIUS_M` of the venue. The server re-checks both on every
- * shake (`POST /v1/dates/:id/bump`); the client lock exists so a couple is
- * never invited to shake at a moment the server would refuse.
+ * hold (`POST /v1/dates/:id/bump`); the client lock exists so a couple is
+ * never invited to hold at a moment the server would refuse.
  */
 
 import type { CanvasState } from "../canvas/sheet.js";
 
 /**
- * How close to the venue a shake must be, in metres. MIRRORS
+ * How close to the venue a hold must be, in metres. MIRRORS
  * `BUMP_VENUE_RADIUS_M` (`packages/shared/src/date-lifecycle.ts`) —
  * `apps/webapp` deliberately does not depend on `@gennety/shared`. A drift
  * here can never grant a sync (the server checks its own constant), but a lock
@@ -22,10 +22,10 @@ import type { CanvasState } from "../canvas/sheet.js";
  */
 export const GEOFENCE_RADIUS_M = 100;
 
-/** MIRRORS `DATE_BUMP_OPENS_MINUTES` — when the server starts accepting a shake. */
+/** MIRRORS `DATE_BUMP_OPENS_MINUTES` — when the server starts accepting a hold. */
 export const SYNC_OPENS_MINUTES = 15;
 
-/** A position older than this is re-read before a shake is posted. */
+/** A position older than this is re-read before a hold is posted. */
 export const FIX_MAX_AGE_MS = 20_000;
 
 /** Distances are shown rounded UP to this step, so GPS jitter does not flicker. */
@@ -53,8 +53,6 @@ export function withinGeofence(distanceM: number | null): boolean {
   return distanceM !== null && distanceM <= GEOFENCE_RADIUS_M;
 }
 
-export type MotionStatus = "idle" | "armed" | "denied" | "unsupported";
-
 export type TerminalPhase =
   /** Not this date (a stale button), or the date is over. */
   | "closed"
@@ -64,10 +62,10 @@ export type TerminalPhase =
   | "early"
   /** Window open; this phone is not within the geofence (or has no fix yet). */
   | "approach"
-  /** Window open and within the geofence; motion not armed yet. */
+  /** Window open and within the geofence: the hold capsule is live. */
   | "ready"
-  /** Listening for the shake. */
-  | "armed"
+  /** A hold is in: the server is waiting for the other phone (up to 10 s). */
+  | "waiting"
   /** Server-confirmed mutual sync. */
   | "synced";
 
@@ -80,7 +78,11 @@ export interface TerminalInput {
   venue: LatLng | null;
   bumpVerified: boolean;
   distanceM: number | null;
-  motion: MotionStatus;
+  /**
+   * A hold has been sent and not answered yet, or its ceremony has not
+   * finished playing. The screen stays on the hold until the scene is over.
+   */
+  holding: boolean;
 }
 
 const OPEN_STATES: ReadonlySet<CanvasState> = new Set<CanvasState>([
@@ -99,18 +101,32 @@ export function terminalPhase(input: TerminalInput): TerminalPhase {
   if (input.bumpVerified || input.state === "DATE_IN_PROGRESS") return "synced";
   if (input.venue === null) return "no-venue-point";
   if (input.state !== "DATE_BUMP_PENDING") return "early";
+  // A hold in flight outranks the GPS: the request is already with the server,
+  // which decides on its own fix. A jittering 100 m edge must not yank the
+  // capsule away while the partner is still arriving.
+  if (input.holding) return "waiting";
   if (!withinGeofence(input.distanceM)) return "approach";
-  return input.motion === "armed" ? "armed" : "ready";
+  return "ready";
+}
+
+/**
+ * What the screen SHOWS. Verification arrives before the scene has played —
+ * the hold's own answer, or a poll right behind it — and the synced view
+ * (title, deck) must not appear under the ceremony: until the scene is over
+ * the terminal stays on the hold.
+ */
+export function shownPhase(phase: TerminalPhase, ceremonyRunning: boolean): TerminalPhase {
+  return ceremonyRunning && phase === "synced" ? "waiting" : phase;
 }
 
 /** The lock the product asks for: Contact Sync is usable only in these two. */
 export function syncUnlocked(phase: TerminalPhase): boolean {
-  return phase === "ready" || phase === "armed";
+  return phase === "ready" || phase === "waiting";
 }
 
 /** Whether the terminal should be watching the phone's position at all. */
 export function wantsLocation(phase: TerminalPhase): boolean {
-  return phase === "early" || phase === "approach" || phase === "ready" || phase === "armed";
+  return phase === "early" || phase === "approach" || phase === "ready" || phase === "waiting";
 }
 
 /** When the sync window opens, from the date's agreed time. */

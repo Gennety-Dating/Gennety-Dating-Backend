@@ -75,7 +75,7 @@ export interface CanvasInput {
  * What the sheet does when tapped. `chat` closes the Mini App, which is the
  * honest action for every state whose real flow lives in the bot: the canvas
  * is a map and a status surface in v1, not a second place to accept a pitch.
- * `terminal` opens the Date Terminal, which owns the shake (Contact Sync) since
+ * `terminal` opens the Date Terminal, which owns the bump gesture (Contact Sync) since
  * 2026-09-11 — one bump surface in the Mini App instead of two that could drift.
  */
 export type SheetAction = "chat" | "terminal" | null;
@@ -198,10 +198,10 @@ export function sheetFor(input: CanvasInput): SheetView {
     case "DATE_BUMP_PENDING":
       return {
         title: s.bumpTitle,
-        // The terminal stays offered after this side has shaken. The two shakes
+        // The terminal stays offered after this side has bumped. The two bumps
         // have to land within `BUMP_SHAKE_WINDOW_MS` of each other, so a phone
-        // that shook alone may well have to shake again, together — which the
-        // old "shake once, then nothing" rule left no way to do.
+        // that held (or shook) alone may well have to go again, together —
+        // which the old "shake once, then nothing" rule left no way to do.
         body: input.bumpMine ? s.bumpWaiting : s.bumpBody,
         action: "terminal",
         actionLabel: s.terminalAction,
