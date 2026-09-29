@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 210 entries
+# Deploy journal index — 211 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-29 | 09-29 — Mini App не закрывается вертикальным свайпом ни на одной странице (`keepOpenOnVerticalSwipe`), корень страниц не пружинит; **только Mini App** (`deploy-webapp.sh` + `pnpm demo:deploy`), без сервера, схемы и env; от порядка миграций не зависит | [pending](./pending.md) |
 | Deployed | 2026-09-28 | Единый знак Gennety по iOS: только брендовые файлы поверх `c372883f`, production/demo Mini App, бот, сайт и два аватара; четыре миграции остаются в очереди | [2026-09-28-brand](./2026-09-28-brand.md) |
 | PENDING | 2026-09-26 | 09-23 (посажено на ствол 09-26) — время свидания: пятичасовой запас вместо минуты (`CALENDAR_MIN_LEAD_MS`, сетка включает сегодня; слот за чертой — 409 `stale_action` с `negotiating`) + Live Activity `time_agreement`; **миграция** `20260926200200_time_agreement_activity` (аддитивная; в сводном выкате — код первым, `db:deploy` следом), без env | [pending](./pending.md) |
 | PENDING | 2026-09-26 | 09-24 (посажено на ствол 09-26) — внешний импорт AI-контекста (Magic Prompt / ai-memory export) удалён из онбординга; **деструктивная миграция `20260926200100_retire_external_profile_import` (дроп двух колонок `users` + enum, переписывает прогресс/сессии/истории онбординга) — сначала код, потом `db:deploy`, бэкап до**; Mini App пересобрать; из спеки ушёл `magic_prompt` | [pending](./pending.md) |

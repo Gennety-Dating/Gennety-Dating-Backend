@@ -4,6 +4,7 @@ import "./referral.css";
 import { icon, type IconName } from "./icons";
 import { butterflyLoaderMarkup } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton, type ReturnPage } from "./return-to.js";
 
 /**
@@ -371,6 +372,7 @@ const BACK_TARGETS: readonly ReturnPage[] = ["ticket-store", "ticket-gate"];
 async function boot(): Promise<void> {
   app?.ready?.();
   app?.expand?.();
+  keepOpenOnVerticalSwipe(app);
   // Bot API 8.0+ immersive fullscreen — removes the top sheet header so the page
   // fills the screen natively (older clients silently fall through to expand()).
   const chromeColor = document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";

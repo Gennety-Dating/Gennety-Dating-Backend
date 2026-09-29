@@ -21,11 +21,13 @@ import { apiFetch } from "./api.js";
  */
 
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { rheostatStyle, shouldTickScale } from "./haptics.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Full-screen immersive web app (Bot API 8.0+). Older clients fall back to
 // expand(). Paint Telegram's chrome to match the active theme so the header /

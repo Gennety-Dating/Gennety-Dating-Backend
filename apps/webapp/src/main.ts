@@ -28,6 +28,7 @@ import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
 import { icon } from "./icons.js";
 import { returnParams } from "./return-to.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 
 /**
  * Calendar Mini App entry point.
@@ -55,6 +56,7 @@ const SHEET_ANIM_MS = 320;
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Bot API 8.0+ — fullscreen mode removes the top sheet gap and lets the
 // design's hero/CTA composition breathe. Older clients silently skip.

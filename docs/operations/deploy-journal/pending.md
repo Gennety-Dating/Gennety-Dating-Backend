@@ -35,6 +35,27 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-09-29) — Mini App не закрывается вертикальным свайпом; корень страниц не пружинит (DECISIONS 2026-09-29).**
+**Только Mini App**: нет схемы, env, флагов и изменений сервера — дифф это `apps/webapp/**` плюс документация.
+Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё
+`pnpm demo:deploy` — демо собирает свой бандл из того же исходника (поведение в демо то же, что в проде).
+Независим от порядка миграций выше: можно выкатить отдельно или вместе с любым заходом.
+**iOS:** не затронут.
+
+Проверка после выката:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -s https://dating-calendar.gennety.com/index.html | grep -c 'overscroll-behavior-y'   # 1
+# На телефоне (Telegram iOS/Android ≥ 7.7) открыть календарь, смену места (и просмотр фото в ней),
+# билеты, Premium: потянуть вниз от верха страницы — лист остаётся на месте; «Закрыть»/⋯ закрывают.
+```
+
+**Rollback:** `git revert` коммита и снова `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`.
+
+---
+
 **PENDING — время свидания: пятичасовой запас + Live Activity `time_agreement` (2026-09-23, на ствол посажено 2026-09-26).**
 Ветка `time-agreement` посажена на ствол 2026-09-26: коммиты «feat(db): time_agreement_activities …»
 (таблица + миграция), «feat(scheduler): the five-hour rule, and the `time_agreement` lock-screen card»

@@ -126,3 +126,12 @@
   --shadow-strong: rgba(0, 0, 0, 0.28);
   --overlay: rgba(0, 0, 0, 0.45);
 }
+
+/* No rubber-band at the top or bottom of a page that scrolls as a whole. With
+   swipe-to-close off (`keepOpenOnVerticalSwipe`, decision 2026-09-29) iOS would
+   still bounce the document past its edge, which reads as the same sheet
+   dragging down. Root only — inner scrollers keep their own behaviour. */
+html,
+body {
+  overscroll-behavior-y: none;
+}

@@ -18,6 +18,7 @@ import {
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { isInsideMarket, type MarketBounds } from "./market-gate.js";
 import { boundaryEvent } from "./haptics.js";
 // maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
@@ -88,6 +89,7 @@ const BOOT_REVEAL_MAX_MS = 2500;
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Bot API 8.0+ — immersive fullscreen so the map fills the screen edge-to-edge.
 // Older clients silently fall through to expand().

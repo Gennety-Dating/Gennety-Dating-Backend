@@ -14,6 +14,7 @@ import {
   SUCCESS_READ_MS,
 } from "./butterfly-success.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 
 /**
  * Verification Mini App — AWS Rekognition Face Liveness.
@@ -383,6 +384,7 @@ function boot(): void {
 
   app.ready();
   app.expand();
+  keepOpenOnVerticalSwipe(app);
   // Bot API 8.0+ — immersive fullscreen for the capture. Older clients
   // gracefully fall through to expanded-but-not-fullscreen. Paint Telegram's
   // chrome to match the active theme so it doesn't flash the wrong color.

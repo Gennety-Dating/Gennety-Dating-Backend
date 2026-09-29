@@ -76,6 +76,8 @@
         color: var(--text);
         font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
         overflow: hidden;
+        /* Mirrors theme.css: no rubber-band past the page edge (2026-09-29). */
+        overscroll-behavior-y: none;
       }
       /* Soft burgundy ambience so the frosted glass has something to refract. */
       body::before {

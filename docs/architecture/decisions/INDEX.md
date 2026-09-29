@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 369 entries
+# Decision index — all 370 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-29 | Mini App не закрывается вертикальным свайпом ни на одной из 13 страниц (`keepOpenOnVerticalSwipe`, Bot API 7.7+; выход — «Закрыть»/⋯/шапка Telegram; старые клиенты как были); корень документа не пружинит (`overscroll-behavior-y: none`); исправлен просмотр фото смены места, включавший свайп обратно | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-28 | знак Gennety одинаковый в iOS, Telegram и на сайте: нижние лепестки сходятся в точке; квадратная иконка из iOS, отдельные знаки сохраняют оформление; прежнее различие 2026-08-23 отменено | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-27 | Сверка системной документации с кодом: 4–10 фото, `MatchStatus` и строковый ticket gate, выводимый DateLifecycleState, T−1ч proxy, T−45м Radar/Terminal, T−15м Bump, отмена с назначения; admin API prompt обобщён для авторизованных агентов без изменения прав API или рантайма | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-26 | сведение веток: три забытых решения основателя посажены на ствол (Launch Events вырезаны, чистка Magic Prompt, согласование времени — миграции `20260926200000/200100/200200`, выкат B: рестарт, потом `db:deploy`); `matchRadius` сознательно НЕ посажен (iOS снова требует поле — сперва необязательное в спеке); остальные ветки уже были в стволе — вершины в тегах `archive/*`, на GitHub одна ветка `main` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

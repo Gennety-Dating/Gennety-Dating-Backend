@@ -64,6 +64,9 @@ export default defineConfig({
     ///     demo-only action stay ONE flex column. Putting the button back
     ///     beside the sentence is a one-line edit that looks harmless and
     ///     shreds the sentence into a word-per-line strip.
+    ///   - `theme.css` — that the document root never rubber-bands past its
+    ///     edge (`overscroll-behavior-y: none`), the CSS half of keeping the
+    ///     sheet from dragging down with swipe-to-close off (2026-09-29).
     /// Scoped rather than `css: true` so no other test starts paying for CSS
     /// processing.
     css: {
@@ -75,6 +78,7 @@ export default defineConfig({
         /canvas\.css/,
         /premium\.css/,
         /location\.css/,
+        /theme\.css/,
       ],
     },
   },

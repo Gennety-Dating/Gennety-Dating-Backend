@@ -6,6 +6,7 @@ import { icon, type IconName } from "./icons";
 import { ctaLabel, ctaTerms } from "./premium-cta-label.js";
 import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton } from "./return-to.js";
 import { invoiceOutcomeFor, premiumScreenFor, type InvoiceOutcome } from "./premium-load.js";
 
@@ -861,6 +862,7 @@ async function load(): Promise<void> {
 
 app?.ready?.();
 app?.expand?.();
+keepOpenOnVerticalSwipe(app);
 
 // Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the paid
 // composition fills the screen. Older clients silently fall through to expand().

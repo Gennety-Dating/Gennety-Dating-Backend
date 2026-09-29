@@ -32,6 +32,7 @@ import {
 } from "./api.js";
 import { reconcileTheme, setTheme } from "./theme.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { errorCopy } from "./onboarding-errors.js";
 import {
   bootPhaseFromRemote,
@@ -207,6 +208,7 @@ function useOnboardingStrings(): OnboardingStrings {
 function configureTelegramChrome(): void {
   app?.ready();
   app?.expand();
+  keepOpenOnVerticalSwipe(app);
   // Mirror Telegram's floating close × / menu ⋯ reserve into `--tg-content-top`.
   // Only the profile screens consume it; every other scene here is full-bleed
   // and unaffected.

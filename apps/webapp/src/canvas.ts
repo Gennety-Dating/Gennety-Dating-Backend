@@ -55,6 +55,7 @@ import { createTransitDock } from "./canvas/transit-dock.js";
 import { tripCamera } from "./canvas/trip-camera.js";
 import type { DockPresence } from "./canvas/transit.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { apiBase } from "./api.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
@@ -75,6 +76,7 @@ const GEO_OPTIONS: PositionOptions = {
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 /**
  * Fullscreen, like every other Mini App here (change of 2026-09-12).

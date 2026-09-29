@@ -1,11 +1,13 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { wireContentInsets } from "../telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "../telegram-swipes.js";
 import "./radar.css";
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();
 tg?.expand();
+keepOpenOnVerticalSwipe(tg);
 if (tg?.isVersionAtLeast?.("8.0")) {
   try {
     tg.requestFullscreen?.();

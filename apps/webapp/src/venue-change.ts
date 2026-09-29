@@ -47,6 +47,7 @@ import {
 } from "./api.js";
 import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { returnParams } from "./return-to.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
@@ -54,6 +55,7 @@ import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the design
 // composition fills the screen. Older clients silently fall through to expand().
@@ -1655,11 +1657,6 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
     // installs the new screen's handler BEFORE tearing us down, so restoring
     // unconditionally would clobber it and strand the user.
     if (backHandler === viewerBack) setBack(prevBack);
-    try {
-      app?.enableVerticalSwipes?.();
-    } catch {
-      /* best-effort */
-    }
   };
 
   document.body.append(overlay);
@@ -1678,11 +1675,9 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
 
   document.addEventListener("keydown", onKey);
   setBack(viewerBack);
-  try {
-    app?.disableVerticalSwipes?.();
-  } catch {
-    /* best-effort — an older client simply keeps its swipe-to-close */
-  }
+  // Swipe-to-close is already off for the whole page (`keepOpenOnVerticalSwipe`
+  // at boot), so the viewer neither disables it on open nor — the old bug —
+  // turns it back on when it closes.
 }
 
 /**
