@@ -287,7 +287,8 @@ and the re-engagement worker — each turn is APPENDED to it, capped at
 `AGENT_STORED_HISTORY_MAX_MESSAGES` (200). Until 2026-09-14 (A13-L9) the column was
 silently overwritten with the replay window on every turn, so this retention was
 not actually true. The **timeline** is Telegram-only; the mobile
-The mobile chat agent keeps its own `Message`-row history unchanged. The menu agent
+The mobile chat agent keeps its own `Message`-row history unchanged (split into
+separate chats since 2026-09-30 — see "Mobile chat agent" below). The menu agent
 itself is *not* Telegram-only, despite what this paragraph used to claim: the
 same `runMenuAgentTurn`, with the same tools, also backs the JWT
 `/v1/assistant/{ask,voice}` routes (corrected 2026-07-29 — the mistake had a
@@ -701,6 +702,19 @@ Supported first-class flows:
   to the dating profile re-runs the same upload-time safety, face-presence,
   identity, duplicate-hash, profile-bucket copy, metadata, and
   verification-rerun path as a normal profile-photo upload.
+  **Separate chats since 2026-09-30** (founder decision, reversing the
+  one-thread index of 2026-09-04): every entry into the chat on iOS opens a NEW
+  chat; older chats live in a history list (`GET /v1/chat/sessions`) titled by
+  a small model — the topic in 2–6 words in the account language, never the
+  person's first line — and can be renamed by hand, after which no model
+  touches the title. Inside a chat the agent sees only that chat (plus the
+  shared system prompt: profile, dates, feed); it reaches older chats only
+  when the person refers to something from before or asks about a past date,
+  through two read tools — `search_past_chats` (summaries + words) and
+  `read_past_chat` — each carrying the dates the person had around that time
+  (partner's first name, venue, time, status, the person's own outcome; never
+  the partner's side). An older app build that names no chat keeps landing in
+  the most recent chat while it is under six hours quiet. Demo behaves as prod.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
 - **Blocking** — `POST /v1/matches/:id/block`, plus `GET /v1/me/blocks` and

@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 212 entries
+# Deploy journal index — 213 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-09-30 | 09-30 — чат агента: отдельные чаты (`chat_sessions`), `GET/PATCH /v1/chat/sessions`, `sessionId` у хода и `/history`, инструменты прошлых чатов, воркер заголовков/саммари; **миграция `20260930120000_chat_sessions` (аддитивная + бэкфилл) — `db:deploy` ДО рестарта, отдельным выкатом C после B**; нужен сборке iOS с чатами | [pending](./pending.md) |
 | PENDING | 2026-09-30 | 09-30 — нативная анкета открывается первым вопросом: `GET /v1/onboarding/interview` делает ход `resume` коллектора (до выката iOS после согласия видит «Повторить», а старые сборки — пустой чат); только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-09-29 | 09-29 — счётчик непрочитанного анонимного чата `SerializedMatch.proxyChatUnreadCount` у `/v1/matches/current` (чистое чтение, курсоры не двигает); только рестарт бота, без миграций и env; от порядка миграций не зависит | [pending](./pending.md) |
 | PENDING | 2026-09-29 | 09-29 — экран свидания Mini App: удержание капсулы вместо встряхивания + церемония встречи (копия стенда iOS, часы по `serverNow`); **только Mini App** (`deploy-webapp.sh` + `pnpm demo:deploy`); катить вместе с ботом (`hold` + `ceremony`) или после — до выката бота работает запасной путь (сцена локально ролью B) | [pending](./pending.md) |

@@ -45,10 +45,22 @@ vi.mock("./menu-agent.js", () => ({
   toolReportedSuccess: () => false,
   executeAgentTool: vi.fn(),
 }));
+const continueOrOpenChatSession = vi.fn(async (_userId: string) => LEGACY_SESSION);
+const touchChatSession = vi.fn(async (_id: string, _at: Date) => undefined);
+vi.mock("./chat-sessions.js", () => ({
+  continueOrOpenChatSession: (userId: string) => continueOrOpenChatSession(userId),
+  touchChatSession: (id: string, at: Date) => touchChatSession(id, at),
+}));
+const afterChatTurn = vi.fn();
+vi.mock("./chat-session-digest.js", () => ({
+  afterChatTurn: (input: unknown) => afterChatTurn(input),
+}));
 
 const { runChatTurn } = await import("./chat-agent.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
+const LEGACY_SESSION = "33333333-3333-4333-8333-333333333333";
+const CHAT = "44444444-4444-4444-8444-444444444444";
 
 /** A 200 whose body carries no choices — the model answered with nothing. */
 const emptyCompletion: typeof fetch = (async () =>
@@ -66,6 +78,122 @@ beforeEach(() => {
   userFindUnique.mockReset();
   messageFindMany.mockReset().mockResolvedValue([]);
   signedUrl.mockClear();
+  continueOrOpenChatSession.mockClear();
+  touchChatSession.mockClear();
+  afterChatTurn.mockClear();
+});
+
+/**
+ * Chat sessions (decision journal 2026-09-30): a turn belongs to ONE chat, and
+ * the model sees that chat alone.
+ */
+describe("chat agent sessions", () => {
+  const reply: typeof fetch = (async () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: "Ок" } }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })) as unknown as typeof fetch;
+
+  it("writes both rows into the named chat and reads only that chat", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+
+    const result = await runChatTurn(
+      { userId: USER, text: "привет", imageUrls: [], sessionId: CHAT },
+      { fetchFn: reply },
+    );
+
+    expect(result.sessionId).toBe(CHAT);
+    expect(continueOrOpenChatSession).not.toHaveBeenCalled();
+    const rows = messageCreate.mock.calls.map(
+      ([arg]) => (arg as { data: { role: string; sessionId: string } }).data,
+    );
+    expect(rows.map((r) => [r.role, r.sessionId])).toEqual([
+      ["user", CHAT],
+      ["assistant", CHAT],
+    ]);
+    expect(messageFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: USER, sessionId: CHAT } }),
+    );
+  });
+
+  it("moves the chat's updatedAt to the reply and hands the digest the turn", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "привет", imageUrl: null, imageUrls: [], context: null },
+    ]);
+
+    const result = await runChatTurn(
+      { userId: USER, text: "привет", imageUrls: [], sessionId: CHAT },
+      { fetchFn: reply },
+    );
+
+    expect(touchChatSession).toHaveBeenCalledWith(CHAT, result.createdAt);
+    expect(afterChatTurn).toHaveBeenCalledWith({
+      userId: USER,
+      sessionId: CHAT,
+      openedNewSession: true,
+    });
+  });
+
+  it("an ongoing chat is not a new one", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "раньше", imageUrl: null, imageUrls: [], context: null },
+      { role: "assistant", content: "ответ", imageUrl: null, imageUrls: [], context: null },
+      { role: "user", content: "сейчас", imageUrl: null, imageUrls: [], context: null },
+    ]);
+
+    await runChatTurn(
+      { userId: USER, text: "сейчас", imageUrls: [], sessionId: CHAT },
+      { fetchFn: reply },
+    );
+
+    expect(afterChatTurn).toHaveBeenCalledWith(expect.objectContaining({ openedNewSession: false }));
+  });
+
+  it("an older build that names no chat lands where the six-hour rule says", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+
+    const result = await runChatTurn(
+      { userId: USER, text: "привет", imageUrls: [] },
+      { fetchFn: reply },
+    );
+
+    expect(continueOrOpenChatSession).toHaveBeenCalledWith(USER);
+    expect(result.sessionId).toBe(LEGACY_SESSION);
+    expect(messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ sessionId: LEGACY_SESSION, role: "user" }),
+      }),
+    );
+  });
+
+  it("tells the model other chats are out of context and how to reach them", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    const seen: Array<{
+      messages: Array<{ role: string; content: string }>;
+      tools: Array<{ function: { name: string } }>;
+    }> = [];
+    const fetchFn = vi.fn(async (_url: string, init: { body: string }) => {
+      seen.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ choices: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await runChatTurn(
+      { userId: USER, text: "помнишь?", imageUrls: [], sessionId: CHAT },
+      { fetchFn: fetchFn as unknown as typeof fetch },
+    );
+
+    const system = seen[0]!.messages[0]!.content;
+    expect(system).toContain("## Earlier chats");
+    expect(system).toContain("search_past_chats");
+    expect(seen[0]!.tools.map((tool) => tool.function.name)).toEqual(
+      expect.arrayContaining(["search_past_chats", "read_past_chat"]),
+    );
+  });
 });
 
 describe("chat agent fallback", () => {

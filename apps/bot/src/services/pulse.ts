@@ -11,7 +11,7 @@ import {
   type PulseRowState,
 } from "@gennety/shared";
 import { getPreviousBatchDate } from "./next-batch.js";
-import { listChatTopics } from "./chat-topics.js";
+import { listChatSessions } from "./chat-sessions.js";
 
 /**
  * Live Pulse — the rows under the status panel on the iOS Today screen
@@ -39,7 +39,11 @@ import { listChatTopics } from "./chat-topics.js";
 export interface PulseTargetDto {
   /** today | map | inbox_item | chat | chat_topic — string on the wire. */
   kind: string;
-  /** Inbox item id for `inbox_item`, topic anchor id for `chat_topic`. */
+  /**
+   * Inbox item id for `inbox_item`; for `chat_topic` the CHAT SESSION id since
+   * 2026-09-30 (it was a topic anchor message id — older builds only read the
+   * kind, so the kind stays).
+   */
   id?: string;
 }
 
@@ -62,7 +66,7 @@ export interface PulseRowDto {
 
 export interface PulseDeps {
   now?: Date;
-  topics?: typeof listChatTopics;
+  sessions?: typeof listChatSessions;
 }
 
 const MINUTE = 60 * 1000;
@@ -70,7 +74,7 @@ const DAY = 24 * 60 * MINUTE;
 
 export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<PulseRowDto[]> {
   const now = deps.now ?? new Date();
-  const topics = deps.topics ?? listChatTopics;
+  const sessions = deps.sessions ?? listChatSessions;
 
   const [user, drop, venue, announcements, pastDate, chat] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { status: true } }),
@@ -78,7 +82,9 @@ export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<
     venueSearchRow(userId),
     announcementRows(userId, now),
     pastDateRow(userId, now),
-    topics(userId, PULSE_CHAT_TOPICS_MAX).then((r) => r.topics).catch(() => []),
+    sessions(userId, { limit: PULSE_CHAT_TOPICS_MAX })
+      .then((r) => r?.sessions ?? [])
+      .catch(() => []),
   ]);
   if (!user) return [];
 
@@ -88,17 +94,20 @@ export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<
   rows.push(...announcements.active);
   if (pastDate) rows.push(pastDate);
   rows.push(...announcements.past);
-  for (const topic of chat.slice(0, PULSE_CHAT_TOPICS_MAX)) {
+  // One row per recent CHAT (decision journal 2026-09-30), titled with the
+  // chat's title. The kind stays `chat_topic` — older builds open the chat by
+  // it and never read the id, which is now the session id.
+  for (const session of chat.slice(0, PULSE_CHAT_TOPICS_MAX)) {
     rows.push({
-      id: `chat_topic:${topic.anchorId}`,
+      id: `chat_topic:${session.id}`,
       kind: "chat_topic",
       state: "past",
-      title: topic.title,
+      title: session.title,
       subtitle: null,
       status: null,
-      at: topic.updatedAt,
+      at: session.updatedAt,
       deadlineAt: null,
-      target: { kind: "chat_topic", id: topic.anchorId },
+      target: { kind: "chat_topic", id: session.id },
     });
   }
   return rows.slice(0, PULSE_ROWS_MAX);

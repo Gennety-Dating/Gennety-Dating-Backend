@@ -473,6 +473,33 @@ transcript chip. The agent's grounding is resolved from the live inbox and
 announcement rows at turn time (`services/chat-context.ts`), so the snapshot
 outliving the inbox row only means the chip stays and the agent has less to add.
 
+`session_id` (uuid, nullable, 2026-09-30) → `chat_sessions`, cascade; index
+`(session_id, created_at)`. Every writer sets it (the chat agent, the Telegram
+photo flow); nullable only for safety. The migration that added it
+(`20260930120000_chat_sessions`) put every older row into a chat by the
+six-hour rule.
+
+### `chat_sessions`
+
+One chat with the app's agent (decision journal 2026-09-30 — ChatGPT-style
+chats, reversing the one-thread index of 2026-09-04). The agent's context is
+one chat's rows; other chats reach it through `search_past_chats` /
+`read_past_chat` (`services/chat-past-tools.ts`).
+
+| Field | Notes |
+|---|---|
+| `id` | UUID minted by the CLIENT for a new chat (first turn creates it, `ON CONFLICT DO NOTHING`); server-side `uuid()` for the legacy path, `gen_random_uuid()` in the backfill |
+| `userId` | → `users`, cascade (the chats go with the account) |
+| `title`, `titleByUser`, `titledAtCount` | Model-written (`MODELS.fast`, account language, 2–6 words, never the opener) or hand-set; `titleByUser` freezes it; `titledAtCount` = non-system message count at the last auto-titling (refresh after +6) |
+| `summary`, `summaryEmbedding`, `summarizedAtCount` | English summary for retrieval + `vector(1536)` of `title + summary` (`text-embedding-3-small`, written by raw SQL — `Unsupported`), and the count it was written at: stale exactly when the chat has grown since |
+| `createdAt` | First message |
+| `updatedAt` | **Newest message**, set by the turn that wrote it — NOT `@updatedAt`, so a rename or a new title never moves a chat to the top of the list |
+
+Index `(user_id, updated_at)` for the list, the legacy six-hour lookup and the
+digest scan. No vector index: every search is scoped to one person's chats.
+Writers: `services/chat-sessions.ts` (claim, legacy rule, touch, rename) and
+`services/chat-session-digest.ts` (title/summary/embedding, CAS on the counts).
+
 ### `announcements`
 
 Rich in-app announcements written in the admin dashboard

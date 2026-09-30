@@ -2,7 +2,14 @@ import { prisma } from "@gennety/db";
 
 /**
  * Chat topics — a read-only index over the ONE continuous conversation that
- * `chat-agent.ts` holds with a user.
+ * `chat-agent.ts` held with a user until 2026-09-30.
+ *
+ * **Superseded by chat sessions** (decision journal 2026-09-30): the agent now
+ * holds separate chats (`chat_sessions`, `services/chat-sessions.ts`), and the
+ * history list reads `GET /v1/chat/sessions`. This index stays only for app
+ * builds that still call `GET /v1/chat/topics`: it keeps cutting the whole
+ * `Message` stream at silences, exactly as before. The text below is the
+ * reasoning of 2026-09-04, kept because it is the decision that was reversed.
  *
  * This is deliberately not threading. There is no `threadId` column, no
  * per-thread context, no forking: `buildChatMessages` still feeds the model
@@ -53,8 +60,11 @@ export interface ChatTopic {
   depth: number;
 }
 
-/** Collapse whitespace and cut on a whole word where one is near the limit. */
-function condense(raw: string, max: number): string {
+/**
+ * Collapse whitespace and cut on a whole word where one is near the limit.
+ * Also the untitled chat's fallback title (`services/chat-sessions.ts`).
+ */
+export function condense(raw: string, max: number): string {
   const flat = raw.replace(/\s+/g, " ").trim();
   if (flat.length <= max) return flat;
   const cut = flat.slice(0, max);

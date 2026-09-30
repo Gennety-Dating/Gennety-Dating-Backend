@@ -457,8 +457,9 @@ model User {
   blocksFiled   UserBlock[] @relation("UserBlockBlocker")
   blocksAgainst UserBlock[] @relation("UserBlockBlocked")
 
-  messages   Message[]
-  inboxItems InboxItem[]
+  messages     Message[]
+  chatSessions ChatSession[]
+  inboxItems   InboxItem[]
 
   noMatchNotices NoMatchNotice[]
 
@@ -2828,12 +2829,61 @@ model Message {
   /// (`services/chat-context.ts`); when those are gone the chip stays and the
   /// agent simply has nothing more to add.
   context   Json?
+  /// The chat this row belongs to (decision journal 2026-09-30). Nullable only
+  /// for safety: every writer sets it, and the migration that added it put
+  /// every older row into a chat by the six-hour rule. `/v1/chat/history`
+  /// without `sessionId` still pages the whole stream across chats — what
+  /// older app builds read.
+  sessionId String?     @map("session_id") @db.Uuid
   createdAt DateTime    @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
   @@map("messages")
+}
+
+/// One conversation with the app's chat agent — ChatGPT-style chats
+/// (founder decision 2026-09-30, reversing "one endless thread" of 2026-09-04).
+///
+/// The agent's context inside a chat is that chat's own `Message` rows plus the
+/// shared system prompt; older chats reach it only through the
+/// `search_past_chats` / `read_past_chat` tools (`services/chat-past-tools.ts`).
+///
+/// `id` is minted by the CLIENT for a new chat (UUID v4), so a retried first
+/// message lands in the same chat instead of opening a second one; a turn with
+/// no id (older builds, the Telegram photo flow) continues the most recent chat
+/// if it is under six hours old and opens a new one otherwise.
+///
+/// `updatedAt` is NOT `@updatedAt`: it is the time of the newest message, set
+/// by the turn that wrote it. Renaming or titling a chat must not move it to
+/// the top of the history list.
+///
+/// Titles are written by a small model (`services/chat-session-digest.ts`):
+/// `titledAtCount` is the non-system message count at the last automatic
+/// titling (the refresh trigger), `titleByUser` freezes the title forever.
+/// `summary` (English, retrieval language) + `summaryEmbedding` feed the search
+/// tool; `summarizedAtCount` is the count the summary was written at, so a
+/// summary is stale exactly when the chat has grown since.
+model ChatSession {
+  id                String                       @id @default(uuid()) @db.Uuid
+  userId            String                       @map("user_id") @db.Uuid
+  title             String?
+  titleByUser       Boolean                      @default(false) @map("title_by_user")
+  titledAtCount     Int                          @default(0) @map("titled_at_count")
+  summary           String?
+  summaryEmbedding  Unsupported("vector(1536)")? @map("summary_embedding")
+  summarizedAtCount Int                          @default(0) @map("summarized_at_count")
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @default(now()) @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, updatedAt])
+  @@map("chat_sessions")
 }
 
 /// A rich announcement written by the founder in the admin dashboard — a

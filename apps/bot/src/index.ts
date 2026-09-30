@@ -55,6 +55,7 @@ import { peerWaitShimmerTick } from "./workers/peer-wait-shimmer.js";
 import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
+import { chatSessionDigestTick } from "./workers/chat-session-digest.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
@@ -286,6 +287,16 @@ const AUTO_UNSUSPEND_CRON_SCHEDULE =
  */
 const EMBEDDING_REFRESH_CRON_SCHEDULE =
   process.env.EMBEDDING_REFRESH_CRON_SCHEDULE ?? "*/5 * * * *";
+
+/**
+ * Chat-session digest (decision journal 2026-09-30): titles and summarizes app
+ * chats that have gone quiet for 30 minutes and changed since their last
+ * summary — ten per tick, one cheap-model call + one embedding each. Offset
+ * from the embedding refresh by two minutes so the two OpenAI sweeps never
+ * start together.
+ */
+const CHAT_SESSION_DIGEST_CRON_SCHEDULE =
+  process.env.CHAT_SESSION_DIGEST_CRON_SCHEDULE ?? "2-59/5 * * * *";
 
 /**
  * Verified-selfie retention: GDPR Article 9 requires biometric data is
@@ -600,6 +611,7 @@ function validateSchedules(): void {
       STATUS_TIMER_CRON_SCHEDULE,
       AUTO_UNSUSPEND_CRON_SCHEDULE,
       EMBEDDING_REFRESH_CRON_SCHEDULE,
+      CHAT_SESSION_DIGEST_CRON_SCHEDULE,
       SELFIE_RETENTION_CRON_SCHEDULE,
       RETENTION_CRON_SCHEDULE,
       ACTIVITY_ROLLUP_CRON_SCHEDULE,
@@ -1014,6 +1026,22 @@ function registerSchedules(): void {
     ),
   );
   console.log(`[cron] Embedding refresh scheduled: "${EMBEDDING_REFRESH_CRON_SCHEDULE}"`);
+
+  // App chat sessions: title + summary + embedding for quiet chats (and, after
+  // the deploy that added sessions, the backfilled history).
+  cron.schedule(
+    CHAT_SESSION_DIGEST_CRON_SCHEDULE,
+    guardedTick("chat-session-digest", () =>
+      chatSessionDigestTick().then((r) => {
+        if (r.scanned > 0) {
+          console.log(
+            `[chat-session-digest] scanned=${r.scanned} digested=${r.summarized} failed=${r.failed}`,
+          );
+        }
+      }),
+    ),
+  );
+  console.log(`[cron] Chat-session digest scheduled: "${CHAT_SESSION_DIGEST_CRON_SCHEDULE}"`);
 
   // Pinned status banner — discrete countdown to next match dispatch.
   cron.schedule(

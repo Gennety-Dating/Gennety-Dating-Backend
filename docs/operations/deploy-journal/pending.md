@@ -12,7 +12,8 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 # Gennety Dating Deploy
 
 **ПОРЯДОК СЛЕДУЮЩЕГО ВЫКАТА (записано 2026-09-26 при посадке трёх забытых веток на ствол) — читать до любого PENDING ниже.**
-В очереди четыре миграции, и у них противоположные требования к порядку:
+В очереди четыре миграции (с 2026-09-30 — пять, пятая `20260930120000_chat_sessions` — выкат C в п. 5), и у них
+противоположные требования к порядку:
 - `20260926120000_user_block_reason` — аддитивная; новый код пишет колонку при каждом блоке → `db:deploy` ДО рестарта;
 - `20260926200000_drop_launch_events` и `20260926200100_retire_external_profile_import` — деструктивные; работающий
   код читает то, что они удаляют (джойн `events`, колонки `users.ai_memory_export_*` в каждом чтении `user`) →
@@ -30,8 +31,71 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
    знает удаляемых таблиц и колонок, а без `time_agreement_activities` только пишет предупреждения. Для B нужен режим
    скрипта «рестарт, потом миграции» или ручные шаги — обычный прогон здесь неверен.
 4. Проверки после выката — в каждом блоке ниже.
+5. **Выкат C (добавлено 2026-09-30)** — чаты агента, миграция `20260930120000_chat_sessions` (аддитивная + бэкфилл).
+   Требование ОБРАТНОЕ, чем у B: `db:deploy` ДО рестарта (новый код читает `messages.session_id` в `/v1/chat/history` и
+   пишет в `chat_sessions` — без миграции чат приложения отвечает 500). Поэтому B катится на коммите ДО посадки чатов
+   (`c1644d50` — ствол, от которого ветвились чаты, — или любой коммит ствола до коммита чатов), а C — любым коммитом
+   после, ОБЫЧНЫМ прогоном скрипта (миграции, потом рестарт). Если B
+   всё же катится коммитом, в котором уже есть чаты, окно между рестартом и `db:deploy` ломает чат приложения — держать
+   его секундами и после выката выполнить починку из блока C ниже. Подробности — блок «чаты агента» ниже.
 
-**iOS:** для выката правок не требуется (подробности — в блоках).
+**iOS:** для выкатов A и B правок не требуется; сборке iOS с чатами (новый экран истории) нужен выкат C.
+
+---
+
+**PENDING (2026-09-30) — чат агента: отдельные чаты как в ChatGPT (`chat_sessions`), заголовки/саммари маленькой моделью, инструменты `search_past_chats`/`read_past_chat` (DECISIONS 2026-09-30).**
+**Миграция `20260930120000_chat_sessions` — `db:deploy` ДО рестарта (выкат C в «Порядке» выше).** Аддитивная: таблица
+`chat_sessions` + `messages.session_id` (nullable, FK с каскадом, два индекса) и бэкфилл в той же транзакции — сообщения
+каждого человека режутся на чаты по паузе >6 ч, каждому сообщению ставится чат. Старый код её переживает (про таблицу и
+колонку не знает). Без новых env и зависимостей; необязательный `CHAT_SESSION_DIGEST_CRON_SCHEDULE` (по умолчанию
+`2-59/5 * * * *`). Mini App не пересобирать. Что меняется: `GET /v1/chat/sessions`, `PATCH /v1/chat/sessions/{id}`,
+`sessionId` у `/v1/chat/message`/`/voice` (ответ несёт `sessionId`) и `?sessionId=` у `/history`; агент видит только
+текущий чат, прошлые — через два инструмента чтения; строки Pulse `chat_topic` — теперь чаты; `/history` подписывает
+снимки страницы одним запросом к Storage; новый воркер `chat-session-digest` пишет заголовки и саммари молчащим 30 мин
+чатам — сразу после выката это весь бэкфилл, по 10 чатов за тик (≈120/ч), каждый = один вызов `MODELS.fast` + один
+эмбеддинг. `/v1/chat/topics` не изменён (старые сборки).
+**Демо:** как прод (та же миграция и тот же код; отдельных веток поведения нет).
+**iOS:** сборке с чатами нужен этот выкат — до него `/v1/chat/sessions` отвечает 404, и клиент должен это пережить.
+Старые сборки не меняются: без `sessionId` ход идёт в последний чат моложе шести часов. Id чатов сервер отдаёт в нижнем
+регистре — сравнивать как UUID, не как строки.
+
+SQL «до» (оценка бэкфилла и очереди воркера; только чтение):
+
+```sql
+SELECT count(*) AS messages, count(DISTINCT user_id) AS people FROM messages;
+```
+
+Проверка после выката:
+
+```sql
+SELECT count(*) AS chats FROM chat_sessions;                        -- ≈ число бывших «тем» по всем людям
+SELECT count(*) AS orphans FROM messages WHERE session_id IS NULL;  -- → 0
+SELECT count(*) AS untitled FROM chat_sessions WHERE title IS NULL; -- убывает ~120/ч, пока воркер разбирает бэкфилл
+```
+
+Если `orphans` > 0 — это ходы, которые старый процесс успел записать между `db:deploy` и рестартом. Починка (кладёт их
+в последний чат человека и двигает его `updated_at`; человек без единого чата остаётся без чата — ищется тем же SELECT):
+
+```sql
+UPDATE messages m SET session_id = (
+  SELECT s.id FROM chat_sessions s WHERE s.user_id = m.user_id ORDER BY s.updated_at DESC, s.id DESC LIMIT 1
+) WHERE m.session_id IS NULL;
+UPDATE chat_sessions s SET updated_at = x.last
+FROM (SELECT session_id, max(created_at) AS last FROM messages WHERE session_id IS NOT NULL GROUP BY session_id) x
+WHERE x.session_id = s.id AND x.last > s.updated_at;
+```
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/chat/sessions?limit=5" | jq '.sessions[] | {id, title, messageCount}'
+# → чаты своего тестового аккаунта, новые сверху; у старых title сначала — первая реплика, через ~полчаса — заголовок модели
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/chat/history?sessionId=<id>&limit=5" | jq '.messages | length'
+pm2 logs gennety-bot --lines 300 --nostream | grep -E "Chat-session digest scheduled|chat-session-digest\]|chat/history\]|chat-digest\]"
+# → расписание при старте; строки "scanned=… digested=… failed=…" каждые 5 мин, пока есть бэкфилл;
+#   строки "[chat/history] rows=… images=… sign_ms=… total_ms=…" — одна на запрос истории
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; миграция остаётся (аддитивна, старый код её не видит). Сообщения,
+записанные старым кодом после отката, будут без чата — при повторном выкате выполнить починку выше.
 
 ---
 

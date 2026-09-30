@@ -23,6 +23,14 @@ import {
   buildChatContextBlock,
   type ChatContextSnapshot,
 } from "./chat-context.js";
+import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
+import { afterChatTurn } from "./chat-session-digest.js";
+import {
+  PAST_CHAT_TOOLS,
+  PAST_CHAT_TOOL_KINDS,
+  executePastChatTool,
+  isPastChatTool,
+} from "./chat-past-tools.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -33,10 +41,20 @@ import {
  * in the `Message` table and supports image attachments end-to-end. It also
  * runs a background tool loop that mutates the user's `Profile` whenever
  * the model surfaces high-confidence facts during the conversation.
+ *
+ * Since 2026-09-30 every turn belongs to ONE chat session (`chat-sessions.ts`)
+ * and the model sees only that chat's rows; the person's other chats are behind
+ * `search_past_chats` / `read_past_chat` (`chat-past-tools.ts`).
  */
 
 const MODEL = MODELS.agent;
+/** Rows of the CURRENT chat fed to the model (and read by the context chip). */
 const HISTORY_LIMIT = 30;
+/**
+ * Model calls per turn. Three still covers the longest path the past-chat
+ * tools add — search, read, reply — so it was not raised; a turn that also
+ * wants a write after reading an old chat asks for it in the next message.
+ */
 const MAX_TOOL_ITERATIONS = 3;
 const TIMEOUT_MS = 45_000;
 
@@ -68,7 +86,21 @@ The person is in the app's Chat tab, not in Telegram. Two things follow.
 
 Age and gender are fixed after onboarding and this tab opens only afterwards,
 so treat them as read-only: if someone says one of them is wrong, say support
-can correct it and move on.`
+can correct it and move on.
+
+## Earlier chats
+
+This chat is its own conversation: you see only its messages plus the live
+context above. The person's other chats with you are NOT in your context.
+
+- When they refer to something from before ("as I told you", "that café last
+  time", "what happened with Anna") or ask about a past date or discussion,
+  call \`search_past_chats\` — the query in English, plus names or words as they
+  would have written them in \`keywords\` — and \`read_past_chat\` for the one hit
+  you need in full. Each hit carries \`datesAround\`: their dates around that
+  time. Otherwise do not search; most turns need nothing from the past.
+- Never claim to remember what you have not read in this chat or through these
+  tools. If nothing turns up, say so and ask.`
 
 /**
  * Инструменты, которых нет у общего набора, — всё, что чат умеет один.
@@ -117,19 +149,21 @@ const CHAT_TOOLS = [
 ];
 
 /**
- * Что уходит модели: семнадцать общих инструментов плюс два чатовых.
- * Порядок значения не имеет, а совпадений имён нет — проверяется тестом.
+ * Что уходит модели: общие инструменты, два чатовых и два чтения прошлых
+ * чатов. Порядок значения не имеет, а совпадений имён нет — проверяется тестом.
  */
-const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS];
+const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS, ...PAST_CHAT_TOOLS];
 
 /**
- * Класс чатовых инструментов. Оба пишут, значит оба попадают под бюджет хода:
- * одно сообщение — одно намерение, и вторая запись в том же ходу отвергается,
- * а не применяется молча (тот же довод, что в `menu-agent`).
+ * Класс чатовых инструментов. Оба профильных пишут, значит оба попадают под
+ * бюджет хода: одно сообщение — одно намерение, и вторая запись в том же ходу
+ * отвергается, а не применяется молча (тот же довод, что в `menu-agent`).
+ * Поиск и чтение прошлых чатов — чтение и бюджет не тратят.
  */
-const CHAT_TOOL_KINDS: Record<string, "write"> = {
+const CHAT_TOOL_KINDS: Record<string, "read" | "write"> = {
   update_profile: "write",
   attach_profile_photo: "write",
+  ...PAST_CHAT_TOOL_KINDS,
 };
 
 function toolKind(name: string): string | undefined {
@@ -185,6 +219,13 @@ export interface ChatTurnInput {
    * block is resolved from it in `buildChatMessages`.
    */
   context?: ChatContextSnapshot | null;
+  /**
+   * The chat this turn belongs to, already claimed for the caller by the route
+   * (`claimChatSession`). Absent — an older build, which names no chat — the
+   * turn continues the most recent chat under six hours quiet or opens a new
+   * one, decided inside the per-user lock.
+   */
+  sessionId?: string | null;
 }
 
 export interface ChatTurnResult {
@@ -193,6 +234,8 @@ export interface ChatTurnResult {
   content: string;
   imageUrl: null;
   createdAt: Date;
+  /** The chat the turn landed in. */
+  sessionId: string;
   /**
    * Подтверждения записей, которые ДЕЙСТВИТЕЛЬНО применились. Их пишет код, а
    * не модель: иначе единственным свидетельством правки профиля была бы её
@@ -250,10 +293,12 @@ async function runTurnInner(
   if (!account) throw new Error(`Unknown user ${userId}`);
   const telegramId = account.telegramId;
   const language = (account.language ?? "en") as Language;
+  const sessionId = input.sessionId ?? (await continueOrOpenChatSession(userId));
 
   await prisma.message.create({
     data: {
       userId,
+      sessionId,
       role: "user",
       content: text,
       imageUrl: imageUrls[0] ?? null,
@@ -262,7 +307,7 @@ async function runTurnInner(
     },
   });
 
-  const messages = await buildChatMessages(userId, telegramId);
+  const { messages, openedNewSession } = await buildChatMessages(userId, telegramId, sessionId);
 
   let iteration = 0;
   let lastReply = "";
@@ -315,7 +360,7 @@ async function runTurnInner(
         continue;
       }
 
-      const outcome = await executeTool(userId, telegramId, tc);
+      const outcome = await executeTool(userId, telegramId, sessionId, tc);
       if (outcome.action) pendingAction = outcome.action;
 
       // Считается и подтверждается только запись, отчитавшаяся об успехе:
@@ -338,8 +383,15 @@ async function runTurnInner(
   if (!lastReply) lastReply = fallbackReply(language);
 
   const persisted = await prisma.message.create({
-    data: { userId, role: "assistant", content: lastReply },
+    data: { userId, sessionId, role: "assistant", content: lastReply },
   });
+  // The chat's `updatedAt` is its newest message — what the history list sorts
+  // by and the legacy six-hour rule reads. Awaited: the list must agree with
+  // the reply the moment the reply is on screen.
+  await touchChatSession(sessionId, persisted.createdAt);
+  // Title (and, on a new chat, the other chats' summaries) — after the reply is
+  // stored, never in its way.
+  afterChatTurn({ userId, sessionId, openedNewSession });
 
   return {
     id: persisted.id,
@@ -347,6 +399,7 @@ async function runTurnInner(
     content: persisted.content,
     imageUrl: null,
     createdAt: persisted.createdAt,
+    sessionId,
     ...(receipts.length > 0 ? { receipts } : {}),
     ...(pendingAction ? { action: pendingAction } : {}),
   };
@@ -369,16 +422,25 @@ function fallbackReply(language: Language): string {
   return t(language, "agentFallbackError");
 }
 
+/**
+ * The model's view of the turn: the shared system prompt, this surface's
+ * addendum, the context chip's block, and the newest `HISTORY_LIMIT` rows of
+ * THIS chat — never another chat's (decision journal 2026-09-30). Also says
+ * whether the turn just written is the chat's first, which is when the
+ * person's other chats get summarized for search.
+ */
 async function buildChatMessages(
   userId: string,
   telegramId: bigint,
-): Promise<OpenAIChatMessage[]> {
+  sessionId: string,
+): Promise<{ messages: OpenAIChatMessage[]; openedNewSession: boolean }> {
   const rows = await prisma.message.findMany({
-    where: { userId },
+    where: { userId, sessionId },
     orderBy: { createdAt: "desc" },
     take: HISTORY_LIMIT,
   });
   rows.reverse();
+  const openedNewSession = rows.filter((row) => row.role !== "system").length === 1;
 
   // Общий промпт плюс чатовая надстройка: персона, плейбук, контекст
   // пользователя, лента и закрепление языка приходят оттуда же, откуда их
@@ -431,7 +493,7 @@ async function buildChatMessages(
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
 
-  return out;
+  return { messages: out, openedNewSession };
 }
 
 async function callOpenAI(
@@ -471,6 +533,7 @@ async function callOpenAI(
 async function executeTool(
   userId: string,
   telegramId: bigint,
+  sessionId: string,
   call: OpenAIToolCall,
 ): Promise<{ result: string; receiptKey: Parameters<typeof t>[1] | null; action: MenuAgentAction | null }> {
   let parsed: unknown;
@@ -478,6 +541,17 @@ async function executeTool(
     parsed = JSON.parse(call.function.arguments || "{}");
   } catch {
     return { result: JSON.stringify({ success: false, detail: "Invalid JSON arguments" }), receiptKey: null, action: null };
+  }
+
+  // Прошлые чаты: только чтение, ключ — `userId` и текущий чат (его в выдаче
+  // быть не должно — он уже в контексте).
+  if (isPastChatTool(call.function.name)) {
+    const args = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    return {
+      result: await executePastChatTool(userId, sessionId, call.function.name, args),
+      receiptKey: null,
+      action: null,
+    };
   }
 
   // Сначала чатовые: они работают с `userId` и с картинками, которых у общего

@@ -38,6 +38,7 @@ vi.mock("../../services/chat-topics.js", () => ({ listChatTopics: async () => ({
 vi.mock("../../services/storage.js", () => ({
   uploadChatImage: async () => ({ path: "p" }),
   createChatImageSignedUrl: async () => "https://signed.example/x",
+  createChatImageSignedUrls: async (paths: string[]) => paths.map(() => "https://signed.example/x"),
 }));
 
 const transcribeVoice = vi.fn(async () => "какой дресс-код?");

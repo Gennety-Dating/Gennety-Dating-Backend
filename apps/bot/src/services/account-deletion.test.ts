@@ -515,4 +515,22 @@ describe("schema: what outlives a deleted account", () => {
     expect(body).toMatch(/blocker\s+User\s+@relation\("UserBlockBlocker".*onDelete: Cascade\)/);
     expect(body).toMatch(/blockedFormerId\s+String\?/);
   });
+
+  /**
+   * App chats (decision journal 2026-09-30) are the person's own words and go
+   * with the account: the chat rows by the user cascade, the messages by both
+   * the user and the chat. Nothing in them is a ledger or a safety record.
+   */
+  it("erases the person's chats and their messages with the account", () => {
+    expect(modelBody("ChatSession")).toMatch(
+      /\n\s+user\s+User\s+@relation\(fields: \[userId\], references: \[id\], onDelete: Cascade\)/,
+    );
+    const message = modelBody("Message");
+    expect(message).toMatch(
+      /\n\s+user\s+User\s+@relation\(fields: \[userId\], references: \[id\], onDelete: Cascade\)/,
+    );
+    expect(message).toMatch(
+      /\n\s+session\s+ChatSession\?\s+@relation\(fields: \[sessionId\], references: \[id\], onDelete: Cascade\)/,
+    );
+  });
 });

@@ -74,7 +74,8 @@ export interface DeleteUserAccountResult {
  *    write the safety tombstones and stamp the reports/blocks filed against the
  *    account (`writeSafetyTombstones`), remove founder report snapshots, and
  *    delete the User row. Payment ledgers, purchases, and reports keep their
- *    rows with a null owner (`onDelete: SetNull`); everything else cascades;
+ *    rows with a null owner (`onDelete: SetNull`); everything else cascades —
+ *    the app chats included (`chat_sessions` and their `messages`, 2026-09-30);
  * 4. after commit only, deliver partner notifications/compensation and DM the
  *    founder feed the full profile + phone + photos of the departing user — an
  *    internal ops channel to one trusted operator, restored by an explicit

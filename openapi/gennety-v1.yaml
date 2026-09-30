@@ -2376,6 +2376,17 @@ paths:
                     агентом"). A reference only — the server resolves the words
                     and grounds this turn and the follow-ups of the next six
                     hours on them. Omit for an ordinary message.
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: |
+                    The chat this turn belongs to. The CLIENT mints the id for a new chat
+                    (UUID v4): the first turn with an id the server has not seen creates
+                    that chat for the caller, so a retried first message cannot open two
+                    chats. An id that belongs to another user is a 404; anything that is
+                    not a UUID is a 400. Omitted (older builds): the turn continues the
+                    caller's most recently active chat if its last message is under six
+                    hours old, and opens a new one otherwise.
       responses:
         "200":
           description: Assistant reply
@@ -2386,6 +2397,13 @@ paths:
                 required: [message]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
+                  sessionId:
+                    type: string
+                    description: >-
+                      The chat the turn landed in — the one named, or the one the
+                      six-hour rule chose. Optional so a build talking to an older
+                      server still decodes the reply. Lower-case, as every id the
+                      server returns (compare ids as UUIDs, not strings).
                   uiHint:
                     $ref: "#/components/schemas/UiHint"
                     description: Always null for chat-agent turns today; contract slot for future hints
@@ -2416,8 +2434,8 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: >-
-            `context` names an inbox item that does not exist or is not the
-            caller's (the same answer for both)
+            `context` names an unknown inbox item, or `sessionId` belongs to
+            another user (the same answer for both)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2464,6 +2482,12 @@ paths:
                 contextId:
                   type: string
                   format: uuid
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: >-
+                    The chat this turn belongs to — same rules as `sessionId` on
+                    `/v1/chat/message`, checked before the audio is transcribed.
       responses:
         "200":
           description: Assistant reply plus what was heard
@@ -2474,6 +2498,9 @@ paths:
                 required: [message, transcript]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
+                  sessionId:
+                    type: string
+                    description: The chat the turn landed in (optional, as on `/v1/chat/message`)
                   transcript:
                     type: string
                     description: What Whisper heard; show it as the person's own message
@@ -2486,6 +2513,13 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
           description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            `contextId` names an unknown inbox item, or `sessionId` belongs to
+            another user (the same answer for both)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2510,6 +2544,11 @@ paths:
         `system` rows are never returned. The client drops them anyway, and
         `/v1/chat/topics` counts messages the same way — a slice that
         disagreed with the topic index would make its `depth` a page short.
+
+        With `sessionId` the page is ONE chat (see `/v1/chat/sessions`);
+        without it, the whole stream across chats, as before. Every photo of
+        a page is signed in one Storage request; `signedImageUrl` is the first
+        entry of `signedImageUrls`.
       parameters:
         - name: limit
           in: query
@@ -2521,6 +2560,14 @@ paths:
             a timestamp: `createdAt` ties are real (one turn writes the user
             row and the assistant row inside the same request), and a
             timestamp cursor would either skip a row or repeat one.
+          schema: { type: string }
+        - name: sessionId
+          in: query
+          description: |
+            Page ONE chat. With it, `before` must belong to the same chat (404
+            otherwise) and an unknown / foreign id is a 404. Without it the route
+            behaves exactly as before — the whole stream across chats — which is
+            what older builds rely on.
           schema: { type: string }
       responses:
         "200":
@@ -2539,7 +2586,94 @@ paths:
                     description: Older messages exist before this page
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
+          description: >-
+            Unknown `before` cursor, one belonging to another user or (with
+            `sessionId`) to another chat; or an unknown / foreign `sessionId`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/sessions:
+    get:
+      tags: [chat]
+      operationId: getChatSessions
+      summary: The person's chats with the agent, most recently active first
+      description: |
+        A chat ("session") is a separate conversation with the agent: the agent's
+        context inside a chat is that chat's own messages plus the shared system
+        prompt (profile, dates, feed) — not the other chats. Older chats stay
+        reachable to the agent through its `search_past_chats` /
+        `read_past_chat` tools.
+
+        A chat exists from its first message on; an empty "new chat" on the
+        client has no row here. Titles are written by a small model after the
+        first reply and refreshed once the conversation has moved on; until the
+        first title lands the server answers with the person's opening line,
+        condensed. A title the person set by hand is never overwritten.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: before
+          in: query
+          description: |
+            Session id to page from, exclusive — the next page holds the chats
+            active before that one. 404 for an id that is unknown or not the
+            caller's.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Chats, most recently active first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions, hasMore]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChatSession" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
           description: Unknown `before` cursor, or one belonging to another user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/sessions/{id}:
+    patch:
+      tags: [chat]
+      operationId: renameChatSession
+      summary: Rename a chat
+      description: |
+        Sets the title by hand. From then on the automatic titler leaves this
+        chat alone. Whitespace is trimmed (runs of it, line breaks included,
+        become one space); an empty title is a 400.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        "200":
+          description: The renamed chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Unknown chat, or one belonging to another user
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2550,6 +2684,10 @@ paths:
       operationId: getChatTopics
       summary: Read-only index of past conversations, newest first
       description: |
+        **Superseded by `/v1/chat/sessions` (2026-09-30)** and kept, unchanged,
+        for app builds that still call it: it cuts the whole message stream at
+        silences, across chats. The text below is the pre-sessions contract.
+
         The chat agent holds ONE continuous conversation per user: there is no
         thread id, no per-thread context and no forking, and this route does
         not introduce any. A "topic" is a slice of that single transcript cut
@@ -7211,7 +7349,11 @@ components:
           description: today | map | inbox_item | chat | chat_topic
         id:
           type: string
-          description: Inbox item id for `inbox_item`, topic anchor id for `chat_topic`
+          description: >-
+            Inbox item id for `inbox_item`; for `chat_topic` the chat SESSION id
+            (since 2026-09-30 — the row is one chat, titled with the chat's
+            title; it used to be a topic anchor message id). Older builds only
+            used the kind to open the chat and never read the id.
 
     ChatHistoryMessage:
       allOf:
@@ -7228,6 +7370,26 @@ components:
               description: >-
                 5-min TTL render URLs for `imageUrls`, same order. An entry is
                 an empty string when that one could not be signed.
+
+    ChatSession:
+      type: object
+      required: [id, title, createdAt, updatedAt, messageCount]
+      properties:
+        id: { type: string }
+        title:
+          type: string
+          description: |
+            Short topic of the chat, written by a small model in the account
+            language (2–6 words). Until the first title lands — the opening
+            line of the person, condensed. A title set by hand wins forever.
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: string
+          format: date-time
+          description: Time of the newest message in the chat
+        messageCount:
+          type: integer
+          description: Messages in the chat, `system` rows excluded
 
     ChatTopic:
       type: object
