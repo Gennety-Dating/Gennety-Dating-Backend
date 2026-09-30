@@ -11,10 +11,16 @@ import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { env } from "../../config.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
-import { markOnboardingField } from "../../services/onboarding-collector.js";
+import {
+  applyOnboardingFacts,
+  BASICS_QUESTIONS,
+  loadOnboardingBasics,
+  markOnboardingField,
+} from "../../services/onboarding-collector.js";
 import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { parseOnboardingBasicsPatch } from "../onboarding-basics.js";
 import { serializeUser } from "./serializers.js";
 import {
   buildInterviewState,
@@ -76,15 +82,22 @@ function ensureInterviewAllowed(
 const openingInterviews = new Map<string, Promise<void>>();
 
 /**
- * The native interview's first question (DECISIONS 2026-09-30).
+ * The native chat's first question (DECISIONS 2026-09-30).
  *
  * Telegram gets it from the Mini App handoff (`/complete` runs a `resume`
  * turn); the native client reaches `conversational` through `POST /consent`,
  * and nothing asked the first question there. `GET` returned an empty history
- * with no `uiHint`, and iOS drew an empty chat where the "name and age" screen
- * belongs. The interview is opened on this read — the one the client makes
- * when the interview screen appears — with the same `resume` turn: it records
- * no user message, so the history starts with the question, as in Telegram.
+ * with no `uiHint`, and iOS drew an empty chat. The chat is opened with the
+ * same `resume` turn: it records no user message, so the history starts with
+ * the question, as in Telegram.
+ *
+ * Only once the basics are complete (same day, later): the native client asks
+ * those five on its own screens and saves them through `POST /basics`, which
+ * opens the chat itself on the save that completes them. Opening earlier would
+ * put the "name and age" question into a chat that must start after the
+ * screens. Here the open is the safety net — a completing save whose turn
+ * failed, or basics finished on another rail — and the first question is
+ * whatever the collector asks after the basics.
  *
  * Only the collector opens it: without the flag, a `resume` turn would reach
  * the legacy agent with an empty message. An interview that already has an
@@ -118,6 +131,7 @@ async function openInterviewIfUnstarted(userId: string): Promise<void> {
     ) {
       return;
     }
+    if (!(await loadOnboardingBasics(userId)).complete) return;
     await runAgentTurn(user.telegramId, { kind: "resume" }, { canPresentTypeRadar: false });
   })();
   openingInterviews.set(userId, opening);
@@ -130,9 +144,11 @@ async function openInterviewIfUnstarted(userId: string): Promise<void> {
 
 /**
  * GET /v1/onboarding/interview
- * Returns the current step + the most recent assistant prompt. An interview
- * the collector has not started yet is opened first, so the answer always
- * carries the first question and its `uiHint` (`openInterviewIfUnstarted`).
+ * Returns the current step, the most recent assistant prompt and the basics
+ * (`basics`). A chat the collector has not started yet is opened first once
+ * the basics are complete, so the answer carries its first question
+ * (`openInterviewIfUnstarted`); before that, `basics` is what the client routes
+ * on.
  */
 onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -145,6 +161,75 @@ onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  const ctx = await loadStateContext(req.userId!);
+  res.json(buildInterviewState(ctx));
+});
+
+/**
+ * POST /v1/onboarding/basics — the native basics screens (DECISIONS 2026-09-30).
+ *
+ * The native twin of the Mini App's `POST /v1/telegram-onboarding/profile`:
+ * name, age, gender, preference, height and relationship intent are saved from
+ * their own screens through the collector's structured path
+ * (`applyOnboardingFacts`), not sent into the chat as answers. Two things the
+ * founder asked for follow from that:
+ *
+ * - Going back is re-saving. A screen the user returns to posts its field
+ *   again and the collector overwrites it — there is no undo to model, exactly
+ *   like the Mini App's back button.
+ * - The chat starts from scratch. The basics never enter `messageHistory`, and
+ *   the save that completes them opens the chat with the collector's `resume`
+ *   turn, so it starts on the first free question, as Telegram does after the
+ *   Mini App. History recorded before that moment — an account that began the
+ *   basics in the old in-chat flow, or a stray opener typed into an empty chat
+ *   — is dropped then: it is the same questions the screens just answered.
+ *
+ * Same body and error codes as the Mini App route (`parseOnboardingBasicsPatch`),
+ * all-or-nothing: a rejected value writes nothing and answers 400
+ * `{error, field}` with the collector's reason.
+ */
+onboardingRouter.post("/basics", async (req: Request, res: Response): Promise<void> => {
+  const user = await loadUser(req.userId!);
+  if (!ensureInterviewAllowed(user, res)) return;
+  if (user.onboardingStep !== "conversational") {
+    res.status(409).json({ error: "interview-not-open" });
+    return;
+  }
+  const parsed = parseOnboardingBasicsPatch((req.body ?? {}) as Record<string, unknown>);
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  if (Object.keys(parsed.facts).length === 0) {
+    res.status(400).json({ error: "no-fields" });
+    return;
+  }
+
+  const before = await loadOnboardingBasics(req.userId!);
+  const snapshot = await applyOnboardingFacts(user.telegramId, parsed.facts);
+  const rejection = snapshot.rejectedFields[0];
+  if (rejection) {
+    res.status(400).json({ error: rejection.reason, field: rejection.field });
+    return;
+  }
+
+  if (!before.complete && !BASICS_QUESTIONS.has(snapshot.currentQuestion)) {
+    await prisma.user.update({
+      where: { id: req.userId! },
+      data: { messageHistory: [] },
+    });
+    try {
+      await openInterviewIfUnstarted(req.userId!);
+    } catch (error) {
+      // The basics are saved either way. The chat then reads as unopened, and
+      // the client's retry is a `GET`, which opens it.
+      console.error("[onboarding] opening turn after basics failed", {
+        userId: req.userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const ctx = await loadStateContext(req.userId!);
   res.json(buildInterviewState(ctx));
 });

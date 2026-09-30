@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 372 entries
+# Decision index — all 373 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-30 | нативная анкета сохраняется экранами: `POST /v1/onboarding/basics` — двойник `/telegram-onboarding/profile` (общий разбор, `applyOnboardingFacts`); «назад» — пересохранение; ответы анкеты не идут в историю, завершающее сохранение сбрасывает `messageHistory` и открывает чат ходом `resume` с первого свободного вопроса; `GET /interview` открывает чат только при `basics.complete`; `InterviewState.basics` (значения, `complete`, `limits`) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | чат агента — отдельные чаты как в ChatGPT (ОТМЕНА «одного потока» 2026-09-04): `chat_sessions` + `messages.session_id` (миграция с бэкфиллом по паузе >6 ч), id нового чата выпускает клиент, без `sessionId` — правило шести часов; `GET/PATCH /v1/chat/sessions`, `/history?sessionId=`; заголовки/саммари `MODELS.fast` вне пути ответа + воркер; агент видит только свой чат, прошлые — через `search_past_chats`/`read_past_chat` (чтение) с `datesAround` без партнёрской стороны; `/topics` оставлен для старых сборок; подпись снимков `/history` одним запросом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | нативная анкета открывается первым вопросом: `GET /v1/onboarding/interview` делает ход `resume` коллектора (как передача Mini App), когда шаг `conversational`, флаг коллектора, согласие, язык и контакт есть, а реплик ассистента нет; параллельные чтения ждут один ход; сбой хода — 200 с неоткрытым состоянием; до правки iOS показывал пустой чат вместо экрана «Имя и возраст» | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-29 | счётчик непрочитанного анонимного чата: `SerializedMatch.proxyChatUnreadCount` — сообщения партнёра после собственного курсора `proxyReadAt*` вызывающего (нет курсора — все), чистое чтение одним `count` по существующему индексу, без миграции; null там же, где `proxyChatOpensAt`, и при сбое подсчёта (вход в чат — по `proxyChatOpensAt`); 0 без запроса только пока чат и не открыт по расписанию, и не объявлен тиком (демо); считается и после закрытия окна; в `required` не внесено | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

@@ -1055,6 +1055,22 @@ vi.mock("../services/onboarding-agent.js", () => ({
 vi.mock("../services/onboarding-collector.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/onboarding-collector.js")>()),
   markOnboardingField: vi.fn(async () => ({})),
+  // The collector's own tests cover these against its progress rules; here the
+  // routes only need a verdict and a save to observe.
+  applyOnboardingFacts: vi.fn(async () => ({
+    rejectedFields: [],
+    acceptedFields: [],
+    currentQuestion: "gender",
+  })),
+  loadOnboardingBasics: vi.fn(async () => ({
+    firstName: null,
+    age: null,
+    gender: null,
+    preference: null,
+    height: null,
+    relationshipIntents: [],
+    complete: false,
+  })),
 }));
 
 vi.mock("../services/menu-agent.js", () => ({
@@ -1171,9 +1187,30 @@ const { prisma: prismaMock } = await import("@gennety/db");
 const { runAgentTurn: runAgentTurnMock } = await import(
   "../services/onboarding-agent.js"
 );
-const { markOnboardingField: markOnboardingFieldMock } = await import(
-  "../services/onboarding-collector.js"
-);
+const {
+  markOnboardingField: markOnboardingFieldMock,
+  applyOnboardingFacts: applyOnboardingFactsMock,
+  loadOnboardingBasics: loadOnboardingBasicsMock,
+} = await import("../services/onboarding-collector.js");
+
+const INCOMPLETE_BASICS = {
+  firstName: null,
+  age: null,
+  gender: null,
+  preference: null,
+  height: null,
+  relationshipIntents: [] as string[],
+  complete: false,
+};
+const COMPLETE_BASICS = {
+  firstName: "Alice",
+  age: 22,
+  gender: "female" as const,
+  preference: "men" as const,
+  height: 168,
+  relationshipIntents: ["spark"],
+  complete: true,
+};
 const { env: envMock } = (await import("../config.js")) as unknown as {
   env: Record<string, unknown>;
 };
@@ -3017,18 +3054,21 @@ describe("/v1/onboarding/interview", () => {
     expect(res.status).toBe(200);
   });
 
-  // The native interview's first question (DECISIONS 2026-09-30): `/consent`
-  // reaches `conversational`, and the first read opens the collector.
+  // The native chat's first question (DECISIONS 2026-09-30): `/consent`
+  // reaches `conversational`; once the basics screens are done, a read with no
+  // question yet opens the collector.
   describe("GET opens an unstarted interview", () => {
-    const opener = "What's your first name, and how old are you?";
+    const opener = "What do you love doing in your free time?";
 
     beforeEach(() => {
       envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = true;
       vi.mocked(runAgentTurnMock).mockClear();
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(COMPLETE_BASICS as never);
     });
     afterEach(() => {
       envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = undefined;
       vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+      vi.mocked(loadOnboardingBasicsMock).mockReset().mockResolvedValue(INCOMPLETE_BASICS as never);
     });
 
     function seedFresh(overrides: Partial<Parameters<typeof seedUser>[0]> = {}) {
@@ -3050,11 +3090,11 @@ describe("/v1/onboarding/interview", () => {
         return { reply: opener, expectingPhoto: false, onboardingComplete: false } as never;
       });
       vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
-        currentQuestion: "first_name_age",
+        currentQuestion: "hobbies",
       } as never);
     }
 
-    it("runs the resume turn and answers with the first question and its screen", async () => {
+    it("runs the resume turn and answers with the first question after the basics", async () => {
       const user = await seedFresh();
       resumeRecordsOpener(user);
       const res = await request(app)
@@ -3068,7 +3108,22 @@ describe("/v1/onboarding/interview", () => {
       );
       expect(res.body.question).toBe(opener);
       expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
-      expect(res.body.uiHint).toMatchObject({ control: "name_age" });
+      expect(res.body.basics).toMatchObject({ complete: true, firstName: "Alice" });
+    });
+
+    it("stays closed while the basics screens are unfinished", async () => {
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(INCOMPLETE_BASICS as never);
+      const user = await seedFresh();
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toEqual({
+        ...INCOMPLETE_BASICS,
+        limits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
+      });
     });
 
     it("opens once when two reads race", async () => {
@@ -3123,6 +3178,180 @@ describe("/v1/onboarding/interview", () => {
       expect(res.status).toBe(200);
       expect(res.body.messages).toEqual([]);
       expect(res.body.uiHint).toBeNull();
+    });
+  });
+
+  // The native basics screens (DECISIONS 2026-09-30): saved like the Mini App's
+  // profile screens, never as chat answers, so going back is a re-save; the
+  // save that completes them opens the chat from scratch.
+  describe("POST /basics", () => {
+    const opener = "What do you love doing in your free time?";
+
+    beforeEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = true;
+      vi.mocked(runAgentTurnMock).mockClear();
+      vi.mocked(applyOnboardingFactsMock).mockClear();
+    });
+    afterEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = undefined;
+      vi.mocked(loadOnboardingBasicsMock).mockReset().mockResolvedValue(INCOMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock)
+        .mockReset()
+        .mockResolvedValue({ rejectedFields: [], acceptedFields: [], currentQuestion: "gender" } as never);
+    });
+
+    function seedInterview(overrides: Partial<Parameters<typeof seedUser>[0]> = {}) {
+      return seedUser({
+        onboardingStep: "conversational",
+        isEmailVerified: true,
+        firstName: null,
+        age: null,
+        messageHistory: [],
+        ...overrides,
+      });
+    }
+
+    function save(user: { id: string }, body: Record<string, unknown>) {
+      return request(app)
+        .post("/v1/onboarding/basics")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send(body);
+    }
+
+    it("saves a screen through the collector and leaves the chat alone", async () => {
+      const user = await seedInterview();
+      const res = await save(user, { gender: "female" });
+      expect(res.status).toBe(200);
+      expect(applyOnboardingFactsMock).toHaveBeenCalledWith(user.telegramId, { gender: "female" });
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toMatchObject({ complete: false });
+    });
+
+    it("maps every field onto the collector's names, like the Mini App", async () => {
+      const user = await seedInterview();
+      await save(user, {
+        firstName: "Alice",
+        age: 22,
+        preference: "men",
+        height: 168,
+        relationshipIntents: ["spark"],
+      });
+      expect(applyOnboardingFactsMock).toHaveBeenCalledWith(user.telegramId, {
+        first_name: "Alice",
+        age: 22,
+        preference: "men",
+        height: 168,
+        relationship_intent: ["spark"],
+      });
+    });
+
+    it("answers 400 with the collector's reason and field", async () => {
+      const user = await seedInterview();
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [{ field: "first_name", reason: "invalid_name" }],
+        acceptedFields: [],
+        currentQuestion: "first_name_age",
+      } as never);
+      const res = await save(user, { firstName: "Anna Maria" });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "invalid_name", field: "first_name" });
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed or empty patch before the collector sees it", async () => {
+      const user = await seedInterview();
+      const malformed = await save(user, { age: "22" });
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.error).toBe("invalid-age");
+      const empty = await save(user, {});
+      expect(empty.status).toBe(400);
+      expect(empty.body.error).toBe("no-fields");
+      expect(applyOnboardingFactsMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses before the interview is open and after onboarding", async () => {
+      const early = await seedInterview({ onboardingStep: "language" });
+      const earlyRes = await save(early, { gender: "female" });
+      expect(earlyRes.status).toBe(409);
+      expect(earlyRes.body.error).toBe("interview-not-open");
+      const done = await seedInterview({ onboardingStep: "completed" });
+      expect((await save(done, { gender: "female" })).status).toBe(409);
+      expect(applyOnboardingFactsMock).not.toHaveBeenCalled();
+    });
+
+    it("opens the chat from scratch on the save that completes the basics", async () => {
+      // Began in the old in-chat flow: a stray opener and two basics exchanges.
+      const user = await seedInterview({
+        messageHistory: [
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "What's your first name, and how old are you?" },
+          { role: "user", content: "Alice, 22" },
+          { role: "assistant", content: "Who are you?" },
+        ],
+      });
+      vi.mocked(loadOnboardingBasicsMock)
+        .mockResolvedValueOnce(INCOMPLETE_BASICS as never)
+        .mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      vi.mocked(runAgentTurnMock).mockImplementationOnce(async () => {
+        user.messageHistory = [
+          ...(user.messageHistory as unknown[]),
+          { role: "assistant", content: opener },
+        ] as never;
+        return { reply: opener, expectingPhoto: false, onboardingComplete: false } as never;
+      });
+
+      const res = await save(user, { relationshipIntents: ["spark"] });
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+      expect(res.body.question).toBe(opener);
+      expect(res.body.basics).toMatchObject({ complete: true });
+    });
+
+    it("never resets or re-opens a chat whose basics were already complete", async () => {
+      const user = await seedInterview({
+        messageHistory: [{ role: "assistant", content: opener }],
+      });
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      const res = await save(user, { relationshipIntents: ["longterm"] });
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+    });
+
+    it("keeps the save when the opening turn fails", async () => {
+      const user = await seedInterview();
+      vi.mocked(loadOnboardingBasicsMock)
+        .mockResolvedValueOnce(INCOMPLETE_BASICS as never)
+        .mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      vi.mocked(runAgentTurnMock).mockRejectedValueOnce(new Error("collector down"));
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const res = await save(user, { relationshipIntents: ["spark"] });
+      errors.mockRestore();
+      expect(res.status).toBe(200);
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toMatchObject({ complete: true });
     });
   });
 

@@ -30,6 +30,7 @@ vi.mock("./onboarding-analytics.js", () => ({
 import {
   applyOnboardingFacts,
   backfillCandidates,
+  loadOnboardingBasics,
   deterministicCandidates,
   extractWithOpenAI,
   isLikelyMetaQuestion,
@@ -814,6 +815,89 @@ describe("applyOnboardingFacts", () => {
         platform: "telegram",
       }),
     );
+  });
+
+  // Going back on the native screens is a re-save (DECISIONS 2026-09-30): the
+  // answer is overwritten and the collector stays on the first unanswered step.
+  it("overwrites an answered basic without moving the current question back", async () => {
+    const state = primeDb(
+      collectorUser({
+        firstName: "Alice",
+        age: 24,
+        gender: "female",
+        preference: "men",
+        onboardingProgress: {
+          completedFields: ["first_name", "age", "gender", "preference"],
+          skippedFields: [],
+          askedFields: ["height"],
+          currentQuestion: "height",
+          collectorVersion: 1,
+          revision: 4,
+          backfilledAt: new Date("2026-08-01T00:00:00.000Z"),
+        },
+      }),
+    );
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, { gender: "male" });
+
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ gender: "male" }) }),
+    );
+    expect(state.progressWrite?.currentQuestion).toBe("height");
+    expect(snapshot.currentQuestion).toBe("height");
+  });
+
+  describe("loadOnboardingBasics", () => {
+    function withIntents(user: ReturnType<typeof collectorUser>, intents: string[]) {
+      return { ...user, profile: { ...user.profile, relationshipIntents: intents } };
+    }
+
+    const allFive = {
+      firstName: "Alice",
+      age: 24,
+      gender: "female",
+      preference: "men",
+    };
+
+    it("mirrors the saved values and says what is still missing", async () => {
+      db.user.findUniqueOrThrow.mockResolvedValue(
+        withIntents(collectorUser({ firstName: "Alice", age: 24 }), []),
+      );
+
+      const basics = await loadOnboardingBasics("user-1");
+
+      expect(basics).toEqual({
+        firstName: "Alice",
+        age: 24,
+        gender: null,
+        preference: null,
+        height: null,
+        relationshipIntents: [],
+        complete: false,
+      });
+    });
+
+    it("counts the intent only once the collector recorded it, as nextOnboardingQuestion does", async () => {
+      // A stored intent set without `relationship_intent` in `completedFields` is
+      // still asked by the collector — so the screens are not done either.
+      const user = collectorUser({ ...allFive, profile: { ...collectorUser().profile, height: 170 } });
+      db.user.findUniqueOrThrow.mockResolvedValue(withIntents(user, ["spark"]));
+      expect((await loadOnboardingBasics("user-1")).complete).toBe(false);
+
+      const recorded = collectorUser({
+        ...allFive,
+        profile: { ...collectorUser().profile, height: 170 },
+        onboardingProgress: {
+          ...collectorUser().onboardingProgress,
+          completedFields: ["relationship_intent"],
+        },
+      });
+      db.user.findUniqueOrThrow.mockResolvedValue(withIntents(recorded, ["spark"]));
+      const basics = await loadOnboardingBasics("user-1");
+      expect(basics.complete).toBe(true);
+      expect(basics.height).toBe(170);
+      expect(basics.relationshipIntents).toEqual(["spark"]);
+    });
   });
 });
 

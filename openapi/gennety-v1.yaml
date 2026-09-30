@@ -2197,6 +2197,53 @@ paths:
               schema: { $ref: "#/components/schemas/InterviewState" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/onboarding/basics:
+    post:
+      tags: [onboarding]
+      operationId: saveOnboardingBasics
+      summary: Save one or more basics screens (name, age, gender, preference, height, intent)
+      description: |
+        The native twin of the Mini App's `POST /v1/telegram-onboarding/profile`
+        (DECISIONS 2026-09-30): the five basics are answered on their own
+        screens and saved through the collector's structured path, never sent
+        into the chat as answers.
+
+        Going back is re-saving: post the field again and it is overwritten.
+        The save that completes the basics (`basics.complete` turns true) opens
+        the chat from scratch — earlier history is dropped and the collector
+        asks its first free question — so the response then carries that
+        question in `messages`. Later saves never touch the chat.
+
+        All-or-nothing: a rejected value writes nothing and answers 400 with
+        the collector's reason (`invalid_name`, `age_out_of_range`,
+        `height_out_of_range`, `invalid_gender`, `invalid_preference`,
+        `invalid_relationship_intent`) and the field, or a shape error
+        (`invalid-age`, …, `no-fields`) without one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingBasicsPatch" }
+      responses:
+        "200":
+          description: Interview state after the save
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewState" }
+        "400":
+          description: A value was rejected; nothing was written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnboardingBasicsRejection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: >-
+            Onboarding already complete, terms not accepted, language not
+            selected, or the interview is not open yet (`interview-not-open`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/onboarding/interview/answer:
     post:
       tags: [onboarding]
@@ -7178,6 +7225,65 @@ components:
           description: Inclusive upper bound — a count for wheels/photos, SECONDS for `voice_record`.
         skippable: { type: boolean }
 
+    OnboardingBasics:
+      type: object
+      description: |
+        The five basics the native client asks on its own screens before the
+        chat (DECISIONS 2026-09-30) — the twin of the Mini App's
+        `profileBasics` + `profileLimits`. The client routes to the first empty
+        screen, shows saved values on the screens it goes back to, and opens
+        the chat once `complete` is true.
+      required: [firstName, age, gender, preference, height, relationshipIntents, complete, limits]
+      properties:
+        firstName: { type: [string, "null"] }
+        age: { type: [integer, "null"] }
+        gender:
+          type: [string, "null"]
+          description: "`male` or `female`. Not an enum: a nullable enum gives the Swift client a phantom `_empty_` case."
+        preference:
+          type: [string, "null"]
+          description: "`men`, `women` or `both`."
+        height: { type: [integer, "null"], description: Centimetres }
+        relationshipIntents:
+          type: array
+          items: { type: string }
+          description: "Canonical intents (`spark`, `open`, `falling`, `longterm`); empty when unanswered."
+        complete:
+          type: boolean
+          description: >-
+            The collector has none of the five left to ask. The intent counts
+            only once the collector recorded it, whatever the stored set holds.
+        limits:
+          type: object
+          required: [minAge, maxAge, minHeightCm, maxHeightCm]
+          properties:
+            minAge: { type: integer }
+            maxAge: { type: integer }
+            minHeightCm: { type: integer }
+            maxHeightCm: { type: integer }
+
+    OnboardingBasicsPatch:
+      type: object
+      description: Any subset of the basics; at least one field.
+      properties:
+        firstName: { type: string }
+        age: { type: integer }
+        gender: { type: string, description: "`male` or `female`" }
+        preference: { type: string, description: "`men`, `women` or `both`" }
+        height: { type: integer, description: Centimetres }
+        relationshipIntents:
+          type: array
+          items: { type: string }
+
+    OnboardingBasicsRejection:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        field:
+          type: string
+          description: The collector's field name (`first_name`, `age`, …) when a value was rejected
+
     InterviewState:
       type: object
       description: Mirrors `InterviewStateDto` in `public/routes/onboarding-state.ts`
@@ -7217,6 +7323,9 @@ components:
             `GET` state. Deliberately not nullable: `enum: [..., null]` makes
             swift-openapi-generator emit a phantom `_empty_` case (see
             `PendingFeedback.venueFit` history) — absence expresses "none".
+        basics:
+          $ref: "#/components/schemas/OnboardingBasics"
+          description: The basics screens' state; present on every native interview response
 
     ChatMessage:
       type: object

@@ -1,7 +1,17 @@
 import { prisma, type OnboardingStep } from "@gennety/db";
-import { MIN_PHOTOS } from "@gennety/shared";
+import {
+  MAX_AGE,
+  MAX_HEIGHT_CM,
+  MIN_AGE,
+  MIN_HEIGHT_CM,
+  MIN_PHOTOS,
+} from "@gennety/shared";
 import { uiHintForQuestion, type UiHint } from "../ui-hints.js";
 import type { OnboardingReaction } from "../../services/message-reactions.js";
+import {
+  loadOnboardingBasics,
+  type OnboardingBasics,
+} from "../../services/onboarding-collector.js";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -33,7 +43,27 @@ export interface InterviewStateDto {
    * reaction is an event on the exchange, not a property of the history.
    */
   reaction?: OnboardingReaction;
+  /**
+   * The five basics the native client asks on its own screens before the chat
+   * (DECISIONS 2026-09-30) — saved values, the collector's `complete` verdict
+   * and the bounds of the two wheels. The native twin of the Mini App's
+   * `/state.profileBasics` + `profileLimits`: the client routes to the first
+   * empty screen, goes back through saved ones, and opens the chat only once
+   * `complete` is true.
+   */
+  basics?: OnboardingBasicsDto;
 }
+
+export interface OnboardingBasicsDto extends OnboardingBasics {
+  limits: { minAge: number; maxAge: number; minHeightCm: number; maxHeightCm: number };
+}
+
+const BASICS_LIMITS: OnboardingBasicsDto["limits"] = {
+  minAge: MIN_AGE,
+  maxAge: MAX_AGE,
+  minHeightCm: MIN_HEIGHT_CM,
+  maxHeightCm: MAX_HEIGHT_CM,
+};
 
 const STEP_ORDER: OnboardingStep[] = ["consent", "language", "conversational", "completed"];
 
@@ -85,6 +115,7 @@ export interface StateContext {
   question?: string | null;
   acknowledgement?: string | null;
   reaction?: OnboardingReaction | null;
+  basics?: OnboardingBasics | null;
 }
 
 export function buildInterviewState(ctx: StateContext): InterviewStateDto {
@@ -112,6 +143,7 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
     // Absent, not null, when there is no reaction: `enum: [..., null]` in the
     // spec makes the Swift generator emit a phantom `_empty_` case.
     ...(ctx.reaction ? { reaction: ctx.reaction } : {}),
+    ...(ctx.basics ? { basics: { ...ctx.basics, limits: BASICS_LIMITS } } : {}),
     messages,
     expectingPhoto,
     photoCount: ctx.photoCount,
@@ -121,7 +153,7 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
 }
 
 export async function loadStateContext(userId: string): Promise<StateContext> {
-  const [user, profile, progress] = await Promise.all([
+  const [user, profile, progress, basics] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
@@ -139,11 +171,13 @@ export async function loadStateContext(userId: string): Promise<StateContext> {
       where: { userId },
       select: { currentQuestion: true },
     }),
+    loadOnboardingBasics(userId),
   ]);
   return {
     step: user.onboardingStep,
     history: (user.messageHistory ?? []) as unknown[],
     photoCount: profile?.photos?.length ?? 0,
     currentQuestion: progress?.currentQuestion ?? null,
+    basics,
   };
 }

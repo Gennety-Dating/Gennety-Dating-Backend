@@ -969,16 +969,25 @@ Hard rules enforced by the collector:
 - Real user text is distinct from `resume` and
   `photos_updated`; synthetic events, assistant text, summaries, and tool
   arguments are never mined as profile facts.
-- **The first question is asked by the server, on both rails.** Telegram gets
-  it from the Mini App handoff (`/complete` runs a `resume` turn). The native
-  client reaches `conversational` through `POST /v1/onboarding/consent`, and
-  its first `GET /v1/onboarding/interview` opens the collector with the same
-  `resume` turn (2026-09-30) — no user message is recorded, the history starts
-  with `first_name_age`, and the response already carries its `uiHint`, which
-  is what the iOS "name and age" screen is drawn from. It runs only when the
-  collector owns the turn (flag, `conversational`, consent, language, a
-  verified contact) and no assistant prompt exists yet; concurrent reads share
-  one turn. Before this the native interview came back empty and iOS drew an
+- **The basics are screens on both apps, never chat answers (2026-09-30).**
+  Name, age, gender, preference, height and relationship intent are saved
+  from their own screens — the Mini App through
+  `POST /v1/telegram-onboarding/profile`, iOS through its JWT twin
+  `POST /v1/onboarding/basics` (same body, same `applyOnboardingFacts` path,
+  all-or-nothing 400 `{error, field}`). Going back on a screen is a re-save:
+  the collector overwrites the value and stays on the first unanswered step.
+  Their answers never enter `messageHistory`; iOS reads what is saved and
+  whether any of the five is left from `InterviewState.basics`.
+- **The chat's first question is asked by the server, on both rails, after
+  the basics.** Telegram gets it from the Mini App handoff (`/complete` runs a
+  `resume` turn). On iOS the save that completes the basics clears the
+  history (an interview begun in the old in-chat flow, a stray opener) and
+  runs the same `resume` turn, so the chat starts from scratch on the first
+  free question; `GET /v1/onboarding/interview` opens it the same way as a
+  safety net, only once the basics are complete, when the collector owns the
+  turn (flag, `conversational`, consent, language, a verified contact) and no
+  assistant prompt exists yet. Concurrent reads and that save share one turn.
+  Before 2026-09-30 the native interview came back empty and iOS drew an
   empty chat instead of the profile screens.
 - **Relationship intent never reaches the embedding.** It is scored by its own
   `V_intent` multiplier (§3.2) from its own column, and folding it into

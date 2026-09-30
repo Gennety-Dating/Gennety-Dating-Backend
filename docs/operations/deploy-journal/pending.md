@@ -99,6 +99,33 @@ pm2 logs gennety-bot --lines 300 --nostream | grep -E "Chat-session digest sched
 
 ---
 
+**PENDING (2026-09-30, вечер) — нативная анкета сохраняется экранами: `POST /v1/onboarding/basics`, чат после неё с чистого листа (DECISIONS 2026-09-30, вечер).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать (её маршрут лишь переехал
+на общий разбор тела). Едет вместе с блоком ниже (тот же день, те же файлы) и с iOS той же даты: iOS до неё шлёт
+анкету в чат и с этим сервером увидит «Повторить». Что меняется: экраны анкеты iOS сохраняют ответы новой ручкой, «назад»
+на них — пересохранение; завершающее сохранение сбрасывает `users.message_history` и задаёт первый свободный вопрос;
+`GET /interview` открывает чат только после анкеты и несёт `basics`. Пишет в БД: колонки анкеты (`users`, `profiles`),
+`onboarding_progress` и — на завершающем сохранении — `users.message_history` (сброс + одна реплика ассистента).
+**Демо:** те же ручки в `demo-api`.
+
+Проверка после выката (JWT нового тестового аккаунта iOS после согласия и города):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/interview \
+  | jq '{messages: (.messages | length), basics}'
+# → messages 0, basics.complete false, basics.limits {18,55,140,220}
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"firstName":"Test","age":25,"gender":"female","preference":"men","height":170,"relationshipIntents":["spark"]}' \
+  https://dating-api.gennety.com/v1/onboarding/basics | jq '{messages, basics: .basics.complete}'
+# → одна реплика ассистента (вопрос об увлечениях), basics true
+pm2 logs gennety-bot --lines 200 --nostream | grep "opening turn"   # → пусто
+```
+
+**Rollback:** `git revert` коммита + рестарт бота (вместе с iOS той же даты). Сохранённые анкеты остаются валидными —
+это те же колонки, что пишет Mini App.
+
+---
+
 **PENDING (2026-09-30) — нативная анкета открывается первым вопросом: `GET /v1/onboarding/interview` делает ход `resume` (DECISIONS 2026-09-30).**
 **Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций выше не
 зависит — едет с тем заходом, в который попадёт коммит. Что меняется: новый человек из iOS после согласия и города больше
