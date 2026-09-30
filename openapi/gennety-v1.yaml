@@ -1970,6 +1970,15 @@ paths:
       tags: [me]
       operationId: uploadPhoto
       summary: Upload one profile photo (multipart field `photo`, ≤8 MB; profile max 10)
+      description: |
+        Appends the photo at the end. 30 uploads an hour per user — refused
+        ones count too (429 past that).
+
+        During onboarding, while the collector is on the photo question, the
+        upload runs no agent turn: the native photo stage stays open past the
+        minimum (`InterviewState.expectingPhoto`) until the user leaves it with
+        `POST /v1/onboarding/photos/continue`, and `interviewState` in the
+        answer is the state after the upload.
       requestBody:
         required: true
         content:
@@ -2046,7 +2055,55 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Active users cannot drop below the minimum photo count
+          description: |
+            `code: "photo_minimum"` (with `min`): the delete would drop below
+            the minimum photo count — refused for active users, and during
+            onboarding once the user has left the photo stage
+            (`POST /v1/onboarding/photos/continue`). While the stage is open
+            there is no floor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/photos/order:
+    put:
+      tags: [me]
+      operationId: reorderPhotos
+      summary: New order for the profile photos (the first is the main photo)
+      description: |
+        The native photo manager's "make main" and in-place replace (upload
+        the new photo, delete the old one, move the new one into its place).
+        Hashes, face scores and `profileMedia` move with their photo; a video
+        keeps its place. No verification rerun — the set of photos is
+        unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order]
+              properties:
+                order:
+                  type: array
+                  maxItems: 10
+                  items: { type: integer, minimum: 0 }
+                  description: |
+                    `order[i]` is the current index of the photo that goes to
+                    position `i` — a permutation of every current index.
+      responses:
+        "200":
+          description: Photos in the new order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotosResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `code: "photos_changed"` — the order is not a permutation of the
+            photos as they are now (added or removed meanwhile). Reload them
+            and ask again.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2342,6 +2399,38 @@ paths:
         "404": { description: Feature disabled }
         "409":
           description: Onboarding already complete, terms not accepted or language not selected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/onboarding/photos/continue:
+    post:
+      tags: [onboarding]
+      operationId: continueOnboardingPhotos
+      summary: Leave the photo stage (the native twin of Telegram's Continue)
+      description: |
+        The photo stage stays open past the minimum while the user adds,
+        swaps and reorders photos in the manager; uploads there run no agent
+        turn. This call leaves it: `photos` is recorded (from then on a delete
+        cannot drop below the minimum) and the collector asks the next
+        question or finalizes onboarding — the response is the next interview
+        state, exactly like an answer's.
+
+        409 `photos-required` (with `minPhotos`) below the minimum.
+        Idempotent: off the photo question (a retry that already landed) it
+        changes nothing and returns the current state.
+      responses:
+        "200":
+          description: Next interview state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `photos-required` below the minimum; onboarding already complete,
+            terms not accepted or language not selected.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -7446,7 +7535,12 @@ components:
                 type: string
                 enum: [user, assistant]
               content: { type: string }
-        expectingPhoto: { type: boolean }
+        expectingPhoto:
+          type: boolean
+          description: |
+            The photo stage is open: true while the collector is on the photo
+            question — past the minimum too, until the user leaves it with
+            `POST /v1/onboarding/photos/continue`.
         photoCount: { type: integer }
         minPhotos: { type: integer }
         uiHint:

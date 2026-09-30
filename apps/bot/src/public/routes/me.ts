@@ -62,6 +62,7 @@ import {
 import {
   photoUploadStatePatch,
   removeAlignedPhotoHash,
+  reorderProfilePhotos,
 } from "../../services/profile-media-validation/photo-state.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { serializeOwnProfileVideo } from "../../services/native-profile-video.js";
@@ -915,7 +916,22 @@ meRouter.post(
     });
 
     let interviewState = null;
-    if (userMeta.onboardingStep !== "completed") {
+    const photoStage =
+      userMeta.onboardingStep === "conversational"
+        ? await prisma.onboardingProgress.findUnique({
+            where: { userId: req.userId! },
+            select: { currentQuestion: true },
+          })
+        : null;
+    if (photoStage?.currentQuestion === "photos") {
+      // The native photo stage: the manager adds, swaps and reorders until the
+      // user leaves it with `POST /v1/onboarding/photos/continue`. No agent
+      // turn per photo — the one that ran here advanced the collector on the
+      // upload that reached the minimum and finalized onboarding under the
+      // user's hands, and re-asked the photo question into the chat on every
+      // earlier one (DECISIONS 2026-09-30).
+      interviewState = buildInterviewState(await loadStateContext(req.userId!));
+    } else if (userMeta.onboardingStep !== "completed") {
       try {
         await injectSystemMessage(
           userMeta.telegramId,
@@ -995,6 +1011,7 @@ meRouter.delete(
         where: { id: req.userId! },
         select: {
           status: true,
+          onboardingStep: true,
           profile: {
             select: {
               photos: true,
@@ -1011,7 +1028,21 @@ meRouter.delete(
       if (index >= photos.length) return { kind: "not_found" as const };
 
       const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
-      if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
+      // Onboarding has no floor while the photo stage is open — the manager
+      // swaps freely there. Once the user has left it (`photos` recorded by
+      // `POST /v1/onboarding/photos/continue`), the collector counts photos as
+      // answered for good, and dropping below the minimum would leave finalize
+      // refusing a state the user cannot see — the same floor as an active user.
+      const photoStageClosed =
+        user.onboardingStep === "conversational" &&
+        nextPhotos.length < MIN_PHOTOS &&
+        (
+          await tx.onboardingProgress.findUnique({
+            where: { userId: req.userId! },
+            select: { completedFields: true },
+          })
+        )?.completedFields.includes("photos") === true;
+      if (nextPhotos.length < MIN_PHOTOS && (user.status === "active" || photoStageClosed)) {
         return { kind: "minimum" as const };
       }
 
@@ -1062,7 +1093,9 @@ meRouter.delete(
       return;
     }
     if (deletion.kind === "minimum") {
-      res.status(409).json({ error: "Minimum photos required", min: MIN_PHOTOS });
+      res
+        .status(409)
+        .json({ error: "Minimum photos required", code: "photo_minimum", min: MIN_PHOTOS });
       return;
     }
 
@@ -1078,6 +1111,87 @@ meRouter.delete(
     queueVerificationRerun(req.userId!);
 
     res.json(await buildPhotosResponse(deletion.nextPhotos));
+  },
+);
+
+/**
+ * PUT /v1/me/photos/order — a new order for the photos, `{ order: number[] }`
+ * where `order[i]` is the current index of the photo that goes to position
+ * `i` (DECISIONS 2026-09-30, the native photo manager).
+ *
+ * Two things the manager does with it: "make main" (the first photo is the one
+ * a match sees first) and "replace" — the new photo is uploaded, the old one
+ * deleted, and the new one moved into the old one's place. Hashes, face scores
+ * and `profileMedia` move with their photo (`reorderProfilePhotos`); a video
+ * keeps its place.
+ *
+ * 400 `invalid-order` for anything but a list of integers; 409
+ * `photos_changed` when it is not a permutation of the photos as they are
+ * now — the client reloads and asks again. No verification rerun: the set of
+ * photos, which is what verification judges, is unchanged.
+ */
+meRouter.put(
+  "/photos/order",
+  async (req: Request, res: Response): Promise<void> => {
+    const order = (req.body as { order?: unknown } | undefined)?.order;
+    if (!Array.isArray(order) || !order.every((index) => Number.isInteger(index))) {
+      res.status(400).json({ error: "invalid-order" });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM users WHERE id = $1::uuid FOR UPDATE",
+        req.userId!,
+      );
+      const profile = await tx.profile.findUnique({
+        where: { userId: req.userId! },
+        select: {
+          photos: true,
+          profileMedia: true,
+          photoFaceScores: true,
+          referenceFaceEmbedding: true,
+          uploadedPhotoHashes: true,
+        },
+      });
+      const photos = profile?.photos ?? [];
+      const next = reorderProfilePhotos({
+        photos,
+        media: normalizeProfileMedia(profile?.profileMedia ?? [], photos),
+        photoFaceScores: profile?.photoFaceScores ?? [],
+        uploadedPhotoHashes: profile?.uploadedPhotoHashes ?? [],
+        order: order as number[],
+      });
+      if (!next) return { kind: "stale" as const };
+      if (profile && photos.length > 0) {
+        const photoState = photoUploadStatePatch({
+          photos: next.photos,
+          uploadedPhotoHashes: next.uploadedPhotoHashes,
+          referenceFaceEmbedding: profile.referenceFaceEmbedding ?? null,
+          // The reference anchor is the first photo, as after a delete of it.
+          refreshReference: next.photos[0] !== photos[0],
+        });
+        await tx.profile.update({
+          where: { userId: req.userId! },
+          data: {
+            photos: next.photos,
+            profileMedia: profileMediaToJson(next.media),
+            photoFaceScores: next.photoFaceScores,
+            ...photoState,
+          },
+        });
+      }
+      return { kind: "ordered" as const, photos: next.photos };
+    });
+
+    if (result.kind === "stale") {
+      res.status(409).json({
+        error: "Photos changed — reload them and try again",
+        code: "photos_changed",
+      });
+      return;
+    }
+    res.json(await buildPhotosResponse(result.photos));
   },
 );
 

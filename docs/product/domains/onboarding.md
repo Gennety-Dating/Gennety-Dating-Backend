@@ -1090,6 +1090,18 @@ Hard rules enforced by the collector:
   the same shape, off the same `reviseStatusScript`).
   At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
+  **The native app has the same open stage (2026-09-30).** Its photo step is a
+  dedicated manager screen (add, delete, replace, make main), so the stage must
+  not close under the user: while the collector is on `photos`, an upload
+  through `POST /v1/me/photos` runs no agent turn and `expectingPhoto` stays
+  true past the minimum; the user leaves with `POST /v1/onboarding/photos/continue`
+  — the same `photos_continue` input as Telegram's button. Until then each
+  upload ran a `photos_updated` turn, which re-asked the photo question into the
+  chat before the minimum and finalized onboarding on the upload that reached
+  it. Leaving records `photos`, and from then on a delete cannot drop below the
+  minimum (finalize would refuse a state the user cannot see); while the stage
+  is open there is no floor, as in Telegram. The order of photos is the user's
+  (`PUT /v1/me/photos/order`): the first one is what a match sees first.
   **The stage is an editor, not an append-only log (2026-07-27).** A persistent
   bottom panel (Telegram *reply* keyboard, one button — "🗂 My photos") sits
   under the chat for the whole stage and opens the **photo editor**: the same

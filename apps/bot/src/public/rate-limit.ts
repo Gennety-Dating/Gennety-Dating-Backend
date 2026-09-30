@@ -389,10 +389,18 @@ export const clientEventsIpLimiter = make({
   message: { error: "Too many event batches, try again later." },
 });
 
-/** Profile photo upload — 10/hour per user (falls back to IP). */
+/**
+ * Profile photo upload — 30/hour per user (falls back to IP).
+ *
+ * Was 10 until the native photo manager (DECISIONS 2026-09-30): a refused
+ * photo counts against the window too, and a swap is an upload, so a new user
+ * filling ten slots with two or three refusals on the way ran out mid-onboarding
+ * and waited up to an hour. Thirty still caps what one account costs the
+ * vision providers.
+ */
 export const photoUploadLimiter = make({
   windowMs: 3_600_000,
-  limit: 10,
+  limit: 30,
   keyGenerator: (req): string => `photo-up:${req.userId ?? ipKey(req)}`,
   message: { error: "Too many photo uploads, try again later." },
 });

@@ -43,6 +43,33 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-09-30, ночь) — нативный шаг фото открыт до «Продолжить»: `POST /v1/onboarding/photos/continue`, `PUT /v1/me/photos/order`, лимит загрузок 30/ч (DECISIONS 2026-09-30, ночь).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App и Telegram не затронуты (обе ручки — только
+JWT, `/v1/me/photos` зовёт только натив). Едет вместе с двумя блоками анкеты ниже (тот же день) и с iOS той же даты:
+её менеджер фото зовёт обе новые ручки, а без выката шаг фото закрывался бы сам на четвёртом фото. Старые сборки iOS
+не ломаются: их «Продолжить» шлёт слово в чат, и коллектор на ≥ 4 фото идёт дальше. Пишет в БД: `profiles.photos` и
+выровненные с ним массивы (порядок), `onboarding_progress.completed_fields` (`photos` на выходе со стадии).
+**Демо:** те же ручки.
+
+Проверка после выката (JWT тестового аккаунта iOS на шаге фото, ≥ 4 фото):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/interview \
+  | jq '{expectingPhoto, photoCount, hint: .uiHint.control}'
+# → expectingPhoto true и после 4 фото, hint photo_upload
+curl -s -X PUT -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"order":[1,0,2,3]}' https://dating-api.gennety.com/v1/me/photos/order | jq '.photos | length'
+# → 4 (первые два поменялись местами); '{"order":[0]}' → 409 photos_changed
+curl -s -X POST -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/photos/continue \
+  | jq '{expectingPhoto, question}'
+# → expectingPhoto false, question — следующий вопрос (голос) или финал
+```
+
+**Rollback:** `git revert` коммита + рестарт бота (вместе с iOS той же даты). Порядок фото, уже заданный людьми, остаётся
+валидным — это те же выровненные массивы.
+
+---
+
 **PENDING (2026-09-30, ночь) — прокси-чат: присутствие («в сети», «печатает…») и долгий опрос `GET …/chat?after=`, `POST …/chat/presence`, `thread-id` у пушей прокси-чата (DECISIONS 2026-09-30).**
 **Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций A/B/C
 выше не зависит — едет с тем заходом, в который попадёт коммит. Что меняется: у `ProxyChatState` два новых поля

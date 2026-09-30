@@ -2616,6 +2616,46 @@ describe("POST /v1/me/photos", () => {
     // No self-photo identity anchor is created before Persona verification.
     expect(userById(user.id)?.profile?.referenceFaceEmbedding ?? null).toBeNull();
   });
+
+  it("runs no agent turn while the native photo stage is open (2026-09-30)", async () => {
+    const { injectSystemMessage } = await import("../services/onboarding-agent.js");
+    vi.mocked(injectSystemMessage).mockClear();
+    vi.mocked(runAgentTurnMock).mockClear();
+    vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+      currentQuestion: "photos",
+    } as never);
+    const user = await seedUser({ onboardingStep: "conversational" });
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["p/a.jpg", "p/b.jpg", "p/c.jpg"],
+      matchRadius: "campus_only",
+    };
+
+    try {
+      const res = await request(app)
+        .post("/v1/me/photos")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(201);
+      // The upload that reaches the minimum no longer moves the collector on:
+      // the stage stays open for the manager until the user leaves it.
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(injectSystemMessage).not.toHaveBeenCalled();
+      expect(res.body.interviewState).toMatchObject({
+        expectingPhoto: true,
+        photoCount: MIN_PHOTOS,
+      });
+    } finally {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    }
+  });
 });
 
 describe("DELETE /v1/me/photos/:index", () => {
@@ -2737,6 +2777,124 @@ describe("DELETE /v1/me/photos/:index", () => {
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
     expect(res.body.photos).toEqual(["b.jpg"]);
+  });
+
+  describe("during onboarding (the native photo manager, 2026-09-30)", () => {
+    afterEach(() => {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    async function seedOnboarding(photos: string[]) {
+      const user = await seedWithPhotos(photos, "onboarding" as UserRow["status"]);
+      userById(user.id)!.onboardingStep = "conversational";
+      return user;
+    }
+
+    it("has no floor while the photo stage is open", async () => {
+      const user = await seedOnboarding(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        completedFields: ["hobbies"],
+      } as never);
+      const res = await request(app)
+        .delete("/v1/me/photos/3")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+    });
+
+    it("keeps the minimum once the user has left the photo stage", async () => {
+      const user = await seedOnboarding(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        completedFields: ["hobbies", "photos"],
+      } as never);
+      const res = await request(app)
+        .delete("/v1/me/photos/3")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("photo_minimum");
+      expect(res.body.min).toBe(MIN_PHOTOS);
+      expect(userById(user.id)?.profile?.photos).toHaveLength(4);
+    });
+  });
+});
+
+describe("PUT /v1/me/photos/order", () => {
+  beforeEach(resetDb);
+
+  async function seedPhotos() {
+    const user = await seedUser();
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+      profileMedia: [
+        { type: "photo", photo: "a.jpg" },
+        { type: "photo", photo: "b.jpg" },
+        { type: "video", video: "u/clip.mp4" },
+        { type: "photo", photo: "c.jpg" },
+        { type: "photo", photo: "d.jpg" },
+      ],
+      photoFaceScores: [0.91, 0.82, 0.73, 0.64],
+      uploadedPhotoHashes: ["ha", "hb", "hc", "hd"],
+      matchRadius: "campus_only",
+    } as never;
+    return user;
+  }
+
+  it("401 without auth", async () => {
+    const res = await request(app).put("/v1/me/photos/order").send({ order: [0] });
+    expect(res.status).toBe(401);
+  });
+
+  it("makes the last photo the main one and moves everything aligned with it", async () => {
+    const user = await seedPhotos();
+    const res = await request(app)
+      .put("/v1/me/photos/order")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ order: [3, 0, 1, 2] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["d.jpg", "a.jpg", "b.jpg", "c.jpg"]);
+    expect(res.body.signedUrls).toHaveLength(4);
+    const profile = userById(user.id)!.profile as unknown as Record<string, unknown>;
+    expect(profile.photos).toEqual(["d.jpg", "a.jpg", "b.jpg", "c.jpg"]);
+    expect(profile.uploadedPhotoHashes).toEqual(["hd", "ha", "hb", "hc"]);
+    expect(profile.photoFaceScores).toEqual([0.64, 0.91, 0.82, 0.73]);
+    // The video keeps its place among the media.
+    expect(profile.profileMedia).toEqual([
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "a.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "photo", photo: "c.jpg" },
+    ]);
+  });
+
+  it("409 photos_changed for an order that no longer fits, and changes nothing", async () => {
+    const user = await seedPhotos();
+    const res = await request(app)
+      .put("/v1/me/photos/order")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ order: [2, 0, 1] });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photos_changed");
+    expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+  });
+
+  it("400 for anything but a list of integers", async () => {
+    const user = await seedPhotos();
+    for (const order of [undefined, "0,1", [0, "1"], [0.5]]) {
+      const res = await request(app)
+        .put("/v1/me/photos/order")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send({ order });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid-order");
+    }
   });
 });
 
@@ -3376,6 +3534,99 @@ describe("/v1/onboarding/interview", () => {
       .send({ text: "x".repeat(4_001) });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Text is too long");
+  });
+
+  describe("POST /photos/continue (the native photo manager, 2026-09-30)", () => {
+    beforeEach(() => {
+      vi.mocked(markOnboardingFieldMock).mockClear();
+      vi.mocked(runAgentTurnMock).mockClear();
+    });
+    afterEach(() => {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    async function seedAtPhotos(count: number) {
+      const user = await seedUser({ onboardingStep: "conversational" });
+      userById(user.id)!.profile = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        hobbies: [],
+        partnerPreferences: null,
+        psychologicalSummary: null,
+        ageRangeMin: null,
+        ageRangeMax: null,
+        photos: Array.from({ length: count }, (_, index) => `${index}.jpg`),
+        matchRadius: "campus_only",
+      };
+      return user;
+    }
+
+    it("records the photos and hands the turn to the collector, as Telegram's Continue", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS + 1);
+      vi.mocked(prismaMock.onboardingProgress.findUnique)
+        .mockResolvedValueOnce({ currentQuestion: "photos" } as never)
+        .mockResolvedValueOnce({ currentQuestion: "voice_prompt" } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).toHaveBeenCalledWith(user.telegramId, "photos");
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "photos_continue" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.expectingPhoto).toBe(false);
+    });
+
+    it("409 photos-required below the minimum", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS - 1);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "photos",
+      } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "photos-required", minPhotos: MIN_PHOTOS });
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("changes nothing off the photo question (a retry that already landed)", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "voice_prompt",
+      } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps the stage open past the minimum until the user leaves it", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS + 2);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "photos",
+      } as never);
+
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.expectingPhoto).toBe(true);
+      expect(res.body.photoCount).toBe(MIN_PHOTOS + 2);
+      expect(res.body.uiHint).toMatchObject({ control: "photo_upload" });
+    });
   });
 
   describe("POST /interview/voice-prompt", () => {

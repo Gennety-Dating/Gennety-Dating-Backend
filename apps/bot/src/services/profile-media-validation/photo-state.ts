@@ -120,3 +120,55 @@ export function photoUploadStatePatch(args: {
     ...(nextReference ? { referenceFaceEmbedding: nextReference } : {}),
   };
 }
+
+/**
+ * A new order for a profile's photos (`order[i]` = the old index of the photo
+ * that lands at position `i`) with everything that is positional against
+ * `photos[]` moved alongside: the static items of `profileMedia` fill the same
+ * static slots in the new order (a video keeps its place among them), and each
+ * hash and face score follows its photo. Scores of an unaligned legacy array
+ * are dropped, as a delete drops them.
+ *
+ * `null` when `order` is not a permutation of the current indexes — the
+ * caller's view of the photos is stale.
+ */
+export function reorderProfilePhotos<M extends { type: string }>(args: {
+  photos: readonly string[];
+  media: readonly M[];
+  photoFaceScores: readonly number[];
+  uploadedPhotoHashes: readonly string[];
+  order: readonly number[];
+}): {
+  photos: string[];
+  media: M[];
+  photoFaceScores: number[];
+  uploadedPhotoHashes: string[];
+} | null {
+  const { photos, order } = args;
+  if (order.length !== photos.length) return null;
+  const seen = new Set<number>();
+  for (const index of order) {
+    if (!Number.isInteger(index) || index < 0 || index >= photos.length || seen.has(index)) {
+      return null;
+    }
+    seen.add(index);
+  }
+  const statics = args.media.filter((item) => item.type !== "video");
+  if (statics.length !== photos.length) return null;
+
+  const reorderedStatics = order.map((index) => statics[index]!);
+  let slot = 0;
+  const media = args.media.map((item) =>
+    item.type === "video" ? item : reorderedStatics[slot++]!,
+  );
+  const hashes = alignPhotoHashes(photos, args.uploadedPhotoHashes);
+  return {
+    photos: order.map((index) => photos[index]!),
+    media,
+    photoFaceScores:
+      args.photoFaceScores.length === photos.length
+        ? order.map((index) => args.photoFaceScores[index]!)
+        : [],
+    uploadedPhotoHashes: order.map((index) => hashes[index]!),
+  };
+}

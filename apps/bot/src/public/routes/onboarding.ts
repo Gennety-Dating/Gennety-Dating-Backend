@@ -3,6 +3,7 @@ import multer from "multer";
 import { prisma } from "@gennety/db";
 import {
   LEGAL_DOCS_VERSION,
+  MIN_PHOTOS,
   SUPPORTED_LANGUAGES,
   type Language,
 } from "@gennety/shared";
@@ -312,6 +313,53 @@ onboardingRouter.post(
     const result = await runAgentTurn(
       user.telegramId,
       { kind: "resume" },
+      { canPresentTypeRadar: false },
+    );
+
+    const ctx = await loadStateContext(req.userId!);
+    res.json(buildInterviewState({ ...ctx, question: result.reply }));
+  },
+);
+
+/**
+ * POST /v1/onboarding/photos/continue — leave the native photo stage
+ * (DECISIONS 2026-09-30, the photo manager).
+ *
+ * The native twin of Telegram's "Continue ➡️" (`photos_continue`). The stage
+ * used to close by itself on the upload that reached the minimum — each upload
+ * ran an agent turn, and at four photos the collector moved on or finalized —
+ * so the native client could neither add a fifth photo nor swap one it had
+ * second thoughts about. Now uploads at this stage run no turn, the stage stays
+ * open (`expectingPhoto`) until the user leaves it here, and this is where the
+ * collector moves on: `photos` is recorded, then the same `photos_continue`
+ * turn as Telegram asks the next question or finalizes. Recording the field
+ * also sets the delete floor for the rest of onboarding (`DELETE
+ * /v1/me/photos/:index`).
+ *
+ * 409 `photos-required` below the minimum. Idempotent: off this question (a
+ * retry whose first attempt landed) it changes nothing and returns the state.
+ */
+onboardingRouter.post(
+  "/photos/continue",
+  agentTextLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await loadUser(req.userId!);
+    if (!ensureInterviewAllowed(user, res)) return;
+
+    const before = await loadStateContext(req.userId!);
+    if (before.step !== "conversational" || before.currentQuestion !== "photos") {
+      res.json(buildInterviewState(before));
+      return;
+    }
+    if (before.photoCount < MIN_PHOTOS) {
+      res.status(409).json({ error: "photos-required", minPhotos: MIN_PHOTOS });
+      return;
+    }
+
+    await markOnboardingField(user.telegramId, "photos");
+    const result = await runAgentTurn(
+      user.telegramId,
+      { kind: "photos_continue" },
       { canPresentTypeRadar: false },
     );
 

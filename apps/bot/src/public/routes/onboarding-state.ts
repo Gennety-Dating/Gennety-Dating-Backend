@@ -121,10 +121,15 @@ export interface StateContext {
 export function buildInterviewState(ctx: StateContext): InterviewStateDto {
   const messages = chatMessages(ctx.history);
   const question = ctx.question ?? lastAssistantMessage(ctx.history);
+  // The native photo stage stays open past the minimum until the user leaves
+  // it (`POST /v1/onboarding/photos/continue`), like Telegram's Continue: its
+  // photo manager adds, swaps and reorders there, and the upload that reaches
+  // the minimum no longer advances the collector (DECISIONS 2026-09-30). The
+  // legacy `request_photos` gate keeps its old bound — nothing else closes it.
   const expectingPhoto =
     ctx.step === "conversational" &&
-    ctx.photoCount < MIN_PHOTOS &&
-    (ctx.currentQuestion === "photos" || hasPhotoRequest(ctx.history));
+    (ctx.currentQuestion === "photos" ||
+      (ctx.photoCount < MIN_PHOTOS && hasPhotoRequest(ctx.history)));
 
   // The photo gate can be active (legacy `request_photos` tool call) even
   // when `currentQuestion` lags behind — prefer the observable state.

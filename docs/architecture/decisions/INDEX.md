@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 374 entries
+# Decision index — all 375 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-30 | нативный шаг фото держится открытым до «Продолжить» (двойник Telegram): загрузка на вопросе `photos` хода агента не делает, выход — `POST /v1/onboarding/photos/continue` (`photos_continue` коллектора, 409 `photos-required` ниже минимума); после выхода удаление ниже минимума — 409 `photo_minimum`; `PUT /v1/me/photos/order` (главное фото, замена на месте; хеши/оценки/`profileMedia` едут с фото); лимит загрузок 10 → 30 в час | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | прокси-чат: «в сети» и «печатает…» (отмена «никаких „печатает…“» §4.5 по постановке основателя) — присутствие в памяти процесса (приложение ~45 с / чат ~12 с / набор ~6 с, истечение будит партнёра), счётчик изменений на пару, `GET …/chat?after=` — долгий опрос по образцу Bump (обрыв снимает «в чате» сразу, курсор не двигает), `POST …/chat/presence`; ничего не хранится, только в окне и только партнёру; `thread-id` у `proxy.*` пушей; «печатает» в Telegram и серверное гашение пуша — не сделано | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | нативная анкета сохраняется экранами: `POST /v1/onboarding/basics` — двойник `/telegram-onboarding/profile` (общий разбор, `applyOnboardingFacts`); «назад» — пересохранение; ответы анкеты не идут в историю, завершающее сохранение сбрасывает `messageHistory` и открывает чат ходом `resume` с первого свободного вопроса; `GET /interview` открывает чат только при `basics.complete`; `InterviewState.basics` (значения, `complete`, `limits`) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | чат агента — отдельные чаты как в ChatGPT (ОТМЕНА «одного потока» 2026-09-04): `chat_sessions` + `messages.session_id` (миграция с бэкфиллом по паузе >6 ч), id нового чата выпускает клиент, без `sessionId` — правило шести часов; `GET/PATCH /v1/chat/sessions`, `/history?sessionId=`; заголовки/саммари `MODELS.fast` вне пути ответа + воркер; агент видит только свой чат, прошлые — через `search_past_chats`/`read_past_chat` (чтение) с `datesAround` без партнёрской стороны; `/topics` оставлен для старых сборок; подпись снимков `/history` одним запросом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
