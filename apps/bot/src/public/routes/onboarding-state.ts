@@ -67,7 +67,7 @@ function hasPhotoRequest(history: unknown[]): boolean {
   return false;
 }
 
-function lastAssistantMessage(history: unknown[]): string | null {
+export function lastAssistantMessage(history: unknown[]): string | null {
   for (let i = history.length - 1; i >= 0; i--) {
     const msg = history[i] as { role?: string; content?: string } | null;
     if (msg?.role === "assistant" && typeof msg.content === "string" && msg.content.trim()) {

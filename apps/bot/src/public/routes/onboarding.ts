@@ -16,7 +16,11 @@ import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { serializeUser } from "./serializers.js";
-import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
+import {
+  buildInterviewState,
+  lastAssistantMessage,
+  loadStateContext,
+} from "./onboarding-state.js";
 
 export const onboardingRouter: Router = Router();
 
@@ -65,12 +69,82 @@ function ensureInterviewAllowed(
 }
 
 /**
+ * Interviews being opened right now, by user id. A second read that lands
+ * mid-turn (a retry, a remounted screen) waits for the same turn instead of
+ * recording the opening question twice. One bot process serves the public API.
+ */
+const openingInterviews = new Map<string, Promise<void>>();
+
+/**
+ * The native interview's first question (DECISIONS 2026-09-30).
+ *
+ * Telegram gets it from the Mini App handoff (`/complete` runs a `resume`
+ * turn); the native client reaches `conversational` through `POST /consent`,
+ * and nothing asked the first question there. `GET` returned an empty history
+ * with no `uiHint`, and iOS drew an empty chat where the "name and age" screen
+ * belongs. The interview is opened on this read — the one the client makes
+ * when the interview screen appears — with the same `resume` turn: it records
+ * no user message, so the history starts with the question, as in Telegram.
+ *
+ * Only the collector opens it: without the flag, a `resume` turn would reach
+ * the legacy agent with an empty message. An interview that already has an
+ * assistant prompt is never re-opened.
+ */
+async function openInterviewIfUnstarted(userId: string): Promise<void> {
+  const inFlight = openingInterviews.get(userId);
+  if (inFlight) return inFlight;
+  const opening = (async () => {
+    if (!env.ONBOARDING_FACT_COLLECTOR_ENABLED) return;
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        telegramId: true,
+        onboardingStep: true,
+        termsAccepted: true,
+        language: true,
+        messageHistory: true,
+        registrationTrack: true,
+        phoneVerifiedAt: true,
+        isEmailVerified: true,
+        email: true,
+      },
+    });
+    if (
+      user.onboardingStep !== "conversational" ||
+      !user.termsAccepted ||
+      !user.language ||
+      !hasTrackVerifiedContact(user) ||
+      lastAssistantMessage((user.messageHistory ?? []) as unknown[]) !== null
+    ) {
+      return;
+    }
+    await runAgentTurn(user.telegramId, { kind: "resume" }, { canPresentTypeRadar: false });
+  })();
+  openingInterviews.set(userId, opening);
+  try {
+    await opening;
+  } finally {
+    openingInterviews.delete(userId);
+  }
+}
+
+/**
  * GET /v1/onboarding/interview
- * Returns the current step + the most recent assistant prompt. When no
- * history exists yet the client should POST an opener (e.g. "hi") to trigger
- * the first agent turn.
+ * Returns the current step + the most recent assistant prompt. An interview
+ * the collector has not started yet is opened first, so the answer always
+ * carries the first question and its `uiHint` (`openInterviewIfUnstarted`).
  */
 onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<void> => {
+  try {
+    await openInterviewIfUnstarted(req.userId!);
+  } catch (error) {
+    // The read still answers: the client shows an unopened interview as
+    // "not ready yet" with a retry, and the retry opens it.
+    console.error("[onboarding] opening turn failed", {
+      userId: req.userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   const ctx = await loadStateContext(req.userId!);
   res.json(buildInterviewState(ctx));
 });

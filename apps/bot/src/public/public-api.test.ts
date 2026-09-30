@@ -3017,6 +3017,115 @@ describe("/v1/onboarding/interview", () => {
     expect(res.status).toBe(200);
   });
 
+  // The native interview's first question (DECISIONS 2026-09-30): `/consent`
+  // reaches `conversational`, and the first read opens the collector.
+  describe("GET opens an unstarted interview", () => {
+    const opener = "What's your first name, and how old are you?";
+
+    beforeEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = true;
+      vi.mocked(runAgentTurnMock).mockClear();
+    });
+    afterEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = undefined;
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    function seedFresh(overrides: Partial<Parameters<typeof seedUser>[0]> = {}) {
+      return seedUser({
+        onboardingStep: "conversational",
+        isEmailVerified: true,
+        firstName: null,
+        age: null,
+        messageHistory: [],
+        ...overrides,
+      });
+    }
+
+    /** The collector's `resume` turn: records the question, no user message. */
+    function resumeRecordsOpener(user: { messageHistory: unknown[] }, delayMs = 0) {
+      vi.mocked(runAgentTurnMock).mockImplementationOnce(async () => {
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        user.messageHistory = [{ role: "assistant", content: opener }];
+        return { reply: opener, expectingPhoto: false, onboardingComplete: false } as never;
+      });
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "first_name_age",
+      } as never);
+    }
+
+    it("runs the resume turn and answers with the first question and its screen", async () => {
+      const user = await seedFresh();
+      resumeRecordsOpener(user);
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.question).toBe(opener);
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+      expect(res.body.uiHint).toMatchObject({ control: "name_age" });
+    });
+
+    it("opens once when two reads race", async () => {
+      const user = await seedFresh();
+      resumeRecordsOpener(user, 50);
+      const token = `Bearer ${signAccess(user.id)}`;
+      const [a, b] = await Promise.all([
+        request(app).get("/v1/onboarding/interview").set("Authorization", token),
+        request(app).get("/v1/onboarding/interview").set("Authorization", token),
+      ]);
+      expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+      expect(a.body.question).toBe(opener);
+      expect(b.body.question).toBe(opener);
+    });
+
+    it("never re-opens an interview that already asked something", async () => {
+      const user = await seedFresh({
+        messageHistory: [{ role: "assistant", content: opener }],
+      });
+      await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("leaves it closed without a verified contact, before consent, or without the collector", async () => {
+      const unverified = await seedFresh({ isEmailVerified: false });
+      const beforeConsent = await seedFresh({ onboardingStep: "language" });
+      for (const user of [unverified, beforeConsent]) {
+        const res = await request(app)
+          .get("/v1/onboarding/interview")
+          .set("Authorization", `Bearer ${signAccess(user.id)}`);
+        expect(res.status).toBe(200);
+        expect(res.body.messages).toEqual([]);
+      }
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = false;
+      const noCollector = await seedFresh();
+      await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(noCollector.id)}`);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("still answers when the opening turn fails", async () => {
+      const user = await seedFresh();
+      vi.mocked(runAgentTurnMock).mockRejectedValueOnce(new Error("collector down"));
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      errors.mockRestore();
+      expect(res.status).toBe(200);
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.uiHint).toBeNull();
+    });
+  });
+
   it("POST /answer refuses to start before terms are accepted", async () => {
     const user = await seedUser({
       onboardingStep: "consent",
