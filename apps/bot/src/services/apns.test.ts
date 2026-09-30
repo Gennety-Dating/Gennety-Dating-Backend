@@ -106,6 +106,28 @@ describe("payload builders", () => {
     expect(payload.aps.category).toBe("proxy.message");
   });
 
+
+  /** A date's chat lines stack as one conversation in Notification Centre. */
+  it("threads proxy-chat pushes by match, and nothing else", () => {
+    const proxy = buildAlertPayload({
+      title: "Anna",
+      body: "I'm at the door",
+      data: { type: "proxy.message", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(proxy.aps["thread-id"]).toBe("proxy.m-7");
+    const opened = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "proxy.opened", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(opened.aps["thread-id"]).toBe("proxy.m-7");
+    const other = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "match.proposed", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(other.aps["thread-id"]).toBeUndefined();
+  });
   it("omits the category when there is no type to name it", () => {
     const payload = buildAlertPayload({ title: "T", body: "B" }) as {
       aps: Record<string, unknown>;

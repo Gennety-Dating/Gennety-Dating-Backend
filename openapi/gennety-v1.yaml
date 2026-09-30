@@ -3395,9 +3395,21 @@ paths:
         "the chat has closed" after — a 409 there would leave it with nothing
         to say. `open` is the only thing that gates sending.
 
-        Poll ~4s while the screen is open, like the calendar. Pass `since` with
-        the id of the newest message already held to get only what is new;
-        omit it for the whole window.
+        **Long-poll while the screen is open** (DECISIONS 2026-09-30). Every
+        answer carries `version`; pass it back as `after` and the read is
+        HELD until something the screen shows changes — a line, a reaction, a
+        read tick, the partner's presence or typing — or ~20 s pass, then it
+        answers with the fresh state. A stale `after` is answered at once.
+        A server predating this ignores `after` and answers at once; a client
+        seeing no `version` in the answer falls back to polling every ~4 s.
+        Pass `since` with the id of the newest message already held to get
+        only what is new; omit it for the whole window.
+
+        **Reading is presence.** While the chat is open for sending, every read
+        marks the caller as on the chat screen for their partner
+        (`partnerPresence.inChat`) — for the whole of a held read. Hanging up
+        mid-hold (the screen closed) takes them off it at once. Nothing about
+        presence is stored; it lives in the server's memory for seconds.
 
         404 while `COORDINATION_FEATURE_ENABLED` is off, matching the Mini App
         routes — the feature does not exist rather than being empty.
@@ -3412,6 +3424,15 @@ paths:
             are returned. An id this match does not carry is NOT an error —
             the whole window comes back, because the alternative is a client
             stuck with a cursor it can never advance.
+        - name: after
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+          description: |
+            `ProxyChatState.version` from the previous answer. Equal to the
+            current version → the read is held until the next change or ~20 s.
+            Anything else (stale, unknown, from before a restart) → answered at
+            once. Opaque: compare for equality, never parse it.
       responses:
         "200":
           description: Window state and messages
@@ -3500,6 +3521,71 @@ paths:
             The window is not open — it has not reached T-1h, it closed at
             T+2h, or this match is not a scheduled date. The client should
             re-read the state rather than retry the send.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/matches/{id}/chat/presence:
+    post:
+      tags: [matches]
+      operationId: reportProxyChatPresence
+      summary: Say where you are (app, chat, typing, gone); hear where the partner is
+      description: |
+        The live half of the pre-date chat (DECISIONS 2026-09-30): the green
+        dot by the partner's photo and «печатает…» under their name.
+
+        **Beats, not state.** Each call is a fact with a short expiry: `app`
+        lasts ~45 s (the app beats every ~20 s in the foreground), `chat` ~12 s
+        (reading the chat refreshes it too), `typing` ~6 s (the composer
+        repeats it every ~3 s while the draft changes, and sends `false` when
+        it empties). `away` clears everything at once — sent when the app
+        leaves the foreground. A phone that vanishes without `away` simply
+        expires.
+
+        **Only inside the window, only between the two of them.** Outside the
+        open window nothing is recorded and the answer is 409 `closed`, so the
+        app stops beating (`away` is always accepted). The answer describes
+        the caller's partner on this date and nothing else. Nothing is stored:
+        presence lives in the server's memory, and a restart forgets it until
+        the next beat. A Telegram partner is never shown as present — the Bot
+        API does not report it.
+
+        A presence change wakes the partner's held read
+        (`GET …/chat?after=`), which is how typing reaches the other screen in
+        well under a second without a socket.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyChatPresenceReport" }
+      responses:
+        "200":
+          description: Recorded; where the partner is
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyChatPresenceAnswer" }
+        "400":
+          description: "`bad-presence` — `place` is not one of the three, or `typing` is not a boolean"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match, or the coordination feature is off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `closed` — the chat is not open for sending, so there is nothing
+            to be present in; stop beating. `wrong-state` — not a scheduled date.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -7036,6 +7122,60 @@ components:
             Server clock, for the same skew correction the countdowns use: the
             window's edges are the product, so a device clock several minutes
             out must not decide when the composer unlocks.
+        partnerPresence:
+          $ref: "#/components/schemas/ProxyChatPresence"
+        version:
+          type: string
+          description: |
+            Change counter for the long-poll: pass it back as `after`. Opaque —
+            compare for equality only. **Optional in the contract only so a
+            client can tell a server predating the long-poll** (absent → poll
+            every ~4 s); this server always sends it, like `partnerPresence`.
+
+    ProxyChatPresence:
+      type: object
+      description: |
+        What the reader is shown about the partner right now. All false
+        outside the open window and for a Telegram partner. Mirrors
+        `PartnerPresence` in `services/proxy-presence.ts`.
+      required: [online, inChat, typing]
+      properties:
+        online:
+          type: boolean
+          description: The partner's app is in the foreground (or on the chat screen).
+        inChat:
+          type: boolean
+          description: The partner has this chat on screen.
+        typing:
+          type: boolean
+          description: The partner is typing into this chat. Implies `inChat`.
+
+    ProxyChatPresenceReport:
+      type: object
+      required: [place]
+      properties:
+        place:
+          type: string
+          enum: [app, chat, away]
+          description: |
+            `app` — in the foreground anywhere in the app; `chat` — on this
+            chat screen; `away` — leaving the foreground (clears everything).
+        typing:
+          type: boolean
+          description: |
+            Read only with `chat`. `true` while the draft keeps changing
+            (repeat every ~3 s), `false` when it empties or is sent. Absent
+            leaves typing as it was.
+
+    ProxyChatPresenceAnswer:
+      type: object
+      required: [partnerPresence, version]
+      properties:
+        partnerPresence:
+          $ref: "#/components/schemas/ProxyChatPresence"
+        version:
+          type: string
+          description: The chat's current `ProxyChatState.version`.
 
     TicketHistoryEntry:
       type: object

@@ -43,6 +43,40 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-09-30, ночь) — прокси-чат: присутствие («в сети», «печатает…») и долгий опрос `GET …/chat?after=`, `POST …/chat/presence`, `thread-id` у пушей прокси-чата (DECISIONS 2026-09-30).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций A/B/C
+выше не зависит — едет с тем заходом, в который попадёт коммит. Что меняется: у `ProxyChatState` два новых поля
+(`partnerPresence`, `version`); `GET /v1/matches/{id}/chat` с `?after=` держит запрос до 20 с (без `after` — как
+раньше); новый `POST /v1/matches/{id}/chat/presence`; у `proxy.message`/`proxy.opened` в `aps` появляется `thread-id`.
+Присутствие живёт только в памяти процесса — рестарт его забывает, следующий удар телефона восстанавливает.
+Нагрузка: одно открытое соединение на открытый экран чата (вместо запроса раз в 4 с), удар присутствия раз в ~20 с
+на человека в окне чата и раз в ~3 с, пока он печатает. Caddy держит 20-секундный запрос без настроек (таймауты по
+умолчанию больше), глобальный лимит 600/мин на IP не задевается.
+**Демо:** как в проде; кукла-партнёр присутствия не шлёт — всегда «не в сети».
+**iOS:** старые сборки не шлют `after` и не замечают новых полей — ведут себя как раньше. Сборке iOS с «в сети» /
+«печатает…» этот выкат нужен; до него она видит ответ без `version`, опрашивает раз в 4 с, на `POST …/presence`
+получает 404 и перестаёт бить — точки и «печатает» просто нет.
+
+Проверка после выката (JWT двух тестовых аккаунтов одной `scheduled`-пары в окне T-1ч…T+2ч):
+
+```sh
+M=<matchId>
+curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq '{open, version, partnerPresence}'
+# → version — строка вида "<штамп>.<n>", partnerPresence — три false
+curl -s -X POST -H "Authorization: Bearer $JWT_B" -H 'content-type: application/json' \
+  -d '{"place":"chat","typing":true}' https://dating-api.gennety.com/v1/matches/$M/chat/presence | jq
+V=$(curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq -r .version)
+curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq .partnerPresence
+# → {"online":true,"inChat":true,"typing":true} в течение ~6 с после удара B
+time curl -s -H "Authorization: Bearer $JWT_A" "https://dating-api.gennety.com/v1/matches/$M/chat?after=$V" | jq .version
+# → без событий отвечает через ~20 с той же версией; напечатать/отправить из второго телефона — ответ сразу
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется, откатывать нечего. Сборка iOS с
+присутствием после отката сама падает на опрос раз в 4 с (нет `version`) и без точки (404 на `presence`).
+
+---
+
 **PENDING (2026-09-30) — чат агента: отдельные чаты как в ChatGPT (`chat_sessions`), заголовки/саммари маленькой моделью, инструменты `search_past_chats`/`read_past_chat` (DECISIONS 2026-09-30).**
 **Миграция `20260930120000_chat_sessions` — `db:deploy` ДО рестарта (выкат C в «Порядке» выше).** Аддитивная: таблица
 `chat_sessions` + `messages.session_id` (nullable, FK с каскадом, два индекса) и бэкфилл в той же транзакции — сообщения

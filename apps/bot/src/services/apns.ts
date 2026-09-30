@@ -164,6 +164,22 @@ export const TIME_SENSITIVE_PUSH_TYPES: ReadonlySet<string> = new Set([
  * app, iOS ignores the level entirely and the notification arrives ordinary.
  * That failure is silent on both sides — see `TIME_SENSITIVE_PUSH_TYPES`.
  */
+/**
+ * `aps.thread-id` — which conversation a notification belongs to, so iOS
+ * stacks a date's chat lines together in Notification Centre instead of
+ * interleaving them with every other push (DECISIONS 2026-09-30).
+ *
+ * Derived from `data.type` + `data.matchId` like `category` is, for the same
+ * reason: a conversation is what the type IS, and a separate field could only
+ * disagree with it. Only the proxy chat has conversations today; everything
+ * else stays in the app's default group.
+ */
+export function threadIdOf(category: string | null, data: Record<string, unknown> | undefined): string | null {
+  if (!category?.startsWith("proxy.")) return null;
+  const matchId = data?.matchId;
+  return typeof matchId === "string" && matchId.length > 0 ? `proxy.${matchId}` : null;
+}
+
 export function buildAlertPayload(input: AlertPushInput): Record<string, unknown> {
   const category = typeof input.data?.type === "string" ? input.data.type : null;
   // `poster` is an announcement's cover frame (decision 2026-09-13). It wakes
@@ -173,11 +189,13 @@ export function buildAlertPayload(input: AlertPushInput): Record<string, unknown
     (typeof input.data?.image === "string" && input.data.image.length > 0) ||
     (typeof input.data?.poster === "string" && input.data.poster.length > 0);
   const timeSensitive = category !== null && TIME_SENSITIVE_PUSH_TYPES.has(category);
+  const thread = threadIdOf(category, input.data);
   return {
     aps: {
       alert: { title: input.title, body: input.body },
       sound: "default",
       ...(category ? { category } : {}),
+      ...(thread ? { "thread-id": thread } : {}),
       ...(mutable ? { "mutable-content": 1 } : {}),
       ...(timeSensitive ? { "interruption-level": "time-sensitive" } : {}),
     },
