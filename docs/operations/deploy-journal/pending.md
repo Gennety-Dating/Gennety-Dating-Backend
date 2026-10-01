@@ -99,6 +99,18 @@ curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/me/pr
 
 ---
 
+**PENDING (2026-10-01, вечер) — Mini App: анкета «основ» без рывков (`ead97137`, `30eac0f2`; DECISIONS 2026-10-01).**
+**Только Mini App**, без миграций и без рестарта бота: `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`; едет вместе
+с блоками Mini App ниже одним прогоном. Меняются `onboarding.tsx`, `onboarding-basics.tsx`, `onboarding.css`,
+`keyboard-viewport.ts` — одна живая сцена онбординга, клавиатура на `transform` + `viewportChanged`, плитка цели на
+`clip-path`, один `selectionChanged` на выбор.
+**Проверка на телефоне в Telegram** (headless этого не видел): новый аккаунт → имя: клавиатура поднимает «Продолжить»
+одним ходом, без подскока; возраст: заголовок и число не растут после ухода клавиатуры; пол → предпочтение → цель:
+выбор без замирания, одна вибрация на касание; вернуться «назад» с темы на город — поиск сохранил набранное.
+**Rollback:** `git revert 30eac0f2 ead97137` и тот же прогон.
+
+---
+
 **PENDING (2026-10-01, позже) — Mini App: Gennety Display на резкости 50 (DECISIONS 2026-10-01).**
 **Только Mini App**, тот же путь, что у блока ниже (`./scripts/deploy-webapp.sh` + `pnpm demo:deploy`), и едет
 вместе с ним: в стволе это те же три файла `GennetyDisplay-*.woff2`, перерезанные из Geologica `SHRP` 50 вместо
