@@ -7,7 +7,7 @@
 // `style` is unchanged in wording and now credits the archetype — it already
 // read as "the whole look", which is what an archetype is.
 import type { Lang } from "../i18n.js";
-import { withCapsLabels } from "../type-trial.js";
+import { withShortLabels } from "../type-trial.js";
 
 export interface RadarStrings {
   title: string;
@@ -170,6 +170,6 @@ const STRINGS: Record<Lang, RadarStrings> = {
 };
 
 export function radarStrings(lang: Lang): RadarStrings {
-  // TRIAL ONLY (trial/rubik-type): short CTA labels under ?type=rubik-caps.
-  return withCapsLabels("radar", lang, STRINGS[lang] ?? STRINGS.en);
+  // TRIAL ONLY (trial/rubik-type): short CTA labels under ?type=unbounded.
+  return withShortLabels("radar", lang, STRINGS[lang] ?? STRINGS.en);
 }

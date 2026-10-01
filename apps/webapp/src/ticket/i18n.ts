@@ -4,7 +4,7 @@
  * independent. Active language comes from `?lang=` on the URL the bot builds.
  */
 
-import { withCapsLabels } from "../type-trial.js";
+import { withShortLabels } from "../type-trial.js";
 
 export type Lang = "en" | "ru" | "uk" | "de" | "pl";
 
@@ -368,12 +368,12 @@ export function strings(lang: Lang): TicketStrings {
 
 /**
  * TRIAL ONLY (trial/rubik-type): the table for PRIMARY buttons (hero / white
- * primary) — under ?type=rubik-caps their labels get the short forms. The
+ * primary) — under ?type=unbounded their labels get the short forms. The
  * same key can sit on a secondary button (e.g. `useSelf`), which stays in
- * sentence case and keeps its full label, so this is per role, not global.
+ * the body face and keeps its full label, so this is per role, not global.
  */
 export function primaryStrings(lang: Lang): TicketStrings {
-  return withCapsLabels("ticket", lang, strings(lang));
+  return withShortLabels("ticket", lang, strings(lang));
 }
 
 /** Interpolate `{key}` placeholders. */
