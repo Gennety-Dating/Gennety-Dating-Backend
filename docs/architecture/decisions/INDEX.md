@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 380 entries
+# Decision index — all 381 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-01 | Mini App: Gennety Display на резкости 50 вслед за iOS (Geologica `SHRP` 100 → 50, решение основателя после испытания гарнитуры); файлы и имена прежние, меняются только концы штрихов; С/с шире на 2.5–3 % — длинные названия мест проверять на перенос; выкат PENDING | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | фото и проверка: `beginLivenessCheck` → `photos_required` ниже `MIN_PHOTOS`, не только при нуле; `GET /v1/me/verification` отдаёт `checking` — реестр запусков проверки лица в памяти процесса (`trackFaceMatchRun`, отметка до первого `await`; свежая проверка, демо, перепроверка после правки фото целиком); пол удаления фото только у `active` (ОТМЕНА пола «после выхода со стадии фото» 2026-09-30); `POST /v1/me/photos/remove` `{paths}` — пачкой по путям из `photos`, одно тело с DELETE, одна перепроверка на запрос, ответ `PhotosResponse`, 1…10 путей | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | `GET /v1/me/profile-gaps` (только чтение, JWT): открытые пункты профиля для подсказки «Сегодня» в порядке `video, photos, music, looking_for, age_range, about, interests, voice, type_radar, major`; условия повторяют существующие ручки, пункт за выключенным флагом не отдаётся; `kind`/`reward` — строки, не enum; `photos` БЕЗ `reward` — бонус за фото выдаёт только стадия фото онбординга в Telegram, не `POST /v1/me/photos` (выдавать ли — решение основателя); «о себе» = `psychologicalSummary`, который финал онбординга перезаписывает машинной заготовкой — она считается пустой и видна людям как их «о себе» (не исправлено); музыка — `countProfileMusic` внутри разрешённого файла, страж ИИ не расширялся | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | Mini App: дисплейный текст (билет, магазин, Date Terminal, Type Radar, смена места) на Gennety Display — своя копия шрифта iOS (Geologica, OFL), веса 600/700/800 по ролям, подмножество под en/ru/uk/de/pl; Space Grotesk снят — у него нет кириллицы, ru/uk-заголовки рисовались двумя шрифтами; файлы в `src/fonts/` (хеш Vite: Caddy держит `*.woff2` immutable год), не в `public/`; тело текста не трогали; Rubik — только проба на ветке `trial/rubik-type` | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |

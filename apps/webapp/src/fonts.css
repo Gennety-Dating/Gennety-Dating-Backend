@@ -10,11 +10,17 @@
  *
  * Gennety Display is the iOS app's own display face (Packages/DesignSystem in
  * the iOS repo): static instances of Geologica (SIL OFL 1.1, no Reserved Font
- * Name; see fonts/OFL.txt) at SHRP 100. The files here are web subsets of those
- * exact TTFs — Basic Latin, Latin-1, Latin Extended-A (pl), Cyrillic (ru, uk:
- * І і Ї ї Є є Ґ ґ), General Punctuation, ʼ № € ₴ − and arrows; kern / liga /
- * tnum kept. ~24.6 KB per weight, and a page only downloads the weights it
- * actually draws.
+ * Name; see fonts/OFL.txt) at SHRP 50 — founder decision 2026-10-01, it was 100
+ * before. The files here are web subsets of those exact TTFs — Basic Latin,
+ * Latin-1, Latin Extended-A (pl), Cyrillic (ru, uk: І і Ї ї Є є Ґ ґ), General
+ * Punctuation, ʼ № € ₴ − and arrows; kern / liga / tnum kept. ~24.8 KB per
+ * weight, and a page only downloads the weights it actually draws.
+ *
+ * Re-subsetting after the iOS TTFs change (fontTools with brotli): keep the
+ * code points of the current files, layout features calt ccmp frac liga locl
+ * tnum kern, name IDs 0–6 13 14 16 17, no hinting, .notdef outline kept. Those
+ * settings rebuild the SHRP 100 files byte for byte, so a diff after a
+ * re-subset is the outlines and nothing else.
  *
  * Imported from each page stylesheet that sets display type (ticket.css — and
  * through it tickets and date-terminal — radar.css, venue-change.css). The
