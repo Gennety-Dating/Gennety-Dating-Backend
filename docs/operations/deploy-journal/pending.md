@@ -43,6 +43,33 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-10-01) — Mini App: заголовки на Gennety Display вместо Space Grotesk (у того нет кириллицы) (DECISIONS 2026-10-01).**
+**Только Mini App**: нет схемы, env, флагов и изменений сервера — дифф это `apps/webapp/**` плюс документация.
+Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё
+`pnpm demo:deploy` — демо собирает свой бандл из того же исходника (поведение в демо то же, что в проде).
+Независим от порядка миграций выше: можно выкатить отдельно или вместе с любым заходом. До выката на проде
+по-прежнему смешанные заголовки (латиница Space Grotesk + кириллица запасным шрифтом) на страницах билета,
+магазина билетов, Date Terminal, Type Radar и смены места. В бандле появляются три файла
+`assets/GennetyDisplay-{SemiBold,Bold,ExtraBold}-<hash>.woff2` (~24,6 КБ каждый; качаются только нужные странице
+веса); Caddy уже отдаёт `*.woff2` как immutable — правка Caddyfile не нужна.
+**iOS:** не затронут.
+
+Проверка после выката:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -s https://dating-calendar.gennety.com/ticket.html | grep -c 'Space+Grotesk'          # 0
+CSS=$(curl -s https://dating-calendar.gennety.com/ticket.html | grep -o 'assets/ticket-[^"]*\.css' | head -1)
+curl -s "https://dating-calendar.gennety.com/$CSS" | grep -o 'assets/GennetyDisplay-[A-Za-z]*-[^)]*\.woff2' | sort -u
+#   → три файла; каждый: curl -sI …/<файл> → 200, content-type font/woff2, cache-control … immutable
+# На телефоне (Telegram, язык uk): Date Terminal / билет — «Ти на місці», «Це метч», корешок «ВХІД» одним шрифтом.
+```
+
+**Rollback:** `git revert` коммита и снова `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`.
+
+---
+
 **PENDING (2026-09-30, ночь) — нативный шаг фото открыт до «Продолжить»: `POST /v1/onboarding/photos/continue`, `PUT /v1/me/photos/order`, лимит загрузок 30/ч (DECISIONS 2026-09-30, ночь).**
 **Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App и Telegram не затронуты (обе ручки — только
 JWT, `/v1/me/photos` зовёт только натив). Едет вместе с двумя блоками анкеты ниже (тот же день) и с iOS той же даты:

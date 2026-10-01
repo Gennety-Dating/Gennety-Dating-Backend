@@ -40,14 +40,18 @@ body {
   gap: 18px;
   padding-top: calc(18px + env(safe-area-inset-top) + var(--tg-content-top));
 }
+/* 26px is the title role, not the gate's 31px display one — so the title
+   weight and tracking come with the size. */
 .terminal-page .ticket-header h1 {
   font-size: 26px;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
 }
 .terminal-kicker {
   margin: 0 0 10px;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-label);
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.46);
@@ -176,9 +180,9 @@ body {
   text-overflow: ellipsis;
 }
 .terminal-radar-value {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 22px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-title);
   letter-spacing: -0.01em;
   color: #fff;
   font-variant-numeric: tabular-nums;
@@ -251,9 +255,10 @@ body {
 }
 .deck-card-n {
   flex: none;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-label);
+  font-variant-numeric: tabular-nums;
   color: #e27691;
 }
 .deck-card-loading {

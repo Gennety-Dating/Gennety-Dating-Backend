@@ -3,6 +3,7 @@
    from layered fills, inset light, and shadow — never from outlines. */
 
 @import "../theme.css";
+@import "../fonts.css";
 
 :root {
   /* Local aliases onto the shared theme tokens (theme.css). --accent /
@@ -230,17 +231,15 @@ body {
   text-align: center;
   animation: rise 0.5s ease both;
 }
-/* Space Grotesk's variable range stops at 700, so "heavier" cannot come from
-   the weight axis — asking for 800 would get a synthesised smear, the same
-   trap onboarding's headline hit (PRODUCT_SPEC §1.3). It comes from size and
-   tracking instead: at 31px the strokes are ~15% thicker in absolute terms,
-   and the negative tracking packs the word into a denser block. */
+/* Display role (≥ 28px): Gennety Display ExtraBold — a real 800 instance, so
+   "heavier" now comes from the face itself. (Space Grotesk, the face this used
+   to be, stopped at 700 and carried no Cyrillic; see fonts.css.) */
 .ticket-header h1 {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 31px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-display);
   margin: 0 0 9px;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--font-display-tracking-display);
   line-height: 1.15;
 }
 .ticket-header p {
@@ -395,8 +394,8 @@ body {
    same tracking reads at a glance; the burgundy is spent on the glow behind the
    butterfly instead, where it has a dark ground to sit on. */
 .ticket-brand-mark {
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: var(--font-display-weight-label);
   letter-spacing: 0.28em;
   font-size: 17px;
   /* Tracking adds space after the LAST letter too, so the text box is 0.28em
@@ -445,9 +444,9 @@ body {
    caption on an object, not the object's headline (which is what the old 22px
    name row made it). */
 .ticket-names {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--font-display-weight-label);
   letter-spacing: 0.02em;
   text-align: center;
   white-space: nowrap;
@@ -503,9 +502,9 @@ body {
    exists so the value opposite it means something, and must never compete with
    it. Uppercased in CSS so the five locales stay natural-cased at source. */
 .ticket-stub-label {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-label);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -525,10 +524,11 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: 7px;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-label);
   letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ticket-stub-count svg {
@@ -881,10 +881,10 @@ body {
 }
 
 .pp-title {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 25px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
   line-height: 1.2;
   margin: 0 0 10px;
   max-width: 320px;

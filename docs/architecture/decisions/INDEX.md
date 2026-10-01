@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 375 entries
+# Decision index — all 376 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-01 | Mini App: дисплейный текст (билет, магазин, Date Terminal, Type Radar, смена места) на Gennety Display — своя копия шрифта iOS (Geologica, OFL), веса 600/700/800 по ролям, подмножество под en/ru/uk/de/pl; Space Grotesk снят — у него нет кириллицы, ru/uk-заголовки рисовались двумя шрифтами; файлы в `src/fonts/` (хеш Vite: Caddy держит `*.woff2` immutable год), не в `public/`; тело текста не трогали; Rubik — только проба на ветке `trial/rubik-type` | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | нативный шаг фото держится открытым до «Продолжить» (двойник Telegram): загрузка на вопросе `photos` хода агента не делает, выход — `POST /v1/onboarding/photos/continue` (`photos_continue` коллектора, 409 `photos-required` ниже минимума); после выхода удаление ниже минимума — 409 `photo_minimum`; `PUT /v1/me/photos/order` (главное фото, замена на месте; хеши/оценки/`profileMedia` едут с фото); лимит загрузок 10 → 30 в час | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | прокси-чат: «в сети» и «печатает…» (отмена «никаких „печатает…“» §4.5 по постановке основателя) — присутствие в памяти процесса (приложение ~45 с / чат ~12 с / набор ~6 с, истечение будит партнёра), счётчик изменений на пару, `GET …/chat?after=` — долгий опрос по образцу Bump (обрыв снимает «в чате» сразу, курсор не двигает), `POST …/chat/presence`; ничего не хранится, только в окне и только партнёру; `thread-id` у `proxy.*` пушей; «печатает» в Telegram и серверное гашение пуша — не сделано | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | нативная анкета сохраняется экранами: `POST /v1/onboarding/basics` — двойник `/telegram-onboarding/profile` (общий разбор, `applyOnboardingFacts`); «назад» — пересохранение; ответы анкеты не идут в историю, завершающее сохранение сбрасывает `messageHistory` и открывает чат ходом `resume` с первого свободного вопроса; `GET /interview` открывает чат только при `basics.complete`; `InterviewState.basics` (значения, `complete`, `limits`) | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

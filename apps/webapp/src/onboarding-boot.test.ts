@@ -115,6 +115,13 @@ describe("first-paint blocking in the shell", () => {
     expect(fallbacks.length).toBe(googleLinks.length);
     for (const link of fallbacks) expect(link).not.toMatch(/media="print"/);
     expect(noscript![1]).toContain("icon_names=");
+    // Same families too, not only the same count: the two copies are edited
+    // by hand, and dropping a family from one (Space Grotesk, 2026-10-01 —
+    // display type is the self-hosted Gennety Display now) must hit both.
+    const hrefs = (links: string[]): string[] =>
+      links.map((link) => /href="([^"]+)"/.exec(link)?.[1] ?? "").sort();
+    expect(hrefs(fallbacks)).toEqual(hrefs(googleLinks));
+    for (const link of [...googleLinks, ...fallbacks]) expect(link).not.toMatch(/Space\+Grotesk/);
   });
 
   it("declares no local stylesheet of its own — Vite injects those, blocking", () => {

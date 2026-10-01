@@ -211,7 +211,8 @@
   border-radius: 17px;
   background: var(--accent-soft);
   box-shadow: var(--sheen-neutral);
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
   color: var(--accent-bright);
 }
 /* DARK: a properly saturated burgundy tile. `--accent-soft` is 0.18 alpha, which
@@ -233,7 +234,7 @@
 }
 .store-bundle-emblem-x {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--font-display-weight-label);
   opacity: 0.6;
   /* Optically centred against the digit's x-height rather than sat on the
      baseline, where a lone "×" hangs low next to a lining numeral. */
@@ -241,8 +242,8 @@
 }
 .store-bundle-emblem-n {
   font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
   line-height: 1;
 }
 
@@ -255,9 +256,9 @@
 }
 
 .store-bundle-main {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: var(--font-display-weight-label);
 }
 
 .store-bundle-per {

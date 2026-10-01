@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 215 entries
+# Deploy journal index — 216 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-01 | 10-01 — Mini App: заголовки на Gennety Display (своя копия, 3 веса woff2 в бандле) вместо Space Grotesk без кириллицы; **только Mini App** (`deploy-webapp.sh` + `pnpm demo:deploy`), без сервера, схемы и env; от порядка миграций не зависит | [pending](./pending.md) |
 | PENDING | 2026-09-30 | 09-30 (ночь) — нативный шаг фото открыт до «Продолжить»: загрузка на вопросе `photos` без хода агента, `POST /v1/onboarding/photos/continue`, `PUT /v1/me/photos/order`, пол удаления после выхода со стадии, лимит загрузок 30/ч; только рестарт бота, вместе с iOS той же даты | [pending.md](./pending.md) |
 | PENDING | 2026-09-30 | 09-30 (ночь) — прокси-чат: присутствие («в сети», «печатает…») в памяти процесса, долгий опрос `GET …/chat?after=`, `POST …/chat/presence`, `thread-id` у пушей `proxy.*`; только рестарт бота, без миграций и env; нужен сборке iOS с присутствием (без него она опрашивает раз в 4 с и без точки) | [pending](./pending.md) |
 | PENDING | 2026-09-30 | 09-30 (вечер) — нативная анкета сохраняется экранами (`POST /v1/onboarding/basics`), «назад» — пересохранение, чат после анкеты с чистого листа; `GET /interview` открывает чат только после анкеты; только рестарт бота, вместе с iOS той же даты | [pending](./pending.md) |

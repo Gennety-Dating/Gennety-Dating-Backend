@@ -31,7 +31,11 @@ const Render = (() => {
   const LIGHT = "#FBF3F5";
   const EYE = { dx: 11, cy: 50, rx: 7.6, ry: 13.4 };
   // MINI APP: 2 — the terminal's faces instead of Geologica: Inter, which
-  // date-terminal.html loads with Cyrillic (its Space Grotesk has none).
+  // date-terminal.html loads with Cyrillic. (Chosen when the page's display
+  // face was Space Grotesk, which has none. Since 2026-10-01 the page also
+  // loads Gennety Display — Geologica's own instance, fonts.css — so moving
+  // DISPLAY onto it is open; not done here, the canvas would first have to
+  // `document.fonts.load` its weights.)
   let DISPLAY = "Inter, ui-rounded, system-ui, sans-serif";
   let SYS = "Inter, -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
   const setFonts = (display, sys) => {
