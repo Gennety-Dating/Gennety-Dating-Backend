@@ -277,10 +277,12 @@ function App(): ReactElement {
   );
   const mascotRef = useRef<MascotHandle | null>(null);
   // Typing that must outlive its scene now that a scene is unmounted when it is
-  // left (see `Scene`): back from the path chooser to consent, or "change
-  // email" from the code screen, should find what the user already entered.
+  // left (see `Scene`): back from the path chooser to consent, "change email"
+  // from the code screen, or back from the theme to the city search, should
+  // find what the user already entered.
   const consentDraft = useRef<ConsentDraft>({ terms: false, research: false });
   const emailDraft = useRef<string | null>(null);
+  const cityDraft = useRef<string>("");
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -859,6 +861,7 @@ function App(): ReactElement {
         <CityGate
           cities={remoteUser?.cityCatalog ?? remoteUser?.supportedCities ?? []}
           onState={onState}
+          draft={cityDraft}
         />
       </Scene>
       <Scene active={phase.kind === "waitlist"}>
@@ -2040,9 +2043,16 @@ function OtpGate(props: {
 function CityGate(props: {
   cities: TelegramCityHit[];
   onState: (state: TelegramOnboardingState) => void;
+  /** The search text, kept by the parent across the scene's unmount. */
+  draft: { current: string };
 }): ReactElement {
   const s = useOnboardingStrings();
-  const [query, setQuery] = useState("");
+  const { draft } = props;
+  const [query, setQueryState] = useState(() => draft.current);
+  const setQuery = (value: string): void => {
+    draft.current = value;
+    setQueryState(value);
+  };
   const [results, setResults] = useState<TelegramCityHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
