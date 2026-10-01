@@ -1129,6 +1129,14 @@ vi.mock("../services/storage.js", () => ({
   downloadTelegramFile: vi.fn(async () => Buffer.from("photo-bytes")),
 }));
 
+// The real pipeline module, with the photo-edit rerun trigger wrapped in a spy
+// so a test can count reruns per request. It only fires when a bot api is
+// injected (`queueVerificationRerun`), which the photo-removal tests do.
+vi.mock("../services/verification-pipeline.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/verification-pipeline.js")>();
+  return { ...actual, triggerVerificationRerun: vi.fn(actual.triggerVerificationRerun) };
+});
+
 vi.mock("../services/vibe-parser.js", () => ({
   parseVibe: vi.fn(async () => ({
     category: "cafe",
@@ -2802,7 +2810,10 @@ describe("DELETE /v1/me/photos/:index", () => {
       expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
     });
 
-    it("keeps the minimum once the user has left the photo stage", async () => {
+    // Decision journal 2026-10-01: the floor is for `active` users only. In
+    // onboarding the photo step and the liveness gate (`photos_required`)
+    // hold the minimum, so a delete after the photo stage is allowed.
+    it("allows dropping below the minimum after the user has left the photo stage", async () => {
       const user = await seedOnboarding(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
       vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
         completedFields: ["hobbies", "photos"],
@@ -2810,11 +2821,202 @@ describe("DELETE /v1/me/photos/:index", () => {
       const res = await request(app)
         .delete("/v1/me/photos/3")
         .set("Authorization", `Bearer ${signAccess(user.id)}`);
-      expect(res.status).toBe(409);
-      expect(res.body.code).toBe("photo_minimum");
-      expect(res.body.min).toBe(MIN_PHOTOS);
-      expect(userById(user.id)?.profile?.photos).toHaveLength(4);
+      expect(res.status).toBe(200);
+      expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+      expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
     });
+  });
+
+  it("409 photo_minimum for an active user at exactly the minimum", async () => {
+    const user = await seedWithPhotos(["a.jpg", "b.jpg", "c.jpg", "d.jpg"], "active");
+    const res = await request(app)
+      .delete("/v1/me/photos/3")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photo_minimum");
+    expect(res.body.min).toBe(MIN_PHOTOS);
+    expect(userById(user.id)?.profile?.photos).toHaveLength(4);
+  });
+});
+
+describe("POST /v1/me/photos/remove", () => {
+  beforeEach(resetDb);
+
+  async function seedRemovable(photos: string[], status: UserRow["status"] = "active") {
+    const user = await seedUser({ status });
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos,
+      matchRadius: "campus_only",
+    } as never;
+    return user;
+  }
+
+  function remove(userId: string, body: unknown) {
+    return request(app)
+      .post("/v1/me/photos/remove")
+      .set("Authorization", `Bearer ${signAccess(userId)}`)
+      .send(body as object);
+  }
+
+  it("401 without auth", async () => {
+    const res = await request(app).post("/v1/me/photos/remove").send({ paths: ["a.jpg"] });
+    expect(res.status).toBe(401);
+  });
+
+  it.each([
+    ["no body", {}],
+    ["not an array", { paths: "a.jpg" }],
+    ["empty", { paths: [] }],
+    ["non-string item", { paths: ["a.jpg", 3] }],
+    ["too many", { paths: Array.from({ length: MAX_PHOTOS + 1 }, (_, i) => `${i}.jpg`) }],
+  ])("400 invalid-paths: %s", async (_label, body) => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    const res = await remove(user.id, body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-paths");
+    expect(userById(user.id)?.profile?.photos).toHaveLength(5);
+  });
+
+  it("removes several photos in one call, keeping hashes, scores and media aligned", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    vi.mocked(deleteStorageObject).mockClear();
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"]);
+    const profile = userById(user.id)!.profile! as Record<string, unknown>;
+    profile.uploadedPhotoHashes = ["ha", "hb", "hc", "hd", "he", "hf"];
+    profile.photoFaceScores = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4];
+    profile.profileMedia = [
+      { type: "photo", photo: "a.jpg" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "e.jpg" },
+      { type: "photo", photo: "f.jpg" },
+    ];
+
+    const res = await remove(user.id, { paths: ["e.jpg", "b.jpg"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "f.jpg"]);
+    expect(res.body.signedUrls).toHaveLength(4);
+    const after = userById(user.id)!.profile! as Record<string, unknown>;
+    expect(after.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "f.jpg"]);
+    expect(after.uploadedPhotoHashes).toEqual(["ha", "hc", "hd", "hf"]);
+    expect(after.photoFaceScores).toEqual([0.9, 0.7, 0.6, 0.4]);
+    expect(after.profileMedia).toEqual([
+      { type: "photo", photo: "a.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "f.jpg" },
+    ]);
+    expect(deleteStorageObject).toHaveBeenCalledTimes(2);
+    expect(deleteStorageObject).toHaveBeenCalledWith(expect.any(String), "b.jpg");
+    expect(deleteStorageObject).toHaveBeenCalledWith(expect.any(String), "e.jpg");
+  });
+
+  it("ignores paths that are not among the photos", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    const res = await remove(user.id, { paths: ["nope.jpg", "c.jpg", "c.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "d.jpg", "e.jpg"]);
+  });
+
+  it("answers 200 with the photos as they are when nothing matches", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    vi.mocked(deleteStorageObject).mockClear();
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+    const res = await remove(user.id, { paths: ["gone.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+    expect(deleteStorageObject).not.toHaveBeenCalled();
+  });
+
+  it("409 photo_minimum for an active user and removes nothing", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"], "active");
+    const res = await remove(user.id, { paths: ["a.jpg", "b.jpg"] });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photo_minimum");
+    expect(res.body.min).toBe(MIN_PHOTOS);
+    expect(userById(user.id)?.profile?.photos).toEqual([
+      "a.jpg",
+      "b.jpg",
+      "c.jpg",
+      "d.jpg",
+      "e.jpg",
+    ]);
+  });
+
+  it("lets an onboarding user remove every photo", async () => {
+    const user = await seedRemovable(
+      ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+      "onboarding" as UserRow["status"],
+    );
+    userById(user.id)!.onboardingStep = "conversational";
+    const res = await remove(user.id, { paths: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual([]);
+    expect(userById(user.id)?.profile?.photos).toEqual([]);
+  });
+
+  it("queues exactly one verification rerun per request", async () => {
+    const { __setBotApiForTests } = await import("./server.js");
+    const { triggerVerificationRerun } = await import("../services/verification-pipeline.js");
+    const rerun = vi.mocked(triggerVerificationRerun);
+    rerun.mockClear();
+    rerun.mockImplementationOnce(async () => ({ kind: "no_inquiry" }));
+    __setBotApiForTests({} as never);
+    try {
+      const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"]);
+      const res = await remove(user.id, { paths: ["a.jpg", "b.jpg"] });
+      expect(res.status).toBe(200);
+      expect(rerun).toHaveBeenCalledTimes(1);
+      expect(rerun).toHaveBeenCalledWith(user.id, expect.anything());
+
+      // Nothing removed → no rerun.
+      rerun.mockClear();
+      await remove(user.id, { paths: ["a.jpg"] });
+      expect(rerun).not.toHaveBeenCalled();
+    } finally {
+      __setBotApiForTests(null);
+    }
+  });
+});
+
+describe("GET /v1/me/verification", () => {
+  beforeEach(resetDb);
+
+  it("reports checking while a face-match run is in flight, and not after", async () => {
+    const { trackFaceMatchRun } = await import("../services/verification-pipeline.js");
+    const user = await seedUser();
+    const auth = `Bearer ${signAccess(user.id)}`;
+
+    const idle = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(idle.status).toBe(200);
+    expect(idle.body.checking).toBe(false);
+    expect(typeof idle.body.status).toBe("string");
+
+    let finish!: () => void;
+    const run = trackFaceMatchRun(
+      user.id,
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const busy = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(busy.body.checking).toBe(true);
+
+    finish();
+    await run;
+    const done = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(done.body.checking).toBe(false);
   });
 });
 

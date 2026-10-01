@@ -30,7 +30,10 @@ import {
   uploadProfilePhoto,
 } from "../../services/storage.js";
 import { gateProfilePhoto } from "../../services/face-match-gate.js";
-import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
+import {
+  isFaceMatchRunning,
+  triggerVerificationRerun,
+} from "../../services/verification-pipeline.js";
 import {
   AccountDeletionCleanupError,
   AccountDeletionDeferredError,
@@ -617,21 +620,25 @@ meRouter.post("/push-token", async (req: Request, res: Response): Promise<void> 
 });
 
 /**
- * GET /v1/me/verification — return just the verification status.
+ * GET /v1/me/verification — the verification status plus `checking`.
  *
- * The mobile client polls this after the user completes the Persona
- * hosted flow (opened via `GET /v1/me/verification/url`). Transitions:
- *   unverified → pending → verified | rejected
+ * The native client polls this after `POST /v1/me/verification/native-event`
+ * answered `processing` (AWS Face Liveness passed and the face-match pipeline
+ * started), and after a photo edit that queued a re-check. `status` is written
+ * by the face-match pipeline (`services/verification-pipeline.ts`) — this
+ * endpoint is read-only.
  *
- * The only writer of `verificationStatus` is the Persona webhook handler
- * (`/v1/webhooks/persona`) — this endpoint is read-only.
+ * `checking` is true while a face-match run for this user is actually in
+ * flight (`isFaceMatchRunning`). The status cannot say it on its own: a
+ * verified user being re-checked stays `verified`, and `pending` also covers a
+ * liveness session that was never finished (decision journal 2026-10-01).
  */
 meRouter.get("/verification", async (req: Request, res: Response): Promise<void> => {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
-    select: { verificationStatus: true },
+    select: { id: true, verificationStatus: true },
   });
-  res.json({ status: user.verificationStatus });
+  res.json({ status: user.verificationStatus, checking: isFaceMatchRunning(user.id) });
 });
 
 // ---------------------------------------------------------------------------
@@ -987,9 +994,162 @@ function photoValidationApiMessage(reason: string): string {
 }
 
 /**
+ * What one photo removal did — shared by `DELETE /v1/me/photos/:index` and
+ * `POST /v1/me/photos/remove`, so the two can never drift on alignment, the
+ * floor, or the rerun.
+ */
+type PhotoRemoval =
+  | { kind: "not_found" }
+  | { kind: "minimum" }
+  /** Nothing to remove (every requested path already gone) — no write. */
+  | { kind: "unchanged"; nextPhotos: string[] }
+  | { kind: "removed"; removedPaths: string[]; nextPhotos: string[] };
+
+/**
+ * Remove the photos `pick` chooses, in one transaction under the user's row
+ * lock — the same lock `PUT /v1/me/photos/order` and the upload take, so a
+ * concurrent edit can neither resurrect nor double-remove a photo.
+ *
+ * `pick` sees the photos as they are UNDER the lock and returns the indices to
+ * remove (empty → `unchanged`), or `"not_found"` for a caller that addressed a
+ * photo that does not exist.
+ *
+ * The floor: an `active` user cannot drop below MIN_PHOTOS — they are on the
+ * match grid, and a profile under the minimum is not one we show. Everyone
+ * else has no floor (decision journal 2026-10-01): a paused user is off the
+ * grid, and during onboarding the minimum is held where it belongs — by the
+ * photo step and the liveness gate (`beginLivenessCheck` → `photos_required`),
+ * not by refusing a delete the user can see no reason for.
+ */
+async function removeProfilePhotos(
+  userId: string,
+  pick: (photos: readonly string[]) => number[] | "not_found",
+): Promise<PhotoRemoval> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe("SELECT id FROM users WHERE id = $1::uuid FOR UPDATE", userId);
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        status: true,
+        profile: {
+          select: {
+            photos: true,
+            profileMedia: true,
+            photoFaceScores: true,
+            referenceFaceEmbedding: true,
+            uploadedPhotoHashes: true,
+          },
+        },
+      },
+    });
+    const photos = user.profile?.photos ?? [];
+    const picked = pick(photos);
+    if (picked === "not_found") return { kind: "not_found" };
+    const drop = new Set(picked.filter((i) => Number.isInteger(i) && i >= 0 && i < photos.length));
+    if (drop.size === 0) return { kind: "unchanged", nextPhotos: photos };
+
+    const nextPhotos = photos.filter((_, i) => !drop.has(i));
+    if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
+      return { kind: "minimum" };
+    }
+
+    // Photo indices address `photos[]`, and `profileMedia` is NOT aligned with
+    // it: a video item has no static frame yet sits among the photos (new
+    // photos are appended after it). Slicing `media` by the photo index removed
+    // the video instead of the photo — and the photos-only fallback in
+    // `normalizeProfileMedia` then hid the damage. Remove the matching STATIC
+    // items instead; the video stays.
+    const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
+    let staticSeen = -1;
+    const nextMedia = media.filter((item) => {
+      if (item.type === "video") return true;
+      staticSeen += 1;
+      return !drop.has(staticSeen);
+    });
+    const scores = user.profile?.photoFaceScores ?? [];
+    const nextScores =
+      scores.length === photos.length ? scores.filter((_, i) => !drop.has(i)) : [];
+    // Highest index first, so every removal addresses the array as it stands.
+    let hashes = user.profile?.uploadedPhotoHashes ?? [];
+    let remaining: readonly string[] = photos;
+    for (const index of [...drop].sort((a, b) => b - a)) {
+      hashes = removeAlignedPhotoHash(remaining, hashes, index);
+      remaining = [...remaining.slice(0, index), ...remaining.slice(index + 1)];
+    }
+    const photoState = photoUploadStatePatch({
+      photos: nextPhotos,
+      uploadedPhotoHashes: hashes,
+      referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
+      // The reference anchor is the first photo; removing it moves the anchor.
+      refreshReference: nextPhotos.length > 0 && drop.has(0),
+      clearReference: nextPhotos.length === 0,
+    });
+
+    await tx.profile.update({
+      where: { userId },
+      data: {
+        photos: nextPhotos,
+        profileMedia: profileMediaToJson(nextMedia),
+        photoFaceScores: nextScores,
+        ...photoState,
+      },
+    });
+    return {
+      kind: "removed",
+      removedPaths: photos.filter((_, i) => drop.has(i)),
+      nextPhotos,
+    };
+  });
+}
+
+/**
+ * The common answer to a removal: 404 / 409 `photo_minimum`, or the remaining
+ * photos (`PhotosResponse`). After a commit that removed something: storage
+ * cleanup best-effort (the DB is the source of truth — a failure is logged,
+ * never returned), and exactly ONE verification rerun for the request, however
+ * many photos went.
+ */
+async function respondToPhotoRemoval(
+  res: Response,
+  userId: string,
+  removal: PhotoRemoval,
+  logPrefix: string,
+): Promise<void> {
+  if (removal.kind === "not_found") {
+    res.status(404).json({ error: "Photo not found" });
+    return;
+  }
+  if (removal.kind === "minimum") {
+    res
+      .status(409)
+      .json({ error: "Minimum photos required", code: "photo_minimum", min: MIN_PHOTOS });
+    return;
+  }
+  if (removal.kind === "removed") {
+    await Promise.all(
+      removal.removedPaths.map(async (path) => {
+        try {
+          await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, path);
+        } catch (err) {
+          console.warn(`${logPrefix} storage delete failed:`, err);
+        }
+      }),
+    );
+
+    // After the photo array is committed: re-run the verification pipeline
+    // so the verificationStatus reflects the new set. Fire-and-forget; the
+    // photo-edit response shouldn't block on Rekognition latency.
+    queueVerificationRerun(userId);
+  }
+  res.json(await buildPhotosResponse(removal.nextPhotos));
+}
+
+/**
  * DELETE /v1/me/photos/:index — remove a photo by its position in the
- * `profile.photos` array. Active users can't drop below MIN_PHOTOS —
- * paused users can (they're off the match grid anyway).
+ * `profile.photos` array. Active users can't drop below MIN_PHOTOS (409
+ * `photo_minimum`); everyone else can, down to none (paused users are off the
+ * match grid; in onboarding the photo step and the liveness gate hold the
+ * minimum).
  *
  * Storage cleanup is best-effort; the DB update is the source of truth.
  */
@@ -1001,116 +1161,46 @@ meRouter.delete(
       res.status(404).json({ error: "Photo not found" });
       return;
     }
+    const removal = await removeProfilePhotos(req.userId!, (photos) =>
+      index < photos.length ? [index] : "not_found",
+    );
+    await respondToPhotoRemoval(res, req.userId!, removal, "[DELETE /v1/me/photos/:index]");
+  },
+);
 
-    const deletion = await prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe(
-        "SELECT id FROM users WHERE id = $1::uuid FOR UPDATE",
-        req.userId!,
-      );
-      const user = await tx.user.findUniqueOrThrow({
-        where: { id: req.userId! },
-        select: {
-          status: true,
-          onboardingStep: true,
-          profile: {
-            select: {
-              photos: true,
-              profileMedia: true,
-              photoFaceScores: true,
-              referenceFaceEmbedding: true,
-              uploadedPhotoHashes: true,
-            },
-          },
-        },
-      });
-      const photos = user.profile?.photos ?? [];
-      const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
-      if (index >= photos.length) return { kind: "not_found" as const };
-
-      const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
-      // Onboarding has no floor while the photo stage is open — the manager
-      // swaps freely there. Once the user has left it (`photos` recorded by
-      // `POST /v1/onboarding/photos/continue`), the collector counts photos as
-      // answered for good, and dropping below the minimum would leave finalize
-      // refusing a state the user cannot see — the same floor as an active user.
-      const photoStageClosed =
-        user.onboardingStep === "conversational" &&
-        nextPhotos.length < MIN_PHOTOS &&
-        (
-          await tx.onboardingProgress.findUnique({
-            where: { userId: req.userId! },
-            select: { completedFields: true },
-          })
-        )?.completedFields.includes("photos") === true;
-      if (nextPhotos.length < MIN_PHOTOS && (user.status === "active" || photoStageClosed)) {
-        return { kind: "minimum" as const };
-      }
-
-      // `index` addresses `photos[]`, and `profileMedia` is NOT aligned with it:
-      // a video item has no static frame yet sits among the photos (new photos
-      // are appended after it). Slicing `media` by the photo index removed the
-      // video instead of the photo — and the photos-only fallback in
-      // `normalizeProfileMedia` then hid the damage. Remove the index-th STATIC
-      // item instead.
-      let staticSeen = -1;
-      const nextMedia = media.filter((item) => {
-        if (item.type === "video") return true;
-        staticSeen += 1;
-        return staticSeen !== index;
-      });
-      const scores = user.profile?.photoFaceScores ?? [];
-      const nextScores =
-        scores.length === photos.length
-          ? [...scores.slice(0, index), ...scores.slice(index + 1)]
-          : [];
-      const nextHashes = removeAlignedPhotoHash(
-        photos,
-        user.profile?.uploadedPhotoHashes ?? [],
-        index,
-      );
-      const photoState = photoUploadStatePatch({
-        photos: nextPhotos,
-        uploadedPhotoHashes: nextHashes,
-        referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
-        refreshReference: nextPhotos.length > 0 && index === 0,
-        clearReference: nextPhotos.length === 0,
-      });
-
-      await tx.profile.update({
-        where: { userId: req.userId! },
-        data: {
-          photos: nextPhotos,
-          profileMedia: profileMediaToJson(nextMedia),
-          photoFaceScores: nextScores,
-          ...photoState,
-        },
-      });
-      return { kind: "deleted" as const, removedPath: photos[index]!, nextPhotos };
-    });
-
-    if (deletion.kind === "not_found") {
-      res.status(404).json({ error: "Photo not found" });
+/**
+ * POST /v1/me/photos/remove — remove several photos at once, `{ paths }`
+ * where each path is an entry of `photos` from `GET /v1/me/photos` (the native
+ * photo manager's multi-select delete, decision journal 2026-10-01).
+ *
+ * The same body as `DELETE /v1/me/photos/:index` in one transaction: the same
+ * floor (only `active` users, 409 `photo_minimum` and nothing removed),
+ * hashes / face scores / `profileMedia` kept aligned, the video stays, and one
+ * verification rerun for the whole request. Paths that are not (or no longer)
+ * among the photos are ignored — a set that resolves to nothing answers 200
+ * with the photos as they are. Addressing by path rather than index keeps a
+ * selection made on a stale list from removing the wrong photo.
+ *
+ * 400 `invalid-paths` unless the body is 1…MAX_PHOTOS strings.
+ */
+meRouter.post(
+  "/photos/remove",
+  async (req: Request, res: Response): Promise<void> => {
+    const paths = (req.body as { paths?: unknown } | undefined)?.paths;
+    if (
+      !Array.isArray(paths) ||
+      paths.length < 1 ||
+      paths.length > MAX_PHOTOS ||
+      !paths.every((path) => typeof path === "string")
+    ) {
+      res.status(400).json({ error: "invalid-paths" });
       return;
     }
-    if (deletion.kind === "minimum") {
-      res
-        .status(409)
-        .json({ error: "Minimum photos required", code: "photo_minimum", min: MIN_PHOTOS });
-      return;
-    }
-
-    try {
-      await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, deletion.removedPath);
-    } catch (err) {
-      console.warn("[DELETE /v1/me/photos/:index] storage delete failed:", err);
-    }
-
-    // After the photo array is committed: re-run the verification pipeline
-    // so the verificationStatus reflects the new set. Fire-and-forget; the
-    // photo-edit response shouldn't block on Persona/Rekognition latency.
-    queueVerificationRerun(req.userId!);
-
-    res.json(await buildPhotosResponse(deletion.nextPhotos));
+    const wanted = new Set(paths as string[]);
+    const removal = await removeProfilePhotos(req.userId!, (photos) =>
+      photos.flatMap((path, i) => (wanted.has(path) ? [i] : [])),
+    );
+    await respondToPhotoRemoval(res, req.userId!, removal, "[POST /v1/me/photos/remove]");
   },
 );
 

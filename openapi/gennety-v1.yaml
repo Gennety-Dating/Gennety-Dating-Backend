@@ -1179,6 +1179,11 @@ paths:
       tags: [me]
       operationId: getVerificationStatus
       summary: Read-only verification status
+      description: |
+        Poll after `native-event` answered `processing`, or after a photo
+        edit (upload / delete / `POST /v1/me/photos/remove`) that queued a
+        re-check. `status` is written by the face-match pipeline; `checking`
+        says whether a face-match run for this user is in flight right now.
       responses:
         "200":
           description: Current status
@@ -1189,6 +1194,18 @@ paths:
                 required: [status]
                 properties:
                   status: { $ref: "#/components/schemas/VerificationStatus" }
+                  checking:
+                    type: boolean
+                    description: |
+                      True while a face-match verification run for this user
+                      is in flight (a fresh check after liveness, or the
+                      re-check a photo edit queues). `status` alone cannot say
+                      it: a verified user being re-checked can stay `verified`
+                      throughout, and `pending` also covers a liveness session
+                      that was never finished. Always sent by current servers;
+                      optional only so older servers stay valid — treat absent
+                      as false. Held in the bot process's memory, so a restart
+                      mid-run reads false.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/me/verification/consent:
@@ -1287,9 +1304,10 @@ paths:
             - `consent_required` — the user has not yet passed through
               `POST /v1/me/verification/consent`. Show the consent screen,
               record the consent, then retry this call once.
-            - `photos_required` — the profile has no photos, so a passing check
-              would have nothing to be compared against. Send the user to add
-              photos (at least `minPhotos`), then offer the check again.
+            - `photos_required` — the profile has fewer than `minPhotos`
+              photos (not only none), so a check would compare against a set
+              the user still has to finish. Send the user to add photos (at
+              least `minPhotos`), then offer the check again.
               `message` carries the ask in the user's language. Checked before
               consent, so nobody reads the biometric disclosure for a check
               that cannot run yet.
@@ -2075,6 +2093,11 @@ paths:
       tags: [me]
       operationId: deletePhoto
       summary: Remove a photo by array index
+      description: |
+        Removes one photo; hashes, face scores and `profileMedia` stay
+        aligned, the video stays. Queues one verification re-check. Only
+        `active` users have a floor (409 `photo_minimum`). To remove several,
+        use `POST /v1/me/photos/remove`.
       parameters:
         - name: index
           in: path
@@ -2090,11 +2113,62 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            `code: "photo_minimum"` (with `min`): the delete would drop below
-            the minimum photo count — refused for active users, and during
-            onboarding once the user has left the photo stage
-            (`POST /v1/onboarding/photos/continue`). While the stage is open
-            there is no floor.
+            `code: "photo_minimum"` (with `min`): the delete would drop an
+            `active` user below the minimum photo count. Nobody else has a
+            floor — paused users, and onboarding users whether or not they
+            have left the photo stage (the photo step and the liveness gate's
+            `photos_required` hold the minimum there).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/photos/remove:
+    post:
+      tags: [me]
+      operationId: removeMyPhotos
+      summary: Remove several photos at once, by path
+      description: |
+        The photo manager's multi-select delete. `paths` are entries of
+        `photos` from `GET /v1/me/photos` (not indices, so a selection made
+        on a stale list cannot remove the wrong photo).
+
+        Same rules as `DELETE /v1/me/photos/{index}`, in one transaction:
+        hashes, face scores and `profileMedia` stay aligned, the video stays,
+        and the minimum applies to `active` users only (409 `photo_minimum`,
+        nothing removed). Paths not among the photos are ignored; when none
+        match, the answer is 200 with the photos as they are and nothing
+        changes. One verification re-check per request, not per photo —
+        poll `GET /v1/me/verification` (`checking`) for it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: string }
+                  description: Photo paths as `GET /v1/me/photos` returns them in `photos`
+      responses:
+        "200":
+          description: Remaining photos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotosResponse" }
+        "400":
+          description: '`error: "invalid-paths"` — `paths` is not 1–10 strings'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `code: "photo_minimum"` (with `min`): the removal would drop an
+            `active` user below the minimum photo count. Nothing was removed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

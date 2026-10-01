@@ -43,6 +43,35 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-10-01) — фото и проверка: `checking` в `GET /v1/me/verification`, `POST /v1/me/photos/remove`, пол удаления только у `active`, `photos_required` ниже минимума (DECISIONS 2026-10-01).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
+A/B/C выше не зависит — едет с любым заходом (A/B/C), в который попадёт коммит. Что меняется на проде:
+`GET /v1/me/verification` добавляет `checking` (реестр запусков проверки лица в памяти процесса — после рестарта
+пуст, это верно: запуски рестарт не переживают); новая ручка `POST /v1/me/photos/remove` `{paths}` (только JWT);
+`DELETE /v1/me/photos/:index` больше не отказывает онбордингу после выхода со стадии фото — 409 `photo_minimum`
+только у `active`; начало проверки (`native-init` и Mini App проверки) отвечает `photos_required` при 1–3 фото, а не
+только при нуле. Пишет в БД то же, что DELETE: `profiles.photos` и выровненные массивы.
+**Демо:** те же ручки, то же поведение (демо-проверка тоже отмечается в реестре).
+**iOS:** старые сборки не ломаются (`checking` — лишнее поле, новую ручку не зовут). Сборке iOS с мультивыбором фото
+и честным «проверяем» выкат нужен; до него `POST /v1/me/photos/remove` отвечает 404, а `checking` отсутствует.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/me/verification | jq
+# → 200 {"status":"…","checking":false}
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"paths":[]}' https://dating-api.gennety.com/v1/me/photos/remove                    # → 400 (invalid-paths)
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"paths":["no-such-photo.jpg"]}' https://dating-api.gennety.com/v1/me/photos/remove | jq '.photos | length'
+#   → 200, список без изменений
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; схема не менялась. Сборка iOS после отката получает 404 на
+`POST /v1/me/photos/remove` и не видит `checking`.
+
+---
+
 **PENDING (2026-10-01) — `GET /v1/me/profile-gaps`: незаполненные пункты профиля для подсказки «Сегодня» (DECISIONS 2026-10-01).**
 **Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
 A/B/C выше не зависит — едет с тем заходом, в который попадёт коммит. Ручка новая и только читает: один запрос
