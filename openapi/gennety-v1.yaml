@@ -1140,6 +1140,40 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/profile-gaps:
+    get:
+      tags: [me]
+      operationId: getProfileGaps
+      summary: Unfinished profile items, in nudge priority order
+      description: |
+        What is still open on the caller's profile, for the Today screen's
+        one-a-day "finish your profile" nudge (decision 2026-10-01). Only
+        currently open items are listed, always in this order:
+        `video`, `photos`, `music`, `looking_for`, `age_range`, `about`,
+        `interests`, `voice`, `type_radar`, `major`. An empty list means the
+        profile is complete.
+
+        The server reports WHICH items are open and nothing else: impressions,
+        "later" and "don't remind me" are kept by the client. An item behind a
+        switched-off feature flag (profile video, music, voice prompt, Type
+        Radar) is never listed, so switching a flag on makes its nudge appear
+        without an app release.
+
+        Read-only and cheap — one user lookup plus, while music is on, one
+        count. Poll it on every Today refresh.
+      responses:
+        "200":
+          description: The open items (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfileGapsResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: The token's user no longer exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/verification:
     get:
       tags: [me]
@@ -7265,6 +7299,65 @@ components:
         version:
           type: string
           description: The chat's current `ProxyChatState.version`.
+
+    ProfileGapsResponse:
+      type: object
+      description: Served by `GET /v1/me/profile-gaps` (`services/profile-gaps.ts`).
+      required: [gaps]
+      properties:
+        gaps:
+          type: array
+          description: |
+            Open items only, in the fixed priority order `video`, `photos`,
+            `music`, `looking_for`, `age_range`, `about`, `interests`, `voice`,
+            `type_radar`, `major`. Empty when the profile is complete.
+          items: { $ref: "#/components/schemas/ProfileGap" }
+
+    ProfileGap:
+      type: object
+      description: One unfinished profile item the Today nudge may point at.
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: |
+            Which item is open. Today one of:
+            - `video` — no profile video (only while the profile-video API is
+              on, the same switch as `videoEnabled` in `GET /v1/me/photos`);
+            - `photos` — fewer than 6 photos AND the one-time photo bonus never
+              claimed (claimed and then deleted down is not a gap);
+            - `music` — no pinned track (only while music is on);
+            - `looking_for` — `partnerPreferences` empty;
+            - `age_range` — neither `ageRangeMin` nor `ageRangeMax` set;
+            - `about` — `psychologicalSummary` empty, or still the text
+              onboarding generated rather than one the person wrote;
+            - `interests` — `hobbies` empty;
+            - `voice` — no voice prompt (only while voice prompts are on);
+            - `type_radar` — Type Radar is available to this person and not
+              calibrated (`available && !calibrated` of `GET /v1/radar/state`;
+              only while Type Radar is on);
+            - `major` — `major` empty.
+
+            Deliberately a plain string and NOT an `enum`: kinds will be added
+            server-side, and swift-openapi-generator turns an `enum` into a
+            closed Swift type that THROWS on an unknown value — one new kind
+            would then fail decoding of the whole list. Clients silently drop a
+            kind they do not know.
+          example: photos
+        reward:
+          type: [string, "null"]
+          description: |
+            What finishing the item earns, when it really earns something right
+            now. Today only `ticket` (one free Date Ticket: the one-time video
+            bonus, or the photo bonus). Absent or null = no reward; never
+            promise one then. A plain string for the same reason as `kind`.
+          example: ticket
+        remaining:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            `photos` only: how many more photos reach the bonus threshold (6).
+          example: 2
 
     TicketHistoryEntry:
       type: object

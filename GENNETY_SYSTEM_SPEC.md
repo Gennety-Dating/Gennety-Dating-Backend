@@ -489,6 +489,7 @@ All endpoints require Bearer JWT (`Authorization: Bearer <token>`) unless marked
 | `GET` | `/v1/music/search` | JWT | Search Spotify catalog using app token (cached 10 min) |
 | `POST`| `/v1/me/photos` | JWT | Upload profile photo; validates moderation & face presence |
 | `DELETE`| `/v1/me/photos/:idx` | JWT | Delete photo at index; updates `uploadedPhotoHashes` |
+| `GET` | `/v1/me/profile-gaps` | JWT | Read-only: unfinished profile items in Today-nudge order (`video`, `photos`, `music`, `looking_for`, `age_range`, `about`, `interests`, `voice`, `type_radar`, `major`); flag-off items omitted |
 | `GET` | `/v1/me/verification/native-init` | JWT | Mints STS credentials for AWS Face Liveness session (`eu-west-1`) |
 | `POST`| `/v1/me/verification/native-event`| JWT | Terminal liveness event; evaluates AWS results & CompareFaces |
 | `GET` | `/v1/matches/current` | JWT | Active match snapshot, partner profile, agreed venue, timezone |

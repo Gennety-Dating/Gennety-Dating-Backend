@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 376 entries
+# Decision index — all 380 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-01 | `GET /v1/me/profile-gaps` (только чтение, JWT): открытые пункты профиля для подсказки «Сегодня» в порядке `video, photos, music, looking_for, age_range, about, interests, voice, type_radar, major`; условия повторяют существующие ручки, пункт за выключенным флагом не отдаётся; `kind`/`reward` — строки, не enum; `photos` БЕЗ `reward` — бонус за фото выдаёт только стадия фото онбординга в Telegram, не `POST /v1/me/photos` (выдавать ли — решение основателя); «о себе» = `psychologicalSummary`, который финал онбординга перезаписывает машинной заготовкой — она считается пустой и видна людям как их «о себе» (не исправлено); музыка — `countProfileMusic` внутри разрешённого файла, страж ИИ не расширялся | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | Mini App: дисплейный текст (билет, магазин, Date Terminal, Type Radar, смена места) на Gennety Display — своя копия шрифта iOS (Geologica, OFL), веса 600/700/800 по ролям, подмножество под en/ru/uk/de/pl; Space Grotesk снят — у него нет кириллицы, ru/uk-заголовки рисовались двумя шрифтами; файлы в `src/fonts/` (хеш Vite: Caddy держит `*.woff2` immutable год), не в `public/`; тело текста не трогали; Rubik — только проба на ветке `trial/rubik-type` | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | нативный шаг фото держится открытым до «Продолжить» (двойник Telegram): загрузка на вопросе `photos` хода агента не делает, выход — `POST /v1/onboarding/photos/continue` (`photos_continue` коллектора, 409 `photos-required` ниже минимума); после выхода удаление ниже минимума — 409 `photo_minimum`; `PUT /v1/me/photos/order` (главное фото, замена на месте; хеши/оценки/`profileMedia` едут с фото); лимит загрузок 10 → 30 в час | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-09-30 | прокси-чат: «в сети» и «печатает…» (отмена «никаких „печатает…“» §4.5 по постановке основателя) — присутствие в памяти процесса (приложение ~45 с / чат ~12 с / набор ~6 с, истечение будит партнёра), счётчик изменений на пару, `GET …/chat?after=` — долгий опрос по образцу Bump (обрыв снимает «в чате» сразу, курсор не двигает), `POST …/chat/presence`; ничего не хранится, только в окне и только партнёру; `thread-id` у `proxy.*` пушей; «печатает» в Telegram и серверное гашение пуша — не сделано | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

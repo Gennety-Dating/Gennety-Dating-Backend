@@ -43,6 +43,33 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-10-01) — `GET /v1/me/profile-gaps`: незаполненные пункты профиля для подсказки «Сегодня» (DECISIONS 2026-10-01).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
+A/B/C выше не зависит — едет с тем заходом, в который попадёт коммит. Ручка новая и только читает: один запрос
+пользователя (профиль + id голосовой записи) и при `PROFILE_MUSIC_ENABLED=true` один `count` треков; в БД ничего не
+пишет. Попутно `GET /v1/radar/state` берёт свои ворота из общего `services/type-radar-availability.ts` — ответ тот же.
+Пункты `music` / `voice` / `type_radar` / `video` появляются только при включённых `PROFILE_MUSIC_ENABLED` /
+`VOICE_PROMPT_ENABLED` / `TYPE_RADAR_ENABLED` / `PROFILE_VIDEO_API_ENABLED`; `reward: "ticket"` — только у `video`
+(бонус за видео не получен и `TICKET_FEATURE_ENABLED`), у `photos` награды нет (бонус за фото приложение не выдаёт).
+**Демо:** та же ручка, то же поведение.
+**iOS:** старые сборки ручку не зовут. Сборке iOS с подсказками профиля (план «Сегодня», этап C) выкат нужен; до него
+она получает 404 и подсказок не показывает.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/me/profile-gaps | jq
+# → 200 {"gaps":[...]} — kind только из video, photos, music, looking_for, age_range, about, interests, voice,
+#   type_radar, major, в этом порядке; у photos есть remaining и нет reward; у video reward "ticket", пока бонус
+#   за видео не получен. Пустой профиль после онбординга почти наверняка содержит "about" (заготовка онбординга).
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/me/profile-gaps   # → 401 без токена
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется. Сборка iOS с подсказками после отката
+получает 404 и просто не показывает их.
+
+---
+
 **PENDING (2026-10-01) — Mini App: заголовки на Gennety Display вместо Space Grotesk (у того нет кириллицы) (DECISIONS 2026-10-01).**
 **Только Mini App**: нет схемы, env, флагов и изменений сервера — дифф это `apps/webapp/**` плюс документация.
 Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё

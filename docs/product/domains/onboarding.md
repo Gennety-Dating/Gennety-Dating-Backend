@@ -958,6 +958,12 @@ launched market — the conditional menu row and the honest weekly DM in §2.1 /
 Profile synthesis uses questionnaire answers and structured intake exclusively.
 Finalization builds `psychologicalSummary` and its embedding from hobbies, partner
 preferences and the two vibe answers. Type Radar precedes photo collection.
+That text is a machine stub ("Profile source: onboarding answers\nHobbies/interests:
+…\nPartner preferences: …") and every finalize OVERWRITES the column with it — yet
+the same column is the person's "About me" on both clients (iOS `ProfileView`,
+Telegram «Мой профиль» / `edit_bio`), so until they rewrite it the stub is what they
+see as their own bio (found 2026-10-01, not fixed). `GET /v1/me/profile-gaps` counts
+the stub as an empty `about`.
 
 Hard rules enforced by the collector:
 - Required fields (`firstName`, `age`, `gender`, `preference`,

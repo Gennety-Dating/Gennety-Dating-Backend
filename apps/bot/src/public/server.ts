@@ -52,6 +52,7 @@ import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { ticketsHistoryRouter } from "./routes/tickets-history.js";
+import { profileGapsRouter } from "./routes/profile-gaps.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createProfileVideoRouter } from "./routes/profile-video.js";
 import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
@@ -612,6 +613,9 @@ app.use("/v1/me/rhythm", rhythmRouter);
 app.use("/v1/me/blocks", createUserBlocksRouter());
 // Wallet movements for the native Tickets tab (TH1). Same rule again.
 app.use("/v1/me/tickets/history", ticketsHistoryRouter);
+// Unfinished profile items for the Today nudge (decision journal 2026-10-01).
+// Same rule; read-only, no flag of its own — each item carries its feature's.
+app.use("/v1/me/profile-gaps", profileGapsRouter);
 // Profile video from the native app (decision journal 2026-09-13). Same rule;
 // 404s before auth while the kill switch is off.
 app.use("/v1/me/video", (req, res, next) => {

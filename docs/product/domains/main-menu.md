@@ -733,6 +733,16 @@ Supported first-class flows:
   `POST /v1/me/profiler/answer`. The app pulls the batch the worker would have
   pushed into the bot chat, and resumes a live question after being closed;
   rules and parity in `onboarding.md` §Phase 1b → "Native app".
+- **Profile gaps** (Today screen, decision 2026-10-01) — `GET /v1/me/profile-gaps`
+  lists the unfinished profile items in the fixed nudge order `video`, `photos`,
+  `music`, `looking_for`, `age_range`, `about`, `interests`, `voice`,
+  `type_radar`, `major`; the app shows one nudge a day and keeps the
+  impressions / "later" / "don't remind me" ledger itself. Items behind an off
+  flag are never listed. `reward: "ticket"` only where finishing really grants
+  one now — the video bonus; the photo bonus is NOT granted by the app's photo
+  upload (only by the Telegram onboarding photo stage), so `photos` carries no
+  reward until that is wired. `about` counts the onboarding-generated
+  `psychologicalSummary` stub as empty. Read-only; demo behaves as prod.
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
   push via `services/push.ts` for the same events that DM Telegram users.
 - `/v1/me/home-location` persists canonical dating city + coordinates for
