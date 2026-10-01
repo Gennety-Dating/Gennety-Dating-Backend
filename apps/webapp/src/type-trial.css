@@ -8,6 +8,17 @@
  * (Rubik and its caps variant were tried first and rejected by the founder on
  * 2026-10-01; they are gone from this branch.)
  *
+ * Round 3 (2026-10-01): `?type=sharp50` / `?type=sharp0` keep Gennety
+ * Display itself — Geologica, the same 600 / 700 / 800 per role, the same
+ * five-language subset (identical cmap) — and only lower its Sharpness axis
+ * (SHRP) from 100 to 50 or to 0; SHRP 0 is stock Geologica as Google Fonts
+ * ships it. Families "Gennety Display 50" / "Gennety Display 0", license
+ * fonts/OFL.txt (the same Geologica OFL as Gennety Display). No size-adjust and
+ * no short labels: the outlines change only at stroke junctions, though a few
+ * advances move with them (C c С с Є Э 1 wider by 5–7 % at SHRP 0, half that
+ * at 50). Buttons stay exactly as without the parameter — this round is about
+ * the display face only.
+ *
  * Both faces are SIL OFL 1.1 with no Reserved Font Name (fonts/OFL-Unbounded.txt,
  * fonts/OFL-WixMadefor.txt): static instances of the variable fonts, subset
  * to the same five-language set as Gennety Display, renamed "Gennety
@@ -75,6 +86,54 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Gennety Display 50";
+  src: url("./fonts/GennetyDisplay50-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Display 50";
+  src: url("./fonts/GennetyDisplay50-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Display 50";
+  src: url("./fonts/GennetyDisplay50-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Display 0";
+  src: url("./fonts/GennetyDisplay0-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Display 0";
+  src: url("./fonts/GennetyDisplay0-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Display 0";
+  src: url("./fonts/GennetyDisplay0-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root[data-type="unbounded"] {
   --font-display: "Gennety Unbounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display-weight-display: 700;
@@ -87,6 +146,15 @@
   --font-display-weight-display: 800;
   --font-display-weight-title: 800;
   --font-display-weight-label: 750;
+}
+
+/* Sharpness only: the weight and tracking tokens stay main’s (800 / 700 / 600). */
+:root[data-type="sharp50"] {
+  --font-display: "Gennety Display 50", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root[data-type="sharp0"] {
+  --font-display: "Gennety Display 0", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Primary CTAs: the burgundy hero and the white primary of the button ladder

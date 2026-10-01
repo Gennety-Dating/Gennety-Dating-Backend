@@ -2,29 +2,31 @@
  * TRIAL ONLY — branch `trial/rubik-type`, never merged to main.
  *
  * The display-face trial's switch (see type-trial.css): each display-face
- * shell copies `?type=unbounded | wix` onto `<html data-type>` before first
- * paint, and this module reads it back.
+ * shell copies `?type=unbounded | wix | sharp50 | sharp0` onto
+ * `<html data-type>` before first paint, and this module reads it back.
  *
  * Unbounded is a wide face: even at the same cap height (size-adjust 93.3 %)
  * a label runs ~18 % longer than in Gennety Display. Primary CTA labels that
  * then wrap or overflow at a 360px-wide viewport — and only those, measured in
  * all five languages against the button's real available width — get a short
- * per-language form here. Nothing changes for `wix` or without the parameter:
- * `withShortLabels` then returns the table it was given.
+ * per-language form here. Nothing changes for `wix`, for `sharp50` / `sharp0`
+ * (Gennety Display itself at a lower Sharpness: only C c С с Є Э 1 run a few %
+ * wider) or without the parameter: `withShortLabels` then returns the table it
+ * was given.
  *
  * Measured at 360×780 with the prices production shows (ticket 250 ⭐ /
  * both 500 ⭐, venue change 150 ⭐); a four-digit price would need rechecking.
  */
 
 type Lang = "en" | "ru" | "uk" | "de" | "pl";
-export type TypeVariant = "unbounded" | "wix";
+export type TypeVariant = "unbounded" | "wix" | "sharp50" | "sharp0";
 type Page = "ticket" | "radar" | "venue-change";
 type Label = string | ((stars: number) => string);
 
 export function typeVariant(): TypeVariant | null {
   if (typeof document === "undefined") return null;
   const t = document.documentElement?.dataset?.type;
-  return t === "unbounded" || t === "wix" ? t : null;
+  return t === "unbounded" || t === "wix" || t === "sharp50" || t === "sharp0" ? t : null;
 }
 
 // Only labels that take MORE lines in Unbounded than in main's build at
