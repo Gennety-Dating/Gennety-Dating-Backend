@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 381 entries
+# Decision index — all 382 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-01 | Аудит текстов (основатель утвердил, кроме «Яркая история» и «Это мэтч» — оставлены): Mini App — display-токены заголовков, 32–40 px/800 в онбординге, сноски убраны, согласие как в iOS; бот — жирная первая строка с Markdown, `**` починен, «дроп» → «подбор», «ты» везде, удержание вместо тряски; выкат PENDING | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | Mini App, анкета «основ» без рывков (аудит, все пункты утверждены основателем): одна живая сцена вместо 17 под `opacity: 0`, клавиатура на `transform` + `viewportChanged`/`isStateStable`, кегли от `--stable-vh`, слот ошибки, плитка цели на `clip-path`, один `selectionChanged` на выбор; черновики сцен (согласия, email, поиск города) — у родителя; ворота email/города вне объёма | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | Mini App: Gennety Display на резкости 50 вслед за iOS (Geologica `SHRP` 100 → 50, решение основателя после испытания гарнитуры); файлы и имена прежние, меняются только концы штрихов; С/с шире на 2.5–3 % — длинные названия мест проверять на перенос; выкат PENDING | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-01 | фото и проверка: `beginLivenessCheck` → `photos_required` ниже `MIN_PHOTOS`, не только при нуле; `GET /v1/me/verification` отдаёт `checking` — реестр запусков проверки лица в памяти процесса (`trackFaceMatchRun`, отметка до первого `await`; свежая проверка, демо, перепроверка после правки фото целиком); пол удаления фото только у `active` (ОТМЕНА пола «после выхода со стадии фото» 2026-09-30); `POST /v1/me/photos/remove` `{paths}` — пачкой по путям из `photos`, одно тело с DELETE, одна перепроверка на запрос, ответ `PhotosResponse`, 1…10 путей | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
