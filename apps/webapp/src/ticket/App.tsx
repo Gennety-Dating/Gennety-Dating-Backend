@@ -11,7 +11,7 @@ import {
   type TicketState,
   type TicketScope,
 } from "../api.js";
-import { pickLang, strings, fill, type TicketStrings } from "./i18n.js";
+import { pickLang, primaryStrings, strings, fill, type TicketStrings } from "./i18n.js";
 import {
   deriveScreen,
   deriveOfferButtons,
@@ -120,6 +120,8 @@ async function preloadScreenPhotos(state: TicketState): Promise<void> {
 
 export function App(): ReactElement {
   const s = strings(lang);
+  // TRIAL ONLY (trial/rubik-type): labels for the primary-role buttons.
+  const sPrimary = primaryStrings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   // "I'll let them grab it" — session-only (see ScreenOptions in ticket-state).
   // It survives the 4s poll because React state isn't remounted by it, and it
@@ -531,7 +533,7 @@ export function App(): ReactElement {
                     {fill(s.famineBadge, { pct: String(state.selfDiscountPct) })}
                   </span>
                 )}
-                {offerLabel(b, state, s)}
+                {offerLabel(b, state, b.primary ? sPrimary : s)}
               </button>
             );
           })}
@@ -551,7 +553,7 @@ export function App(): ReactElement {
                     <Avatar src={partnerPhotoSrc} name={state.partnerName} size={44} />
                   </span>
                 )}
-                {offerLabel(b, state, s)}
+                {offerLabel(b, state, b.primary ? sPrimary : s)}
               </button>
             ))}
             {/* A real, bordered alternative — not a ghost text link — and it
@@ -564,7 +566,7 @@ export function App(): ReactElement {
 
         {(sc === "success" || sc === "partner-paid" || sc === "closed") && (
           <button type="button" className="btn-primary" onClick={goToScheduling}>
-            {s.goToScheduling}
+            {sPrimary.goToScheduling}
           </button>
         )}
 

@@ -11,6 +11,9 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Gennety · Date Terminal</title>
+    <!-- TRIAL ONLY (branch trial/rubik-type): ?type=rubik | rubik-caps puts data-type on <html>
+         before first paint; src/type-trial.css and src/type-trial.ts key off it. -->
+    <script>(function(){try{var t=new URLSearchParams(location.search).get("type");if(t==="rubik"||t==="rubik-caps")document.documentElement.dataset.type=t;}catch(e){}})();</script>
     <style>
       html,
       body {

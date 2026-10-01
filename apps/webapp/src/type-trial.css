@@ -1,0 +1,73 @@
+/**
+ * TRIAL ONLY — branch `trial/rubik-type`, never merged to main.
+ *
+ * Rubik as a candidate brand display face, behind a switch: `?type=rubik` or
+ * `?type=rubik-caps` on any page that sets display type puts
+ * `data-type="…"` on <html> (inline pre-paint snippet in each shell). Without
+ * the parameter nothing here applies and the page is exactly main's Gennety
+ * Display build.
+ *
+ * Rubik (Hubert & Fischer, SIL OFL 1.1, no Reserved Font Name; see
+ * fonts/OFL-Rubik.txt), static instances 500/600/700 of the variable font,
+ * subset to the same five-language set as Gennety Display. Family name
+ * "Gennety Rubik" so it can never collide with a system-installed Rubik.
+ *
+ * Roles, ink-matched to Gennety Display: display (≥ 28px) 700, title
+ * (20–27px) 600, label (< 20px) 500. Tracking scale unchanged.
+ *
+ *   rubik       display/title/label in Rubik; primary CTA labels in the
+ *               display token at 600, sentence case.
+ *   rubik-caps  as rubik, plus primary CTA labels UPPERCASE, 700, 16px,
+ *               +0.06em (the founder's original brief: [ ВЫБРАТЬ МЕСТО ]).
+ *               Labels that would wrap or overflow at 360px get a short
+ *               per-language form (type-trial.ts).
+ */
+
+@font-face {
+  font-family: "Gennety Rubik";
+  src: url("./fonts/GennetyRubik-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Rubik";
+  src: url("./fonts/GennetyRubik-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gennety Rubik";
+  src: url("./fonts/GennetyRubik-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root[data-type="rubik"],
+:root[data-type="rubik-caps"] {
+  --font-display: "Gennety Rubik", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display-weight-display: 700;
+  --font-display-weight-title: 600;
+  --font-display-weight-label: 500;
+}
+
+/* Primary CTAs: the burgundy hero and the white primary of the button ladder
+   (ticket, store, terminal, venue board), the venue board's burgundy express
+   button, the terminal's hold capsule, and the Type Radar verdict pair — the
+   two verdicts are one equal-weight control, so both take the style. */
+:root[data-type="rubik"] :is(.btn-hero, .btn-primary, .btn-express, .hold-capsule, .radar-verdict),
+:root[data-type="rubik-caps"] :is(.btn-hero, .btn-primary, .btn-express, .hold-capsule, .radar-verdict) {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+:root[data-type="rubik-caps"] :is(.btn-hero, .btn-primary, .btn-express, .hold-capsule, .radar-verdict) {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

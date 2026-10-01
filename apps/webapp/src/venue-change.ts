@@ -30,6 +30,7 @@ import { BUTTERFLY_PATH } from "./brand-butterfly.js";
  */
 
 import "./venue-change.css";
+import { capsLabel, withCapsLabels } from "./type-trial.js";
 import { butterflyLoader } from "./butterfly-loader";
 import { butterflySuccess } from "./butterfly-success";
 import {
@@ -659,7 +660,8 @@ const T: Record<Lang, Strings> = {
     premiumFreeWithSub: "Za darmo z Gennety Premium",
   },
 };
-const s = T[lang];
+// TRIAL ONLY (trial/rubik-type): short CTA labels under ?type=rubik-caps.
+const s = withCapsLabels("venue-change", lang, T[lang]);
 
 function categoryLabel(category: string): string {
   return s.categoryLabels[category] ?? category;
@@ -1929,7 +1931,7 @@ function renderDetail(v: VenueChangeCatalogItem): void {
     // No ⭐ on this button any more: the tap opens our Premium screen, it does
     // not charge anything, and a Stars glyph would promise a payment sheet.
     bar.push(
-      iconBtn("btn-primary", "lock", s.premiumPlate + " · " + s.heartAdd, () => {
+      iconBtn("btn-primary", "lock", capsLabel("venue-change", lang, "premiumMark") ?? s.premiumPlate + " · " + s.heartAdd, () => {
         openPremiumMiniApp();
       }),
     );

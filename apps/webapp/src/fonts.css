@@ -30,6 +30,9 @@
  * Body text is NOT this face — it stays on each page's Inter / system stack.
  */
 
+/* TRIAL BRANCH ONLY (`trial/rubik-type`): the Rubik variants, inert without ?type=. */
+@import "./type-trial.css";
+
 @font-face {
   font-family: "Gennety Display";
   src: url("./fonts/GennetyDisplay-SemiBold.woff2") format("woff2");
