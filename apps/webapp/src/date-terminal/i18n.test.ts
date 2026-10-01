@@ -22,10 +22,11 @@ describe("terminal copy", () => {
     }
   });
 
-  it("keeps the product names in English everywhere", () => {
+  it("never shows the internal product names (copy audit 2026-10-01)", () => {
     for (const lang of LANGS) {
-      expect(TERMINAL_TABLES[lang].kicker).toBe("Date Terminal");
-      expect(TERMINAL_TABLES[lang].titleSynced).toContain("Contact Sync");
+      for (const [key, text] of Object.entries(TERMINAL_TABLES[lang])) {
+        expect(text, `${lang}.${key}`).not.toMatch(/Date Terminal|Contact Sync/u);
+      }
     }
   });
 

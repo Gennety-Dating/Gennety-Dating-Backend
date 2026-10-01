@@ -4,24 +4,20 @@ const translations = {
   en: {
     // --- Onboarding ---
     consentMessage:
-      "Welcome to Gennety Dating!\n\n" +
-      "Before we begin, please review our Terms of Service and Privacy Policy and agree to our data retention terms.",
-    consentAgree: "I Agree",
+      "*Hi! This is Gennety* 👋\n\nBefore we start, read the Terms of Service and Privacy Policy and agree to the data storage rules.",
+    consentAgree: "I accept",
     consentPrivacyButton: "Privacy Policy",
     consentTermsButton: "Terms of Service",
-    welcome: "Gennety Dating 👀\nAI matchmaking for real dates.",
+    welcome: "*Gennety Dating*\nWe find your match and set up a real-life date right away.",
     chooseLanguage: "Pick your language:",
     philosophyPitch:
-      "Gennety runs on one idea: *Zero Chat*.\n\n" +
-      "You never message your match. I get who you are, " +
-      "find someone actually compatible, and handle everything — time, place, the whole thing.\n\n" +
-      "You just show up. Sound good?",
-    philosophyContinue: "I'm in 🚀",
-    askEmail: "Drop your uni email (like name@stanford.edu):",
-    invalidEmail: "Hmm, that doesn't look like a uni email. Try your .edu or .ac.uk address.",
-    otpSent: "Sent a 6-digit code to *{email}*. Drop it here:",
+      "*No texting needed here*\n\nI get to know you, find someone who fits and arrange the time and place myself. All you do is show up. Shall we?",
+    philosophyContinue: "Let's go 🚀",
+    askEmail: "Type your university email — for example, name@knu.ua",
+    invalidEmail: "That doesn't look like a university email. Check the address and send it again.",
+    otpSent: "Sent a code to *{email}*. Enter it here:",
     otpInvalid: "That code didn't work. Try again:",
-    otpExpired: "Code expired. Enter your email again:",
+    otpExpired: "The code has expired. Enter your email again and I'll send a new one.",
     otpTooManyAttempts: "Too many tries. Enter your email again for a fresh code.",
     otpCooldown: "Hold on — wait a minute before requesting a new code.",
     emailVerified: "Email confirmed ✨",
@@ -41,7 +37,7 @@ const translations = {
     llmAnalysing3: "Building your psychological fingerprint...",
     llmDumpReceived: "Profile ready ✨",
     askPhotos:
-      "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
+      "Almost done! Send {min}–{max} photos where you're clearly visible. No explicit shots. Videos work too — as long as you can be seen.",
     photoReceived: "Photo {n}/{max}",
     voicePromptSkipButton: "Without a voice note",
     /**
@@ -71,7 +67,7 @@ const translations = {
     voicePromptReviewDone: "✅ Done",
     /** Closing line of the skip/drop exit; carries the panel teardown. */
     voicePromptSkipped: "No voice note then — that's fine.",
-    voicePromptSaved: "Saved ✨ They'll hear it right before they decide.",
+    voicePromptSaved: "Saved ✨ Your match will hear it before they answer.",
     voicePromptTooShort: "That was barely a second — the mic button needs holding. Try again, aim for about 15 seconds.",
     voicePromptTooLong: "A bit long — keep it under 30 seconds, otherwise it doesn't get listened to. Record another one?",
     voicePromptUnsafe: "I can't put that on a profile. Record a different one — or skip, it's optional.",
@@ -80,10 +76,8 @@ const translations = {
     voicePromptPitchCaption: "{name} recorded this for you",
     photoRejected:
       "Your face needs to be visible in the photo. Try another shot.",
-    photoDuplicate:
-      "This photo is already in your profile. Add a different shot — every photo must be unique.",
-    photoDuplicateNear:
-      "This photo is already in your profile. Add a different shot — every photo must be unique.",
+    photoDuplicate: "This photo is already in your profile — send a different one.",
+    photoDuplicateNear: "This photo is already in your profile — send a different one.",
     photoUnsafeContent:
       "That photo can't be published in a profile. Pick a different, non-explicit one.",
     photoFaceObscured:
@@ -94,14 +88,11 @@ const translations = {
       "All photos must belong to the same person. Make sure your face is in every shot.",
     photoIdentityUncertain:
       "I couldn't match that face reliably. Try a clearer photo with better light and a more visible face.",
-    photoConsensusPending:
-      "I haven't fixed the profile identity yet. Send one more different photo where the same person is visible.",
-    photoConsensusOutlierRejected:
-      "One pending photo showed a different person, so I left it out.",
-    photoConsensusConfirmed:
-      "Identity confirmed from matching photos ✨",
+    photoConsensusPending: "Send one more photo — with two shots I can tell it's you on them.",
+    photoConsensusOutlierRejected: "One photo shows someone else — I didn't add it.",
+    photoConsensusConfirmed: "Great, it's you in every photo ✨",
     photoConsensusNoPairCap:
-      "I still don't see two photos of the same person. Nothing has been fixed yet — send another clear photo of you.",
+      "I still don't see two photos of the same person. Send one more clear photo of you.",
     photoVisionError:
       "Couldn't process the file. Try again.",
     photoInvalidMedia:
@@ -133,15 +124,14 @@ const translations = {
     videoProcessingUnavailable:
       "I couldn't check that video right now. Your existing video was not changed. Try again in a bit.",
     ticketRewardPhoto:
-      "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}*",
+      "🎟️ *A free Date Ticket is yours!*\n\nIt's a gift for your photos. One date = 1 ticket. Balance: *{balance}*",
     ticketRewardVideo:
-      "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}*",
+      "🎟️ *Another free Date Ticket is yours!*\n\nIt's a gift for your video. One date = 1 ticket. Balance: *{balance}*",
     ticketRewardStudent:
-      "🎓 University email verified — student perk unlocked: *2 free Date Tickets* are in your wallet.\n\nEach date costs 1 ticket, so your first two dates are covered. Balance: *{balance}*",
+      "🎓 *Two free Date Tickets are yours!*\n\nA gift for verifying your university email. One date = 1 ticket. Balance: *{balance}*",
     welcomeGiftTicket:
-      "Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$8.49\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
-    ticketStorePurchased:
-      "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}*",
+      "*Your first ticket is on me* ❤️\n\nA date normally costs 1 ticket (~$8.49). This one is free — it's already in your wallet.",
+    ticketStorePurchased: "✨ *Payment received!* Tickets added: *{count}*. Balance: *{balance}*",
     ticketStoreCheckoutError: "Couldn't confirm that payment. Try again in a moment.",
     premiumCheckoutAlreadySubscribed:
       "You already have an active Premium subscription, so this payment was stopped — nothing was charged.",
@@ -149,41 +139,37 @@ const translations = {
       "Your payment went through, but we couldn't hand over what you bought — something broke on our side.\n\nDon't pay again. We've already been alerted and will either deliver it or return your Stars.",
     ticketStoreInvoiceTitle: "Gennety Date Tickets",
     ticketStoreInvoiceDesc:
-      "{count} Date Ticket(s) added to your wallet. Each ticket covers one date.",
-    ticketGateInvoiceDesc:
-      "Securing your date — {count} Date Ticket(s). Each ticket covers one person.",
-    ticketStoreInvoiceLabel: "{count} Date Ticket(s)",
+      "Date Tickets added to your wallet: {count}. Each ticket covers one date.",
+    ticketGateInvoiceDesc: "Date payment. Date Tickets: {count}. Each ticket covers one person.",
+    ticketStoreInvoiceLabel: "Date Tickets × {count}",
     onboardingFinalizeBlocked:
       "I can't finish setting you up just yet — a couple of details are still missing on my side. Give it another go in a minute; if it keeps happening, write to @gennetysupport and we'll sort it out.",
-    onboardingPhotosNeedMore:
-      "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
+    onboardingPhotosNeedMore: "Photos: {count}/{min}. Send {remaining} more.",
     onboardingPhotosBonusOffer:
-      "Your required photos are ready.\n\nReach {threshold} photos ({remaining} remaining) to earn a free Date Ticket. You can also send one short profile video for another free ticket.\n\nBoth are optional — send more media now, or continue.",
+      "Required photos done ✨\n{remaining} more photos (up to {threshold}) earn a free ticket. A short video earns another.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Your required photos are ready, and your video bonus is secured.\n\nReach {threshold} photos ({remaining} remaining) to earn a second free Date Ticket, or continue.",
+      "Required photos done, the video ticket is yours ✨\n{remaining} more photos (up to {threshold}) earn a second free ticket.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} photos. {remaining} more unlocks a free Date Ticket. Send them now or continue.",
+      "Photos: {count}/{threshold}.\n{remaining} more and a free ticket is yours.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} photos. {remaining} more unlocks your second free Date Ticket. Send them now or continue.",
+      "Photos: {count}/{threshold}.\n{remaining} more and a second free ticket is yours.",
     onboardingPhotosPhotoBonusEarned:
-      "{count} photos are ready, and your free photo Date Ticket is secured ✨\n\nYou may still add photos up to {max}, or send one short profile video for another free ticket. Otherwise, continue.",
+      "Photos: {count}. The free photo ticket is yours ✨\nYou can add photos (up to {max}) or a video — it earns another ticket.",
     onboardingPhotosBothBonusesEarned:
-      "{count} photos and your profile video are ready — both free Date Tickets are secured ✨\n\nYou may still add photos up to {max}, or continue.",
+      "Photos: {count}, video done — both free tickets are yours ✨\nYou can add more photos (up to {max}).",
     onboardingPhotosPhotoBonusEarnedMax:
-      "All {max} photos are ready, and your free photo Date Ticket is secured ✨\n\nYou may still send one short profile video for another free ticket, or continue.",
+      "All {max} photos done, the photo ticket is yours ✨\nA short video earns another free ticket.",
     onboardingPhotosBothBonusesEarnedMax:
-      "All {max} photos and your profile video are ready — both free Date Tickets are secured ✨\n\nContinue when you're ready.",
+      "All {max} photos and the video are done ✨\nBoth free tickets are yours.",
     onboardingPhotosOptional:
-      "Your required photos are ready.\n\nYou may add more photos up to {max}, send one short profile video, or continue.",
+      "Required photos done.\nYou can add more (up to {max}) or a short video.",
     onboardingPhotosOptionalAfterVideo:
-      "Your required photos and profile video are ready.\n\nYou may add more photos up to {max}, or continue.",
-    onboardingPhotosOptionalMax:
-      "All {max} photos are ready.\n\nYou may send one short profile video, or continue.",
-    onboardingPhotosOptionalMaxAfterVideo:
-      "All {max} photos and your profile video are ready.\n\nContinue when you're ready.",
+      "Required photos and video done.\nYou can add more photos (up to {max}).",
+    onboardingPhotosOptionalMax: "All {max} photos done.\nYou can add a short video.",
+    onboardingPhotosOptionalMaxAfterVideo: "All {max} photos and the video are done ✨",
     menuMyTickets: "🎟️ My Tickets",
     ticketWalletText:
-      "🎟️ *My Tickets*\n\nYou have *{balance}* ticket(s). Each date costs 1 ticket — buy more anytime.",
+      "🎟️ *My Tickets*\n\nTickets: *{balance}*. Each date costs 1 ticket — buy more anytime.",
     ticketWalletOpenStore: "🎟️ Buy tickets",
     photosEnough: "You can send more (up to {max}) or hit the button to continue.",
     photosDone: "Photos uploaded ✨",
@@ -196,9 +182,7 @@ const translations = {
     profileConfirm: "Looks good",
     profileEdit: "Change something",
     onboardingComplete:
-      "You're in! 🎉\n\n" +
-      "I'm already on it — looking for your match. " +
-      "I'll hit you up as soon as someone special comes along.",
+      "*Done, you're in!* 🎉\n\nI'm already looking for your match — I'll write as soon as I find someone.",
     btnLike: "👍",
     btnDislike: "👎",
     btnContinuePhotos: "Continue ➡️",
@@ -207,17 +191,9 @@ const translations = {
 
     // --- Persona verification CTA (end of onboarding) ---
     verifyPitch:
-      "Final step. We need to confirm you're a real person.\n\n" +
-      "We compare the selfie captured during verification with every photo in your profile. " +
-      "Photos that don't match you will be rejected.\n\n" +
-      "Skipping verification will significantly lower your starting ELO rating, " +
-      "and the algorithm will surface fewer matches for you.",
+      "*Last step — confirm it's you*\n\nTake a selfie and I'll compare it with your profile photos. Photos that aren't you will be removed.\n\nWithout the check you'll get fewer matches.",
     verifyPitchMandatory:
-      "Final step. We confirm every member is a real person.\n\n" +
-      "We'll compare the selfie captured during verification with every photo in your profile — " +
-      "photos that don't match you will be rejected.\n\n" +
-      "If the photos in your profile aren't of you, swap them first with the button below.\n\n" +
-      "Verification is required: matching starts right after you pass it.",
+      "*Last step — confirm it's you*\n\nTake a selfie and I'll compare it with your profile photos. If the photos aren't of you, replace them first. Once you pass, I start looking for your match right away.",
     verifyMandatoryNotice:
       "Verification is now required for all new profiles — matching starts right after you pass it. It takes about a minute:",
     verifyReminderNudge:
@@ -230,7 +206,7 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Skip anyway",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Upload different photos",
-    verifyBtnRedoPhotosSecondary: "📷 It's my photos instead",
+    verifyBtnRedoPhotosSecondary: "📷 I'll change my photos first",
     verifyBtnAddPhotos: "📷 Add photos",
     // `beginLivenessCheck` refuses a check while the profile has no photos
     // (audit A13-H11): a pass would have nothing to be compared against.
@@ -252,9 +228,7 @@ const translations = {
       "Photos updated ✅ I'm re-checking them against your verification selfie — no need to redo it. I'll message you the moment it's done.",
     verifyPhotosSavedNowVerify:
       "Photos updated ✅ One step left — verification:",
-    verifySkipped:
-      "Skipped verification. You can run it later from the profile menu " +
-      "to restore your ELO rating.",
+    verifySkipped: "Verification skipped. You can do it later from the profile menu.",
     verifyCheckAlreadyDone:
       "Already processed — you should have gotten the result message above. " +
       "If something looks wrong, tap 🟢 Verify now to retry.",
@@ -263,21 +237,11 @@ const translations = {
     // different situations and profile photos are never even in scope on this
     // path: CompareFaces only runs after a `passed` liveness result.
     verifyRetryNotLive:
-      "The check stopped before it ever reached your photos — it just couldn't " +
-      "confirm a live face that time, so they haven't been looked at yet. A few " +
-      "things that help: bright " +
-      "light facing you (not behind you), your whole face inside the frame, no " +
-      "sunglasses or anything covering it. Tap 🟢 Verify now and try again.",
+      "*Couldn't recognise your face*\n\nFace a bright light, take off your glasses and tap 🟢 Verify now again.",
     verifyRetryUnfinished:
-      "This check didn't finish, so it never got as far as your photos — they " +
-      "haven't been looked at yet. Don't switch away from Telegram or close the camera " +
-      "mid-check; go through it start to finish in one go, it only takes about 15 " +
-      "seconds. Tap 🟢 Verify now to try again.",
+      "*The check was interrupted*\n\nGo through it in one go without leaving Telegram — it takes about 15 seconds. Tap 🟢 Verify now.",
     verifyRetryTechnical:
-      "That one was on us, not you — a technical hiccup on our side. It stopped " +
-      "before your photos were checked, so nothing about them has been decided " +
-      "either way. Sorry about that. Tap 🟢 Verify now and " +
-      "try again — it should go through cleanly this time.",
+      "*A glitch on our side*\n\nTap 🟢 Verify now again — it should work this time.",
     verifyReferenceExpired:
       "We delete your verification selfie after 90 days, so there's nothing left " +
       "here to check your new photos against. One more 10-second check and " +
@@ -292,13 +256,11 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
-      "⚠️ Your profile photos don't match the selfie from your verification.\n\n" +
-      "If those photos aren't you — tap 📷 below to swap them, and I'll re-check automatically (no new selfie needed). If they are you, the match just came out weak — run verification again in good lighting.",
+      "⚠️ *Your photos don't match the selfie*\n\nIf they aren't you, replace them with the 📷 button and I'll re-check. If they are you, run the check again in good light.",
     verifyPhotosDropped:
       "One thing: some photos didn't match your verification selfie, so I took them off your profile. Everything else is live. Add a couple more shots of yourself whenever you like 📷",
     verifyPhotosBelowMinimum:
-      "You're verified ✅ — that part is done for good.\n\n" +
-      "But some photos didn't match your selfie, so I took them off, and now your profile is under the {min}-photo minimum. Add {need} more of yourself and I'll start looking for a match right away 📷",
+      "You're verified ✅\n\nBut some photos didn't match your selfie, so I took them off, and now your profile is under the {min}-photo minimum. Add {need} more of yourself and I'll start looking for a match right away 📷",
     // --- Native-app push copy for the same verification outcomes (§1.4). Own
     // strings rather than reused DM copy: these land on a lock screen, so they
     // need a title, they must stay short, and they cannot point at a Telegram
@@ -360,8 +322,8 @@ const translations = {
     // Owner-only by founder decision: the pitch never carries this, so the
     // line has to say so wherever the owner meets it.
     intentPrivateNote: "only you can see this",
-    myProfileIntentLine: "🎯 Looking for: {intent} · {privateNote}",
-    myProfileIntentUnset: "🎯 Looking for: not set · {privateNote}",
+    myProfileIntentLine: "🎯 Looking for: {intent}",
+    myProfileIntentUnset: "🎯 Looking for: not set",
     editIntentBtn: "🎯 What I'm looking for",
     editIntentPrompt:
       "What are you looking for right now? Pick as many as fit — most people hold more than one.\n\nOnly you ever see this — I use it to match you better.",
@@ -369,25 +331,21 @@ const translations = {
 
     // --- Edit Profile ---
     editProfileBody:
-      "These are locked in:\n\n" +
-      "• *Name:* {firstName} {surname}\n" +
-      "• *Age:* {age}\n" +
-      "• *University:* {university}\n\n" +
-      "You can edit:",
+      "These can't be changed:\n\n• *Name:* {firstName} {surname}\n• *Age:* {age}\n• *University:* {university}\n\nYou can edit:",
     editBioBtn: "📝 About me",
     editPrefsBtn: "💘 Who I want",
     editMajorBtn: "💼 What I do",
     editProfilePhotosBtn: "📸 My photos",
     editBioPrompt:
-      "Write a few lines about yourself (max 500 chars).\n👀 Your match reads this before the date.",
-    editBioCurrent: "This is what's there now — whatever you send replaces all of it:",
+      "Write a few lines about yourself (up to 500 characters) — your match will read them before the date.",
+    editBioCurrent: "Here's what it says now. New text will replace it:",
     editBioTooLong: "Too long — keep it under 500.",
     editBioSaved: "About me updated",
     editMajorPrompt:
       "What do you do? (job / studies / field, max 100 chars)\n👀 Shown to your match.",
     editMajorTooLong: "Too long — keep it under 100.",
     editMajorSaved: "Saved",
-    editPrefsTitle: "💘 *Who I want*\n\nAffects who you get matched with. What to change?",
+    editPrefsTitle: "💘 *Who I want*\n\nWhat to change?",
     editPrefsAgeBtn: "🎂 Partner age range",
     editPrefsDescriptionBtn: "✨ The kind of person",
     editPrefsCurrent:
@@ -399,15 +357,14 @@ const translations = {
     editPrefsDescriptionSaved: "Partner preferences updated",
     editHobbiesSaved: "Interests updated",
     agentEntryPrompt: "Here you go:",
-    agentFallbackError: "Something glitched on my side. Say that again?",
+    agentFallbackError: "Something went wrong. Please say that again.",
     agentBlockedVerification: "Finish verification first — everything else opens up after that.",
     agentBlockedSuspended:
       "Your account is on hold right now, so I can't help with this. Questions go to @gennetysupport.",
     agentBlockedInvestigation:
       "Your account is under review right now. Nothing to do here for the moment — @gennetysupport can tell you more.",
     agentBlockedBanned: "This account is closed. If you think that's wrong, write to @gennetysupport.",
-    profileEmbeddingSyncPending:
-      "Saved. Matching will apply it after the automatic profile sync finishes.",
+    profileEmbeddingSyncPending: "Saved. I'll factor it into the next round.",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What partner age range are you looking for? (e.g. 20-28)\nMin: {min}, Max: {max}.",
     editAgeRangeInvalid: "Didn't get that. Two numbers like 20-28 (range {min}–{max}).",
@@ -483,15 +440,10 @@ const translations = {
     themeDarkOption: "🌙 Dark",
     themeLightOption: "☀️ Light",
     helpBody:
-      "*Need help?*\n\n" +
-      "We don't do chats between users — that's by design. " +
-      "Got an issue with a match, date, or the bot? Hit up support:\n\n" +
-      "💬 [@gennetysupport](https://t.me/gennetysupport)",
+      "*Need help?*\n\nAn issue with a match, a date or the bot — write to support:\n\n💬 [@gennetysupport](https://t.me/gennetysupport)",
     settingsDeleteAccount: "🗑 Delete Account",
     deleteAccountConfirm:
-      "You sure? This will *permanently delete* your account.\n\n" +
-      "Everything goes — profile, photos, matches, embeddings. " +
-      "*Can't undo this.*",
+      "*Delete your account for good?*\n\nYour profile, photos and matches will be gone. This can't be undone.",
     deleteAccountYes: "Yes, delete everything",
     deleteAccountNo: "Cancel",
     deleteAccountDone:
@@ -506,39 +458,29 @@ const translations = {
     accountActionExpired: "This confirmation expired. Open the action again.",
     statusActionUnavailable: "This action isn't available for the current account status.",
     deleteFreezeIntro:
-      "Wait — before you delete everything 👀\n\n" +
-      "You don't have to lose it all. *Freeze* your account instead: your profile, " +
-      "photos and verification stay safe, you disappear from matching, and next time " +
-      "you just send /start to land right back in your ready profile — no re-onboarding.\n\n" +
-      "Still want to delete? That one's permanent.",
+      "Wait — before you delete everything 👀\n\nYou don't have to lose it all. *Freeze* your account instead: your profile, photos and verification stay safe, you disappear from matching, and next time you just send /start to land right back in your ready profile — no signing up again.\n\nStill want to delete? That one's permanent.",
     deleteFreezeBtn: "❄️ Freeze my account",
     deleteProceedBtn: "Delete my account anyway",
     freezeConfirmed:
       "Done — your account is *frozen* ❄️\n\n" +
       "You're hidden from matching and won't get pinged. " +
       "Come back anytime with /start and everything's still here.",
-    freezeWelcomeBack:
-      "Welcome back! ❄️ → ☀️ Your account is *unfrozen* and live again. " +
-      "Here's your profile:",
-    deleteFinalYes: "Yes, I'm 100% sure",
-    deleteFinalNoSoft: "No",
-    deleteFinalNoHard: "Oh god, no",
+    freezeWelcomeBack: "*Welcome back!* Your account is unfrozen.",
+    deleteFinalYes: "Yes, delete",
+    deleteFinalNoSoft: "No, keep it",
+    deleteFinalNoHard: "No, keep it",
     freezePartnerNotice:
       "Heads up — your match is no longer available, so this one won't go ahead. " +
       "No worries: you'll get priority in the next batch 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Found you a match!",
-    matchDeadlineNotice:
-      "You've got 24h to reply. " +
-      "Once you tap — *the decision is final*. No take-backs.",
+    matchDeadlineNotice: "You have 24 hours to answer. You can't change it afterwards.",
     matchStreamStart: "Why you two click…",
     matchBtnAccept: "Accept",
     matchBtnDecline: "❌ Pass",
     matchDeclineConfirmPrompt:
-      "Pass on this match?\n\n" +
-      "This is final — you won't be matched with this person again. " +
-      "Tap to confirm, or go back.",
+      "Pass on this match?\n\nThis is final — you won't be matched with this person again.",
     matchBtnConfirmDecline: "❌ Yes, pass",
     matchBtnKeepDeciding: "← Go back",
     matchDecisionQuestionM:
@@ -556,16 +498,14 @@ const translations = {
     matchAccepted: "Accepted ✨ Waiting on them.",
     matchBothAccepted: "It's mutual 🤍 Let's find a time.",
     matchDeclined:
-      "All good. What was the main reason you passed?\n\n" +
-      "Tap one below — quick answer, and it helps me see the pattern over time.\n\n" +
-      "Or say it in your own words: a short text or voice note, and I'll factor that into your next drop.",
+      "Got it. What didn't fit? Pick an option or say it in your own words — I'll factor it in next time.",
     matchDeclineReasonType: "Not my type physically",
     matchDeclineReasonVibe: "Different vibe",
     matchDeclineReasonInterests: "Interests don't match",
     matchDeclineReasonLifestyle: "Lifestyle mismatch",
     matchDeclineReasonOther: "Something else",
     matchDeclineOtherAsk:
-      "Sure — send a short text or voice note with the reason. I'll factor it into the next drop.",
+      "Sure — send a short text or voice note with the reason. I'll factor it into the next round.",
     matchDeclineFeedbackSaved:
       "Got it. I'll tune the next picks around this.",
     matchDeclineAlreadyNoted: "Already noted — thanks.",
@@ -573,29 +513,24 @@ const translations = {
       "Couldn't save that right now. You can still send a short text or voice note.",
     matchDeclineThanks: "Noted. I keep looking.",
     matchPeerDecided:
-      "Your match has already given their answer. Your turn.\n\n" +
-      "*What* they chose — you'll see only after you reply yourself. " +
-      "And remember: your reply is final.",
+      "*Your match has already answered*\n\nWhat they said — you'll see after you answer.",
     matchPeerWasAccepted: "FYI — your match was in. Just didn't line up this time.",
     matchPeerWasDeclined: "FYI — your match passed this time.",
     matchAcceptedPeerDeclined:
       "This time it's a no from their side. It happens — here a date only happens when it's mutual. " +
       "I keep looking; the next pick will be closer.",
     matchAcceptedPeerDeclinedPriority:
-      "This time it's a no from their side. It happens — here a date only happens when it's mutual.\n\n" +
-      "I've boosted your priority for the next drop. The next pick will be closer.",
+      "This time it's a no from their side. It happens — here a date only happens when it's mutual.\n\nI've raised your priority for the next round. The next pick will be closer.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Verified",
-    matchVerifiedQuote:
-      "We verified this person. They passed our face-match check — " +
-      "the photos in this profile match their real identity and belong to them.",
+    matchVerifiedQuote: "Verified: the photos really show this person.",
     // The bold span is applied as a `bold` MessageEntity by the pitch, NOT by
     // markdown: the final pitch message carries `entities` (for the verified
     // blockquote) and Telegram accepts `entities` OR `parse_mode`, never both.
     // Hence the label is its own key — the composer needs its exact bounds, and
     // parsing `*…*` out of the interpolated string is unsafe because {reason}
     // is model-written and may contain an asterisk of its own.
-    matchSynergyLabel: "Synergy {score}/99",
+    matchSynergyLabel: "Compatibility {score}/99",
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ {hours}h left to reply",
     pitchCountdownMinutes: "⏳ {minutes} min left to reply",
@@ -626,8 +561,7 @@ const translations = {
     stallBtnStillOn: "🟢 Yes, still on",
     stallBtnPlansChanged: "Plans changed",
     stallPeerAsked:
-      "Nudged {name} about you two — waiting to hear back.\n\n" +
-      "Nothing needed from you for now. I won't leave you hanging — I'll come back either way.",
+      "Nudged {name} about you two — waiting to hear back.\n\nNothing needed from you for now.",
     stallStillOnAck: "Got it, still on ✨",
     stallPeerStillOn: "{name} is around, still on ✨",
     stallCancelConfirmPrompt:
@@ -635,14 +569,11 @@ const translations = {
     stallBtnCancelConfirm: "🔴 Yes, cancel",
     stallBtnCancelBack: "🟢 ← Back",
     stallCancelAborted: "Alright — still on. 👍",
-    stallCancelDone:
-      "Got it. I've let {name} know — no details.\n\nYou're back in the pool.",
+    stallCancelDone: "Got it. I've let {name} know — no details.\n\nYou're back in the search.",
     stallPeerCancelled:
-      "Date cancelled — {name}'s plans changed.\n\n" +
-      "This isn't about you. I've bumped your priority in the next drop.",
+      "Date cancelled — {name}'s plans changed.\n\nThis isn't about you. I've bumped your priority in the next round.",
     stallTimeoutPartnerGone:
-      "Date cancelled — {name} never got back to us.\n\n" +
-      "A shame, but better now than on the day. I've bumped your priority in the next drop.",
+      "Date cancelled — {name} never got back to us.\n\nA shame, but better now than on the day. I've bumped your priority in the next round.",
     stallTimeoutSelf:
       "Your date with {name} is cancelled — there was no answer for two days, " +
       "and I couldn't keep you both hanging.\n\n" +
@@ -651,32 +582,23 @@ const translations = {
     // search failed for good and nothing was going to retry it. Nobody went
     // quiet, so neither is told their partner did.
     stallTimeoutVenueUnresolved:
-      "Your date with {name} is cancelled — I couldn't find a place for you two in time.\n\n" +
-      "That's on me, not on either of you. I've bumped your priority in the next drop.",
+      "Your date with {name} is cancelled — I couldn't find a place for you two in time.\n\nThat's on me, not on either of you. I've bumped your priority in the next round.",
     pitchExpired: "⏳ Time's up — this proposal expired.",
     matchExpiredSilentWarning:
-      "Time's up — you didn't reply to your match in 24h. " +
-      "Wait for the next drop.\n\n" +
-      "Don't ignore proposals — it's disrespectful to your partner. " +
-      "Next time we'll lower your rating for this.",
+      "*Time to answer is up*\n\nNext time, answer at least “no” — someone is waiting.",
     matchExpiredSilentPenalty:
-      "Time's up — you didn't reply to your match in 24h. " +
-      "Wait for the next drop.\n\n" +
-      "Your rating has been lowered for ignoring the proposal — it's disrespectful to your partner.",
+      "*Time to answer is up*\n\nIt's the second time, so your rating has been lowered. Next time, answer at least “no” — someone is waiting.",
     matchExpiredYouMissedDate:
-      "Heads up — your match was actually in. You missed a real date.\n\n",
+      "Heads up — your match was actually in. This could have been a real date.\n\n",
     matchExpiredPeerIgnored:
-      "Your match didn't reply within 24h, so the date won't happen. " +
-      "We'll see you in the next drop.",
+      "Your match didn't reply within 24h, so the date won't happen. See you in the next round.",
     // §3.4 — this side PASSED, and the partner then went silent. A first
     // decision leaves the row `proposed` either way, so a decliner reaches
     // expiry classified as a `responder` exactly like someone who accepted
     // and got stood up. They already got their "you passed" ack, so this is
     // deliberately a bare fact with no consolation and no card: it exists
     // only so the match doesn't vanish from the menu and banner unexplained.
-    matchExpiredSelfDeclined:
-      "That match is closed — you passed, and the 24h window is up. " +
-      "See you in the next drop.",
+    matchExpiredSelfDeclined: "This match is closed. See you in the next round.",
     // Expiry card (PRODUCT_SPEC §3.4). The card states WHAT HAPPENED and the
     // caption adds only the consequence, so nothing is said twice. The
     // `matchExpired*` strings above stay as the plain-text fallback for when
@@ -684,12 +606,10 @@ const translations = {
     // Headlines are split on "\n"; the last line renders in the accent colour.
     expiryCardOverlineExpired: "WINDOW CLOSED",
     expiryCardHeadlineExpired: "TIME'S\nUP",
-    expiryCardSublineExpired:
-      "24 hours passed with no answer.\nSee you in the next drop.",
+    expiryCardSublineExpired: "24 hours passed with no answer.\nSee you in the next round.",
     expiryCardOverlinePenalty: "SECOND TIME, NO ANSWER",
     expiryCardHeadlinePenalty: "RATING\nLOWERED",
-    expiryCardSublinePenalty:
-      "A second match left unanswered.\nSee you in the next drop.",
+    expiryCardSublinePenalty: "A second match left unanswered.\nSee you in the next round.",
     expiryCardOverlinePeerIgnored: "NOT ABOUT YOU",
     expiryCardHeadlinePeerIgnored: "THEY NEVER\nANSWERED",
     expiryCardSublinePeerIgnored:
@@ -698,51 +618,23 @@ const translations = {
     expiryCardHeadlineMissedDate: "IT WAS\nMUTUAL",
     expiryCardSublineMissedDate:
       "They were ready to meet.\n24 hours passed with no answer.",
-    expiryCaptionSilentWarning:
-      "Don't ignore proposals — it's disrespectful to the person waiting on you. " +
-      "Next time we'll lower your rating for it.",
+    expiryCaptionSilentWarning: "Next time, answer at least “no” — someone is waiting.",
     expiryCaptionSilentPenalty:
-      "Ignoring proposals is disrespectful to the person waiting on you.",
-    expiryCaptionPeerIgnored: "See you in the next drop.",
+      "It's the second time, so your rating has been lowered. Next time, answer at least “no” — someone is waiting.",
+    expiryCaptionPeerIgnored: "See you in the next round.",
     noMatchThisWeekTier1:
-      "Hey\n\n" +
-      "No match this time. Not because something's off with you — the quality bar just stays where it is, " +
-      "and I'd rather wait than hand you someone who isn't worth your time.\n\n" +
-      "Meanwhile:\n" +
-      "• the community keeps growing, and the matching gets sharper all the time.\n" +
-      "• the longer you wait, the higher your priority for the next drop.\n\n" +
-      "I'm on it ✨",
+      "*No match this week*\n\nI didn't find anyone who truly fits, and I won't offer just anyone. You'll have priority in the next round ✨",
     noMatchThisWeekTier2:
-      "Hey\n\n" +
-      "Still going, still no one I'd actually be excited to introduce you to. " +
-      "Thanks for sticking around; that matters.\n\n" +
-      "What's happening:\n" +
-      "• I'm bringing more people like you in and tuning the algorithm in your favour.\n" +
-      "• your priority for the next drop is already raised.\n\n" +
-      "I'm on it 🤍",
+      "*No match again*\n\nFor the second week in a row I don't see anyone who truly fits. Thanks for waiting — your priority in the next round is even higher 🤍",
     noMatchThisWeekTier3:
-      "Hey\n\n" +
-      "Another honest update — still no one truly worth your time. " +
-      "I like this even less than you do, and I won't pretend otherwise.\n\n" +
-      "On my side:\n" +
-      "• I'm personally watching your queue and pushing growth in your area.\n" +
-      "• the longer you wait, the higher up the list you move for the next drop.\n\n" +
-      "Thanks for trusting me 🤍",
+      "*Still no match*\n\nThere's still no one who truly fits, and I won't offer just anyone. I'm watching your queue — you're among the first in the next round 🤍",
     noMatchDiscountOffer:
       "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
     poolExhaustedPauseNotice:
-      "Hey\n\n" +
-      "Straight up: right now there's genuinely no one here for you — I checked, and the pool is empty. " +
-      "That's not about you; there's just no one to introduce you to yet.\n\n" +
-      "I'm pausing your search instead of sending the same message again and again. " +
-      "Nothing else changes — your profile, photos, and verification all stay exactly as they are.\n\n" +
-      "The moment someone who fits shows up, I'll bring you straight back in myself — no need to do anything. " +
-      "You can also resume any time from the menu.",
+      "*Pausing your search*\n\nRight now there's genuinely no one for you — it's not about you. As soon as someone who fits shows up, I'll bring you back into the search myself.",
     poolExhaustedResumeNotice:
-      "Hey\n\n" +
-      "Good news — someone new showed up who fits, so I've brought you back into the search. " +
-      "You're back in the running for the next drop 🤍",
+      "Good news — someone who fits showed up, so I've brought you back into the search. You're in the next round 🤍",
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
@@ -751,10 +643,9 @@ const translations = {
       "📅 Now pick your time — open the calendar and mark every slot that works.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
-    ticketCardCaption:
-      "It's mutual 🤍 Get your *Date Ticket* to unlock planning.",
+    ticketCardCaption: "It's a match 🤍 Get your ticket and we'll pick a time.",
     ticketCardCaptionPremium:
-      "It's mutual 🤍 Premium covers both your tickets — straight to picking a time.",
+      "It's a match 🤍 Premium covers both tickets — straight to picking a time.",
     ticketButton: "🎟️ Get your date ticket",
     ticketViewButton: "🎟️ View your date ticket",
     ticketStatusButton: "Open date",
@@ -778,7 +669,7 @@ const translations = {
       "💛 Done — you covered {name}'s ticket. The moment she sees it, I'll let you know.",
     ticketPartnerSawItDm: "❤️ {name} saw that you covered her ticket.",
     ticketRefundedDm:
-      "Your match didn't grab their ticket in time, so we've refunded yours. No worries — we've opened scheduling for free. Let's find a time 📅",
+      "Your ticket is back in your wallet, and the date is still on. Let's pick a time 📅",
     ticketRefundedToWallet:
       "🎟️ Your Date Ticket is back in your wallet — yours to use on the next date.",
     ticketRefundedToWalletBoth:
@@ -791,7 +682,7 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Open in Maps",
     matchScheduledBtnShare: "📤 Share this card",
     dateCardWhen: "WHEN",
-    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
+    dateCardSlogan: "No texting.\nStraight to real life.",
     dateCardShareCaption:
       "Share away — your match's face is hidden to protect their privacy 💞",
     dateCardShareFailed:
@@ -803,7 +694,7 @@ const translations = {
     matchSchedulePeerSuggestedAlternative:
       "Your match countered with a different time. Take a look — agree, or suggest your own.",
     matchScheduleSavedConfirmation:
-      "Saved ✨ Your match got a ping — I'll tell you the moment they answer.",
+      "Done. Your match got a notification — I'll write when they answer.",
     matchScheduleNoOverlapYet:
       "You've both picked times, but nothing overlaps yet. Add a few more — the second a slot matches, it's locked:",
     // Scheduling reminder for a pair whose calendars already share slots that
@@ -816,13 +707,11 @@ const translations = {
     venueTimeCardLabel: "YOUR DATE",
     venueTimeLockedCaption: "Your date is locked in ✨",
     venueConciergeIntro:
-      "Time's locked. One thing before I find your spot.\n\n" +
-      "📍 *Mark where you'll be setting off from* for the date — your place, a metro station, a friend's flat, wherever you'll actually be leaving from.\n\n" +
-      "I'll use that point to find a comfortable meeting spot that's easy for *both* of you to reach, close to where you start out. Tap below to drop it on the map:",
+      "*Where will you set off from?*\n\nDrop a point on the map — home, a metro station, anywhere convenient. I'll find a place that's easy for both of you to reach.",
     venueConciergeBtnLocation: "📍 Send my location",
     venueConciergeBtnMap: "🗺️ Pick on map",
     venueLocationFirst:
-      "First things first — *mark where you'll be setting off from* 📍 Tap below to drop it on the map. I'll ask about the vibe right after.",
+      "First things first — *mark where you'll be setting off from* 📍 Tap below to drop it on the map.",
     venueOriginOutsideMarket:
       "That point is outside {city}, and Gennety only works in {city} for now — I look for a place within a short trip of you both, so I can't find one from there. Mark the spot in {city} you'll be setting off from:",
     venueVibeNoted: "Vibe noted ✨ Now pick where you'll be coming from:",
@@ -888,16 +777,15 @@ const translations = {
     // Prime Time (PRIME_TIME_PRODUCT_SPEC.md). The invoice copy says what the
     // Stars buy for the PAIR, not for the buyer — the band opens for both, and
     // a description that said "for you" would misdescribe the purchase.
-    primeInvoiceTitle: "Late evening times",
+    primeInvoiceTitle: "Late evenings",
     primeInvoiceDesc:
       "Opens 18:30, 19:00 and 19:30 on every day of your calendar — for both of you, for this date.",
-    primeInvoiceLabel: "Late evening times",
-    primeTimeOpenedDm:
-      "{name} opened the late evening times — 18:30 and later are now available in your calendar.",
+    primeInvoiceLabel: "Late evenings",
+    primeTimeOpenedDm: "{name} opened late evenings — 18:30 and later are now in your calendar.",
     primeTimeRefunded:
-      "The late evening times didn't open, so your Stars are back. The rest of the calendar is unchanged.",
+      "Late evenings didn't open, so your Stars are back. The rest of the calendar is unchanged.",
     primeTimeRefundedDateOff:
-      "The date is off, so the Stars you spent on the late evening times are back with you.",
+      "The date is off, so the Stars you spent on late evenings are back with you.",
     // Meme unlock (§Phase 4 pre-date reveal). The offer is a teaser on purpose:
     // it says a meme EXISTS and what knowing it is worth, never anything about
     // the meme itself — a description in the offer would be the product, given
@@ -952,20 +840,20 @@ const translations = {
     // Product delivery uses bottom-of-chat message edits; rich drafts are
     // explicit dev-only demos.
     icebreakerStreamStart: "✨ Lining up a few things you two could talk about…",
-    noMatchStreamStart: "💫 Going over the pool for you…",
+    noMatchStreamStart: "💫 Looking through candidates for you…",
     profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
     // The Date Terminal's two messages (T-45m / T-15m). "Date Terminal" and
     // "Contact Sync" are product names and stay in English in every locale.
     dateTerminalInvite:
-      "Your date is in {minutes} minutes.\n📍 {venue}\n\nThe Date Terminal is open — it shows how far you are from the place. At the table, shake your phones together: that's Contact Sync.",
+      "*Your date is in {minutes} min*\n📍 {venue}\n\nOpen the date screen — it will show you the way. At the table, hold your phones together, top edges touching, to swap contacts.",
     dateTerminalReminder:
-      "Contact Sync is open.\n📍 {venue}\n\nOnce you're both at the table, open the terminal and shake your phones together.",
-    dateTerminalBtn: "🎟 Open the Date Terminal",
+      "*Contact swap is open*\n📍 {venue}\n\nOnce you're both at the table, open the date screen and hold your phones together.",
+    dateTerminalBtn: "🎟 Open the date",
     dateDayActivityStartTitle: "Your date is today",
     emergencyPushTitle: "Your date is off",
-    emergencyPushBody: "Open Gennety — they left a reason.",
+    emergencyPushBody: "Open Gennety — the reason is there.",
     dateDayActivityStartBody: "Everything you need is on your lock screen.",
     // The venue-change lock-screen card (iOS `venue_change` Live Activity,
     // decision 2026-09-22): the alert a push-to-start must carry. The partner
@@ -991,15 +879,10 @@ const translations = {
     timeActivityStartWaitingNoName: "Waiting to hear back about the time",
     timeActivityStartMatch: "Time set: {when}",
     emergencyUnlocked:
-      "Plans changed and you really can't make it? You can still cancel below.\n" +
-      "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
+      "Plans changed and you really can't make it? You can cancel with the button below.",
     emergencyBtn: "Cancel Date",
     emergencyConfirmPrompt:
-      "Before you cancel, quick check.\n\n" +
-      "If this is nerves, being a little late, or uncertainty, keep the date. " +
-      "Your match has cleared time for you, and showing up still gives the evening a chance.\n\n" +
-      "*Cancel only if you truly can't make it; the match can't be restored.* " +
-      "If you continue, I'll ask for a reason and send it to your match word for word.",
+      "If it's just nerves or running late, better keep the date. *Cancel only if you truly can't make it:* the match can't be brought back.",
     emergencyBtnConfirm: "🔴 Yes, cancel the date",
     emergencyBtnBack: "🟢 Keep the date",
     emergencyAborted: "Okay — your date is still on. 👍",
@@ -1019,11 +902,9 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Your match cancelled the date. Here's what they wrote:",
     emergencyReceivedOtherSoftNote:
-      "This isn't because of you. Gennety will raise your priority a little for the next drop.",
+      "This isn't because of you. Gennety will raise your priority a little in the next round.",
     feedbackInvitation:
-      "How did your date go? ✨\n\n" +
-      "Share a couple of details: was there chemistry, what was the vibe, did you like the place?\n" +
-      "We'll take it into account to match your expectations even better next time.",
+      "*How did your date go?* ✨\n\nShare a couple of details: was there chemistry, what was the vibe, did you like the place?",
     feedbackBtnForm: "✍️ Open feedback form",
     feedbackBtnVoice: "🎤 Send voice instead",
     // The T+24h attendance question (PRODUCT_SPEC §Phase 4). Asked BEFORE the
@@ -1055,7 +936,7 @@ const translations = {
       "Just record a voice note 🎙️\n\n" +
       "Tell us how the date went — was there chemistry? What did you like? " +
       "Anything that didn't work? A minute is plenty.",
-    feedbackThanks: "Thanks for the feedback ✨ We'll use it to improve your future matches.",
+    feedbackThanks: "Thanks! I'll factor it into the next round ✨",
     // A second answer is refused, not merged: the first one already fed matching.
     feedbackAlreadySubmitted: "You've already told us how this date went — thanks, it's saved ✨",
     feedbackPushTitle: "How was your date?",
@@ -1066,15 +947,15 @@ const translations = {
     // sentence in two places. It names nobody: the lock screen is public, and
     // the only trace of the partner is a photo the client blurs on arrival.
     matchDropPushTitle: "Your match is here",
-    matchDropPushBody: "Tap to see who your AI picked ✨",
+    matchDropPushBody: "Tap to see ✨",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Report",
     reportAsk:
       "This report is private. What best describes the problem?",
     reportCategoryFakePhotos: "Fake or misleading photos",
     reportCategoryWrongPerson: "Wrong person in the photo",
-    reportCategoryOffensive: "Offensive or disturbing behavior",
-    reportCategoryUnsafe: "Unsafe / red flag",
+    reportCategoryOffensive: "Rudeness or strange behavior",
+    reportCategoryUnsafe: "I felt unsafe",
     reportCategorySpam: "Spam or fraud",
     reportCategoryInappropriate: "Inappropriate profile",
     reportCategoryOther: "Other",
@@ -1085,7 +966,8 @@ const translations = {
     reportSkipBtn: "Skip",
     reportThanksT1: "Got it — we'll use this to tune your future matches 🎯",
     reportThanksT2: "Reported. Thanks — we'll act on this.",
-    reportThanksT3: "Reported. We're freezing their account for manual review — thanks for flagging.",
+    reportThanksT3:
+      "Report received. This person's account is frozen pending review. Thanks for letting us know.",
     reportFailed: "Couldn't process your report right now. Try again in a minute.",
     reportDuplicate: "You've already reported this match.",
     reportBackBtn: "← Go back",
@@ -1102,15 +984,7 @@ const translations = {
       "🚫 Your account has been frozen pending a safety review. " +
       "Our team will contact you via @gennetysupport if further action is needed.",
     safetyNoteFemale:
-      "Hey! Your Gennety date starts in 90 minutes at **{location_name}**.\n\n" +
-      "We care about your safety, so while you're getting ready, a quick first-date checklist:\n\n" +
-      "📍 **Stick to the plan.** We picked a safe public venue for you. Don't agree to move the meeting to a private location or go to someone's place.\n" +
-      "👥 **If it's crowded.** It happens — no worries: grab a coffee and walk a bit, or move to a café nearby where it's busy and well-lit.\n" +
-      "🚗 **Transport.** Get there and back on your own — public transport, taxi, or walking works. Just don't get in a car with someone you barely know.\n" +
-      "📱 **Tell someone close.** Forward the meeting details to a friend or family, and if possible share your live location for the evening.\n" +
-      "☕ **Stay aware.** Try not to leave your belongings or drink unattended.\n" +
-      "🛑 **Your boundaries.** If you feel uncomfortable or your date's behavior seems off — you have every right to just get up and leave at any moment. Your safety always beats politeness.\n\n" +
-      "Have a great evening ✨",
+      "*Your date is in 90 minutes — {location_name}*\n\n📍 *Stick to the plan.* We picked a safe public place for you. Don't agree to move the meeting somewhere private or to go to someone's home.\n🚗 *Transport.* Get there and back on your own — public transport, taxi or on foot. Don't get into a car with someone you barely know.\n📱 *Tell someone close.* Forward the meeting details to a friend or family member and, if you can, share your location for the evening.\n🛑 *Your boundaries.* If you feel uncomfortable or your date's behavior seems off, you can just get up and leave at any moment. Your safety matters more than politeness.\n\nHave a great evening ✨",
     // The T-1.5h safety brief on the app rail (§5.4). The DM above IS the
     // brief; this only says one has arrived, because a checklist does not fit
     // on a lock screen and must not sit there in the first place. It names
@@ -1135,17 +1009,17 @@ const translations = {
     deadlineNudgePushBody: "About {hours}h left to answer. Yes or no — both are fine.",
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Next match in {d}d {h}h",
-    statusHoursMinutes: "⏳ Matches drop in {h}h {m}m",
-    statusMinutes: "✨ Almost ready! Matches drop in {m}m",
+    statusHoursMinutes: "⏳ Matches arrive in {h}h {m}m",
+    statusMinutes: "✨ Almost ready! Matches arrive in {m}m",
     statusProcessing: "✨ Analyzing your city… Check back shortly.",
-    statusBannerSchedule: "Next drop: {date}, {time}",
+    statusBannerSchedule: "Next round: {date}, {time}",
     statusBannerActive: "We're already looking for your person ✦",
     statusBannerSearching:
       "I'm looking for your person — I check every evening.\n" +
       "The moment there's someone worth your time, you'll hear from me.",
-    statusButtonDaysHours: "Drop in {d}d {h}h",
-    statusButtonHoursMinutes: "Drop in {h}h {m}m",
-    statusButtonMinutes: "✨ Drop in {m}m",
+    statusButtonDaysHours: "Next round in {d}d {h}h",
+    statusButtonHoursMinutes: "Next round in {h}h {m}m",
+    statusButtonMinutes: "✨ Next round in {m}m",
     statusButtonProcessing: "✨ Matching in progress",
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
@@ -1183,23 +1057,12 @@ const translations = {
     statusButtonMenu: "Open menu",
     menuCitySwitch: "📍 Switch city to Kyiv",
     citySwitchCard:
-      "📍 *Your city: {city}*\n\n" +
-      "Gennety is live in Kyiv only for now. Matches are always within one city, " +
-      "so until we launch in {city} there's nobody here to introduce you to.\n\n" +
-      "If you're ready to go on dates in Kyiv, switch — your profile, photos and " +
-      "verification all stay exactly as they are, and you're in the next drop.",
+      "📍 *Your city: {city}*\n\nGennety is live in Kyiv only for now. Matches are always within one city, so until we launch in {city} there's nobody here to introduce you to.\n\nIf you'd like to go on dates in Kyiv, switch — your profile, photos and verification all stay exactly as they are, and you're in the next round.",
     citySwitchConfirm: "📍 Yes, match me in Kyiv",
-    citySwitchDone:
-      "Done — your matching city is Kyiv 🤍\n\n" +
-      "You're in the next drop: {date}.",
+    citySwitchDone: "Done — your matching city is Kyiv 🤍\n\nYou're in the next round: {date}.",
     citySwitchFailed: "Couldn't switch the city just now. Try again in a moment.",
     noMatchCityNotLaunched:
-      "Hey\n\n" +
-      "Straight up: Gennety hasn't launched in {city} yet — we're only in Kyiv so far. " +
-      "Matches always happen inside one city, so there's nobody here I could introduce you to, " +
-      "and I'd rather say that than keep you waiting on a drop that can't include you.\n\n" +
-      "Your profile stays as it is, and we'll tell you the moment we open your city.\n\n" +
-      "If you're ready to go on dates in Kyiv, switch below — you'll be in the next drop.",
+      "*Gennety isn't in {city} yet*\n\nWe're only in Kyiv so far, and matches always happen inside one city — so there's nobody here to introduce you to yet. Your profile stays as it is, and we'll write the moment we open your city.\n\nIf you'd like to go on dates in Kyiv, switch below and you'll be in the next round.",
     noMatchCitySwitchBtn: "📍 Switch to Kyiv",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
@@ -1228,7 +1091,7 @@ const translations = {
     rateLimitFloodNotice:
       "Whoa, that's a lot of messages at once — give me a few seconds to catch up, then go again. 🙂",
     rateLimitDailyBudgetNotice:
-      "You've been super active today 🙂 Let's pick this up again tomorrow — we've reached today's limit so I can keep things running smoothly for everyone.",
+      "You've written a lot today 🙂 Let's continue tomorrow — that's today's limit.",
 
     // --- Pre-date coordination (feature-flagged) ---
     // The anonymous chat only, for every scheduled date. The T-3h questionnaire
@@ -1265,16 +1128,16 @@ const translations = {
     menuInviteFriend: "🎁 Invite a friend",
     referralHubTitle: "Invite your friends to Gennety",
     referralHubTagline:
-      "Every friend who passes verification via your link earns you a date ticket 🎟 — and they get one too.\n\nAnd the more people in your city, the higher the chance we find a match for you too.",
+      "Every friend who passes verification via your link earns you a date ticket 🎟 — and they get one too.",
     referralShareButton: "📤 Invite a friend",
-    referralShareCaption: "The AI finds your best match and sets up the meeting itself.",
+    referralShareCaption: "Gennety finds your best match and sets up the meeting itself.",
     referralShareJoin: "Join Gennety 💫",
     // --- HDYHAU (онбординговый вопрос об источнике, `shared/hdyhau.ts`) ---
-    hdyhauQuestion: "Last thing — how did you hear about Gennety?",
+    hdyhauQuestion: "Last thing — how did you hear about us?",
     hdyhauFriendInPerson: "A friend told me in person",
     hdyhauFriendOnline: "A friend sent me a link",
     hdyhauSocialMedia: "Social media",
-    hdyhauSearch: "I searched for it",
+    hdyhauSearch: "Through search",
     hdyhauAd: "An ad",
     hdyhauEvent: "An event or party",
     hdyhauOther: "Somewhere else",
@@ -1288,12 +1151,13 @@ const translations = {
     referralCardInvitedGeneric: "You're invited",
     referralCardHeadA: "Real dates.",
     referralCardHeadB: "Zero texting.",
-    referralCardSupport: "The AI finds your match on deep compatibility and sets up the meeting in person.",
+    referralCardSupport:
+      "Gennety finds your match on deep compatibility and sets up the meeting in person.",
     referralCardGift: "{ticketsPhrase} — on us",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n• *Free venue changes* — swap your date spot as often as you like, no fee\n\nMore to come.",
+      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Top venues* — a selection of places a level above\n• *Free venue changes* — swap your date spot as often as you like, no fee",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumOpenCta: "Learn more",
     premiumCancelHint:
@@ -1333,9 +1197,9 @@ const translations = {
     premiumCancelKeepBtn: "Keep Premium",
     premiumCancelFinalConfirm:
       "Last check — cancel Gennety Premium?\n\nPremium stays active until {date}, nothing changes before then. After this, auto-renew is off for good — want it back later, you'll pay again.",
-    premiumCancelFinalYes: "Yes, I'm 100% sure, cancel",
+    premiumCancelFinalYes: "Yes, cancel",
     premiumCancelFinalNoSoft: "No, keep it",
-    premiumCancelFinalNoHard: "Wait, don't cancel",
+    premiumCancelFinalNoHard: "No, keep it",
     premiumCancelDone:
       "Done — auto-renew is off. Premium stays active until {date}, and nothing else will be charged. You can resubscribe anytime.",
     premiumCancelKept: "Keeping it ✨ Premium is active until {date}.",
@@ -1351,9 +1215,7 @@ const translations = {
     // Buyer-facing. The offer must state the honest terms BEFORE payment:
     // it buys an introduction, not a date, and only "found nobody" is refunded.
     rematchOfferFamine:
-      "No match this time — that's the pool, not you.\n\n" +
-      "I can run the search again right now, just for you. One new person, picked the same way: {price}.\n\n" +
-      "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
+      "No match this time — it's not about you.\n\nI can search again right now: {price}. If I find no one, I'll refund your Stars.",
     rematchOfferFailed:
       "That one didn't land. Happens.\n\n" +
       "I can go again right now and bring you someone new — {price}.\n\n" +
@@ -1370,9 +1232,9 @@ const translations = {
     // The number appears one tap later, on the offer card, before any payment —
     // the same rule §3.8 applies to the Premium hub.
     statusButtonRematch: "Search now",
-    rematchInvoiceTitle: "Rematch",
-    rematchInvoiceDesc: "One more search, right now — a new person picked by your matchmaker.",
-    rematchInvoiceLabel: "Rematch",
+    rematchInvoiceTitle: "New search",
+    rematchInvoiceDesc: "One more search, right now — a new person picked by Gennety.",
+    rematchInvoiceLabel: "New search",
     rematchFound: "Found someone. Sending you the details now ✨",
     rematchNoCandidate:
       "I looked — there's nobody new for you in your city right now. Your Stars are back. You stay in the next round.",
@@ -1382,11 +1244,11 @@ const translations = {
       "I found someone, but I couldn't deliver the profile — that one's on us. Your Stars are back, and it didn't use up a rematch.",
     rematchUndeliveredPending:
       "I found someone, but I couldn't deliver the profile, and the refund didn't go through on the first try. I'm on it — your Stars will be back shortly.",
-    rematchRefunded: "Your Stars for the rematch are back ✨",
+    rematchRefunded: "Your Stars for the new search are back ✨",
     rematchLimitReached:
-      "You've used your rematches for now. The next one opens in a few days — your next match is still coming.",
+      "You've used your extra searches for now. The next one opens in a few days — the regular round is still coming.",
     rematchUnavailable:
-      "Can't run a rematch right now. If you have a match in progress, finish that one first.",
+      "Can't start a new search right now. If you have a match in progress, finish that one first.",
     // Partner-facing gift framing. NEVER mentions payment, the buyer, or any
     // decision state — it is a prefix on her ordinary pitch.
     rematchGiftFamine:
@@ -1406,24 +1268,20 @@ const translations = {
   ru: {
     // --- Onboarding ---
     consentMessage:
-      "Добро пожаловать в Gennety Dating!\n\n" +
-      "Перед началом ознакомьтесь с нашими Условиями использования и Политикой конфиденциальности и примите условия хранения данных.",
-    consentAgree: "Согласен",
+      "*Привет! Это Gennety* 👋\n\nПрежде чем начать, прочитай Условия использования и Политику конфиденциальности и согласись с правилами хранения данных.",
+    consentAgree: "Принимаю",
     consentPrivacyButton: "Политика конфиденциальности",
     consentTermsButton: "Условия использования",
-    welcome: "Gennety Dating 👀\nAI-мэтчмейкинг для настоящих свиданий.",
+    welcome: "*Gennety Dating*\nПодбираем пару и сразу назначаем свидание вживую.",
     chooseLanguage: "Выбери язык:",
     philosophyPitch:
-      "Gennety работает по одному принципу: *Zero Chat*.\n\n" +
-      "Ты не пишешь мэтчу. Я разбираюсь, кто ты, " +
-      "нахожу реально совместимого человека и беру на себя всё — время, место, всю логистику.\n\n" +
-      "Тебе только прийти. Заходишь?",
-    philosophyContinue: "Го! 🚀",
-    askEmail: "Скинь свою универскую почту (типа name@msu.edu.ru):",
-    invalidEmail: "Хм, не похоже на универскую почту. Нужен адрес .edu / .ac.uk.",
-    otpSent: "Код из 6 цифр улетел на *{email}*. Скинь сюда:",
+      "*Здесь не нужно переписываться*\n\nЯ узнаю тебя, найду подходящего человека и сам договорюсь о времени и месте. Тебе останется только прийти. Поехали?",
+    philosophyContinue: "Поехали 🚀",
+    askEmail: "Напиши свою почту вуза — например, name@knu.ua",
+    invalidEmail: "Это не похоже на почту вуза. Проверь адрес и пришли ещё раз.",
+    otpSent: "Отправил код на *{email}*. Введи его сюда:",
     otpInvalid: "Не тот код. Попробуй ещё:",
-    otpExpired: "Код протух. Введи почту заново:",
+    otpExpired: "Код устарел. Введи почту ещё раз — пришлю новый.",
     otpTooManyAttempts: "Слишком много попыток. Введи почту заново — пришлём новый код.",
     otpCooldown: "Подожди минутку перед повторной отправкой.",
     emailVerified: "Почта подтверждена ✨",
@@ -1443,7 +1301,7 @@ const translations = {
     llmAnalysing3: "Собираю психологический портрет...",
     llmDumpReceived: "Профиль готов ✨",
     askPhotos:
-      "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
+      "Почти готово! Пришли {min}–{max} фото, где хорошо видно тебя. Откровенные снимки нельзя. Видео тоже можно — главное, чтобы тебя было видно.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
     voicePromptSkipHint: "Пропустить — кнопка «{button}» внизу чата.",
@@ -1452,19 +1310,17 @@ const translations = {
       "Записал — послушай. Пришли другое, если хочешь переписать, или «{button}», чтобы убрать.",
     voicePromptReviewDone: "✅ Готово",
     voicePromptSkipped: "Хорошо, обойдёмся без голосового.",
-    voicePromptSaved: "Сохранил ✨ Он услышит его прямо перед тем, как решить.",
+    voicePromptSaved: "Сохранил ✨ Твой мэтч услышит его перед тем, как ответить.",
     voicePromptTooShort: "Это меньше секунды — кнопку микрофона надо держать. Попробуй ещё раз, целься секунд на 15.",
     voicePromptTooLong: "Длинновато — уложись в 30 секунд, иначе такое просто не дослушивают. Запишешь ещё раз?",
     voicePromptUnsafe: "Такое я не могу поставить в анкету. Запиши другое — или пропусти, это по желанию.",
     voicePromptContactInfo: "Ники и номера лучше не называть — встречу я организую сам, в этом весь смысл. Запиши лучше что-нибудь про себя.",
     voicePromptUnavailable: "Не смог обработать запись. Пришли её ещё раз через минуту.",
-    voicePromptPitchCaption: "{name} записал(а) для тебя голосовое",
+    voicePromptPitchCaption: "{name}: голосовое для тебя",
     photoRejected:
       "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
-    photoDuplicate:
-      "Это фото уже есть в профиле. Добавь другой снимок — все фотографии должны быть уникальными.",
-    photoDuplicateNear:
-      "Это фото уже есть в профиле. Добавь другой снимок — все фотографии должны быть уникальными.",
+    photoDuplicate: "Это фото уже есть в профиле — пришли другое.",
+    photoDuplicateNear: "Это фото уже есть в профиле — пришли другое.",
     photoUnsafeContent:
       "Это фото нельзя публиковать в профиле. Выбери другой снимок без откровенного контента.",
     photoFaceObscured:
@@ -1475,14 +1331,11 @@ const translations = {
       "Все фото должны принадлежать одному человеку. Убедись, что твоё лицо есть на каждом снимке.",
     photoIdentityUncertain:
       "Не получилось надёжно сопоставить лицо. Пришли более чёткое фото с хорошим освещением и хорошо видимым лицом.",
-    photoConsensusPending:
-      "Я пока не зафиксировал личность в профиле. Пришли ещё одно другое фото, где виден тот же человек.",
-    photoConsensusOutlierRejected:
-      "Одно ожидающее фото было с другим человеком, поэтому я его не добавил.",
-    photoConsensusConfirmed:
-      "Личность подтверждена по совпадающим фото ✨",
+    photoConsensusPending: "Пришли ещё одно фото — по двум снимкам я пойму, что на них ты.",
+    photoConsensusOutlierRejected: "На одном фото другой человек — его я не добавил.",
+    photoConsensusConfirmed: "Отлично, на всех фото ты ✨",
     photoConsensusNoPairCap:
-      "Я всё ещё не вижу двух фото одного человека. Пока ничего не зафиксировано — пришли ещё одно чёткое фото себя.",
+      "Пока не вижу двух фото одного человека. Пришли ещё одно чёткое фото, где видно тебя.",
     photoVisionError:
       "Не удалось обработать файл. Попробуй ещё раз.",
     photoInvalidMedia:
@@ -1514,15 +1367,14 @@ const translations = {
     videoProcessingUnavailable:
       "Сейчас не получилось проверить видео. Предыдущее видео не изменено. Попробуй ещё раз немного позже.",
     ticketRewardPhoto:
-      "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}*",
+      "🎟️ *Бесплатный билет на свидание — твой!*\n\nЭто подарок за фото. Одно свидание = 1 билет. Баланс: *{balance}*",
     ticketRewardVideo:
-      "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}*",
+      "🎟️ *Ещё один бесплатный билет — твой!*\n\nЭто подарок за видео. Одно свидание = 1 билет. Баланс: *{balance}*",
     ticketRewardStudent:
-      "🎓 Университетская почта подтверждена — студенческий бонус: *2 бесплатных билета на свидания* уже на балансе.\n\nКаждое свидание стоит 1 билет, так что первые две встречи за наш счёт. Баланс: *{balance}*",
+      "🎓 *Два бесплатных билета — твои!*\n\nЭто подарок за подтверждённую почту вуза. Одно свидание = 1 билет. Баланс: *{balance}*",
     welcomeGiftTicket:
-      "Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$8.49\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
-    ticketStorePurchased:
-      "✨ Оплата прошла — добавлено *{count}* билет(ов)!\n\nБаланс: *{balance}*",
+      "*Первый билет — от меня* ❤️\n\nОбычно свидание стоит 1 билет (~$8.49). Этот — бесплатно, он уже в кошельке.",
+    ticketStorePurchased: "✨ *Оплата прошла!* Билетов добавлено: *{count}*. Баланс: *{balance}*",
     ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
     premiumCheckoutAlreadySubscribed:
       "У тебя уже есть активная подписка Premium, поэтому оплата остановлена — ничего не списано.",
@@ -1531,40 +1383,36 @@ const translations = {
     ticketStoreInvoiceTitle: "Билеты Gennety",
     ticketStoreInvoiceDesc:
       "Пополнение кошелька: {count} 🎟️. Каждый билет покрывает одно свидание.",
-    ticketGateInvoiceDesc:
-      "Оплата вашего свидания — {count} билет(а/ов). Один билет — на одного человека.",
+    ticketGateInvoiceDesc: "Оплата свидания. Билетов: {count}. Один билет — на одного человека.",
     ticketStoreInvoiceLabel: "Билеты Gennety × {count}",
     onboardingFinalizeBlocked:
       "Пока не могу завершить настройку — на моей стороне не хватает пары данных. Попробуй ещё раз через минуту; если повторится, напиши в @gennetysupport, разберёмся.",
-    onboardingPhotosNeedMore:
-      "Фото: {count}/{min}. Осталось прислать чётких фото: {remaining}.",
+    onboardingPhotosNeedMore: "Фото: {count}/{min}. Пришли ещё {remaining}.",
     onboardingPhotosBonusOffer:
-      "Обязательные фото готовы.\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь бесплатный билет на свидание. Ещё один бесплатный билет можно получить за короткое видео для профиля.\n\nОба бонуса необязательны — можешь прислать медиа сейчас или продолжить.",
+      "Нужные фото есть ✨\nЕщё {remaining} фото (до {threshold}) — и бесплатный билет. За короткое видео — ещё один.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Обязательные фото готовы, а билет за видео уже твой.\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь второй бесплатный билет. Или продолжай.",
+      "Нужные фото есть, билет за видео — твой ✨\nЕщё {remaining} фото (до {threshold}) — и второй бесплатный билет.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото. Ещё {remaining} — и бесплатный билет на свидание твой. Пришли сейчас или продолжай.",
+      "Фото: {count}/{threshold}.\nЕщё {remaining} — и бесплатный билет твой.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото. Ещё {remaining} — и второй бесплатный билет твой. Пришли сейчас или продолжай.",
+      "Фото: {count}/{threshold}.\nЕщё {remaining} — и второй бесплатный билет твой.",
     onboardingPhotosPhotoBonusEarned:
-      "Готово {count} фото, и бесплатный билет за фотографии уже твой ✨\n\nМожно добавить фото до {max} или короткое видео за ещё один бесплатный билет. Либо продолжай.",
+      "Фото: {count}. Бесплатный билет за фото — твой ✨\nМожно добавить фото (до {max}) или видео — за него ещё один билет.",
     onboardingPhotosBothBonusesEarned:
-      "Готово {count} фото и видео — оба бесплатных билета уже твои ✨\n\nМожно добавить фото до {max} или продолжить.",
+      "Фото: {count}, видео есть — оба бесплатных билета твои ✨\nМожно добавить ещё фото (до {max}).",
     onboardingPhotosPhotoBonusEarnedMax:
-      "Все {max} фото готовы, и бесплатный билет за фотографии уже твой ✨\n\nМожно отправить короткое видео за ещё один бесплатный билет или продолжить.",
+      "Все {max} фото есть, билет за фото — твой ✨\nЗа короткое видео — ещё один бесплатный билет.",
     onboardingPhotosBothBonusesEarnedMax:
-      "Все {max} фото и видео готовы — оба бесплатных билета уже твои ✨\n\nПродолжай, когда будешь готов.",
+      "Все {max} фото и видео есть ✨\nОба бесплатных билета — твои.",
     onboardingPhotosOptional:
-      "Обязательные фото готовы.\n\nМожешь добавить ещё фото до {max}, отправить короткое видео для профиля или продолжить.",
+      "Нужные фото есть.\nМожно добавить ещё (до {max}) или короткое видео.",
     onboardingPhotosOptionalAfterVideo:
-      "Обязательные фото и видео готовы.\n\nМожешь добавить ещё фото до {max} или продолжить.",
-    onboardingPhotosOptionalMax:
-      "Все {max} фото готовы.\n\nМожешь отправить короткое видео для профиля или продолжить.",
-    onboardingPhotosOptionalMaxAfterVideo:
-      "Все {max} фото и видео готовы.\n\nПродолжай, когда будешь готов.",
+      "Нужные фото и видео есть.\nМожно добавить ещё фото (до {max}).",
+    onboardingPhotosOptionalMax: "Все {max} фото есть.\nМожно добавить короткое видео.",
+    onboardingPhotosOptionalMaxAfterVideo: "Все {max} фото и видео есть ✨",
     menuMyTickets: "🎟️ Мои билеты",
     ticketWalletText:
-      "🎟️ *Мои билеты*\n\nУ тебя *{balance}* билет(ов). Каждое свидание стоит 1 билет — докупить можно в любой момент.",
+      "🎟️ *Мои билеты*\n\nБилетов: *{balance}*. Каждое свидание стоит 1 билет — докупить можно в любой момент.",
     ticketWalletOpenStore: "🎟️ Купить билеты",
     photosEnough: "Можешь скинуть ещё (до {max}) или жми кнопку.",
     photosDone: "Фото загружены ✨",
@@ -1576,10 +1424,7 @@ const translations = {
       "Всё ок?",
     profileConfirm: "Всё ок",
     profileEdit: "Поменять",
-    onboardingComplete:
-      "Ты в деле! 🎉\n\n" +
-      "Я уже ищу тебе пару. " +
-      "Напишу, как только найду кого-то стоящего.",
+    onboardingComplete: "*Готово, ты в деле!* 🎉\n\nУже ищу тебе пару — напишу, как найду.",
     btnLike: "👍",
     btnDislike: "👎",
     btnContinuePhotos: "Дальше ➡️",
@@ -1588,17 +1433,9 @@ const translations = {
 
     // --- Persona verification CTA (end of onboarding) ---
     verifyPitch:
-      "Финальный шаг. Нам нужно убедиться, что ты реальный человек.\n\n" +
-      "Селфи, которое мы сделаем во время верификации, мы сравним с каждой фотографией в твоём профиле. " +
-      "Фото, на которых не ты, будут отклонены.\n\n" +
-      "Отказ от верификации значительно снизит твой стартовый ELO-рейтинг, " +
-      "и алгоритм будет предлагать тебе меньше встреч.",
+      "*Последний шаг — подтверди, что это ты*\n\nСделай селфи, и я сравню его с фото в профиле. Фото, где не ты, я уберу.\n\nБез проверки предложений будет меньше.",
     verifyPitchMandatory:
-      "Финальный шаг. Мы подтверждаем, что каждый участник — реальный человек.\n\n" +
-      "Селфи, сделанное во время верификации, мы сравним с каждой фотографией в твоём профиле — " +
-      "фото, на которых не ты, будут отклонены.\n\n" +
-      "Если на фото в профиле не ты — сначала замени их кнопкой ниже.\n\n" +
-      "Верификация обязательна: подбор пар начнётся сразу после её прохождения.",
+      "*Последний шаг — подтверди, что это ты*\n\nСделай селфи, и я сравню его с фото в профиле. Если на фото не ты — сначала замени их. После проверки сразу начну искать пару.",
     verifyMandatoryNotice:
       "Верификация теперь обязательна для всех новых профилей — подбор пар начнётся сразу после её прохождения. Это займёт около минуты:",
     verifyReminderNudge:
@@ -1611,7 +1448,7 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Всё равно пропустить",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Загрузить другие фото",
-    verifyBtnRedoPhotosSecondary: "📷 На самом деле дело в фото",
+    verifyBtnRedoPhotosSecondary: "📷 Сначала поменяю фото",
     verifyBtnAddPhotos: "📷 Добавить фото",
     verifyPhotosRequired:
       "Верификация сравнивает селфи с фото в твоём профиле — а их пока нет. " +
@@ -1628,28 +1465,16 @@ const translations = {
       "Фото обновлены ✅ Перепроверяю их по селфи из верификации — проходить её заново не нужно. Напишу, как только закончу.",
     verifyPhotosSavedNowVerify:
       "Фото обновлены ✅ Остался последний шаг — верификация:",
-    verifySkipped:
-      "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
-      "чтобы вернуть ELO-рейтинг.",
+    verifySkipped: "Проверка пропущена. Пройти её можно позже в меню профиля.",
     verifyCheckAlreadyDone:
       "Уже обработано — сообщение с результатом должно быть выше. " +
       "Если что-то пошло не так — нажми 🟢 Пройти верификацию ещё раз.",
     verifyRetryNotLive:
-      "Проверка остановилась раньше, чем дошла до твоих фото, — просто в этот раз " +
-      "не получилось подтвердить живое лицо, так что фото ещё никто не смотрел. " +
-      "Что обычно помогает: яркий свет " +
-      "спереди (не сзади), лицо целиком в кадре, без очков и без всего, что его " +
-      "закрывает. Нажми 🟢 Пройти верификацию и попробуй ещё раз.",
+      "*Не получилось распознать лицо*\n\nВстань лицом к яркому свету, сними очки и нажми 🟢 Пройти верификацию ещё раз.",
     verifyRetryUnfinished:
-      "Проверка не была завершена, поэтому до твоих фото она не дошла — их ещё " +
-      "никто не смотрел. Не сворачивай Telegram и не закрывай камеру на середине — " +
-      "пройди её от начала до конца за один раз, это займёт секунд 15. Нажми " +
-      "🟢 Пройти верификацию и попробуй снова.",
+      "*Проверка прервалась*\n\nПройди её за один раз, не сворачивая Telegram, — это секунд 15. Нажми 🟢 Пройти верификацию.",
     verifyRetryTechnical:
-      "На этот раз дело в нас, а не в тебе — небольшой технический сбой на " +
-      "нашей стороне. Всё оборвалось до проверки фото, так что по ним пока ничего " +
-      "не решено. Извини за это. Нажми " +
-      "🟢 Пройти верификацию и попробуй ещё раз — в этот раз всё должно пройти гладко.",
+      "*Сбой на нашей стороне*\n\nНажми 🟢 Пройти верификацию ещё раз — теперь должно получиться.",
     verifyReferenceExpired:
       "Мы удаляем селфи с верификации через 90 дней, так что сверить новые фото " +
       "уже не с чем. Ещё одна проверка на 10 секунд — и всё готово. Профиль пока " +
@@ -1664,13 +1489,11 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
-      "⚠️ Фото в твоём профиле не совпадают с селфи из верификации.\n\n" +
-      "Если на них не ты — нажми 📷 ниже и замени их, я перепроверю автоматически (новое селфи не нужно). Если это всё-таки ты — совпадение просто получилось слабым, пройди верификацию заново при хорошем свете.",
+      "⚠️ *Фото не совпали с селфи*\n\nЕсли на них не ты — замени их кнопкой 📷, я перепроверю. Если ты — пройди проверку ещё раз при хорошем свете.",
     verifyPhotosDropped:
       "Один момент: часть фото не совпала с селфи из верификации, я убрал их из профиля. Всё остальное на месте. Добавь ещё пару своих снимков, когда будет удобно 📷",
     verifyPhotosBelowMinimum:
-      "Верификация пройдена ✅ — это уже навсегда.\n\n" +
-      "Но часть фото не совпала с селфи, я их убрал, и теперь в профиле меньше {min} фотографий. Добавь ещё {need} своих — и я сразу начну искать тебе пару 📷",
+      "Верификация пройдена ✅\n\nНо часть фото не совпала с селфи, я их убрал, и теперь в профиле меньше {min} фотографий. Добавь ещё {need} своих — и я сразу начну искать тебе пару 📷",
     // --- Native-app push copy for the same verification outcomes (§1.4). Own
     // strings rather than reused DM copy: these land on a lock screen, so they
     // need a title, they must stay short, and they cannot point at a Telegram
@@ -1694,8 +1517,7 @@ const translations = {
       "Некоторые не совпали с селфи из верификации, я убрал их из профиля. Всё остальное на месте.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
-    verifyMiniAppError:
-      "Не удалось запустить проверку. Попробуйте ещё раз.",
+    verifyMiniAppError: "Не удалось запустить проверку. Попробуй ещё раз.",
     verifyMiniAppCloseBtn: "Закрыть",
     photoMatchMismatch:
       "⚠️ Это фото не совпадает с селфи из верификации. " +
@@ -1727,8 +1549,8 @@ const translations = {
     intentFalling: "Влюбиться",
     intentLongterm: "Всерьёз и надолго",
     intentPrivateNote: "видно только тебе",
-    myProfileIntentLine: "🎯 Ты ищешь: {intent} · {privateNote}",
-    myProfileIntentUnset: "🎯 Ты ищешь: не выбрано · {privateNote}",
+    myProfileIntentLine: "🎯 Ты ищешь: {intent}",
+    myProfileIntentUnset: "🎯 Ты ищешь: не выбрано",
     editIntentBtn: "🎯 Что я ищу",
     editIntentPrompt:
       "Что ты сейчас ищешь? Отметь всё, что подходит — обычно это не одно.\n\nЭто видишь только ты — нужно, чтобы точнее подбирать пару.",
@@ -1736,25 +1558,21 @@ const translations = {
 
     // --- Edit Profile ---
     editProfileBody:
-      "Это зафиксировано:\n\n" +
-      "• *Имя:* {firstName} {surname}\n" +
-      "• *Возраст:* {age}\n" +
-      "• *Универ:* {university}\n\n" +
-      "Можно поменять:",
+      "Это поменять нельзя:\n\n• *Имя:* {firstName} {surname}\n• *Возраст:* {age}\n• *Универ:* {university}\n\nМожно поменять:",
     editBioBtn: "📝 О себе",
     editPrefsBtn: "💘 Кого ищу",
     editMajorBtn: "💼 Чем занимаешься",
     editProfilePhotosBtn: "📸 Мои фото",
     editBioPrompt:
-      "Напиши пару строк о себе (до 500 символов).\n👀 Это читает твоя пара перед свиданием.",
-    editBioCurrent: "Сейчас там вот это — то, что пришлёшь, заменит текст целиком:",
+      "Напиши пару строк о себе (до 500 символов) — мэтч прочитает их перед свиданием.",
+    editBioCurrent: "Сейчас написано так. Новый текст заменит его:",
     editBioTooLong: "Слишком длинно — уложись в 500.",
     editBioSaved: "«О себе» обновлено",
     editMajorPrompt:
       "Чем занимаешься? (работа / учёба / сфера, до 100 символов)\n👀 Видно твоей паре.",
     editMajorTooLong: "Слишком длинно — уложись в 100.",
     editMajorSaved: "Сохранено",
-    editPrefsTitle: "💘 *Кого ищу*\n\nВлияет на то, кто тебе попадётся. Что меняем?",
+    editPrefsTitle: "💘 *Кого ищу*\n\nЧто меняем?",
     editPrefsAgeBtn: "🎂 Возраст партнёра",
     editPrefsDescriptionBtn: "✨ Какого человека ищу",
     editPrefsCurrent:
@@ -1766,15 +1584,14 @@ const translations = {
     editPrefsDescriptionSaved: "Предпочтения обновлены",
     editHobbiesSaved: "Интересы обновлены",
     agentEntryPrompt: "Держи:",
-    agentFallbackError: "Что-то у меня сбойнуло. Повтори, пожалуйста?",
+    agentFallbackError: "Что-то пошло не так. Повтори, пожалуйста.",
     agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
     agentBlockedSuspended:
       "Аккаунт сейчас на паузе с нашей стороны, так что тут не помогу. Вопросы — в @gennetysupport.",
     agentBlockedInvestigation:
       "Аккаунт сейчас на проверке. Пока делать нечего — подробности расскажут в @gennetysupport.",
     agentBlockedBanned: "Этот аккаунт закрыт. Если считаешь, что это ошибка — напиши в @gennetysupport.",
-    profileEmbeddingSyncPending:
-      "Сохранено. Подбор применит это после автоматической синхронизации профиля.",
+    profileEmbeddingSyncPending: "Сохранено. Учту при следующем подборе.",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "В каком возрастном диапазоне искать тебе пару? (напр. 20-28)\nМин: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не понял. Два числа через дефис, напр. 20-28 (от {min} до {max}).",
@@ -1804,7 +1621,7 @@ const translations = {
     photoStagePanelBtn: "🗂 Мои фото",
     photoStagePanelPlaceholder: "Пришли ещё фото или нажми 🗂",
     photoEditorIntro:
-      "Вот всё, что ты прислал. Нажми 🗑 под любым фото, чтобы убрать его, или пришли новые прямо сюда.",
+      "Вот все твои фото. Нажми 🗑 под любым фото, чтобы убрать его, или пришли новые прямо сюда.",
     photoEditorBackBtn: "← Вернуться к загрузке",
     menuVideo: "🎬 Видео профиля",
     editVideoPrompt:
@@ -1835,15 +1652,10 @@ const translations = {
     themeDarkOption: "🌙 Тёмная",
     themeLightOption: "☀️ Светлая",
     helpBody:
-      "*Нужна помощь?*\n\n" +
-      "Чатов между юзерами у нас нет — так задумано. " +
-      "Проблема с мэтчем, свиданием или ботом? Пиши в саппорт:\n\n" +
-      "💬 [@gennetysupport](https://t.me/gennetysupport)",
+      "*Нужна помощь?*\n\nПроблема с мэтчем, свиданием или ботом — напиши в поддержку:\n\n💬 [@gennetysupport](https://t.me/gennetysupport)",
     settingsDeleteAccount: "🗑 Удалить аккаунт",
     deleteAccountConfirm:
-      "Точно? Аккаунт будет *удалён навсегда*.\n\n" +
-      "Всё пропадёт — профиль, фото, мэтчи, эмбеддинги. " +
-      "*Это не откатить.*",
+      "*Удалить аккаунт навсегда?*\n\nПропадут профиль, фото и мэтчи. Отменить это нельзя.",
     deleteAccountYes: "Да, удалить всё",
     deleteAccountNo: "Отмена",
     deleteAccountDone:
@@ -1856,39 +1668,29 @@ const translations = {
     accountActionExpired: "Подтверждение устарело. Открой действие заново.",
     statusActionUnavailable: "Это действие недоступно для текущего статуса аккаунта.",
     deleteFreezeIntro:
-      "Подожди — прежде чем всё удалять 👀\n\n" +
-      "Необязательно терять всё. Лучше *заморозь* аккаунт: профиль, фото и верификация " +
-      "останутся, ты пропадёшь из подбора, а в следующий раз просто отправишь /start — и " +
-      "сразу попадёшь в свой готовый профиль, без повторного онбординга.\n\n" +
-      "Всё-таки удалить? Это уже навсегда.",
+      "Подожди — прежде чем всё удалять 👀\n\nНеобязательно терять всё. Лучше *заморозь* аккаунт: профиль, фото и верификация останутся, ты пропадёшь из подбора, а в следующий раз просто отправишь /start — и сразу попадёшь в свой готовый профиль, без повторной регистрации.\n\nВсё-таки удалить? Это уже навсегда.",
     deleteFreezeBtn: "❄️ Заморозить аккаунт",
     deleteProceedBtn: "Всё равно удалить аккаунт",
     freezeConfirmed:
       "Готово — аккаунт *заморожен* ❄️\n\n" +
       "Тебя не видно в подборе и я не буду писать. " +
       "Возвращайся когда угодно через /start — всё на месте.",
-    freezeWelcomeBack:
-      "С возвращением! ❄️ → ☀️ Аккаунт *разморожен* и снова в строю. " +
-      "Вот твой профиль:",
-    deleteFinalYes: "Да, я уверен на 100%",
-    deleteFinalNoSoft: "Нет",
-    deleteFinalNoHard: "О боже, нет",
+    freezeWelcomeBack: "*С возвращением!* Аккаунт разморожен.",
+    deleteFinalYes: "Да, удалить",
+    deleteFinalNoSoft: "Нет, оставить",
+    deleteFinalNoHard: "Нет, оставить",
     freezePartnerNotice:
       "Важное: твой мэтч больше недоступен, так что это свидание не состоится. " +
       "Не переживай — в следующем подборе у тебя будет приоритет 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Нашли тебе мэтч!",
-    matchDeadlineNotice:
-      "У тебя 24 часа на ответ. " +
-      "Как только нажмёшь — *решение окончательное*. Изменить нельзя.",
+    matchDeadlineNotice: "На ответ 24 часа. Передумать потом нельзя.",
     matchStreamStart: "Почему вы подходите…",
     matchBtnAccept: "Принять",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
-      "Точно пасуешь?\n\n" +
-      "Это решение окончательное — этого человека ты больше не увидишь. " +
-      "Нажми, чтобы подтвердить, или вернись назад.",
+      "Точно пасуешь?\n\nЭто решение окончательное — этого человека ты больше не увидишь.",
     matchBtnConfirmDecline: "❌ Да, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
@@ -1906,40 +1708,32 @@ const translations = {
     matchAccepted: "Принято ✨ Ждём вторую сторону.",
     matchBothAccepted: "Взаимно 🤍 Найдём время.",
     matchDeclined:
-      "Ок, всё нормально. Что стало главной причиной?\n\n" +
-      "Нажми вариант ниже — это быстрый ответ, он помогает мне видеть картину со временем.\n\n" +
-      "А если скажешь своими словами — короткий текст или голосовое — я учту это в следующем дропе.",
+      "Понял. Что не подошло? Выбери вариант или напиши своими словами — учту в следующий раз.",
     matchDeclineReasonType: "Не мой тип внешне",
     matchDeclineReasonVibe: "Не тот вайб",
     matchDeclineReasonInterests: "Не совпали интересы",
     matchDeclineReasonLifestyle: "Разный образ жизни",
     matchDeclineReasonOther: "Другая причина",
     matchDeclineOtherAsk:
-      "Ок — отправь короткий текст или голосовое с причиной. Учту в следующем дропе.",
+      "Ок — отправь короткий текст или голосовое с причиной. Учту в следующем подборе.",
     matchDeclineFeedbackSaved:
       "Принял. Следующий подбор настрою с учётом этого.",
     matchDeclineAlreadyNoted: "Уже записал — спасибо.",
     matchDeclineFeedbackFailed:
       "Не получилось сохранить прямо сейчас. Можешь всё равно отправить короткий текст или голосовое.",
     matchDeclineThanks: "Понял. Ищу дальше.",
-    matchPeerDecided:
-      "Твой мэтч уже дал ответ. Твоя очередь.\n\n" +
-      "*Что* именно он выбрал — увидишь только после своего ответа. " +
-      "И помни: твой выбор окончательный.",
+    matchPeerDecided: "*Твой мэтч уже ответил*\n\nЧто именно — узнаешь после своего ответа.",
     matchPeerWasAccepted: "Кстати — твой мэтч был согласен. В этот раз просто не сошлось.",
     matchPeerWasDeclined: "Кстати — твой мэтч в этот раз отказался.",
     matchAcceptedPeerDeclined:
       "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе. " +
       "Ищу дальше — следующий вариант будет ближе.",
     matchAcceptedPeerDeclinedPriority:
-      "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе.\n\n" +
-      "Я поднял твой приоритет на следующий дроп. Следующий вариант будет ближе.",
+      "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе.\n\nЯ поднял твой приоритет в следующем подборе. Следующий вариант будет ближе.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Подтверждён",
-    matchVerifiedQuote:
-      "Мы проверили этого пользователя. Он успешно прошёл проверку лица, " +
-      "что означает: фотографии в профиле соответствуют его личности и принадлежат лично ему.",
-    matchSynergyLabel: "Синергия {score}/99",
+    matchVerifiedQuote: "Проверено: на фото действительно этот человек.",
+    matchSynergyLabel: "Совместимость {score}/99",
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Осталось {hours}ч на ответ",
     pitchCountdownMinutes: "⏳ Осталось {minutes} мин на ответ",
@@ -1961,9 +1755,7 @@ const translations = {
       "{name} ждёт — вы остановились на выборе места.\nВсё ещё в силе?",
     stallBtnStillOn: "🟢 Да, всё в силе",
     stallBtnPlansChanged: "Планы изменились",
-    stallPeerAsked:
-      "Напомнил {name} про тебя — жду ответа.\n\n" +
-      "От тебя пока ничего не нужно. Висеть в неизвестности не оставлю — вернусь с новостями в любом случае.",
+    stallPeerAsked: "Напомнил {name} про тебя — жду ответа.\n\nОт тебя пока ничего не нужно.",
     stallStillOnAck: "Понял, всё в силе ✨",
     stallPeerStillOn: "{name} на связи, всё в силе ✨",
     stallCancelConfirmPrompt:
@@ -1988,39 +1780,29 @@ const translations = {
       "Это не ваша вина, а моя. Поднял твой приоритет в следующем подборе.",
     pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
     matchExpiredSilentWarning:
-      "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
-      "Жди следующего дропа.\n\n" +
-      "Не игнорируй предложения — это неуважение к твоему партнёру. " +
-      "В следующий раз за такое поведение мы снизим твой рейтинг.",
+      "*Время на ответ вышло*\n\nВ следующий раз ответь хотя бы «нет» — человек ждёт.",
     matchExpiredSilentPenalty:
-      "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
-      "Жди следующего дропа.\n\n" +
-      "Твой рейтинг снижен за игнор — это неуважение к твоему партнёру.",
+      "*Время на ответ вышло*\n\nЭто уже второй раз, поэтому рейтинг снижен. В следующий раз ответь хотя бы «нет» — человек ждёт.",
     matchExpiredYouMissedDate:
-      "Важно: твой мэтч был согласен прийти — ты пропустил настоящее свидание.\n\n",
+      "Важно: твой мэтч был согласен прийти — это могло быть настоящее свидание.\n\n",
     matchExpiredPeerIgnored:
-      "Партнёр не ответил в течение суток — свидание не состоится. " +
-      "Увидимся в следующем дропе.",
+      "Твой мэтч не ответил за сутки — свидание не состоится. Увидимся в следующем подборе.",
     // §3.4 — this side PASSED, and the partner then went silent. A first
     // decision leaves the row `proposed` either way, so a decliner reaches
     // expiry classified as a `responder` exactly like someone who accepted
     // and got stood up. They already got their "you passed" ack, so this is
     // deliberately a bare fact with no consolation and no card: it exists
     // only so the match doesn't vanish from the menu and banner unexplained.
-    matchExpiredSelfDeclined:
-      "Этот матч закрыт — ты отказался, и сутки на ответ истекли. " +
-      "Увидимся в следующем дропе.",
+    matchExpiredSelfDeclined: "Мэтч закрыт. Увидимся в следующем подборе.",
     // Карточка истечения (PRODUCT_SPEC §3.4). Заголовки намеренно
     // гендерно-нейтральны: род пользователя на карточку не подставляется,
     // а форма «ответил(-а)» в крупном заголовке нечитаема.
     expiryCardOverlineExpired: "ОКНО ЗАКРЫТО",
     expiryCardHeadlineExpired: "ВРЕМЯ\nВЫШЛО",
-    expiryCardSublineExpired:
-      "Прошло 24 часа без ответа.\nЖдём тебя в следующем дропе.",
+    expiryCardSublineExpired: "Прошло 24 часа без ответа.\nЖдём тебя в следующем подборе.",
     expiryCardOverlinePenalty: "ВТОРОЙ РАЗ БЕЗ ОТВЕТА",
     expiryCardHeadlinePenalty: "РЕЙТИНГ\nПОНИЖЕН",
-    expiryCardSublinePenalty:
-      "Второй мэтч без ответа.\nЖдём тебя в следующем дропе.",
+    expiryCardSublinePenalty: "Второй мэтч без ответа.\nЖдём тебя в следующем подборе.",
     expiryCardOverlinePeerIgnored: "ЭТО НЕ ПРО ТЕБЯ",
     expiryCardHeadlinePeerIgnored: "ПАРА НЕ\nОТВЕТИЛА",
     expiryCardSublinePeerIgnored:
@@ -2029,57 +1811,28 @@ const translations = {
     expiryCardHeadlineMissedDate: "ЭТО БЫЛО\nВЗАИМНО",
     expiryCardSublineMissedDate:
       "Пара была готова встретиться.\nЗа 24 часа ответа не было.",
-    expiryCaptionSilentWarning:
-      "Не игнорируй предложения — это неуважение к тому, кто ждал ответа. " +
-      "В следующий раз за это мы снизим твой рейтинг.",
+    expiryCaptionSilentWarning: "В следующий раз ответь хотя бы «нет» — человек ждёт.",
     expiryCaptionSilentPenalty:
-      "Игнорировать предложения — это неуважение к тому, кто ждал ответа.",
-    expiryCaptionPeerIgnored: "Увидимся в следующем дропе.",
+      "Это уже второй раз, поэтому рейтинг снижен. В следующий раз ответь хотя бы «нет» — человек ждёт.",
+    expiryCaptionPeerIgnored: "Увидимся в следующем подборе.",
     noMatchThisWeekTier1:
-      "Привет\n\n" +
-      "В этот раз без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
-      "и я лучше подожду, чем предложу «лишь бы было».\n\n" +
-      "Тем временем:\n" +
-      "• сообщество растёт, подбор становится точнее.\n" +
-      "• чем дольше ждёшь, тем выше твой приоритет в следующем дропе.\n\n" +
-      "Я в деле ✨",
+      "*На этой неделе без мэтча*\n\nНе нашёл того, кто правда подходит, а предлагать кого попало не хочу. В следующем подборе у тебя приоритет ✨",
     noMatchThisWeekTier2:
-      "Привет\n\n" +
-      "Уже второй раз подряд — всё ещё нет никого, кого я был бы рад тебе показать. " +
-      "Спасибо, что остаёшься — это правда важно.\n\n" +
-      "Что происходит:\n" +
-      "• привожу новых людей и настраиваю алгоритм под твои критерии.\n" +
-      "• твой приоритет в следующем дропе уже повышен.\n\n" +
-      "Я этим занимаюсь 🤍",
+      "*Снова без мэтча*\n\nВторую неделю подряд не вижу того, кто правда подходит. Спасибо, что ждёшь — в следующем подборе твой приоритет ещё выше 🤍",
     noMatchThisWeekTier3:
-      "Привет\n\n" +
-      "Снова честно: пары, которая правда стоит твоего времени, всё ещё нет. " +
-      "Мне это нравится даже меньше, чем тебе, и делать вид, что всё ок, я не буду.\n\n" +
-      "Что делаю:\n" +
-      "• лично слежу за твоей очередью и подталкиваю рост в твоём городе.\n" +
-      "• чем дольше ждёшь, тем выше твой приоритет в дропе.\n\n" +
-      "Спасибо, что доверяешь 🤍",
+      "*Пока без мэтча*\n\nПодходящего человека всё ещё нет, а предлагать кого попало я не буду. Слежу за твоей очередью — в следующем подборе ты среди первых 🤍",
     noMatchDiscountOffer:
       "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
     poolExhaustedPauseNotice:
-      "Привет\n\n" +
-      "Скажу прямо: сейчас для тебя реально никого нет — я проверил, пул пуст. " +
-      "Дело не в тебе, просто пока некого предложить.\n\n" +
-      "Ставлю твой поиск на паузу вместо того, чтобы слать одно и то же сообщение снова и снова. " +
-      "Всё остальное остаётся как есть — анкета, фото и верификация никуда не денутся.\n\n" +
-      "Как только появится тот, кто подойдёт, я сам верну тебя в поиск — делать ничего не нужно. " +
-      "Возобновить можно и самому, в любой момент, через меню.",
+      "*Ставлю поиск на паузу*\n\nСейчас для тебя правда никого нет — дело не в тебе. Как появится подходящий человек, сам верну тебя в поиск.",
     poolExhaustedResumeNotice:
-      "Привет\n\n" +
-      "Хорошие новости — появился тот, кто подходит, и я вернул тебя в поиск. " +
-      "Ты снова в игре на следующий дроп 🤍",
+      "Хорошие новости — появился тот, кто подходит, и я вернул тебя в поиск. Ты в следующем подборе 🤍",
     matchSchedulePeerProposed:
       "Твой мэтч уже отметил время в календаре. Открой — согласись или предложи своё:",
     matchSchedulePeerSuggestedAlternative:
       "Твой мэтч предложил другое время. Глянь — можно согласиться или предложить свой вариант.",
-    matchScheduleSavedConfirmation:
-      "Сохранил ✨ Мэтч получил пинг — напишу, как только ответит.",
+    matchScheduleSavedConfirmation: "Готово. Твой мэтч получил уведомление — напишу, как ответит.",
     matchScheduleNoOverlapYet:
       "Вы оба отметили время, но пока ничего не совпало. Добавь ещё пару слотов — как только один пересечётся, фиксирую дату:",
     matchSchedulePickFinalYet:
@@ -2091,16 +1844,14 @@ const translations = {
       "📅 Теперь выбери время — открой календарь и отметь все удобные слоты.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
-    ticketCardCaption:
-      "Взаимно 🤍 Получи *билет на свидание*, чтобы открыть планирование.",
-    ticketCardCaptionPremium:
-      "Взаимно 🤍 Premium покрывает оба билета — сразу переходим ко времени.",
+    ticketCardCaption: "Это мэтч 🤍 Возьми билет — и выберем время.",
+    ticketCardCaptionPremium: "Это мэтч 🤍 Premium покрывает оба билета — сразу выбираем время.",
     ticketButton: "🎟️ Получить билет на свидание",
     ticketViewButton: "🎟️ Посмотреть свой билет на свидание",
     ticketStatusButton: "Открыть свидание",
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
     ticketPeerTookTheirs:
-      "{name} только что взял(а) свой билет на свидание 🎟️ Твой — последний, и мы открываем планирование.",
+      "{name} уже с билетом на свидание 🎟️ Остался твой — и откроем планирование.",
     bumpVerifiedDm:
       "Вы оба на месте ✨ Свидание засчитано, а билет на следующее — от меня.",
     bumpDeckIntro: "Если разговору понадобится, куда пойти:",
@@ -2109,8 +1860,7 @@ const translations = {
     ticketCoveredHerConfirm:
       "💛 Готово — ты оплатил билет за {name}. Как только она это увидит, я дам тебе знать.",
     ticketPartnerSawItDm: "❤️ {name} увидела, что ты оплатил её билет.",
-    ticketRefundedDm:
-      "Собеседник не успел взять свой билет, поэтому твой мы вернули. Ничего страшного — открыли планирование бесплатно. Давай найдём время 📅",
+    ticketRefundedDm: "Твой билет вернулся в кошелёк, а свидание в силе. Давай выберем время 📅",
     ticketRefundedToWallet:
       "🎟️ Билет вернулся в твой кошелёк — используешь его на следующем свидании.",
     ticketRefundedToWalletBoth:
@@ -2122,23 +1872,20 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
     matchScheduledBtnShare: "📤 Поделиться карточкой",
     dateCardWhen: "КОГДА",
-    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
+    dateCardSlogan: "Без переписки.\nСразу вживую.",
     dateCardShareCaption:
       "Делись смело — лицо твоего мэтча скрыто, чтобы сохранить его приватность 💞",
-    dateCardShareFailed:
-      "Не получилось подготовить карточку для отправки — попробуйте через минуту.",
-    matchSchedulePickedPrefix: "Ты выбрал: ",
+    dateCardShareFailed: "Не получилось подготовить карточку для отправки — попробуй через минуту.",
+    matchSchedulePickedPrefix: "Твой выбор: ",
     matchScheduleWaitingPeer: "Ждём выбор второй стороны…",
     venueTimeCardLabel: "ВАШЕ СВИДАНИЕ",
     venueTimeLockedCaption: "Время вашего свидания закреплено ✨",
     venueConciergeIntro:
-      "Время выбрано. Один момент перед тем, как подобрать место.\n\n" +
-      "📍 *Отметь, откуда ты будешь выезжать* на свидание — дом, станция метро, квартира друга, откуда тебе реально удобно стартовать.\n\n" +
-      "По этой точке я подберу удобное место встречи, до которого легко добраться вам *обоим*, недалеко от твоего старта. Нажми кнопку ниже и отметь точку на карте:",
+      "*Откуда поедешь на свидание?*\n\nОтметь точку на карте — дом, метро, любое удобное место. Подберу место, куда удобно добраться вам обоим.",
     venueConciergeBtnLocation: "📍 Отправить геолокацию",
     venueConciergeBtnMap: "🗺️ Выбрать на карте",
     venueLocationFirst:
-      "Сначала самое главное — *отметь, откуда ты будешь выезжать* 📍 Нажми кнопку ниже и поставь точку на карте. Про вайб спрошу сразу после.",
+      "Сначала самое главное — *отметь, откуда ты будешь выезжать* 📍 Нажми кнопку ниже и поставь точку на карте.",
     venueOriginOutsideMarket:
       "Эта точка за пределами {city}, а Gennety пока работает только там — я ищу место недалеко от вас обоих, и оттуда подобрать не смогу. Отметь точку в {city}, откуда будешь выезжать:",
     venueVibeNoted: "Вайб записан ✨ Теперь укажи, откуда поедешь:",
@@ -2201,23 +1948,23 @@ const translations = {
     venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали.",
     venueChangeRefunded:
       "Смена места не прошла, звёзды вернулись к тебе. Свидание в силе — в том месте, о котором договаривались изначально.",
-    primeInvoiceTitle: "Поздние вечерние времена",
+    primeInvoiceTitle: "Поздние вечера",
     primeInvoiceDesc:
       "Откроет 18:30, 19:00 и 19:30 во все дни вашего календаря — для вас обоих, на это свидание.",
-    primeInvoiceLabel: "Поздние вечерние времена",
+    primeInvoiceLabel: "Поздние вечера",
     primeTimeOpenedDm:
-      "{name} открыл(а) поздние вечерние времена — 18:30 и позже теперь доступны в вашем календаре.",
+      "{name} открывает поздние вечера — 18:30 и позже теперь есть в вашем календаре.",
     primeTimeRefunded:
-      "Поздние вечерние времена не открылись, звёзды вернулись к тебе. Остальной календарь без изменений.",
+      "Поздние вечера не открылись, звёзды вернулись к тебе. Остальной календарь без изменений.",
     primeTimeRefundedDateOff:
-      "Свидание не состоится, поэтому звёзды за поздние вечерние времена вернулись к тебе.",
+      "Свидание не состоится, поэтому звёзды за поздние вечера вернулись к тебе.",
     memeCardTeaser:
       "🎭 Ещё кое-что про {name}.\n\nКогда я спросил, что по-настоящему смешит, ответа словами не было — прилетел мем. Это говорит о человеке больше, чем любые три предложения.\n\nХочешь увидеть его до встречи?",
     memeCardBtn: "🎭 Показать",
     memeRevealCaption: "🎭 Что смешит {name}:",
     memeRevealSource: "▶️ Посмотреть целиком:",
     memeRevealFallback:
-      "🎭 Саму картинку переслать не вышло, поэтому словами — вот что прислал(а) {name} на вопрос, что смешит:\n\n_{description}_",
+      "🎭 Саму картинку переслать не вышло, поэтому словами. {name} — о том, что смешит:\n\n_{description}_",
     memeRevealGone: "На этот вопрос ответили заново словами — мема здесь больше нет.",
     memeRevealUnavailable: "Эта карточка уже неактивна.",
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
@@ -2257,13 +2004,13 @@ const translations = {
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
     dateTerminalInvite:
-      "Свидание через {minutes} минут.\n📍 {venue}\n\nDate Terminal уже открыт — он покажет, сколько тебе осталось до места. За столиком тряхните телефоны вместе: это Contact Sync.",
+      "*Свидание через {minutes} мин*\n📍 {venue}\n\nОткрой экран свидания — он покажет дорогу. За столиком приложите телефоны друг к другу и удерживайте, чтобы обменяться контактами.",
     dateTerminalReminder:
-      "Contact Sync открыт.\n📍 {venue}\n\nКогда вы оба за столиком — открой терминал и тряхните телефоны вместе.",
-    dateTerminalBtn: "🎟 Открыть Date Terminal",
+      "*Обмен контактами открыт*\n📍 {venue}\n\nКогда вы оба за столиком — открой экран свидания, приложите телефоны друг к другу и удерживайте.",
+    dateTerminalBtn: "🎟 Открыть свидание",
     dateDayActivityStartTitle: "Сегодня свидание",
     emergencyPushTitle: "Свидание отменено",
-    emergencyPushBody: "Откройте Gennety — там написана причина.",
+    emergencyPushBody: "Открой Gennety — там причина.",
     dateDayActivityStartBody: "Всё нужное — на экране блокировки.",
     venueActivityStartTitle: "Смена места",
     venueActivityStartPartner: "{name} предлагает {what}",
@@ -2284,16 +2031,10 @@ const translations = {
     timeActivityStartWaiting: "Ждём, когда {name} ответит",
     timeActivityStartWaitingNoName: "Ждём ответ по времени",
     timeActivityStartMatch: "Время назначено: {when}",
-    emergencyUnlocked:
-      "Планы поменялись и совсем не можешь прийти? Отменить можно кнопкой ниже.\n" +
-      "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
+    emergencyUnlocked: "Планы поменялись и совсем не можешь прийти? Отменить можно кнопкой ниже.",
     emergencyBtn: "Отменить свидание",
     emergencyConfirmPrompt:
-      "Перед отменой — короткая проверка.\n\n" +
-      "Если это волнение, небольшое опоздание или сомнение, лучше оставь свидание. " +
-      "Мэтч уже выделил время для тебя, а личная встреча всё ещё может приятно удивить.\n\n" +
-      "*Отменяй только если точно не можешь прийти: вернуть мэтч после этого нельзя.* " +
-      "Если продолжишь, я попрошу причину и отправлю её мэтчу как есть.",
+      "Если это просто волнение или опоздание — лучше оставь свидание. *Отменяй, только если точно не можешь прийти:* вернуть мэтч будет нельзя.",
     emergencyBtnConfirm: "🔴 Да, отменить свидание",
     emergencyBtnBack: "🟢 Оставить свидание",
     emergencyAborted: "Хорошо — свидание остаётся в силе. 👍",
@@ -2309,11 +2050,9 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Мэтч отменил свидание. Вот что написал:",
     emergencyReceivedOtherSoftNote:
-      "Это не из-за тебя. Gennety немного поднимет твой приоритет в следующем дропе.",
+      "Это не из-за тебя. Gennety немного поднимет твой приоритет в следующем подборе.",
     feedbackInvitation:
-      "Как прошло свидание? ✨\n\n" +
-      "Поделись парой деталей: была ли химия, какой был вайб, понравилось ли место?\n" +
-      "Учтём, чтобы в следующий раз лучше соответствовать твоим ожиданиям.",
+      "*Как прошло свидание?* ✨\n\nПоделись парой деталей: была ли химия, какой был вайб, понравилось ли место?",
     feedbackBtnForm: "✍️ Открыть форму",
     feedbackBtnVoice: "🎤 Записать голосом",
     attendanceAsk: "Прежде чем спрашивать, как всё прошло — вы вчера встретились? 🙂",
@@ -2336,20 +2075,20 @@ const translations = {
       "Просто запиши голосовое 🎙️\n\n" +
       "Расскажи, как прошло — была ли химия, что зашло, что не очень. " +
       "Минуты вполне хватит.",
-    feedbackThanks: "Спасибо за фидбэк ✨ Используем для улучшения.",
-    feedbackAlreadySubmitted: "Ты уже рассказал(а), как прошло это свидание, — спасибо, всё сохранено ✨",
+    feedbackThanks: "Спасибо! Учту в следующем подборе ✨",
+    feedbackAlreadySubmitted: "Отзыв об этом свидании уже есть — спасибо, всё сохранено ✨",
     feedbackPushTitle: "Как прошло свидание?",
     feedbackPushBody: "Минута твоего времени — и в следующий раз мы подберём точнее.",
     matchDropPushTitle: "Твоя пара найдена",
-    matchDropPushBody: "Нажми, чтобы увидеть, кого выбрал твой AI ✨",
+    matchDropPushBody: "Нажми, чтобы посмотреть ✨",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Пожаловаться",
     reportAsk:
       "Эта жалоба приватная. Что лучше всего описывает проблему?",
     reportCategoryFakePhotos: "Фейковые или вводящие в заблуждение фото",
     reportCategoryWrongPerson: "На фото другой человек",
-    reportCategoryOffensive: "Оскорбительное или тревожное поведение",
-    reportCategoryUnsafe: "Небезопасно / красный флаг",
+    reportCategoryOffensive: "Грубость или странное поведение",
+    reportCategoryUnsafe: "Мне было небезопасно",
     reportCategorySpam: "Спам или мошенничество",
     reportCategoryInappropriate: "Неподходящий профиль",
     reportCategoryOther: "Другое",
@@ -2360,9 +2099,10 @@ const translations = {
     reportSkipBtn: "Пропустить",
     reportThanksT1: "Принято — учтём в будущих мэтчах 🎯",
     reportThanksT2: "Жалоба зарегистрирована. Спасибо — разберёмся.",
-    reportThanksT3: "Жалоба зарегистрирована. Замораживаем их аккаунт для ручной проверки — спасибо, что сообщил(а).",
+    reportThanksT3:
+      "Жалоба принята. Аккаунт этого человека заморожен до проверки. Спасибо за сигнал.",
     reportFailed: "Не получилось обработать жалобу. Попробуй через минуту.",
-    reportDuplicate: "Ты уже жаловался(ась) на этот мэтч.",
+    reportDuplicate: "Жалоба на этот мэтч уже отправлена.",
     reportBackBtn: "← Назад",
     reportCancelled: "Хорошо — жалоба не отправлена.",
     reportWarningStrike1:
@@ -2377,15 +2117,7 @@ const translations = {
       "🚫 Твой аккаунт заморожен для проверки безопасности. " +
       "Команда свяжется через @gennetysupport, если потребуются дальнейшие действия.",
     safetyNoteFemale:
-      "Привет! Твое свидание от Gennety начнется уже через полтора часа в **{location_name}**.\n\n" +
-      "Мы заботимся о твоей безопасности, поэтому, пока ты собираешься, вот небольшая памятка для первой встречи:\n\n" +
-      "📍 **Придерживайся плана.** Мы подобрали для вас безопасное публичное место. Не соглашайся переносить встречу в уединенную локацию или ехать в гости.\n" +
-      "👥 **Если будет людно.** Так бывает — не страшно: можно взять кофе и пройтись или зайти в соседнее кафе, где людно и светло.\n" +
-      "🚗 **Транспорт.** Добирайся до места и обратно самостоятельно любым удобным тебе способом (на общественном транспорте, такси или пешком). Главное — не садись в машину к малознакомому человеку.\n" +
-      "📱 **Предупреди близких.** Перешли подруге или кому-то из близких детали этой встречи и, по возможности, расшарь свою геопозицию на вечер.\n" +
-      "☕ **Контроль.** Старайся не оставлять свои вещи и напиток без присмотра.\n" +
-      "🛑 **Твои границы.** Если тебе некомфортно или поведение партнера кажется странным — ты имеешь полное право просто встать и уйти в любой момент. Твоя безопасность всегда важнее вежливости.\n\n" +
-      "Желаем отличного вечера и приятных впечатлений! ✨",
+      "*Свидание через полтора часа — {location_name}*\n\n📍 *Придерживайся плана.* Мы подобрали для вас безопасное публичное место. Не соглашайся переносить встречу в уединённое место или ехать в гости.\n🚗 *Транспорт.* Добирайся туда и обратно самостоятельно — на общественном транспорте, такси или пешком. Не садись в машину к малознакомому человеку.\n📱 *Предупреди близких.* Перешли подруге или кому-то из близких детали встречи и, если можешь, поделись геопозицией на вечер.\n🛑 *Твои границы.* Если тебе некомфортно или поведение партнёра кажется странным — можно просто встать и уйти в любой момент. Твоя безопасность важнее вежливости.\n\nХорошего вечера ✨",
     safetyBriefPushTitle: "Перед выходом",
     safetyBriefPushBody: "Памятка безопасности на сегодня уже в приложении.",
     noMatchPushTitle: "В этот раз без мэтча",
@@ -2401,14 +2133,14 @@ const translations = {
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
     statusMinutes: "✨ Почти готово! Мэтчи прилетят через {m} мин",
     statusProcessing: "✨ Сканируем твой город… Загляни чуть позже.",
-    statusBannerSchedule: "Следующий дроп: {date}, {time}",
+    statusBannerSchedule: "Следующий подбор: {date}, {time}",
     statusBannerActive: "Мы уже ищем твоего человека ✦",
     statusBannerSearching:
       "Ищу твоего человека — проверяю каждый вечер.\n" +
       "Как только появится кто-то, кто правда стоит твоего времени, я напишу.",
-    statusButtonDaysHours: "До дропа: {d}д {h}ч",
-    statusButtonHoursMinutes: "До дропа: {h}ч {m}мин",
-    statusButtonMinutes: "✨ До дропа: {m}мин",
+    statusButtonDaysHours: "До подбора: {d}д {h}ч",
+    statusButtonHoursMinutes: "До подбора: {h}ч {m}мин",
+    statusButtonMinutes: "✨ До подбора: {m}мин",
     statusButtonProcessing: "✨ Подбираем мэтчи",
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
@@ -2426,29 +2158,17 @@ const translations = {
 
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
-      "Пока Gennety работает только в Киеве — в городе {city} мы ещё не запустились, " +
-      "и мэтчить тебя здесь не с кем.\n\n" +
-      "Готов ходить на свидания в Киеве? Смени город в меню.",
+      "Пока Gennety работает только в Киеве — в городе {city} мы ещё не запустились, и мэтчить тебя здесь не с кем.\n\nХочешь ходить на свидания в Киеве? Смени город в меню.",
     statusButtonMenu: "Открыть меню",
     menuCitySwitch: "📍 Сменить город на Киев",
     citySwitchCard:
-      "📍 *Твой город: {city}*\n\n" +
-      "Пока Gennety работает только в Киеве. Мэтчи всегда внутри одного города, " +
-      "поэтому до запуска в городе {city} знакомить тебя здесь не с кем.\n\n" +
-      "Если готов ходить на свидания в Киеве — переключись. Анкета, фото и верификация " +
-      "останутся как есть, и ты попадёшь в ближайший дроп.",
+      "📍 *Твой город: {city}*\n\nПока Gennety работает только в Киеве. Мэтчи всегда внутри одного города, поэтому до запуска в городе {city} знакомить тебя здесь не с кем.\n\nЕсли хочешь ходить на свидания в Киеве — переключись. Анкета, фото и верификация останутся как есть, и ты попадёшь в ближайший подбор.",
     citySwitchConfirm: "📍 Да, ищите мне пару в Киеве",
     citySwitchDone:
-      "Готово — твой город для мэтчей теперь Киев 🤍\n\n" +
-      "Ты в ближайшем дропе: {date}.",
+      "Готово — твой город для мэтчей теперь Киев 🤍\n\nТы в ближайшем подборе: {date}.",
     citySwitchFailed: "Не получилось сменить город. Попробуй ещё раз через минуту.",
     noMatchCityNotLaunched:
-      "Привет\n\n" +
-      "Скажу честно: в городе {city} Gennety ещё не запущен — пока мы работаем только в Киеве. " +
-      "Мэтчи всегда внутри одного города, поэтому знакомить тебя здесь не с кем, " +
-      "и лучше сказать это прямо, чем держать тебя в ожидании дропа, в который ты не попадаешь.\n\n" +
-      "Анкета остаётся как есть, и мы напишем, как только откроем твой город.\n\n" +
-      "А если готов ходить на свидания в Киеве — переключись ниже и попадёшь в ближайший дроп.",
+      "*В городе {city} Gennety пока нет*\n\nМы работаем только в Киеве, а мэтчи всегда внутри одного города — знакомить тебя здесь пока не с кем. Анкета остаётся как есть, и мы напишем, как только откроем твой город.\n\nЕсли хочешь ходить на свидания в Киеве — переключись ниже и попадёшь в ближайший подбор.",
     noMatchCitySwitchBtn: "📍 Перейти на Киев",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
@@ -2476,8 +2196,7 @@ const translations = {
       "Голосовое слишком длинное. До 5 минут — или просто напиши текстом.",
     rateLimitFloodNotice:
       "Ого, как много сообщений сразу — дай пару секунд догнать, потом продолжим. 🙂",
-    rateLimitDailyBudgetNotice:
-      "Ты сегодня супер активн(а) 🙂 Давай продолжим завтра — на сегодня лимит исчерпан, чтобы всё работало стабильно для всех.",
+    rateLimitDailyBudgetNotice: "Ты сегодня много пишешь 🙂 Продолжим завтра — на сегодня лимит.",
 
     // --- Pre-date coordination (feature-flagged) ---
     coordProxyOpenedEnterPrompt:
@@ -2504,35 +2223,36 @@ const translations = {
     menuInviteFriend: "🎁 Пригласить друга",
     referralHubTitle: "Приглашай друзей в Gennety",
     referralHubTagline:
-      "За каждого друга, который пройдёт проверку по твоей ссылке, — билет на свидание 🎟 тебе, и ему тоже.\n\nИ чем больше людей в твоём городе, тем выше шанс, что подберём пару и тебе.",
+      "За каждого друга, который пройдёт проверку по твоей ссылке, — билет на свидание 🎟 тебе, и ему тоже.",
     referralShareButton: "📤 Пригласить друга",
-    referralShareCaption: "ИИ подбирает лучшую пару и сам организует встречу.",
+    referralShareCaption: "Gennety подбирает лучшую пару и сам организует встречу.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     // --- HDYHAU (онбординговый вопрос об источнике, `shared/hdyhau.ts`) ---
-    hdyhauQuestion: "И последнее — откуда вы узнали про Gennety?",
+    hdyhauQuestion: "И последнее — откуда ты о нас знаешь?",
     hdyhauFriendInPerson: "Друг рассказал лично",
     hdyhauFriendOnline: "Знакомый прислал ссылку",
     hdyhauSocialMedia: "Соцсети",
-    hdyhauSearch: "Нашёл(ла) сам(а) через поиск",
+    hdyhauSearch: "Через поиск",
     hdyhauAd: "Реклама",
     hdyhauEvent: "Вечеринка или мероприятие",
     hdyhauOther: "Откуда-то ещё",
     hdyhauSkip: "Пропустить",
     hdyhauThanks: "Спасибо — это правда помогает. 💛",
     referralRewardDm:
-      "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟\n{next}",
+      "{name} — проверка по твоей ссылке пройдена ✨\n\nНачислено: +{tickets} 🎟\n{next}",
     referralRewardNext: "Осталось наград за приглашения: {remaining}.",
     referralRewardNextMax: "Это была последняя награда за приглашения — спасибо 💛",
-    referralCardInvitedBy: "Тебя пригласил(а) {name}",
+    referralCardInvitedBy: "{name} зовёт тебя в Gennety",
     referralCardInvitedGeneric: "Тебя приглашают",
     referralCardHeadA: "Реальные свидания.",
     referralCardHeadB: "Ноль переписки.",
-    referralCardSupport: "ИИ подбирает пару по глубокой совместимости и сам организует встречу вживую.",
+    referralCardSupport:
+      "Gennety подбирает пару по глубокой совместимости и сам организует встречу вживую.",
     referralCardGift: "{ticketsPhrase} — в подарок",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n\nДальше — больше.",
+      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Лучшие заведения* — подборка мест уровнем выше\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumOpenCta: "Подробнее",
     premiumCancelHint:
@@ -2572,25 +2292,23 @@ const translations = {
     premiumCancelKeepBtn: "Оставить Premium",
     premiumCancelFinalConfirm:
       "Последняя проверка — точно отменяем Gennety Premium?\n\nPremium останется активным до {date}, до этой даты ничего не изменится. После подтверждения автопродление выключится навсегда — захочешь вернуть Premium позже, придётся оплатить заново.",
-    premiumCancelFinalYes: "Да, я уверен на 100%, отменить",
+    premiumCancelFinalYes: "Да, отменить",
     premiumCancelFinalNoSoft: "Нет, оставить",
-    premiumCancelFinalNoHard: "Стоп, не отменяй",
+    premiumCancelFinalNoHard: "Нет, оставить",
     premiumCancelDone:
       "Готово — автопродление отключено. Premium активен до {date}, больше ничего не спишется. Вернуться можно в любой момент.",
     premiumCancelKept: "Оставляем ✨ Premium активен до {date}.",
     premiumCancelAppStore:
-      "Подписка оформлена через App Store, поэтому отменить её можно только на iPhone: Настройки → [ваше имя] → Подписки → Gennety Premium → Отменить. Доступ сохранится до {date}.",
+      "Подписка оформлена через App Store, поэтому отменить её можно только на iPhone: Настройки → [твоё имя] → Подписки → Gennety Premium → Отменить. Доступ сохранится до {date}.",
     premiumCancelNotActive: "Сейчас у тебя нет активной подписки Premium.",
     premiumCancelReasonAsk:
-      "Спасибо, что был с нами 🤍 Если не сложно — расскажи в двух словах, почему решил отменить? Это правда помогает нам стать лучше.",
+      "Спасибо за время с нами 🤍 Если не сложно — расскажи в двух словах, почему отменяешь? Это правда помогает нам стать лучше.",
     premiumCancelReasonSkipBtn: "Не хочу отвечать",
     premiumCancelReasonThanks: "Спасибо, учтём 🤍 Premium всегда можно вернуть.",
 
     // --- Rematch ---
     rematchOfferFamine:
-      "В этот раз пары не нашлось — это про пул, не про тебя.\n\n" +
-      "Могу прогнать поиск заново прямо сейчас, только для тебя. Один новый человек, подбор тот же: {price}.\n\n" +
-      "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
+      "В этот раз пары не нашлось — дело не в тебе.\n\nМогу поискать ещё раз прямо сейчас: {price}. Не найду — верну звёзды.",
     rematchOfferFailed:
       "Не сложилось. Бывает.\n\n" +
       "Могу пойти на второй заход прямо сейчас и найти тебе нового человека — {price}.\n\n" +
@@ -2600,9 +2318,9 @@ const translations = {
       "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
     rematchOfferBtn: "Искать заново — {price}",
     statusButtonRematch: "Искать сейчас",
-    rematchInvoiceTitle: "Реметч",
-    rematchInvoiceDesc: "Ещё один поиск прямо сейчас — новый человек от твоего мэтчмейкера.",
-    rematchInvoiceLabel: "Реметч",
+    rematchInvoiceTitle: "Новый поиск",
+    rematchInvoiceDesc: "Ещё один поиск прямо сейчас — новый человек от Gennety.",
+    rematchInvoiceLabel: "Новый поиск",
     rematchFound: "Нашёл. Сейчас пришлю ✨",
     rematchNoCandidate:
       "Посмотрел — новых вариантов в твоём городе сейчас нет. Звёзды вернул. В следующем раунде ты остаёшься.",
@@ -2612,11 +2330,11 @@ const translations = {
       "Нашёл человека, но доставить анкету не смог — это на нашей стороне. Звёзды вернул, и попытка не засчиталась.",
     rematchUndeliveredPending:
       "Нашёл человека, но доставить анкету не смог, а возврат с первого раза не прошёл. Уже занимаюсь — звёзды вернутся в ближайшее время.",
-    rematchRefunded: "Звёзды за реметч вернулись ✨",
+    rematchRefunded: "Звёзды за новый поиск вернулись ✨",
     rematchLimitReached:
-      "Реметчи на сейчас закончились. Следующий откроется через пару дней — обычный мэтч всё равно будет.",
+      "Новые поиски на сейчас закончились. Следующий откроется через пару дней — обычный подбор всё равно будет.",
     rematchUnavailable:
-      "Сейчас реметч не сделать. Если у тебя есть мэтч в работе — сначала закончи с ним.",
+      "Сейчас новый поиск не запустить. Если у тебя есть мэтч в работе — сначала закончи с ним.",
     rematchGiftFamine:
       "Я говорил, что пары для тебя пока нет. Продолжил искать — и нашёл человека, на которого стоит посмотреть.",
     rematchGiftFailed:
@@ -2634,24 +2352,20 @@ const translations = {
   uk: {
     // --- Onboarding ---
     consentMessage:
-      "Ласкаво просимо до Gennety Dating!\n\n" +
-      "Перш ніж почати, ознайомтеся з нашими Умовами використання та Політикою конфіденційності та прийміть умови зберігання даних.",
-    consentAgree: "Згоден",
+      "*Привіт! Це Gennety* 👋\n\nПерш ніж почати, прочитай Умови використання та Політику конфіденційності й погодься з правилами зберігання даних.",
+    consentAgree: "Приймаю",
     consentPrivacyButton: "Політика конфіденційності",
     consentTermsButton: "Умови використання",
-    welcome: "Gennety Dating 👀\nAI-метчмейкінг для справжніх побачень.",
+    welcome: "*Gennety Dating*\nПідбираємо пару й одразу призначаємо побачення наживо.",
     chooseLanguage: "Обери мову:",
     philosophyPitch:
-      "Gennety працює за одним принципом: *Zero Chat*.\n\n" +
-      "Ти не пишеш метчу. Я розбираюся, хто ти, " +
-      "знаходжу реально сумісну людину і беру на себе все — час, місце, всю логістику.\n\n" +
-      "Тобі лише прийти. Заходиш?",
-    philosophyContinue: "Го! 🚀",
-    askEmail: "Скинь свою університетську пошту (типу name@knu.edu.ua):",
-    invalidEmail: "Хм, не схоже на університетську пошту. Потрібна адреса .edu / .ac.uk.",
-    otpSent: "Код із 6 цифр полетів на *{email}*. Скинь сюди:",
+      "*Тут не треба листуватися*\n\nЯ дізнаюся тебе, знайду людину, яка підходить, і сам домовлюся про час і місце. Тобі залишиться тільки прийти. Поїхали?",
+    philosophyContinue: "Поїхали 🚀",
+    askEmail: "Напиши свою пошту університету — наприклад, name@knu.ua",
+    invalidEmail: "Це не схоже на пошту університету. Перевір адресу й надішли ще раз.",
+    otpSent: "Надіслав код на *{email}*. Введи його сюди:",
     otpInvalid: "Не той код. Спробуй ще:",
-    otpExpired: "Код протермінувався. Введи пошту знову:",
+    otpExpired: "Код застарів. Введи пошту ще раз — надішлю новий.",
     otpTooManyAttempts: "Забагато спроб. Введи пошту знову — надішлемо новий код.",
     otpCooldown: "Зачекай хвилинку перед повторним надсиланням.",
     emailVerified: "Пошту підтверджено ✨",
@@ -2671,7 +2385,7 @@ const translations = {
     llmAnalysing3: "Збираю психологічний портрет...",
     llmDumpReceived: "Профіль готовий ✨",
     askPhotos:
-      "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
+      "Майже готово! Надішли {min}–{max} фото, де тебе добре видно. Відверті знімки не можна. Відео теж можна — головне, щоб тебе було видно.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
     voicePromptSkipHint: "Пропустити — кнопка «{button}» внизу чату.",
@@ -2680,19 +2394,17 @@ const translations = {
       "Записав — послухай. Надішли інше, якщо хочеш перезаписати, або «{button}», щоб прибрати.",
     voicePromptReviewDone: "✅ Готово",
     voicePromptSkipped: "Гаразд, обійдемося без голосового.",
-    voicePromptSaved: "Зберіг ✨ Він почує його прямо перед тим, як вирішити.",
+    voicePromptSaved: "Зберіг ✨ Твій метч почує його перед тим, як відповісти.",
     voicePromptTooShort: "Це менше секунди — кнопку мікрофона треба тримати. Спробуй ще раз, цілься секунд на 15.",
     voicePromptTooLong: "Задовго — вклади́ся в 30 секунд, інакше таке просто не дослуховують. Запишеш ще раз?",
     voicePromptUnsafe: "Таке я не можу поставити в анкету. Запиши інше — або пропусти, це за бажанням.",
     voicePromptContactInfo: "Ніки та номери краще не називати — зустріч я організую сам, у цьому весь сенс. Запиши краще щось про себе.",
     voicePromptUnavailable: "Не зміг обробити запис. Надішли його ще раз за хвилину.",
-    voicePromptPitchCaption: "{name} записав(ла) для тебе голосове",
+    voicePromptPitchCaption: "{name}: голосове для тебе",
     photoRejected:
       "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
-    photoDuplicate:
-      "Це фото вже є в профілі. Додай інший знімок — усі фотографії мають бути унікальними.",
-    photoDuplicateNear:
-      "Це фото вже є в профілі. Додай інший знімок — усі фотографії мають бути унікальними.",
+    photoDuplicate: "Це фото вже є в профілі — надішли інше.",
+    photoDuplicateNear: "Це фото вже є в профілі — надішли інше.",
     photoUnsafeContent:
       "Це фото не можна публікувати у профілі. Обери інший знімок без відвертого контенту.",
     photoFaceObscured:
@@ -2703,14 +2415,11 @@ const translations = {
       "Усі фото мають належати одній людині. Переконайся, що твоє обличчя є на кожному знімку.",
     photoIdentityUncertain:
       "Не вдалося надійно зіставити обличчя. Надішли чіткіше фото з хорошим освітленням і добре видимим обличчям.",
-    photoConsensusPending:
-      "Я поки не зафіксував особу в профілі. Надішли ще одне інше фото, де видно ту саму людину.",
-    photoConsensusOutlierRejected:
-      "Одне очікуване фото було з іншою людиною, тому я його не додав.",
-    photoConsensusConfirmed:
-      "Особу підтверджено за збіжними фото ✨",
+    photoConsensusPending: "Надішли ще одне фото — за двома знімками я зрозумію, що на них ти.",
+    photoConsensusOutlierRejected: "На одному фото інша людина — його я не додав.",
+    photoConsensusConfirmed: "Чудово, на всіх фото ти ✨",
     photoConsensusNoPairCap:
-      "Я досі не бачу двох фото однієї людини. Поки нічого не зафіксовано — надішли ще одне чітке фото себе.",
+      "Поки не бачу двох фото однієї людини. Надішли ще одне чітке фото, де видно тебе.",
     photoVisionError:
       "Не вдалося обробити файл. Спробуй ще раз.",
     photoInvalidMedia:
@@ -2742,15 +2451,14 @@ const translations = {
     videoProcessingUnavailable:
       "Зараз не вдалося перевірити відео. Попереднє відео не змінено. Спробуй ще раз трохи пізніше.",
     ticketRewardPhoto:
-      "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}*",
+      "🎟️ *Безкоштовний квиток на побачення — твій!*\n\nЦе подарунок за фото. Одне побачення = 1 квиток. Баланс: *{balance}*",
     ticketRewardVideo:
-      "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}*",
+      "🎟️ *Ще один безкоштовний квиток — твій!*\n\nЦе подарунок за відео. Одне побачення = 1 квиток. Баланс: *{balance}*",
     ticketRewardStudent:
-      "🎓 Університетську пошту підтверджено — студентський бонус: *2 безкоштовні квитки на побачення* вже на балансі.\n\nКожне побачення коштує 1 квиток, тож перші дві зустрічі за наш рахунок. Баланс: *{balance}*",
+      "🎓 *Два безкоштовні квитки — твої!*\n\nЦе подарунок за підтверджену пошту університету. Одне побачення = 1 квиток. Баланс: *{balance}*",
     welcomeGiftTicket:
-      "Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$8.49\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
-    ticketStorePurchased:
-      "✨ Оплату отримано — додано *{count}* квиток(ів)!\n\nБаланс: *{balance}*",
+      "*Перший квиток — від мене* ❤️\n\nЗазвичай побачення коштує 1 квиток (~$8.49). Цей — безкоштовно, він уже в гаманці.",
+    ticketStorePurchased: "✨ *Оплата пройшла!* Квитків додано: *{count}*. Баланс: *{balance}*",
     ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
     premiumCheckoutAlreadySubscribed:
       "У тебе вже є активна підписка Premium, тож оплату зупинено — нічого не списано.",
@@ -2759,40 +2467,35 @@ const translations = {
     ticketStoreInvoiceTitle: "Квитки Gennety",
     ticketStoreInvoiceDesc:
       "Поповнення гаманця: {count} 🎟️. Кожен квиток покриває одне побачення.",
-    ticketGateInvoiceDesc:
-      "Оплата вашого побачення — {count} квиток(ів). Один квиток — на одну людину.",
+    ticketGateInvoiceDesc: "Оплата побачення. Квитків: {count}. Один квиток — на одну людину.",
     ticketStoreInvoiceLabel: "Квитки Gennety × {count}",
     onboardingFinalizeBlocked:
       "Поки не можу завершити налаштування — на моєму боці бракує кількох даних. Спробуй ще раз за хвилину; якщо повториться, напиши в @gennetysupport, розберемось.",
-    onboardingPhotosNeedMore:
-      "Фото: {count}/{min}. Залишилося надіслати чітких фото: {remaining}.",
+    onboardingPhotosNeedMore: "Фото: {count}/{min}. Надішли ще {remaining}.",
     onboardingPhotosBonusOffer:
-      "Обов'язкові фото готові.\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш безкоштовний квиток на побачення. Ще один безкоштовний квиток можна отримати за коротке відео для профілю.\n\nОбидва бонуси необов'язкові — можеш надіслати медіа зараз або продовжити.",
+      "Потрібні фото є ✨\nЩе {remaining} фото (до {threshold}) — і безкоштовний квиток. За коротке відео — ще один.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Обов'язкові фото готові, а квиток за відео вже твій.\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш другий безкоштовний квиток. Або продовжуй.",
+      "Потрібні фото є, квиток за відео — твій ✨\nЩе {remaining} фото (до {threshold}) — і другий безкоштовний квиток.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото. Ще {remaining} — і безкоштовний квиток на побачення твій. Надішли зараз або продовжуй.",
+      "Фото: {count}/{threshold}.\nЩе {remaining} — і безкоштовний квиток твій.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото. Ще {remaining} — і другий безкоштовний квиток твій. Надішли зараз або продовжуй.",
+      "Фото: {count}/{threshold}.\nЩе {remaining} — і другий безкоштовний квиток твій.",
     onboardingPhotosPhotoBonusEarned:
-      "Готово {count} фото, і безкоштовний квиток за фотографії вже твій ✨\n\nМожна додати фото до {max} або коротке відео за ще один безкоштовний квиток. Або продовжуй.",
+      "Фото: {count}. Безкоштовний квиток за фото — твій ✨\nМожна додати фото (до {max}) або відео — за нього ще один квиток.",
     onboardingPhotosBothBonusesEarned:
-      "Готово {count} фото й відео — обидва безкоштовні квитки вже твої ✨\n\nМожна додати фото до {max} або продовжити.",
+      "Фото: {count}, відео є — обидва безкоштовні квитки твої ✨\nМожна додати ще фото (до {max}).",
     onboardingPhotosPhotoBonusEarnedMax:
-      "Усі {max} фото готові, і безкоштовний квиток за фотографії вже твій ✨\n\nМожна надіслати коротке відео за ще один безкоштовний квиток або продовжити.",
+      "Усі {max} фото є, квиток за фото — твій ✨\nЗа коротке відео — ще один безкоштовний квиток.",
     onboardingPhotosBothBonusesEarnedMax:
-      "Усі {max} фото й відео готові — обидва безкоштовні квитки вже твої ✨\n\nПродовжуй, коли будеш готовий.",
-    onboardingPhotosOptional:
-      "Обов'язкові фото готові.\n\nМожеш додати ще фото до {max}, надіслати коротке відео для профілю або продовжити.",
+      "Усі {max} фото й відео є ✨\nОбидва безкоштовні квитки — твої.",
+    onboardingPhotosOptional: "Потрібні фото є.\nМожна додати ще (до {max}) або коротке відео.",
     onboardingPhotosOptionalAfterVideo:
-      "Обов'язкові фото й відео готові.\n\nМожеш додати ще фото до {max} або продовжити.",
-    onboardingPhotosOptionalMax:
-      "Усі {max} фото готові.\n\nМожеш надіслати коротке відео для профілю або продовжити.",
-    onboardingPhotosOptionalMaxAfterVideo:
-      "Усі {max} фото й відео готові.\n\nПродовжуй, коли будеш готовий.",
+      "Потрібні фото й відео є.\nМожна додати ще фото (до {max}).",
+    onboardingPhotosOptionalMax: "Усі {max} фото є.\nМожна додати коротке відео.",
+    onboardingPhotosOptionalMaxAfterVideo: "Усі {max} фото й відео є ✨",
     menuMyTickets: "🎟️ Мої квитки",
     ticketWalletText:
-      "🎟️ *Мої квитки*\n\nУ тебе *{balance}* квиток(ів). Кожне побачення коштує 1 квиток — докупити можна будь-коли.",
+      "🎟️ *Мої квитки*\n\nКвитків: *{balance}*. Кожне побачення коштує 1 квиток — докупити можна будь-коли.",
     ticketWalletOpenStore: "🎟️ Купити квитки",
     photosEnough: "Можеш надіслати ще (до {max}) або тисни кнопку.",
     photosDone: "Фото завантажено ✨",
@@ -2804,10 +2507,7 @@ const translations = {
       "Все ок?",
     profileConfirm: "Все ок",
     profileEdit: "Змінити",
-    onboardingComplete:
-      "Ти в грі! 🎉\n\n" +
-      "Я вже шукаю тобі пару. " +
-      "Напишу, щойно знайду когось вартого твого часу.",
+    onboardingComplete: "*Готово, ти в грі!* 🎉\n\nУже шукаю тобі пару — напишу, щойно знайду.",
     btnLike: "👍",
     btnDislike: "👎",
     btnContinuePhotos: "Далі ➡️",
@@ -2816,17 +2516,9 @@ const translations = {
 
     // --- Persona verification CTA (end of onboarding) ---
     verifyPitch:
-      "Фінальний крок. Нам треба переконатися, що ти реальна людина.\n\n" +
-      "Селфі, яке ми зробимо під час верифікації, ми порівняємо з кожним фото у твоєму профілі. " +
-      "Фото, на яких не ти, буде відхилено.\n\n" +
-      "Відмова від верифікації суттєво знизить твій стартовий ELO-рейтинг, " +
-      "і алгоритм пропонуватиме тобі менше зустрічей.",
+      "*Останній крок — підтверди, що це ти*\n\nЗроби селфі, і я порівняю його з фото в профілі. Фото, де не ти, я приберу.\n\nБез перевірки пропозицій буде менше.",
     verifyPitchMandatory:
-      "Фінальний крок. Ми підтверджуємо, що кожен учасник — реальна людина.\n\n" +
-      "Селфі, зроблене під час верифікації, ми порівняємо з кожним фото у твоєму профілі — " +
-      "фото, на яких не ти, буде відхилено.\n\n" +
-      "Якщо на фото у профілі не ти — спершу заміни їх кнопкою нижче.\n\n" +
-      "Верифікація обов'язкова: підбір пар почнеться одразу після її проходження.",
+      "*Останній крок — підтверди, що це ти*\n\nЗроби селфі, і я порівняю його з фото в профілі. Якщо на фото не ти — спершу заміни їх. Після перевірки одразу почну шукати пару.",
     verifyMandatoryNotice:
       "Верифікація тепер обов'язкова для всіх нових профілів — підбір пар почнеться одразу після її проходження. Це займе близько хвилини:",
     verifyReminderNudge:
@@ -2839,7 +2531,7 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Все одно пропустити",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Завантажити інші фото",
-    verifyBtnRedoPhotosSecondary: "📷 Насправді річ у фото",
+    verifyBtnRedoPhotosSecondary: "📷 Спершу зміню фото",
     verifyBtnAddPhotos: "📷 Додати фото",
     verifyPhotosRequired:
       "Верифікація порівнює селфі з фото у твоєму профілі — а їх поки немає. " +
@@ -2856,28 +2548,16 @@ const translations = {
       "Фото оновлено ✅ Перевіряю їх за селфі з верифікації — проходити її заново не треба. Напишу, щойно закінчу.",
     verifyPhotosSavedNowVerify:
       "Фото оновлено ✅ Залишився останній крок — верифікація:",
-    verifySkipped:
-      "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
-      "щоб повернути ELO-рейтинг.",
+    verifySkipped: "Перевірку пропущено. Пройти її можна пізніше в меню профілю.",
     verifyCheckAlreadyDone:
       "Вже оброблено — повідомлення з результатом має бути вище. " +
       "Якщо щось не так — натисни 🟢 Пройти верифікацію ще раз.",
     verifyRetryNotLive:
-      "Перевірка зупинилася раніше, ніж дійшла до твоїх фото, — просто цього разу " +
-      "не вдалося підтвердити живе обличчя, тож фото ще ніхто не дивився. " +
-      "Що зазвичай допомагає: яскраве " +
-      "світло спереду (не ззаду), обличчя цілком у кадрі, без окулярів і без " +
-      "нічого, що його закриває. Натисни 🟢 Пройти верифікацію і спробуй ще раз.",
+      "*Не вдалося розпізнати обличчя*\n\nСтань обличчям до яскравого світла, зніми окуляри й натисни 🟢 Пройти верифікацію ще раз.",
     verifyRetryUnfinished:
-      "Перевірку не було завершено, тому до твоїх фото вона не дійшла — їх ще " +
-      "ніхто не дивився. Не згортай Telegram і не закривай камеру посередині — пройди " +
-      "її від початку до кінця за один раз, це займе секунд 15. Натисни " +
-      "🟢 Пройти верифікацію і спробуй знову.",
+      "*Перевірка перервалася*\n\nПройди її за один раз, не згортаючи Telegram, — це секунд 15. Натисни 🟢 Пройти верифікацію.",
     verifyRetryTechnical:
-      "Цього разу річ у нас, а не в тобі — невеликий технічний збій на нашому " +
-      "боці. Усе обірвалося до перевірки фото, тож щодо них поки нічого не " +
-      "вирішено. Вибач за це. Натисни 🟢 Пройти верифікацію " +
-      "і спробуй ще раз — цього разу все має пройти гладко.",
+      "*Збій на нашому боці*\n\nНатисни 🟢 Пройти верифікацію ще раз — тепер має вийти.",
     verifyReferenceExpired:
       "Ми видаляємо селфі з верифікації через 90 днів, тож звірити нові фото вже " +
       "нема з чим. Ще одна перевірка на 10 секунд — і все готово. Профіль поки " +
@@ -2892,13 +2572,11 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
-      "⚠️ Фото в твоєму профілі не збігаються з селфі з верифікації.\n\n" +
-      "Якщо на них не ти — натисни 📷 нижче і заміни їх, я перевірю автоматично (нове селфі не потрібне). Якщо це все ж таки ти — збіг просто вийшов слабким, пройди верифікацію знову при хорошому світлі.",
+      "⚠️ *Фото не збіглися із селфі*\n\nЯкщо на них не ти — заміни їх кнопкою 📷, я перевірю ще раз. Якщо ти — пройди перевірку ще раз при хорошому світлі.",
     verifyPhotosDropped:
       "Один момент: частина фото не збіглася з селфі з верифікації, я прибрав їх із профілю. Усе інше на місці. Додай ще пару своїх знімків, коли буде зручно 📷",
     verifyPhotosBelowMinimum:
-      "Верифікацію пройдено ✅ — це вже назавжди.\n\n" +
-      "Але частина фото не збіглася з селфі, я їх прибрав, і тепер у профілі менше ніж {min} фотографій. Додай ще {need} своїх — і я одразу почну шукати тобі пару 📷",
+      "Верифікацію пройдено ✅\n\nАле частина фото не збіглася із селфі, я їх прибрав, і тепер у профілі менше ніж {min} фотографій. Додай ще {need} своїх — і я одразу почну шукати тобі пару 📷",
     // --- Native-app push copy for the same verification outcomes (§1.4). Own
     // strings rather than reused DM copy: these land on a lock screen, so they
     // need a title, they must stay short, and they cannot point at a Telegram
@@ -2922,8 +2600,7 @@ const translations = {
       "Деякі не збіглися із селфі з верифікації, я прибрав їх із профілю. Усе інше на місці.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
-    verifyMiniAppError:
-      "Не вдалося запустити перевірку. Спробуйте ще раз.",
+    verifyMiniAppError: "Не вдалося запустити перевірку. Спробуй ще раз.",
     verifyMiniAppCloseBtn: "Закрити",
     photoMatchMismatch:
       "⚠️ Це фото не збігається з селфі верифікації. " +
@@ -2955,8 +2632,8 @@ const translations = {
     intentFalling: "Закохатися",
     intentLongterm: "Всерйоз і надовго",
     intentPrivateNote: "бачиш тільки ти",
-    myProfileIntentLine: "🎯 Ти шукаєш: {intent} · {privateNote}",
-    myProfileIntentUnset: "🎯 Ти шукаєш: не обрано · {privateNote}",
+    myProfileIntentLine: "🎯 Ти шукаєш: {intent}",
+    myProfileIntentUnset: "🎯 Ти шукаєш: не обрано",
     editIntentBtn: "🎯 Що я шукаю",
     editIntentPrompt:
       "Що ти зараз шукаєш? Познач усе, що підходить — зазвичай це не одне.\n\nЦе бачиш тільки ти — потрібно, щоб точніше добирати пару.",
@@ -2964,25 +2641,21 @@ const translations = {
 
     // --- Edit Profile ---
     editProfileBody:
-      "Це зафіксовано:\n\n" +
-      "• *Ім'я:* {firstName} {surname}\n" +
-      "• *Вік:* {age}\n" +
-      "• *Універ:* {university}\n\n" +
-      "Можна змінити:",
+      "Це змінити не можна:\n\n• *Ім'я:* {firstName} {surname}\n• *Вік:* {age}\n• *Універ:* {university}\n\nМожна змінити:",
     editBioBtn: "📝 Про себе",
     editPrefsBtn: "💘 Кого шукаю",
     editMajorBtn: "💼 Чим займаєшся",
     editProfilePhotosBtn: "📸 Мої фото",
     editBioPrompt:
-      "Напиши кілька рядків про себе (до 500 символів).\n👀 Це читає твоя пара перед побаченням.",
-    editBioCurrent: "Зараз там ось це — те, що надішлеш, замінить текст повністю:",
+      "Напиши кілька рядків про себе (до 500 символів) — метч прочитає їх перед побаченням.",
+    editBioCurrent: "Зараз написано так. Новий текст замінить його:",
     editBioTooLong: "Задовге — вклади в 500.",
     editBioSaved: "«Про себе» оновлено",
     editMajorPrompt:
       "Чим займаєшся? (робота / навчання / сфера, до 100 символів)\n👀 Видно твоїй парі.",
     editMajorTooLong: "Задовге — вклади в 100.",
     editMajorSaved: "Збережено",
-    editPrefsTitle: "💘 *Кого шукаю*\n\nВпливає на те, хто тобі трапиться. Що міняємо?",
+    editPrefsTitle: "💘 *Кого шукаю*\n\nЩо міняємо?",
     editPrefsAgeBtn: "🎂 Вік партнера",
     editPrefsDescriptionBtn: "✨ Яку людину шукаю",
     editPrefsCurrent:
@@ -2994,15 +2667,14 @@ const translations = {
     editPrefsDescriptionSaved: "Уподобання оновлено",
     editHobbiesSaved: "Інтереси оновлено",
     agentEntryPrompt: "Тримай:",
-    agentFallbackError: "Щось у мене збилося. Повтори, будь ласка?",
+    agentFallbackError: "Щось пішло не так. Повтори, будь ласка.",
     agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
     agentBlockedSuspended:
       "Акаунт зараз на паузі з нашого боку, тож тут не допоможу. Питання — у @gennetysupport.",
     agentBlockedInvestigation:
       "Акаунт зараз на перевірці. Поки що робити нічого — подробиці розкажуть у @gennetysupport.",
     agentBlockedBanned: "Цей акаунт закрито. Якщо вважаєш, що це помилка — напиши в @gennetysupport.",
-    profileEmbeddingSyncPending:
-      "Збережено. Підбір застосує це після автоматичної синхронізації профілю.",
+    profileEmbeddingSyncPending: "Збережено. Врахую в наступному підборі.",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "У якому віковому діапазоні шукати тобі пару? (напр. 20-28)\nМін: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не зрозумів. Два числа через дефіс, напр. 20-28 (від {min} до {max}).",
@@ -3032,7 +2704,7 @@ const translations = {
     photoStagePanelBtn: "🗂 Мої фото",
     photoStagePanelPlaceholder: "Надішли ще фото або натисни 🗂",
     photoEditorIntro:
-      "Ось усе, що ти надіслав. Натисни 🗑 під будь-яким фото, щоб прибрати його, або надішли нові прямо сюди.",
+      "Ось усі твої фото. Натисни 🗑 під будь-яким фото, щоб прибрати його, або надішли нові прямо сюди.",
     photoEditorBackBtn: "← Повернутися до завантаження",
     menuVideo: "🎬 Відео профілю",
     editVideoPrompt:
@@ -3063,15 +2735,10 @@ const translations = {
     themeDarkOption: "🌙 Темна",
     themeLightOption: "☀️ Світла",
     helpBody:
-      "*Потрібна допомога?*\n\n" +
-      "Чатів між юзерами у нас немає — так задумано. " +
-      "Проблема з метчем, побаченням чи ботом? Пиши в сапорт:\n\n" +
-      "💬 [@gennetysupport](https://t.me/gennetysupport)",
+      "*Потрібна допомога?*\n\nПроблема з метчем, побаченням чи ботом — напиши в підтримку:\n\n💬 [@gennetysupport](https://t.me/gennetysupport)",
     settingsDeleteAccount: "🗑 Видалити акаунт",
     deleteAccountConfirm:
-      "Точно? Акаунт буде *видалено назавжди*.\n\n" +
-      "Все зникне — профіль, фото, метчі, ембедінги. " +
-      "*Це не відкотити.*",
+      "*Видалити акаунт назавжди?*\n\nЗникнуть профіль, фото й метчі. Скасувати це не можна.",
     deleteAccountYes: "Так, видалити все",
     deleteAccountNo: "Скасувати",
     deleteAccountDone:
@@ -3084,39 +2751,29 @@ const translations = {
     accountActionExpired: "Підтвердження застаріло. Відкрий дію знову.",
     statusActionUnavailable: "Ця дія недоступна для поточного статусу акаунта.",
     deleteFreezeIntro:
-      "Зачекай — перш ніж усе видаляти 👀\n\n" +
-      "Необов'язково втрачати все. Краще *заморозь* акаунт: профіль, фото та верифікація " +
-      "залишаться, ти зникнеш із підбору, а наступного разу просто надішлеш /start — і " +
-      "одразу потрапиш у свій готовий профіль, без повторного онбордингу.\n\n" +
-      "Все-таки видалити? Це вже назавжди.",
+      "Зачекай — перш ніж усе видаляти 👀\n\nНеобов'язково втрачати все. Краще *заморозь* акаунт: профіль, фото та верифікація залишаться, ти зникнеш із підбору, а наступного разу просто надішлеш /start — і одразу потрапиш у свій готовий профіль, без повторної реєстрації.\n\nВсе-таки видалити? Це вже назавжди.",
     deleteFreezeBtn: "❄️ Заморозити акаунт",
     deleteProceedBtn: "Все одно видалити акаунт",
     freezeConfirmed:
       "Готово — акаунт *заморожено* ❄️\n\n" +
       "Тебе не видно в підборі і я не писатиму. " +
       "Повертайся будь-коли через /start — усе на місці.",
-    freezeWelcomeBack:
-      "З поверненням! ❄️ → ☀️ Акаунт *розморожено* і знову в строю. " +
-      "Ось твій профіль:",
-    deleteFinalYes: "Так, я впевнений на 100%",
-    deleteFinalNoSoft: "Ні",
-    deleteFinalNoHard: "О боже, ні",
+    freezeWelcomeBack: "*З поверненням!* Акаунт розморожено.",
+    deleteFinalYes: "Так, видалити",
+    deleteFinalNoSoft: "Ні, залишити",
+    deleteFinalNoHard: "Ні, залишити",
     freezePartnerNotice:
       "Важливо: твій метч більше недоступний, тож це побачення не відбудеться. " +
       "Не хвилюйся — у наступному підборі в тебе буде пріоритет 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Знайшли тобі метч!",
-    matchDeadlineNotice:
-      "У тебе 24 години на відповідь. " +
-      "Щойно натиснеш — *рішення остаточне*. Змінити не можна.",
+    matchDeadlineNotice: "На відповідь 24 години. Передумати потім не можна.",
     matchStreamStart: "Чому ви підходите…",
     matchBtnAccept: "Прийняти",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
-      "Точно пасуєш?\n\n" +
-      "Це рішення остаточне — цю людину ти більше не побачиш. " +
-      "Натисни, щоб підтвердити, або повернись назад.",
+      "Точно пасуєш?\n\nЦе рішення остаточне — цю людину ти більше не побачиш.",
     matchBtnConfirmDecline: "❌ Так, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
@@ -3134,40 +2791,32 @@ const translations = {
     matchAccepted: "Прийнято ✨ Чекаємо на іншу сторону.",
     matchBothAccepted: "Взаємно 🤍 Знайдемо час.",
     matchDeclined:
-      "Ок, усе нормально. Що стало головною причиною?\n\n" +
-      "Натисни варіант нижче — це швидка відповідь, вона допомагає мені бачити картину з часом.\n\n" +
-      "А якщо скажеш своїми словами — короткий текст або голосове — я врахую це в наступному дропі.",
+      "Зрозумів. Що не підійшло? Обери варіант або напиши своїми словами — врахую наступного разу.",
     matchDeclineReasonType: "Не мій тип зовні",
     matchDeclineReasonVibe: "Не той вайб",
     matchDeclineReasonInterests: "Не збіглися інтереси",
     matchDeclineReasonLifestyle: "Різний спосіб життя",
     matchDeclineReasonOther: "Інша причина",
     matchDeclineOtherAsk:
-      "Ок — надішли короткий текст або голосове з причиною. Врахую в наступному дропі.",
+      "Ок — надішли короткий текст або голосове з причиною. Врахую в наступному підборі.",
     matchDeclineFeedbackSaved:
       "Прийняв. Наступний підбір налаштую з урахуванням цього.",
     matchDeclineAlreadyNoted: "Уже записав — дякую.",
     matchDeclineFeedbackFailed:
       "Не вдалося зберегти просто зараз. Можеш усе одно надіслати короткий текст або голосове.",
     matchDeclineThanks: "Зрозумів. Шукаю далі.",
-    matchPeerDecided:
-      "Твій метч уже дав відповідь. Твоя черга.\n\n" +
-      "*Що* саме він обрав — побачиш лише після своєї відповіді. " +
-      "І пам'ятай: твій вибір остаточний.",
+    matchPeerDecided: "*Твій метч уже відповів*\n\nЩо саме — дізнаєшся після своєї відповіді.",
     matchPeerWasAccepted: "До речі — твій метч був згодний. Цього разу просто не склалось.",
     matchPeerWasDeclined: "До речі — твій метч цього разу відмовився.",
     matchAcceptedPeerDeclined:
       "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу. " +
       "Шукаю далі — наступний варіант буде ближчим.",
     matchAcceptedPeerDeclinedPriority:
-      "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу.\n\n" +
-      "Я підняв твій пріоритет на наступний дроп. Наступний варіант буде ближчим.",
+      "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу.\n\nЯ підняв твій пріоритет у наступному підборі. Наступний варіант буде ближчим.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Підтверджено",
-    matchVerifiedQuote:
-      "Ми перевірили цього користувача. Він успішно пройшов перевірку обличчя — " +
-      "фотографії в профілі відповідають його особистості та належать саме йому.",
-    matchSynergyLabel: "Синергія {score}/99",
+    matchVerifiedQuote: "Перевірено: на фото справді ця людина.",
+    matchSynergyLabel: "Сумісність {score}/99",
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Залишилось {hours}год на відповідь",
     pitchCountdownMinutes: "⏳ Залишилось {minutes} хв на відповідь",
@@ -3190,8 +2839,7 @@ const translations = {
     stallBtnStillOn: "🟢 Так, все в силі",
     stallBtnPlansChanged: "Плани змінилися",
     stallPeerAsked:
-      "Нагадав {name} про тебе — чекаю відповіді.\n\n" +
-      "Від тебе поки нічого не потрібно. Висіти в невідомості не залишу — повернуся з новинами в будь-якому разі.",
+      "Нагадав {name} про тебе — чекаю відповіді.\n\nВід тебе поки нічого не потрібно.",
     stallStillOnAck: "Зрозумів, усе в силі ✨",
     stallPeerStillOn: "{name} на зв'язку, усе в силі ✨",
     stallCancelConfirmPrompt:
@@ -3216,37 +2864,28 @@ const translations = {
       "Це не ваша провина, а моя. Підняв твій пріоритет у наступному підборі.",
     pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
     matchExpiredSilentWarning:
-      "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
-      "Чекай наступного дропу.\n\n" +
-      "Не ігноруй пропозиції — це неповага до твого партнера. " +
-      "Наступного разу за таку поведінку ми знизимо твій рейтинг.",
+      "*Час на відповідь вийшов*\n\nНаступного разу відповідай хоча б «ні» — людина чекає.",
     matchExpiredSilentPenalty:
-      "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
-      "Чекай наступного дропу.\n\n" +
-      "Твій рейтинг знижено за ігнор — це неповага до твого партнера.",
+      "*Час на відповідь вийшов*\n\nЦе вже вдруге, тому рейтинг знижено. Наступного разу відповідай хоча б «ні» — людина чекає.",
     matchExpiredYouMissedDate:
-      "Важливо: твій метч був згодний прийти — ти пропустив справжнє побачення.\n\n",
+      "Важливо: твій метч був згоден прийти — це могло бути справжнє побачення.\n\n",
     matchExpiredPeerIgnored:
-      "Партнер не відповів протягом доби — побачення не відбудеться. " +
-      "Побачимось у наступному дропі.",
+      "Твій метч не відповів за добу — побачення не відбудеться. Побачимось у наступному підборі.",
     // §3.4 — this side PASSED, and the partner then went silent. A first
     // decision leaves the row `proposed` either way, so a decliner reaches
     // expiry classified as a `responder` exactly like someone who accepted
     // and got stood up. They already got their "you passed" ack, so this is
     // deliberately a bare fact with no consolation and no card: it exists
     // only so the match doesn't vanish from the menu and banner unexplained.
-    matchExpiredSelfDeclined:
-      "Цей метч закрито — ти відмовився, і доба на відповідь минула. " +
-      "Побачимось у наступному дропі.",
+    matchExpiredSelfDeclined: "Метч закрито. Побачимось у наступному підборі.",
     // Картка спливання (PRODUCT_SPEC §3.4) — заголовки гендерно-нейтральні.
     expiryCardOverlineExpired: "ВІКНО ЗАЧИНЕНО",
     expiryCardHeadlineExpired: "ЧАС\nВИЙШОВ",
     expiryCardSublineExpired:
-      "Минуло 24 години без відповіді.\nЧекаємо на тебе в наступному дропі.",
+      "Минуло 24 години без відповіді.\nЧекаємо на тебе в наступному підборі.",
     expiryCardOverlinePenalty: "ВДРУГЕ БЕЗ ВІДПОВІДІ",
     expiryCardHeadlinePenalty: "РЕЙТИНГ\nЗНИЖЕНО",
-    expiryCardSublinePenalty:
-      "Другий метч без відповіді.\nЧекаємо на тебе в наступному дропі.",
+    expiryCardSublinePenalty: "Другий метч без відповіді.\nЧекаємо на тебе в наступному підборі.",
     expiryCardOverlinePeerIgnored: "ЦЕ НЕ ПРО ТЕБЕ",
     expiryCardHeadlinePeerIgnored: "ПАРА НЕ\nВІДПОВІЛА",
     expiryCardSublinePeerIgnored:
@@ -3255,51 +2894,23 @@ const translations = {
     expiryCardHeadlineMissedDate: "ЦЕ БУЛО\nВЗАЄМНО",
     expiryCardSublineMissedDate:
       "Пара була готова зустрітися.\nЗа 24 години відповіді не було.",
-    expiryCaptionSilentWarning:
-      "Не ігноруй пропозиції — це неповага до того, хто чекав на відповідь. " +
-      "Наступного разу за це ми знизимо твій рейтинг.",
+    expiryCaptionSilentWarning: "Наступного разу відповідай хоча б «ні» — людина чекає.",
     expiryCaptionSilentPenalty:
-      "Ігнорувати пропозиції — це неповага до того, хто чекав на відповідь.",
-    expiryCaptionPeerIgnored: "Побачимось у наступному дропі.",
+      "Це вже вдруге, тому рейтинг знижено. Наступного разу відповідай хоча б «ні» — людина чекає.",
+    expiryCaptionPeerIgnored: "Побачимось у наступному підборі.",
     noMatchThisWeekTier1:
-      "Привіт\n\n" +
-      "Цього разу без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
-      "і я краще почекаю, ніж запропоную «аби було».\n\n" +
-      "Тим часом:\n" +
-      "• спільнота росте, підбір стає точнішим.\n" +
-      "• що довше чекаєш, то вищий твій пріоритет у наступному дропі.\n\n" +
-      "Я в ділі ✨",
+      "*Цього тижня без метчу*\n\nНе знайшов того, хто справді підходить, а пропонувати будь-кого не хочу. У наступному підборі в тебе пріоритет ✨",
     noMatchThisWeekTier2:
-      "Привіт\n\n" +
-      "Уже другий раз поспіль — досі немає нікого, кого я був би радий тобі показати. " +
-      "Дякую, що лишаєшся — це справді важливо.\n\n" +
-      "Що відбувається:\n" +
-      "• приводжу нових людей і налаштовую алгоритм під твої критерії.\n" +
-      "• твій пріоритет у наступному дропі вже підвищено.\n\n" +
-      "Я цим займаюся 🤍",
+      "*Знову без метчу*\n\nДругий тиждень поспіль не бачу того, хто справді підходить. Дякую, що чекаєш — у наступному підборі твій пріоритет ще вищий 🤍",
     noMatchThisWeekTier3:
-      "Привіт\n\n" +
-      "Знову чесно: пари, яка справді варта твого часу, досі немає. " +
-      "Мені це подобається ще менше, ніж тобі, і вдавати, що все ок, я не буду.\n\n" +
-      "Що роблю:\n" +
-      "• особисто стежу за твоєю чергою і підштовхую ріст у твоєму місті.\n" +
-      "• що довше чекаєш, то вищий твій пріоритет у дропі.\n\n" +
-      "Дякую, що довіряєш 🤍",
+      "*Поки без метчу*\n\nЛюдини, яка підходить, досі немає, а пропонувати будь-кого я не буду. Стежу за твоєю чергою — у наступному підборі ти серед перших 🤍",
     noMatchDiscountOffer:
       "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
     poolExhaustedPauseNotice:
-      "Привіт\n\n" +
-      "Скажу прямо: зараз для тебе реально нікого немає — я перевірив, пул порожній. " +
-      "Це не про тебе, просто поки нема кого запропонувати.\n\n" +
-      "Ставлю твій пошук на паузу замість того, щоб надсилати те саме повідомлення знову й знову. " +
-      "Все інше лишається як є — анкета, фото та верифікація нікуди не дінуться.\n\n" +
-      "Щойно з'явиться той, хто підійде, я сам поверну тебе в пошук — робити нічого не треба. " +
-      "Відновити можна й самостійно, будь-коли, через меню.",
+      "*Ставлю пошук на паузу*\n\nЗараз для тебе справді нікого немає — справа не в тобі. Щойно з'явиться людина, яка підходить, сам поверну тебе в пошук.",
     poolExhaustedResumeNotice:
-      "Привіт\n\n" +
-      "Гарні новини — з'явився той, хто підходить, і я повернув тебе в пошук. " +
-      "Ти знову в грі на наступний дроп 🤍",
+      "Гарні новини — з'явився той, хто підходить, і я повернув тебе в пошук. Ти в наступному підборі 🤍",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
       "Взаємно 🤍 Відкрий календар і познач зручний час.",
@@ -3307,16 +2918,14 @@ const translations = {
       "📅 Тепер обери час — відкрий календар і познач усі зручні слоти.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
-    ticketCardCaption:
-      "Взаємно 🤍 Отримай *квиток на побачення*, щоб відкрити планування.",
-    ticketCardCaptionPremium:
-      "Взаємно 🤍 Premium покриває обидва квитки — одразу переходимо до часу.",
+    ticketCardCaption: "Це метч 🤍 Візьми квиток — і оберемо час.",
+    ticketCardCaptionPremium: "Це метч 🤍 Premium покриває обидва квитки — одразу обираємо час.",
     ticketButton: "🎟️ Отримати квиток на побачення",
     ticketViewButton: "🎟️ Переглянути свій квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
     ticketPeerTookTheirs:
-      "{name} щойно взяв(ла) свій квиток на побачення 🎟️ Твій — останній, і ми відкриваємо планування.",
+      "{name} уже з квитком на побачення 🎟️ Залишився твій — і відкриємо планування.",
     bumpVerifiedDm:
       "Ви обидва на місці ✨ Побачення зараховано, а квиток на наступне — від мене.",
     bumpDeckIntro: "Якщо розмові знадобиться, куди піти:",
@@ -3325,8 +2934,7 @@ const translations = {
     ticketCoveredHerConfirm:
       "💛 Готово — ти оплатив квиток за {name}. Щойно вона це побачить, я дам тобі знати.",
     ticketPartnerSawItDm: "❤️ {name} побачила, що ти оплатив її квиток.",
-    ticketRefundedDm:
-      "Співрозмовник не встиг узяти свій квиток, тож твій ми повернули. Нічого страшного — відкрили планування безкоштовно. Знайдімо час 📅",
+    ticketRefundedDm: "Твій квиток повернувся в гаманець, а побачення в силі. Давай оберемо час 📅",
     ticketRefundedToWallet:
       "🎟️ Квиток повернувся до твого гаманця — використаєш його на наступному свіданні.",
     ticketRefundedToWalletBoth:
@@ -3338,19 +2946,18 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
     matchScheduledBtnShare: "📤 Поділитися карткою",
     dateCardWhen: "КОЛИ",
-    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
+    dateCardSlogan: "Без листування.\nОдразу наживо.",
     dateCardShareCaption:
       "Ділися сміливо — обличчя твого метчу приховане, щоб зберегти його приватність 💞",
-    dateCardShareFailed:
-      "Не вдалося підготувати картку для надсилання — спробуйте за хвилину.",
-    matchSchedulePickedPrefix: "Ти обрав: ",
+    dateCardShareFailed: "Не вдалося підготувати картку для надсилання — спробуй за хвилину.",
+    matchSchedulePickedPrefix: "Твій вибір: ",
     matchScheduleWaitingPeer: "Чекаємо на вибір іншої сторони…",
     matchSchedulePeerProposed:
       "Твій метч уже позначив час у календарі. Відкрий — погодься або запропонуй свій:",
     matchSchedulePeerSuggestedAlternative:
       "Твій метч запропонував інший час. Глянь — можна погодитись або запропонувати свій варіант.",
     matchScheduleSavedConfirmation:
-      "Зберіг ✨ Метч отримав пінг — напишу, щойно відповість.",
+      "Готово. Твій метч отримав сповіщення — напишу, щойно відповість.",
     matchScheduleNoOverlapYet:
       "Ви обоє позначили час, але поки нічого не збіглося. Додай ще кілька слотів — щойно один перетнеться, фіксую дату:",
     matchSchedulePickFinalYet:
@@ -3358,13 +2965,11 @@ const translations = {
     venueTimeCardLabel: "ВАШЕ ПОБАЧЕННЯ",
     venueTimeLockedCaption: "Час вашого побачення зафіксовано ✨",
     venueConciergeIntro:
-      "Час зафіксовано. Один момент, перш ніж підібрати місце.\n\n" +
-      "📍 *Познач, звідки ти будеш виїжджати* на побачення — дім, станція метро, квартира друга, звідки тобі реально зручно стартувати.\n\n" +
-      "За цією точкою я підберу зручне місце зустрічі, до якого легко дістатися вам *обом*, неподалік від твого старту. Натисни кнопку нижче й познач точку на карті:",
+      "*Звідки поїдеш на побачення?*\n\nПознач точку на карті — дім, метро, будь-яке зручне місце. Підберу місце, куди зручно дістатися вам обом.",
     venueConciergeBtnLocation: "📍 Надіслати геолокацію",
     venueConciergeBtnMap: "🗺️ Обрати на карті",
     venueLocationFirst:
-      "Спершу головне — *познач, звідки ти будеш виїжджати* 📍 Натисни кнопку нижче й постав точку на карті. Про вайб запитаю одразу після.",
+      "Спершу головне — *познач, звідки ти будеш виїжджати* 📍 Натисни кнопку нижче й постав точку на карті.",
     venueOriginOutsideMarket:
       "Ця точка за межами {city}, а Gennety поки працює лише там — я шукаю місце неподалік від вас обох, і звідти підібрати не зможу. Познач точку в {city}, звідки будеш виїжджати:",
     venueVibeNoted: "Вайб записано ✨ Тепер вкажи, звідки поїдеш:",
@@ -3427,23 +3032,23 @@ const translations = {
     venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували.",
     venueChangeRefunded:
       "Зміна місця не пройшла, тож зірки повернулися до тебе. Побачення в силі — у тому місці, про яке домовлялися спочатку.",
-    primeInvoiceTitle: "Пізні вечірні часи",
+    primeInvoiceTitle: "Пізні вечори",
     primeInvoiceDesc:
       "Відкриє 18:30, 19:00 і 19:30 в усі дні вашого календаря — для вас обох, на це побачення.",
-    primeInvoiceLabel: "Пізні вечірні часи",
+    primeInvoiceLabel: "Пізні вечори",
     primeTimeOpenedDm:
-      "{name} відкрив(ла) пізні вечірні часи — 18:30 і пізніше тепер доступні у вашому календарі.",
+      "{name} відкриває пізні вечори — 18:30 і пізніше тепер є у вашому календарі.",
     primeTimeRefunded:
-      "Пізні вечірні часи не відкрилися, тож зірки повернулися до тебе. Решта календаря без змін.",
+      "Пізні вечори не відкрилися, зірки повернулися до тебе. Решта календаря без змін.",
     primeTimeRefundedDateOff:
-      "Побачення не відбудеться, тож зірки за пізні вечірні часи повернулися до тебе.",
+      "Побачення не відбудеться, тож зірки за пізні вечори повернулися до тебе.",
     memeCardTeaser:
       "🎭 Ще дещо про {name}.\n\nКоли я запитав, що по-справжньому смішить, відповіді словами не було — прилетів мем. Це говорить про людину більше, ніж будь-які три речення.\n\nХочеш побачити його до зустрічі?",
     memeCardBtn: "🎭 Показати",
     memeRevealCaption: "🎭 Що смішить {name}:",
     memeRevealSource: "▶️ Подивитися повністю:",
     memeRevealFallback:
-      "🎭 Саму картинку переслати не вийшло, тому словами — ось що надіслав(ла) {name} на питання, що смішить:\n\n_{description}_",
+      "🎭 Саму картинку переслати не вийшло, тому словами. {name} — про те, що смішить:\n\n_{description}_",
     memeRevealGone: "На це питання відповіли наново словами — мема тут більше немає.",
     memeRevealUnavailable: "Ця картка вже неактивна.",
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
@@ -3483,13 +3088,13 @@ const translations = {
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
     dateTerminalInvite:
-      "Побачення за {minutes} хвилин.\n📍 {venue}\n\nDate Terminal уже відкритий — він покаже, скільки тобі лишилося до місця. За столиком струсіть телефони разом: це Contact Sync.",
+      "*Побачення за {minutes} хв*\n📍 {venue}\n\nВідкрий екран побачення — він покаже дорогу. За столиком прикладіть телефони один до одного й утримуйте, щоб обмінятися контактами.",
     dateTerminalReminder:
-      "Contact Sync відкрито.\n📍 {venue}\n\nКоли ви обоє за столиком — відкрий термінал і струсіть телефони разом.",
-    dateTerminalBtn: "🎟 Відкрити Date Terminal",
+      "*Обмін контактами відкрито*\n📍 {venue}\n\nКоли ви обоє за столиком — відкрий екран побачення, прикладіть телефони один до одного й утримуйте.",
+    dateTerminalBtn: "🎟 Відкрити побачення",
     dateDayActivityStartTitle: "Сьогодні побачення",
     emergencyPushTitle: "Побачення скасовано",
-    emergencyPushBody: "Відкрийте Gennety — там написана причина.",
+    emergencyPushBody: "Відкрий Gennety — там причина.",
     dateDayActivityStartBody: "Усе потрібне — на екрані блокування.",
     venueActivityStartTitle: "Зміна місця",
     venueActivityStartPartner: "{name} пропонує {what}",
@@ -3510,16 +3115,10 @@ const translations = {
     timeActivityStartWaiting: "Чекаємо, коли {name} відповість",
     timeActivityStartWaitingNoName: "Чекаємо на відповідь щодо часу",
     timeActivityStartMatch: "Час призначено: {when}",
-    emergencyUnlocked:
-      "Плани змінилися і зовсім не можеш прийти? Скасувати можна кнопкою нижче.\n" +
-      "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
+    emergencyUnlocked: "Плани змінилися і зовсім не можеш прийти? Скасувати можна кнопкою нижче.",
     emergencyBtn: "Скасувати побачення",
     emergencyConfirmPrompt:
-      "Перед скасуванням — коротка перевірка.\n\n" +
-      "Якщо це хвилювання, невелике запізнення або сумнів, краще залиш побачення. " +
-      "Метч уже виділив час для тебе, а жива зустріч ще може приємно здивувати.\n\n" +
-      "*Скасовуй лише якщо точно не можеш прийти: після цього метч не можна відновити.* " +
-      "Якщо продовжиш, я попрошу причину й надішлю її метчу як є.",
+      "Якщо це просто хвилювання чи запізнення — краще залиш побачення. *Скасовуй, лише якщо точно не можеш прийти:* повернути метч буде не можна.",
     emergencyBtnConfirm: "🔴 Так, скасувати побачення",
     emergencyBtnBack: "🟢 Залишити побачення",
     emergencyAborted: "Гаразд — побачення залишається в силі. 👍",
@@ -3535,11 +3134,9 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Метч скасував побачення. Ось що написав:",
     emergencyReceivedOtherSoftNote:
-      "Це не через тебе. Gennety трохи підніме твій пріоритет у наступному дропі.",
+      "Це не через тебе. Gennety трохи підніме твій пріоритет у наступному підборі.",
     feedbackInvitation:
-      "Як пройшло побачення? ✨\n\n" +
-      "Поділись парою деталей: чи була хімія, який був вайб, чи сподобалось місце?\n" +
-      "Врахуємо, щоб наступного разу краще відповідати твоїм очікуванням.",
+      "*Як пройшло побачення?* ✨\n\nПоділись парою деталей: чи була хімія, який був вайб, чи сподобалось місце?",
     feedbackBtnForm: "✍️ Відкрити форму",
     feedbackBtnVoice: "🎤 Записати голосом",
     attendanceAsk: "Перш ніж питати, як усе минуло — ви вчора зустрілися? 🙂",
@@ -3562,20 +3159,20 @@ const translations = {
       "Просто запиши голосове 🎙️\n\n" +
       "Розкажи, як пройшло — чи була хімія, що сподобалось, що не дуже. " +
       "Хвилини цілком вистачить.",
-    feedbackThanks: "Дякую за фідбек ✨ Використаємо для покращення.",
-    feedbackAlreadySubmitted: "Ти вже розповів(ла), як пройшло це побачення, — дякую, усе збережено ✨",
+    feedbackThanks: "Дякую! Врахую в наступному підборі ✨",
+    feedbackAlreadySubmitted: "Відгук про це побачення вже є — дякую, усе збережено ✨",
     feedbackPushTitle: "Як пройшло побачення?",
     feedbackPushBody: "Хвилина твого часу — і наступного разу ми підберемо точніше.",
     matchDropPushTitle: "Твою пару знайдено",
-    matchDropPushBody: "Натисни, щоб побачити, кого обрав твій AI ✨",
+    matchDropPushBody: "Натисни, щоб подивитися ✨",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Поскаржитися",
     reportAsk:
       "Ця скарга приватна. Що найкраще описує проблему?",
     reportCategoryFakePhotos: "Фейкові або оманливі фото",
     reportCategoryWrongPerson: "На фото інша людина",
-    reportCategoryOffensive: "Образлива або тривожна поведінка",
-    reportCategoryUnsafe: "Небезпечно / червоний прапорець",
+    reportCategoryOffensive: "Грубість або дивна поведінка",
+    reportCategoryUnsafe: "Мені було небезпечно",
     reportCategorySpam: "Спам або шахрайство",
     reportCategoryInappropriate: "Неприйнятний профіль",
     reportCategoryOther: "Інше",
@@ -3586,9 +3183,10 @@ const translations = {
     reportSkipBtn: "Пропустити",
     reportThanksT1: "Прийнято — врахуємо в майбутніх метчах 🎯",
     reportThanksT2: "Скаргу зареєстровано. Дякуємо — розберемося.",
-    reportThanksT3: "Скаргу зареєстровано. Заморожуємо їхній акаунт для ручної перевірки — дякуємо, що повідомив(ла).",
+    reportThanksT3:
+      "Скаргу прийнято. Акаунт цієї людини заморожено до перевірки. Дякуємо за сигнал.",
     reportFailed: "Не вдалося обробити скаргу. Спробуй за хвилину.",
-    reportDuplicate: "Ти вже скаржився(лася) на цей метч.",
+    reportDuplicate: "Скаргу на цей метч уже надіслано.",
     reportBackBtn: "← Назад",
     reportCancelled: "Гаразд — скаргу не надіслано.",
     reportWarningStrike1:
@@ -3603,15 +3201,7 @@ const translations = {
       "🚫 Твій акаунт заморожено для перевірки безпеки. " +
       "Команда зв'яжеться через @gennetysupport, якщо знадобляться подальші дії.",
     safetyNoteFemale:
-      "Привіт! Твоє побачення від Gennety почнеться вже за півтори години в **{location_name}**.\n\n" +
-      "Ми дбаємо про твою безпеку, тож поки ти збираєшся — невелика пам'ятка для першої зустрічі:\n\n" +
-      "📍 **Дотримуйся плану.** Ми підібрали для вас безпечне публічне місце. Не погоджуйся переносити зустріч до усамітненої локації чи їхати в гості.\n" +
-      "👥 **Якщо буде людно.** Таке буває — не страшно: можна взяти каву й прогулятися або зайти в сусіднє кафе, де людно і світло.\n" +
-      "🚗 **Транспорт.** Добирайся туди і назад самостійно будь-яким зручним способом (громадським транспортом, таксі чи пішки). Головне — не сідай у машину до малознайомої людини.\n" +
-      "📱 **Попередь близьких.** Перешли подрузі або комусь із близьких деталі цієї зустрічі і, якщо є можливість, поділися геолокацією на вечір.\n" +
-      "☕ **Контроль.** Намагайся не залишати речі й напій без нагляду.\n" +
-      "🛑 **Твої межі.** Якщо тобі некомфортно або поведінка партнера здається дивною — маєш повне право просто встати і піти в будь-який момент. Твоя безпека завжди важливіша за ввічливість.\n\n" +
-      "Бажаємо чудового вечора і приємних вражень ✨",
+      "*Побачення за півтори години — {location_name}*\n\n📍 *Дотримуйся плану.* Ми підібрали для вас безпечне публічне місце. Не погоджуйся переносити зустріч у відлюдне місце чи їхати в гості.\n🚗 *Транспорт.* Добирайся туди й назад самостійно — громадським транспортом, таксі чи пішки. Не сідай у машину до малознайомої людини.\n📱 *Попередь близьких.* Перешли подрузі або комусь із близьких деталі зустрічі й, якщо можеш, поділися геолокацією на вечір.\n🛑 *Твої межі.* Якщо тобі некомфортно або поведінка партнера здається дивною — можна просто встати й піти будь-якої миті. Твоя безпека важливіша за ввічливість.\n\nГарного вечора ✨",
     safetyBriefPushTitle: "Перед виходом",
     safetyBriefPushBody: "Пам'ятка безпеки на сьогодні вже в застосунку.",
     noMatchPushTitle: "Цього разу без метчу",
@@ -3627,14 +3217,14 @@ const translations = {
     statusHoursMinutes: "⏳ Метчі прилетять через {h}г {m}хв",
     statusMinutes: "✨ Майже готово! Метчі прилетять за {m} хв",
     statusProcessing: "✨ Скануємо твоє місто… Зазирни трохи згодом.",
-    statusBannerSchedule: "Наступний дроп: {date}, {time}",
+    statusBannerSchedule: "Наступний підбір: {date}, {time}",
     statusBannerActive: "Ми вже шукаємо твою людину ✦",
     statusBannerSearching:
       "Шукаю твою людину — перевіряю щовечора.\n" +
       "Щойно з'явиться хтось, хто справді вартий твого часу, я напишу.",
-    statusButtonDaysHours: "До дропу: {d}д {h}г",
-    statusButtonHoursMinutes: "До дропу: {h}г {m}хв",
-    statusButtonMinutes: "✨ До дропу: {m}хв",
+    statusButtonDaysHours: "До підбору: {d}д {h}г",
+    statusButtonHoursMinutes: "До підбору: {h}г {m}хв",
+    statusButtonMinutes: "✨ До підбору: {m}хв",
     statusButtonProcessing: "✨ Підбираємо метчі",
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
@@ -3652,29 +3242,17 @@ const translations = {
 
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
-      "Поки Gennety працює лише в Києві — у місті {city} ми ще не запустилися, " +
-      "і метчити тебе тут немає з ким.\n\n" +
-      "Готовий ходити на побачення в Києві? Зміни місто в меню.",
+      "Поки Gennety працює лише в Києві — у місті {city} ми ще не запустилися, і метчити тебе тут немає з ким.\n\nХочеш ходити на побачення в Києві? Зміни місто в меню.",
     statusButtonMenu: "Відкрити меню",
     menuCitySwitch: "📍 Змінити місто на Київ",
     citySwitchCard:
-      "📍 *Твоє місто: {city}*\n\n" +
-      "Поки Gennety працює лише в Києві. Метчі завжди в межах одного міста, " +
-      "тож до запуску в місті {city} знайомити тебе тут немає з ким.\n\n" +
-      "Якщо готовий ходити на побачення в Києві — перемкнись. Анкета, фото та верифікація " +
-      "залишаться як є, і ти потрапиш у найближчий дроп.",
+      "📍 *Твоє місто: {city}*\n\nПоки Gennety працює лише в Києві. Метчі завжди в межах одного міста, тож до запуску в місті {city} знайомити тебе тут немає з ким.\n\nЯкщо хочеш ходити на побачення в Києві — перемкнись. Анкета, фото та верифікація залишаться як є, і ти потрапиш у найближчий підбір.",
     citySwitchConfirm: "📍 Так, шукайте мені пару в Києві",
     citySwitchDone:
-      "Готово — твоє місто для метчів тепер Київ 🤍\n\n" +
-      "Ти в найближчому дропі: {date}.",
+      "Готово — твоє місто для метчів тепер Київ 🤍\n\nТи в найближчому підборі: {date}.",
     citySwitchFailed: "Не вдалося змінити місто. Спробуй ще раз за хвилину.",
     noMatchCityNotLaunched:
-      "Привіт\n\n" +
-      "Скажу чесно: у місті {city} Gennety ще не запущено — поки ми працюємо лише в Києві. " +
-      "Метчі завжди в межах одного міста, тож знайомити тебе тут немає з ким, " +
-      "і краще сказати це прямо, ніж тримати тебе в очікуванні дропу, в який ти не потрапляєш.\n\n" +
-      "Анкета залишається як є, і ми напишемо, щойно відкриємо твоє місто.\n\n" +
-      "А якщо готовий ходити на побачення в Києві — перемкнись нижче й потрапиш у найближчий дроп.",
+      "*У місті {city} Gennety поки немає*\n\nМи працюємо лише в Києві, а метчі завжди в межах одного міста — знайомити тебе тут поки немає з ким. Анкета залишається як є, і ми напишемо, щойно відкриємо твоє місто.\n\nЯкщо хочеш ходити на побачення в Києві — перемкнись нижче й потрапиш у найближчий підбір.",
     noMatchCitySwitchBtn: "📍 Перейти на Київ",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
@@ -3702,8 +3280,7 @@ const translations = {
       "Голосове задовге. До 5 хвилин — або просто напиши текстом.",
     rateLimitFloodNotice:
       "Ого, як багато повідомлень одразу — дай кілька секунд наздогнати, потім продовжимо. 🙂",
-    rateLimitDailyBudgetNotice:
-      "Ти сьогодні дуже активний(на) 🙂 Продовжимо завтра — на сьогодні ліміт вичерпано, щоб усе працювало стабільно для всіх.",
+    rateLimitDailyBudgetNotice: "Ти сьогодні багато пишеш 🙂 Продовжимо завтра — на сьогодні ліміт.",
 
     // --- Pre-date coordination (feature-flagged) ---
     coordProxyOpenedEnterPrompt:
@@ -3730,35 +3307,36 @@ const translations = {
     menuInviteFriend: "🎁 Запросити друга",
     referralHubTitle: "Запрошуй друзів у Gennety",
     referralHubTagline:
-      "За кожного друга, який пройде перевірку за твоїм посиланням, — квиток на побачення 🎟 тобі, і йому теж.\n\nІ що більше людей у твоєму місті, то вищий шанс, що підберемо пару й тобі.",
+      "За кожного друга, який пройде перевірку за твоїм посиланням, — квиток на побачення 🎟 тобі, і йому теж.",
     referralShareButton: "📤 Запросити друга",
-    referralShareCaption: "ШІ підбирає найкращу пару й сам організовує зустріч.",
+    referralShareCaption: "Gennety підбирає найкращу пару й сам організовує зустріч.",
     referralShareJoin: "Приєднатися до Gennety 💫",
     // --- HDYHAU (онбординговий запит про джерело, `shared/hdyhau.ts`) ---
-    hdyhauQuestion: "І останнє — звідки ви дізналися про Gennety?",
+    hdyhauQuestion: "І останнє — звідки ти про нас знаєш?",
     hdyhauFriendInPerson: "Друг розповів особисто",
     hdyhauFriendOnline: "Знайомий надіслав посилання",
     hdyhauSocialMedia: "Соцмережі",
-    hdyhauSearch: "Знайшов(ла) через пошук",
+    hdyhauSearch: "Через пошук",
     hdyhauAd: "Реклама",
     hdyhauEvent: "Вечірка або подія",
     hdyhauOther: "Звідкись іще",
     hdyhauSkip: "Пропустити",
     hdyhauThanks: "Дякуємо — це справді допомагає. 💛",
     referralRewardDm:
-      "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟\n{next}",
+      "{name} — перевірку за твоїм посиланням пройдено ✨\n\nНараховано: +{tickets} 🎟\n{next}",
     referralRewardNext: "Залишилося нагород за запрошення: {remaining}.",
     referralRewardNextMax: "Це була остання нагорода за запрошення — дякуємо 💛",
-    referralCardInvitedBy: "Тебе запросив(ла) {name}",
+    referralCardInvitedBy: "{name} кличе тебе в Gennety",
     referralCardInvitedGeneric: "Тебе запрошують",
     referralCardHeadA: "Справжні побачення.",
     referralCardHeadB: "Нуль листування.",
-    referralCardSupport: "ШІ підбирає пару за глибокою сумісністю й сам організовує зустріч наживо.",
+    referralCardSupport:
+      "Gennety підбирає пару за глибокою сумісністю й сам організовує зустріч наживо.",
     referralCardGift: "{ticketsPhrase} — у подарунок",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n\nДалі — більше.",
+      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Найкращі заклади* — добірка місць рівнем вище\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumOpenCta: "Детальніше",
     premiumCancelHint:
@@ -3798,25 +3376,23 @@ const translations = {
     premiumCancelKeepBtn: "Залишити Premium",
     premiumCancelFinalConfirm:
       "Остання перевірка — точно скасовуємо Gennety Premium?\n\nPremium залишиться активним до {date}, до цієї дати нічого не зміниться. Після підтвердження автопродовження вимкнеться назавжди — захочеш повернути Premium пізніше, доведеться оплатити знову.",
-    premiumCancelFinalYes: "Так, я впевнений на 100%, скасувати",
+    premiumCancelFinalYes: "Так, скасувати",
     premiumCancelFinalNoSoft: "Ні, залишити",
-    premiumCancelFinalNoHard: "Стоп, не скасовуй",
+    premiumCancelFinalNoHard: "Ні, залишити",
     premiumCancelDone:
       "Готово — автоподовження вимкнено. Premium активний до {date}, більше нічого не спишеться. Повернутися можна будь-коли.",
     premiumCancelKept: "Залишаємо ✨ Premium активний до {date}.",
     premiumCancelAppStore:
-      "Підписку оформлено через App Store, тож скасувати її можна лише на iPhone: Налаштування → [ваше ім'я] → Підписки → Gennety Premium → Скасувати. Доступ збережеться до {date}.",
+      "Підписку оформлено через App Store, тож скасувати її можна лише на iPhone: Налаштування → [твоє ім'я] → Підписки → Gennety Premium → Скасувати. Доступ збережеться до {date}.",
     premiumCancelNotActive: "Зараз у тебе немає активної підписки Premium.",
     premiumCancelReasonAsk:
-      "Дякуємо, що був із нами 🤍 Якщо не важко — розкажи двома словами, чому вирішив скасувати? Це справді допомагає нам ставати кращими.",
+      "Дякуємо за час із нами 🤍 Якщо не важко — розкажи двома словами, чому скасовуєш? Це справді допомагає нам ставати кращими.",
     premiumCancelReasonSkipBtn: "Не хочу відповідати",
     premiumCancelReasonThanks: "Дякуємо, врахуємо 🤍 Premium завжди можна повернути.",
 
     // --- Rematch ---
     rematchOfferFamine:
-      "Цього разу пари не знайшлося — це про пул, не про тебе.\n\n" +
-      "Можу запустити пошук заново просто зараз, тільки для тебе. Одна нова людина, добір той самий: {price}.\n\n" +
-      "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
+      "Цього разу пари не знайшлося — справа не в тобі.\n\nМожу пошукати ще раз просто зараз: {price}. Не знайду — поверну зірки.",
     rematchOfferFailed:
       "Не склалося. Буває.\n\n" +
       "Можу піти на другий захід просто зараз і знайти тобі нову людину — {price}.\n\n" +
@@ -3826,9 +3402,9 @@ const translations = {
       "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
     rematchOfferBtn: "Шукати заново — {price}",
     statusButtonRematch: "Шукати зараз",
-    rematchInvoiceTitle: "Реметч",
-    rematchInvoiceDesc: "Ще один пошук просто зараз — нова людина від твого метчмейкера.",
-    rematchInvoiceLabel: "Реметч",
+    rematchInvoiceTitle: "Новий пошук",
+    rematchInvoiceDesc: "Ще один пошук просто зараз — нова людина від Gennety.",
+    rematchInvoiceLabel: "Новий пошук",
     rematchFound: "Знайшов. Зараз надішлю ✨",
     rematchNoCandidate:
       "Подивився — нових варіантів у твоєму місті зараз немає. Зірки повернув. У наступному раунді ти лишаєшся.",
@@ -3838,11 +3414,11 @@ const translations = {
       "Знайшов людину, але доставити анкету не зміг — це на нашому боці. Зірки повернув, і спроба не зарахувалася.",
     rematchUndeliveredPending:
       "Знайшов людину, але доставити анкету не зміг, а повернення з першого разу не пройшло. Уже займаюся — зірки повернуться найближчим часом.",
-    rematchRefunded: "Зірки за реметч повернулися ✨",
+    rematchRefunded: "Зірки за новий пошук повернулися ✨",
     rematchLimitReached:
-      "Реметчі на зараз закінчилися. Наступний відкриється за кілька днів — звичайний метч усе одно буде.",
+      "Нові пошуки на зараз закінчилися. Наступний відкриється за кілька днів — звичайний підбір усе одно буде.",
     rematchUnavailable:
-      "Зараз реметч не зробити. Якщо в тебе є метч у роботі — спершу заверши його.",
+      "Зараз новий пошук не запустити. Якщо в тебе є метч у роботі — спершу заверши його.",
     rematchGiftFamine:
       "Я казав, що пари для тебе поки немає. Продовжив шукати — і знайшов людину, на яку варто подивитися.",
     rematchGiftFailed:
@@ -3869,24 +3445,22 @@ type TranslationTable = Record<TranslationKey, string>;
 const deTranslations: TranslationTable = {
   ...translations.en,
   consentMessage:
-    "Willkommen bei Gennety Dating!\n\n" +
-    "Bevor wir anfangen, lies bitte unsere Nutzungsbedingungen und Datenschutzerklärung und stimme den Bedingungen zur Datenspeicherung zu.",
-  consentAgree: "Ich stimme zu",
+    "*Hi! Hier ist Gennety* 👋\n\nBevor wir anfangen, lies die Nutzungsbedingungen und die Datenschutzerklärung und stimme den Regeln zur Datenspeicherung zu.",
+  consentAgree: "Ich akzeptiere",
   consentPrivacyButton: "Datenschutzerklärung",
   consentTermsButton: "Nutzungsbedingungen",
-  welcome: "Gennety Dating 👀\nAI-Matchmaking für echte Dates.",
+  welcome: "*Gennety Dating*\nWir finden dein Match und planen direkt ein echtes Date.",
   chooseLanguage: "Wähle deine Sprache:",
   philosophyPitch:
-    "Gennety basiert auf einer Idee: *Zero Chat*.\n\n" +
-    "Du schreibst deinem Match nicht. Ich verstehe, wer du bist, " +
-    "finde jemanden, der wirklich passt, und kümmere mich um alles - Zeit, Ort, das ganze Setup.\n\n" +
-    "Du musst nur auftauchen. Klingt gut?",
-  philosophyContinue: "Ich bin dabei 🚀",
-  askEmail: "Schick deine Uni-Mail (z. B. name@stanford.edu):",
-  invalidEmail: "Hm, das sieht nicht nach einer Uni-Mail aus. Versuch es mit einer .edu- oder .ac.uk-Adresse.",
-  otpSent: "Ich habe einen 6-stelligen Code an *{email}* gesendet. Schreib ihn hier rein:",
+    "*Hier musst du nicht schreiben*\n\nIch lerne dich kennen, finde jemanden, der passt, und kläre Zeit und Ort selbst. Du musst nur hingehen. Los geht's?",
+  philosophyContinue: "Los geht's 🚀",
+  askEmail: "Schreib deine Uni-E-Mail — zum Beispiel name@knu.ua",
+  invalidEmail:
+    "Das sieht nicht nach einer Uni-E-Mail aus. Prüf die Adresse und schick sie noch einmal.",
+  otpSent: "Ich habe einen Code an *{email}* geschickt. Gib ihn hier ein:",
   otpInvalid: "Der Code hat nicht funktioniert. Versuch es nochmal:",
-  otpExpired: "Der Code ist abgelaufen. Gib deine E-Mail erneut ein:",
+  otpExpired:
+    "Der Code ist abgelaufen. Gib deine E-Mail noch einmal ein, dann schicke ich einen neuen.",
   otpTooManyAttempts: "Zu viele Versuche. Gib deine E-Mail erneut ein, damit wir einen neuen Code senden.",
   otpCooldown: "Warte kurz - bitte erst in einer Minute einen neuen Code anfordern.",
   emailVerified: "E-Mail bestätigt ✨",
@@ -3906,7 +3480,7 @@ const deTranslations: TranslationTable = {
   llmAnalysing3: "Ich baue deinen psychologischen Fingerabdruck...",
   llmDumpReceived: "Profil bereit ✨",
   askPhotos:
-    "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
+    "Fast geschafft! Schick {min}–{max} Fotos, auf denen man dich gut sieht. Keine freizügigen Bilder. Videos gehen auch — Hauptsache, man sieht dich.",
   photoReceived: "Foto {n}/{max}",
   voicePromptSkipButton: "Ohne Sprachnachricht",
   voicePromptSkipHint: "Überspringen: „{button}“, unten im Chat.",
@@ -3915,7 +3489,7 @@ const deTranslations: TranslationTable = {
     "Aufgenommen — hör sie dir an. Schick eine neue, um sie zu ersetzen, oder „{button}“, um sie zu verwerfen.",
   voicePromptReviewDone: "✅ Fertig",
   voicePromptSkipped: "Dann ohne Sprachnachricht — auch gut.",
-  voicePromptSaved: "Gespeichert ✨ Die Person hört sie direkt vor ihrer Entscheidung.",
+  voicePromptSaved: "Gespeichert ✨ Dein Match hört sie, bevor es antwortet.",
   voicePromptTooShort: "Das war kaum eine Sekunde — die Mikrofontaste muss gehalten werden. Versuch's nochmal, ziel auf etwa 15 Sekunden.",
   voicePromptTooLong: "Etwas lang — bleib unter 30 Sekunden, sonst hört das niemand zu Ende. Nochmal aufnehmen?",
   voicePromptUnsafe: "Das kann ich nicht ins Profil stellen. Nimm etwas anderes auf — oder überspring es, es ist freiwillig.",
@@ -3924,10 +3498,8 @@ const deTranslations: TranslationTable = {
   voicePromptPitchCaption: "{name} hat das für dich aufgenommen",
   photoRejected:
     "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
-  photoDuplicate:
-    "Dieses Foto ist bereits in deinem Profil. Füge ein anderes Bild hinzu - alle Fotos müssen eindeutig sein.",
-  photoDuplicateNear:
-    "Dieses Foto ist bereits in deinem Profil. Füge ein anderes Bild hinzu - alle Fotos müssen eindeutig sein.",
+  photoDuplicate: "Dieses Foto ist schon in deinem Profil — schick ein anderes.",
+  photoDuplicateNear: "Dieses Foto ist schon in deinem Profil — schick ein anderes.",
   photoUnsafeContent:
     "Dieses Foto kann nicht im Profil veröffentlicht werden. Wähle bitte ein anderes, nicht explizites Foto.",
   photoFaceObscured:
@@ -3939,13 +3511,12 @@ const deTranslations: TranslationTable = {
   photoIdentityUncertain:
     "Das Gesicht konnte nicht zuverlässig zugeordnet werden. Sende ein klareres Foto mit gutem Licht und gut sichtbarem Gesicht.",
   photoConsensusPending:
-    "Ich habe die Profilidentität noch nicht festgelegt. Sende ein weiteres anderes Foto, auf dem dieselbe Person zu sehen ist.",
+    "Schick noch ein Foto — mit zwei Bildern erkenne ich, dass du darauf bist.",
   photoConsensusOutlierRejected:
-    "Ein wartendes Foto zeigte eine andere Person, deshalb habe ich es nicht hinzugefügt.",
-  photoConsensusConfirmed:
-    "Identität durch übereinstimmende Fotos bestätigt ✨",
+    "Auf einem Foto ist jemand anderes — das habe ich nicht hinzugefügt.",
+  photoConsensusConfirmed: "Super, auf allen Fotos bist du ✨",
   photoConsensusNoPairCap:
-    "Ich sehe immer noch keine zwei Fotos derselben Person. Es wurde noch nichts festgelegt - sende ein weiteres klares Foto von dir.",
+    "Ich sehe noch keine zwei Fotos derselben Person. Schick noch ein klares Foto von dir.",
   photoVisionError: "Die Datei konnte nicht verarbeitet werden. Versuch es erneut.",
   photoInvalidMedia:
     "Diese Datei ist kein unterstütztes Foto. Sende ein JPEG-, PNG-, WebP- oder HEIC-Bild.",
@@ -3960,24 +3531,14 @@ const deTranslations: TranslationTable = {
   profileConfirm: "Passt",
   profileEdit: "Etwas ändern",
   onboardingComplete:
-    "Du bist drin! 🎉\n\n" +
-    "Ich suche schon nach deinem Match. " +
-    "Ich melde mich, sobald jemand Besonderes auftaucht.",
+    "*Fertig, du bist dabei!* 🎉\n\nIch suche schon dein Match — ich melde mich, sobald ich jemanden finde.",
   btnContinuePhotos: "Weiter ➡️",
   finishOnboardingFirst:
     "Schließe zuerst die Registrierung ab, dann sind Menü und Einstellungen verfügbar.\nSchreib /start, um weiterzumachen.",
   verifyPitch:
-    "Letzter Schritt. Wir müssen bestätigen, dass du eine echte Person bist.\n\n" +
-    "Wir vergleichen das Selfie aus der Verifizierung mit jedem Foto in deinem Profil. " +
-    "Fotos, die nicht zu dir passen, werden abgelehnt.\n\n" +
-    "Wenn du die Verifizierung überspringst, sinkt dein Start-ELO deutlich " +
-    "und der Algorithmus zeigt dir weniger Matches.",
+    "*Letzter Schritt — bestätige, dass du es bist*\n\nMach ein Selfie, und ich vergleiche es mit deinen Profilfotos. Fotos, auf denen du nicht bist, entferne ich.\n\nOhne den Check bekommst du weniger Vorschläge.",
   verifyPitchMandatory:
-    "Letzter Schritt. Wir bestätigen, dass jedes Mitglied eine echte Person ist.\n\n" +
-    "Wir vergleichen das Selfie aus der Verifizierung mit jedem Foto in deinem Profil — " +
-    "Fotos, die nicht zu dir passen, werden abgelehnt.\n\n" +
-    "Wenn du auf den Profilfotos nicht zu sehen bist, tausch sie zuerst über den Button unten aus.\n\n" +
-    "Die Verifizierung ist verpflichtend: das Matching startet direkt nach dem Bestehen.",
+    "*Letzter Schritt — bestätige, dass du es bist*\n\nMach ein Selfie, und ich vergleiche es mit deinen Profilfotos. Wenn du nicht auf den Fotos bist, tausch sie zuerst aus. Nach dem Check suche ich sofort dein Match.",
   verifyMandatoryNotice:
     "Die Verifizierung ist jetzt für alle neuen Profile verpflichtend — das Matching startet direkt nach dem Bestehen. Dauert etwa eine Minute:",
   verifyReminderNudge:
@@ -3990,7 +3551,7 @@ const deTranslations: TranslationTable = {
   verifyBtnSkipConfirm: "🔴 Trotzdem überspringen",
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Andere Fotos hochladen",
-  verifyBtnRedoPhotosSecondary: "📷 Eigentlich meine Fotos",
+  verifyBtnRedoPhotosSecondary: "📷 Erst Fotos ändern",
   verifyBtnAddPhotos: "📷 Fotos hinzufügen",
   verifyPhotosRequired:
     "Die Verifizierung vergleicht dein Selfie mit den Fotos in deinem Profil — und dort sind noch keine. " +
@@ -4007,31 +3568,16 @@ const deTranslations: TranslationTable = {
     "Fotos aktualisiert ✅ Ich prüfe sie erneut gegen dein Verifizierungs-Selfie — du musst sie nicht wiederholen. Ich melde mich, sobald es fertig ist.",
   verifyPhotosSavedNowVerify:
     "Fotos aktualisiert ✅ Ein Schritt fehlt noch — die Verifizierung:",
-  verifySkipped:
-    "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
-    "um dein ELO wiederherzustellen.",
+  verifySkipped: "Verifizierung übersprungen. Du kannst sie später im Profilmenü machen.",
   verifyCheckAlreadyDone:
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyRetryNotLive:
-    "Die Prüfung ist abgebrochen, bevor sie überhaupt bei deinen Fotos angekommen " +
-    "ist — sie konnte diesmal kein lebendiges Gesicht bestätigen, deine Fotos hat " +
-    "sich also noch niemand angesehen. Was " +
-    "meist hilft: helles Licht von vorne (nicht von hinten), dein ganzes Gesicht " +
-    "im Bild, keine Sonnenbrille oder Verdeckung. Tipp auf 🟢 Jetzt verifizieren " +
-    "und versuch es noch einmal.",
+    "*Gesicht nicht erkannt*\n\nStell dich mit dem Gesicht zu hellem Licht, nimm die Brille ab und tippe noch einmal auf 🟢 Jetzt verifizieren.",
   verifyRetryUnfinished:
-    "Diese Prüfung wurde nicht zu Ende geführt, deshalb kam sie gar nicht erst " +
-    "bis zu deinen Fotos — die hat sich noch niemand angesehen. Wechsle währenddessen " +
-    "nicht aus Telegram raus und schließ die Kamera nicht zwischendurch; geh " +
-    "einmal am Stück durch, das dauert nur etwa 15 Sekunden. Tipp auf " +
-    "🟢 Jetzt verifizieren und versuch es erneut.",
+    "*Der Check wurde unterbrochen*\n\nMach ihn in einem Rutsch, ohne Telegram zu verlassen — das dauert etwa 15 Sekunden. Tippe auf 🟢 Jetzt verifizieren.",
   verifyRetryTechnical:
-    "Das lag diesmal an uns, nicht an dir — ein technischer Hänger auf unserer " +
-    "Seite. Es hat abgebrochen, bevor deine Fotos geprüft wurden, über sie ist " +
-    "also noch nichts entschieden. Tut uns leid. " +
-    "Tipp auf 🟢 Jetzt verifizieren und versuch es noch einmal — das sollte " +
-    "diesmal glatt laufen.",
+    "*Ein Fehler bei uns*\n\nTippe noch einmal auf 🟢 Jetzt verifizieren — diesmal sollte es klappen.",
   verifyReferenceExpired:
     "Wir löschen dein Verifizierungs-Selfie nach 90 Tagen, deshalb gibt es hier " +
     "nichts mehr, womit wir deine neuen Fotos abgleichen könnten. Eine weitere " +
@@ -4046,13 +3592,11 @@ const deTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
-    "⚠️ Deine Profilfotos passen nicht zum Selfie aus deiner Verifizierung.\n\n" +
-    "Wenn du auf diesen Fotos nicht zu sehen bist — tipp unten auf 📷, tausch sie aus, ich prüfe automatisch erneut (kein neues Selfie nötig). Wenn du es doch bist, ist der Abgleich einfach schwach ausgefallen — starte die Verifizierung bei gutem Licht noch einmal.",
+    "⚠️ *Die Fotos passen nicht zum Selfie*\n\nWenn du nicht darauf bist, tausch sie über den 📷-Button aus, dann prüfe ich neu. Wenn du es bist, mach den Check noch einmal bei gutem Licht.",
   verifyPhotosDropped:
     "Eine Sache noch: Ein paar Fotos passten nicht zum Selfie aus deiner Verifizierung, die habe ich aus deinem Profil genommen. Alles andere ist online. Lad einfach ein paar neue Aufnahmen von dir hoch, wenn du magst 📷",
   verifyPhotosBelowMinimum:
-    "Du bist verifiziert ✅ — das ist dauerhaft erledigt.\n\n" +
-    "Ein paar Fotos passten allerdings nicht zu deinem Selfie, die habe ich entfernt, und jetzt liegt dein Profil unter dem Minimum von {min} Fotos. Lad noch {need} von dir hoch, dann suche ich sofort nach einem Match 📷",
+    "Du bist verifiziert ✅\n\nEin paar Fotos passten allerdings nicht zu deinem Selfie, die habe ich entfernt, und jetzt liegt dein Profil unter dem Minimum von {min} Fotos. Lad noch {need} von dir hoch, dann suche ich sofort nach einem Match 📷",
   // --- Native-app push copy for the same verification outcomes (§1.4). Own
   // strings rather than reused DM copy: these land on a lock screen, so they
   // need a title, they must stay short, and they cannot point at a Telegram
@@ -4110,56 +3654,51 @@ const deTranslations: TranslationTable = {
   videoProcessingUnavailable:
     "Ich konnte das Video gerade nicht prüfen. Dein bisheriges Video wurde nicht geändert. Versuch es bitte gleich noch einmal.",
   ticketRewardPhoto:
-    "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}*",
+    "🎟️ *Ein kostenloses Date-Ticket gehört dir!*\n\nEin Geschenk für deine Fotos. Ein Date = 1 Ticket. Guthaben: *{balance}*",
   ticketRewardVideo:
-    "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}*",
+    "🎟️ *Noch ein kostenloses Date-Ticket gehört dir!*\n\nEin Geschenk für dein Video. Ein Date = 1 Ticket. Guthaben: *{balance}*",
   ticketRewardStudent:
-    "🎓 Universitäts-E-Mail bestätigt — Studi-Bonus freigeschaltet: *2 kostenlose Date-Tickets* sind in deinem Guthaben.\n\nJedes Date kostet 1 Ticket — deine ersten zwei Dates gehen auf uns. Guthaben: *{balance}*",
+    "🎓 *Zwei kostenlose Date-Tickets gehören dir!*\n\nEin Geschenk für deine bestätigte Uni-E-Mail. Ein Date = 1 Ticket. Guthaben: *{balance}*",
   welcomeGiftTicket:
-    "Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$8,49\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
+    "*Dein erstes Ticket geht auf mich* ❤️\n\nNormalerweise kostet ein Date 1 Ticket (~$8.49). Dieses ist gratis — es liegt schon in deiner Wallet.",
   ticketStorePurchased:
-    "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}*",
+    "✨ *Zahlung erhalten!* Tickets hinzugefügt: *{count}*. Guthaben: *{balance}*",
   ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Versuch es gleich noch mal.",
   premiumCheckoutAlreadySubscribed:
     "Du hast schon ein aktives Premium-Abo, deshalb wurde die Zahlung gestoppt — es wurde nichts abgebucht.",
   paymentStuckDm:
     "Deine Zahlung ist durchgegangen, aber wir konnten dir das Gekaufte nicht aushändigen — bei uns ist etwas kaputtgegangen.\n\nZahl nicht noch einmal. Wir sind bereits informiert und liefern es entweder nach oder erstatten deine Stars.",
   ticketStoreInvoiceTitle: "Gennety Date-Tickets",
-  ticketStoreInvoiceDesc:
-    "{count} Date-Ticket(s) für deine Wallet. Jedes Ticket deckt ein Date ab.",
-  ticketGateInvoiceDesc:
-    "Dein Date wird gesichert — {count} Date-Ticket(s). Ein Ticket pro Person.",
-  ticketStoreInvoiceLabel: "{count} Date-Ticket(s)",
+  ticketStoreInvoiceDesc: "Date-Tickets für deine Wallet: {count}. Jedes Ticket deckt ein Date ab.",
+  ticketGateInvoiceDesc: "Date-Zahlung. Date-Tickets: {count}. Ein Ticket gilt für eine Person.",
+  ticketStoreInvoiceLabel: "Date-Tickets × {count}",
   onboardingFinalizeBlocked:
     "Ich kann dich noch nicht fertig einrichten — auf meiner Seite fehlen ein paar Angaben. Versuch es gleich noch einmal; wenn es bleibt, schreib an @gennetysupport, wir klären das.",
-  onboardingPhotosNeedMore:
-    "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
+  onboardingPhotosNeedMore: "Fotos: {count}/{min}. Schick noch {remaining}.",
   onboardingPhotosBonusOffer:
-    "Die Pflichtfotos sind fertig.\n\nErreiche {threshold} Fotos (noch {remaining}), um ein kostenloses Date-Ticket zu bekommen. Für ein kurzes Profilvideo erhältst du ein weiteres kostenloses Ticket.\n\nBeide Boni sind optional — sende jetzt weitere Medien oder fahre fort.",
+    "Pflichtfotos erledigt ✨\nNoch {remaining} Fotos (bis {threshold}) bringen ein Gratis-Ticket. Ein kurzes Video bringt noch eins.",
   onboardingPhotosBonusOfferAfterVideo:
-    "Die Pflichtfotos sind fertig und dein Video-Bonus ist gesichert.\n\nErreiche {threshold} Fotos (noch {remaining}), um ein zweites kostenloses Date-Ticket zu bekommen, oder fahre fort.",
+    "Pflichtfotos erledigt, das Video-Ticket gehört dir ✨\nNoch {remaining} Fotos (bis {threshold}) bringen ein zweites Gratis-Ticket.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} Fotos. Noch {remaining}, um ein kostenloses Date-Ticket freizuschalten. Sende sie jetzt oder fahre fort.",
+    "Fotos: {count}/{threshold}.\nNoch {remaining}, dann gehört dir ein Gratis-Ticket.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} Fotos. Noch {remaining}, um dein zweites kostenloses Date-Ticket freizuschalten. Sende sie jetzt oder fahre fort.",
+    "Fotos: {count}/{threshold}.\nNoch {remaining}, dann gehört dir ein zweites Gratis-Ticket.",
   onboardingPhotosPhotoBonusEarned:
-    "{count} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✨\n\nDu kannst noch Fotos bis maximal {max} oder ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden. Sonst fahre fort.",
+    "Fotos: {count}. Das Gratis-Ticket für Fotos gehört dir ✨\nDu kannst Fotos (bis {max}) oder ein Video hinzufügen — dafür gibt es noch ein Ticket.",
   onboardingPhotosBothBonusesEarned:
-    "{count} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✨\n\nDu kannst noch Fotos bis maximal {max} senden oder fortfahren.",
+    "Fotos: {count}, Video da — beide Gratis-Tickets gehören dir ✨\nDu kannst noch Fotos hinzufügen (bis {max}).",
   onboardingPhotosPhotoBonusEarnedMax:
-    "Alle {max} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✨\n\nDu kannst noch ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden oder fortfahren.",
+    "Alle {max} Fotos da, das Foto-Ticket gehört dir ✨\nEin kurzes Video bringt noch ein Gratis-Ticket.",
   onboardingPhotosBothBonusesEarnedMax:
-    "Alle {max} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✨\n\nFahre fort, wenn du bereit bist.",
+    "Alle {max} Fotos und das Video sind da ✨\nBeide Gratis-Tickets gehören dir.",
   onboardingPhotosOptional:
-    "Die Pflichtfotos sind fertig.\n\nDu kannst weitere Fotos bis maximal {max}, ein kurzes Profilvideo senden oder fortfahren.",
+    "Pflichtfotos erledigt.\nDu kannst weitere (bis {max}) oder ein kurzes Video hinzufügen.",
   onboardingPhotosOptionalAfterVideo:
-    "Die Pflichtfotos und dein Profilvideo sind fertig.\n\nDu kannst weitere Fotos bis maximal {max} senden oder fortfahren.",
-  onboardingPhotosOptionalMax:
-    "Alle {max} Fotos sind fertig.\n\nDu kannst noch ein kurzes Profilvideo senden oder fortfahren.",
-  onboardingPhotosOptionalMaxAfterVideo:
-    "Alle {max} Fotos und dein Profilvideo sind fertig.\n\nFahre fort, wenn du bereit bist.",
+    "Pflichtfotos und Video erledigt.\nDu kannst weitere Fotos hinzufügen (bis {max}).",
+  onboardingPhotosOptionalMax: "Alle {max} Fotos sind da.\nDu kannst ein kurzes Video hinzufügen.",
+  onboardingPhotosOptionalMaxAfterVideo: "Alle {max} Fotos und das Video sind da ✨",
   ticketWalletText:
-    "🎟️ *Meine Tickets*\n\nDu hast *{balance}* Ticket(s). Jedes Date kostet 1 Ticket — jederzeit nachkaufbar.",
+    "🎟️ *Meine Tickets*\n\nTickets: *{balance}*. Jedes Date kostet 1 Ticket — nachkaufen kannst du jederzeit.",
   ticketWalletOpenStore: "🎟️ Tickets kaufen",
   menuBack: "⬅️ Zurück",
   myProfileBody:
@@ -4177,32 +3716,28 @@ const deTranslations: TranslationTable = {
   intentFalling: "Mich verlieben",
   intentLongterm: "Etwas Langfristiges",
   intentPrivateNote: "das siehst nur du",
-  myProfileIntentLine: "🎯 Du suchst: {intent} · {privateNote}",
-  myProfileIntentUnset: "🎯 Du suchst: nicht gewählt · {privateNote}",
+  myProfileIntentLine: "🎯 Du suchst: {intent}",
+  myProfileIntentUnset: "🎯 Du suchst: nicht gewählt",
   editIntentBtn: "🎯 Was ich suche",
   editIntentPrompt:
     "Wonach suchst du gerade? Wähl alles, was passt — meistens ist es nicht nur eins.\n\nDas siehst nur du — ich nutze es, um besser zu matchen.",
   editIntentCleared: "Nichts gewählt",
   editProfileBody:
-    "Das ist fest gespeichert:\n\n" +
-    "• *Name:* {firstName} {surname}\n" +
-    "• *Alter:* {age}\n" +
-    "• *Universität:* {university}\n\n" +
-    "Du kannst bearbeiten:",
+    "Das lässt sich nicht ändern:\n\n• *Name:* {firstName} {surname}\n• *Alter:* {age}\n• *Universität:* {university}\n\nDu kannst bearbeiten:",
   editBioBtn: "📝 Über mich",
   editPrefsBtn: "💘 Wen ich suche",
   editMajorBtn: "💼 Was ich mache",
   editProfilePhotosBtn: "📸 Meine Fotos",
   editBioPrompt:
-    "Schreib ein paar Zeilen über dich (max. 500 Zeichen).\n👀 Dein Match liest das vor dem Date.",
-  editBioCurrent: "Das steht aktuell da - was du schickst, ersetzt alles davon:",
+    "Schreib ein paar Zeilen über dich (bis 500 Zeichen) — dein Match liest sie vor dem Date.",
+  editBioCurrent: "So steht es gerade da. Neuer Text ersetzt ihn:",
   editBioTooLong: "Zu lang - bleib unter 500 Zeichen.",
   editBioSaved: "„Über mich“ aktualisiert",
   editMajorPrompt:
     "Was machst du? (Job / Studium / Bereich, max. 100 Zeichen)\n👀 Für dein Match sichtbar.",
   editMajorTooLong: "Zu lang - bleib unter 100 Zeichen.",
   editMajorSaved: "Gespeichert",
-  editPrefsTitle: "💘 *Wen ich suche*\n\nBeeinflusst, wer dir vorgeschlagen wird. Was ändern?",
+  editPrefsTitle: "💘 *Wen ich suche*\n\nWas ändern?",
   editPrefsAgeBtn: "🎂 Partner-Alter",
   editPrefsDescriptionBtn: "✨ Welche Person ich suche",
   editPrefsCurrent:
@@ -4214,7 +3749,7 @@ const deTranslations: TranslationTable = {
   editPrefsDescriptionSaved: "Partnerwünsche aktualisiert",
   editHobbiesSaved: "Interessen aktualisiert",
   agentEntryPrompt: "Hier, bitte:",
-  agentFallbackError: "Bei mir ist was schiefgelaufen. Sag das nochmal?",
+  agentFallbackError: "Da ist etwas schiefgelaufen. Sag das bitte noch einmal.",
   agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
   agentBlockedSuspended:
     "Dein Konto ist gerade von unserer Seite pausiert, da kann ich hier nicht helfen. Fragen an @gennetysupport.",
@@ -4222,8 +3757,7 @@ const deTranslations: TranslationTable = {
     "Dein Konto wird gerade geprüft. Im Moment gibt es nichts zu tun — Details bekommst du bei @gennetysupport.",
   agentBlockedBanned:
     "Dieses Konto ist geschlossen. Wenn das ein Fehler ist, schreib an @gennetysupport.",
-  profileEmbeddingSyncPending:
-    "Gespeichert. Das Matching übernimmt es nach der automatischen Profilsynchronisierung.",
+  profileEmbeddingSyncPending: "Gespeichert. Ich berücksichtige es in der nächsten Runde.",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
   editAgeRangePrompt: "In welcher Altersspanne sollen wir nach einem Partner für dich suchen? (z. B. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Das habe ich nicht verstanden. Zwei Zahlen wie 20-28 (Bereich {min}-{max}).",
@@ -4280,15 +3814,10 @@ const deTranslations: TranslationTable = {
   themeDarkOption: "🌙 Dunkel",
   themeLightOption: "☀️ Hell",
   helpBody:
-    "*Brauchst du Hilfe?*\n\n" +
-    "Wir machen bewusst keine Chats zwischen Nutzern. " +
-    "Problem mit Match, Date oder Bot? Schreib dem Support:\n\n" +
-    "💬 [@gennetysupport](https://t.me/gennetysupport)",
+    "*Brauchst du Hilfe?*\n\nProblem mit einem Match, einem Date oder dem Bot — schreib dem Support:\n\n💬 [@gennetysupport](https://t.me/gennetysupport)",
   settingsDeleteAccount: "🗑 Account löschen",
   deleteAccountConfirm:
-    "Sicher? Das löscht deinen Account *dauerhaft*.\n\n" +
-    "Alles ist weg - Profil, Fotos, Matches, Embeddings. " +
-    "*Das kann nicht rückgängig gemacht werden.*",
+    "*Account endgültig löschen?*\n\nProfil, Fotos und Matches sind dann weg. Das lässt sich nicht rückgängig machen.",
   deleteAccountYes: "Ja, alles löschen",
   deleteAccountNo: "Abbrechen",
   deleteAccountDone:
@@ -4301,38 +3830,27 @@ const deTranslations: TranslationTable = {
   accountActionExpired: "Diese Bestätigung ist abgelaufen. Öffne die Aktion erneut.",
   statusActionUnavailable: "Diese Aktion ist für den aktuellen Accountstatus nicht verfügbar.",
   deleteFreezeIntro:
-    "Warte — bevor du alles löschst 👀\n\n" +
-    "Du musst nicht alles verlieren. *Friere* deinen Account lieber ein: Profil, Fotos " +
-    "und Verifizierung bleiben erhalten, du verschwindest aus dem Matching, und beim " +
-    "nächsten Mal sendest du einfach /start und landest direkt in deinem fertigen Profil " +
-    "— kein erneutes Onboarding.\n\n" +
-    "Trotzdem löschen? Das ist endgültig.",
+    "Warte — bevor du alles löschst 👀\n\nDu musst nicht alles verlieren. *Friere* deinen Account lieber ein: Profil, Fotos und Verifizierung bleiben erhalten, du verschwindest aus dem Matching, und beim nächsten Mal sendest du einfach /start und landest direkt in deinem fertigen Profil — ohne neue Registrierung.\n\nTrotzdem löschen? Das ist endgültig.",
   deleteFreezeBtn: "❄️ Account einfrieren",
   deleteProceedBtn: "Account trotzdem löschen",
   freezeConfirmed:
     "Erledigt — dein Account ist *eingefroren* ❄️\n\n" +
     "Du bist im Matching nicht sichtbar und bekommst keine Nachrichten. " +
     "Komm jederzeit mit /start zurück — alles ist noch da.",
-  freezeWelcomeBack:
-    "Willkommen zurück! ❄️ → ☀️ Dein Account ist *aufgetaut* und wieder aktiv. " +
-    "Hier ist dein Profil:",
-  deleteFinalYes: "Ja, ich bin mir zu 100% sicher",
-  deleteFinalNoSoft: "Nein",
-  deleteFinalNoHard: "Oh Gott, nein",
+  freezeWelcomeBack: "*Willkommen zurück!* Dein Account ist wieder aktiv.",
+  deleteFinalYes: "Ja, löschen",
+  deleteFinalNoSoft: "Nein, behalten",
+  deleteFinalNoHard: "Nein, behalten",
   freezePartnerNotice:
     "Kurze Info — dein Match ist nicht mehr verfügbar, dieses Date findet also nicht statt. " +
     "Kein Stress: Beim nächsten Durchlauf hast du Priorität 💛",
   matchHeadline: "💘 Wir haben ein Match für dich!",
-  matchDeadlineNotice:
-    "Du hast 24h zum Antworten. " +
-    "Sobald du tippst, ist *die Entscheidung final*. Kein Zurück.",
+  matchDeadlineNotice: "Du hast 24 Stunden für deine Antwort. Ändern kannst du sie danach nicht.",
   matchStreamStart: "Warum ihr zusammenpasst…",
   matchBtnAccept: "Annehmen",
   matchBtnDecline: "❌ Passen",
   matchDeclineConfirmPrompt:
-    "Dieses Match passen?\n\n" +
-    "Das ist endgültig — diese Person wird dir nicht noch einmal vorgeschlagen. " +
-    "Tippe zum Bestätigen oder geh zurück.",
+    "Wirklich passen?\n\nDas ist endgültig — diese Person wird dir nicht noch einmal vorgeschlagen.",
   matchBtnConfirmDecline: "❌ Ja, passen",
   matchBtnKeepDeciding: "← Zurück",
   matchDecisionQuestionM:
@@ -4350,38 +3868,31 @@ const deTranslations: TranslationTable = {
   matchAccepted: "Angenommen ✨ Warten auf die andere Person.",
   matchBothAccepted: "Beidseitig 🤍 Lass uns eine Zeit finden.",
   matchDeclined:
-    "Alles gut. Was war der Hauptgrund, warum du gepasst hast?\n\n" +
-    "Tipp unten etwas an — schnelle Antwort, und ich sehe mit der Zeit das Muster.\n\n" +
-    "Oder sag es in deinen eigenen Worten: ein kurzer Text oder eine Sprachnachricht — das nehme ich in deinen nächsten Drop mit.",
+    "Verstanden. Was hat nicht gepasst? Wähl eine Option oder sag es mit eigenen Worten — ich berücksichtige es beim nächsten Mal.",
   matchDeclineReasonType: "Optisch nicht mein Typ",
   matchDeclineReasonVibe: "Anderer Vibe",
   matchDeclineReasonInterests: "Interessen passen nicht",
   matchDeclineReasonLifestyle: "Lifestyle passt nicht",
   matchDeclineReasonOther: "Etwas anderes",
   matchDeclineOtherAsk:
-    "Klar — schick einen kurzen Text oder eine Sprachnachricht mit dem Grund. Ich nehme es in den nächsten Drop mit.",
+    "Klar — schick einen kurzen Text oder eine Sprachnachricht mit dem Grund. Ich berücksichtige es in der nächsten Runde.",
   matchDeclineFeedbackSaved: "Verstanden. Die nächsten Vorschläge stelle ich darauf ein.",
   matchDeclineAlreadyNoted: "Schon notiert — danke.",
   matchDeclineFeedbackFailed: "Konnte das gerade nicht speichern. Du kannst trotzdem einen kurzen Text oder eine Sprachnachricht senden.",
   matchDeclineThanks: "Notiert. Ich suche weiter.",
   matchPeerDecided:
-    "Dein Match hat schon geantwortet. Jetzt bist du dran.\n\n" +
-    "*Was* sie gewählt haben, siehst du erst nach deiner eigenen Antwort. " +
-    "Und denk dran: deine Antwort ist final.",
+    "*Dein Match hat schon geantwortet*\n\nWas genau — erfährst du nach deiner Antwort.",
   matchPeerWasAccepted: "Zur Info - dein Match war dabei. Es hat diesmal nur nicht gepasst.",
   matchPeerWasDeclined: "Zur Info - dein Match hat diesmal gepasst.",
   matchAcceptedPeerDeclined:
     "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist. " +
     "Ich suche weiter; der nächste Vorschlag sitzt näher.",
   matchAcceptedPeerDeclinedPriority:
-    "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist.\n\n" +
-    "Deine Priorität für den nächsten Drop ist erhöht. Der nächste Vorschlag sitzt näher.",
+    "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist.\n\nDeine Priorität für die nächste Runde ist erhöht. Der nächste Vorschlag sitzt näher.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Verifiziert",
-  matchVerifiedQuote:
-    "Wir haben diese Person verifiziert. Sie hat unseren Face-Match-Check bestanden - " +
-    "die Fotos in diesem Profil passen zu ihrer echten Identität.",
-  matchSynergyLabel: "Synergie {score}/99",
+  matchVerifiedQuote: "Verifiziert: Auf den Fotos ist wirklich diese Person.",
+  matchSynergyLabel: "Kompatibilität {score}/99",
   matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Noch {hours}h zum Antworten",
   pitchCountdownMinutes: "⏳ Noch {minutes} Min zum Antworten",
@@ -4404,8 +3915,7 @@ const deTranslations: TranslationTable = {
   stallBtnStillOn: "🟢 Ja, alles bleibt",
   stallBtnPlansChanged: "Pläne haben sich geändert",
   stallPeerAsked:
-    "Habe {name} an euch erinnert — warte auf Antwort.\n\n" +
-    "Von dir braucht es erstmal nichts. Ich lasse dich nicht hängen — ich melde mich auf jeden Fall.",
+    "Habe {name} an euch erinnert — warte auf Antwort.\n\nVon dir braucht es erstmal nichts.",
   stallStillOnAck: "Alles klar, bleibt so ✨",
   stallPeerStillOn: "{name} ist da, alles bleibt ✨",
   stallCancelConfirmPrompt:
@@ -4414,52 +3924,40 @@ const deTranslations: TranslationTable = {
   stallBtnCancelBack: "🟢 ← Zurück",
   stallCancelAborted: "Gut — bleibt so. 👍",
   stallCancelDone:
-    "Verstanden. {name} habe ich informiert — ohne Details.\n\nDu bist wieder im Pool.",
+    "Verstanden. {name} habe ich informiert — ohne Details.\n\nDu bist wieder in der Suche.",
   stallPeerCancelled:
-    "Date abgesagt — bei {name} haben sich die Pläne geändert.\n\n" +
-    "Das liegt nicht an dir. Ich habe deine Priorität für den nächsten Drop erhöht.",
+    "Date abgesagt — bei {name} haben sich die Pläne geändert.\n\nDas liegt nicht an dir. Ich habe deine Priorität für die nächste Runde erhöht.",
   stallTimeoutPartnerGone:
-    "Date abgesagt — von {name} kam keine Antwort.\n\n" +
-    "Schade, aber besser jetzt als am Tag selbst. Ich habe deine Priorität für den nächsten Drop erhöht.",
+    "Date abgesagt — von {name} kam keine Antwort.\n\nSchade, aber besser jetzt als am Tag selbst. Ich habe deine Priorität für die nächste Runde erhöht.",
   stallTimeoutSelf:
     "Dein Date mit {name} ist abgesagt — zwei Tage keine Antwort, " +
     "und ich konnte euch beide nicht länger hängen lassen.\n\n" +
     "Wenn sich Pläne ändern, sag es mir einfach. Das ist völlig okay.",
   stallTimeoutVenueUnresolved:
-    "Dein Date mit {name} ist abgesagt — ich habe nicht rechtzeitig einen Ort für euch beide gefunden.\n\n" +
-    "Das liegt an mir, nicht an euch. Ich habe deine Priorität im nächsten Drop erhöht.",
+    "Dein Date mit {name} ist abgesagt — ich habe nicht rechtzeitig einen Ort für euch beide gefunden.\n\nDas liegt an mir, nicht an euch. Ich habe deine Priorität in der nächsten Runde erhöht.",
   pitchExpired: "⏳ Zeit abgelaufen - dieser Vorschlag ist verfallen.",
   matchExpiredSilentWarning:
-    "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
-    "Warte auf den nächsten Drop.\n\n" +
-    "Ignorier Vorschläge nicht - das ist deinem Gegenüber gegenüber unfair. " +
-    "Beim nächsten Mal senken wir dafür dein Rating.",
+    "*Die Zeit zum Antworten ist um*\n\nAntworte nächstes Mal wenigstens mit „Nein“ — jemand wartet.",
   matchExpiredSilentPenalty:
-    "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
-    "Warte auf den nächsten Drop.\n\n" +
-    "Dein Rating wurde gesenkt, weil das Ignorieren eines Vorschlags unfair gegenüber deinem Gegenüber ist.",
-  matchExpiredYouMissedDate: "Wichtig - dein Match war tatsächlich dabei. Du hast ein echtes Date verpasst.\n\n",
+    "*Die Zeit zum Antworten ist um*\n\nEs ist schon das zweite Mal, deshalb wurde dein Rating gesenkt. Antworte nächstes Mal wenigstens mit „Nein“ — jemand wartet.",
+  matchExpiredYouMissedDate:
+    "Wichtig — dein Match war tatsächlich dabei. Das hätte ein echtes Date werden können.\n\n",
   matchExpiredPeerIgnored:
-    "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. " +
-    "Wir sehen uns beim nächsten Drop.",
+    "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. Wir sehen uns in der nächsten Runde.",
   // §3.4 — this side PASSED, and the partner then went silent. A first
   // decision leaves the row `proposed` either way, so a decliner reaches
   // expiry classified as a `responder` exactly like someone who accepted
   // and got stood up. They already got their "you passed" ack, so this is
   // deliberately a bare fact with no consolation and no card: it exists
   // only so the match doesn't vanish from the menu and banner unexplained.
-  matchExpiredSelfDeclined:
-    "Dieses Match ist geschlossen — du hast abgelehnt, und die 24h sind um. " +
-    "Wir sehen uns beim nächsten Drop.",
+  matchExpiredSelfDeclined: "Dieses Match ist geschlossen. Wir sehen uns in der nächsten Runde.",
   // Ablauf-Karte (PRODUCT_SPEC §3.4) — Überschriften bewusst geschlechtsneutral.
   expiryCardOverlineExpired: "FENSTER GESCHLOSSEN",
   expiryCardHeadlineExpired: "ZEIT\nABGELAUFEN",
-  expiryCardSublineExpired:
-    "24 Stunden ohne Antwort.\nWir sehen uns beim nächsten Drop.",
+  expiryCardSublineExpired: "24 Stunden ohne Antwort.\nWir sehen uns in der nächsten Runde.",
   expiryCardOverlinePenalty: "ZWEITES MAL OHNE ANTWORT",
   expiryCardHeadlinePenalty: "RATING\nGESENKT",
-  expiryCardSublinePenalty:
-    "Ein zweites Match ohne Antwort.\nWir sehen uns beim nächsten Drop.",
+  expiryCardSublinePenalty: "Zweites Match ohne Antwort.\nWir sehen uns in der nächsten Runde.",
   expiryCardOverlinePeerIgnored: "NICHT DEINE SCHULD",
   expiryCardHeadlinePeerIgnored: "KEINE\nANTWORT",
   expiryCardSublinePeerIgnored:
@@ -4468,61 +3966,32 @@ const deTranslations: TranslationTable = {
   expiryCardHeadlineMissedDate: "ES WAR\nGEGENSEITIG",
   expiryCardSublineMissedDate:
     "Dein Match wollte sich treffen.\n24 Stunden ohne Antwort.",
-  expiryCaptionSilentWarning:
-    "Ignoriere Vorschläge nicht - das ist respektlos gegenüber der Person, die auf dich gewartet hat. " +
-    "Beim nächsten Mal senken wir dafür dein Rating.",
+  expiryCaptionSilentWarning: "Antworte nächstes Mal wenigstens mit „Nein“ — jemand wartet.",
   expiryCaptionSilentPenalty:
-    "Vorschläge zu ignorieren ist respektlos gegenüber der Person, die auf dich gewartet hat.",
-  expiryCaptionPeerIgnored: "Wir sehen uns beim nächsten Drop.",
+    "Es ist schon das zweite Mal, deshalb wurde dein Rating gesenkt. Antworte nächstes Mal wenigstens mit „Nein“ — jemand wartet.",
+  expiryCaptionPeerIgnored: "Wir sehen uns in der nächsten Runde.",
   noMatchThisWeekTier1:
-    "Hey\n\n" +
-    "Diesmal kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
-    "und ich warte lieber, als dir jemanden zu geben, der deine Zeit nicht wert ist.\n\n" +
-    "In der Zwischenzeit:\n" +
-    "• die Community wächst, das Matching wird immer schärfer.\n" +
-    "• je länger du wartest, desto höher deine Priorität im nächsten Drop.\n\n" +
-    "Ich bin dran ✨",
+    "*Diese Woche kein Match*\n\nIch habe niemanden gefunden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. In der nächsten Runde hast du Priorität ✨",
   noMatchThisWeekTier2:
-    "Hey\n\n" +
-    "Schon wieder — immer noch niemand, den ich dir wirklich gern vorstellen würde. " +
-    "Danke, dass du dranbleibst; das zählt.\n\n" +
-    "Was gerade passiert:\n" +
-    "• ich hole mehr passende Leute rein und stelle den Algorithmus auf dich ein.\n" +
-    "• deine Priorität für den nächsten Drop ist bereits erhöht.\n\n" +
-    "Ich bin dran 🤍",
+    "*Wieder kein Match*\n\nDie zweite Woche in Folge sehe ich niemanden, der wirklich passt. Danke fürs Warten — in der nächsten Runde ist deine Priorität noch höher 🤍",
   noMatchThisWeekTier3:
-    "Hey\n\n" +
-    "Wieder ein ehrliches Update — immer noch niemand, der deine Zeit wirklich wert wäre. " +
-    "Mich nervt das noch mehr als dich, und ich tue nicht so, als wäre es anders.\n\n" +
-    "Auf meiner Seite:\n" +
-    "• ich beobachte deine Queue persönlich und pushe das Wachstum in deiner Gegend.\n" +
-    "• je länger du wartest, desto weiter rückst du in der Priorität nach oben.\n\n" +
-    "Danke für dein Vertrauen 🤍",
+    "*Noch kein Match*\n\nEs gibt immer noch niemanden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. Ich behalte deine Warteschlange im Blick — in der nächsten Runde bist du unter den Ersten 🤍",
   noMatchDiscountOffer:
     "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
   poolExhaustedPauseNotice:
-    "Hey\n\n" +
-    "Ganz ehrlich: Gerade gibt es wirklich niemanden für dich — ich habe nachgesehen, der Pool ist leer. " +
-    "Das liegt nicht an dir, es gibt momentan einfach niemanden, den ich dir vorstellen könnte.\n\n" +
-    "Ich pausiere deine Suche, statt dir immer wieder dieselbe Nachricht zu schicken. " +
-    "Alles andere bleibt wie es ist — dein Profil, deine Fotos und deine Verifizierung ändern sich nicht.\n\n" +
-    "Sobald jemand Passendes auftaucht, hole ich dich selbst zurück — du musst nichts tun. " +
-    "Du kannst die Suche aber auch jederzeit selbst über das Menü fortsetzen.",
+    "*Ich pausiere deine Suche*\n\nGerade gibt es wirklich niemanden für dich — das liegt nicht an dir. Sobald jemand Passendes auftaucht, hole ich dich selbst zurück in die Suche.",
   poolExhaustedResumeNotice:
-    "Hey\n\n" +
-    "Gute Nachrichten — jemand Neues, der passt, ist aufgetaucht, also habe ich dich zurück in die Suche geholt. " +
-    "Du bist wieder im Rennen für den nächsten Drop 🤍",
+    "Gute Nachrichten — jemand Passendes ist aufgetaucht, also habe ich dich zurück in die Suche geholt. Du bist in der nächsten Runde dabei 🤍",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
     "Beidseitig 🤍 Öffne den Kalender und markiere passende Zeiten.",
   matchScheduleAfterTicket:
     "📅 Jetzt eure Zeit — öffne den Kalender und markiere alle passenden Slots.",
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
-  ticketCardCaption:
-    "Beidseitig 🤍 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
+  ticketCardCaption: "Es ist ein Match 🤍 Hol dir dein Ticket, dann wählen wir eine Zeit.",
   ticketCardCaptionPremium:
-    "Beidseitig 🤍 Premium deckt beide Tickets — direkt zur Zeitwahl.",
+    "Es ist ein Match 🤍 Premium deckt beide Tickets ab — wir wählen direkt eine Zeit.",
   ticketButton: "🎟️ Date-Ticket holen",
   ticketViewButton: "🎟️ Dein Date-Ticket ansehen",
   ticketStatusButton: "Date öffnen",
@@ -4539,7 +4008,7 @@ const deTranslations: TranslationTable = {
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
   matchScheduledBtnShare: "📤 Karte teilen",
   dateCardWhen: "WANN",
-  dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
+  dateCardSlogan: "Kein Chatten.\nDirekt im echten Leben.",
   dateCardShareCaption:
     "Teile sie ruhig — das Gesicht deines Matches ist zum Schutz seiner Privatsphäre verdeckt 💞",
   dateCardShareFailed:
@@ -4551,7 +4020,7 @@ const deTranslations: TranslationTable = {
   matchSchedulePeerSuggestedAlternative:
     "Dein Match hat eine andere Zeit vorgeschlagen. Schau rein — zustimmen oder selbst etwas vorschlagen.",
   matchScheduleSavedConfirmation:
-    "Gespeichert ✨ Dein Match hat einen Ping bekommen — ich sage Bescheid, sobald eine Antwort kommt.",
+    "Erledigt. Dein Match hat eine Benachrichtigung bekommen — ich melde mich, sobald eine Antwort da ist.",
   matchScheduleNoOverlapYet:
     "Ihr habt beide Zeiten markiert, aber noch passt nichts zusammen. Füg ein paar Optionen hinzu — sobald ein Slot passt, ist es fix:",
   matchSchedulePickFinalYet:
@@ -4559,13 +4028,11 @@ const deTranslations: TranslationTable = {
   venueTimeCardLabel: "EUER DATE",
   venueTimeLockedCaption: "Euer Termin steht ✨",
   venueConciergeIntro:
-    "Zeit steht. Eine Sache, bevor ich den Ort finde.\n\n" +
-    "📍 *Markiere, von wo du losfährst* zum Date - dein Zuhause, eine Metro-Station, die Wohnung einer Freundin, wo immer du tatsächlich startest.\n\n" +
-    "Anhand dieses Punkts finde ich einen angenehmen Treffpunkt, der für *euch beide* gut erreichbar ist, nah an deinem Start. Tippe unten, um ihn auf der Karte zu setzen:",
+    "*Von wo fährst du zum Date los?*\n\nSetz einen Punkt auf der Karte — Zuhause, eine Metro-Station, irgendein passender Ort. Ich finde einen Ort, den ihr beide gut erreicht.",
   venueConciergeBtnLocation: "📍 Standort senden",
   venueConciergeBtnMap: "🗺️ Auf Karte wählen",
   venueLocationFirst:
-    "Zuerst das Wichtigste - *markiere, von wo du losfährst* 📍 Tippe unten, um den Punkt auf der Karte zu setzen. Nach dem Vibe frage ich gleich danach.",
+    "Zuerst das Wichtigste - *markiere, von wo du losfährst* 📍 Tippe unten, um den Punkt auf der Karte zu setzen.",
   venueOriginOutsideMarket:
     "Dieser Punkt liegt außerhalb von {city}, und Gennety ist vorerst nur dort aktiv - ich suche einen Ort in kurzer Entfernung für euch beide, von dort finde ich also keinen. Markiere den Punkt in {city}, von dem du losfährst:",
   venueVibeNoted: "Vibe notiert ✨ Jetzt wähle, von wo du kommst:",
@@ -4627,16 +4094,16 @@ const deTranslations: TranslationTable = {
   venueDeclinedKeepDm: "Ihr bleibt bei {venue}, wie geplant.",
   venueChangeRefunded:
     "Der Ortswechsel hat nicht geklappt, deine Sterne sind zurück. Das Date bleibt wie geplant — am bisherigen Ort.",
-  primeInvoiceTitle: "Späte Abendzeiten",
+  primeInvoiceTitle: "Späte Abende",
   primeInvoiceDesc:
     "Öffnet 18:30, 19:00 und 19:30 an allen Tagen eures Kalenders — für euch beide, für dieses Date.",
-  primeInvoiceLabel: "Späte Abendzeiten",
+  primeInvoiceLabel: "Späte Abende",
   primeTimeOpenedDm:
-    "{name} hat die späten Abendzeiten geöffnet — 18:30 und später stehen jetzt in eurem Kalender.",
+    "{name} schaltet späte Abende frei — 18:30 und später stehen jetzt in eurem Kalender.",
   primeTimeRefunded:
-    "Die späten Abendzeiten wurden nicht geöffnet, deine Sterne sind zurück. Der restliche Kalender bleibt unverändert.",
+    "Die späten Abende wurden nicht freigeschaltet, deine Stars sind zurück. Der restliche Kalender bleibt gleich.",
   primeTimeRefundedDateOff:
-    "Das Date findet nicht statt, deine Sterne für die späten Abendzeiten sind zurück.",
+    "Das Date findet nicht statt, deshalb sind die Stars für die späten Abende zurück bei dir.",
   memeCardTeaser:
     "🎭 Noch etwas über {name}.\n\nAuf die Frage, worüber sie wirklich lachen, kam keine Antwort in Worten — sondern ein Meme. Das sagt mehr über einen Menschen als drei Sätze.\n\nMöchtest du es vor dem Treffen sehen?",
   memeCardBtn: "🎭 Zeig es mir",
@@ -4675,16 +4142,16 @@ const deTranslations: TranslationTable = {
   venueInvoiceLabel: "Ortsänderung",
   icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
-  noMatchStreamStart: "💫 Ich gehe den Pool für dich durch…",
+  noMatchStreamStart: "💫 Ich gehe die Kandidaten für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
   dateTerminalInvite:
-    "Dein Date ist in {minutes} Minuten.\n📍 {venue}\n\nDas Date Terminal ist offen — es zeigt dir, wie weit du noch vom Ort entfernt bist. Am Tisch schüttelt ihr eure Handys gemeinsam: das ist Contact Sync.",
+    "*Dein Date ist in {minutes} Min.*\n📍 {venue}\n\nÖffne den Date-Bildschirm — er zeigt dir den Weg. Am Tisch haltet ihr eure Handys mit den Oberkanten aneinander, um Kontakte auszutauschen.",
   dateTerminalReminder:
-    "Contact Sync ist offen.\n📍 {venue}\n\nSobald ihr beide am Tisch seid, öffne das Terminal und schüttelt eure Handys gemeinsam.",
-  dateTerminalBtn: "🎟 Date Terminal öffnen",
+    "*Kontaktaustausch ist offen*\n📍 {venue}\n\nWenn ihr beide am Tisch sitzt, öffne den Date-Bildschirm und haltet eure Handys mit den Oberkanten aneinander.",
+  dateTerminalBtn: "🎟 Date öffnen",
   dateDayActivityStartTitle: "Heute ist dein Date",
   emergencyPushTitle: "Dein Date ist abgesagt",
-  emergencyPushBody: "Öffne Gennety - dort steht der Grund.",
+  emergencyPushBody: "Öffne Gennety — dort steht der Grund.",
   dateDayActivityStartBody: "Alles Wichtige liegt auf deinem Sperrbildschirm.",
   venueActivityStartTitle: "Ortswechsel",
   venueActivityStartPartner: "{name} schlägt {what} vor",
@@ -4706,16 +4173,10 @@ const deTranslations: TranslationTable = {
   timeActivityStartWaitingNoName: "Wir warten auf eine Antwort zur Zeit",
   timeActivityStartMatch: "Termin steht: {when}",
   profilerSkip: "Überspringen",
-  emergencyUnlocked:
-    "Pläne geändert und du kannst wirklich nicht? Du kannst unten absagen.\n" +
-    "*Du musst einen Grund schreiben - er wird exakt so an dein Match weitergeleitet.*",
+  emergencyUnlocked: "Pläne geändert und du kannst wirklich nicht? Du kannst unten absagen.",
   emergencyBtn: "Date absagen",
   emergencyConfirmPrompt:
-    "Bevor du absagst, kurzer Check.\n\n" +
-    "Wenn es Nervosität, eine kleine Verspätung oder Unsicherheit ist, behalte das Date. " +
-    "Dein Match hat sich Zeit für dich freigehalten, und in echt kann der Abend noch überraschen.\n\n" +
-    "*Sag nur ab, wenn du wirklich nicht kommen kannst; das Match lässt sich danach nicht wiederherstellen.* " +
-    "Wenn du weitermachst, frage ich nach einem Grund und leite ihn Wort für Wort weiter.",
+    "Wenn es nur Nervosität oder eine Verspätung ist, behalte lieber das Date. *Sag nur ab, wenn du wirklich nicht kommen kannst:* Das Match lässt sich nicht zurückholen.",
   emergencyBtnConfirm: "🔴 Ja, Date absagen",
   emergencyBtnBack: "🟢 Date behalten",
   emergencyAborted: "Okay — dein Date bleibt bestehen. 👍",
@@ -4726,11 +4187,10 @@ const deTranslations: TranslationTable = {
     "Falls es nicht stattgefunden hat, frage ich dich am nächsten Tag danach.",
   emergencyReceivedOther: "Dein Match hat das Date abgesagt. Das wurde geschrieben:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Dein Match hat das Date abgesagt. Das wurde geschrieben:",
-  emergencyReceivedOtherSoftNote: "Das liegt nicht an dir. Gennety erhöht deine Priorität für den nächsten Drop ein wenig.",
+  emergencyReceivedOtherSoftNote:
+    "Das liegt nicht an dir. Gennety erhöht deine Priorität für die nächste Runde ein wenig.",
   feedbackInvitation:
-    "Wie lief dein Date? ✨\n\n" +
-    "Teil ein paar Details: gab es Chemie, wie war der Vibe, hat dir der Ort gefallen?\n" +
-    "Wir berücksichtigen das, um nächstes Mal noch besser zu deinen Erwartungen zu passen.",
+    "*Wie lief dein Date?* ✨\n\nTeil ein paar Details: gab es Chemie, wie war der Vibe, hat dir der Ort gefallen?",
   feedbackBtnForm: "✍️ Feedback-Formular öffnen",
   feedbackBtnVoice: "🎤 Stattdessen Sprachnachricht senden",
   attendanceAsk: "Bevor ich frage, wie es war — habt ihr euch gestern tatsächlich getroffen? 🙂",
@@ -4753,18 +4213,18 @@ const deTranslations: TranslationTable = {
     "Nimm einfach eine Sprachnachricht auf 🎙️\n\n" +
     "Erzähl, wie das Date lief - gab es Chemie? Was mochtest du? " +
     "Was hat nicht funktioniert? Eine Minute reicht.",
-  feedbackThanks: "Danke für dein Feedback ✨ Wir nutzen es, um deine zukünftigen Matches zu verbessern.",
+  feedbackThanks: "Danke! Ich berücksichtige es in der nächsten Runde ✨",
   feedbackAlreadySubmitted: "Du hast uns schon erzählt, wie dieses Date war — danke, es ist gespeichert ✨",
   feedbackPushTitle: "Wie war dein Date?",
   feedbackPushBody: "Eine Minute von dir, und das nächste Match passt besser.",
   matchDropPushTitle: "Dein Match ist da",
-  matchDropPushBody: "Tippen, um zu sehen, wen deine KI gewählt hat ✨",
+  matchDropPushBody: "Tippe zum Ansehen ✨",
   reportBtn: "🚨 Melden",
   reportAsk: "Diese Meldung ist privat. Was beschreibt das Problem am besten?",
   reportCategoryFakePhotos: "Fake- oder irreführende Fotos",
   reportCategoryWrongPerson: "Falsche Person auf dem Foto",
-  reportCategoryOffensive: "Beleidigendes oder verstörendes Verhalten",
-  reportCategoryUnsafe: "Unsicher / Red Flag",
+  reportCategoryOffensive: "Unhöflichkeit oder seltsames Verhalten",
+  reportCategoryUnsafe: "Ich habe mich unsicher gefühlt",
   reportCategorySpam: "Spam oder Betrug",
   reportCategoryInappropriate: "Unangemessenes Profil",
   reportCategoryOther: "Anderes",
@@ -4773,7 +4233,8 @@ const deTranslations: TranslationTable = {
   reportSkipBtn: "Überspringen",
   reportThanksT1: "Verstanden - wir nutzen das, um deine zukünftigen Matches zu verbessern 🎯",
   reportThanksT2: "Gemeldet. Danke - wir kümmern uns darum.",
-  reportThanksT3: "Gemeldet. Wir frieren den Account für eine manuelle Prüfung ein - danke fürs Bescheid sagen.",
+  reportThanksT3:
+    "Meldung erhalten. Der Account dieser Person ist bis zur Prüfung eingefroren. Danke für den Hinweis.",
   reportFailed: "Konnte die Meldung gerade nicht verarbeiten. Versuch es in einer Minute nochmal.",
   reportDuplicate: "Du hast dieses Match bereits gemeldet.",
   reportBackBtn: "← Zurück",
@@ -4789,15 +4250,7 @@ const deTranslations: TranslationTable = {
     "🚫 Dein Account wurde für eine Sicherheitsprüfung eingefroren. " +
     "Unser Team meldet sich über @gennetysupport, falls weitere Schritte nötig sind.",
   safetyNoteFemale:
-    "Hey! Dein Gennety-Date startet in 90 Minuten bei **{location_name}**.\n\n" +
-    "Deine Sicherheit ist uns wichtig, deshalb eine kurze Checkliste für das erste Treffen:\n\n" +
-    "📍 **Bleib beim Plan.** Wir haben einen sicheren öffentlichen Ort gewählt. Stimm keinem Wechsel an einen privaten Ort zu und geh nicht zu jemandem nach Hause.\n" +
-    "👥 **Wenn es voll ist.** Passiert - kein Ding: einen Kaffee holen und ein Stück laufen, oder in ein Café nebenan wechseln, wo was los und hell ist.\n" +
-    "🚗 **Transport.** Komm selbst hin und zurück - ÖPNV, Taxi oder zu Fuß. Steig nicht bei jemandem ins Auto, den du kaum kennst.\n" +
-    "📱 **Sag jemandem Bescheid.** Schick die Treffdetails an eine Freundin, einen Freund oder Familie und teile wenn möglich deinen Live-Standort.\n" +
-    "☕ **Bleib aufmerksam.** Lass Sachen und Getränk möglichst nicht unbeaufsichtigt.\n" +
-    "🛑 **Deine Grenzen.** Wenn du dich unwohl fühlst oder das Verhalten komisch wirkt, kannst du jederzeit gehen. Deine Sicherheit ist wichtiger als Höflichkeit.\n\n" +
-    "Hab einen schönen Abend ✨",
+    "*Dein Date ist in 90 Minuten — {location_name}*\n\n📍 *Bleib beim Plan.* Wir haben einen sicheren öffentlichen Ort für euch gewählt. Stimm keinem Wechsel an einen privaten Ort zu und geh nicht mit zu jemandem nach Hause.\n🚗 *Transport.* Komm selbst hin und zurück — mit ÖPNV, Taxi oder zu Fuß. Steig nicht bei jemandem ins Auto, den du kaum kennst.\n📱 *Sag jemandem Bescheid.* Schick die Treffdetails an eine Freundin oder Familie und teile, wenn möglich, deinen Standort für den Abend.\n🛑 *Deine Grenzen.* Wenn du dich unwohl fühlst oder das Verhalten komisch wirkt, kannst du jederzeit einfach aufstehen und gehen. Deine Sicherheit ist wichtiger als Höflichkeit.\n\nHab einen schönen Abend ✨",
   safetyBriefPushTitle: "Bevor du losgehst",
   safetyBriefPushBody: "Deine Sicherheits-Checkliste für heute Abend liegt in der App.",
   noMatchPushTitle: "Diesmal kein Match",
@@ -4809,17 +4262,17 @@ const deTranslations: TranslationTable = {
   deadlineNudgePushTitle: "Das Fenster schließt sich",
   deadlineNudgePushBody: "Noch etwa {hours} Std. Zeit zu antworten. Ja oder nein — beides ist okay.",
   statusDaysHours: "⏳ Nächstes Match in {d}T {h}Std",
-  statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
-  statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
+  statusHoursMinutes: "⏳ Matches kommen in {h}Std {m}Min",
+  statusMinutes: "✨ Fast bereit! Matches kommen in {m} Min",
   statusProcessing: "✨ Analysiere deine Stadt... Schau später nochmal rein.",
-  statusBannerSchedule: "Nächster Drop: {date}, {time}",
+  statusBannerSchedule: "Nächste Runde: {date}, {time}",
   statusBannerActive: "Wir suchen bereits nach deinem Menschen ✦",
   statusBannerSearching:
     "Ich suche deinen Menschen — ich schaue jeden Abend nach.\n" +
     "Sobald jemand da ist, der deine Zeit wirklich wert ist, melde ich mich.",
-  statusButtonDaysHours: "Drop in {d}T {h}Std",
-  statusButtonHoursMinutes: "Drop in {h}Std {m}Min",
-  statusButtonMinutes: "✨ Drop in {m}Min",
+  statusButtonDaysHours: "Nächste Runde in {d}T {h}Std",
+  statusButtonHoursMinutes: "Nächste Runde in {h}Std {m}Min",
+  statusButtonMinutes: "✨ Nächste Runde in {m}Min",
   statusButtonProcessing: "✨ Matching läuft",
 
   // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
@@ -4843,23 +4296,13 @@ const deTranslations: TranslationTable = {
   statusButtonMenu: "Menü öffnen",
   menuCitySwitch: "📍 Stadt auf Kyjiw wechseln",
   citySwitchCard:
-    "📍 *Deine Stadt: {city}*\n\n" +
-    "Gennety ist vorerst nur in Kyjiw am Start. Matches finden immer innerhalb einer Stadt statt — " +
-    "bis wir in {city} starten, gibt es hier niemanden, den wir dir vorstellen könnten.\n\n" +
-    "Wenn du bereit bist, in Kyjiw auf Dates zu gehen, wechsle einfach: Profil, Fotos und " +
-    "Verifizierung bleiben genau so, und du bist beim nächsten Drop dabei.",
+    "📍 *Deine Stadt: {city}*\n\nGennety ist vorerst nur in Kyjiw am Start. Matches finden immer innerhalb einer Stadt statt — bis wir in {city} starten, gibt es hier niemanden, den wir dir vorstellen könnten.\n\nWenn du in Kyjiw auf Dates gehen möchtest, wechsle einfach: Profil, Fotos und Verifizierung bleiben genau so, und du bist in der nächsten Runde dabei.",
   citySwitchConfirm: "📍 Ja, matcht mich in Kyjiw",
   citySwitchDone:
-    "Erledigt — deine Match-Stadt ist jetzt Kyjiw 🤍\n\n" +
-    "Du bist beim nächsten Drop dabei: {date}.",
+    "Erledigt — deine Match-Stadt ist jetzt Kyjiw 🤍\n\nDu bist in der nächsten Runde dabei: {date}.",
   citySwitchFailed: "Der Stadtwechsel hat gerade nicht geklappt. Versuch es gleich noch einmal.",
   noMatchCityNotLaunched:
-    "Hey\n\n" +
-    "Ganz ehrlich: In {city} ist Gennety noch nicht gestartet — bisher sind wir nur in Kyjiw. " +
-    "Matches finden immer innerhalb einer Stadt statt, hier könnte ich dir also niemanden vorstellen. " +
-    "Das sage ich dir lieber direkt, statt dich auf einen Drop warten zu lassen, bei dem du nicht dabei sein kannst.\n\n" +
-    "Dein Profil bleibt wie es ist, und wir melden uns, sobald wir deine Stadt öffnen.\n\n" +
-    "Und wenn du bereit bist, in Kyjiw auf Dates zu gehen: unten wechseln — dann bist du beim nächsten Drop dabei.",
+    "*In {city} gibt es Gennety noch nicht*\n\nBisher sind wir nur in Kyjiw, und Matches finden immer innerhalb einer Stadt statt — hier gibt es also noch niemanden, den ich dir vorstellen könnte. Dein Profil bleibt wie es ist, und wir melden uns, sobald wir deine Stadt öffnen.\n\nWenn du in Kyjiw auf Dates gehen möchtest, wechsle unten — dann bist du in der nächsten Runde dabei.",
   noMatchCitySwitchBtn: "📍 Zu Kyjiw wechseln",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
@@ -4884,7 +4327,7 @@ const deTranslations: TranslationTable = {
   rateLimitFloodNotice:
     "Wow, das sind viele Nachrichten auf einmal — gib mir ein paar Sekunden, dann geht's weiter. 🙂",
   rateLimitDailyBudgetNotice:
-    "Du warst heute super aktiv 🙂 Lass uns morgen weitermachen — das heutige Limit ist erreicht, damit alles für alle rund läuft.",
+    "Du hast heute viel geschrieben 🙂 Machen wir morgen weiter — das Tageslimit ist erreicht.",
 
   // --- Live Photo admission ---
   livePhotoMissingStatic:
@@ -4901,7 +4344,7 @@ const deTranslations: TranslationTable = {
     "💛 Erledigt — du hast {name}s Ticket übernommen. Sobald sie es sieht, sag ich dir Bescheid.",
   ticketPartnerSawItDm: "❤️ {name} hat gesehen, dass du ihr Ticket übernommen hast.",
   ticketRefundedDm:
-    "Dein Match hat sein Ticket nicht rechtzeitig geholt — deins ist erstattet. Kein Stress: die Terminplanung ist jetzt gratis offen 📅",
+    "Dein Ticket ist zurück in deiner Wallet, und das Date steht. Lass uns eine Zeit wählen 📅",
   ticketRefundedToWallet:
     "🎟️ Dein Date-Ticket liegt wieder in deiner Wallet — für das nächste Date.",
   ticketRefundedToWalletBoth:
@@ -4933,15 +4376,15 @@ const deTranslations: TranslationTable = {
   menuInviteFriend: "🎁 Freund einladen",
   referralHubTitle: "Lade deine Freunde zu Gennety ein",
   referralHubTagline:
-    "Für jeden Freund, der über deinen Link die Verifizierung besteht, bekommst du ein Date-Ticket 🎟 — und er auch.\n\nUnd je mehr Menschen in deiner Stadt, desto höher die Chance, dass wir auch für dich ein Match finden.",
+    "Für jeden Freund, der über deinen Link die Verifizierung besteht, bekommst du ein Date-Ticket 🎟 — und er auch.",
   referralShareButton: "📤 Freund einladen",
-  referralShareCaption: "Die KI findet dein bestes Match und plant das Treffen selbst.",
+  referralShareCaption: "Gennety findet dein bestes Match und plant das Treffen selbst.",
   referralShareJoin: "Gennety beitreten 💫",
-  hdyhauQuestion: "Zum Schluss - woher kennst du Gennety?",
+  hdyhauQuestion: "Noch eine letzte Frage — woher kennst du uns?",
   hdyhauFriendInPerson: "Ein Freund hat es mir persönlich erzählt",
   hdyhauFriendOnline: "Ein Freund hat mir einen Link geschickt",
   hdyhauSocialMedia: "Social Media",
-  hdyhauSearch: "Selbst über die Suche gefunden",
+  hdyhauSearch: "Über die Suche",
   hdyhauAd: "Eine Anzeige",
   hdyhauEvent: "Ein Event oder eine Party",
   hdyhauOther: "Woanders",
@@ -4955,12 +4398,13 @@ const deTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Du bist eingeladen",
   referralCardHeadA: "Echte Dates.",
   referralCardHeadB: "Null Chatten.",
-  referralCardSupport: "Die KI findet dein Match nach tiefer Kompatibilität und organisiert das Treffen persönlich.",
+  referralCardSupport:
+    "Gennety findet dein Match nach tiefer Kompatibilität und organisiert das Treffen persönlich.",
   referralCardGift: "{ticketsPhrase} — geschenkt",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n\nDa kommt noch mehr.",
+    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Die besten Orte* — eine Auswahl an Orten eine Klasse höher\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumOpenCta: "Mehr erfahren",
   premiumCancelHint:
@@ -5000,9 +4444,9 @@ const deTranslations: TranslationTable = {
   premiumCancelKeepBtn: "Premium behalten",
   premiumCancelFinalConfirm:
     "Letzte Prüfung — Gennety Premium wirklich kündigen?\n\nPremium bleibt bis {date} aktiv, bis dahin ändert sich nichts. Nach der Bestätigung ist die automatische Verlängerung endgültig aus — willst du Premium später zurück, zahlst du erneut.",
-  premiumCancelFinalYes: "Ja, ich bin mir zu 100% sicher, kündigen",
+  premiumCancelFinalYes: "Ja, kündigen",
   premiumCancelFinalNoSoft: "Nein, behalten",
-  premiumCancelFinalNoHard: "Warte, nicht kündigen",
+  premiumCancelFinalNoHard: "Nein, behalten",
   premiumCancelDone:
     "Erledigt — die automatische Verlängerung ist aus. Premium bleibt bis {date} aktiv, weitere Kosten entstehen nicht. Du kannst jederzeit wieder abonnieren.",
   premiumCancelKept: "Bleibt ✨ Premium ist bis {date} aktiv.",
@@ -5016,9 +4460,7 @@ const deTranslations: TranslationTable = {
 
   // --- Rematch ---
   rematchOfferFamine:
-    "Diesmal kein Match — das liegt am Pool, nicht an dir.\n\n" +
-    "Ich kann die Suche sofort noch mal starten, nur für dich. Eine neue Person, gleiche Auswahl: {price}.\n\n" +
-    "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
+    "Diesmal kein Match — das liegt nicht an dir.\n\nIch kann sofort noch einmal suchen: {price}. Finde ich niemanden, bekommst du deine Stars zurück.",
   rematchOfferFailed:
     "Hat nicht gepasst. Kommt vor.\n\n" +
     "Ich kann sofort noch mal suchen und dir jemand Neues bringen — {price}.\n\n" +
@@ -5028,9 +4470,9 @@ const deTranslations: TranslationTable = {
     "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
   rematchOfferBtn: "Neu suchen — {price}",
   statusButtonRematch: "Jetzt suchen",
-  rematchInvoiceTitle: "Rematch",
-  rematchInvoiceDesc: "Noch eine Suche, sofort — eine neue Person von deinem Matchmaker.",
-  rematchInvoiceLabel: "Rematch",
+  rematchInvoiceTitle: "Neue Suche",
+  rematchInvoiceDesc: "Noch eine Suche, sofort — eine neue Person, ausgewählt von Gennety.",
+  rematchInvoiceLabel: "Neue Suche",
   rematchFound: "Hab jemanden. Schicke dir gleich die Details ✨",
   rematchNoCandidate:
     "Ich habe geschaut — in deiner Stadt gibt es gerade niemand Neues für dich. Deine Stars sind zurück. Für die nächste Runde bist du dabei.",
@@ -5040,11 +4482,11 @@ const deTranslations: TranslationTable = {
     "Ich habe jemanden gefunden, konnte das Profil aber nicht zustellen — das liegt an uns. Deine Stars sind zurück, und der Versuch zählt nicht.",
   rematchUndeliveredPending:
     "Ich habe jemanden gefunden, konnte das Profil aber nicht zustellen, und die Rückerstattung hat beim ersten Versuch nicht geklappt. Ich kümmere mich — deine Stars sind gleich zurück.",
-  rematchRefunded: "Deine Stars für den Rematch sind zurück ✨",
+  rematchRefunded: "Deine Stars für die neue Suche sind zurück ✨",
   rematchLimitReached:
-    "Deine Rematches sind für den Moment aufgebraucht. Der nächste geht in ein paar Tagen — dein nächstes Match kommt trotzdem.",
+    "Deine zusätzlichen Suchen sind vorerst aufgebraucht. Die nächste gibt es in ein paar Tagen — die reguläre Runde kommt trotzdem.",
   rematchUnavailable:
-    "Gerade geht kein Rematch. Wenn du ein laufendes Match hast, mach das zuerst zu Ende.",
+    "Eine neue Suche geht gerade nicht. Wenn du ein laufendes Match hast, schließ das zuerst ab.",
   rematchGiftFamine:
     "Ich hatte gesagt, dass es gerade kein Match für dich gibt. Ich habe weitergesucht — und jemanden gefunden, der deine Zeit wert ist.",
   rematchGiftFailed:
@@ -5063,24 +4505,20 @@ const deTranslations: TranslationTable = {
 const plTranslations: TranslationTable = {
   ...translations.en,
   consentMessage:
-    "Witamy w Gennety Dating!\n\n" +
-    "Zanim zaczniemy, przeczytaj Warunki usługi i Politykę prywatności oraz zaakceptuj warunki przechowywania danych.",
+    "*Cześć! Tu Gennety* 👋\n\nZanim zaczniemy, przeczytaj Warunki korzystania i Politykę prywatności i zaakceptuj zasady przechowywania danych.",
   consentAgree: "Akceptuję",
   consentPrivacyButton: "Polityka prywatności",
   consentTermsButton: "Warunki usługi",
-  welcome: "Gennety Dating 👀\nAI matchmaking dla prawdziwych randek.",
+  welcome: "*Gennety Dating*\nDobieramy parę i od razu umawiamy randkę na żywo.",
   chooseLanguage: "Wybierz język:",
   philosophyPitch:
-    "Gennety działa według jednej zasady: *Zero Chat*.\n\n" +
-    "Nie piszesz do swojego matcha. Rozumiem, kim jesteś, " +
-    "znajduję naprawdę kompatybilną osobę i ogarniam wszystko - czas, miejsce, cały plan.\n\n" +
-    "Ty po prostu przychodzisz. Brzmi dobrze?",
-  philosophyContinue: "Wchodzę w to 🚀",
-  askEmail: "Wyślij swój e-mail uniwersytecki (np. name@stanford.edu):",
-  invalidEmail: "Hm, to nie wygląda jak e-mail uniwersytecki. Spróbuj adresu .edu albo .ac.uk.",
-  otpSent: "Wysłaliśmy 6-cyfrowy kod na *{email}*. Wpisz go tutaj:",
+    "*Tu nie trzeba pisać*\n\nPoznam cię, znajdę pasującą osobę i sam ustalę czas i miejsce. Tobie zostaje tylko przyjść. Ruszamy?",
+  philosophyContinue: "Ruszamy 🚀",
+  askEmail: "Napisz swój uczelniany e-mail — na przykład name@knu.ua",
+  invalidEmail: "To nie wygląda na uczelniany e-mail. Sprawdź adres i wyślij jeszcze raz.",
+  otpSent: "Wysłałem kod na *{email}*. Wpisz go tutaj:",
   otpInvalid: "Ten kod nie zadziałał. Spróbuj ponownie:",
-  otpExpired: "Kod wygasł. Wpisz e-mail jeszcze raz:",
+  otpExpired: "Kod wygasł. Wpisz e-mail jeszcze raz — wyślę nowy.",
   otpTooManyAttempts: "Za dużo prób. Wpisz e-mail ponownie, wyślemy nowy kod.",
   otpCooldown: "Poczekaj chwilę - nowy kod możesz zamówić za minutę.",
   emailVerified: "E-mail potwierdzony ✨",
@@ -5100,7 +4538,7 @@ const plTranslations: TranslationTable = {
   llmAnalysing3: "Buduję Twój psychologiczny odcisk...",
   llmDumpReceived: "Profil gotowy ✨",
   askPhotos:
-    "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
+    "Prawie gotowe! Wyślij {min}–{max} zdjęć, na których dobrze cię widać. Bez odważnych zdjęć. Wideo też może być — byle było cię widać.",
   photoReceived: "Zdjęcie {n}/{max}",
   voicePromptSkipButton: "Bez wiadomości głosowej",
   voicePromptSkipHint: "Pominąć — przycisk „{button}” na dole czatu.",
@@ -5109,19 +4547,17 @@ const plTranslations: TranslationTable = {
     "Nagrane — posłuchaj. Wyślij inne, żeby zastąpić, albo „{button}”, żeby usunąć.",
   voicePromptReviewDone: "✅ Gotowe",
   voicePromptSkipped: "To bez wiadomości głosowej — w porządku.",
-  voicePromptSaved: "Zapisałem ✨ Usłyszy ją tuż przed decyzją.",
+  voicePromptSaved: "Zapisane ✨ Twój match usłyszy to przed odpowiedzią.",
   voicePromptTooShort: "To ledwie sekunda — przycisk mikrofonu trzeba przytrzymać. Spróbuj jeszcze raz, celuj w jakieś 15 sekund.",
   voicePromptTooLong: "Trochę za długo — zmieść się w 30 sekundach, inaczej nikt tego nie dosłucha. Nagrasz jeszcze raz?",
   voicePromptUnsafe: "Tego nie mogę umieścić w profilu. Nagraj coś innego — albo pomiń, to nieobowiązkowe.",
   voicePromptContactInfo: "Nicków i numerów lepiej nie podawaj — spotkanie organizuję ja, o to właśnie chodzi. Opowiedz lepiej coś o sobie.",
   voicePromptUnavailable: "Nie udało mi się przetworzyć nagrania. Wyślij je jeszcze raz za chwilę.",
-  voicePromptPitchCaption: "{name} nagrał(a) to dla ciebie",
+  voicePromptPitchCaption: "{name}: wiadomość głosowa dla ciebie",
   photoRejected:
     "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
-  photoDuplicate:
-    "To zdjęcie jest już w Twoim profilu. Dodaj inne ujęcie - wszystkie zdjęcia muszą być unikalne.",
-  photoDuplicateNear:
-    "To zdjęcie jest już w Twoim profilu. Dodaj inne ujęcie - wszystkie zdjęcia muszą być unikalne.",
+  photoDuplicate: "To zdjęcie jest już w profilu — wyślij inne.",
+  photoDuplicateNear: "To zdjęcie jest już w profilu — wyślij inne.",
   photoUnsafeContent:
     "Tego zdjęcia nie można opublikować w profilu. Wybierz inne zdjęcie bez treści erotycznych.",
   photoFaceObscured:
@@ -5132,14 +4568,11 @@ const plTranslations: TranslationTable = {
     "Wszystkie zdjęcia muszą należeć do jednej osoby. Upewnij się, że Twoja twarz jest na każdym ujęciu.",
   photoIdentityUncertain:
     "Nie udało się wiarygodnie dopasować twarzy. Wyślij wyraźniejsze zdjęcie z lepszym światłem i dobrze widoczną twarzą.",
-  photoConsensusPending:
-    "Nie ustaliłem jeszcze tożsamości profilu. Wyślij jeszcze jedno inne zdjęcie, na którym widać tę samą osobę.",
-  photoConsensusOutlierRejected:
-    "Jedno oczekujące zdjęcie pokazywało inną osobę, więc go nie dodałem.",
-  photoConsensusConfirmed:
-    "Tożsamość potwierdzona przez pasujące zdjęcia ✨",
+  photoConsensusPending: "Wyślij jeszcze jedno zdjęcie — po dwóch ujęciach poznam, że to ty.",
+  photoConsensusOutlierRejected: "Na jednym zdjęciu jest ktoś inny — tego nie dodałem.",
+  photoConsensusConfirmed: "Świetnie, na wszystkich zdjęciach jesteś ty ✨",
   photoConsensusNoPairCap:
-    "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
+    "Nadal nie widzę dwóch zdjęć tej samej osoby. Wyślij jeszcze jedno wyraźne zdjęcie siebie.",
   photoVisionError: "Nie udało się przetworzyć pliku. Spróbuj ponownie.",
   photoInvalidMedia:
     "Ten plik nie jest obsługiwanym zdjęciem. Wyślij obraz JPEG, PNG, WebP lub HEIC.",
@@ -5153,25 +4586,14 @@ const plTranslations: TranslationTable = {
     "Wygląda dobrze?",
   profileConfirm: "Wygląda dobrze",
   profileEdit: "Zmień coś",
-  onboardingComplete:
-    "Jesteś w środku! 🎉\n\n" +
-    "Już szukam Twojego matcha. " +
-    "Odezwę się, gdy pojawi się ktoś wyjątkowy.",
+  onboardingComplete: "*Gotowe, wchodzisz!* 🎉\n\nJuż szukam ci pary — napiszę, gdy tylko znajdę.",
   btnContinuePhotos: "Dalej ➡️",
   finishOnboardingFirst:
     "Najpierw dokończ rejestrację, potem menu i ustawienia będą dostępne.\nWpisz /start, aby kontynuować.",
   verifyPitch:
-    "Ostatni krok. Musimy potwierdzić, że jesteś prawdziwą osobą.\n\n" +
-    "Porównujemy selfie z weryfikacji z każdym zdjęciem w Twoim profilu. " +
-    "Zdjęcia, które nie pasują do Ciebie, zostaną odrzucone.\n\n" +
-    "Pominięcie weryfikacji mocno obniży Twój startowy ranking ELO, " +
-    "a algorytm będzie pokazywał Ci mniej dopasowań.",
+    "*Ostatni krok — potwierdź, że to ty*\n\nZrób selfie, a porównam je ze zdjęciami w profilu. Zdjęcia, na których nie ma ciebie, usunę.\n\nBez weryfikacji propozycji będzie mniej.",
   verifyPitchMandatory:
-    "Ostatni krok. Potwierdzamy, że każdy uczestnik to prawdziwa osoba.\n\n" +
-    "Porównamy selfie z weryfikacji z każdym zdjęciem w Twoim profilu — " +
-    "zdjęcia, które nie pasują do Ciebie, zostaną odrzucone.\n\n" +
-    "Jeśli na zdjęciach w profilu nie ma Ciebie — najpierw wymień je przyciskiem poniżej.\n\n" +
-    "Weryfikacja jest obowiązkowa: dobieranie par zacznie się zaraz po jej zaliczeniu.",
+    "*Ostatni krok — potwierdź, że to ty*\n\nZrób selfie, a porównam je ze zdjęciami w profilu. Jeśli na zdjęciach nie ma ciebie — najpierw je wymień. Po weryfikacji od razu zacznę szukać pary.",
   verifyMandatoryNotice:
     "Weryfikacja jest teraz obowiązkowa dla wszystkich nowych profili — dobieranie par zacznie się zaraz po jej zaliczeniu. Zajmie to około minuty:",
   verifyReminderNudge:
@@ -5184,7 +4606,7 @@ const plTranslations: TranslationTable = {
   verifyBtnSkipConfirm: "🔴 Pomiń mimo to",
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Wgraj inne zdjęcia",
-  verifyBtnRedoPhotosSecondary: "📷 Właściwie problem ze zdjęciami",
+  verifyBtnRedoPhotosSecondary: "📷 Najpierw zmienię zdjęcia",
   verifyBtnAddPhotos: "📷 Dodaj zdjęcia",
   verifyPhotosRequired:
     "Weryfikacja porównuje selfie ze zdjęciami w twoim profilu — a na razie ich nie ma. " +
@@ -5201,30 +4623,16 @@ const plTranslations: TranslationTable = {
     "Zdjęcia zaktualizowane ✅ Sprawdzam je ponownie względem selfie z weryfikacji — nie musisz jej powtarzać. Napiszę, gdy skończę.",
   verifyPhotosSavedNowVerify:
     "Zdjęcia zaktualizowane ✅ Został ostatni krok — weryfikacja:",
-  verifySkipped:
-    "Weryfikacja pominięta. Możesz uruchomić ją później z menu profilu, " +
-    "aby przywrócić swój ranking ELO.",
+  verifySkipped: "Weryfikacja pominięta. Możesz ją przejść później w menu profilu.",
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
   verifyRetryNotLive:
-    "Weryfikacja zatrzymała się, zanim w ogóle doszła do Twoich zdjęć — tym razem " +
-    "nie udało się potwierdzić żywej twarzy, więc nikt ich jeszcze nie oglądał. " +
-    "Co zwykle " +
-    "pomaga: jasne światło z przodu (nie z tyłu), cała twarz w kadrze, bez " +
-    "okularów przeciwsłonecznych i niczego, co ją zasłania. Kliknij " +
-    "🟢 Zweryfikuj teraz i spróbuj jeszcze raz.",
+    "*Nie udało się rozpoznać twarzy*\n\nStań twarzą do jasnego światła, zdejmij okulary i jeszcze raz kliknij 🟢 Zweryfikuj teraz.",
   verifyRetryUnfinished:
-    "Ta weryfikacja nie została dokończona, więc w ogóle nie doszła do Twoich " +
-    "zdjęć — nikt ich jeszcze nie oglądał. Nie przełączaj się z Telegrama i nie zamykaj " +
-    "kamery w trakcie — przejdź całość za jednym razem, to zajmuje około 15 " +
-    "sekund. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie.",
+    "*Weryfikacja została przerwana*\n\nPrzejdź ją za jednym razem, nie zamykając Telegrama — to około 15 sekund. Kliknij 🟢 Zweryfikuj teraz.",
   verifyRetryTechnical:
-    "Tym razem to była nasza wina, nie Twoja — drobna usterka techniczna po " +
-    "naszej stronie. Przerwało się, zanim zdjęcia zostały sprawdzone, więc nic o " +
-    "nich jeszcze nie rozstrzygnięto. " +
-    "Przepraszamy. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie — tym razem " +
-    "powinno przejść bez problemu.",
+    "*Błąd po naszej stronie*\n\nKliknij jeszcze raz 🟢 Zweryfikuj teraz — tym razem powinno się udać.",
   verifyReferenceExpired:
     "Usuwamy selfie z weryfikacji po 90 dniach, więc nie mamy już do czego " +
     "porównać twoich nowych zdjęć. Jeszcze jedna 10-sekundowa kontrola i gotowe - " +
@@ -5239,13 +4647,11 @@ const plTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
-    "⚠️ Twoje zdjęcia profilowe nie pasują do selfie z weryfikacji.\n\n" +
-    "Jeśli nie ma Cię na tych zdjęciach — kliknij 📷 poniżej, podmień je, a ja sprawdzę je ponownie automatycznie (nowe selfie nie jest potrzebne). Jeśli to jednak Ty, dopasowanie po prostu wyszło słabe — zweryfikuj się jeszcze raz przy dobrym świetle.",
+    "⚠️ *Zdjęcia nie pasują do selfie*\n\nJeśli to nie ty — wymień je przyciskiem 📷, sprawdzę ponownie. Jeśli to ty — przejdź weryfikację jeszcze raz przy dobrym świetle.",
   verifyPhotosDropped:
     "Jedna rzecz: część zdjęć nie pasowała do selfie z weryfikacji, więc zdjąłem je z profilu. Reszta jest widoczna. Dorzuć jeszcze kilka swoich ujęć, kiedy będziesz mieć chwilę 📷",
   verifyPhotosBelowMinimum:
-    "Jesteś zweryfikowany ✅ — to już na stałe.\n\n" +
-    "Ale część zdjęć nie pasowała do selfie, więc je zdjąłem i teraz w profilu jest mniej niż {min} zdjęć. Dodaj jeszcze {need} swoich, a od razu zacznę szukać pary 📷",
+    "Weryfikacja zaliczona ✅\n\nAle część zdjęć nie pasowała do selfie, więc je zdjąłem i teraz w profilu jest mniej niż {min} zdjęć. Dodaj jeszcze {need} swoich, a od razu zacznę szukać pary 📷",
   // --- Native-app push copy for the same verification outcomes (§1.4). Own
   // strings rather than reused DM copy: these land on a lock screen, so they
   // need a title, they must stay short, and they cannot point at a Telegram
@@ -5303,15 +4709,14 @@ const plTranslations: TranslationTable = {
   videoProcessingUnavailable:
     "Nie udało się teraz sprawdzić wideo. Poprzednie wideo nie zostało zmienione. Spróbuj ponownie za chwilę.",
   ticketRewardPhoto:
-    "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}*",
+    "🎟️ *Darmowy bilet na randkę jest twój!*\n\nTo prezent za zdjęcia. Jedna randka = 1 bilet. Saldo: *{balance}*",
   ticketRewardVideo:
-    "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}*",
+    "🎟️ *Kolejny darmowy bilet jest twój!*\n\nTo prezent za wideo. Jedna randka = 1 bilet. Saldo: *{balance}*",
   ticketRewardStudent:
-    "🎓 E-mail uczelniany potwierdzony — bonus studencki: *2 darmowe bilety na randki* są już w Twoim portfelu.\n\nKażda randka kosztuje 1 bilet, więc pierwsze dwie randki są na nasz koszt. Saldo: *{balance}*",
+    "🎓 *Dwa darmowe bilety są twoje!*\n\nTo prezent za potwierdzony uczelniany e-mail. Jedna randka = 1 bilet. Saldo: *{balance}*",
   welcomeGiftTicket:
-    "Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$8.49\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
-  ticketStorePurchased:
-    "✨ Płatność otrzymana — dodano *{count}* bilet(ów)!\n\nSaldo: *{balance}*",
+    "*Pierwszy bilet ode mnie* ❤️\n\nZwykle randka kosztuje 1 bilet (~$8.49). Ten jest za darmo — już jest w portfelu.",
+  ticketStorePurchased: "✨ *Płatność przeszła!* Dodane bilety: *{count}*. Saldo: *{balance}*",
   ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
   premiumCheckoutAlreadySubscribed:
     "Masz już aktywną subskrypcję Premium, więc płatność została zatrzymana — nic nie pobrano.",
@@ -5320,39 +4725,35 @@ const plTranslations: TranslationTable = {
   ticketStoreInvoiceTitle: "Bilety Gennety",
   ticketStoreInvoiceDesc:
     "{count} bilet(ów) dodanych do portfela. Każdy bilet pokrywa jedną randkę.",
-  ticketGateInvoiceDesc:
-    "Zabezpieczenie randki — {count} bilet(y/ów). Jeden bilet na jedną osobę.",
+  ticketGateInvoiceDesc: "Opłata za randkę. Bilety: {count}. Jeden bilet — na jedną osobę.",
   ticketStoreInvoiceLabel: "Bilety Gennety × {count}",
   onboardingFinalizeBlocked:
     "Nie mogę jeszcze dokończyć konfiguracji — po mojej stronie brakuje kilku danych. Spróbuj ponownie za chwilę; jeśli to się powtórzy, napisz na @gennetysupport, ogarniemy to.",
-  onboardingPhotosNeedMore:
-    "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
+  onboardingPhotosNeedMore: "Zdjęcia: {count}/{min}. Wyślij jeszcze {remaining}.",
   onboardingPhotosBonusOffer:
-    "Wymagane zdjęcia są gotowe.\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć darmowy bilet na randkę. Za krótkie wideo profilowe otrzymasz kolejny darmowy bilet.\n\nOba bonusy są opcjonalne — wyślij media teraz albo przejdź dalej.",
+    "Wymagane zdjęcia są ✨\nJeszcze {remaining} zdjęć (do {threshold}) — i darmowy bilet. Za krótkie wideo — kolejny.",
   onboardingPhotosBonusOfferAfterVideo:
-    "Wymagane zdjęcia są gotowe, a bonus za wideo jest już zabezpieczony.\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć drugi darmowy bilet, albo przejdź dalej.",
+    "Wymagane zdjęcia są, bilet za wideo jest twój ✨\nJeszcze {remaining} zdjęć (do {threshold}) — i drugi darmowy bilet.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} zdjęć. Jeszcze {remaining}, aby odblokować darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
+    "Zdjęcia: {count}/{threshold}.\nJeszcze {remaining} — i darmowy bilet jest twój.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} zdjęć. Jeszcze {remaining}, aby odblokować drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
+    "Zdjęcia: {count}/{threshold}.\nJeszcze {remaining} — i drugi darmowy bilet jest twój.",
   onboardingPhotosPhotoBonusEarned:
-    "Masz {count} zdjęć, a darmowy bilet za zdjęcia jest już zabezpieczony ✨\n\nMożesz dodać zdjęcia do {max} lub krótkie wideo profilowe za kolejny darmowy bilet. Albo przejdź dalej.",
+    "Zdjęcia: {count}. Darmowy bilet za zdjęcia jest twój ✨\nMożesz dodać zdjęcia (do {max}) albo wideo — za nie kolejny bilet.",
   onboardingPhotosBothBonusesEarned:
-    "Masz {count} zdjęć i wideo profilowe — oba darmowe bilety są zabezpieczone ✨\n\nMożesz dodać zdjęcia do {max} albo przejść dalej.",
+    "Zdjęcia: {count}, wideo jest — oba darmowe bilety są twoje ✨\nMożesz dodać jeszcze zdjęcia (do {max}).",
   onboardingPhotosPhotoBonusEarnedMax:
-    "Wszystkie {max} zdjęć są gotowe, a darmowy bilet za zdjęcia jest zabezpieczony ✨\n\nMożesz wysłać krótkie wideo profilowe za kolejny darmowy bilet albo przejść dalej.",
+    "Wszystkie {max} zdjęć są, bilet za zdjęcia jest twój ✨\nZa krótkie wideo — kolejny darmowy bilet.",
   onboardingPhotosBothBonusesEarnedMax:
-    "Wszystkie {max} zdjęć i wideo profilowe są gotowe — oba darmowe bilety są zabezpieczone ✨\n\nPrzejdź dalej, gdy będziesz gotowy.",
+    "Wszystkie {max} zdjęć i wideo są ✨\nOba darmowe bilety są twoje.",
   onboardingPhotosOptional:
-    "Wymagane zdjęcia są gotowe.\n\nMożesz dodać więcej zdjęć do {max}, wysłać krótkie wideo profilowe albo przejść dalej.",
+    "Wymagane zdjęcia są.\nMożesz dodać więcej (do {max}) albo krótkie wideo.",
   onboardingPhotosOptionalAfterVideo:
-    "Wymagane zdjęcia i wideo profilowe są gotowe.\n\nMożesz dodać więcej zdjęć do {max} albo przejść dalej.",
-  onboardingPhotosOptionalMax:
-    "Wszystkie {max} zdjęć są gotowe.\n\nMożesz wysłać krótkie wideo profilowe albo przejść dalej.",
-  onboardingPhotosOptionalMaxAfterVideo:
-    "Wszystkie {max} zdjęć i wideo profilowe są gotowe.\n\nPrzejdź dalej, gdy będziesz gotowy.",
+    "Wymagane zdjęcia i wideo są.\nMożesz dodać więcej zdjęć (do {max}).",
+  onboardingPhotosOptionalMax: "Wszystkie {max} zdjęć są.\nMożesz dodać krótkie wideo.",
+  onboardingPhotosOptionalMaxAfterVideo: "Wszystkie {max} zdjęć i wideo są ✨",
   ticketWalletText:
-    "🎟️ *Moje bilety*\n\nMasz *{balance}* bilet(ów). Każda randka kosztuje 1 bilet — dokupisz w każdej chwili.",
+    "🎟️ *Moje bilety*\n\nBilety: *{balance}*. Każda randka kosztuje 1 bilet — dokupić można w każdej chwili.",
   ticketWalletOpenStore: "🎟️ Kup bilety",
   menuBack: "⬅️ Wstecz",
   myProfileBody:
@@ -5370,32 +4771,28 @@ const plTranslations: TranslationTable = {
   intentFalling: "Zakochać się",
   intentLongterm: "Coś na dłużej",
   intentPrivateNote: "widzisz to tylko ty",
-  myProfileIntentLine: "🎯 Szukasz: {intent} · {privateNote}",
-  myProfileIntentUnset: "🎯 Szukasz: nie wybrano · {privateNote}",
+  myProfileIntentLine: "🎯 Szukasz: {intent}",
+  myProfileIntentUnset: "🎯 Szukasz: nie wybrano",
   editIntentBtn: "🎯 Czego szukam",
   editIntentPrompt:
     "Czego teraz szukasz? Zaznacz wszystko, co pasuje — zwykle to nie jedno.\n\nWidzisz to tylko ty — pomaga mi lepiej dobierać parę.",
   editIntentCleared: "Nic nie wybrano",
   editProfileBody:
-    "Te dane są zablokowane:\n\n" +
-    "• *Imię i nazwisko:* {firstName} {surname}\n" +
-    "• *Wiek:* {age}\n" +
-    "• *Uniwersytet:* {university}\n\n" +
-    "Możesz edytować:",
+    "Tego nie można zmienić:\n\n• *Imię i nazwisko:* {firstName} {surname}\n• *Wiek:* {age}\n• *Uniwersytet:* {university}\n\nMożesz edytować:",
   editBioBtn: "📝 O mnie",
   editPrefsBtn: "💘 Kogo szukam",
   editMajorBtn: "💼 Czym się zajmujesz",
   editProfilePhotosBtn: "📸 Moje zdjęcia",
   editBioPrompt:
-    "Napisz kilka słów o sobie (maks. 500 znaków).\n👀 Twoja para czyta to przed randką.",
-  editBioCurrent: "Teraz jest tam to - to, co wyślesz, zastąpi całość:",
+    "Napisz kilka zdań o sobie (do 500 znaków) — twój match przeczyta je przed randką.",
+  editBioCurrent: "Teraz jest tak. Nowy tekst go zastąpi:",
   editBioTooLong: "Za długie - zmieść się w 500 znakach.",
   editBioSaved: "„O mnie” zaktualizowane",
   editMajorPrompt:
     "Czym się zajmujesz? (praca / studia / branża, maks. 100 znaków)\n👀 Widoczne dla Twojej pary.",
   editMajorTooLong: "Za długie - zmieść się w 100 znakach.",
   editMajorSaved: "Zapisano",
-  editPrefsTitle: "💘 *Kogo szukam*\n\nWpływa na to, kto Ci się trafi. Co zmienić?",
+  editPrefsTitle: "💘 *Kogo szukam*\n\nCo zmienić?",
   editPrefsAgeBtn: "🎂 Wiek partnera",
   editPrefsDescriptionBtn: "✨ Jakiej osoby szukam",
   editPrefsCurrent:
@@ -5407,7 +4804,7 @@ const plTranslations: TranslationTable = {
   editPrefsDescriptionSaved: "Preferencje zaktualizowane",
   editHobbiesSaved: "Zainteresowania zaktualizowane",
   agentEntryPrompt: "Proszę:",
-  agentFallbackError: "Coś mi się wysypało. Powtórzysz?",
+  agentFallbackError: "Coś poszło nie tak. Powtórz, proszę.",
   agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",
   agentBlockedSuspended:
     "Twoje konto jest teraz wstrzymane po naszej stronie, więc tu nie pomogę. Pytania na @gennetysupport.",
@@ -5415,8 +4812,7 @@ const plTranslations: TranslationTable = {
     "Twoje konto jest w trakcie weryfikacji. Na razie nie ma co robić — szczegóły powie @gennetysupport.",
   agentBlockedBanned:
     "To konto jest zamknięte. Jeśli uważasz, że to błąd, napisz na @gennetysupport.",
-  profileEmbeddingSyncPending:
-    "Zapisano. Matching zastosuje to po automatycznej synchronizacji profilu.",
+  profileEmbeddingSyncPending: "Zapisane. Uwzględnię to przy następnym doborze.",
   editPrefsBack: "⬅️ Wróć do edycji",
   editAgeRangePrompt: "W jakim przedziale wiekowym mamy szukać dla Ciebie partnera? (np. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Nie łapię. Podaj dwie liczby, np. 20-28 (zakres {min}-{max}).",
@@ -5446,7 +4842,7 @@ const plTranslations: TranslationTable = {
   photoStagePanelBtn: "🗂 Moje zdjęcia",
   photoStagePanelPlaceholder: "Wyślij więcej zdjęć lub kliknij 🗂",
   photoEditorIntro:
-    "To wszystko, co wysłałeś. Kliknij 🗑 pod dowolnym zdjęciem, aby je usunąć, albo wyślij nowe tutaj.",
+    "Oto wszystkie twoje zdjęcia. Kliknij 🗑 pod dowolnym zdjęciem, aby je usunąć, albo wyślij nowe tutaj.",
   photoEditorBackBtn: "← Wróć do wysyłania",
   menuVideo: "🎬 Wideo profilu",
   editVideoPrompt:
@@ -5473,15 +4869,10 @@ const plTranslations: TranslationTable = {
   themeDarkOption: "🌙 Ciemny",
   themeLightOption: "☀️ Jasny",
   helpBody:
-    "*Potrzebujesz pomocy?*\n\n" +
-    "Nie tworzymy czatów między użytkownikami - tak działa nasz model. " +
-    "Problem z dopasowaniem, randką albo botem? Napisz do supportu:\n\n" +
-    "💬 [@gennetysupport](https://t.me/gennetysupport)",
+    "*Potrzebujesz pomocy?*\n\nProblem z matchem, randką albo botem — napisz do supportu:\n\n💬 [@gennetysupport](https://t.me/gennetysupport)",
   settingsDeleteAccount: "🗑 Usuń konto",
   deleteAccountConfirm:
-    "Na pewno? To *trwale usunie* Twoje konto.\n\n" +
-    "Zniknie wszystko - profil, zdjęcia, dopasowania, embeddingi. " +
-    "*Tego nie da się cofnąć.*",
+    "*Usunąć konto na zawsze?*\n\nZnikną profil, zdjęcia i matche. Tego nie da się cofnąć.",
   deleteAccountYes: "Tak, usuń wszystko",
   deleteAccountNo: "Anuluj",
   deleteAccountDone:
@@ -5494,37 +4885,27 @@ const plTranslations: TranslationTable = {
   accountActionExpired: "To potwierdzenie wygasło. Otwórz działanie ponownie.",
   statusActionUnavailable: "Ta czynność jest niedostępna dla bieżącego statusu konta.",
   deleteFreezeIntro:
-    "Zaczekaj — zanim wszystko usuniesz 👀\n\n" +
-    "Nie musisz tracić wszystkiego. Lepiej *zamroź* konto: profil, zdjęcia i weryfikacja " +
-    "zostają, znikasz z dopasowywania, a następnym razem wystarczy wysłać /start, by wrócić " +
-    "prosto do swojego gotowego profilu — bez ponownego onboardingu.\n\n" +
-    "Nadal chcesz usunąć? Tego nie da się cofnąć.",
+    "Zaczekaj — zanim wszystko usuniesz 👀\n\nNie musisz tracić wszystkiego. Lepiej *zamroź* konto: profil, zdjęcia i weryfikacja zostają, znikasz z dopasowywania, a następnym razem wystarczy wysłać /start, by wrócić prosto do swojego gotowego profilu — bez ponownej rejestracji.\n\nNadal chcesz usunąć? Tego nie da się cofnąć.",
   deleteFreezeBtn: "❄️ Zamroź konto",
   deleteProceedBtn: "Mimo to usuń konto",
   freezeConfirmed:
     "Gotowe — Twoje konto jest *zamrożone* ❄️\n\n" +
     "Nie widać Cię w dopasowywaniu i nie będę pisać. " +
     "Wróć kiedy chcesz przez /start — wszystko czeka na swoim miejscu.",
-  freezeWelcomeBack:
-    "Witaj z powrotem! ❄️ → ☀️ Twoje konto jest *odmrożone* i znów aktywne. " +
-    "Oto Twój profil:",
-  deleteFinalYes: "Tak, jestem pewien na 100%",
-  deleteFinalNoSoft: "Nie",
-  deleteFinalNoHard: "O Boże, nie",
+  freezeWelcomeBack: "*Witaj z powrotem!* Konto odmrożone.",
+  deleteFinalYes: "Tak, usuń",
+  deleteFinalNoSoft: "Nie, zostaw",
+  deleteFinalNoHard: "Nie, zostaw",
   freezePartnerNotice:
     "Ważne — Twoje dopasowanie nie jest już dostępne, więc ta randka się nie odbędzie. " +
     "Spokojnie: w następnej turze masz priorytet 💛",
   matchHeadline: "💘 Znaleźliśmy dla Ciebie dopasowanie!",
-  matchDeadlineNotice:
-    "Masz 24h na odpowiedź. " +
-    "Gdy klikniesz, *decyzja jest ostateczna*. Bez cofania.",
+  matchDeadlineNotice: "Na odpowiedź masz 24 godziny. Potem nie można zmienić zdania.",
   matchStreamStart: "Czemu do siebie pasujecie…",
   matchBtnAccept: "Akceptuj",
   matchBtnDecline: "❌ Odpuść",
   matchDeclineConfirmPrompt:
-    "Na pewno odpuszczasz?\n\n" +
-    "Ta decyzja jest ostateczna — tej osoby już więcej nie zobaczysz. " +
-    "Kliknij, aby potwierdzić, albo wróć.",
+    "Na pewno pasujesz?\n\nTo decyzja ostateczna — tej osoby już nie zobaczysz.",
   matchBtnConfirmDecline: "❌ Tak, odpuść",
   matchBtnKeepDeciding: "← Wróć",
   matchDecisionQuestionM:
@@ -5542,38 +4923,31 @@ const plTranslations: TranslationTable = {
   matchAccepted: "Przyjęte ✨ Czekamy na drugą osobę.",
   matchBothAccepted: "Wzajemne 🤍 Znajdźmy termin.",
   matchDeclined:
-    "W porządku. Jaki był główny powód, że odpuściłeś/odpuściłaś?\n\n" +
-    "Kliknij opcję poniżej — szybka odpowiedź, dzięki niej z czasem widzę wzorzec.\n\n" +
-    "Albo powiedz to własnymi słowami: krótki tekst lub głosówka — to uwzględnię w Twoim kolejnym dropie.",
+    "Jasne. Co nie pasowało? Wybierz opcję albo napisz własnymi słowami — uwzględnię to następnym razem.",
   matchDeclineReasonType: "Wyglądowo nie mój typ",
   matchDeclineReasonVibe: "Inny vibe",
   matchDeclineReasonInterests: "Zainteresowania nie pasują",
   matchDeclineReasonLifestyle: "Styl życia nie pasuje",
   matchDeclineReasonOther: "Coś innego",
   matchDeclineOtherAsk:
-    "Jasne — wyślij krótki tekst albo głosówkę z powodem. Uwzględnię to w kolejnym dropie.",
+    "Okej — wyślij krótki tekst albo wiadomość głosową z powodem. Uwzględnię to przy następnym doborze.",
   matchDeclineFeedbackSaved: "Zapisane. Kolejne propozycje ustawię pod to.",
   matchDeclineAlreadyNoted: "Już zapisane — dzięki.",
   matchDeclineFeedbackFailed: "Nie udało się teraz zapisać. Nadal możesz wysłać krótki tekst albo głosówkę.",
   matchDeclineThanks: "Jasne. Szukam dalej.",
   matchPeerDecided:
-    "Twoje dopasowanie już odpowiedziało. Teraz Twoja kolej.\n\n" +
-    "*Co* wybrali, zobaczysz dopiero po własnej odpowiedzi. " +
-    "I pamiętaj: Twoja odpowiedź jest ostateczna.",
+    "*Twój match już odpowiedział*\n\nCo dokładnie — dowiesz się po swojej odpowiedzi.",
   matchPeerWasAccepted: "FYI - Twoje dopasowanie było na tak. Tym razem po prostu się nie złożyło.",
   matchPeerWasDeclined: "FYI - Twoje dopasowanie tym razem odpuściło.",
   matchAcceptedPeerDeclined:
     "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu. " +
     "Szukam dalej; następna propozycja będzie bliżej.",
   matchAcceptedPeerDeclinedPriority:
-    "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu.\n\n" +
-    "Podniosłem Twój priorytet na kolejny drop. Następna propozycja będzie bliżej.",
+    "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu.\n\nPodniosłem Twój priorytet przy kolejnym doborze. Następna propozycja będzie bliżej.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Zweryfikowano",
-  matchVerifiedQuote:
-    "Zweryfikowaliśmy tę osobę. Przeszła naszą weryfikację twarzy - " +
-    "zdjęcia w profilu pasują do jej prawdziwej tożsamości.",
-  matchSynergyLabel: "Synergia {score}/99",
+  matchVerifiedQuote: "Zweryfikowane: na zdjęciach naprawdę jest ta osoba.",
+  matchSynergyLabel: "Zgodność {score}/99",
   matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Zostało {hours}h na odpowiedź",
   pitchCountdownMinutes: "⏳ Zostało {minutes} min na odpowiedź",
@@ -5596,8 +4970,7 @@ const plTranslations: TranslationTable = {
   stallBtnStillOn: "🟢 Tak, wszystko aktualne",
   stallBtnPlansChanged: "Plany się zmieniły",
   stallPeerAsked:
-    "Przypomniałem {name} o was — czekam na odpowiedź.\n\n" +
-    "Od ciebie na razie nic nie trzeba. Nie zostawię cię w zawieszeniu — wrócę z wieściami tak czy inaczej.",
+    "Przypomniałem {name} o was — czekam na odpowiedź.\n\nOd ciebie na razie nic nie trzeba.",
   stallStillOnAck: "Jasne, wszystko aktualne ✨",
   stallPeerStillOn: "{name} jest w kontakcie, wszystko aktualne ✨",
   stallCancelConfirmPrompt:
@@ -5605,8 +4978,7 @@ const plTranslations: TranslationTable = {
   stallBtnCancelConfirm: "🔴 Tak, odwołaj",
   stallBtnCancelBack: "🟢 ← Wróć",
   stallCancelAborted: "Dobrze — wszystko zostaje. 👍",
-  stallCancelDone:
-    "Rozumiem. {name} poinformowałem — bez szczegółów.\n\nWracasz do puli.",
+  stallCancelDone: "Rozumiem. {name} poinformowałem — bez szczegółów.\n\nWracasz do wyszukiwania.",
   stallPeerCancelled:
     "Randka odwołana — u {name} zmieniły się plany.\n\n" +
     "To nie o ciebie. Podniosłem twój priorytet w następnym doborze.",
@@ -5618,31 +4990,22 @@ const plTranslations: TranslationTable = {
     "a nie mogłem trzymać was oboje w zawieszeniu.\n\n" +
     "Jeśli plany się zmieniają — po prostu napisz. To normalne.",
   stallTimeoutVenueUnresolved:
-    "Twoja randka z {name} została odwołana — nie udało mi się na czas znaleźć dla was miejsca.\n\n" +
-    "To moja wina, nie wasza. Podniosłem twój priorytet w następnym dropie.",
+    "Twoja randka z {name} została odwołana — nie udało mi się na czas znaleźć dla was miejsca.\n\nTo moja wina, nie wasza. Podniosłem twój priorytet w następnym doborze.",
   pitchExpired: "⏳ Czas minął - ta propozycja wygasła.",
   matchExpiredSilentWarning:
-    "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
-    "Poczekaj na kolejny drop.\n\n" +
-    "Nie ignoruj propozycji - to nie fair wobec drugiej osoby. " +
-    "Następnym razem obniżymy za to Twój rating.",
+    "*Czas na odpowiedź minął*\n\nNastępnym razem odpowiedz chociaż „nie” — ktoś czeka.",
   matchExpiredSilentPenalty:
-    "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
-    "Poczekaj na kolejny drop.\n\n" +
-    "Twój rating został obniżony za ignorowanie propozycji - to nie fair wobec drugiej osoby.",
-  matchExpiredYouMissedDate: "Ważne - Twoje dopasowanie było naprawdę na tak. Przegapiłeś/przegapiłaś realną randkę.\n\n",
+    "*Czas na odpowiedź minął*\n\nTo już drugi raz, więc ocena została obniżona. Następnym razem odpowiedz chociaż „nie” — ktoś czeka.",
+  matchExpiredYouMissedDate: "Ważne — twój match był na tak. To mogła być prawdziwa randka.\n\n",
   matchExpiredPeerIgnored:
-    "Twoje dopasowanie nie odpowiedziało w ciągu 24h, więc randka się nie odbędzie. " +
-    "Widzimy się przy kolejnym dropie.",
+    "Twój match nie odpowiedział w ciągu 24h, więc randka się nie odbędzie. Widzimy się przy następnym doborze.",
   // §3.4 — this side PASSED, and the partner then went silent. A first
   // decision leaves the row `proposed` either way, so a decliner reaches
   // expiry classified as a `responder` exactly like someone who accepted
   // and got stood up. They already got their "you passed" ack, so this is
   // deliberately a bare fact with no consolation and no card: it exists
   // only so the match doesn't vanish from the menu and banner unexplained.
-  matchExpiredSelfDeclined:
-    "To dopasowanie jest zamknięte — odmówiłeś, a 24h minęły. " +
-    "Widzimy się przy kolejnym dropie.",
+  matchExpiredSelfDeclined: "Match zamknięty. Widzimy się przy następnym doborze.",
   // Karta wygaśnięcia (PRODUCT_SPEC §3.4). Nagłówki są neutralne płciowo —
   // forma "odpuściłeś/odpuściłaś" jest nieczytelna w dużym stopniu pisma.
   // Polskie znaki diakrytyczne wymagają PEŁNEGO Unbounded (`unbounded-700.woff`),
@@ -5650,11 +5013,11 @@ const plTranslations: TranslationTable = {
   expiryCardOverlineExpired: "OKNO ZAMKNIĘTE",
   expiryCardHeadlineExpired: "CZAS\nMINĄŁ",
   expiryCardSublineExpired:
-    "Minęły 24 godziny bez odpowiedzi.\nDo zobaczenia w kolejnym dropie.",
+    "Minęły 24 godziny bez odpowiedzi.\nCzekamy na ciebie przy następnym doborze.",
   expiryCardOverlinePenalty: "DRUGI RAZ BEZ ODPOWIEDZI",
   expiryCardHeadlinePenalty: "RATING\nOBNIŻONY",
   expiryCardSublinePenalty:
-    "Drugie dopasowanie bez odpowiedzi.\nDo zobaczenia w kolejnym dropie.",
+    "Drugi match bez odpowiedzi.\nCzekamy na ciebie przy następnym doborze.",
   expiryCardOverlinePeerIgnored: "TO NIE O TOBIE",
   expiryCardHeadlinePeerIgnored: "BRAK\nODPOWIEDZI",
   expiryCardSublinePeerIgnored:
@@ -5663,67 +5026,37 @@ const plTranslations: TranslationTable = {
   expiryCardHeadlineMissedDate: "TO BYŁO\nWZAJEMNE",
   expiryCardSublineMissedDate:
     "Twoje dopasowanie chciało się spotkać.\n24 godziny bez odpowiedzi.",
-  expiryCaptionSilentWarning:
-    "Nie ignoruj propozycji - to brak szacunku wobec osoby, która na ciebie czekała. " +
-    "Następnym razem obniżymy za to twój rating.",
+  expiryCaptionSilentWarning: "Następnym razem odpowiedz chociaż „nie” — ktoś czeka.",
   expiryCaptionSilentPenalty:
-    "Ignorowanie propozycji to brak szacunku wobec osoby, która na ciebie czekała.",
-  expiryCaptionPeerIgnored: "Do zobaczenia w kolejnym dropie.",
+    "To już drugi raz, więc ocena została obniżona. Następnym razem odpowiedz chociaż „nie” — ktoś czeka.",
+  expiryCaptionPeerIgnored: "Widzimy się przy następnym doborze.",
   noMatchThisWeekTier1:
-    "Hej\n\n" +
-    "Tym razem bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
-    "i wolę poczekać, niż podsunąć Ci kogoś niewartego Twojego czasu.\n\n" +
-    "Tymczasem:\n" +
-    "• społeczność rośnie, dobór jest coraz celniejszy.\n" +
-    "• im dłużej czekasz, tym wyższy Twój priorytet w kolejnym dropie.\n\n" +
-    "Działam ✨",
+    "*W tym tygodniu bez matcha*\n\nNie znalazłem nikogo, kto naprawdę pasuje, a nie chcę proponować byle kogo. Przy następnym doborze masz priorytet ✨",
   noMatchThisWeekTier2:
-    "Hej\n\n" +
-    "Znowu z rzędu — wciąż nie ma nikogo, kogo naprawdę chciałbym Ci przedstawić. " +
-    "Dzięki, że jesteś; to ma znaczenie.\n\n" +
-    "Co się dzieje:\n" +
-    "• ściągam więcej osób podobnych do Ciebie i stroję algorytm pod Ciebie.\n" +
-    "• Twój priorytet w kolejnym dropie jest już podniesiony.\n\n" +
-    "Działam 🤍",
+    "*Znowu bez matcha*\n\nDrugi tydzień z rzędu nie widzę nikogo, kto naprawdę pasuje. Dzięki, że czekasz — przy następnym doborze twój priorytet jest jeszcze wyższy 🤍",
   noMatchThisWeekTier3:
-    "Hej\n\n" +
-    "Znowu szczerze: wciąż nie ma osoby, która naprawdę byłaby warta Twojego czasu. " +
-    "Mnie to frustruje jeszcze bardziej niż Ciebie i nie będę udawać inaczej.\n\n" +
-    "Po mojej stronie:\n" +
-    "• osobiście pilnuję Twojej kolejki i popycham wzrost w Twojej okolicy.\n" +
-    "• im dłużej czekasz, tym wyżej przesuwasz się w priorytecie dropu.\n\n" +
-    "Dzięki za zaufanie 🤍",
+    "*Na razie bez matcha*\n\nNadal nie ma nikogo, kto naprawdę pasuje, a nie będę proponować byle kogo. Pilnuję twojej kolejki — przy następnym doborze jesteś wśród pierwszych 🤍",
   noMatchDiscountOffer:
     "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
   poolExhaustedPauseNotice:
-    "Hej\n\n" +
-    "Szczerze: teraz naprawdę nie ma dla Ciebie nikogo — sprawdziłem, pula jest pusta. " +
-    "To nie o Tobie, po prostu na razie nie mam kogo Ci przedstawić.\n\n" +
-    "Zawieszam Twoje poszukiwania, zamiast wysyłać wciąż tę samą wiadomość. " +
-    "Reszta zostaje bez zmian — Twój profil, zdjęcia i weryfikacja nigdzie nie znikają.\n\n" +
-    "Gdy tylko pojawi się ktoś pasujący, sam przywrócę Cię do poszukiwań — nie musisz nic robić. " +
-    "Możesz też wznowić samodzielnie w dowolnym momencie z menu.",
+    "*Wstrzymuję wyszukiwanie*\n\nTeraz naprawdę nie ma nikogo dla ciebie — to nie twoja wina. Gdy tylko pojawi się ktoś pasujący, sam przywrócę cię do wyszukiwania.",
   poolExhaustedResumeNotice:
-    "Hej\n\n" +
-    "Dobre wieści — pojawił się ktoś nowy, kto pasuje, więc przywróciłem Cię do poszukiwań. " +
-    "Znów jesteś w grze na następny drop 🤍",
+    "Dobre wieści — pojawił się ktoś pasujący, więc przywróciłem cię do wyszukiwania. Jesteś w następnym doborze 🤍",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
     "Wzajemnie ✨ Otwórz kalendarz i zaznacz pasujące godziny.",
   matchScheduleAfterTicket:
     "📅 Teraz wybierz czas — otwórz kalendarz i zaznacz wszystkie pasujące terminy.",
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
-  ticketCardCaption:
-    "Wzajemnie ✨ Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
-  ticketCardCaptionPremium:
-    "Wzajemnie ✨ Premium pokrywa oba bilety — od razu wybieracie czas.",
+  ticketCardCaption: "To match 🤍 Weź bilet — i wybierzemy termin.",
+  ticketCardCaptionPremium: "To match 🤍 Premium pokrywa oba bilety — od razu wybieramy termin.",
   ticketButton: "🎟️ Odbierz bilet na randkę",
   ticketViewButton: "🎟️ Zobacz swój bilet na randkę",
   ticketStatusButton: "Otwórz randkę",
   ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
   ticketPeerTookTheirs:
-    "{name} właśnie odebrał(a) swój bilet na randkę 🎟️ Twój jest ostatni — potem otwieramy planowanie.",
+    "{name} ma już bilet na randkę 🎟️ Został twój — potem otwieramy planowanie.",
   bumpVerifiedDm:
     "Jesteście oboje na miejscu ✨ Randka zaliczona — bilet na następną ode mnie.",
   bumpDeckIntro: "Jeśli rozmowa będzie potrzebowała kierunku:",
@@ -5734,19 +5067,18 @@ const plTranslations: TranslationTable = {
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
   matchScheduledBtnShare: "📤 Udostępnij kartę",
   dateCardWhen: "KIEDY",
-  dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
+  dateCardSlogan: "Bez pisania.\nOd razu na żywo.",
   dateCardShareCaption:
     "Udostępniaj śmiało — twarz Twojego matcha jest zasłonięta dla ochrony jego prywatności 💞",
   dateCardShareFailed:
     "Nie udało się przygotować karty do udostępnienia — spróbuj za chwilę.",
-  matchSchedulePickedPrefix: "Wybrałeś/wybrałaś: ",
+  matchSchedulePickedPrefix: "Twój wybór: ",
   matchScheduleWaitingPeer: "Czekamy na drugą osobę...",
   matchSchedulePeerProposed:
     "Twój match zaznaczył już godziny w kalendarzu. Otwórz — potwierdź jedną albo zaproponuj własną:",
   matchSchedulePeerSuggestedAlternative:
     "Twój match zaproponował inny termin. Zerknij — możesz się zgodzić albo zaproponować swój.",
-  matchScheduleSavedConfirmation:
-    "Zapisane ✨ Dałem znać twojemu matchowi — odezwę się, gdy odpowie.",
+  matchScheduleSavedConfirmation: "Gotowe. Twój match dostał powiadomienie — napiszę, gdy odpowie.",
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście godziny, ale jeszcze nic się nie pokrywa. Dodaj kilka opcji — gdy tylko jakiś slot się zgodzi, klepnięte:",
   matchSchedulePickFinalYet:
@@ -5754,13 +5086,11 @@ const plTranslations: TranslationTable = {
   venueTimeCardLabel: "WASZA RANDKA",
   venueTimeLockedCaption: "Termin waszej randki jest ustalony ✨",
   venueConciergeIntro:
-    "Termin ustalony. Jedna rzecz, zanim znajdę miejsce.\n\n" +
-    "📍 *Zaznacz, skąd będziesz wyruszać* na randkę - twój dom, stacja metra, mieszkanie znajomego, skądkolwiek faktycznie ruszasz.\n\n" +
-    "Na podstawie tego punktu znajdę wygodne miejsce spotkania, łatwo dostępne dla *was obojga*, blisko twojego startu. Kliknij poniżej, aby zaznaczyć je na mapie:",
+    "*Skąd pojedziesz na randkę?*\n\nZaznacz punkt na mapie — dom, metro, dowolne wygodne miejsce. Dobiorę lokal, do którego wygodnie dotrzecie oboje.",
   venueConciergeBtnLocation: "📍 Wyślij lokalizację",
   venueConciergeBtnMap: "🗺️ Wybierz na mapie",
   venueLocationFirst:
-    "Najpierw najważniejsze - *zaznacz, skąd będziesz wyruszać* 📍 Kliknij poniżej, aby zaznaczyć punkt na mapie. O vibe zapytam zaraz potem.",
+    "Najpierw najważniejsze - *zaznacz, skąd będziesz wyruszać* 📍 Kliknij poniżej, aby zaznaczyć punkt na mapie.",
   venueOriginOutsideMarket:
     "Ten punkt jest poza {city}, a Gennety działa na razie tylko tam - szukam miejsca blisko was obojga, więc stamtąd nie znajdę żadnego. Zaznacz punkt w {city}, z którego wyruszysz:",
   venueVibeNoted: "Vibe zapisany ✨ Teraz wybierz, skąd będziesz jechać:",
@@ -5822,23 +5152,23 @@ const plTranslations: TranslationTable = {
   venueDeclinedKeepDm: "Zostajecie w {venue}, zgodnie z planem.",
   venueChangeRefunded:
     "Zmiana miejsca nie doszła do skutku, gwiazdki wróciły do Ciebie. Randka jest aktualna — w dotychczasowym miejscu.",
-  primeInvoiceTitle: "Późne wieczorne godziny",
+  primeInvoiceTitle: "Późne wieczory",
   primeInvoiceDesc:
     "Otworzy 18:30, 19:00 i 19:30 we wszystkie dni waszego kalendarza — dla was obojga, na tę randkę.",
-  primeInvoiceLabel: "Późne wieczorne godziny",
+  primeInvoiceLabel: "Późne wieczory",
   primeTimeOpenedDm:
-    "{name} otworzył(a) późne wieczorne godziny — 18:30 i później są już dostępne w waszym kalendarzu.",
+    "{name} otwiera późne wieczory — 18:30 i później są teraz w waszym kalendarzu.",
   primeTimeRefunded:
-    "Późne wieczorne godziny nie zostały otwarte, gwiazdki wróciły do Ciebie. Reszta kalendarza bez zmian.",
+    "Późne wieczory się nie otworzyły, gwiazdki wróciły do ciebie. Reszta kalendarza bez zmian.",
   primeTimeRefundedDateOff:
-    "Randka się nie odbędzie, więc gwiazdki za późne wieczorne godziny wróciły do Ciebie.",
+    "Randka się nie odbędzie, więc gwiazdki za późne wieczory wróciły do ciebie.",
   memeCardTeaser:
     "🎭 Jeszcze jedno o {name}.\n\nKiedy zapytałem, co naprawdę śmieszy, nie było odpowiedzi słowami — przyleciał mem. To mówi o człowieku więcej niż trzy zdania.\n\nChcesz go zobaczyć przed spotkaniem?",
   memeCardBtn: "🎭 Pokaż",
   memeRevealCaption: "🎭 Co śmieszy {name}:",
   memeRevealSource: "▶️ Zobacz w całości:",
   memeRevealFallback:
-    "🎭 Samego obrazka nie udało się przesłać, więc słowami — oto co wysłał(a) {name} na pytanie, co go/ją śmieszy:\n\n_{description}_",
+    "🎭 Samego obrazka nie udało się przesłać, więc słowami. {name} — o tym, co śmieszy:\n\n_{description}_",
   memeRevealGone: "Na to pytanie odpowiedziano ponownie słowami — nie ma tu już mema.",
   memeRevealUnavailable: "Ta karta nie jest już aktywna.",
   venuePayPromptDm: "Razem wybraliście nowe miejsce na randkę.\n\n📍 {venue}",
@@ -5873,13 +5203,13 @@ const plTranslations: TranslationTable = {
   noMatchStreamStart: "💫 Przeglądam dopasowania dla Ciebie…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
   dateTerminalInvite:
-    "Randka za {minutes} minut.\n📍 {venue}\n\nDate Terminal jest już otwarty — pokaże, ile ci zostało do miejsca. Przy stoliku potrząśnijcie razem telefonami: to Contact Sync.",
+    "*Randka za {minutes} min*\n📍 {venue}\n\nOtwórz ekran randki — pokaże ci drogę. Przy stoliku przyłóżcie telefony do siebie i przytrzymajcie, żeby wymienić się kontaktami.",
   dateTerminalReminder:
-    "Contact Sync jest otwarty.\n📍 {venue}\n\nGdy oboje będziecie przy stoliku, otwórz terminal i potrząśnijcie razem telefonami.",
-  dateTerminalBtn: "🎟 Otwórz Date Terminal",
+    "*Wymiana kontaktów otwarta*\n📍 {venue}\n\nGdy oboje będziecie przy stoliku — otwórz ekran randki, przyłóżcie telefony do siebie i przytrzymajcie.",
+  dateTerminalBtn: "🎟 Otwórz randkę",
   dateDayActivityStartTitle: "Dziś masz randkę",
   emergencyPushTitle: "Randka odwołana",
-  emergencyPushBody: "Otwórz Gennety - jest tam powód.",
+  emergencyPushBody: "Otwórz Gennety — tam jest powód.",
   dateDayActivityStartBody: "Wszystko, czego potrzebujesz, jest na ekranie blokady.",
   venueActivityStartTitle: "Zmiana miejsca",
   venueActivityStartPartner: "{name} proponuje {what}",
@@ -5901,16 +5231,10 @@ const plTranslations: TranslationTable = {
   timeActivityStartWaitingNoName: "Czekamy na odpowiedź w sprawie czasu",
   timeActivityStartMatch: "Czas ustalony: {when}",
   profilerSkip: "Pomiń",
-  emergencyUnlocked:
-    "Plany się zmieniły i naprawdę nie możesz przyjść? Możesz odwołać poniżej.\n" +
-    "*Musisz napisać powód - przekażemy go dopasowaniu dokładnie tak, jak go napiszesz.*",
+  emergencyUnlocked: "Plany się zmieniły i naprawdę nie możesz przyjść? Możesz odwołać poniżej.",
   emergencyBtn: "Odwołaj randkę",
   emergencyConfirmPrompt:
-    "Zanim odwołasz, krótki check.\n\n" +
-    "Jeśli to stres, małe spóźnienie albo niepewność, zostaw randkę. " +
-    "Twoje dopasowanie zarezerwowało czas dla Ciebie, a spotkanie na żywo nadal może pozytywnie zaskoczyć.\n\n" +
-    "*Odwołuj tylko, jeśli naprawdę nie możesz przyjść; potem nie da się przywrócić dopasowania.* " +
-    "Jeśli przejdziesz dalej, poproszę o powód i przekażę go słowo w słowo.",
+    "Jeśli to tylko stres albo spóźnienie — lepiej zostaw randkę. *Odwołuj tylko, jeśli naprawdę nie możesz przyjść:* matcha nie da się przywrócić.",
   emergencyBtnConfirm: "🔴 Tak, odwołaj randkę",
   emergencyBtnBack: "🟢 Zostaw randkę",
   emergencyAborted: "Okej — Twoja randka jest aktualna. 👍",
@@ -5921,11 +5245,10 @@ const plTranslations: TranslationTable = {
     "Jeśli do spotkania nie doszło, zapytam cię o to następnego dnia.",
   emergencyReceivedOther: "Twoje dopasowanie odwołało randkę. Oto co napisali:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Twoje dopasowanie odwołało randkę. Oto co napisali:",
-  emergencyReceivedOtherSoftNote: "To nie przez Ciebie. Gennety trochę podniesie Twój priorytet na kolejny drop.",
+  emergencyReceivedOtherSoftNote:
+    "To nie przez Ciebie. Gennety trochę podniesie Twój priorytet przy kolejnym doborze.",
   feedbackInvitation:
-    "Jak poszła randka? ✨\n\n" +
-    "Podziel się kilkoma szczegółami: była chemia, jaki był vibe, czy miejsce się podobało?\n" +
-    "Weźmiemy to pod uwagę, żeby następnym razem lepiej trafić w Twoje oczekiwania.",
+    "*Jak poszła randka?* ✨\n\nPodziel się kilkoma szczegółami: była chemia, jaki był vibe, czy miejsce się podobało?",
   feedbackBtnForm: "✍️ Otwórz formularz feedbacku",
   feedbackBtnVoice: "🎤 Wyślij głosówkę zamiast tego",
   attendanceAsk: "Zanim zapytam, jak było — spotkaliście się wczoraj? 🙂",
@@ -5948,18 +5271,18 @@ const plTranslations: TranslationTable = {
     "Po prostu nagraj wiadomość głosową 🎙️\n\n" +
     "Opowiedz, jak poszła randka - była chemia? Co Ci się podobało? " +
     "Co nie zadziałało? Minuta wystarczy.",
-  feedbackThanks: "Dzięki za feedback ✨ Użyjemy go, żeby ulepszyć przyszłe dopasowania.",
+  feedbackThanks: "Dzięki! Uwzględnię to przy następnym doborze ✨",
   feedbackAlreadySubmitted: "Już opowiedziałeś(-aś), jak poszła ta randka — dzięki, zapisane ✨",
   feedbackPushTitle: "Jak poszła randka?",
   feedbackPushBody: "Minuta twojego czasu, a następne dopasowanie będzie trafniejsze.",
   matchDropPushTitle: "Twój match już jest",
-  matchDropPushBody: "Dotknij, by zobaczyć, kogo wybrało AI ✨",
+  matchDropPushBody: "Kliknij, aby zobaczyć ✨",
   reportBtn: "🚨 Zgłoś",
   reportAsk: "To zgłoszenie jest prywatne. Co najlepiej opisuje problem?",
   reportCategoryFakePhotos: "Fałszywe albo mylące zdjęcia",
   reportCategoryWrongPerson: "Inna osoba na zdjęciu",
-  reportCategoryOffensive: "Obraźliwe albo niepokojące zachowanie",
-  reportCategoryUnsafe: "Niebezpieczne / red flag",
+  reportCategoryOffensive: "Niegrzeczność lub dziwne zachowanie",
+  reportCategoryUnsafe: "Było niebezpiecznie",
   reportCategorySpam: "Spam albo oszustwo",
   reportCategoryInappropriate: "Nieodpowiedni profil",
   reportCategoryOther: "Inne",
@@ -5968,9 +5291,10 @@ const plTranslations: TranslationTable = {
   reportSkipBtn: "Pomiń",
   reportThanksT1: "Jasne - użyjemy tego, żeby lepiej stroić przyszłe dopasowania 🎯",
   reportThanksT2: "Zgłoszone. Dzięki - zajmiemy się tym.",
-  reportThanksT3: "Zgłoszone. Zamrażamy konto tej osoby do ręcznej weryfikacji - dzięki za sygnał.",
+  reportThanksT3:
+    "Zgłoszenie przyjęte. Konto tej osoby jest zamrożone do czasu weryfikacji. Dzięki za sygnał.",
   reportFailed: "Nie udało się teraz obsłużyć zgłoszenia. Spróbuj za minutę.",
-  reportDuplicate: "Już zgłosiłeś/zgłosiłaś to dopasowanie.",
+  reportDuplicate: "To dopasowanie zostało już zgłoszone.",
   reportBackBtn: "← Wróć",
   reportCancelled: "Okej — zgłoszenie nie zostało wysłane.",
   reportWarningStrike1:
@@ -5984,15 +5308,7 @@ const plTranslations: TranslationTable = {
     "🚫 Twoje konto zostało zamrożone do przeglądu bezpieczeństwa. " +
     "Nasz zespół skontaktuje się przez @gennetysupport, jeśli będą potrzebne dalsze kroki.",
   safetyNoteFemale:
-    "Hej! Twoja randka od Gennety zaczyna się za 90 minut w **{location_name}**.\n\n" +
-    "Dbamy o Twoje bezpieczeństwo, więc krótka checklista przed pierwszym spotkaniem:\n\n" +
-    "📍 **Trzymaj się planu.** Wybraliśmy bezpieczne publiczne miejsce. Nie zgadzaj się na przeniesienie spotkania do prywatnej lokalizacji ani na wizytę u kogoś.\n" +
-    "👥 **Jeśli jest tłok.** Zdarza się - spokojnie: weź kawę i przejdź się albo przenieś do kawiarni obok, gdzie jest ruch i jasno.\n" +
-    "🚗 **Transport.** Dojedź i wróć samodzielnie - komunikacją, taksówką albo pieszo. Nie wsiadaj do auta z osobą, której prawie nie znasz.\n" +
-    "📱 **Powiedz bliskim.** Prześlij szczegóły spotkania znajomej osobie albo rodzinie i jeśli możesz, udostępnij lokalizację na wieczór.\n" +
-    "☕ **Uważaj.** Staraj się nie zostawiać rzeczy ani napoju bez opieki.\n" +
-    "🛑 **Twoje granice.** Jeśli czujesz dyskomfort albo zachowanie drugiej osoby jest dziwne, masz pełne prawo wstać i wyjść w każdej chwili. Twoje bezpieczeństwo jest ważniejsze niż uprzejmość.\n\n" +
-    "Dobrego wieczoru ✨",
+    "*Randka za 90 minut — {location_name}*\n\n📍 *Trzymaj się planu.* Wybraliśmy dla was bezpieczne publiczne miejsce. Nie zgadzaj się na przeniesienie spotkania w ustronne miejsce ani na wizytę u kogoś.\n🚗 *Transport.* Dojedź i wróć samodzielnie — komunikacją, taksówką albo pieszo. Nie wsiadaj do auta z osobą, której prawie nie znasz.\n📱 *Powiedz bliskim.* Prześlij szczegóły spotkania przyjaciółce albo komuś bliskiemu i jeśli możesz, udostępnij lokalizację na wieczór.\n🛑 *Twoje granice.* Jeśli czujesz dyskomfort albo zachowanie drugiej osoby wydaje się dziwne, możesz po prostu wstać i wyjść w każdej chwili. Twoje bezpieczeństwo jest ważniejsze niż uprzejmość.\n\nDobrego wieczoru ✨",
   safetyBriefPushTitle: "Zanim wyjdziesz",
   safetyBriefPushBody: "Twoja lista bezpieczeństwa na dziś jest już w aplikacji.",
   noMatchPushTitle: "Tym razem bez matcha",
@@ -6007,14 +5323,14 @@ const plTranslations: TranslationTable = {
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
   statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",
   statusProcessing: "✨ Analizujemy Twoje miasto... Zajrzyj trochę później.",
-  statusBannerSchedule: "Następny drop: {date}, {time}",
+  statusBannerSchedule: "Następny dobór: {date}, {time}",
   statusBannerActive: "Już szukamy Twojej osoby ✦",
   statusBannerSearching:
     "Szukam Twojej osoby — sprawdzam każdego wieczoru.\n" +
     "Gdy tylko pojawi się ktoś naprawdę wart Twojego czasu, odezwę się.",
-  statusButtonDaysHours: "Do dropu: {d}d {h}h",
-  statusButtonHoursMinutes: "Do dropu: {h}h {m}min",
-  statusButtonMinutes: "✨ Do dropu: {m}min",
+  statusButtonDaysHours: "Do doboru: {d}d {h}h",
+  statusButtonHoursMinutes: "Do doboru: {h}h {m}min",
+  statusButtonMinutes: "✨ Do doboru: {m}min",
   statusButtonProcessing: "✨ Dobieramy dopasowania",
 
   // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
@@ -6032,29 +5348,17 @@ const plTranslations: TranslationTable = {
 
   // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
   statusBannerMarketPending:
-    "Na razie Gennety działa tylko w Kijowie — w mieście {city} jeszcze nie wystartowaliśmy, " +
-    "więc nie ma tu kogo Ci dopasować.\n\n" +
-    "Gotowy na randki w Kijowie? Zmień miasto w menu.",
+    "Na razie Gennety działa tylko w Kijowie — w mieście {city} jeszcze nie wystartowaliśmy, więc nie ma tu kogo Ci dopasować.\n\nChcesz chodzić na randki w Kijowie? Zmień miasto w menu.",
   statusButtonMenu: "Otwórz menu",
   menuCitySwitch: "📍 Zmień miasto na Kijów",
   citySwitchCard:
-    "📍 *Twoje miasto: {city}*\n\n" +
-    "Na razie Gennety działa tylko w Kijowie. Dopasowania zawsze są w obrębie jednego miasta, " +
-    "więc dopóki nie wystartujemy w mieście {city}, nie ma tu kogo Ci przedstawić.\n\n" +
-    "Jeśli jesteś gotowy chodzić na randki w Kijowie — przełącz się. Profil, zdjęcia i weryfikacja " +
-    "zostaną bez zmian, a Ty trafisz do najbliższego dropu.",
+    "📍 *Twoje miasto: {city}*\n\nNa razie Gennety działa tylko w Kijowie. Dopasowania zawsze są w obrębie jednego miasta, więc dopóki nie wystartujemy w mieście {city}, nie ma tu kogo Ci przedstawić.\n\nJeśli chcesz chodzić na randki w Kijowie — przełącz się. Profil, zdjęcia i weryfikacja zostaną bez zmian, a Ty trafisz do najbliższego doboru.",
   citySwitchConfirm: "📍 Tak, szukajcie mi pary w Kijowie",
   citySwitchDone:
-    "Gotowe — Twoje miasto dopasowań to teraz Kijów 🤍\n\n" +
-    "Jesteś w najbliższym dropie: {date}.",
+    "Gotowe — Twoje miasto dopasowań to teraz Kijów 🤍\n\nJesteś w najbliższym doborze: {date}.",
   citySwitchFailed: "Nie udało się teraz zmienić miasta. Spróbuj ponownie za chwilę.",
   noMatchCityNotLaunched:
-    "Hej\n\n" +
-    "Szczerze: w mieście {city} Gennety jeszcze nie wystartowało — na razie jesteśmy tylko w Kijowie. " +
-    "Dopasowania zawsze są w obrębie jednego miasta, więc nie mam Ci tu kogo przedstawić. " +
-    "Wolę powiedzieć to wprost, niż trzymać Cię w oczekiwaniu na drop, w którym nie możesz być.\n\n" +
-    "Twój profil zostaje bez zmian, a odezwiemy się, gdy tylko otworzymy Twoje miasto.\n\n" +
-    "A jeśli jesteś gotowy chodzić na randki w Kijowie — przełącz się poniżej i trafisz do najbliższego dropu.",
+    "*W mieście {city} Gennety jeszcze nie ma*\n\nNa razie działamy tylko w Kijowie, a dopasowania zawsze są w obrębie jednego miasta — więc nie mam ci tu jeszcze kogo przedstawić. Profil zostaje bez zmian, a odezwiemy się, gdy tylko otworzymy twoje miasto.\n\nJeśli chcesz chodzić na randki w Kijowie — przełącz się poniżej i trafisz do najbliższego doboru.",
   noMatchCitySwitchBtn: "📍 Przejdź na Kijów",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
@@ -6074,12 +5378,11 @@ const plTranslations: TranslationTable = {
   dateHubPlanningNegotiating: "Masz dopasowanie z {name}! Wybierz pasujący czas:",
   dateHubPlanningVenue:
     "Prawie gotowe z {name}. Zaznacz, skąd będziesz wyruszać:",
-  voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
+  voiceTranscriptionFailed: "Nie dosłyszałem — możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
   rateLimitFloodNotice:
     "Oho, sporo wiadomości naraz — daj mi kilka sekund, potem ruszamy dalej. 🙂",
-  rateLimitDailyBudgetNotice:
-    "Dziś jesteś bardzo aktywny/a 🙂 Wróćmy do tego jutro — na dziś limit wyczerpany, żeby wszystko działało płynnie dla wszystkich.",
+  rateLimitDailyBudgetNotice: "Dużo dziś piszesz 🙂 Kontynuujmy jutro — na dziś limit.",
 
   // --- Live Photo admission ---
   livePhotoMissingStatic:
@@ -6099,8 +5402,7 @@ const plTranslations: TranslationTable = {
   ticketCoveredHerConfirm:
     "💛 Gotowe — bilet dla {name} opłacony. Dam znać, gdy tylko go zobaczy.",
   ticketPartnerSawItDm: "❤️ {name} już wie, że bilet jest od Ciebie.",
-  ticketRefundedDm:
-    "Twój bilet został zwrócony — druga strona nie odebrała swojego na czas. Bez stresu: planowanie terminu jest teraz otwarte za darmo 📅",
+  ticketRefundedDm: "Twój bilet wrócił do portfela, a randka jest aktualna. Wybierzmy termin 📅",
   ticketRefundedToWallet:
     "🎟️ Twój bilet wrócił do portfela — wykorzystasz go na następnej randce.",
   ticketRefundedToWalletBoth:
@@ -6132,15 +5434,15 @@ const plTranslations: TranslationTable = {
   menuInviteFriend: "🎁 Zaproś znajomego",
   referralHubTitle: "Zapraszaj znajomych do Gennety",
   referralHubTagline:
-    "Za każdego znajomego, który przejdzie weryfikację przez twój link, dostajesz bilet na randkę 🎟 — a on też.\n\nA im więcej osób w twoim mieście, tym większa szansa, że dobierzemy parę także tobie.",
+    "Za każdego znajomego, który przejdzie weryfikację przez twój link, dostajesz bilet na randkę 🎟 — a on też.",
   referralShareButton: "📤 Zaproś znajomego",
-  referralShareCaption: "AI dobiera najlepszą parę i sam organizuje spotkanie.",
+  referralShareCaption: "Gennety dobiera najlepszą parę i sam organizuje spotkanie.",
   referralShareJoin: "Dołącz do Gennety 💫",
-  hdyhauQuestion: "Na koniec - skąd wiesz o Gennety?",
+  hdyhauQuestion: "I ostatnie — skąd o nas wiesz?",
   hdyhauFriendInPerson: "Znajomy powiedział mi osobiście",
   hdyhauFriendOnline: "Znajomy przysłał mi link",
   hdyhauSocialMedia: "Media społecznościowe",
-  hdyhauSearch: "Znalazłem(-am) przez wyszukiwarkę",
+  hdyhauSearch: "Przez wyszukiwarkę",
   hdyhauAd: "Reklama",
   hdyhauEvent: "Impreza lub wydarzenie",
   hdyhauOther: "Skądinąd",
@@ -6154,12 +5456,13 @@ const plTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Masz zaproszenie",
   referralCardHeadA: "Prawdziwe randki.",
   referralCardHeadB: "Zero pisania.",
-  referralCardSupport: "AI dobiera parę według głębokiej zgodności i sam organizuje spotkanie na żywo.",
+  referralCardSupport:
+    "Gennety dobiera parę według głębokiej zgodności i sam organizuje spotkanie na żywo.",
   referralCardGift: "{ticketsPhrase} — w prezencie",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, ile byś ich nie miał\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n\nDalej — więcej.",
+    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, niezależnie od liczby randek\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Najlepsze lokale* — wybór miejsc o poziom wyżej\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumOpenCta: "Dowiedz się więcej",
   premiumCancelHint:
@@ -6199,9 +5502,9 @@ const plTranslations: TranslationTable = {
   premiumCancelKeepBtn: "Zostaw Premium",
   premiumCancelFinalConfirm:
     "Ostatnie sprawdzenie — na pewno anulować Gennety Premium?\n\nPremium pozostanie aktywne do {date}, do tego czasu nic się nie zmieni. Po potwierdzeniu automatyczne odnawianie zostanie wyłączone na stałe — jeśli zechcesz wrócić do Premium później, zapłacisz ponownie.",
-  premiumCancelFinalYes: "Tak, jestem pewien na 100%, anuluj",
+  premiumCancelFinalYes: "Tak, anuluj",
   premiumCancelFinalNoSoft: "Nie, zostaw",
-  premiumCancelFinalNoHard: "Czekaj, nie anuluj",
+  premiumCancelFinalNoHard: "Nie, zostaw",
   premiumCancelDone:
     "Gotowe — automatyczne odnawianie wyłączone. Premium jest aktywne do {date}, nic więcej nie zostanie pobrane. Możesz wrócić w każdej chwili.",
   premiumCancelKept: "Zostaje ✨ Premium jest aktywne do {date}.",
@@ -6209,15 +5512,13 @@ const plTranslations: TranslationTable = {
     "Ta subskrypcja została kupiona przez App Store, więc można ją anulować tylko na iPhonie: Ustawienia → [twoje imię] → Subskrypcje → Gennety Premium → Anuluj. Dostęp pozostanie do {date}.",
   premiumCancelNotActive: "Nie masz teraz aktywnej subskrypcji Premium.",
   premiumCancelReasonAsk:
-    "Dzięki, że byłeś z nami 🤍 Jeśli możesz — napisz w dwóch słowach, czemu rezygnujesz? To naprawdę pomaga nam być lepszymi.",
+    "Dzięki za czas z nami 🤍 Jeśli możesz — napisz w dwóch słowach, czemu rezygnujesz? To naprawdę pomaga nam być lepszymi.",
   premiumCancelReasonSkipBtn: "Wolę nie mówić",
   premiumCancelReasonThanks: "Dziękujemy, zapiszemy 🤍 Premium zawsze można przywrócić.",
 
   // --- Rematch ---
   rematchOfferFamine:
-    "Tym razem nie było pary — to kwestia puli, nie ciebie.\n\n" +
-    "Mogę puścić wyszukiwanie jeszcze raz, teraz, tylko dla ciebie. Jedna nowa osoba, ten sam dobór: {price}.\n\n" +
-    "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
+    "Tym razem nie było pary — to nie twoja wina.\n\nMogę poszukać jeszcze raz od razu: {price}. Jeśli nikogo nie znajdę — oddam gwiazdki.",
   rematchOfferFailed:
     "Nie wyszło. Zdarza się.\n\n" +
     "Mogę pójść na drugie podejście teraz i znaleźć ci nową osobę — {price}.\n\n" +
@@ -6227,9 +5528,9 @@ const plTranslations: TranslationTable = {
     "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
   rematchOfferBtn: "Szukaj jeszcze raz — {price}",
   statusButtonRematch: "Szukaj teraz",
-  rematchInvoiceTitle: "Rematch",
-  rematchInvoiceDesc: "Jeszcze jedno wyszukiwanie, teraz — nowa osoba od twojego matchmakera.",
-  rematchInvoiceLabel: "Rematch",
+  rematchInvoiceTitle: "Nowe wyszukiwanie",
+  rematchInvoiceDesc: "Jeszcze jedno wyszukiwanie, od razu — nowa osoba od Gennety.",
+  rematchInvoiceLabel: "Nowe wyszukiwanie",
   rematchFound: "Mam kogoś. Zaraz wysyłam szczegóły ✨",
   rematchNoCandidate:
     "Sprawdziłem — w twoim mieście nie ma teraz nikogo nowego. Gwiazdki wróciły. W kolejnej rundzie zostajesz.",
@@ -6239,11 +5540,11 @@ const plTranslations: TranslationTable = {
     "Znalazłem kogoś, ale nie udało mi się dostarczyć profilu — to po naszej stronie. Gwiazdki wróciły, a próba się nie liczy.",
   rematchUndeliveredPending:
     "Znalazłem kogoś, ale nie udało mi się dostarczyć profilu, a zwrot za pierwszym razem nie przeszedł. Zajmuję się tym — gwiazdki wrócą niedługo.",
-  rematchRefunded: "Gwiazdki za rematch wróciły ✨",
+  rematchRefunded: "Gwiazdki za nowe wyszukiwanie wróciły ✨",
   rematchLimitReached:
-    "Rematche na teraz się skończyły. Następny otworzy się za kilka dni — kolejna para i tak będzie.",
+    "Dodatkowe wyszukiwania na razie się skończyły. Następne otworzy się za kilka dni — zwykły dobór i tak będzie.",
   rematchUnavailable:
-    "Teraz nie zrobię rematchu. Jeśli masz parę w toku — najpierw dokończ tamto.",
+    "Teraz nie da się uruchomić nowego wyszukiwania. Jeśli masz match w toku — najpierw go dokończ.",
   rematchGiftFamine:
     "Mówiłem, że na razie nie ma dla ciebie pary. Szukałem dalej — i znalazłem kogoś, na kogo warto spojrzeć.",
   rematchGiftFailed:

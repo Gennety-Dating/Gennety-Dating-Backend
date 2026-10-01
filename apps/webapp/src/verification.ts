@@ -233,15 +233,26 @@ function panelScreen(lang: Lang, glyph: string, textKey: Parameters<typeof tr>[1
 function consentScreen(lang: Lang): string {
   const p = (key: Parameters<typeof tr>[1]): string =>
     `<p class="consent-text">${escapeHtml(tr(lang, key))}</p>`;
+  // The four sections each open with their own label ("What happens:" …). The
+  // label is set bold so the screen can be scanned by section; the text after
+  // it is unchanged consent copy.
+  const section = (key: Parameters<typeof tr>[1]): string => {
+    const text = tr(lang, key);
+    const cut = text.indexOf(": ");
+    if (cut < 0) return p(key);
+    return `<p class="consent-text"><strong class="consent-label">${escapeHtml(
+      text.slice(0, cut + 1),
+    )}</strong> ${escapeHtml(text.slice(cut + 2))}</p>`;
+  };
   return `
     <div class="screen screen--consent">
       <div class="consent">
         <h1 class="consent-title">${escapeHtml(tr(lang, "verifyConsentTitle"))}</h1>
         ${p("verifyConsentLead")}
-        ${p("verifyConsentWhat")}
-        ${p("verifyConsentWho")}
-        ${p("verifyConsentKeep")}
-        ${p("verifyConsentRefuse")}
+        ${section("verifyConsentWhat")}
+        ${section("verifyConsentWho")}
+        ${section("verifyConsentKeep")}
+        ${section("verifyConsentRefuse")}
         <a class="consent-link" href="${PRIVACY_POLICY_URL}" target="_blank" rel="noreferrer">
           ${escapeHtml(tr(lang, "verifyConsentPolicyLink"))}
         </a>

@@ -1,4 +1,5 @@
 import type { Api, RawApi } from "grammy";
+import type { MessageEntity } from "grammy/types";
 import { prisma, type Prisma } from "@gennety/db";
 import {
   CADENCE,
@@ -8,6 +9,7 @@ import {
   type TranslationKey,
 } from "@gennety/shared";
 import { streamDraftsToChat } from "./ai-stream.js";
+
 import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
@@ -22,6 +24,23 @@ import {
   buildCitySwitchKeyboard,
   isMarketPending,
 } from "../handlers/menu/city-switch.js";
+
+/**
+ * The notices open with a `*bold*` heading line (copy audit 2026-10-01), but
+ * they go out WITHOUT `parse_mode` — the city name is user data and the stream
+ * path has no Markdown. So the leading `*…*` is lifted into a `bold` entity on
+ * plain text instead. Offsets are UTF-16 code units, which is what JS string
+ * lengths already count.
+ */
+export function leadBoldEntity(text: string): { text: string; entities?: MessageEntity[] } {
+  const m = /^\*([^*\n]+)\*/.exec(text);
+  if (!m) return { text };
+  const heading = m[1]!;
+  return {
+    text: heading + text.slice(m[0].length),
+    entities: [{ type: "bold", offset: 0, length: heading.length }],
+  };
+}
 
 /**
  * Empathetic "no match" DM.
@@ -536,34 +555,44 @@ export async function sendNoMatchNotices(
       let dmError: unknown;
 
       if (viaTelegram) {
+        const lead = leadBoldEntity(body);
         try {
           if (marketPending) {
             // Plain send, not the rich "we really looked" stream — nothing was
             // searched for this user, so that beat would be a lie. It also carries
             // the switch button, which the draft-stream primitive cannot attach.
-            await api.sendMessage(Number(u.telegramId), body, {
+            await api.sendMessage(Number(u.telegramId), lead.text, {
               reply_markup: buildCitySwitchKeyboard(lang),
+              ...(lead.entities ? { entities: lead.entities } : {}),
             });
           } else if (pausedNow) {
             // Plain send — this states a fact ("the pool is empty, you're
             // paused") rather than performing empathy for a search that, this
             // time, genuinely didn't run. Mirrors the market-pending treatment.
-            await api.sendMessage(Number(u.telegramId), body);
+            await api.sendMessage(
+              Number(u.telegramId),
+              lead.text,
+              lead.entities ? { entities: lead.entities } : undefined,
+            );
           } else {
             // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
             // "we really looked" — then the full empathetic body as the persisted
             // send. We never spell out bad news slowly. Streams via the native rich
             // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
             // renders as a `<tg-thinking>` shimmer, the body is the plain final
-            // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
-            // newlines only), so the plain final send renders identically —
-            // `parse_mode` is intentionally dropped. Degrades to the classic edited
+            // `sendMessage`. No `parse_mode`: the only markup, the bold heading,
+            // rides as an entity (`leadBoldEntity`). Degrades to the classic edited
             // stream on clients without rich-draft support.
             await streamImpl(
               api,
               Number(u.telegramId),
-              [t(lang, "noMatchStreamStart"), body],
-              { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
+              [t(lang, "noMatchStreamStart"), lead.text],
+              {
+                rich: true,
+                thinkingIndex: 0,
+                thinkingEmojiId: AI_EMOJI.think,
+                ...(lead.entities ? { entities: lead.entities } : {}),
+              },
             );
           }
           delivered = true;

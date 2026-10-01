@@ -47,15 +47,6 @@ body {
   font-weight: var(--font-display-weight-title);
   letter-spacing: var(--font-display-tracking-title);
 }
-.terminal-kicker {
-  margin: 0 0 10px;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: var(--font-display-weight-label);
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.46);
-}
 
 /* ── The ticket and its tear ────────────────────────────────────────────── */
 /* Above the deck, so the cards slide out from UNDER the torn edge. */

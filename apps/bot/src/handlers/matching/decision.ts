@@ -379,7 +379,8 @@ async function notifyPeer(
   if (pushReachable(peer)) {
     await sendPushToUser(peerIdOf(match, side), {
       title: "Gennety",
-      body: text,
+      // A lock screen renders no Markdown — drop the bold markers.
+      body: text.replace(/[*_`]/g, ""),
       data: { type: push.type, matchId: match.id },
     }).catch((err: unknown) => {
       console.warn(

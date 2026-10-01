@@ -112,6 +112,7 @@ async function handoverToFeedback(
   releaseMatchFlowClaim(ctx.session);
   const lang = ctx.session.language;
   await ctx.reply(t(lang, "feedbackInvitation"), {
+    parse_mode: "Markdown",
     reply_markup: buildFeedbackKeyboard(matchId, lang, theme),
   });
 }

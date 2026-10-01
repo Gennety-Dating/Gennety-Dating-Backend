@@ -822,8 +822,8 @@ const AMBIENCE_IDS: VenueAmbience[] = ["quiet", "cozy_public", "lively", "design
 const FORMAT_DISPLAY_IDS: VenueFormat[] = ["seated", "walking", "interactive"];
 const VIBE_ERRORS: Record<Lang, { describe: string; experience: string; relax: string }> = {
   en: { describe: "Please describe the vibe first.", experience: "Choose at least one experience.", relax: "No verified place matches every requirement. Please relax: " },
-  ru: { describe: "Сначала опишите вайб.", experience: "Выберите хотя бы один формат встречи.", relax: "Нет проверенного места со всеми условиями. Ослабьте ограничение: " },
-  uk: { describe: "Спочатку опишіть вайб.", experience: "Оберіть хоча б один формат зустрічі.", relax: "Немає перевіреного місця з усіма умовами. Послабте обмеження: " },
+  ru: { describe: "Сначала опиши, какое место хочешь.", experience: "Выбери хотя бы один формат встречи.", relax: "Нет проверенного места со всеми условиями. Ослабь ограничение: " },
+  uk: { describe: "Спочатку опиши, яке місце хочеш.", experience: "Обери хоча б один формат зустрічі.", relax: "Немає перевіреного місця з усіма умовами. Послаб обмеження: " },
   de: { describe: "Beschreibe zuerst die Stimmung.", experience: "Wähle mindestens ein Erlebnis.", relax: "Kein geprüfter Ort erfüllt alle Bedingungen. Bitte lockere: " },
   pl: { describe: "Najpierw opisz klimat.", experience: "Wybierz co najmniej jeden rodzaj spotkania.", relax: "Żadne zweryfikowane miejsce nie spełnia wszystkich warunków. Poluzuj: " },
 };
@@ -836,8 +836,8 @@ const INITIAL_PRICE_NOTE: Record<Lang, string> = {
 };
 const LABELS: Record<Lang, Record<string, string>> = {
   en: { conversation: "Easy conversation", coffee_treats: "Coffee & treats", meal_discovery: "Discover food", walk_view: "Walk & views", art_culture: "Art & culture", drinks_evening: "Evening drinks", playful_activity: "Playful activity", surprise_me: "Surprise me", quiet: "Quiet", cozy_public: "Cozy", lively: "Lively", design_forward: "Design-led", scenic: "Scenic", romantic_public: "Romantic", seated: "Seated", walking: "Walking", interactive: "Interactive", indoor: "Indoor", outdoor: "Outdoor", vegan: "Vegan", vegetarian: "Vegetarian", halal: "Halal", kosher: "Kosher", gluten_free: "Gluten-free", alcohol_free: "No alcohol", step_free: "Step-free", required_indoor: "Must be indoors", required_outdoor: "Must be outdoors", free: "Free", inexpensive: "Inexpensive", moderate: "Moderate", max_price: "Maximum price", commute_12_km: "Allow up to 12 km" },
-  ru: { conversation: "Спокойно поговорить", coffee_treats: "Кофе и десерт", meal_discovery: "Новая еда", walk_view: "Прогулка и виды", art_culture: "Искусство", drinks_evening: "Вечерние напитки", playful_activity: "Активность", surprise_me: "Удивите меня", quiet: "Тихо", cozy_public: "Уютно", lively: "Живо", design_forward: "Стильный дизайн", scenic: "Красивый вид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулка", interactive: "Интерактивно", indoor: "В помещении", outdoor: "На улице", vegan: "Веган", vegetarian: "Вегетарианское", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютена", alcohol_free: "Без алкоголя", step_free: "Без ступеней", required_indoor: "Только в помещении", required_outdoor: "Только на улице", free: "Бесплатно", inexpensive: "Недорого", moderate: "Умеренно", max_price: "Максимальная цена", commute_12_km: "Разрешить до 12 км" },
-  uk: { conversation: "Спокійно поговорити", coffee_treats: "Кава й десерт", meal_discovery: "Нова їжа", walk_view: "Прогулянка й краєвиди", art_culture: "Мистецтво", drinks_evening: "Вечірні напої", playful_activity: "Активність", surprise_me: "Здивуйте мене", quiet: "Тихо", cozy_public: "Затишно", lively: "Жваво", design_forward: "Стильний дизайн", scenic: "Гарний краєвид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулянка", interactive: "Інтерактивно", indoor: "У приміщенні", outdoor: "Надворі", vegan: "Веган", vegetarian: "Вегетаріанське", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютену", alcohol_free: "Без алкоголю", step_free: "Без сходинок", required_indoor: "Лише в приміщенні", required_outdoor: "Лише надворі", free: "Безкоштовно", inexpensive: "Недорого", moderate: "Помірно", max_price: "Максимальна ціна", commute_12_km: "Дозволити до 12 км" },
+  ru: { conversation: "Спокойно поговорить", coffee_treats: "Кофе и десерт", meal_discovery: "Новая еда", walk_view: "Прогулка и виды", art_culture: "Искусство", drinks_evening: "Вечерние напитки", playful_activity: "Активность", surprise_me: "Удиви меня", quiet: "Тихо", cozy_public: "Уютно", lively: "Живо", design_forward: "Стильный дизайн", scenic: "Красивый вид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулка", interactive: "Интерактивно", indoor: "В помещении", outdoor: "На улице", vegan: "Веган", vegetarian: "Вегетарианское", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютена", alcohol_free: "Без алкоголя", step_free: "Без ступеней", required_indoor: "Только в помещении", required_outdoor: "Только на улице", free: "Бесплатно", inexpensive: "Недорого", moderate: "Умеренно", max_price: "Максимальная цена", commute_12_km: "Разрешить до 12 км" },
+  uk: { conversation: "Спокійно поговорити", coffee_treats: "Кава й десерт", meal_discovery: "Нова їжа", walk_view: "Прогулянка й краєвиди", art_culture: "Мистецтво", drinks_evening: "Вечірні напої", playful_activity: "Активність", surprise_me: "Здивуй мене", quiet: "Тихо", cozy_public: "Затишно", lively: "Жваво", design_forward: "Стильний дизайн", scenic: "Гарний краєвид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулянка", interactive: "Інтерактивно", indoor: "У приміщенні", outdoor: "Надворі", vegan: "Веган", vegetarian: "Вегетаріанське", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютену", alcohol_free: "Без алкоголю", step_free: "Без сходинок", required_indoor: "Лише в приміщенні", required_outdoor: "Лише надворі", free: "Безкоштовно", inexpensive: "Недорого", moderate: "Помірно", max_price: "Максимальна ціна", commute_12_km: "Дозволити до 12 км" },
   de: { conversation: "Gut reden", coffee_treats: "Kaffee & Süßes", meal_discovery: "Essen entdecken", walk_view: "Spaziergang & Aussicht", art_culture: "Kunst & Kultur", drinks_evening: "Drinks am Abend", playful_activity: "Aktivität", surprise_me: "Überrasch mich", quiet: "Ruhig", cozy_public: "Gemütlich", lively: "Lebhaft", design_forward: "Designorientiert", scenic: "Schöne Aussicht", romantic_public: "Romantisch", seated: "Sitzend", walking: "Spaziergang", interactive: "Interaktiv", indoor: "Drinnen", outdoor: "Draußen", vegan: "Vegan", vegetarian: "Vegetarisch", halal: "Halal", kosher: "Koscher", gluten_free: "Glutenfrei", alcohol_free: "Ohne Alkohol", step_free: "Barrierearm", required_indoor: "Nur drinnen", required_outdoor: "Nur draußen", free: "Kostenlos", inexpensive: "Günstig", moderate: "Moderat", max_price: "Höchstpreis", commute_12_km: "Bis 12 km erlauben" },
   pl: { conversation: "Spokojna rozmowa", coffee_treats: "Kawa i słodkości", meal_discovery: "Odkrywanie jedzenia", walk_view: "Spacer i widoki", art_culture: "Sztuka i kultura", drinks_evening: "Wieczorne drinki", playful_activity: "Aktywność", surprise_me: "Zaskocz mnie", quiet: "Cicho", cozy_public: "Przytulnie", lively: "Żywo", design_forward: "Dobry design", scenic: "Widokowo", romantic_public: "Romantycznie", seated: "Przy stoliku", walking: "Spacer", interactive: "Interaktywnie", indoor: "W środku", outdoor: "Na zewnątrz", vegan: "Wegańskie", vegetarian: "Wegetariańskie", halal: "Halal", kosher: "Koszerne", gluten_free: "Bez glutenu", alcohol_free: "Bez alkoholu", step_free: "Bez schodów", required_indoor: "Tylko wewnątrz", required_outdoor: "Tylko na zewnątrz", free: "Bezpłatnie", inexpensive: "Niedrogo", moderate: "Umiarkowanie", max_price: "Maksymalna cena", commute_12_km: "Zezwól do 12 km" },
 };
@@ -881,10 +881,10 @@ const VIBE_UI: Record<Lang, VibeUi> = {
   ru: {
     step: "Шаг 2 из 2",
     title: "Какое место?",
-    help: "Опишите атмосферу заведения — я подберу подходящее.",
+    help: "Опиши атмосферу заведения — я подберу подходящее.",
     placeholder: "например: тихое кафе, чтобы поговорить · уютный винный бар · крыша с видом · живое место с музыкой",
     continueBtn: "Дальше",
-    reviewLabel: "Вот что я уловил — нажмите, чтобы поправить:",
+    reviewLabel: "Вот что я уловил — нажми, чтобы поправить:",
     confirmBtn: "Всё верно — подобрать место",
     groupExperience: "Что делаем",
     groupAtmosphere: "Атмосфера",
@@ -897,10 +897,10 @@ const VIBE_UI: Record<Lang, VibeUi> = {
   uk: {
     step: "Крок 2 з 2",
     title: "Яке місце?",
-    help: "Опишіть атмосферу закладу — я підберу відповідне.",
+    help: "Опиши атмосферу закладу — я підберу відповідне.",
     placeholder: "наприклад: тихе кафе, щоб поговорити · затишний винний бар · дах із краєвидом · жваве місце з музикою",
     continueBtn: "Далі",
-    reviewLabel: "Ось що я вловив — торкніться, щоб виправити:",
+    reviewLabel: "Ось що я вловив — торкнись, щоб виправити:",
     confirmBtn: "Усе вірно — підібрати місце",
     groupExperience: "Що робимо",
     groupAtmosphere: "Атмосфера",

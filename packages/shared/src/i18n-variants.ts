@@ -53,23 +53,23 @@ const VARIANTS: Partial<Record<TranslationKey, Record<Language, string[]>>> = {
   },
   matchScheduleSavedConfirmation: {
     en: [
-      "Done. Your match got the ping — you'll hear from me the moment they answer.",
-      "Locked your picks in. I'll ping you as soon as your match replies.",
+      "Saved. Your match has been notified — you'll hear from me the moment they answer.",
+      "Locked your picks in. I'll let you know as soon as your match replies.",
     ],
     ru: [
-      "Готово. Мэтч получил пинг — напишу сразу, как ответит.",
+      "Записал. Мэтч уже знает — напишу сразу, как ответит.",
       "Зафиксировал твои слоты. Как только мэтч ответит — дам знать.",
     ],
     uk: [
-      "Готово. Метч отримав пінг — напишу, щойно відповість.",
+      "Записав. Метч уже знає — напишу, щойно відповість.",
       "Зафіксував твої слоти. Щойно метч відповість — дам знати.",
     ],
     de: [
-      "Erledigt. Dein Match hat den Ping — du hörst von mir, sobald eine Antwort da ist.",
+      "Gespeichert. Dein Match weiß Bescheid — du hörst von mir, sobald eine Antwort da ist.",
       "Deine Slots stehen. Sobald dein Match antwortet, sage ich Bescheid.",
     ],
     pl: [
-      "Gotowe. Twój match dostał ping — odezwę się, gdy tylko odpowie.",
+      "Zapisane. Twój match już wie — odezwę się, gdy tylko odpowie.",
       "Twoje sloty zapisane. Dam znać, jak tylko match odpowie.",
     ],
   },

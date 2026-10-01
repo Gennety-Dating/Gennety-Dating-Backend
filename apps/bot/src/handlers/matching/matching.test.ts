@@ -1086,7 +1086,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     ]);
   });
 
-  it("prepends `💎 Synergy 87/99 — <reason>` to the final pitch chunk", async () => {
+  it("prepends `💎 Compatibility 87/99 — <reason>` to the final pitch chunk", async () => {
     mMatch.findUnique.mockResolvedValue(findUniquePayload());
     const api = makeApi();
     const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
@@ -1104,10 +1104,10 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     const draftsB = callB![2] as string[];
     const finalA = draftsA[draftsA.length - 1]!;
     const finalB = draftsB[draftsB.length - 1]!;
-    expect(finalA).toContain("Synergy 87/99");
+    expect(finalA).toContain("Compatibility 87/99");
     expect(finalA).toContain("Aligned values and complementary rhythms.");
     expect(finalA).toContain("You two click. Both love jazz.");
-    expect(finalB).toContain("Synergy 87/99");
+    expect(finalB).toContain("Compatibility 87/99");
   });
 
   it("falls back to name-only caption when age is missing", async () => {
@@ -1229,7 +1229,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     const callA = stream.mock.calls.find((c) => c[1] === 1001);
     const draftsA = callA![2] as string[];
     const finalA = draftsA[draftsA.length - 1]!;
-    expect(finalA).not.toContain("Synergy");
+    expect(finalA).not.toContain("Compatibility");
     expect(finalA).not.toContain("/99");
   });
 
@@ -1269,7 +1269,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     expect(streamCallA).toBeDefined();
     const draftsA = streamCallA![2] as string[];
     const finalA = draftsA[draftsA.length - 1]!;
-    expect(finalA).toContain("face-match");
+    expect(finalA).toContain("really show this person");
     const entitiesA = (streamCallA![3] as { entities?: Array<Record<string, number | string>> })
       .entities;
     const quoteEntity = entitiesA?.find((e) => e.type === "blockquote");
@@ -1279,7 +1279,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
         quoteEntity!.offset as number,
         (quoteEntity!.offset as number) + (quoteEntity!.length as number),
       ),
-    ).toContain("face-match");
+    ).toContain("really show this person");
 
     // Side A's chat therefore gets ONE plain message: the decision question.
     const messagesA = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
@@ -1554,8 +1554,8 @@ describe("matching decision flow", () => {
     });
 
     const [declineText, declineOptions] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(declineText).toMatch(/main reason/i);
-    expect(declineText).toMatch(/text or voice note/i);
+    expect(declineText).toMatch(/what didn't fit/i);
+    expect(declineText).toMatch(/your own words/i);
     expect(declineOptions).toEqual(
       expect.objectContaining({
         reply_markup: expect.objectContaining({
@@ -1576,7 +1576,7 @@ describe("matching decision flow", () => {
     expect(peerCalls).toHaveLength(1);
     const [peerChatId, peerText] = peerCalls[0]!;
     expect(peerChatId).toBe(1002); // userB
-    expect(peerText).toMatch(/your match has already given their answer/i);
+    expect(peerText).toMatch(/your match has already answered/i);
     expect(peerText).not.toMatch(/passed|declined|not in/i);
     // A decliner is not waiting on anything — a pass is irreversible and the
     // next thing they see is the "why?" prompt, not a hand-off.
@@ -1609,7 +1609,7 @@ describe("matching decision flow", () => {
       (call) => call[0] === 1002,
     );
     expect(peerCalls).toHaveLength(1);
-    expect(peerCalls[0]![1]).toMatch(/your match has already given their answer/i);
+    expect(peerCalls[0]![1]).toMatch(/your match has already answered/i);
     // Must not reveal the accept verdict.
     expect(peerCalls[0]![1]).not.toMatch(/mutual|accepted|both/i);
   });
@@ -1647,7 +1647,7 @@ describe("matching decision flow", () => {
     expect(userId).toBe("uid-B");
     expect(payload).toEqual({
       title: "Gennety",
-      body: t("en", "matchPeerDecided"),
+      body: t("en", "matchPeerDecided").replace(/[*_`]/g, ""),
       data: { type: "match.peer_decided", matchId: "match-1" },
     });
     // Blind on the push rail too: the body says an answer exists, not which.
@@ -1804,7 +1804,7 @@ describe("matching decision flow", () => {
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(replyTexts.some((s: string) => /accepted/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /a no from their side/i.test(s))).toBe(true);
-    expect(replyTexts.some((s: string) => /boosted your priority for the next drop/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /raised your priority for the next round/i.test(s))).toBe(true);
 
     // The user who accepted despite the peer's earlier decline gets a real
     // priority boost for the next weekly batch.
@@ -1860,7 +1860,7 @@ describe("matching decision flow", () => {
 
     // Actor (B) sees matchDeclined + matchPeerWasAccepted.
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(replyTexts.some((s: string) => /main reason/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /what didn't fit/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /your match was in/i.test(s))).toBe(true);
 
     // First decider (A) accepted, then learns B did not confirm the meeting.
@@ -1868,7 +1868,7 @@ describe("matching decision flow", () => {
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![0]).toBe(1001);
     expect(peerSends[0]![1]).toMatch(/a no from their side/i);
-    expect(peerSends[0]![1]).toMatch(/boosted your priority for the next drop/i);
+    expect(peerSends[0]![1]).toMatch(/raised your priority for the next round/i);
     expect(mProfile.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "uid-A" },

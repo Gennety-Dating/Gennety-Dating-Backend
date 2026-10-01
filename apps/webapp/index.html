@@ -207,10 +207,16 @@
         padding: calc(20px + var(--safe-top) + var(--tg-content-top)) 20px 0;
       }
 
+      /* Display heading (copy audit 2026-10-01) — the same values as the
+         `--fs-display` / `--fw-display` tokens in src/theme.css, which this
+         self-contained page does not load. --font-stack is the system face,
+         which draws a real 800. */
       h1.title {
-        font-size: 26px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
+        font-size: clamp(30px, 8.5vw, 36px);
+        font-weight: 800;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
         margin: 0 0 24px;
       }
 

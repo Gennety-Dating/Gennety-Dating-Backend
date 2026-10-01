@@ -305,19 +305,13 @@ body {
   cursor: default;
 }
 /* When the tickets actually land — said right under the button so nobody
-   expects one the moment the invite is sent. A step louder than the share hint
-   below it: this one sets an expectation, that one is reassurance. */
+   expects one the moment the invite is sent. (The "forwarded in one tap"
+   reassurance under it was removed in the copy audit, 2026-10-01.) */
 .ref-timing {
   text-align: center;
   font-size: 0.8rem;
   color: var(--text-muted);
   margin: 0.7rem 0 0;
-}
-.ref-share-hint {
-  text-align: center;
-  font-size: 0.76rem;
-  color: var(--text-faint);
-  margin: 0.3rem 0 0;
 }
 
 /* The loading state centres the shared butterfly mark in whatever height the

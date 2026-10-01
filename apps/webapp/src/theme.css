@@ -135,3 +135,18 @@ html,
 body {
   overscroll-behavior-y: none;
 }
+
+/* ── Display type scale (copy & typography audit, founder 2026-10-01) ──────
+   Theme-independent, so it lives in its own :root block. One big, heavy,
+   tightly tracked heading per screen and a readable lead under it. Weights
+   must be ones the page actually loads (onboarding: Inter 400-800 from Google
+   Fonts; display face: Gennety Display 600/700/800 in fonts.css) — a weight
+   that is not loaded is faked by the browser and looks smeared. */
+:root {
+  --fs-display: clamp(30px, 8.5vw, 36px);
+  --fw-display: 800;
+  --lh-display: 1.08;
+  --ls-display: -0.025em;
+  --fs-lead: 17px;
+  --lh-lead: 1.45;
+}

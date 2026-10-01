@@ -488,7 +488,6 @@ export function DateTerminal(): ReactElement {
       <TerminalGlass />
       <div className="ticket-scroll">
         <header className="ticket-header terminal-header">
-          <p className="terminal-kicker">{s.kicker}</p>
           <h1>{titleFor(shown, s, timeLabel)}</h1>
           <p>{subFor(shown, s, opensLabel, alone)}</p>
         </header>

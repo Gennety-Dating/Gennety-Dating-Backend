@@ -1610,7 +1610,10 @@ async function runFaceMatchVerificationWired(
                 kind === "rejected" ? { photoRedoFirst: true } : undefined,
               )
             : null;
+        // Markdown: the rejected verdict carries a bold first line. Every DM
+        // reaching this branch is static i18n copy (no user-provided text).
         await api.sendMessage(Number(telegramId), message, {
+          parse_mode: "Markdown",
           ...(keyboard ? { reply_markup: keyboard } : {}),
         });
       },

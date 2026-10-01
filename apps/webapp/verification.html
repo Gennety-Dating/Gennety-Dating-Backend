@@ -145,15 +145,22 @@
       }
       .consent-title {
         margin: 0;
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
+        /* Display heading (copy audit 2026-10-01). The system face draws a
+           real 800 on iOS / Android, so no web font is needed for it. */
+        font-size: 32px;
+        line-height: 1.08;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
       }
       .consent-text {
         margin: 0;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.5;
         opacity: 0.85;
+      }
+      .consent-label {
+        font-weight: 700;
       }
       .consent-link {
         font-size: 14px;

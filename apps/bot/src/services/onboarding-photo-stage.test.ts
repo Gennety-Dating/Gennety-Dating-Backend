@@ -25,9 +25,9 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: false,
     });
 
-    expect(text).toContain("6 photos");
-    expect(text).toContain("profile video");
-    expect(text).toContain("optional");
+    expect(text).toContain("(up to 6)");
+    expect(text).toContain("short video");
+    expect(text).toContain("free ticket");
   });
 
   it("does not re-offer the video ticket after a video was added", () => {
@@ -38,8 +38,8 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: true,
     });
 
-    expect(text).toContain("second free Date Ticket");
-    expect(text).not.toContain("profile video");
+    expect(text).toContain("second free ticket");
+    expect(text).not.toContain("video");
   });
 
   it("keeps the video path open after six photos", () => {
@@ -50,8 +50,7 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: false,
     });
 
-    expect(text).toContain("короткое видео");
-    expect(text).toContain("продолжай");
+    expect(text).toContain("или видео");
     expect(text).toContain("до 10");
   });
 
@@ -63,8 +62,8 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: false,
     });
 
-    expect(text).toContain("short profile video");
-    expect(text).not.toContain("Date Ticket");
+    expect(text).toContain("short video");
+    expect(text).not.toContain("ticket");
   });
 
   it("does not offer another video when tickets are disabled and one exists", () => {
@@ -75,8 +74,8 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: true,
     });
 
-    expect(text).not.toContain("send one short profile video");
-    expect(text.toLowerCase()).toContain("continue");
+    expect(text).not.toContain("short video");
+    expect(text).toContain("up to 10");
   });
 
   it("only offers Continue when all media slots and bonuses are complete", () => {
@@ -87,8 +86,7 @@ describe("onboardingPhotoStageText", () => {
       hasVideo: true,
     });
 
-    expect(text).toContain("both free Date Tickets");
-    expect(text.toLowerCase()).toContain("continue");
+    expect(text).toContain("Both free tickets");
     expect(text).not.toContain("add photos");
     expect(text).not.toContain("send one short profile video");
   });

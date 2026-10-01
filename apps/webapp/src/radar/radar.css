@@ -48,12 +48,16 @@ body {
 .radar-head {
   text-align: center;
 }
+/* Display role since the copy audit (2026-10-01): 30px / 800 — the weight
+   fonts.css loads as GennetyDisplay-ExtraBold. */
 .radar-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: var(--font-display-weight-title);
-  letter-spacing: var(--font-display-tracking-title);
+  font-size: 30px;
+  line-height: 1.08;
+  font-weight: var(--font-display-weight-display);
+  letter-spacing: var(--font-display-tracking-display);
+  text-wrap: balance;
 }
 
 /* Progress — a single hairline bar. No "X / Y" scoreboard: the point is a calm

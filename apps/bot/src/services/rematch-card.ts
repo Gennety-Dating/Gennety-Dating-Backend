@@ -322,7 +322,10 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
 
       el("div", { display: "flex", flexGrow: 9, minHeight: "0px" }),
 
-      // Overline, led by a short burgundy rule.
+      // Overline, led by a short burgundy rule. An empty overline drops the
+      // whole row (copy audit 2026-10-01: the rematch card carries none).
+      ...(input.overline
+        ? [
       el("div", { display: "flex", alignItems: "center", marginBottom: "26px" }, [
         el("div", {
           display: "flex",
@@ -345,6 +348,8 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
           input.overline,
         ),
       ]),
+          ]
+        : []),
 
       el(
         "div",

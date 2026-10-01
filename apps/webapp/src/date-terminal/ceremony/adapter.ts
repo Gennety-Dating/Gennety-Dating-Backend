@@ -106,7 +106,7 @@ export function planFor(device: CeremonyDevice, options: PlanOptions): CeremonyP
 }
 
 export interface CeremonyLabels {
-  /** The waiting capsule — «Ждём партнёра…». */
+  /** The waiting capsule — «Ждём твою пару…». */
   waiting: string;
   /** The capsule of the phone whose hold completed the pair — «Готово». */
   ready: string;

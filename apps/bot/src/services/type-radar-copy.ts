@@ -13,31 +13,31 @@ export interface TypeRadarInviteCopy {
 const COPY: Record<Language, TypeRadarInviteCopy> = {
   en: {
     intro:
-      "Quick visual step before we finish — tap through a few photos so I learn your type. ~30 seconds, and it only tunes who I show you. Nobody else sees it.",
+      "Last step: flip through the photos and mark who you like — that's how I learn your type. Half a minute, and nobody will see it.",
     button: "🫰 Choose my type",
     skip: "Skip for now",
   },
   ru: {
     intro:
-      "Быстрый визуальный шаг перед финалом — пролистай пару фото, чтобы я понял твой типаж. ~30 секунд, влияет только на то, кого я тебе показываю. Этого никто не видит.",
+      "Последний шаг: полистай фото и отметь, кто нравится, — так я пойму твой типаж. Полминуты, никто этого не увидит.",
     button: "🫰 Выбрать типаж",
     skip: "Пропустить",
   },
   uk: {
     intro:
-      "Швидкий візуальний крок перед фіналом — гортни кілька фото, щоб я зрозумів твій типаж. ~30 секунд, впливає лише на те, кого я тобі показую. Цього ніхто не бачить.",
+      "Останній крок: погортай фото й познач, хто подобається, — так я зрозумію твій типаж. Пів хвилини, ніхто цього не побачить.",
     button: "🫰 Обрати типаж",
     skip: "Пропустити",
   },
   de: {
     intro:
-      "Kurzer visueller Schritt zum Schluss — tippe dich durch ein paar Fotos, damit ich deinen Typ lerne. ~30 Sekunden, steuert nur, wen ich dir zeige. Sieht sonst niemand.",
+      "Letzter Schritt: Blättere durch die Fotos und markiere, wer dir gefällt — so lerne ich deinen Typ. Eine halbe Minute, und niemand sieht es.",
     button: "🫰 Meinen Typ wählen",
     skip: "Später",
   },
   pl: {
     intro:
-      "Szybki krok wizualny na koniec — przewiń kilka zdjęć, żebym poznał twój typ. ~30 sekund, wpływa tylko na to, kogo ci pokazuję. Nikt inny tego nie widzi.",
+      "Ostatni krok: przejrzyj zdjęcia i zaznacz, kto ci się podoba — tak poznam twój typ. Pół minuty, nikt tego nie zobaczy.",
     button: "🫰 Wybierz mój typ",
     skip: "Pomiń",
   },

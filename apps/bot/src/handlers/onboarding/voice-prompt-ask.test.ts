@@ -16,14 +16,15 @@ import { voicePromptAskText } from "./voice-prompt.js";
 describe("voice-prompt ask", () => {
   const languages = SUPPORTED_LANGUAGES as readonly Language[];
 
-  it("points at the skip button by its real label, in every language", () => {
+  it("leaves the skip affordance to the panel button, in every language", () => {
+    // Copy audit 2026-10-01: the "skip — button at the bottom of the chat"
+    // line was dropped; the panel's own skip button (always shown with this
+    // ask) is the exit. The question itself still says the step is optional.
     for (const language of languages) {
-      const label = t(language, "voicePromptSkipButton");
-      const ask = voicePromptAskText(
-        language,
-        onboardingQuestionText(language, "voice_prompt"),
-      );
-      expect(ask, language).toContain(label);
+      const question = onboardingQuestionText(language, "voice_prompt");
+      const ask = voicePromptAskText(language, question);
+      expect(ask, language).toBe(question);
+      expect(ask, language).not.toContain(t(language, "voicePromptSkipButton"));
     }
   });
 

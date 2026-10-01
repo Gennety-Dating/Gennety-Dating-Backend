@@ -5,6 +5,7 @@ import {
   DATE_TERMINAL_INVITE_LEAD_MINUTES,
   DATE_TERMINAL_REMINDER_GRACE_MINUTES,
   dateTerminalBeatFor,
+  escapeMd,
   t,
   type DateTerminalBeat,
   type Language,
@@ -144,7 +145,8 @@ async function deliver(
   if (!telegramReachable(user)) return;
   const lang: Language = user.language ?? "en";
   const text = t(lang, beat === "invite" ? "dateTerminalInvite" : "dateTerminalReminder", {
-    venue: venueName ?? "",
+    // Sent as legacy Markdown for the bold first line, so the venue is escaped.
+    venue: escapeMd(venueName ?? ""),
     minutes: DATE_TERMINAL_INVITE_LEAD_MINUTES,
   });
   const keyboard: InlineKeyboardMarkup = {
@@ -164,7 +166,10 @@ async function deliver(
     ],
   };
   await api
-    .sendMessage(Number(user.telegramId), text, { reply_markup: keyboard })
+    .sendMessage(Number(user.telegramId), text, {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    })
     .catch((err: unknown) => {
       console.warn(
         `[date-terminal] ${beat} failed for ${user.id}:`,

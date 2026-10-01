@@ -890,14 +890,6 @@ body {
   max-width: 320px;
   animation: rise 0.5s 0.15s ease both;
 }
-.pp-sub {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 15px;
-  line-height: 1.5;
-  max-width: 280px;
-  animation: rise 0.5s 0.28s ease both;
-}
 
 /* Self-pay button carrying the one-time famine discount — relative so the badge
    pins to its top-right corner. */
@@ -1170,8 +1162,7 @@ body {
   .pp-logo,
   .pp-shine,
   .pp-stamp,
-  .pp-title,
-  .pp-sub {
+  .pp-title {
     animation: none;
   }
   .pp-heart {

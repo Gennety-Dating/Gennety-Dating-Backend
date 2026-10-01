@@ -1575,7 +1575,6 @@ function LanguageGate(props: {
   return (
     <GateShell>
       <h1>{s.languageTitle}</h1>
-      <p>{s.languageLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="choice-row">
         {LANGUAGE_OPTIONS.map((option) => (
@@ -1655,7 +1654,6 @@ function ThemeGate(props: {
   return (
     <GateShell>
       <h1>{s.themeTitle}</h1>
-      <p>{s.themeLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="theme-tile-row">
         {THEME_VALUES.map((value) => {
@@ -1726,7 +1724,6 @@ function PathGate(props: {
   return (
     <GateShell>
       <h1>{s.pathTitle}</h1>
-      <p>{s.pathLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="choice-row">
         {options.map((option) => (
@@ -1805,7 +1802,6 @@ function PhoneGate(props: {
           {busy ? s.phoneSharing : s.phoneShare}
         </button>
       </div>
-      <div className="gate-meta">{s.phoneMeta}</div>
     </GateShell>
   );
 }
@@ -1885,7 +1881,6 @@ function EmailGate(props: {
           {busy ? s.emailSending : s.emailSend}
         </button>
       </div>
-      <div className="gate-meta">{s.emailMeta}</div>
     </GateShell>
   );
 }
@@ -2209,7 +2204,6 @@ function CityGate(props: {
         <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
           <span>
             <strong>{geoBusy ? s.cityDetecting : s.cityDetect}</strong>
-            <small>{s.cityGeoMeta}</small>
           </span>
           <span className="material-symbols-outlined">my_location</span>
         </button>
@@ -2314,7 +2308,6 @@ function WaitlistGate(props: {
       <h1>{s.waitlistTitle(city)}</h1>
       <p>{s.waitlistLead(city)}</p>
       {error ? <div className="gate-error">{error}</div> : null}
-      <div className="gate-note">{s.waitlistPriority}</div>
       <div className="gate-stack">
         <button
           className="choice-button"
@@ -2327,7 +2320,6 @@ function WaitlistGate(props: {
           <span className="material-symbols-outlined">location_city</span>
         </button>
       </div>
-      <div className="gate-meta">{s.waitlistMeta}</div>
     </GateShell>
   );
 }
@@ -2383,20 +2375,6 @@ function PromoGiftGate(props: {
           </svg>
         </div>
         <h1 className="promo-gift-title">{s.promoGiftTitle}</h1>
-        <ul className="promo-gift-statuses" aria-hidden="false">
-          <li className="promo-gift-status">
-            <span className="promo-gift-check">✓</span>
-            {s.promoGiftStatusConfirmed}
-          </li>
-          <li className="promo-gift-status">
-            <span className="promo-gift-check">✓</span>
-            {s.promoGiftPromoActive}
-          </li>
-          <li className="promo-gift-status">
-            <span className="promo-gift-check">✓</span>
-            {s.promoGiftSubActivated}
-          </li>
-        </ul>
         <div className="promo-gift-rewards">
           <div className="promo-gift-reward">{ticketLine}</div>
           <div className="promo-gift-reward">{monthsLine}</div>
@@ -2547,7 +2525,7 @@ function HandoffLoading(props: {
       <div>
         <div className="loading-orb" />
         <h1>{complete ? s.handoffReadyTitle : s.handoffTitle}</h1>
-        <p>{error ?? s.handoffLead}</p>
+        {error ? <p>{error}</p> : null}
         {error ? (
           <button
             className="gate-button"
@@ -2608,7 +2586,6 @@ function SyncingScene(): ReactElement {
       <div>
         <div className="loading-orb syncing-orb" />
         <h1>{s.syncingTitle}</h1>
-        <p>{s.syncingLead}</p>
       </div>
     </div>
   );

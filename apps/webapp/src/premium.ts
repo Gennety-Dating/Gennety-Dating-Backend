@@ -72,7 +72,6 @@ interface Copy {
   b3t: string;
   b3d: string;
   b3x: string;
-  more: string;
   // Plan picker (§3.8 — 1 / 3 / 6 months).
   planMonthly: string;
   plan3: string;
@@ -116,18 +115,18 @@ const COPY: Record<Lang, Copy> = {
     sub: "The good stuff, unlocked.",
     b1t: "Unlimited dates",
     b1d: "Every date is covered — no ticket, no per-date fee.",
-    b1x: "A date normally costs one Date Ticket each. With Premium your own place at the table is always covered, however often you go — and buying a ticket for your date, if you want to, still costs one ticket.",
+    b1x:
+      "Your own seat on every date is always paid for. A ticket for your match is separate, if you'd like to treat them.",
     b4t: "Every evening time",
     b4d: "The late slots in the calendar stay open for you.",
-    b4x: "The last hours of each day are the ones people actually want, so they are a Premium band — anyone else opens them for a one-off fee, per date. With Premium they are simply open, on every date you plan, for both of you.",
+    b4x: "Late evenings are the most wanted time. With Premium they're open on every date, for both of you.",
     b3t: "Free venue changes",
     b3d: "Swap your date spot as often as you like — no fee.",
     b3x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
     b2t: "Premium venues",
-    b2d: "A hand-picked tier of nicer places in the venue board",
+    b2d: "A step-up selection of places",
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
     b2link: "See the places",
-    more: "More perks are on the way.",
     planMonthly: "1 month",
   plan3: "3 months",
   plan6: "6 months",
@@ -150,18 +149,19 @@ const COPY: Record<Lang, Copy> = {
     sub: "Лучшее — открыто.",
     b1t: "Безлимитные свидания",
     b1d: "Каждое свидание покрыто — без билета и без оплаты за раз.",
-    b1x: "Обычно свидание стоит по одному билету с человека. С Premium твоё место всегда покрыто, сколько бы свиданий ни было — а оплатить билет за спутницу, если захочешь, по-прежнему стоит один билет.",
+    b1x: "Твоё место на свидании всегда оплачено. Билет для пары — отдельно, если захочешь угостить.",
     b4t: "Любое вечернее время",
     b4d: "Поздние слоты в календаре открыты для тебя.",
-    b4x: "Последние часы каждого дня — те, которые на самом деле нужны, поэтому это Premium-полоса: остальные открывают её разово и за отдельную плату, на одно свидание. С Premium она просто открыта, на каждом свидании, сразу для вас двоих.",
+    b4x:
+      "Поздние вечера — самое востребованное время. С Premium они открыты на каждом свидании, сразу для вас двоих.",
     b3t: "Бесплатная смена места",
     b3d: "Меняй место свидания сколько угодно — без оплаты.",
     b3x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
     b2t: "Премиум-заведения",
-    b2d: "Отобранный тир мест получше в подборе",
-    b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
+    b2d: "Подборка мест уровнем выше",
+    b2x:
+      "Premium открывает отдельную подборку заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
     b2link: "Посмотреть места",
-    more: "Дальше будет больше.",
     planMonthly: "1 месяц",
   plan3: "3 месяца",
   plan6: "6 месяцев",
@@ -184,18 +184,19 @@ const COPY: Record<Lang, Copy> = {
     sub: "Найкраще — відкрито.",
     b1t: "Безлімітні побачення",
     b1d: "Кожне побачення покрите — без квитка й без оплати за раз.",
-    b1x: "Зазвичай побачення коштує по одному квитку з людини. З Premium твоє місце завжди покрите, скільки б побачень не було — а сплатити квиток за супутницю, якщо захочеш, і далі коштує один квиток.",
+    b1x: "Твоє місце на побаченні завжди оплачено. Квиток для пари — окремо, якщо захочеш пригостити.",
     b4t: "Будь-який вечірній час",
     b4d: "Пізні слоти в календарі відкриті для тебе.",
-    b4x: "Останні години кожного дня — ті, які насправді потрібні, тому це Premium-смуга: решта відкриває її разово й за окрему плату, на одне побачення. З Premium вона просто відкрита, на кожному побаченні, одразу для вас двох.",
+    b4x:
+      "Пізні вечори — найзатребуваніший час. З Premium вони відкриті на кожному побаченні, одразу для вас двох.",
     b3t: "Безкоштовна зміна місця",
     b3d: "Змінюй місце побачення скільки завгодно — без оплати.",
     b3x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
     b2t: "Преміум-заклади",
-    b2d: "Відібраний тір кращих місць у підборі",
-    b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
+    b2d: "Добірка місць рівнем вище",
+    b2x:
+      "Premium відкриває окрему добірку закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
     b2link: "Подивитись місця",
-    more: "Далі буде більше.",
     planMonthly: "1 місяць",
   plan3: "3 місяці",
   plan6: "6 місяців",
@@ -218,18 +219,19 @@ const COPY: Record<Lang, Copy> = {
     sub: "Das Beste, freigeschaltet.",
     b1t: "Unbegrenzte Dates",
     b1d: "Jedes Date ist abgedeckt — kein Ticket, keine Gebühr pro Date.",
-    b1x: "Ein Date kostet normalerweise pro Person ein Date-Ticket. Mit Premium ist dein eigener Platz immer abgedeckt, egal wie oft — und das Ticket deiner Begleitung zu übernehmen kostet weiterhin ein Ticket.",
+    b1x:
+      "Dein Platz beim Date ist immer bezahlt. Ein Ticket für dein Match kommt extra, falls du es einladen willst.",
     b4t: "Jede Abendzeit",
     b4d: "Die späten Slots im Kalender bleiben für dich offen.",
-    b4x: "Die letzten Stunden jedes Tages sind die, die man wirklich will — deshalb sind sie ein Premium-Band: alle anderen öffnen es einmalig gegen Gebühr, pro Date. Mit Premium ist es einfach offen, bei jedem Date, für euch beide.",
+    b4x:
+      "Späte Abende sind die gefragteste Zeit. Mit Premium sind sie bei jedem Date offen, für euch beide.",
     b3t: "Kostenlose Ortswechsel",
     b3d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
     b3x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
     b2t: "Premium-Orte",
-    b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard",
+    b2d: "Eine Auswahl gehobener Orte",
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
     b2link: "Orte ansehen",
-    more: "Mehr kommt bald.",
     planMonthly: "1 Monat",
   plan3: "3 Monate",
   plan6: "6 Monate",
@@ -254,18 +256,18 @@ const COPY: Record<Lang, Copy> = {
     sub: "To, co najlepsze — odblokowane.",
     b1t: "Nielimitowane randki",
     b1d: "Każda randka jest pokryta — bez biletu i bez opłaty za randkę.",
-    b1x: "Randka zwykle kosztuje po jednym bilecie od osoby. Z Premium twoje miejsce jest zawsze pokryte, niezależnie od liczby randek — a pokrycie biletu partnerki, jeśli zechcesz, nadal kosztuje jeden bilet.",
+    b1x: "Twoje miejsce na randce jest zawsze opłacone. Bilet dla pary — osobno, jeśli zechcesz zaprosić.",
     b4t: "Każda wieczorna godzina",
     b4d: "Późne sloty w kalendarzu są dla ciebie otwarte.",
-    b4x: "Ostatnie godziny każdego dnia to te, których naprawdę się chce — dlatego są pasmem Premium: reszta otwiera je jednorazowo za opłatą, na jedną randkę. Z Premium są po prostu otwarte, na każdej randce, od razu dla was obojga.",
+    b4x:
+      "Późne wieczory to najbardziej rozchwytywany czas. Z Premium są otwarte na każdej randce, od razu dla was obojga.",
     b3t: "Darmowa zmiana miejsca",
     b3d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
     b3x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
     b2t: "Miejsca premium",
-    b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy",
+    b2d: "Wybór miejsc o klasę wyżej",
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
     b2link: "Zobacz miejsca",
-    more: "Więcej wkrótce.",
     planMonthly: "1 miesiąc",
   plan3: "3 miesiące",
   plan6: "6 miesięcy",
@@ -618,7 +620,6 @@ function renderOffer(state: PremiumState): void {
     list.append(benefitCard(ico, anim, tt, dd, xx, link));
   }
   scroll.append(list);
-  scroll.append(el("p", "pm-more", s.more));
 
   // No referral chip here, by founder decision (2026-09-22): the referral
   // program pays out Date Tickets only, and its entry points live at ticket

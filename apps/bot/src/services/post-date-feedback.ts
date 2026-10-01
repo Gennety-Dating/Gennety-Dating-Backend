@@ -176,7 +176,7 @@ const FEEDBACK_LABELS: Record<Language, FeedbackLabels> = {
   },
   ru: {
     chem: "Химия (1–10)",
-    second: "Готов(а) на вторую встречу?",
+    second: "Хочешь встретиться ещё раз?",
     notes: "Комментарий",
     yes: "да",
     maybe: "может быть",
@@ -184,7 +184,7 @@ const FEEDBACK_LABELS: Record<Language, FeedbackLabels> = {
   },
   uk: {
     chem: "Хімія (1–10)",
-    second: "Готовий(а) на другу зустріч?",
+    second: "Хочеш зустрітися ще раз?",
     notes: "Коментар",
     yes: "так",
     maybe: "можливо",

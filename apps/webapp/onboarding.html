@@ -58,11 +58,12 @@
            overrides the six-second intro animation away. */
         animation: orbBreath 1800ms ease-in-out infinite;
       }
-      /* `.orb-wrap` centres the whole block — orb, heading and lead — while the
-         shell knows no language yet and so shows no text. 72px is that missing
-         text (36px heading line + 12px margin + 24px lead line), reserved so
-         the orb sits at the same height in both and does not jump on handover. */
-      #boot-orb .orb-text-space { height: 72px; }
+      /* `.orb-wrap` centres the whole block — orb and heading — while the
+         shell knows no language yet and so shows no text. 52px is that missing
+         text (40px heading line + 12px margin; the syncing screen has had no
+         lead since 2026-10-01), reserved so the orb sits at the same height in
+         both and does not jump on handover. */
+      #boot-orb .orb-text-space { height: 52px; }
       @keyframes orbBreath {
         0%, 100% {
           box-shadow: 0 0 48px rgba(255, 255, 255, 0.18), 0 0 90px rgba(139, 37, 59, 0.26);

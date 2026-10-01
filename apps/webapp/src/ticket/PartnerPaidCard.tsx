@@ -90,7 +90,6 @@ export function PartnerPaidCard({
       </div>
 
       <h1 className="pp-title">{fill(s.partnerPaidTitle, { name: partnerName })}</h1>
-      <p className="pp-sub">{s.partnerPaidSub}</p>
     </div>
   );
 }

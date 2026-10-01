@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, escapeMd, type Language, PRE_DATE_SAFETY_HOURS } from "@gennety/shared";
+import { t, type Language, PRE_DATE_SAFETY_HOURS } from "@gennety/shared";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 
@@ -92,7 +92,9 @@ export async function runPreDateSafetyTick(
       continue;
     }
 
-    const venue = escapeMd(match.venueName ?? "");
+    // The venue sits INSIDE the bold title, where legacy Markdown allows no
+    // escapes — strip the markup characters instead of escaping them.
+    const venue = (match.venueName ?? "").replace(/[_*`[\]]/g, "");
 
     // Per-leg .catch so one blocked / unreachable user doesn't abort the
     // batch and trigger duplicate sends on the next tick.

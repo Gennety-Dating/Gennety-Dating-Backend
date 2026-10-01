@@ -432,7 +432,7 @@ function IntentTile(props: {
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */
 function BasicsShell(props: {
-  /** Omitted on the name screen, where the field's placeholder is the ask. */
+  /** Every screen passes one; optional so a future field-only screen may omit it. */
   title?: string;
   error: string | null;
   children: ReactNode;
@@ -583,6 +583,7 @@ function NameScreen(props: {
 
   return (
     <BasicsShell
+      title={props.strings.basicsNameTitle}
       error={props.error}
       modifier="ob-basics--name"
       action={
@@ -605,8 +606,9 @@ function NameScreen(props: {
         spellCheck={false}
         enterKeyHint="done"
         maxLength={40}
-        // The visible question is gone from this screen; the field is the whole
-        // ask. Keep it as the accessible name so a screen reader still says it.
+        // The question is also the visible title again (copy audit 2026-10-01,
+        // same size as every other basics screen); the field keeps it as its
+        // accessible name so a screen reader says it on focus.
         aria-label={props.strings.basicsNameTitle}
         placeholder={props.strings.basicsNamePlaceholder}
         value={name}

@@ -110,7 +110,7 @@ describe("sendDateTerminalBeats", () => {
       data: { terminalReminderSentAt: at(-10) },
     });
     expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage.mock.calls[0]![1]).toContain("Contact Sync");
+    expect(sendMessage.mock.calls[0]![1]).toContain("Обмен контактами открыт");
   });
 
   it("claims but does not send the reminder to a pair that already synced", async () => {

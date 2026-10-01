@@ -439,6 +439,7 @@ async function sendRetryPrompt(
       photoRedoLabel: t(language, "verifyBtnRedoPhotosSecondary"),
     });
     await api.sendMessage(Number(telegramId), livenessRetryMessage(language, outcome), {
+      parse_mode: "Markdown",
       ...(keyboard ? { reply_markup: keyboard } : {}),
     });
   } catch (err) {

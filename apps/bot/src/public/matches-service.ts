@@ -312,12 +312,15 @@ async function notifyParticipant(
     user.telegramId > 0n &&
     (user.platform === "telegram" || user.platform === "both")
   ) {
-    await api.sendMessage(Number(user.telegramId), text).catch(() => {});
+    await api
+      .sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" })
+      .catch(() => {});
   }
   if (user.platform === "mobile" || user.platform === "both") {
     await sendPushToUser(user.id, {
       title: push.title,
-      body: text,
+      // A lock screen renders no Markdown — drop the bold markers.
+      body: text.replace(/[*_`]/g, ""),
       data: { type: push.type, matchId: push.matchId },
     }).catch(() => {});
   }

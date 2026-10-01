@@ -150,10 +150,10 @@ const MAX_CAPTION_CHARS = 1024;
  */
 const CARD_KEYS: Record<
   ExpiryCardVariant,
-  { overline: TranslationKey; headline: TranslationKey; subline: TranslationKey }
+  { overline: TranslationKey | null; headline: TranslationKey; subline: TranslationKey }
 > = {
   expired: {
-    overline: "expiryCardOverlineExpired",
+    overline: null, // copy audit 2026-10-01: no overline
     headline: "expiryCardHeadlineExpired",
     subline: "expiryCardSublineExpired",
   },
@@ -163,12 +163,12 @@ const CARD_KEYS: Record<
     subline: "expiryCardSublinePenalty",
   },
   peer_ignored: {
-    overline: "expiryCardOverlinePeerIgnored",
+    overline: null,
     headline: "expiryCardHeadlinePeerIgnored",
     subline: "expiryCardSublinePeerIgnored",
   },
   missed_date: {
-    overline: "expiryCardOverlineMissedDate",
+    overline: null,
     headline: "expiryCardHeadlineMissedDate",
     subline: "expiryCardSublineMissedDate",
   },
@@ -192,7 +192,7 @@ export async function buildCard(
   const keys = CARD_KEYS[variant];
   const png = await renderExpiryCard({
     variant,
-    overline: t(lang, keys.overline),
+    overline: keys.overline ? t(lang, keys.overline) : "",
     headline: t(lang, keys.headline),
     subline: t(lang, keys.subline),
     // `User.theme` is non-null with a `dark` default, so anything that isn't
@@ -268,7 +268,9 @@ export async function sendExpiryNotifications(
           caption: card.caption,
         });
       } else {
-        await api.sendMessage(Number(side.telegramId), composeBody(side, lang));
+        await api.sendMessage(Number(side.telegramId), composeBody(side, lang), {
+          parse_mode: "Markdown",
+        });
       }
       notified++;
       // Rematch offer (REMATCH_PRODUCT_SPEC.md, D4) — the second pain moment:

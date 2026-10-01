@@ -112,7 +112,8 @@ export async function sendRematchOfferIfEligible(
   if (text.length > CAPTION_LIMIT) return sendText();
 
   const png = await renderRematchCard({
-    overline: t(lang, "rematchCardOverline"),
+    // Overline dropped by the copy audit (2026-10-01); the key stays in i18n.
+    overline: "",
     headline: t(lang, "rematchCardHeadline"),
     subline: t(lang, "rematchCardSubline"),
     theme,
