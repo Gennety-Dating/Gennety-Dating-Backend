@@ -44,7 +44,14 @@ import {
   type OnboardingPhase,
 } from "./onboarding-route.js";
 import { BasicsGate } from "./onboarding-basics.js";
-import { isWorthWriting, keyboardInset } from "./keyboard-viewport.js";
+import {
+  KEYBOARD_MOTION_MS,
+  isWorthWriting,
+  keyboardInset,
+  nextVisibleBottom,
+  raisesKeyboard,
+} from "./keyboard-viewport.js";
+import type { KeyboardMotion } from "./keyboard-viewport.js";
 import {
   BASICS_STEPS,
   nextBasicsStep,
@@ -226,6 +233,12 @@ function configureTelegramChrome(): void {
   }
 }
 
+/**
+ * Longest an outgoing scene stays mounted. The crossfade is `opacity 420ms` in
+ * `.scene-stage`; this only matters where no `transitionend` arrives.
+ */
+const SCENE_EXIT_CEILING_MS = 700;
+
 function App(): ReactElement {
   // The element every screen's `height: 100%` chains up to, and therefore the
   // reference the soft-keyboard inset is measured against. See the
@@ -263,6 +276,11 @@ function App(): ReactElement {
     PREVIEW_WELCOME ? "loop" : prefersReducedMotion() ? "off" : "loop",
   );
   const mascotRef = useRef<MascotHandle | null>(null);
+  // Typing that must outlive its scene now that a scene is unmounted when it is
+  // left (see `Scene`): back from the path chooser to consent, or "change
+  // email" from the code screen, should find what the user already entered.
+  const consentDraft = useRef<ConsentDraft>({ terms: false, research: false });
+  const emailDraft = useRef<string | null>(null);
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -419,61 +437,130 @@ function App(): ReactElement {
   // a layout viewport that has already shrunk shrinks the reference with it and
   // the inset falls to zero on its own. See `keyboard-viewport.ts` for the
   // arithmetic and the measurements.
+  //
+  // Written on the SHELL, not on `:root`. On the root every write restyled the
+  // whole document, and every hidden scene that read the variable restarted its
+  // own height transition once per keyboard frame — 225 transitions for one
+  // keyboard on the name screen, measured, for one pill that had to move.
+  //
+  // Inside Telegram, a `viewportChanged` with `isStateStable: false` means the
+  // client is mid-animation (its sheet, or the keyboard on Android, where the
+  // WebView itself is resized): nothing is written until it reports the stable
+  // state, so the screen moves once to where Telegram settles instead of
+  // chasing every intermediate frame. Outside Telegram the visual viewport is
+  // the only signal there is, and it is used directly.
   useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    // `--stable-vh`: one hundredth of the shell's height with no keyboard up.
+    // The profile screens size their type from it instead of from `dvh`, which
+    // shrinks while the keyboard is open and grew the next screen's title and
+    // age readout under the user's eyes as it closed.
+    const captureStableHeight = (): void => {
+      if (raisesKeyboard(document.activeElement)) return;
+      if (shell.clientHeight > 0) {
+        shell.style.setProperty("--stable-vh", `${shell.clientHeight / 100}px`);
+      }
+    };
+    captureStableHeight();
     const vv = window.visualViewport;
     if (!vv) return;
-    const root = document.documentElement;
+    const telegram = app?.onEvent && app.platform && app.platform !== "unknown" ? app : null;
     let written: number | null = null;
+    let bottom: number | null = null;
+    let lastShellHeight = shell.clientHeight;
+    let motion: KeyboardMotion = "free";
+    let motionUntil = 0;
+    let telegramMoving = false;
     let frame = 0;
     const write = (): void => {
       frame = 0;
-      const shell = shellRef.current;
-      if (!shell) return;
-      const next = keyboardInset({
+      if (telegramMoving) return;
+      const shellHeight = shell.clientHeight;
+      const raw = keyboardInset({
         shellHeight: shell.clientHeight,
         viewportHeight: vv.height,
         viewportOffsetTop: vv.offsetTop,
       });
+      const direction = performance.now() < motionUntil ? motion : "free";
+      bottom = nextVisibleBottom(bottom, shellHeight - raw, direction);
+      const next = Math.max(0, Math.round(shellHeight - bottom));
+      // The pill glides only when the shell itself held still — the floating
+      // keyboard. When the shell resized in this same frame the layout has
+      // already moved the pill, and easing the inset on top of that is what
+      // overshot it by a third of a keyboard (124px measured) before it settled.
+      const glide = shellHeight === lastShellHeight;
+      lastShellHeight = shellHeight;
       if (!isWorthWriting(written, next)) return;
       written = next;
-      root.style.setProperty("--kb-height", `${next}px`);
+      shell.toggleAttribute("data-kb-glide", glide);
+      shell.style.setProperty("--kb-height", `${next}px`);
     };
-    // A CSS transition RESTARTS from wherever it currently is every time the
-    // value changes, so a value that churns is a transition that never gets to
-    // finish — and a rise that keeps restarting is what reads as stepped rather
-    // than as one movement. Several of these can fire in the same frame (the
-    // keyboard resizes the visual viewport AND scrolls it, and the client may
-    // resize the WebView on top of that), so they are coalesced into one write
-    // per frame instead of one style recalc and one restart each.
+    // Several of these can fire in the same frame (the keyboard resizes the
+    // visual viewport AND scrolls it, and the client may resize the WebView on
+    // top of that), so they are coalesced into one write per frame.
     // `KB_HEIGHT_STEP_PX` then absorbs a slow ramp: WebKit scrolls a focused
     // field into view while the keyboard is still animating, and `offsetTop` is
-    // part of this sum, so that arrives as a stream of ~1px changes none of
-    // which is worth restarting an animation for.
+    // part of this sum, so that arrives as a stream of ~1px changes.
     const schedule = (): void => {
       if (frame) return;
       frame = requestAnimationFrame(write);
     };
+    const onFocusChange = (event: FocusEvent): void => {
+      if (!raisesKeyboard(event.target instanceof Element ? event.target : null)) return;
+      motion = event.type === "focusin" ? "opening" : "closing";
+      motionUntil = performance.now() + KEYBOARD_MOTION_MS;
+    };
+    const onTelegramViewport = (event: TelegramViewportChanged): void => {
+      telegramMoving = !event.isStateStable;
+      if (event.isStateStable) {
+        captureStableHeight();
+        schedule();
+      }
+    };
+    const onOrientation = (): void => {
+      // The new orientation is a new screen: whatever the keyboard was doing
+      // no longer constrains the edge, and the type scale is re-measured.
+      motion = "free";
+      bottom = null;
+      requestAnimationFrame(captureStableHeight);
+      schedule();
+    };
     write();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
+    telegram?.onEvent?.("viewportChanged", onTelegramViewport);
     // The shell's own box is the other half of the subtraction, and it can
     // change without the visual viewport moving at all — which is exactly the
     // case that used to strand a full keyboard's worth of reservation on an
     // already-shrunk screen. Observing the element covers every route to that
     // (a WebView resize, a rotation, Telegram's own chrome) without having to
     // guess which event a given client fires.
+    // Measured SYNCHRONOUSLY from the observer, not on the next frame: the
+    // observer runs after layout and before paint, so writing here corrects the
+    // inset in the very frame the shell shrank. A frame later is one painted
+    // frame with the keyboard reserved twice — the pill a keyboard too high.
+    const measureNow = (): void => {
+      if (frame) cancelAnimationFrame(frame);
+      write();
+    };
     const observer =
-      typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+      typeof ResizeObserver === "function" ? new ResizeObserver(measureNow) : null;
     if (shellRef.current) observer?.observe(shellRef.current);
     window.addEventListener("resize", schedule);
-    window.addEventListener("orientationchange", schedule);
+    window.addEventListener("orientationchange", onOrientation);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
+      telegram?.offEvent?.("viewportChanged", onTelegramViewport);
       observer?.disconnect();
       window.removeEventListener("resize", schedule);
-      window.removeEventListener("orientationchange", schedule);
+      window.removeEventListener("orientationchange", onOrientation);
     };
   }, []);
 
@@ -723,7 +810,7 @@ function App(): ReactElement {
         <SyncingScene />
       </Scene>
       <Scene active={phase.kind === "consent"}>
-        <ConsentGate onState={onState} />
+        <ConsentGate onState={onState} draft={consentDraft} />
       </Scene>
       <Scene active={phase.kind === "language"}>
         <LanguageGate onState={onState} selected={remoteUser?.language ?? null} />
@@ -737,6 +824,7 @@ function App(): ReactElement {
       <Scene active={phase.kind === "email"}>
         <EmailGate
           defaultEmail={remoteUser?.email ?? ""}
+          draft={emailDraft}
           onOtp={(email, emailVerification) =>
             setPhase({
               kind: "otp",
@@ -908,8 +996,51 @@ function MascotWelcomeOverlay(props: {
   );
 }
 
+/**
+ * One full-screen scene. Only the ACTIVE scene and the one fading out are
+ * mounted; every other `<section>` is an empty shell.
+ *
+ * All nineteen used to stay mounted for the whole session and were hidden by
+ * opacity alone. Hidden is not idle: seven glass cards kept their
+ * `backdrop-filter`, eight glows their 110px blur, a syncing orb and the theme
+ * glyphs kept breathing, and every soft-keyboard frame restarted height
+ * transitions on screens nobody could see. The outgoing scene stays mounted
+ * until its own opacity transition ends (with a ceiling, for reduced motion,
+ * where there is none), so the crossfade is unchanged.
+ *
+ * Unmounting resets a scene's local state, which every scene already does on
+ * its own when it is left (`active` effects) — except the two that hold typing
+ * the user would expect back: the consent ticks and the email address. Those
+ * are kept by their parent (`consentDraft`, `emailDraft`).
+ */
 function Scene(props: { active: boolean; children: ReactNode }): ReactElement {
-  return <section className={`scene-stage ${props.active ? "is-active" : ""}`}>{props.children}</section>;
+  const { active } = props;
+  const sectionRef = useRef<HTMLElement>(null);
+  const [present, setPresent] = useState(active);
+  if (active && !present) setPresent(true);
+
+  useEffect(() => {
+    if (active || !present) return;
+    const section = sectionRef.current;
+    const leave = (): void => setPresent(false);
+    const ceiling = window.setTimeout(leave, SCENE_EXIT_CEILING_MS);
+    const onEnd = (event: TransitionEvent): void => {
+      if (event.target === section && event.propertyName === "opacity") leave();
+    };
+    section?.addEventListener("transitionend", onEnd);
+    section?.addEventListener("transitioncancel", onEnd);
+    return () => {
+      window.clearTimeout(ceiling);
+      section?.removeEventListener("transitionend", onEnd);
+      section?.removeEventListener("transitioncancel", onEnd);
+    };
+  }, [active, present]);
+
+  return (
+    <section ref={sectionRef} className={`scene-stage ${active ? "is-active" : ""}`}>
+      {present ? props.children : null}
+    </section>
+  );
 }
 
 function TopChrome(props: { onBack: () => void }): ReactElement {
@@ -1336,10 +1467,19 @@ function CycleDots(props: { total: number; active: number; complete: boolean }):
 }
 
 
-function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
+interface ConsentDraft {
+  terms: boolean;
+  research: boolean;
+}
+
+function ConsentGate(props: {
+  onState: (state: TelegramOnboardingState) => void;
+  draft: { current: ConsentDraft };
+}): ReactElement {
   const s = useOnboardingStrings();
-  const [terms, setTerms] = useState(false);
-  const [research, setResearch] = useState(false);
+  const { draft } = props;
+  const [terms, setTerms] = useState(draft.current.terms);
+  const [research, setResearch] = useState(draft.current.research);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1365,7 +1505,15 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
       <p>{s.consentLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <label className="check-row">
-        <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.currentTarget.checked)} />
+        <input
+          type="checkbox"
+          checked={terms}
+          onChange={(event) => {
+            const checked = event.currentTarget.checked;
+            draft.current = { ...draft.current, terms: checked };
+            setTerms(checked);
+          }}
+        />
         <span>
           {s.consentTermsPrefix}{" "}
           <a className="gate-link" href={TERMS_OF_SERVICE_URL} rel="noreferrer" target="_blank">
@@ -1379,7 +1527,15 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
         </span>
       </label>
       <label className="check-row">
-        <input type="checkbox" checked={research} onChange={(event) => setResearch(event.currentTarget.checked)} />
+        <input
+          type="checkbox"
+          checked={research}
+          onChange={(event) => {
+            const checked = event.currentTarget.checked;
+            draft.current = { ...draft.current, research: checked };
+            setResearch(checked);
+          }}
+        />
         <span>{s.consentResearch}</span>
       </label>
       <button className="gate-button" disabled={!terms || busy || !app?.initData} onClick={() => void submit()}>
@@ -1653,11 +1809,14 @@ function PhoneGate(props: {
 
 function EmailGate(props: {
   defaultEmail: string;
+  /** What the user last typed here, kept across the scene unmounting. */
+  draft: { current: string | null };
   onOtp: (email: string, emailVerification?: EmailVerificationState) => void;
   onState: (state: TelegramOnboardingState) => void;
 }): ReactElement {
   const s = useOnboardingStrings();
-  const [email, setEmail] = useState(props.defaultEmail);
+  const { draft } = props;
+  const [email, setEmail] = useState(() => draft.current ?? props.defaultEmail);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1705,7 +1864,11 @@ function EmailGate(props: {
           enterKeyHint="send"
           placeholder="name@university.edu"
           value={email}
-          onChange={(event) => setEmail(event.currentTarget.value)}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            draft.current = value;
+            setEmail(value);
+          }}
           onKeyDown={(event) => {
             // Enter on the soft/hardware keyboard fires the same path as the
             // "Next" button, so the user never has to scroll down to tap it.
@@ -2401,11 +2564,11 @@ function HandoffLoading(props: {
  * (butterfly-success.ts), the same one verification, the calendar, Type Radar and
  * the venue board show.
  *
- * `active` is load-bearing rather than cosmetic. `Scene` keeps every child
- * mounted for the whole session and only toggles a class, so a mark mounted
- * unconditionally would fly its whole animation — and fire its haptic — while
- * still hidden at app start, and the user would arrive at a finished, static
- * tick minutes later. Same reason `HandoffLoading` takes the flag.
+ * `active` is still load-bearing. `Scene` now mounts only the active scene
+ * and the one fading out, but the outgoing copy stays mounted for its 420ms
+ * exit — a mark mounted unconditionally would restart its flight (and its
+ * haptic) on a screen that is leaving. Same reason `HandoffLoading` takes the
+ * flag.
  */
 function DoneScene(props: { active: boolean }): ReactElement {
   const s = useOnboardingStrings();

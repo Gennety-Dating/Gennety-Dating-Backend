@@ -85,16 +85,47 @@ describe("the selected tile", () => {
     // the intrinsic width (540px) and the `right` offset is dropped as
     // over-constrained, so `inset` alone hangs the picture 381px off the tile.
     const photo = declarations(".ob-intent-photo");
-    expect(photo).toMatch(/width:\s*calc\(100% - 2 \* var\(--intent-ring\)\)/);
-    expect(photo).toMatch(/height:\s*calc\(100% - 2 \* var\(--intent-ring\)\)/);
+    expect(photo).toMatch(/width:\s*100%/);
+    expect(photo).toMatch(/height:\s*100%/);
     expect(photo).not.toMatch(/(^|;)\s*inset:/);
+  });
+
+  it("reveals the ring with a clip, by the ring's own width on every side", () => {
+    // The frame is the gap between the clip and the tile's edge, so it is only
+    // a frame if it is even — which `inset()` is and a scaled 3:4 box is not.
+    expect(declarations(".ob-intent.is-on .ob-intent-frames")).toMatch(
+      /clip-path:\s*inset\(var\(--intent-ring\) round calc\(20px - var\(--intent-ring\)\)\)/,
+    );
+  });
+
+  it("animates the selection on the compositor and the clip only", () => {
+    // Selecting a tile used to transition top/left/width/height/border-radius of
+    // the photographs, the label's margin, the tile's box-shadow and a filter —
+    // twenty transitions per tap, most of them relayout or repaint every frame.
+    const intentRules = RULES.filter((rule) =>
+      rule.selectors.some((selector) => selector.includes(".ob-intent")),
+    );
+    const transitioned = intentRules.flatMap((rule) =>
+      [...rule.body.matchAll(/transition:\s*([^;]+);/g)].flatMap(([, value]) =>
+        value
+          // Commas inside cubic-bezier(...) are not list separators.
+          .split(/,(?![^(]*\))/)
+          .map((part) => part.trim().split(/\s+/)[0])
+          .filter((property) => property !== "none"),
+      ),
+    );
+    expect(transitioned.length).toBeGreaterThan(0);
+    for (const property of transitioned) {
+      expect(["opacity", "transform", "translate", "scale", "clip-path"]).toContain(property);
+    }
   });
 
   it("lights the ring from its borders inward, not from the middle out", () => {
     // The house recipe: a NEGATIVE spread pulls each shadow's body out past its
     // own edge and leaves only the falloff pointing in. At zero or positive the
     // same declaration is a vignette pressing inward — the opposite reading.
-    const inset = [...declarations(".ob-intent.is-on").matchAll(/inset (-?\d+px) 0 (\d+px) (-?\d+px)|inset 0 (-?\d+px) (\d+px) (-?\d+px)/g)];
+    // It lives on a pre-rendered layer that only fades (`.ob-intent::before`).
+    const inset = [...declarations(".ob-intent::before").matchAll(/inset (-?\d+px) 0 (\d+px) (-?\d+px)|inset 0 (-?\d+px) (\d+px) (-?\d+px)/g)];
     expect(inset.length).toBeGreaterThanOrEqual(4);
     for (const shadow of inset) {
       const spread = shadow[3] ?? shadow[6];
@@ -109,11 +140,13 @@ describe("the selected tile", () => {
     expect(declarations(".ob-intent")).toMatch(/flex-direction:\s*column/);
   });
 
-  it("mounts one photograph until the option is chosen", () => {
-    // The other three are ~80-120 kB apiece. Rendering them all up front would
-    // put ~600 kB on every registration for pictures most people never see;
-    // mounting them on selection IS the preload.
-    expect(SCREEN).toMatch(/selected \? photos : photos\.slice\(0, 1\)/);
+  it("mounts every frame up front, so the tap only changes opacity", () => {
+    // Reversed 2026-10-01. Mounting the other three on selection saved their
+    // bytes for options nobody picked, but it put three fresh WebP decodes on
+    // the exact frame the selection animates. The cost now lands at rest.
+    expect(SCREEN).toMatch(/\{photos\.map\(\(src, index\) =>/);
+    expect(SCREEN).not.toMatch(/photos\.slice\(0, 1\)/);
+    expect(SCREEN).toMatch(/decoding="async"/);
   });
 
   it("stops the cycle and every transition under reduced motion", () => {

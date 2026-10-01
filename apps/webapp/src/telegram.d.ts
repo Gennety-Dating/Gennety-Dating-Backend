@@ -64,6 +64,11 @@ interface TelegramSafeAreaInset {
   right: number;
 }
 
+/** Payload of the `viewportChanged` Web App event. */
+interface TelegramViewportChanged {
+  isStateStable: boolean;
+}
+
 interface TelegramWebApp {
   /** Raw init data — contains user, auth_date, hash, start_param, etc. */
   initData: string;
@@ -90,8 +95,24 @@ interface TelegramWebApp {
    * fullscreen mode. Not covered by `env(safe-area-inset-*)`.
    */
   contentSafeAreaInset?: TelegramSafeAreaInset;
+  /**
+   * Current height of the visible Web App area, in CSS px (Bot API 6.0+).
+   * Changes continuously while Telegram animates its own sheet or the keyboard.
+   */
+  viewportHeight?: number;
+  /**
+   * Height of the visible area in its last STABLE state — what to lay out
+   * against, because it does not move mid-animation (Bot API 6.0+).
+   */
+  viewportStableHeight?: number;
+  /**
+   * `viewportChanged` reports whether the area has settled. `isStateStable` is
+   * false for every intermediate frame of a resize and true once it ends.
+   */
+  onEvent?(event: "viewportChanged", handler: (event: TelegramViewportChanged) => void): void;
   /** Subscribe to a Web App event, e.g. `contentSafeAreaChanged`. */
   onEvent?(event: string, handler: () => void): void;
+  offEvent?(event: "viewportChanged", handler: (event: TelegramViewportChanged) => void): void;
   /** Unsubscribe from a Web App event. */
   offEvent?(event: string, handler: () => void): void;
   /**

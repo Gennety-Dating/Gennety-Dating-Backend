@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { KB_HEIGHT_STEP_PX, isWorthWriting, keyboardInset } from "./keyboard-viewport.js";
+import {
+  KB_HEIGHT_STEP_PX,
+  isWorthWriting,
+  keyboardInset,
+  nextVisibleBottom,
+} from "./keyboard-viewport.js";
 
 /**
  * The screen these numbers come from: a 393x852 CSS-px iPhone with a 298px
@@ -92,6 +97,33 @@ describe("isWorthWriting", () => {
   });
 });
 
+describe("nextVisibleBottom", () => {
+  it("holds the pill still through a resized WebView's two-step arrival", () => {
+    // Telegram reports the keyboard twice: first the visual viewport shrinks
+    // (inset = keyboard, edge at 554), then the shell itself (inset = 0, edge
+    // still at 554). The edge must not move between the two.
+    const first = nextVisibleBottom(SCREEN, SCREEN - KEYBOARD, "opening");
+    const second = nextVisibleBottom(first, VISIBLE - 0, "opening");
+    expect(first).toBe(VISIBLE);
+    expect(second).toBe(VISIBLE);
+  });
+
+  it("never lets the edge drop back down while the keyboard is opening", () => {
+    // A frame where the two viewports disagree used to read as a bounce.
+    expect(nextVisibleBottom(VISIBLE, SCREEN, "opening")).toBe(VISIBLE);
+  });
+
+  it("never lets the edge jump back up while the keyboard is closing", () => {
+    expect(nextVisibleBottom(SCREEN, VISIBLE, "closing")).toBe(SCREEN);
+    expect(nextVisibleBottom(VISIBLE, SCREEN, "closing")).toBe(SCREEN);
+  });
+
+  it("follows the measurement when no keyboard event is in flight", () => {
+    expect(nextVisibleBottom(VISIBLE, SCREEN, "free")).toBe(SCREEN);
+    expect(nextVisibleBottom(null, VISIBLE, "opening")).toBe(VISIBLE);
+  });
+});
+
 /**
  * The arithmetic above is only correct if it is handed the right reference, and
  * the reference lives in `onboarding.tsx`. That file is a React entry with no
@@ -134,7 +166,7 @@ describe("the onboarding shell is what the inset is measured against", () => {
     // screen. Observing the element covers every route to that without having
     // to guess which event a given client fires.
     const body = await viewportEffect();
-    expect(body).toContain("new ResizeObserver(schedule)");
+    expect(body).toContain("new ResizeObserver(measureNow)");
     expect(body).toContain('observer?.observe(shellRef.current)');
   });
 });
