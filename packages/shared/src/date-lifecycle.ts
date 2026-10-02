@@ -129,15 +129,6 @@ export const PROXIMITY_ARRIVED_RADIUS_M = 50;
 /** Reliability granted to BOTH sides when a Bump verifies. */
 export const BUMP_RELIABILITY_REWARD = 50;
 
-/**
- * Geohash precision for a Scratch Map tile — 6 is about 1.2 km × 0.6 km.
- *
- * The privacy guarantee is this number. At 7 (~150 m) a stored tile starts
- * naming a street; at 5 (~5 km) the whole of Kyiv is a handful of tiles and the
- * map stops being a map. This is the coarsest precision that still draws a city.
- */
-export const SCRATCH_TILE_PRECISION = 6;
-
 /** Topics per side in a generated icebreaker deck. */
 export const BUMP_ICEBREAKER_COUNT = 5;
 

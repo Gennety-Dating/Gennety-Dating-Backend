@@ -18,21 +18,6 @@ export interface CanvasStrings {
   idleTitle: string;
   idleBody: string;
   idleNoDrop: string;
-  /** The Scratch Map's one line. `{percent}` is already formatted. */
-  scratchExplored: string;
-  /**
-   * The Scratch Map's consent, and it has to carry four things (§Scratch Map),
-   * because this is the one control in the product that authorises COLLECTING
-   * a new class of data rather than using data already held: what it does,
-   * that what is stored is an approximate AREA and never a position, that
-   * nothing is recorded while the screen is closed, and that turning it off
-   * later stops the collection without taking the map away.
-   */
-  scratchOffer: string;
-  scratchEnable: string;
-  scratchDisable: string;
-  /** The write is the consent, so a failed one must not look like success. */
-  scratchFailed: string;
   /** A pitch is on the table and THIS side has not answered. */
   decisionTitle: string;
   decisionBody: string;
@@ -109,12 +94,6 @@ const en: CanvasStrings = {
   idleTitle: "Finding you a match",
   idleBody: "Next match in {time}. Until then the map is yours.",
   idleNoDrop: "I check every evening. You'll hear from me the moment I find someone.",
-  scratchExplored: "You've walked {percent} of Kyiv.",
-  scratchOffer:
-    "Want me to colour in the parts of Kyiv you've actually been in? I'd note the rough area — about a kilometre across, never where exactly you are — and only while this screen is open. Turn it off whenever you like; the map stays.",
-  scratchEnable: "Colour in my Kyiv",
-  scratchDisable: "Stop recording",
-  scratchFailed: "That didn't save. Try again.",
   decisionTitle: "Someone's waiting on your answer",
   decisionBody: "Open the chat and tell me yes or no — {time} left.",
   planningTitle: "Sorting out the details",
@@ -161,12 +140,6 @@ const ru: CanvasStrings = {
   idleTitle: "Ищем тебе пару",
   idleBody: "Следующий подбор через {time}. А пока карта твоя.",
   idleNoDrop: "Смотрю каждый вечер. Напишу, как только найду.",
-  scratchExplored: "Пройдено {percent} Киева.",
-  scratchOffer:
-    "Закрасить те части Киева, где ты правда бываешь? Я буду отмечать примерный район — примерно километр в поперечнике, а не то, где ты именно, — и только пока открыт этот экран. Выключить можно когда угодно, карта останется.",
-  scratchEnable: "Закрасить мой Киев",
-  scratchDisable: "Больше не отмечать",
-  scratchFailed: "Не сохранилось. Попробуй ещё раз.",
   decisionTitle: "От тебя ждут ответа",
   decisionBody: "Открой чат и скажи да или нет — осталось {time}.",
   planningTitle: "Договариваемся о деталях",
@@ -213,12 +186,6 @@ const uk: CanvasStrings = {
   idleTitle: "Шукаємо тобі пару",
   idleBody: "Наступний підбір через {time}. А поки карта твоя.",
   idleNoDrop: "Дивлюся щовечора. Напишу, щойно знайду.",
-  scratchExplored: "Пройдено {percent} Києва.",
-  scratchOffer:
-    "Зафарбувати ті частини Києва, де ти справді буваєш? Я відмічатиму приблизний район — десь кілометр завширшки, а не те, де ти саме, — і лише поки відкритий цей екран. Вимкнути можна будь-коли, карта залишиться.",
-  scratchEnable: "Зафарбувати мій Київ",
-  scratchDisable: "Більше не відмічати",
-  scratchFailed: "Не збереглося. Спробуй ще раз.",
   decisionTitle: "Від тебе чекають відповіді",
   decisionBody: "Відкрий чат і скажи так чи ні — лишилось {time}.",
   planningTitle: "Узгоджуємо деталі",
@@ -266,12 +233,6 @@ const de: CanvasStrings = {
   idleTitle: "Wir suchen ein Match für dich",
   idleBody: "Nächste Auswahl in {time}. Bis dahin gehört dir die Karte.",
   idleNoDrop: "Ich schaue jeden Abend. Du hörst von mir, sobald ich jemanden finde.",
-  scratchExplored: "Du hast {percent} von Kyjiw erlaufen.",
-  scratchOffer:
-    "Soll ich die Teile von Kyjiw einfärben, in denen du wirklich warst? Ich merke mir die ungefähre Gegend — etwa einen Kilometer breit, nie deinen genauen Standort — und nur, solange dieser Screen offen ist. Du kannst es jederzeit abschalten, die Karte bleibt.",
-  scratchEnable: "Mein Kyjiw einfärben",
-  scratchDisable: "Nicht mehr mitschreiben",
-  scratchFailed: "Das wurde nicht gespeichert. Versuch es noch mal.",
   decisionTitle: "Jemand wartet auf deine Antwort",
   decisionBody: "Öffne den Chat und sag ja oder nein — noch {time}.",
   planningTitle: "Wir klären die Details",
@@ -319,12 +280,6 @@ const pl: CanvasStrings = {
   idleTitle: "Szukamy ci pary",
   idleBody: "Następne dopasowanie za {time}. Na razie mapa jest twoja.",
   idleNoDrop: "Sprawdzam co wieczór. Odezwę się, gdy tylko kogoś znajdę.",
-  scratchExplored: "Odkryte: {percent} Kijowa.",
-  scratchOffer:
-    "Zamalować te części Kijowa, w których naprawdę bywasz? Zapiszę przybliżoną okolicę — jakiś kilometr wszerz, nigdy dokładnego miejsca — i tylko wtedy, gdy ten ekran jest otwarty. Możesz to wyłączyć kiedy chcesz, mapa zostanie.",
-  scratchEnable: "Zamaluj mój Kijów",
-  scratchDisable: "Przestań zapisywać",
-  scratchFailed: "Nie zapisało się. Spróbuj jeszcze raz.",
   decisionTitle: "Ktoś czeka na twoją odpowiedź",
   decisionBody: "Otwórz czat i powiedz tak albo nie — zostało {time}.",
   planningTitle: "Ustalamy szczegóły",

@@ -126,7 +126,6 @@ vi.mock("../services/ticket-wallet.js", () => ({
   grantTickets: vi.fn(async () => 1),
   isUniqueViolation: () => false,
 }));
-vi.mock("../services/scratch-map.js", () => ({ recordVerifiedVisit: vi.fn(async () => undefined) }));
 vi.mock("../services/openai.js", () => ({ callOpenAIText: vi.fn(async () => "") }));
 vi.mock("../services/main-bot-api.js", () => ({ getMainBotApi: () => null }));
 vi.mock("../services/push.js", () => ({ sendPushToUser: vi.fn(async () => true) }));

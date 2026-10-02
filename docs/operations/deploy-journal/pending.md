@@ -43,6 +43,31 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 ---
 
+**PENDING (2026-10-02) — Scratch Map снят, `GET /v1/date-map` — карта подтверждённых свиданий (DECISIONS 2026-10-02).**
+**Рестарт бота + пересборка Mini App:** без миграции, env, флагов и зависимостей. От порядка A/B/C выше не зависит.
+Что меняется на проде: `/v1/scratch`, `/v1/scratch/ping`, `/v1/scratch/opt-in` удалены (404); новая ручка
+`GET /v1/date-map` (JWT или `tma`) — только чтение `matches` + `curated_venues`; Date Bump больше не пишет в
+`user_scratch_maps`; доска смены места берёт «уже были» из посещённых свиданий. Mini App: туман и тумблер с канвы
+сняты. **В БД ничего не пишется и не удаляется** — `user_scratch_maps` и `users.scratch_map_opt_in` остаются как
+есть до отдельного решения основателя об удалении (деструктивная миграция, правило 5).
+**Демо:** `GET /v1/date-map` отвечает `confirmedDates: 0` — демо не пишет `dateAttended*` (Bump недостижим).
+**iOS:** старые сборки зовут `/v1/scratch` из настроек и канвы — получают 404, обе ошибки клиент глотает
+(`CanvasModel` `loadScratchMap`/`pingScratch` — `try?`); как выглядит экран «Scratch Map» в настройках старой сборки
+после 404 — не проверено (TestFlight-сборки обновятся сборкой с картой свиданий, где экрана нет).
+Сборке iOS с разделом «Карта свиданий» в профиле выкат нужен; до него раздел не появляется.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/scratch   # 404
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/date-map   # {"confirmedDates":…,"places":[…],"vibes":[…]}
+psql "$DATABASE_URL" -c "select max(updated_at) from user_scratch_maps;"            # не растёт после выката
+```
+
+**Откат:** предыдущий коммит, рестарт, пересборка Mini App — схема не менялась.
+
+---
+
 **PENDING (2026-10-01) — фото и проверка: `checking` в `GET /v1/me/verification`, `POST /v1/me/photos/remove`, пол удаления только у `active`, `photos_required` ниже минимума (DECISIONS 2026-10-01).**
 **Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
 A/B/C выше не зависит — едет с любым заходом (A/B/C), в который попадёт коммит. Что меняется на проде:

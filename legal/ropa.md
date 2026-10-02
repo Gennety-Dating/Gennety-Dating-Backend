@@ -92,10 +92,11 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Retention** | While the account exists; erased on deletion |
 | **Note** | A departure point is **never** shown to the match — only the agreed venue |
 
-### 2.5b Explored areas ("map colouring") — optional, off by default
+### 2.5b Explored areas ("map colouring") — RETIRED 2026-10-02
 
 | | |
 |---|---|
+| **Status** | **Collection stopped 2026-10-02** — the feature was retired, the endpoints removed, and nothing reads or writes the tiles. Rows already stored stay (erased on account deletion) until the table is dropped; the drop is pending the founder's approval. The date map that replaced it collects nothing new: it reads the attendance already held for activity 2.4/2.5 date records |
 | **Purpose** | Let a user colour in the parts of their city they have actually been to |
 | **Legal basis** | Art. 6(1)(a) **consent** — a dedicated in-product switch, off by default, withdrawable at any time. Deliberately NOT covered by the research opt-in or by the sign-up terms: this authorises collecting a new class of data, so it is asked for separately |
 | **Data categories** | Geohash precision-6 tiles (~1.2 km x 0.61 km) and a count of them. **No coordinate is stored** — the position is reduced to a tile and discarded |

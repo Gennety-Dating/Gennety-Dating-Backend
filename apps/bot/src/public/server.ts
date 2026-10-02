@@ -24,7 +24,7 @@ import { countdownRouter } from "./routes/countdown.js";
 import { dateStateRouter } from "./routes/date-state.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
-import { scratchMapRouter } from "./routes/scratch-map.js";
+import { dateMapRouter } from "./routes/date-map.js";
 import { frequentPlacesRouter } from "./routes/frequent-places.js";
 import { rhythmRouter } from "./routes/rhythm.js";
 import { venuesRouter } from "./routes/venues.js";
@@ -650,12 +650,11 @@ app.use("/v1/dates", dateBumpRouter);
 // Same prefix, separate router: the Bump and the Radar share a resource and
 // nothing else — one is a two-sided commit, the other a masked read.
 app.use("/v1/dates", dateRadarRouter);
-// The Scratch Map. Its own prefix and not `/v1/me/*`: it is the only surface a
-// client polls while nothing is happening, and it is gated by a consent of its
-// own rather than by being logged in.
-app.use("/v1/scratch", scratchMapRouter);
-// Frequently visited places. Same shape as the Scratch Map, for the same
-// reasons: its own consent, either rail, and a foreground-only presence call.
+// The date map: places of confirmed dates, derived from `Match` rows. Replaced
+// the Scratch Map's `/v1/scratch` (city fog, retired 2026-10-02).
+app.use("/v1/date-map", dateMapRouter);
+// Frequently visited places: its own consent, either rail, and a
+// foreground-only presence call.
 app.use("/v1/frequent-places", frequentPlacesRouter);
 // Curated places for the iOS standby canvas (IDLE_EXPLORING). The list is a
 // canvas call and takes either rail; the photo route under it is reached by a

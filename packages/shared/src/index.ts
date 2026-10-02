@@ -63,7 +63,6 @@ export {
   BUMP_VENUE_RADIUS_M,
   PROXIMITY_ARRIVED_RADIUS_M,
   BUMP_RELIABILITY_REWARD,
-  SCRATCH_TILE_PRECISION,
   BUMP_ICEBREAKER_COUNT,
   bumpWindowFor,
   checkBumpWindow,
@@ -106,8 +105,6 @@ export {
   distanceKm,
 } from "./markets.js";
 export type { City, CityStatus, Market, WaitlistCity } from "./markets.js";
-export { tileFor, tileBounds, isTile } from "./geohash.js";
-export type { TileBounds } from "./geohash.js";
 export * from "./frequent-places.js";
 export { t, escapeMd, interpolate, dateTicketsPhrase, venuePlacesPhrase } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";

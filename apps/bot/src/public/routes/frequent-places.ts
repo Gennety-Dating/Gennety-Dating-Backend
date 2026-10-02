@@ -31,7 +31,7 @@ import type {
  * `POST /v1/frequent-places/presence` — one foreground fix at a place, or
  *   "I left".
  *
- * Its own prefix and either rail, the Scratch Map's shape: it is a feature of
+ * Its own prefix and either rail: it is a feature of
  * the person rather than of the client they use, and it runs under a consent
  * of its own. What the MATCH sees is not here — it rides on
  * `/v1/matches/current` (`partnerFrequentPlaces`), built by the one function

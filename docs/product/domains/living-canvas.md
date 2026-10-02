@@ -1,12 +1,12 @@
-<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), the transit dock (Uber / maps hand-offs, §6.4b), Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
+<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), the transit dock (Uber / maps hand-offs, §6.4b), Date Radar, the canvas screen, the date map (§6.5, ex-Scratch Map), or Campus Radar (Phase 6). -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 7001-7327) — migrated 2026-09-01 -->
 
 ## Phase 6 — Living Canvas & Viral Mechanics
 
 The clients stop being a chat with screens attached and become a **dark map of
 Kyiv with one sheet on it**. The sheet's contents are decided by the pair's
-current `DateLifecycleState`; the map underneath carries the fog of the Scratch
-Map, the pulsing venue pins, and — in the last forty-five minutes before a date
+current `DateLifecycleState`; the map underneath carries the pulsing venue
+pins and — in the last forty-five minutes before a date
 — the radar.
 
 Four invariants this phase does not touch: no user-to-user chat, the blind
@@ -519,53 +519,47 @@ map keeps showing through the thing describing it.
 
 The iOS native canvas is unchanged.
 
-### 6.5 Scratch Map — the city you have actually been in
+### 6.5 Date map — places of confirmed dates (was: Scratch Map)
 
-A dark veil over Kyiv with a hole punched through it wherever this person has
-been. It is the answer to what the canvas is FOR on the six evenings a week
-when nobody has a date: a map with nothing on it is a screen you open once.
+**Retired 2026-10-02: the Scratch Map's city fog.** It was a veil over Kyiv
+with a hole punched wherever a person had walked with the canvas open —
+geohash-6 tiles and a "share of the city" percentage, behind its own opt-in.
+The founder's rule for every map in the product is that it serves a date and
+nothing else; a fog that grew while someone walked to class was a background
+tracker with no date in it. Gone with it: `/v1/scratch` (read, ping, opt-in),
+`packages/shared/src/geohash.ts`, the Mini App fog and toggle, the iOS fog
+screen in Settings. The table `user_scratch_maps` and `users.scratch_map_opt_in`
+are no longer read or written; dropping them is a destructive migration and
+waits for the founder's explicit go.
 
-**Tiles, never coordinates, and that is the design rather than the storage.**
-A tile is geohash precision 6 — roughly 1.2 km × 0.61 km — so the column can
-say "they have been around Podil" and cannot say which building. Every other
-geographic value in the product is per-purpose and per-match and disappears
-with the row that held it; this is the first thing that ACCUMULATES, which is
-why the guarantee has to be the shape of what is written rather than a rule
-somebody remembers at the call site. `packages/shared/src/geohash.ts`
-deliberately offers no decode to a point.
+**What replaces it is derived, never stored.** `GET /v1/date-map`
+(`services/date-map.ts`) answers the places where THIS side attended a held
+date — `Match.status ∈ {scheduled, completed}`, `agreedTime` in the past, and
+`dateAttendedA/B` true for the caller's side (a verified Date Bump writes it;
+so does the attendance flow). Per side on purpose: one partner's verified
+presence says nothing about where the other one was.
 
-**Off by default, behind its own consent.** `User.scratchMapOptIn` is not a
-fold into `researchOptIn`: that one governs analytics use of data we already
-hold, this one authorises COLLECTING a new class of it, and a consent that
-authorises new collection is never inferred from a broader tick — the rule
-`biometricConsentAt` already follows. **Switching it off stops collection and
-keeps the map**: the tiles are the person's own, and a toggle that silently
-deleted months of them would be a worse surprise than one that stops
-collecting. Erasure is account deletion.
+- **No collection, no consent of its own.** It reads nothing the date did not
+  already hold. No ping, no user coordinate anywhere: the only point is the
+  venue's, and only on rows where `venueLat/Lng` is the venue rather than the
+  legacy route midpoint (`venueCoordinatesOf`).
+- **Never "with whom".** The answer carries the place, the visit count and the
+  last date — never the partner.
+- **Profile enrichment.** `confirmedDates` counts every attended date (even one
+  with no named venue); `vibes` are the canonical Venue Intent experiences
+  (`mapVibeTagsToFacets` over the catalog's `vibeTags`) weighted by dates spent
+  there, top three. The iOS profile shows them to the owner only.
+- **The venue-change board reads the same source.** "You have been here"
+  (`SEEN_PENALTY` in `venue-change-personalization.ts`) is now the date map's
+  place ids, so the ranking means exactly what the profile shows — and it no
+  longer reads a row the person might have opted out of.
 
-**Nothing is recorded while you are not looking.** The only two writers are a
-ping sent while the canvas is open and a verified Date Bump. There is no
-background-location entitlement in the iOS app and no such permission requested
-in the Mini App, so that promise is structural rather than a policy.
-
-**The Bump writes here for the same reason it may write attendance.** It is not
-a guess about where someone was — two people deliberately shook their phones,
-at the venue, at the time — so it records the venue and its tile for both
-sides. It rides the bump's success path fire-and-forget: a souvenir must never
-cost someone the date their reliability and bonus ticket depend on.
-
-**The percentage is a share of the CITY.** The denominator is a constant of the
-market (2915 tiles for Kyiv), not of anyone's data — derived from visited tiles
-it would move everyone's number whenever a stranger walked somewhere new, and a
-person who explored nothing would watch their own fall. A first tile is 0.034%
-and is shown as 0.1% rather than 0.0%: telling someone who just walked their
-first square that they have walked nothing reads as a broken feature.
-
-**The fog is translucent.** The city under it stays legible — streets, the
-river, where you are. An opaque veil would turn the map into a scratch card
-that happens to be a city, and the canvas exists to show the city. And it is
-drawn only once tiles have arrived: a fully-fogged map with no data hides
-everything, says nothing, and looks exactly like a bug.
+**The journey itself is the existing pipeline, not a new screen.** Pre-date:
+the date-venue spotlight and the route dock. En route / arrived: the Date
+Radar (in-memory presence, `en_route` / `arrived` derived, never stored).
+Unlock: the Date Bump ceremony — on iOS it now ends on one quiet unlock sound
+at the plaque on both phones, and both-arrived plays a two-beat heartbeat.
+Post-date: the place lands on the date map.
 
 ### 6.6 Campus Radar — a bonus drop for a campus that just filled up
 

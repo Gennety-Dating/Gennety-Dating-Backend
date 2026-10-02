@@ -4787,129 +4787,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
-  /v1/scratch:
+  /v1/date-map:
     get:
       tags: [date]
-      operationId: getScratchMap
-      summary: The Dating Scratch Map — which parts of the city you have been in
+      operationId: getDateMap
+      summary: The date map — places of this person's confirmed dates
       description: >
-        Tiles, a percentage and the venues a verified Date Bump has recorded,
-        plus the consent the whole feature runs under, so one call draws the
-        screen.
-
-
-        **Tiles, never coordinates.** A tile is geohash precision 6 — roughly
-        1.2 km × 0.61 km — so this can say "they have been around Podil" and
-        can never say which building. Every other geo value in the product is
-        per-purpose and per-match; this is the first that accumulates, which is
-        why the guarantee is the shape of what is stored rather than a rule at
-        the call site.
+        Derived from `Match` rows where this side attended a held date
+        (`dateAttended*`, written by a verified Date Bump or the attendance
+        flow). Nothing is collected for it: no ping, no opt-in, no user
+        coordinate — the only point is the VENUE's, and only where the row
+        stores the venue rather than the legacy route midpoint. The partner is
+        never part of the answer. Replaced the Scratch Map's `/v1/scratch`
+        (city fog, retired 2026-10-02).
       responses:
         "200":
-          description: The caller's map
+          description: The caller's date map
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ScratchMap" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /v1/scratch/ping:
-    post:
-      tags: [date]
-      operationId: postScratchPing
-      summary: Record one foreground position as a tile
-      description: >
-        The coordinates pick a tile and are then dropped — never stored, never
-        logged, the same rule the Date Radar follows.
-
-
-        Answers the CURRENT map on every call, including the common "you have
-        not moved" case, so the client needs no second request to redraw. A
-        ping that uncovers nothing performs no write at all: someone sitting in
-        a café would otherwise write a row every few seconds for a set that
-        never changes.
-
-
-        Only ever called from the foreground, with the map open. There is no
-        background-location entitlement in the iOS app and no such permission
-        requested in the Mini App, which is what makes "nothing is recorded
-        while you are not looking" structural rather than a promise.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [lat, lng]
-              properties:
-                lat: { type: number }
-                lng: { type: number }
-      responses:
-        "200":
-          description: Position folded into a tile; the whole map returned
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/ScratchMap"
-                  - type: object
-                    required: [ok, uncovered]
-                    properties:
-                      ok: { type: boolean, const: true }
-                      uncovered:
-                        type: boolean
-                        description: Whether this ping revealed new ground.
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "409":
-          description: >
-            `opted-out` (the toggle is off) or `outside-market` (a ping from a
-            city that is not the caller's own — the map is "your Kyiv", and a
-            week abroad would otherwise fill it with squares no percentage of
-            Kyiv can describe). Neither is worth retrying; the client's job is
-            to offer the toggle or say nothing.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
-  /v1/scratch/opt-in:
-    put:
-      tags: [date]
-      operationId: putScratchOptIn
-      summary: Turn the Scratch Map's collection on or off
-      description: >
-        Off by default, and its own consent rather than a fold into
-        `researchOptIn`: that one governs analytics use of data we already
-        hold, this one authorises COLLECTING a new class of it, and a consent
-        that authorises new collection is never inferred from a broader tick —
-        the same rule `biometricConsentAt` follows.
-
-
-        **Switching it off stops collection and keeps the map.** The tiles are
-        the person's own; a toggle that silently deleted months of them would
-        be a worse surprise than one that stops collecting. Erasure is account
-        deletion, which reaches this row by cascade.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [enabled]
-              properties:
-                enabled: { type: boolean }
-      responses:
-        "200":
-          description: The new setting, with the map unchanged
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/ScratchMap"
-                  - type: object
-                    required: [ok]
-                    properties:
-                      ok: { type: boolean, const: true }
-        "400": { $ref: "#/components/responses/BadRequest" }
+              schema: { $ref: "#/components/schemas/DateMap" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/frequent-places:
@@ -4947,8 +4843,8 @@ paths:
       description: >
         **On by default** (founder decision 2026-09-11). Off stops collection
         at once and removes the block from the profile and from the match; the
-        visit days already stored are kept and age out after 180 days — the
-        Scratch Map's rule that a toggle never silently deletes.
+        visit days already stored are kept and age out after 180 days — a
+        toggle never silently deletes.
       requestBody:
         required: true
         content:
@@ -5902,34 +5798,52 @@ components:
           description: Answers kept after filtering.
         completedAt: { type: string, format: date-time }
 
-    ScratchMap:
+    DateMap:
       type: object
-      required: [optIn, exploredTiles, exploredPercent, discoveredVenues]
+      required: [confirmedDates, places, vibes]
       properties:
-        optIn:
-          type: boolean
-          description: Whether this person has authorised collection at all.
-        exploredTiles:
+        confirmedDates:
+          type: integer
+          description: Held dates this side attended, including ones with no named venue.
+        places:
           type: array
-          description: >
-            Geohash precision-6 tiles, sorted and unique. A neighbourhood each,
-            and nothing narrower is representable.
-          items: { type: string }
-        exploredPercent:
-          type: number
-          description: >
-            Share of the caller's own city, in [0..1]. The denominator is a
-            constant of the CITY, not of the data — derived from visited tiles
-            it would move everyone's number whenever a stranger walked
-            somewhere new.
-        discoveredVenues:
+          description: Most recent first.
+          items: { $ref: "#/components/schemas/DateMapPlace" }
+        vibes:
           type: array
-          description: >
-            Google Place ids of venues a verified Date Bump recorded. Place
-            ids rather than catalog row ids: the catalog holds several rows per
-            real venue, so a row id would give two people who sat in the same
-            café different histories.
+          description: Most frequent first, at most three.
+          items: { $ref: "#/components/schemas/DateMapVibe" }
+
+    DateMapPlace:
+      type: object
+      required: [placeId, name, lat, lng, visits, lastDateAt, experiences]
+      properties:
+        placeId:
+          type: [string, "null"]
+          description: Google place id; null on the legacy domain-based venue path.
+        name: { type: string }
+        lat:
+          type: [number, "null"]
+          description: The venue's latitude; null when the row only holds a route midpoint.
+        lng:
+          type: [number, "null"]
+        visits: { type: integer, minimum: 1 }
+        lastDateAt: { type: string, format: date-time }
+        experiences:
+          type: array
+          description: Canonical Venue Intent experience ids (`coffee_treats`, `art_culture`, …) mapped from the catalog's vibe tags.
           items: { type: string }
+
+    DateMapVibe:
+      type: object
+      required: [experience, dates]
+      properties:
+        experience:
+          type: string
+          description: Canonical Venue Intent experience id.
+        dates:
+          type: integer
+          description: Confirmed dates spent at a place with this experience.
 
     FrequentPlaces:
       type: object

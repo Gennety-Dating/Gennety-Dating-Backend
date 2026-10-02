@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 
 import { haversineDistanceKm } from "./geo.js";
+import { readAttendedPlaceIds } from "./date-map.js";
 import { readFrequentPlaces } from "./frequent-places.js";
 
 /**
@@ -35,8 +36,8 @@ import { readFrequentPlaces } from "./frequent-places.js";
  *     is the brief's "near their usual hubs": proximity to where they already
  *     are, not the identity of a café they already sit in.
  *   - **Novelty** — whether they have already been taken there by us
- *     (`UserScratchMap.discoveredVenues`, written when a Date Bump verifies a
- *     couple at a venue). A CHANGE of venue that offers the place you were
+ *     (the date map: `Match` rows where this side attended a confirmed date —
+ *     `services/date-map.ts`). A CHANGE of venue that offers the place you were
  *     last taken to is the one suggestion the feature exists to avoid, so
  *     having been there is a penalty rather than a boost.
  *
@@ -76,7 +77,7 @@ export interface AffinityAnchor {
 /** Everything personal about one viewer, resolved once per catalog call. */
 export interface ViewerAffinity {
   anchors: AffinityAnchor[];
-  /** Place ids a Date Bump has already verified this person at. */
+  /** Place ids of this person's confirmed dates (the date map). */
   beenThere: ReadonlySet<string>;
 }
 
@@ -176,41 +177,20 @@ export function personalizeOrder<T extends RankableVenue>(
 }
 
 /**
- * Where a Date Bump has verified this person, or null.
- *
- * Its own `async` function rather than a `.catch()` on the call, because a
- * throw while REACHING the query — a Prisma client that predates the model,
- * which is exactly what a half-migrated deploy looks like — is synchronous.
- * Inside `Promise.all([...])` that throw escapes before `Promise.all` is
- * called, abandoning the sibling promise unhandled; an async function turns it
- * into a rejection this `try` can actually see.
- */
-async function readScratchMap(userId: string): Promise<{ discoveredVenues: string[] } | null> {
-  try {
-    return await prisma.userScratchMap.findUnique({
-      where: { userId },
-      select: { discoveredVenues: true },
-    });
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Everything personal about one viewer, or `NO_AFFINITY` when there is nothing
  * to know. Never throws: a board that cannot be personalised is a board in its
  * ordinary order, not an error on a screen.
  */
 export async function readViewerAffinity(userId: string): Promise<ViewerAffinity> {
   try {
-    const [frequent, scratch] = await Promise.all([
+    const [frequent, beenThere] = await Promise.all([
       // Reads the opt-in itself and answers with an empty ranking when it is
       // off, so consent is enforced in one place rather than re-checked here.
       readFrequentPlaces(userId),
-      readScratchMap(userId),
+      // Places of this person's confirmed dates — the date map's own source,
+      // so "you have been here" means exactly what the profile shows.
+      readAttendedPlaceIds(userId),
     ]);
-
-    const beenThere = new Set(scratch?.discoveredVenues ?? []);
 
     // Hidden places are excluded deliberately. Hiding one is the owner saying
     // "do not show people this about me"; quietly steering their date towards

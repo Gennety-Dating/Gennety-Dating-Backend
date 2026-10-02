@@ -86,10 +86,10 @@ most two of one category.
 ### Visibility and control
 
 - `users.frequentPlacesOptIn` defaults to **true** — a founder decision that
-  departs from the rule `scratchMapOptIn` and `biometricConsentAt` keep. Off
+  departs from the rule `biometricConsentAt` keeps. Off
   stops collection at once (the open stay is dropped, the fences go empty) and
   removes the block from the owner and the match; stored days are kept and age
-  out, the Scratch Map's rule for a toggle.
+  out — a toggle never silently deletes.
 - `PUT /v1/frequent-places/{placeId}/visibility` hides one place. It stops the
   showing, not the counting.
 - The match's copy is built only by `partnerFrequentPlaces`, cached for 10

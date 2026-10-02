@@ -1,7 +1,7 @@
 /**
  * HTTP boundary of `/v1/frequent-places/*`, plus the one function that decides
  * what a match sees. Prisma is mocked (no SQL here — the live-database pass is
- * a separate check); the canvas rail is mocked the way `scratch-map-api.test.ts`
+ * a separate check); the canvas rail is mocked the way `date-map-api.test.ts`
  * mocks it. Only `Date` is faked, so a stay can last fifteen minutes in a test
  * that takes milliseconds. Google is never called: the one test that follows a
  * thumbnail link into the photo route stubs `fetch`.

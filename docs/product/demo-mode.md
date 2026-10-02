@@ -1017,16 +1017,16 @@ that cannot work yet. No puppet branch either: the terminal is one side's own
 screen, not a negotiation. It becomes demoable when the Bump does, by the same
 change to how the demo schedules.
 
-## The Scratch Map fills, the Campus Radar cannot fire
+## The date map stays empty, the Campus Radar cannot fire
 
-Two halves of §Scratch Map / §Campus Radar, and they land on opposite sides of
-the demo's line.
-
-**The Scratch Map works here, and needs no puppet branch** — it is one-sided by
-construction, so there is nothing for the puppet to answer. A visitor who turns
-the toggle on and opens the canvas uncovers tiles exactly as a real user would.
-Worth knowing rather than assuming: the demo's own database is separate, so
-those tiles are the visitor's own and nothing reaches production.
+**The date map (living-canvas.md §6.5) shows nothing here, and needs no puppet
+branch.** It is a read over `matches` where the caller's side attended, and
+nothing in the demo writes `dateAttended*`: the Bump is unreachable (section
+above) and the demo's date never reaches the attendance flow. So
+`GET /v1/date-map` answers `confirmedDates: 0`, and the iOS profile section
+that draws it stays hidden — the same as for any real user before a first date.
+(Until 2026-10-02 this section described the Scratch Map's fog, which a demo
+visitor could fill; the fog is retired.)
 
 **The Campus Radar can never fire here, structurally.** Its cron is not
 scheduled under `DEMO_MODE_ENABLED` at all — for the same reason drop matching

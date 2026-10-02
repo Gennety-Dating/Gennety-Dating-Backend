@@ -215,7 +215,7 @@ model User {
   primeTimePurchases        PrimeTimePurchase[]
   liveActivityTokens        LiveActivityToken[]
   userPlaceVisits           UserPlaceVisit[]
-  userScratchMap            UserScratchMap[]
+  userScratchMap            UserScratchMap[]   // RETIRED 2026-10-02, drop pending
 }
 ```
 
@@ -449,7 +449,7 @@ stateDiagram-v2
 - **Native iOS Mapping:** MapLibre Native 6.31 in Release, with Mapbox retained as a Debug fallback.
 - **Privacy Obfuscation Boundaries:**
   - Raw coordinates are never delivered to peers or stored permanently in connection with real-time location.
-  - Dating Scratch Map: GPS fix mapped to Geohash-6 tile (~1.2 km $\times$ 0.6 km). Coordinates are discarded immediately after hashing.
+  - Date map (replaced the Scratch Map fog 2026-10-02): derived from attended `Match` rows at query time; the only coordinate is the venue's, never the user's.
   - Frequently Visited Places: Foreground fixes checked against in-memory city geofences. Coordinates dropped immediately. A visit day is recorded in `user_place_visits` only if two fixes $\ge 15$ min apart land within a venue boundary.
 
 ---
@@ -509,8 +509,7 @@ All endpoints require Bearer JWT (`Authorization: Bearer <token>`) unless marked
 | `GET` | `/v1/date/state` | JWT/tma | Living Canvas derived state (`DateLifecycleState`) |
 | `POST`| `/v1/dates/:id/bump` | JWT/tma | Date Bump shake submission; verifies distance $\le 100$m & time $\le 10$s |
 | `POST`| `/v1/dates/:id/proximity` | JWT/tma | Date Radar ping; drops coordinates, returns masked ETA |
-| `GET/PUT`| `/v1/scratch` | JWT/tma | Dating Scratch Map tiles & opt-in toggle |
-| `POST`| `/v1/scratch/ping` | JWT/tma | Add foreground position to Scratch Map (hashed to geohash-6) |
+| `GET`| `/v1/date-map` | JWT/tma | Places of confirmed dates, count, top vibes (derived from `Match`) |
 | `GET/POST`| `/v1/frequent-places` | JWT/tma | Frequently visited places list & presence check |
 | `GET` | `/v1/venues/showcase` | JWT/tma | Curated venue showcase carousel for map standby mode |
 | `GET` | `/v1/events` | JWT/tma | Open launch events & Party Mode sessions |
@@ -649,7 +648,7 @@ Gennety supports structured deep links across Telegram and native iOS:
 
 ### 6.3 Gamification & Viral Loops
 - **Reliability Score:** Every user profile maintains a `reliabilityScore` (default 100). Completing a verified physical Date Bump awards `+50` Reliability. No-shows or cancellations within 2 hours of a date trigger severe score penalties and temporary matchmaking suspensions.
-- **Dating Scratch Map:** An interactive "fog of war" map of the city. As users walk around or complete dates, Geohash-6 tiles (~1.2 km $\times$ 0.6 km) are un-fogged, displaying their explored percentage of the city.
+- **Date map:** Places of a person's confirmed dates (verified Date Bump or attendance), with a confirmed-date count and top venue vibes on their own profile. Replaced the Scratch Map's city fog (retired 2026-10-02 — a background tracker with no date in it).
 - **Referral Milestone Ladder:**
   - Progress tracker with cash/ticket rewards based on verified signups ($K$-factor direct tracking).
   - Rewards are triggered when the referred user clears **identity verification**, preventing fake account farming.
@@ -668,7 +667,7 @@ Gennety supports structured deep links across Telegram and native iOS:
 
 ### 7.1 Security & Privacy Boundaries
 1. **Zero-Chat Platform Invariant:** Users cannot initiate unmoderated text or media chats with each other. The only communication is the time-boxed (T-1h to T+2h) plain-text proxy relay, where all messages are recorded to `ProxyMessage` with inline report capabilities.
-2. **Ephemeral Location Tracking:** Real-time GPS coordinates are never persisted. Date Radar, Frequent Places, and Scratch Map process coordinates in memory and discard them immediately.
+2. **Ephemeral Location Tracking:** Real-time GPS coordinates are never persisted. Date Radar and Frequent Places process coordinates in memory and discard them immediately.
 3. **Blind Decision Invariant:** Neither side of a match proposal can inspect the partner's accept/decline action until both have responded or the 24-hour TTL has expired.
 4. **GDPR Article 9 Biometric Data Scrub:** Reference selfies stored in Supabase during AWS Face Liveness checks are permanently purged after 90 days (`services/selfie-retention.ts`). Subsequent profile photo edits require fresh liveness verification.
 5. **Face Obstruction Policy:** To prevent false rejections of legitimate users, sunglasses and facial covering rejections at upload time are removed. Identity is verified strictly at the final liveness stage.

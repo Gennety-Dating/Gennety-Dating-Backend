@@ -575,7 +575,7 @@ export interface ShowcasePlace {
  *
  * The catalog holds a row per university domain, so one café in Podil can be
  * three rows with three ids — on the map, three pins stacked on one spot. The
- * Google place id is the real identity (the Scratch Map keys on it for the same
+ * Google place id is the real identity (the date map keys on it for the same
  * reason); a hand-entered row without one falls back to its name and a position
  * rounded to ~10 m.
  */

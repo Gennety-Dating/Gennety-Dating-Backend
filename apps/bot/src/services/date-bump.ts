@@ -44,7 +44,6 @@ import {
 } from "@gennety/shared";
 
 import { haversineDistanceKm, type LatLng } from "./geo.js";
-import { recordVerifiedVisit } from "./scratch-map.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
@@ -172,7 +171,6 @@ async function recordBumpDetailed(
       // Признак того, что `venueLat/Lng` означает заведение, а не середину
       // маршрута: `venue-location.ts`.
       venueMidpointLat: true,
-      venuePlaceId: true,
     },
   });
   if (!match) return refuse("wrong-state");
@@ -219,18 +217,6 @@ async function recordBumpDetailed(
   }
 
   const claimed = await verifyBump(match, at);
-  if (claimed) {
-    // The Scratch Map's other writer (§Scratch Map). Fire-and-forget on
-    // purpose: it is the one thing here that is a souvenir rather than a
-    // consequence, and the pair is at a table waiting for this response. It
-    // swallows its own errors and honours each side's opt-in independently.
-    void recordVerifiedVisit({
-      userIds: [match.userAId, match.userBId],
-      venueId: match.venuePlaceId,
-      lat: match.venueLat,
-      lng: match.venueLng,
-    });
-  }
   if (!claimed) return { ok: true, verified: true, justVerified: false, side };
   return {
     ok: true,

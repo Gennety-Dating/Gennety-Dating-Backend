@@ -15,7 +15,7 @@ split by phase. This stub stays because source comments reference
 | §3.6 – §3.11 (scheduling, venue, date card, Premium, referral, promo, rematch) | [docs/product/domains/scheduling-and-monetization.md](docs/product/domains/scheduling-and-monetization.md) |
 | §Phase 4 (date lifecycle, feedback, emergency) | [docs/product/domains/date-lifecycle.md](docs/product/domains/date-lifecycle.md) |
 | §Phase 5 (reports, strikes, blocking) | [docs/product/domains/trust-and-safety.md](docs/product/domains/trust-and-safety.md) |
-| §Phase 6 (Living Canvas, Date Bump, Radar, Scratch Map) | [docs/product/domains/living-canvas.md](docs/product/domains/living-canvas.md) |
+| §Phase 6 (Living Canvas, Date Bump, Radar, date map) | [docs/product/domains/living-canvas.md](docs/product/domains/living-canvas.md) |
 | §Cross-Cutting (quiet hours, GDPR, languages, marks) | [docs/product/domains/cross-cutting.md](docs/product/domains/cross-cutting.md) |
 | §Venue Intent V2 | [docs/product/domains/venue-intent-v2.md](docs/product/domains/venue-intent-v2.md) |
 
