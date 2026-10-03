@@ -1963,9 +1963,10 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](rematch.md).
   ban (so "rematch" always means *someone new*, including after a decline), the
   single-live-match rule, the verification/contact-rail gates, city scoping, and
   the profile candidate cooldown (6 h daily / 24 h weekly). **A paid run never lowers the admission bar and
-  never buys a score boost.** The cooldown is deliberately kept: right after the
-  scheduled batch the only available candidates are the *unpaired* women, which is
-  exactly the cohort the famine gift is meant for.
+  never buys a score boost.** The original weekly rationale was that right after the
+  batch the only available candidates are the *unpaired* women, the intended
+  famine-gift cohort. This absolute claim is not established for daily; see the
+  2026-10-03 cadence report. The profile cooldown is unchanged.
 - **Pain-triggered entry points only** (no menu row): the no-match DM (at most once per 7 days in either profile),
   and any match that died without a date — an explicit decline (his, hers, or
   both; the primary case), the same decision taken from the iOS app, or a proposal-deadline
