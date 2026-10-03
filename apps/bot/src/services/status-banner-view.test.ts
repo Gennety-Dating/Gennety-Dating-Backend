@@ -5,11 +5,11 @@ const NEXT_DROP = new Date("2026-07-23T15:00:00.000Z");
 
 describe("renderStatusBanner", () => {
   it.each([
-    ["en", "Drop in"],
-    ["ru", "До дропа"],
-    ["uk", "До дропу"],
-    ["de", "Drop in"],
-    ["pl", "Do dropu"],
+    ["en", "Next round in"],
+    ["ru", "До подбора"],
+    ["uk", "До підбору"],
+    ["de", "Nächste Runde in"],
+    ["pl", "Do doboru"],
   ] as const)("renders the primary timer copy for %s", (language, fragment) => {
     const view = renderStatusBanner({
       now: new Date("2026-07-21T09:00:00.000Z"),
@@ -56,8 +56,8 @@ describe("renderStatusBanner", () => {
   });
 
   it.each([
-    [new Date("2026-07-23T09:31:00.000Z"), "До дропа: 5ч 29мин"],
-    [new Date("2026-07-23T14:42:00.000Z"), "✨ До дропа: 18мин"],
+    [new Date("2026-07-23T09:31:00.000Z"), "До подбора: 5ч 29мин"],
+    [new Date("2026-07-23T14:42:00.000Z"), "✨ До подбора: 18мин"],
   ])("renders the short timer phase at %s", (now, expected) => {
     const view = renderStatusBanner({
       now,
