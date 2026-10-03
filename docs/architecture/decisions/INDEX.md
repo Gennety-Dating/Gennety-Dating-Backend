@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 387 entries
+# Decision index — all 391 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-04 | Profiler, контекстные вопросы: Spotify и Apple Health не триггеры окончательно; триггеры — карта свиданий, прошлые ответы, сезон; частые места — только после раскрытия в политике и согласия; ответы в мэтчинг позже, после быстрых ответов в iOS, поэтому вопросы сразу с закрытыми вариантами; текст бота «Учту при следующем подборе» не меняется (осознанное расхождение с §Phase 1b); порядок — формулировки → ввод в iOS → мэтчинг | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-03 | APNs: `BadDeviceToken` повторяется на втором хосте Apple, подошедший хост запоминается для токена (память процесса) — один сервер доставляет и sandbox- (Xcode), и production-токены (TestFlight/App Store); токен стирается, только если отказали оба; вместо колонки окружения и правки iOS из плана 10-02 | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-03 | Rematch: old post-batch and negligible-impact claims labelled weekly-era rationale, daily validation still reserved for founder | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-03 | документация ритма: daily в проде, weekly без env; дефолт и спорные доводы сохранены, серверные разделы system spec зеркалируются в iOS | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
