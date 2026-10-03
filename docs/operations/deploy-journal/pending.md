@@ -11,6 +11,22 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-03 — APNs: доставка и sandbox-, и production-токенов с одного сервера.**
+Только код бота (`apps/bot/src/services/apns.ts`): на `BadDeviceToken` один повтор на втором хосте Apple, подошедший
+хост запоминается для токена в памяти; токен стирается, только если отказали оба хоста. Без миграций, без env,
+без правки iOS и контракта `/v1`; от порядка других блоков не зависит. Решение — журнал решений 2026-10-03.
+- **Выкат:** только рестарт бота (rsync кода + `pm2 restart gennety-bot`), Mini App не меняется.
+- **Env (по желанию, не обязательно для этого блока):** к выходу в App Store — `APNS_ENVIRONMENT=production`, чтобы
+  первый запрос шёл на хост большинства токенов.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/apns.test.ts` (блок «sandbox / production
+  token routing»); на проде — пуш на сборку из Xcode и на сборку из TestFlight доходят оба, `pushToken` у обоих
+  после пуша не обнулён.
+- **Откат:** вернуть `apns.ts` из предыдущего коммита и рестарт.
+- **Демо:** не затрагивается (APNs только у iOS).
+- **iOS:** изменений не требует.
+
+---
+
 **Deployed 2026-10-02 — выкат A/B/C: прод `c372883f` (+ знак `f60f27b2`) → `52ab95f6` (весь `main`), 22:09–22:18 UTC.**
 Скрипт `~/gennety-backups/deploy-abc-1002.sh a|b|c` (вне репо), по «Порядку» ниже. Бэкап до: `prod-backup-2026-10-02T22-08-09Z.json`
 (28 users, 68 таблиц; таблицы мероприятий пусты). Гейты скрипта: бэкап < 6 ч; набор применённых миграций ровно под заход

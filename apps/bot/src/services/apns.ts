@@ -53,10 +53,45 @@ export function apnsConfigured(): boolean {
   );
 }
 
+const APNS_PRODUCTION_HOST = "https://api.push.apple.com";
+const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
+
+/** The host tried first for a token we have not learned yet (`APNS_ENVIRONMENT`). */
 export function apnsHost(): string {
-  return env.APNS_ENVIRONMENT === "production"
-    ? "https://api.push.apple.com"
-    : "https://api.sandbox.push.apple.com";
+  return env.APNS_ENVIRONMENT === "production" ? APNS_PRODUCTION_HOST : APNS_SANDBOX_HOST;
+}
+
+/**
+ * One server talks to two kinds of devices: Xcode/debug installs mint SANDBOX
+ * tokens, TestFlight and App Store installs mint PRODUCTION ones, and each
+ * host answers `BadDeviceToken` for the other kind. A single
+ * `APNS_ENVIRONMENT` therefore cannot reach both — and that answer is in the
+ * dead-token set, so the wrong host used to erase a perfectly good token.
+ *
+ * So a `BadDeviceToken` is retried once on the other host, and the host that
+ * accepted the token is remembered for it. Memory only, no column: a restart
+ * costs each mismatched token one extra request, and the client does not need
+ * to know which environment it was built for. Bounded so a stream of genuinely
+ * bad tokens cannot grow it; the oldest entry goes first.
+ */
+const LEARNED_HOST_MAX = 20_000;
+const learnedHosts = new Map<string, string>();
+
+function otherHost(host: string): string {
+  return host === APNS_PRODUCTION_HOST ? APNS_SANDBOX_HOST : APNS_PRODUCTION_HOST;
+}
+
+function rememberHost(deviceToken: string, host: string): void {
+  if (host === apnsHost()) {
+    learnedHosts.delete(deviceToken);
+    return;
+  }
+  learnedHosts.delete(deviceToken);
+  learnedHosts.set(deviceToken, host);
+  if (learnedHosts.size > LEARNED_HOST_MAX) {
+    const oldest = learnedHosts.keys().next().value;
+    if (oldest !== undefined) learnedHosts.delete(oldest);
+  }
 }
 
 export function liveActivityTopic(): string {
@@ -90,6 +125,20 @@ export function apnsProviderJwt(now = Date.now()): string {
 export function resetApnsCachesForTest(): void {
   cachedKey = null;
   cachedJwt = null;
+  learnedHosts.clear();
+  transport = http2Post;
+}
+
+type ApnsTransport = (
+  host: string,
+  path: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+) => Promise<{ status: number; body: string }>;
+
+/** Test seam: replaces the HTTP/2 call until the next `resetApnsCachesForTest`. */
+export function __setApnsTransportForTests(fake: ApnsTransport): void {
+  transport = fake;
 }
 
 export interface AlertPushInput {
@@ -343,6 +392,8 @@ function http2Post(
   });
 }
 
+let transport: ApnsTransport = http2Post;
+
 /**
  * Refusals that are about OUR credentials, not about one device.
  *
@@ -428,21 +479,44 @@ export async function sendApnsNotification(
     options.topic ??
     (options.pushType === "liveactivity" ? liveActivityTopic() : env.APNS_BUNDLE_ID);
 
+  const headers = {
+    authorization: `bearer ${apnsProviderJwt()}`,
+    "apns-topic": topic,
+    "apns-push-type": options.pushType,
+    "apns-priority": String(options.priority ?? 10),
+    ...(options.collapseId
+      ? { "apns-collapse-id": options.collapseId.slice(0, COLLAPSE_ID_MAX_BYTES) }
+      : {}),
+  };
+
+  const firstHost = learnedHosts.get(deviceToken) ?? apnsHost();
+  const first = await postOnce(firstHost, deviceToken, headers, payload);
+  if (first.ok || first.reason !== "BadDeviceToken") {
+    if (first.ok) rememberHost(deviceToken, firstHost);
+    return first;
+  }
+
+  // The token may belong to the other environment — see `learnedHosts`.
+  const secondHost = otherHost(firstHost);
+  const second = await postOnce(secondHost, deviceToken, headers, payload);
+  if (second.ok) {
+    rememberHost(deviceToken, secondHost);
+    return second;
+  }
+  learnedHosts.delete(deviceToken);
+  // The second host's answer decides: only a refusal from BOTH proves the token
+  // dead, and a transient failure on the retry must not turn into a deletion.
+  return second;
+}
+
+async function postOnce(
+  host: string,
+  deviceToken: string,
+  headers: Record<string, string>,
+  payload: Record<string, unknown>,
+): Promise<ApnsSendResult> {
   try {
-    const res = await http2Post(
-      apnsHost(),
-      `/3/device/${deviceToken}`,
-      {
-        authorization: `bearer ${apnsProviderJwt()}`,
-        "apns-topic": topic,
-        "apns-push-type": options.pushType,
-        "apns-priority": String(options.priority ?? 10),
-        ...(options.collapseId
-          ? { "apns-collapse-id": options.collapseId.slice(0, COLLAPSE_ID_MAX_BYTES) }
-          : {}),
-      },
-      payload,
-    );
+    const res = await transport(host, `/3/device/${deviceToken}`, headers, payload);
     if (res.status === 200) return { ok: true };
     let reason: string | null = null;
     try {
