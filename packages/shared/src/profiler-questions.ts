@@ -224,6 +224,22 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    // Women's bank only: it fuels the man's pre-date hint ("she loves peonies"),
+    // the same "what she wants" angle as `f_food`. The copy invites the "no
+    // bouquets, please" answer on purpose — without it the hint generator
+    // would read silence as a green light for flowers.
+    id: "f_flowers",
+    gender: "female",
+    priority: "medium",
+    text: {
+      en: "What are your favourite flowers? And if bouquets aren't your thing — say so too.",
+      ru: "Какие твои любимые цветы? А если букеты — не твоё, так и скажи.",
+      uk: "Які твої улюблені квіти? А якщо букети — не твоє, так і скажи.",
+      de: "Was sind deine Lieblingsblumen? Und wenn Sträuße nicht dein Ding sind — sag das ruhig auch.",
+      pl: "Jakie są twoje ulubione kwiaty? A jeśli bukiety to nie twoja bajka — też śmiało powiedz.",
+    },
+  },
+  {
     id: "f_week_highlight",
     gender: "female",
     priority: "medium",

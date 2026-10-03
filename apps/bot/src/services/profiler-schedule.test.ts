@@ -175,6 +175,27 @@ describe("selectNextProfilerQuestion", () => {
     expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
   });
 
+  it("offers the women-only flowers question to a woman who finished the older bank", () => {
+    // A woman who answered everything before `f_flowers` existed has no row for
+    // it, so pass 1 hands it to her in the next batch — no backfill needed.
+    const rows = profilerAllAsked()
+      .filter((id) => id !== "f_flowers")
+      .map((id) => row({ questionId: id, answerText: "x" }));
+    expect(selectNextProfilerQuestion("female", rows, CYCLE)?.id).toBe("f_flowers");
+  });
+
+  it("never offers the flowers question to a man, even with his bank exhausted", () => {
+    const asked: string[] = [];
+    const rows: ProfilerAnswerRow[] = [];
+    for (let q = selectNextProfilerQuestion("male", rows, CYCLE); q; q = selectNextProfilerQuestion("male", rows, CYCLE)) {
+      asked.push(q.id);
+      rows.push(row({ questionId: q.id, answerText: "x" }));
+    }
+    expect(asked.length).toBe(profilerQuestionBank("male").length);
+    expect(asked).not.toContain("f_flowers");
+    expect(selectNextProfilerQuestion(null, [], CYCLE)).toBeNull();
+  });
+
   it("prefers a never-asked question over a stale situational one", () => {
     const rows = [row({ questionId: "f_media", answerText: "a book", cycleId: "2026-06-04" })];
     expect(selectNextProfilerQuestion("female", rows, CYCLE)?.id).toBe("f_date_spots");
