@@ -67,6 +67,28 @@ complete + вопрос об увлечениях; ответ → вопрос �
 
 ---
 
+**PENDING (2026-10-02) — Très Branché удалён из каталога Киева (DECISIONS 2026-10-02).**
+Файлы каталога и витрина — в `main`. **Запись данных — прод И демо, отдельно от кода (агенту запись
+на дроплет закрыта классификатором):** удалить строки `curated_venues` с
+`place_id = 'ChIJ6ZKeqVnO1EARYnOXe-r0swY'` (5 на базу, по копии на вуз; координаты 50.4488, 30.5122) —
+`deleteMany` из `/opt/gennety` и `/opt/gennety-demo` тем же способом, что выключение La Coupole в
+`~/gennety-backups/deploy-showcase.sh`, предварительно сохранив строки в JSON (откат — `createMany`
+из него). Внешних ключей на таблицу нет. Пока код не выкачен, на дроплете старый `approved.json` с
+этими строками — ручной `seed-venues:import` там вернул бы их. Витрина: выбор, которого нет в базе,
+выпадает сам — после удаления строк Très Branché исчезает и со старым кодом.
+Проверка: `select count(*) from curated_venues where place_id = 'ChIJ6ZKeqVnO1EARYnOXe-r0swY'` → 0.
+**Плюс ALTO в premium** (`ChIJ3bKJRaLP1EARiU6B6J-5siI`, 5 строк в `approved.json`): в базы попадёт только
+импортом каталога (`seed-venues:import`, upsert по `universityDomain` + `placeId`) — после выката кода, когда на
+дроплете новый `approved.json`; проверка — `count(*) … where place_id = 'ChIJ3bKJRaLP1EARiU6B6J-5siI' and active` → 5.
+Пункт витрины ALTO без строк в базе просто выпадает — ошибки нет.
+**Плюс 2026-10-03 — ещё пять мест удалить так же** (прод и демо, `deleteMany` по `place_id` с сохранением строк в
+JSON): `ChIJmXMfBxHP1EARTERJS0iRjk0` (CAPULETI), `ChIJG_R5BxfS1EARkyPslwP59vs` (Prynada Ukrainian Cafe),
+`ChIJy3gqpUvP1EARWs4eCSGAkxg` и `ChIJGWt6D0bP1EARZH8fF_Hozlo` (две Чорноморки), `ChIJ85hE68vN1EARS0XiBKJmu04`
+(Trullo D'oro Cafe). Проверка — `count(*)` по этим `place_id` → 0.
+**iOS:** не затрагивает. **Демо:** та же запись.
+
+---
+
 **Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-02) — Scratch Map снят, `GET /v1/date-map` — карта подтверждённых свиданий (DECISIONS 2026-10-02).**
 **Рестарт бота + пересборка Mini App:** без миграции, env, флагов и зависимостей. От порядка A/B/C выше не зависит.
 Что меняется на проде: `/v1/scratch`, `/v1/scratch/ping`, `/v1/scratch/opt-in` удалены (404); новая ручка

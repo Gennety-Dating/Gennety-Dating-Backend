@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 222 entries
+# Deploy journal index — 223 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-02 | 10-02/03 — Très Branché, CAPULETI, Prynada, две Чорноморки и Trullo D'oro удалены из каталога Киева, ALTO добавлен в premium: файлы каталога + витрина в `main`; ALTO в базы — импортом каталога; удаление строк в прод- и демо-базе (6 мест × 5 строк на базу, `deleteMany` по placeId) — отдельная запись данных, не код | [pending](./pending.md) |
 | Deployed | 2026-10-02 | 10-02 22:09–22:18 UTC — выкат A/B/C всего `main` (`52ab95f6`) скриптом `deploy-abc-1002.sh`: 5 миграций (2 деструктивные после рестарта), Mini App, онбординг iOS проверен насквозь синтетическим аккаунтом; все PENDING-блоки уехали им; демо не выкачено | [pending](./pending.md) |
 | Deployed | 2026-10-01 | (was PENDING; выкат A/B/C 2026-10-02, прод `52ab95f6`) 10-01 (позже) — Mini App: Gennety Display на резкости 50 (те же три woff2, Geologica SHRP 100 → 50); **только Mini App**, тот же прогон, что у блока Gennety Display вместо Space Grotesk, едет вместе с ним | [pending](./pending.md) |
 | Deployed | 2026-10-01 | (was PENDING; выкат A/B/C 2026-10-02, прод `52ab95f6`) 10-01 — `GET /v1/me/profile-gaps`: незаполненные пункты профиля для подсказки «Сегодня» (только чтение; `photos` без награды, `video` с билетом, пункты за выключенными флагами не отдаются); только рестарт бота, без миграций и env; от порядка миграций не зависит; нужен сборке iOS с подсказками профиля | [pending](./pending.md) |

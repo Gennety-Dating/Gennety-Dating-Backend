@@ -932,36 +932,6 @@
   },
   {
     "input": {
-      "name": "Tres BRANCHE",
-      "tier": "premium"
-    },
-    "query": "Tres BRANCHE Київ",
-    "matches": [
-      {
-        "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-        "name": "Très Branché",
-        "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-        "lat": 50.4487568,
-        "lng": 30.5121607,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 972,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "french_restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 0.8,
-        "tier": "premium",
-        "acceptMatch": false,
-        "nameConfidence": 0.78,
-        "flags": [
-          "already-in-catalog"
-        ]
-      }
-    ],
-    "alternates": []
-  },
-  {
-    "input": {
       "name": "Steak House Grill do Brasil"
     },
     "query": "Steak House Grill do Brasil Київ",
@@ -1329,35 +1299,6 @@
         "nameConfidence": 0.49
       }
     ]
-  },
-  {
-    "input": {
-      "name": "Montecchi v Capuleti"
-    },
-    "query": "Montecchi v Capuleti Київ",
-    "matches": [
-      {
-        "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-        "name": "CAPULETI",
-        "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-        "lat": 50.424793900000004,
-        "lng": 30.533982299999998,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 1288,
-        "priceLevel": null,
-        "primaryType": "italian_restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 2.9,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
-        "flags": [
-          "already-in-catalog"
-        ]
-      }
-    ],
-    "alternates": []
   },
   {
     "input": {
@@ -1953,35 +1894,6 @@
         "nameConfidence": 1,
         "flags": [
           "status:CLOSED_PERMANENTLY"
-        ]
-      }
-    ],
-    "alternates": []
-  },
-  {
-    "input": {
-      "name": "Trullo D'Oro Osteria"
-    },
-    "query": "Trullo D'Oro Osteria Київ",
-    "matches": [
-      {
-        "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-        "name": "Trullo D'oro Cafe",
-        "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-        "lat": 50.4333239,
-        "lng": 30.422367299999998,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.6,
-        "reviews": 605,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "italian_restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 7.4,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.62,
-        "flags": [
-          "already-in-catalog"
         ]
       }
     ],
@@ -3474,35 +3386,6 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.47,
-        "flags": [
-          "already-in-catalog"
-        ]
-      }
-    ],
-    "alternates": []
-  },
-  {
-    "input": {
-      "name": "Prynada Ukrainian Cafe"
-    },
-    "query": "Prynada Ukrainian Cafe Київ",
-    "matches": [
-      {
-        "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-        "name": "Prynada Ukrainian Cafe",
-        "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-        "lat": 50.5117573,
-        "lng": 30.507341,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.7,
-        "reviews": 3074,
-        "priceLevel": null,
-        "primaryType": "ukrainian_restaurant",
-        "suggestedCategory": "cafe",
-        "distanceKm": 6.9,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
         "flags": [
           "already-in-catalog"
         ]
