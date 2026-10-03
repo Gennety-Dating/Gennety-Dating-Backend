@@ -1,7 +1,8 @@
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 
 const WHISPER_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
-const WHISPER_MODEL = "whisper-1";
+const WHISPER_MODEL = MODELS.transcription;
 const WHISPER_TIMEOUT_MS = 45_000;
 
 export const WHISPER_MAX_BYTES = 25 * 1024 * 1024;
@@ -76,7 +77,7 @@ function transcriptionFilename(mime: string): string | null {
 }
 
 /**
- * Transcribe a voice-note buffer via OpenAI Whisper.
+ * Transcribe a voice-note buffer via OpenAI file transcription.
  *
  * Returns the transcript, or an empty string if the API key is missing,
  * the request fails, or no text is returned. Callers treat "" as "failed —
@@ -110,7 +111,9 @@ export async function transcribeVoice(
   form.append("file", blob, filename);
   form.append("model", WHISPER_MODEL);
   form.append("response_format", "json");
-  if (options.language) form.append("language", options.language);
+  if (options.language) {
+    form.append(WHISPER_MODEL === "gpt-transcribe" ? "languages[]" : "language", options.language);
+  }
 
   try {
     const res = await fetchFn(WHISPER_ENDPOINT, {
@@ -122,14 +125,14 @@ export async function transcribeVoice(
 
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`Whisper call failed: ${res.status} ${body}`);
+      console.warn(`Voice transcription call failed: ${res.status} ${body}`);
       return "";
     }
 
     const json = (await res.json()) as WhisperResponse;
-    return json.text?.trim() ?? "";
+    return typeof json.text === "string" ? json.text.trim() : "";
   } catch (err) {
-    console.warn("Whisper call error:", err);
+    console.warn("Voice transcription call error:", err);
     return "";
   }
 }

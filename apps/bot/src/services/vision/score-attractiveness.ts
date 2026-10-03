@@ -1,5 +1,5 @@
 import { env } from "../../config.js";
-import { MODELS } from "../../models.js";
+import { MODELS, normalizeChatCompletion } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 
 /**
@@ -185,9 +185,9 @@ export async function scoreAttractivenessFromBuffers(
         Authorization: `Bearer ${apiKey}`,
       },
       signal: controller.signal,
-      body: JSON.stringify({
+      body: JSON.stringify(normalizeChatCompletion({
         model: VISION_MODEL,
-        max_completion_tokens: 1_000,
+        max_completion_tokens: 4096,
         temperature: 0,
         response_format: { type: "json_object" },
         messages: [
@@ -197,7 +197,7 @@ export async function scoreAttractivenessFromBuffers(
             content,
           },
         ],
-      }),
+      })),
     });
 
     if (!res.ok) return { ok: false, error: "api" };

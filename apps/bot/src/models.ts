@@ -1,40 +1,57 @@
-/**
- * Single source of truth for the OpenAI chat/vision model used at every call
- * site. Historically each service hardcoded its own model string, so an OpenAI
- * generation retirement (e.g. GPT-5.4 → GPT-5.6, 2026-07) meant hunting through
- * a dozen files; now it is a one-line change here (or a live env override).
- *
- * Roles map to the GPT-5.6 tiers (`terra` = balanced ≈GPT-5.5, `luna` =
- * fast/cheap nano-successor; both are vision-capable):
- *   - `vision`     — quality-sensitive, matching-critical vision (the Elo
- *                    attractiveness seed). Low volume (once per verification),
- *                    so it gets the stronger tier.
- *   - `visionFast` — simple, higher-volume per-photo checks (face presence,
- *                    duplicate detection).
- *   - `agent`      — conversational agents + user-facing generation (onboarding,
- *                    menu, mobile chat, pitch, match-card copy, the shared prompt
- *                    pipeline default) where reasoning/quality matters.
- *   - `fast`       — cheap classification + short templated DMs (decision-intent,
- *                    nudge / announce / re-engagement workers).
- *
- * Each role is env-overridable so a future retirement can be hotfixed with
- * `pm2 restart --update-env` — no redeploy. Defaults apply when the override is
- * unset. `config.ts` loads `.env`/`.env.local` before any service (and thus this
- * module) is first imported (index.ts imports config first), so the overrides
- * are populated by the time they're read.
- *
- * Kept deliberately SEPARATE from `config.ts`: many unit tests `vi.mock` the
- * config module with a hand-rolled `env`, and routing models through config
- * would make `MODELS` undefined in every one of those tests. This module has no
- * `BOT_TOKEN`/dotenv coupling, so mocking config never disturbs it.
- *
- * Embeddings / Whisper / moderation live at their own call sites and are
- * deliberately NOT routed through here (changing the embedding model forces a
- * full re-embed of every profile — a separate decision).
- */
+/** Central model roles. Keep this module independent of config/dotenv for tests. */
 export const MODELS = {
-  vision: process.env.OPENAI_MODEL_VISION ?? "gpt-5.6-terra",
-  visionFast: process.env.OPENAI_MODEL_VISION_FAST ?? "gpt-5.6-luna",
-  agent: process.env.OPENAI_MODEL_AGENT ?? "gpt-5.6-terra",
-  fast: process.env.OPENAI_MODEL_FAST ?? "gpt-5.6-luna",
+  // Quality-sensitive initial Elo and interpretation of profile answers.
+  vision: process.env.OPENAI_MODEL_VISION || "gpt-6.1-sol",
+  profile: process.env.OPENAI_MODEL_PROFILE || "gpt-6.1-sol",
+  // Conversation, extraction, copy, classification and routine vision.
+  visionFast: process.env.OPENAI_MODEL_VISION_FAST || "gpt-6-luna",
+  agent: process.env.OPENAI_MODEL_AGENT || "gpt-6-luna",
+  fast: process.env.OPENAI_MODEL_FAST || "gpt-6-luna",
+  transcription: process.env.OPENAI_MODEL_TRANSCRIPTION || "gpt-transcribe",
+  // These contracts cannot be switched by an environment override: existing
+  // vectors must share one embedding space; duration needs verbose_json.
+  transcriptionDuration: "whisper-1",
+  embedding: "text-embedding-3-small",
+  moderation: "omni-moderation-latest",
 } as const;
+
+/** Apply only documented capabilities; unknown overrides pass through intact. */
+export function normalizeChatCompletion(body: Record<string, unknown>): Record<string, unknown> {
+  const model = typeof body.model === "string" ? body.model : "";
+  const matches = (name: string) => model === name || model.startsWith(`${name}-`);
+  const luna = matches("gpt-6-luna") || matches("gpt-6-sol");
+  const sol = matches("gpt-6.1-sol") || matches("gpt-6-astra");
+  const legacy = matches("gpt-5.6-terra") || matches("gpt-5.6-luna");
+  if (!luna && !sol && !legacy) return body;
+
+  const result = { ...body };
+  const hasTools = Array.isArray(result.tools) && result.tools.length > 0;
+  if (sol && hasTools) {
+    throw new Error(`${model} tool calling requires Responses API; configure GPT-6 Luna for chat agents`);
+  }
+  if (sol) {
+    // Sol has no 'none' effort. Reserve a separate reasoning budget at callers.
+    if (result.reasoning_effort === undefined || result.reasoning_effort === "none") {
+      result.reasoning_effort = "low";
+    }
+  } else if (luna) {
+    // Routine requests use the entire completion allowance for visible output.
+    result.reasoning_effort ??= "none";
+    if (hasTools && result.reasoning_effort !== "none") {
+      throw new Error(`${model} Chat Completions tools require reasoning_effort:none`);
+    }
+  } else if (result.reasoning_effort === undefined) {
+    const budget = result.max_completion_tokens;
+    if (hasTools || (typeof budget === "number" && budget > 0 && budget <= 512)) {
+      result.reasoning_effort = "none";
+    }
+  }
+
+  if (legacy || result.reasoning_effort !== "none") {
+    delete result.temperature;
+    delete result.top_p;
+    delete result.top_logprobs;
+    delete result.logprobs;
+  }
+  return result;
+}

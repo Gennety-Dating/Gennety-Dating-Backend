@@ -37,6 +37,8 @@ describe("extractVibeAxes", () => {
       anchor_tags: ["Music", "music", " FOOD ", 42, "Nature"],
     });
     const result = await extractVibeAxes("club until 4am with everyone", "the people", "en");
+    expect(callOpenAIJson).toHaveBeenCalledWith(expect.any(String), expect.any(String),
+      expect.objectContaining({ model: "gpt-6.1-sol", maxTokens: 4096 }));
     expect(result).toEqual({
       energyAxis: 1,
       orientationAxis: -1,

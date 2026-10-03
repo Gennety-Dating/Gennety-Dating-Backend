@@ -42,8 +42,9 @@ describe("transcribeVoice", () => {
     await transcribeVoice(buffer, { fetchFn, language: "en" });
 
     const form = fetchFn.mock.calls[0][1].body as FormData;
-    expect(form.get("model")).toBe("whisper-1");
-    expect(form.get("language")).toBe("en");
+    expect(form.get("model")).toBe("gpt-transcribe");
+    expect(form.get("languages[]")).toBe("en");
+    expect(form.has("language")).toBe(false);
     expect(form.get("file")).toBeInstanceOf(Blob);
   });
 

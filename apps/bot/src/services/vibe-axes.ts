@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/db";
 import { callOpenAIJson } from "./openai.js";
+import { MODELS } from "../models.js";
 
 /**
  * Vibe-axis extraction (PRODUCT_SPEC §1.3 / §3.2).
@@ -101,7 +102,8 @@ export async function extractVibeAxes(
 
   const raw = await callOpenAIJson<RawVibeAxes>(SYSTEM_PROMPT, userContent, {
     ...(options.fetchFn ? { fetchFn: options.fetchFn } : {}),
-    temperature: 0,
+    model: MODELS.profile,
+    maxTokens: 4096,
   });
   if (!raw) return null;
 

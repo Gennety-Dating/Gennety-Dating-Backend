@@ -55,10 +55,40 @@ handling in `runWithUsage(key, …)` (`services/usage-context.ts`,
 `AsyncLocalStorage`; keys `tg:<id>` / `user:<id>`), and the `openaiFetch`
 wrapper (`services/openai-fetch.ts`) — a `fetch` drop-in at the scattered OpenAI
 call sites — reads the exact `usage.total_tokens` OpenAI returns and charges it
-to the ambient key plus a process-wide hourly breaker. Whisper audio is priced
+to the ambient key plus a process-wide hourly breaker. File transcription audio is priced
 by duration (not tokens), so it stays under the per-request voice limiter only.
 All knobs are env-flagged (see deploy.md), ship on with loose thresholds tuned
 so normal fast use never trips them, and add no Prisma schema or dependency.
+
+## OpenAI model roles (2026-10-04)
+
+1. `apps/bot/src/models.ts` owns all active model identifiers. Onboarding,
+   menu and mobile agents, factual extraction, generated copy, classification,
+   workers and routine image checks default to `gpt-6-luna`. Chat Completions
+   stays in use with `reasoning_effort: "none"`, including function tools.
+2. Initial photo Elo and `vibe-axes` profile interpretation default to
+   `gpt-6.1-sol`, with low reasoning and a 4096-token completion allowance.
+   Sampling parameters are removed for reasoning requests. Historical Elo
+   assessments and cached video analyses retain their recorded model.
+3. Voice messages and ordinary video-audio transcription use `gpt-transcribe`.
+   Multipart language hints are sent as `languages[]`. Voice-prompt validation
+   keeps `whisper-1` and `verbose_json` for server-measured duration.
+4. Embeddings stay pinned to `text-embedding-3-small` (1536 dimensions), and
+   moderation stays on `omni-moderation-latest`. Their identifiers are centralized
+   but changing embedding space or duration format needs a separate migration.
+5. Optional `OPENAI_MODEL_AGENT`, `OPENAI_MODEL_FAST`, `OPENAI_MODEL_VISION_FAST`,
+   `OPENAI_MODEL_VISION`, `OPENAI_MODEL_PROFILE`, and `OPENAI_MODEL_TRANSCRIPTION`
+   overrides are documented in both environment examples. Empty values select
+   defaults. Model configuration must be loaded before importing services.
+   Known incompatible tool overrides fail before HTTP; unknown models keep their
+   request parameters and require their own compatibility verification.
+6. Demo uses the same defaults, including its synthetic partner. Admission
+   rules, fallbacks and isolation are unchanged. Raw REST calls need no SDK
+   upgrade. No automatic re-embedding or re-scoring runs during this migration.
+
+Official compatibility references:
+[GPT-6 migration](https://developers.openai.com/api/docs/guides/latest-model),
+[file transcription](https://developers.openai.com/api/docs/guides/speech-to-text).
 
 ## Storage Buckets (Supabase)
 
@@ -126,7 +156,7 @@ currently bot-side only.
 
 | Service | Role |
 |---|---|
-| OpenAI | Onboarding / menu / mobile chat agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, vision Elo seed |
+| OpenAI | Onboarding / menu / mobile chat agents, embeddings, file transcription (gpt-transcribe; Whisper for measured duration), image/text moderation, vision Elo seed |
 | AWS Rekognition Face Liveness | Identity liveness: `CreateFaceLivenessSession` + `GetFaceLivenessSessionResults` server-side (`services/face-liveness.ts`); the device streams its selfie video straight to `StartFaceLivenessSession` using STS credentials minted per session by `services/liveness-credentials.ts`. Replaced Persona 2026-07-26. ~$0.015 per check with no monthly floor, so a paused ad campaign costs nothing. A session and its reference image expire 3 minutes after creation — see PRODUCT_SPEC §1.4. **Runs in `FACE_LIVENESS_REGION` = `eu-west-1`, NOT the `AWS_REGION` (eu-central-1) the rest of Rekognition uses** — Frankfurt does not serve Face Liveness, and answers with a message-less `AccessDeniedException` that mimics an IAM denial. `rekognition-client.ts` caches one client per region; the region is returned to the client verbatim because the detector must stream to the region its session was created in. |
 | AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and the face-match decision; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. **"Fallback" is now enforced rather than described** (2026-09-04): V2 used to count the eligible curated rows and run the sweep anyway on every assignment, so `decidePlacesSweep` / `VENUE_PLACES_FALLBACK_MAX_CURATED` gates it on a thin pool — and defers it to a rescue for the run whose deep pool ranked nothing, which is the only state where the spend can still change the outcome. The runtime search mask sits at the **Enterprise** tier and no higher: `rating` / `priceLevel` / `regularOpeningHours` ARE the quality gate, while `editorialSummary` (the one Atmosphere-tier field) was removed from it and is now bought only by the seeder (`searchVenueCandidates(..., { editorialSummary: true })`), which writes it to `curated_venues` once and reads it for months. The Mini App's departure picker uses **Autocomplete (New)** with a client-minted `sessionToken` per typing episode, closed by a Place Details **Essentials** request (`id,location,formattedAddress`) on `/v1/location/resolve` — a completed session bills its keystrokes at zero, replacing the per-keystroke Text Search Pro that cost $0.10–$0.19 per departure point. Resolved places are cached in `place_cache` (30-day TTL, Google's ceiling; `place_id` kept indefinitely as ToS permits, pruned by the nightly cron). The `places.photos` field + the Places **media** endpoint supply the date-card venue cover photo (fetched at render time, credited on the card, never persisted) and the §3.7b board's galleries; the photo-name lookup (`fetchPlacePhotoNames`, mask `photos`) is the free Place Details Essentials (IDs Only) tier. The board's proxy accepts only the two widths the client renders (each distinct width is a separately billed Place Photo request) and its tiles defer loading until near the viewport (`photo-defer.ts`), since `loading="lazy"` cannot reach a CSS `background-image`. Demo mode is denied the paid search outright (`PLACES_LIVE_SEARCH_ENABLED`) because its generated `.env` inherits production's `PLACES_API_KEY`. |

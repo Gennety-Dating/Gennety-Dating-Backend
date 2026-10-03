@@ -1,8 +1,8 @@
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import type { ProviderError } from "./types.js";
 
 const ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
-const MODEL = "whisper-1";
 
 export type AudioTranscriptionResult =
   | {
@@ -40,7 +40,7 @@ export async function transcribeVideoAudio(
     new Blob([new Uint8Array(buffer)], { type: "audio/mpeg" }),
     "profile-video.mp3",
   );
-  form.append("model", MODEL);
+  form.append("model", options.withDuration ? MODELS.transcriptionDuration : MODELS.transcription);
   form.append("response_format", options.withDuration ? "verbose_json" : "json");
 
   try {

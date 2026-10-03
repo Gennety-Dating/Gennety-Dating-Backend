@@ -31,6 +31,7 @@ describe("transcribeVideoAudio", () => {
 
     expect(result).toEqual({ ok: true, text: "hello there", durationSeconds: 17.36 });
     expect(responseFormat(fetchFn)).toBe("verbose_json");
+    expect((fetchFn.mock.calls[0]![1]?.body as FormData).get("model")).toBe("whisper-1");
   });
 
   it("keeps the plain response, and no duration, for callers that did not ask", async () => {
@@ -40,6 +41,7 @@ describe("transcribeVideoAudio", () => {
 
     expect(result).toEqual({ ok: true, text: "hello" });
     expect(responseFormat(fetchFn)).toBe("json");
+    expect((fetchFn.mock.calls[0]![1]?.body as FormData).get("model")).toBe("gpt-transcribe");
   });
 
   it("omits a duration it cannot trust rather than passing it on", async () => {

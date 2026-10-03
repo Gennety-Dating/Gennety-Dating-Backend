@@ -1,8 +1,9 @@
+import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
-import { env } from "../config.js";
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_MODEL = MODELS.embedding;
 const EMBEDDING_DIMS = 1536;
 
 /**

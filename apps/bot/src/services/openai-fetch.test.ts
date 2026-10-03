@@ -115,195 +115,80 @@ function forwardedBody(fetchMock: ReturnType<typeof vi.fn>): unknown {
   return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
-describe("openaiFetch temperature normalization (GPT-5.6 only supports default=1)", () => {
-
-  it("strips a non-default temperature from the chat body", async () => {
+describe("openaiFetch model capabilities", () => {
+  async function send(body: Record<string, unknown>, endpoint = "chat/completions") {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
     vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({ model: "gpt-5.6-terra", messages: [], temperature: 0.3 }),
+    await openaiFetch(`https://api.openai.com/v1/${endpoint}`, {
+      method: "POST", body: JSON.stringify(body),
     });
+    return forwardedBody(fetchMock) as Record<string, unknown>;
+  }
 
-    const body = forwardedBody(fetchMock) as Record<string, unknown>;
-    expect(body).not.toHaveProperty("temperature");
-    expect(body.model).toBe("gpt-5.6-terra");
-    expect(body.messages).toEqual([]);
+  it("gives Luna tools and tiny classifiers a visible-output budget", async () => {
+    for (const extra of [
+      { max_completion_tokens: 16 },
+      { max_completion_tokens: 1024 },
+      { tools: [{ type: "function", function: { name: "get_my_profile" } }], tool_choice: "auto" },
+    ]) {
+      const body = await send({ model: "gpt-6-luna", temperature: 0.3, ...extra });
+      expect(body).toEqual({ model: "gpt-6-luna", temperature: 0.3, ...extra, reasoning_effort: "none" });
+    }
   });
 
-  it("keeps other sampling params intact while stripping temperature", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        temperature: 0,
-        max_completion_tokens: 800,
-        response_format: { type: "json_schema" },
-      }),
+  it("uses low reasoning for Sol and removes incompatible sampling fields", async () => {
+    const body = await send({
+      model: "gpt-6.1-sol", reasoning_effort: "none", temperature: 0,
+      top_p: 0.9, top_logprobs: 2, logprobs: true, max_completion_tokens: 4096,
+      response_format: { type: "json_object" }, messages: [],
     });
-
-    const body = forwardedBody(fetchMock) as Record<string, unknown>;
-    expect(body).not.toHaveProperty("temperature");
-    expect(body.max_completion_tokens).toBe(800);
-    expect(body.response_format).toEqual({ type: "json_schema" });
+    expect(body).toEqual({
+      model: "gpt-6.1-sol", reasoning_effort: "low", max_completion_tokens: 4096,
+      response_format: { type: "json_object" }, messages: [],
+    });
   });
 
-  it("preserves an explicit temperature of 1", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({ temperature: 1 }),
-    });
-
-    expect((forwardedBody(fetchMock) as Record<string, unknown>).temperature).toBe(1);
+  it("preserves supported explicit reasoning and strips sampling for Luna low", async () => {
+    expect(await send({ model: "gpt-6-luna", reasoning_effort: "low", temperature: 1 }))
+      .toEqual({ model: "gpt-6-luna", reasoning_effort: "low" });
   });
 
-  it("leaves a body without a temperature untouched", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+  it("rejects incompatible agent overrides before making an HTTP request", async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({ model: "gpt-5.6-luna", input: "x" }),
-    });
-
-    const body = forwardedBody(fetchMock) as Record<string, unknown>;
-    expect(body).toEqual({ model: "gpt-5.6-luna", input: "x" });
+    for (const params of [
+      { model: "gpt-6.1-sol" },
+      { model: "gpt-6-luna", reasoning_effort: "low" },
+    ]) {
+      await expect(openaiFetch("https://api.openai.com/v1/chat/completions", {
+        body: JSON.stringify({ ...params, tools: [{ type: "function" }] }),
+      })).rejects.toThrow(/tools|tool calling/);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("leaves a non-JSON string body untouched", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      body: "not-json",
-    });
-
-    expect(fetchMock.mock.calls[0]![1]?.body).toBe("not-json");
-  });
-});
-
-describe("openaiFetch tool reasoning_effort normalization (GPT-5.6 tools need reasoning_effort:none)", () => {
-  it("injects reasoning_effort:none when the body carries function tools", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        model: "gpt-5.6-terra",
-        messages: [],
-        tools: [{ type: "function", function: { name: "get_my_profile" } }],
-        tool_choice: "auto",
-      }),
-    });
-
-    const body = forwardedBody(fetchMock) as Record<string, unknown>;
-    expect(body.reasoning_effort).toBe("none");
-    expect(body.tool_choice).toBe("auto");
-    expect(body.model).toBe("gpt-5.6-terra");
+  it("leaves unknown models and non-chat endpoints intact", async () => {
+    const body = { model: "gpt-4.1-mini", temperature: 0, max_completion_tokens: 16 };
+    expect(await send(body)).toEqual(body);
+    const other = { model: "gpt-6-luna", temperature: 0 };
+    for (const endpoint of ["embeddings", "moderations", "responses"]) {
+      expect(await send(other, endpoint)).toEqual(other);
+    }
   });
 
-  it("strips temperature AND injects reasoning_effort in the same tool request", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        temperature: 0.5,
-        tools: [{ type: "function", function: { name: "pause_matching" } }],
-      }),
-    });
-
-    const body = forwardedBody(fetchMock) as Record<string, unknown>;
-    expect(body).not.toHaveProperty("temperature");
-    expect(body.reasoning_effort).toBe("none");
+  it("retains legacy override compatibility without changing generous budgets", async () => {
+    expect(await send({ model: "gpt-5.6-terra", temperature: 0, max_completion_tokens: 16 }))
+      .toEqual({ model: "gpt-5.6-terra", max_completion_tokens: 16, reasoning_effort: "none" });
+    expect(await send({ model: "gpt-5.6-terra", temperature: 0, max_completion_tokens: 1000 }))
+      .toEqual({ model: "gpt-5.6-terra", max_completion_tokens: 1000 });
   });
 
-  it("does not add reasoning_effort to a tool-less request with no declared budget", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+  it("leaves malformed JSON and multipart data intact", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({}));
     vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        model: "gpt-5.6-terra",
-        messages: [],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
-  });
-
-  it("injects reasoning_effort:none for a tool-less request with a tight budget", async () => {
-    // Reasoning is billed against max_completion_tokens; at 220 it can consume
-    // the entire allowance and return empty content (match-card copy, observed
-    // live 2026-07-25).
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        model: "gpt-5.6-terra",
-        max_completion_tokens: 220,
-        messages: [],
-      }),
-    });
-
-    expect((forwardedBody(fetchMock) as Record<string, unknown>).reasoning_effort).toBe("none");
-  });
-
-  it("leaves a generous completion budget reasoning", async () => {
-    // The Elo vision seed (1000) and fact collector (800) can afford reasoning
-    // and benefit from it — the tight-budget guard must not reach them.
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        model: "gpt-5.6-terra",
-        max_completion_tokens: 1000,
-        messages: [],
-      }),
-    });
-
-    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
-  });
-
-  it("does not add reasoning_effort for an empty tools array", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({ tools: [] }),
-    });
-
-    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
-  });
-
-  it("never overwrites an explicit reasoning_effort a caller already set", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      body: JSON.stringify({
-        tools: [{ type: "function", function: { name: "get_my_profile" } }],
-        reasoning_effort: "low",
-      }),
-    });
-
-    expect((forwardedBody(fetchMock) as Record<string, unknown>).reasoning_effort).toBe("low");
+    for (const body of ["not-json", "null", "[]", new FormData()]) {
+      await openaiFetch("https://api.openai.com/v1/chat/completions", { body });
+      expect(fetchMock.mock.lastCall?.[1]?.body).toBe(body);
+    }
   });
 });

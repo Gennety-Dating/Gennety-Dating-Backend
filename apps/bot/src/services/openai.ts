@@ -1,5 +1,5 @@
 import { env } from "../config.js";
-import { MODELS } from "../models.js";
+import { MODELS, normalizeChatCompletion } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 
 /**
@@ -66,7 +66,7 @@ export async function callOpenAIJson<T>(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(normalizeChatCompletion({
         model,
         max_completion_tokens: maxTokens,
         temperature,
@@ -84,7 +84,7 @@ export async function callOpenAIJson<T>(
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-      }),
+      })),
       signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
 
@@ -129,7 +129,7 @@ export async function callOpenAIText(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(normalizeChatCompletion({
         model,
         max_completion_tokens: maxTokens,
         temperature,
@@ -137,7 +137,7 @@ export async function callOpenAIText(
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-      }),
+      })),
       signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
 

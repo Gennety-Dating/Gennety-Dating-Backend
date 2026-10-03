@@ -1,3 +1,4 @@
+import { normalizeChatCompletion } from "../models.js";
 import { currentUsageKey } from "./usage-context.js";
 import { usageLimiter } from "./usage-limiter.js";
 
@@ -29,101 +30,21 @@ interface UsagePayload {
 
 const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
 
-/**
- * The configured GPT-5.6 models (`models.ts`) are reasoning models, and the
- * OpenAI `/v1/chat/completions` endpoint rejects two things the pre-migration
- * GPT-5.4/4.1 call sites still send:
- *
- *   1. Any `temperature` other than the default `1` → hard 400 ("Unsupported
- *      value: 'temperature' does not support 0 with this model. Only the
- *      default (1) value is supported."). Many chat call sites pass 0 / 0.3 /
- *      0.7, correct for the old families but fatal now (degraded pitch, Elo
- *      seed, vibe axes, fact extraction, …).
- *   2. Function `tools` without `reasoning_effort: "none"` → hard 400
- *      ("Function tools with reasoning_effort are not supported for
- *      gpt-5.6-terra in /v1/chat/completions. To use function tools, use
- *      /v1/responses or set reasoning_effort to 'none'."). This breaks the
- *      three tool-calling agents (menu, onboarding, mobile chat) — the failing
- *      request bubbles up and the caller silently falls back to the plain
- *      menu / a canned reply.
- *   3. Reasoning tokens are billed against `max_completion_tokens`, so a
- *      tight budget sized for the *visible* answer can be consumed entirely by
- *      hidden reasoning: the call returns HTTP 200 with
- *      `finish_reason: "length"` and an EMPTY `content`. Measured on
- *      2026-07-25 against the live API: the match-card copy call (220 tokens)
- *      burned all 220 on reasoning in 1 of 3 runs, and the decision-intent
- *      classifier (16 tokens) failed 3 of 3 — silently degrading every
- *      non-keyword Accept/Decline reply to "other". It is intermittent and
- *      budget-dependent, which is what makes it so easy to misread as a flaky
- *      model rather than a systematic misconfiguration.
- *
- * All three are normalised here, in one place, so every chat request that flows
- * through `openaiFetch` is corrected regardless of call site: drop a
- * non-default `temperature`, and inject `reasoning_effort: "none"` whenever the
- * body carries function `tools` OR declares a completion budget too tight to
- * survive reasoning overhead (respecting an explicit value if a caller ever
- * sets one). A request with no `max_completion_tokens` is left alone — its
- * output is unbounded, so reasoning cannot starve it — as are generous budgets
- * where reasoning is affordable and often desirable (the Elo vision seed at
- * 1000, the onboarding fact collector at 800). Bodies that aren't JSON strings
- * (embeddings, streams) pass through unchanged, and any parse failure leaves
- * the request as-is.
- *
- * SINGLE REVERT POINT: when a model that supports custom temperature and tool
- * calls without this flag is configured (an `OPENAI_MODEL_*` override), remove
- * this shim.
- */
-/**
- * Completion budgets at or below this are treated as "too tight to reason in":
- * reasoning is disabled so the whole budget reaches the visible answer.
- *
- * Chosen from measured behaviour — reasoning expands to fill the space it is
- * given (~110-122 tokens observed at a 700 budget), so anything in the low
- * hundreds risks being fully consumed. This covers every short-output call site
- * in the bot (classification at 16, worker DMs at 100-160, card copy at 220,
- * appearance tags at 300, the pitch at 480) while leaving the deliberately
- * generous, quality-sensitive budgets (800+) reasoning as before.
- */
-const REASONING_STARVATION_BUDGET = 512;
-
+/** Normalize only chat requests, never embeddings, moderation or audio. */
 function normalizeChatCompletionBody(
+  input: Parameters<typeof fetch>[0],
   init: RequestInit | undefined,
 ): RequestInit | undefined {
-  if (!init || typeof init.body !== "string") return init;
+  const url = input instanceof Request ? input.url : String(input);
+  if (new URL(url).pathname !== "/v1/chat/completions" || !init || typeof init.body !== "string") return init;
   let parsed: unknown;
   try {
     parsed = JSON.parse(init.body);
   } catch {
     return init;
   }
-  if (typeof parsed !== "object" || parsed === null) return init;
-  const body = parsed as Record<string, unknown>;
-
-  let changed = false;
-
-  // (1) Drop a non-default temperature — GPT-5.6 only accepts the default (1).
-  if ("temperature" in body && body.temperature !== 1) {
-    delete body.temperature;
-    changed = true;
-  }
-
-  // (2) Function tools require `reasoning_effort: "none"` on these reasoning
-  // models. (3) So do tight completion budgets, which hidden reasoning would
-  // otherwise consume whole, returning an empty `content` with
-  // `finish_reason: "length"`. Never overwrite an explicit value a caller set.
-  if (!("reasoning_effort" in body)) {
-    const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
-    const budget = body.max_completion_tokens;
-    const hasTightBudget =
-      typeof budget === "number" && budget > 0 && budget <= REASONING_STARVATION_BUDGET;
-    if (hasTools || hasTightBudget) {
-      body.reasoning_effort = "none";
-      changed = true;
-    }
-  }
-
-  if (!changed) return init;
-  return { ...init, body: JSON.stringify(body) };
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return init;
+  return { ...init, body: JSON.stringify(normalizeChatCompletion(parsed as Record<string, unknown>)) };
 }
 
 function extractTotalTokens(body: unknown): number {
@@ -136,7 +57,7 @@ function extractTotalTokens(body: unknown): number {
 }
 
 export const openaiFetch: typeof fetch = async (input, init) => {
-  const requestInit = normalizeChatCompletionBody(init);
+  const requestInit = normalizeChatCompletionBody(input, init);
   const res = await fetch(input, {
     ...requestInit,
     signal: requestInit?.signal ?? AbortSignal.timeout(DEFAULT_OPENAI_TIMEOUT_MS),

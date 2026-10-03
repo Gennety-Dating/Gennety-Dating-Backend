@@ -233,6 +233,9 @@ describe("scoreAttractivenessFromBuffer", () => {
 
     const body = JSON.parse((fetchFn.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.model).toBe(MODELS.vision);
+    expect(body.reasoning_effort).toBe("low");
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.max_completion_tokens).toBe(4096);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.messages[0].content).toMatch(/symmetry/i);
     expect(body.messages[0].content).toMatch(/SCUT-FBP5500/);

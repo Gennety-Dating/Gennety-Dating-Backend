@@ -1,4 +1,5 @@
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import type {
   ModerationProviderResult,
   ModerationSignal,
@@ -6,7 +7,7 @@ import type {
 } from "./types.js";
 
 const MODERATION_ENDPOINT = "https://api.openai.com/v1/moderations";
-const MODERATION_MODEL = "omni-moderation-latest";
+const MODERATION_MODEL = MODELS.moderation;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 // The coarse `sexual` boolean is intentionally NOT a hard block for images:
