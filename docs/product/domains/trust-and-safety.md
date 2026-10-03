@@ -50,7 +50,7 @@ Other safeguards:
   time and surfaced as `reportDuplicate` to the user.
 - `autoUnsuspendElapsed` runs hourly so a 14-day Tier-2 suspension that
   expires mid-week reactivates within the hour rather than waiting for the
-  next Thursday batch.
+  next scheduled batch.
 - `MatchEvent` rows (`ACCEPTED`, `DECLINED`, `EXPIRED_SILENT`,
   `EXPIRED_PEER_IGNORED`, `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`) drive Elo
   updates and the admin dashboard's behavioural views. The enum also declares

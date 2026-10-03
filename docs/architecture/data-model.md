@@ -1298,7 +1298,7 @@ takes a restriction, never an exemption: the ids are handed to
 ordinary eligibility is still excluded. A second pairing implementation would
 be a second definition of what a good match is, and the two would diverge
 silently. It carries a pre-batch blackout for exactly the reason Rematch does —
-a single-cohort run can take a candidate the globally-optimal Thursday batch
+a single-cohort run can take a candidate the globally-optimal scheduled batch
 needed — and it deliberately leaves starvation counters alone: incrementing
 them would punish a lively campus, resetting them would hand one a priority
 advantage in the next batch.
@@ -1446,7 +1446,7 @@ qualification.
 ### `founder_reports`
 
 Snapshot of a weekly founder matches report (feature-flagged ops feed, gated by
-`FOUNDER_NOTIFY_ENABLED`). Built after the Thursday batch by
+`FOUNDER_NOTIFY_ENABLED`). Built after the scheduled batch by
 `notifyFounderWeeklyMatches` (`services/founder-notify.ts`) and read by the
 tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
 (unique crypto-random URL token = the page's sole authorization, never logged),

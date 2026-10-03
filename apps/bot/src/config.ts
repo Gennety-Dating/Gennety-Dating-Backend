@@ -762,7 +762,7 @@ export const env = {
   /// Master flag for Rematch (REMATCH_PRODUCT_SPEC.md). When false (default),
   /// nothing renders, the invoice route refuses, and a `rematch:` payload that
   /// somehow arrives is refunded — the feature ships dark. When true, a man who
-  /// was left unpaired by the weekly batch or whose match ended badly can pay
+  /// was left unpaired by the scheduled batch or whose match ended badly can pay
   /// once to re-run the engine for himself. The woman never buys and never sees
   /// a price: she receives an ordinary pitch wrapped in gift framing.
   /// Telegram-only in v1 (explicit decision — Stars is a Telegram rail).
@@ -852,7 +852,7 @@ export const env = {
   /// An out-of-cycle drop for one university whose verified cohort just grew.
   /// Ships OFF: it is a second entry point into the allocator, and the reason
   /// Rematch carries a pre-batch blackout is that a single-cohort run can take
-  /// a candidate the globally-optimal Thursday batch needed.
+  /// a candidate the globally-optimal scheduled batch needed.
   CAMPUS_DROP_ENABLED: process.env.CAMPUS_DROP_ENABLED === "true",
   /// How many students a campus must newly verify inside the window to earn a
   /// drop. Low enough to fire on a real campus push, high enough that two

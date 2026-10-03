@@ -303,7 +303,7 @@ const CHAT_SESSION_DIGEST_CRON_SCHEDULE =
  * stored "no longer than necessary". We scrub stored selfies (the
  * Persona-captured image used as face-match reference) 90 days after
  * `verifiedAt`. Daily at 03:30 Europe/Kyiv — off-peak, doesn't share
- * the hour with the weekly matching cron.
+ * the hour with the scheduled matching cron.
  */
 const SELFIE_RETENTION_CRON_SCHEDULE =
   process.env.SELFIE_RETENTION_CRON_SCHEDULE ?? "30 3 * * *";
@@ -328,7 +328,7 @@ const RETENTION_CRON_SCHEDULE =
  */
 const ACTIVITY_ROLLUP_CRON_SCHEDULE =
   process.env.ACTIVITY_ROLLUP_CRON_SCHEDULE ?? "20 0 * * *";
-/// Weekly, Friday 10:00 Kyiv — the morning after Thursday's batch, so the
+/// Weekly, Friday 10:00 Kyiv — the reporting window includes daily production drops, so the
 /// window it reports on always contains a full drop cycle.
 const VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE =
   process.env.VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE ?? "0 10 * * 5";
@@ -985,7 +985,7 @@ function registerSchedules(): void {
   // a university whose verified cohort just grew. Registered only when
   // CAMPUS_DROP_ENABLED — it is a SECOND entry point into the allocator, and
   // the reason Rematch carries a pre-batch blackout is that a single-cohort
-  // run can take a candidate the globally-optimal Thursday batch needed.
+  // run can take a candidate the globally-optimal scheduled batch needed.
   //
   // Not scheduled in demo mode, for the same reason drop matching is not:
   // the demo must never pair two visitors with each other, and a campus drop
@@ -1001,7 +1001,7 @@ function registerSchedules(): void {
   }
 
   // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
-  // `suspendedUntil` has elapsed without waiting for the weekly batch.
+  // `suspendedUntil` has elapsed without waiting for the scheduled batch.
   cron.schedule(
     AUTO_UNSUSPEND_CRON_SCHEDULE,
     guardedTick("auto-unsuspend", () =>

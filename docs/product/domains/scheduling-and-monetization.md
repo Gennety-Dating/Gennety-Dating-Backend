@@ -1962,14 +1962,14 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](rematch.md).
   engine, so a rematch inherits every §3.2 invariant unchanged: the lifetime pair
   ban (so "rematch" always means *someone new*, including after a decline), the
   single-live-match rule, the verification/contact-rail gates, city scoping, and
-  the 24 h candidate cooldown. **A paid run never lowers the admission bar and
+  the profile candidate cooldown (6 h daily / 24 h weekly). **A paid run never lowers the admission bar and
   never buys a score boost.** The cooldown is deliberately kept: right after the
-  Thursday batch the only available candidates are the *unpaired* women, which is
+  scheduled batch the only available candidates are the *unpaired* women, which is
   exactly the cohort the famine gift is meant for.
-- **Pain-triggered entry points only** (no menu row): the Thursday no-match DM,
+- **Pain-triggered entry points only** (no menu row): the no-match DM (at most once per 7 days in either profile),
   and any match that died without a date — an explicit decline (his, hers, or
-  both; the primary case), the same decision taken from the iOS app, or a 24 h
-  TTL expiry. The offer fires only once the match is terminal and the outcome
+  both; the primary case), the same decision taken from the iOS app, or a proposal-deadline
+  expiry (daily: next batch minus 30 min, minimum 90 min; weekly: 24 h). The offer fires only once the match is terminal and the outcome
   reveals have landed, never to a first decider whose match is still live. It
   states before payment that it buys an introduction, not a date.
 - **Money rule.** Payment buys a pitch. A decline, a ghost, or a failed
@@ -1999,13 +1999,13 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](rematch.md).
   so delivery is *unknown* rather than known-empty — is never refunded: reversing
   a charge for a card the partner may be reading is the one error this rail must
   not make.
-- **Limits.** 2 purchases per rolling 7 days with a 24 h cooldown between them
+- **Limits.** Profile defaults: 7 purchases per rolling 7 days in daily, 2 in weekly with a 24 h cooldown between them
   (the cooldown is what stops decline-and-instantly-retry, preserving the weight
   of a decision); a candidate who already received a rematch pitch within 7 days
-  is protected from another; and a blackout window before the weekly batch keeps
-  a single-seeker run from taking a candidate the globally-optimal Thursday
+  is protected from another; and a blackout window before the scheduled batch (1 h daily / 6 h weekly by profile default) keeps
+  a single-seeker run from taking a candidate the globally-optimal scheduled
   allocation needed. A rematch pairing clears both sides' famine counters exactly
-  like the weekly batch.
+  like the scheduled batch.
 - `Match.source` (`weekly`/`rematch`) is stamped inside the creating transaction;
   weekly-optimizer analytics filter to `weekly` so on-demand runs never pollute
   the scoring A/B. The blind-decision, no-in-app-chat, single-live-match, and
@@ -2214,3 +2214,5 @@ Prime Time there is deliberately **no USD display env**: Telegram names the real
 sum in its own payment sheet, and a hardcoded "$0.50" label would be wrong at the
 premium rate. `MEME_UNLOCK_REFUND_CRON_SCHEDULE` defaults to hourly and the cron
 is registered only when the feature is live.
+
+<!-- Cadence review 2026-10-03: the immediate-post-batch cooldown argument and claims of negligible between-cycle cannibalization are not established for daily. See docs/operations/reports/drop-cadence-docs-2026-10-03.md; no behavior change authorized. -->

@@ -189,7 +189,7 @@ Registration v2 (не через email-обход). Placeholder существу
 - **Меню:** My Profile, Edit Profile (фикс identity), Pause/Resume, Settings
   (язык, тема), My Tickets (кошелёк + store), **Gennety Premium** (хаб +
   in-chat отмена подписки), status-banner countdown.
-- **Матчинг:** weekly batch, no-match notice, scoring
+- **Матчинг:** scheduled batch, no-match notice, scoring
   (embedding/research/V_league/V_agePref/V_type/penalty/starvation + male
   reach), hard SQL-фильтры, питч + Synergy + стриминг + **Match Card**
   (коллаж вместо простого альбома фото), welcome-gift, blind decision (все
@@ -245,7 +245,7 @@ Registration v2 (не через email-обход). Placeholder существу
 | `pnpm --filter @gennety/bot exec tsx scripts/dev/check-eligibility.ts <id> <id>` | Почему пара матчится/нет |
 | `pnpm --filter @gennety/bot exec tsx scripts/dev/reset-accounts.ts --apply <id> [<id>]` | Полный wipe аккаунтов |
 | `pnpm --filter @gennety/bot exec tsx scripts/dev/advance-match-clock.ts <matchId> agreed -3h` | Сдвиг тайм-якорей матча (lifecycle/expiry) |
-| `pnpm --filter @gennety/bot exec tsx scripts/dev/force-match-batch.ts` | Запустить реальный weekly-батч сейчас |
+| `pnpm --filter @gennety/bot exec tsx scripts/dev/force-match-batch.ts` | Запустить реальный плановый батч сейчас |
 | `pnpm dev:reset-onboarding:apply` | Чистый онбординг для A+B |
 | `pnpm dev:trigger-test-match` | Форс `proposed` + dispatch (реальный питч) |
 | `pnpm dev:watch-and-match` | Авто-матч, как только оба завершат онбординг |

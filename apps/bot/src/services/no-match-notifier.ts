@@ -169,7 +169,7 @@ function delay(ms: number): Promise<void> {
 
 /**
  * Floors `now` to UTC midnight of the same day. Used as the dedup key for
- * `NoMatchNotice` — the cron fires once per Thursday so day-granularity is
+ * `NoMatchNotice` — the scheduled fallback fires once per day under `daily`, so day-granularity is
  * sufficient and `@@unique([userId, dropDate])` blocks accidental re-fires
  * within the same drop.
  */

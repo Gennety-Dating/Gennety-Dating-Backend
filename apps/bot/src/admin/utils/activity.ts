@@ -22,18 +22,17 @@ export const DAY_MS = 86_400_000;
  * MAU is a ROLLING 30 days, not a calendar month.
  *
  * Both are offered by the endpoint, but this is the default and the one the
- * dashboard should read, for a reason specific to this product rather than
- * convention: the whole rhythm here is weekly — the drop, the famine notice,
- * the check-in ladder — so 30 days is exactly four of those cycles whatever
- * month it is. A calendar month contains four or five Thursdays, which would
- * make February structurally quieter than March by the calendar rather than by
- * the product, and a metric that moves for that reason cannot be read as a
- * trend.
+ * dashboard should read: a fixed-duration window keeps calendar-month length
+ * from changing the denominator. Production drops run daily, while famine
+ * notices remain weekly. The former rationale of four or five Thursday drops
+ * per calendar month applies only to the env-free `weekly` profile.
+ * No analytics window or calculation is changed by this documentation update.
  */
 export const MAU_WINDOW_DAYS = 30;
 
 /**
- * WAU is reported alongside, and at this cadence it is arguably the headline.
+ * WAU is reported alongside DAU. The rationale below applies to `weekly`,
+ * the env-free code default; production has used `daily` since 2026-08-10.
  *
  * A user with one drop a week has no reason to open the bot daily, so DAU
  * measures how many people happened to be mid-conversation today rather than

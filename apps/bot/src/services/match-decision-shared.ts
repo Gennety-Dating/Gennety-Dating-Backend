@@ -39,7 +39,7 @@ export function outcomeRevealKey(
 
 /**
  * Compensate the user who accepted a match their partner then declined (or
- * ghosted): bump standby/priority so the next weekly batch favours them.
+ * ghosted): bump standby/priority so the next scheduled batch favours them.
  * Idempotency is the caller's job — this unconditionally increments.
  *
  * Returns whether the boost was applied (drives the softer reveal copy).

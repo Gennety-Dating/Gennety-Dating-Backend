@@ -9,9 +9,11 @@ export const countdownRouter: Router = Router();
 countdownRouter.use(requireAuth);
 
 /**
- * Next weekly drop + server clock for skew correction. The mobile app
- * uses `serverNow` to align its client timer with the server (Thursday
- * 18:00 Europe/Kyiv by default, driven by MATCH_CRON_SCHEDULE).
+ * Next scheduled drop + server clock for skew correction. The mobile app
+ * uses `serverNow` to align its timer with the server: daily at 18:00
+ * Europe/Kyiv in production (`DROP_CADENCE=daily` since 2026-08-10).
+ * Without the env override the code defaults to `weekly` (Thursday 18:00);
+ * MATCH_CRON_SCHEDULE can override the active profile cron.
  *
  * `searchersInCity` едет здесь, а не в `/v1/app/config`: конфиг не
  * авторизован (город спрашивающего ему неизвестен) и кэшируется, а «Сегодня»

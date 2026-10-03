@@ -4,7 +4,7 @@
  *
  * A single ordered axis: how far ahead the person is looking. Everything else
  * usually hung on this question (children, marriage) belongs to a different
- * product — this one's horizon is one date on Thursday — and the two other
+ * product — this one's horizon is one upcoming date — and the two other
  * dimensions people reach for, tempo and process-vs-person, are already
  * measured by the vibe axes (`energyAxis` / `orientationAxis`). Measuring them
  * twice would double their weight for nothing.

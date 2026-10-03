@@ -14,7 +14,7 @@ import { buildScanFrames } from "./radar-scan-counter.js";
  * unlike the venue / date-card / video-check statuses it tracks no real work and
  * is passed no `until` promise — the radar verdicts were already persisted
  * before this runs, and the matching it narrates does not happen until the
- * Thursday batch, days later.
+ * next scheduled batch.
  *
  * Copy lives here rather than in the shared i18n bundle, matching the existing
  * {@link file://./type-radar-copy.ts} precedent that keeps this feature-flagged

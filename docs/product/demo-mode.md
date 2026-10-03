@@ -532,9 +532,10 @@ is also set identically whether the radar was submitted, skipped, disabled, or
 never shown for want of a deployed deck at that age band — so the demo needs no
 idea whether a radar step exists at all.
 
-**Message 4 says "regularly", not a number.** Production runs `DROP_CADENCE=weekly`
-— one Thursday drop — with a `daily` profile in code but inert (PRODUCT_SPEC
-§3.1). Copy here must not describe a cadence production does not run.
+**Message 4 says "regularly", not a number.** Production uses `DROP_CADENCE=daily`
+since 2026-08-10: a daily drop at 18:00 Europe/Kyiv. Without env the code defaults
+to `weekly`. Demo matching is session-driven; these documentation corrections
+do not change its scheduler, defaults or copy.
 
 ## Recovery
 
@@ -677,7 +678,7 @@ Three properties keep the exemption narrow, and each is pinned by a test
   same puppet twice — which is why the redo button deletes its own match rows
   (`clearDemoMatches`) rather than relying on this.
 - **With the flag off the query is rebuilt byte-for-byte**, so the production
-  allocator — which also runs the real Thursday drop and the paid Rematch — has
+  allocator — which also runs the real daily drop and the paid Rematch — has
   the same shape, the same plan, and the same guard test pinning it
   (`match-engine-eligibility.test.ts`). `demoPuppetIdsAmong` is not even called.
 

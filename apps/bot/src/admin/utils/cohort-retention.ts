@@ -89,12 +89,10 @@ export function bucketLabel(start: Date, bucket: CohortBucket): string {
  * One column of the matrix: "was the user active in the `windowDays` days
  * ending on day `day`".
  *
- * The width exists because an exact-day reading is the wrong instrument for
- * THIS product. The whole rhythm here is weekly — one drop, one famine notice,
- * one check-in ladder — so a perfectly healthy user has no reason to open the
- * bot on any particular day, and `windowDays: 1` at day 30 would be measuring
- * the drop schedule rather than the person. It is the same argument
- * `activity.ts` makes for reporting WAU beside DAU.
+ * The width was chosen for the original weekly profile: an exact-day reading
+ * at day 30 could measure the drop weekday instead of the person. Production
+ * now uses daily; the 7-day window is unchanged and its product rationale is
+ * recorded for founder review (2026-10-03 cadence documentation report).
  *
  * Day 1 keeps `windowDays: 1` because there the exact day IS the question:
  * "did they come back the very next day" is a real, sharp signal, and a week

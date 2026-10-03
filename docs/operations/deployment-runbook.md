@@ -1062,7 +1062,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   create at least one code, then set `PROMO_FEATURE_ENABLED=true`.
 - Rematch (feature-flagged, paid on-demand engine re-run, PRODUCT_SPEC §3.11 /
   `REMATCH_PRODUCT_SPEC.md`): `REMATCH_FEATURE_ENABLED` (default `false` — leave
-  off until launch). When on, a man whom the Thursday batch left unpaired, or
+  off until launch). When on, a man whom the scheduled batch left unpaired, or
   whose match expired without a date, gets a DM offering one paid re-run of the
   matching engine for himself; the woman it finds never buys and never sees a
   price — she gets an ordinary pitch with gift framing. Telegram-only (Stars is a
@@ -1071,7 +1071,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `REMATCH_MAX_PER_WEEK` (`2`), `REMATCH_COOLDOWN_HOURS` (`24`),
   `REMATCH_GIFT_CAP_DAYS` (`7`, protects a candidate from serial gift-pitching),
   `REMATCH_PRE_BATCH_BLACKOUT_HOURS` (`6`, keeps a single-seeker run from taking
-  a candidate the globally-optimal Thursday batch needed; `0` disables),
+  a candidate the globally-optimal scheduled batch needed; `0` disables),
   `REMATCH_FAILED_LOOKBACK_DAYS` (`14`), and `REMATCH_REFUND_CRON_SCHEDULE`
   (`0 * * * *`). **Requires `db:push` of the additive `matches.source` (default
   `'weekly'`) / `matches.rematch_paid_by_id` columns and the new
@@ -1160,7 +1160,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   Two things worth knowing before flipping it:
   - It is a **deliberate labor illusion**. Nothing is scanned — the radar
     verdicts are saved before it starts, and matching doesn't run until the
-    Thursday batch. Founder-approved (2026-07-27) with the copy as specified.
+    scheduled batch. Founder-approved (2026-07-27) with the copy as specified.
   - It **holds the user ~10.7s** (plus a 2.2s lead-in that waits out the Mini
     App's own close animation) before their next onboarding question. That is
     real added time in the funnel — watch
@@ -1174,7 +1174,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
   When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's
   full profile + photos on first activation (questionnaire-based profile), (2) a tokenized
-  weekly-matches report link after the Thursday batch, (3) both date cards + venue
+  weekly-matches report link after the scheduled batch, (3) both date cards + venue
   when a date locks in, (4) the full profile + **phone number** + photos when a
   user freezes or hard-deletes their account (bot Settings→Delete/Freeze and mobile
   `DELETE /v1/me`; the delete path snapshots the row and downloads any photo

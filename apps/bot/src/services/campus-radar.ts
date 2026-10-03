@@ -8,7 +8,7 @@ import { createProposedMatch, previewDropBatch } from "./match-engine.js";
  * Campus Radar and the Bonus Campus Drop (PRODUCT_SPEC §Campus Radar).
  *
  * A university that suddenly verifies a dozen students has a pool the product
- * cannot use until Thursday. This watches for that and runs one extra drop,
+ * cannot use until the next scheduled drop. This watches for that and runs one extra drop,
  * scoped to that campus.
  *
  * **It reuses the real allocator rather than pairing anyone itself.** Same
@@ -24,7 +24,7 @@ import { createProposedMatch, previewDropBatch } from "./match-engine.js";
  *      the row IS the record of the last drop, and a counter would be a second
  *      source of truth about it.
  *   2. A **pre-batch blackout**, because a single-cohort run can take a
- *      candidate the globally-optimal Thursday batch needed. Exactly the
+ *      candidate the globally-optimal scheduled batch needed. Exactly the
  *      protection `REMATCH_PRE_BATCH_BLACKOUT_HOURS` exists to give, for
  *      exactly the same reason.
  *   3. A **growth threshold**, so it fires on a campus push rather than on two
@@ -189,7 +189,7 @@ export interface CampusDropResult {
  * many ordinary drops a person has been passed over by; a bonus run that
  * incremented it would punish everyone it failed to pair for having a lively
  * campus, and one that reset it would hand a whole university a priority
- * advantage in the next Thursday batch.
+ * advantage in the next scheduled batch.
  */
 export async function runCampusDrop(domain: string): Promise<CampusDropResult> {
   const cohort = await prisma.user.findMany({

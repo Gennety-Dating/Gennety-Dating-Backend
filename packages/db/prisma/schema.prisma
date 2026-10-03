@@ -973,7 +973,7 @@ model Profile {
   /// Universal Elo rating in [0..1000]. Seeded by the AI vision pass on the
   /// primary photo when Persona flips the user to `verified`
   /// (see `apps/bot/src/services/elo/seed-from-vision.ts`), then updated on
-  /// each Thursday accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
+  /// each drop accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
   /// Drives the `V_league` multiplier in match scoring — large rating gaps
   /// decay the candidate's score so users mostly see opponents in their league.
   eloScore                  Int                          @default(500) @map("elo_score")
@@ -2208,7 +2208,7 @@ model Match {
   /// does not increment. Defaulted so historical rows read 0.
   venueChangeCount          Int       @default(0) @map("venue_change_count")
 
-  /// How this pair was allocated: `weekly` (the Thursday batch — the default and
+  /// How this pair was allocated: `weekly` (the scheduled batch — the default and
   /// the only value before Rematch) or `rematch` (a paid, on-demand single-seeker
   /// run bought by one man, REMATCH_PRODUCT_SPEC.md). String, not a Prisma enum,
   /// matching `ticketStatus`/`venueChangeStatus`/`coordMethod`; whitelist lives
@@ -2998,7 +2998,7 @@ model InboxItem {
 }
 
 /// Audit row for the empathetic "no match this week" DM that fires ~15 min
-/// after the Thursday batch for every `active` user the matcher couldn't pair.
+/// after the scheduled batch for every `active` user the matcher couldn't pair.
 /// `tier` is the consecutive-famine count (1 = first week without a match,
 /// 2 = second, 3+ = third or more) — drives the escalating warmth of the
 /// template selected from `i18n.noMatchThisWeek*`. `dropDate` is truncated
@@ -3230,7 +3230,7 @@ model ClientEvent {
 }
 
 /// Snapshot of a weekly founder matches report (gated by `FOUNDER_NOTIFY_ENABLED`).
-/// Built after the Thursday batch (`notifyFounderWeeklyMatches`), stored so the
+/// Built after the scheduled batch (`notifyFounderWeeklyMatches`), stored so the
 /// tokenized report page (`GET /v1/founder/report/:token`) renders a stable view
 /// regardless of later profile edits. Contains PII (names, cities, photo refs,
 /// attractiveness scores) but never `psychologicalSummary`. The

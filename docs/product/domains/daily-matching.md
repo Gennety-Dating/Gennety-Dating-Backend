@@ -1,32 +1,24 @@
-<!-- WHEN_TO_READ: ACTIVE MIGRATION. You are touching matching cadence, `DROP_CADENCE`, or the weekly->daily transition. Phases 0-6 shipped 2026-08-02; production still runs the `weekly` profile. Read section 3.1 ('Что осталось') for the remaining work — sections 1-2 are background only. -->
+<!-- WHEN_TO_READ: You are touching matching cadence or DROP_CADENCE. Production uses daily since 2026-08-10; code defaults to weekly without env. Read the current status first; the migration phases and 2026-08-09 audit below are historical background. -->
 <!-- SOURCE: DAILY_MATCHING_IMPLEMENTATION_PLAN.md (moved unchanged) — migrated 2026-09-01 -->
 
 # Переход на ежедневный matching — план имплементации
 
-> ## СТАТУС НА 2026-08-09: каркас отгружен, осталась последняя миля
+> ## СТАТУС НА 2026-10-03: ежедневный профиль включён в проде
 >
-> **Фазы 0–6 уехали в прод 2026-08-02** (релиз «daily-cadence matching migration
-> groundwork», см. [deploy.md](../../operations/deployment-runbook.md)). Прод работает на профиле `weekly`,
-> `DROP_CADENCE` в `/opt/gennety/.env` не задан. Проверено по коду 2026-08-09 —
-> сводка в §3.0.
+> Прод работает на `DROP_CADENCE=daily` с 2026-08-10: ежедневный дроп в 18:00
+> по Киеву (`Europe/Kyiv`). Основание — [решение 2026-08-10](../../architecture/decisions/2026-08-07_2026-08-12.md#2026-08-10--drop_cadencedaily-in-production-and-the-thursday-gate-was-replaced-by-a-dry-run).
+> Переключение сделано через env; `resolveCadence(undefined)` по-прежнему
+> выбирает `weekly` (четверг 18:00) для локальной среды и CI без env.
 >
-> **Что это меняет для читателя:** §3 ниже больше не является списком работ.
-> Актуальный список — **§3.1 «Что осталось»**. Разделы §1 и §2 сохранены как
-> справка: они объясняют, ПОЧЕМУ стратегия дедлайна устроена именно так, и это
-> знание всё ещё нужно.
+> Разделы ниже — история миграции и аудита на 2026-08-09, включая прежний
+> список работ §3.1; они не описывают текущую готовность продакшена.
+> Rematch читает профиль через `rematchLimits()` в `services/rematch.ts`; D8 снят решением 2026-08-09.
+> `cadence.ts` и текущие сервисы определяют действующие значения.
 >
-> **Два решения из §0 отменены более поздним решением фаундера.** D4 и D5
-> («DM раз в 2–3 дня», «тиры в днях», «скидка от 7 дней») **вытеснены**
-> решением *«Match daily, apologise weekly»* от 2026-08-02 (PRODUCT_SPEC §3.1,
-> DECISIONS.md): `famineNoticeIntervalMs` = **7 дней в обоих профилях**, тиры
-> считают **уведомления**, а не дни, скидка остаётся на тире 2. Переключение
-> каденции меняет то, как часто мы *ищем*, а не то, как часто *пишем*.
->
-> **Главная незакрытая дыра — Rematch.** `DropCadence` объявляет пять
-> rematch-полей, из них **четыре мертвы**: `rematchBlackoutMs`,
-> `rematchMaxPerInterval`, `rematchCooldownMs`, `rematchGiftCapMs` закреплены
-> тестом и не читаются ниоткуда; живо только `rematchWindowMs`. Абстракция
-> выглядит готовой и не является таковой — см. §3.1 блок A.
+> **«Match daily, apologise weekly» (2026-08-02) действует в обоих профилях:**
+> `famineNoticeIntervalMs` = 7 дней, тиры считают уведомления, скидка — от тира 2.
+> В `daily` дедлайн ответа привязан к следующему батчу минус 30 минут,
+> с минимумом 90 минут от отправки; фиксированные 24 часа — только `weekly`.
 >
 > ---
 >

@@ -11,7 +11,7 @@ const LANGUAGE_LOCALES: Record<Language, string> = {
 /**
  * The stage of the caller's single live match, when they have one
  * (PRODUCT_SPEC §2.1). A user occupying a live-match slot is excluded from the
- * weekly batch (§3.2 filter 8), so the next-drop countdown would be a promise
+ * scheduled batch (§3.2 filter 8), so the next-drop countdown would be a promise
  * we can't keep — the banner counts down whatever is actually next for them.
  *
  * Resolved from the match row by `resolveBannerStage` (workers/status-timer.ts),

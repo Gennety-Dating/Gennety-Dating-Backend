@@ -592,7 +592,7 @@
   labels: the other two dimensions people reach for here are already measured
   (tempo and process-vs-person are the vibe axes, §3.2), and the ones usually
   bundled with the question — children, marriage — belong to a different
-  product, since this one's horizon is one date on Thursday. Four points and not
+  product, since this one's horizon is one upcoming date. Four points and not
   three or six: at three the middle swallows everyone who is unsure, and past
   four people stop distinguishing neighbours, so the answer becomes noise.
 
@@ -1247,8 +1247,7 @@ Hard rules enforced by the collector:
   was rated), the verdicts are already persisted before it starts, and at ~10.7s
   it is by far the longest of these beats. It is also the only one whose copy
   describes something that has not happened yet — "looking for matches" /
-  "scanning profiles N" fires mid-onboarding, before photos and liveness, days
-  before the Thursday batch. That is a deliberate, founder-approved labor
+  "scanning profiles N" fires mid-onboarding, before photos and liveness, before the next scheduled batch. That is a deliberate, founder-approved labor
   illusion, and `RADAR_THINKING_ENABLED` is its kill switch. Concierge venue
   selection is hybrid: the first three beats
   always play out, then the final atmosphere beat tracks
@@ -1932,7 +1931,7 @@ and never touch them.
 `verificationStatus='verified'`, or when they belong to the explicit legacy
 cohort `verificationStatus='unverified' AND verificationSkippedAt IS NOT NULL`.
 New `unverified`, `pending`, `pending_review`, and `rejected` users never enter
-candidate or weekly-batch queries. The photo-edit auto-rerun handles
+candidate or scheduled-batch queries. The photo-edit auto-rerun handles
 rehabilitation and admin moderation handles borderline cases.
 
 ### 1.5 Re-engagement chain
@@ -2350,8 +2349,7 @@ questions too — see **Native app** at the end of this list.
   answered forever. **Situational** ones — "what are you watching / reading /
   listening to", "plans for the coming weekend", "best part of your week" —
   describe *right now*, so they are re-asked once per drop cycle and their new
-  answer overwrites the previous one. This is what makes a weekly cadence worth
-  having: without it the bank simply runs out after a couple of days and the
+  answer overwrites the previous one. This keeps the per-cycle refresh useful: without it the bank simply runs out after a couple of days and the
   Profiler goes quiet, and the icebreakers keep quoting a month-old answer.
   Selection order is unchanged for the first two passes (never-asked, then a
   skipped question eligible to return); the refresh pass comes last, so a stale

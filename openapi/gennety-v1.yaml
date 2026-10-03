@@ -4505,7 +4505,7 @@ paths:
     get:
       tags: [countdown]
       operationId: getCountdown
-      summary: Next weekly drop + per-user weekly status
+      summary: Next scheduled drop + per-user matching status
       responses:
         "200":
           description: Countdown snapshot

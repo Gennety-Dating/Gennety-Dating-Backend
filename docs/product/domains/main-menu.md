@@ -30,7 +30,7 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   place Gennety operates, and the only city change the product offers after
   onboarding. Non-destructive — only `Profile.home*`/coordinates/`timeZone`
   change; status, profile, photos, verification, tickets and Premium are
-  untouched, so the user lands in the next Thursday drop as they are. A failed
+  untouched, so the user lands in the next daily production drop (18:00 Europe/Kyiv) as they are. A failed
   save says so rather than claiming success. Telegram-only; iOS uses
   `POST /v1/me/home-location`.
 - **My Date** — a conditional row, present **only** while the user has an
@@ -511,8 +511,8 @@ visible timer anywhere. The drop mode (5) is the one exception and is
 deliberately left as it was — its label is short enough to survive the badge.
 
 **The banner is stage-aware (2026-07-29): it counts down whatever is actually
-next for this user, not always the weekly drop.** A user occupying a live-match
-slot is *excluded from the Thursday batch* (§3.2 filter 8), so a pinned
+next for this user, not always the scheduled drop.** A user occupying a live-match
+slot is *excluded from the scheduled batch* (§3.2 filter 8), so a pinned
 "your next drop in Xd Yh" above every conversation was the same kind of promise
 the product cannot keep as the unlaunched-city case below — and it pointed at
 the wrong thing anyway, since on a `proposed` match the user's whole attention is

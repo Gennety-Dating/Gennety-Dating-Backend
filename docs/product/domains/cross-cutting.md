@@ -166,7 +166,7 @@ quiet-hours guard like the other nudges.)
 ### Standby / Starvation
 
 `Profile.standbyCount` (canonical) + `missedWeeks` (legacy alias) increment
-on every weekly batch where the user was eligible but unpaired, and also as
+on every scheduled batch where the user was eligible but unpaired, and also as
 a compensating boost when the user accepted a proposal but the peer declined.
 They reset to 0 on a successful pairing. `lastMissedAt` powers the "priority
 boosted" UX ping. The matching score adds `starvationBonus(standbyCount)`
@@ -195,7 +195,7 @@ in truth it had refused to look. (The same window is what stopped the demo:
 it pitches seconds after the reason is given, so it lost that race every time.)
 A caller appending several constraints at once — post-date feedback — refreshes
 once at the end rather than per line.
-Before every weekly batch, matching takes and processes the complete dirty
+Before every scheduled batch, matching takes and processes the complete dirty
 snapshot without the cron's 20-row cap, logging only aggregate counts.
 Eligibility requires `embeddingDirty = false`: a still-dirty profile is skipped
 fail-closed, receives no stale match, and does not gain a false standby penalty.

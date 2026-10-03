@@ -4,11 +4,11 @@
  *
  * The important thing about this file is how little matching logic is in it.
  * `findCandidatesFor()` is already a single-seeker matching engine — same
- * candidate SQL, same multi-factor re-rank as the weekly batch — so a rematch
+ * candidate SQL, same multi-factor re-rank as the scheduled batch — so a rematch
  * inherits every invariant for free: the lifetime pair ban (he can never be
  * re-shown someone he already saw, including the woman he just declined), the
  * single-live-match rule, the verification/contact-rail gates, city scoping, and
- * the 24h candidate cooldown. This module only adds the things the engine has no
+ * the profile candidate cooldown (6h daily / 24h weekly). This module only adds the things the engine has no
  * opinion about: who may BUY, how often, whom we protect from being re-pitched,
  * and how her invitation is framed.
  *
@@ -36,7 +36,7 @@ const DAY_MS = 24 * HOUR_MS;
 /**
  * How many ranked candidates to scan before applying the gift cap. The engine
  * returns them best-first, so scanning a few and taking the first survivor keeps
- * the top-1 semantics of the weekly batch while letting the cap skip a
+ * the top-1 semantics of the scheduled batch while letting the cap skip a
  * recently-gift-pitched woman instead of failing the whole run.
  */
 const REMATCH_CANDIDATE_SCAN = 5;
@@ -160,7 +160,7 @@ export async function checkRematchEligibility(
   // either a stale card or a tampered invoice — refuse and let the caller refund.
   if (user.gender !== "male") return { ok: false, reason: "not_male" };
 
-  // Same admission bar as the weekly batch — a paid run never lowers it.
+  // Same admission bar as the scheduled batch — a paid run never lowers it.
   const verificationAdmits =
     user.verificationStatus === "verified" ||
     (user.verificationStatus === "unverified" && user.verificationSkippedAt !== null);
@@ -240,7 +240,7 @@ export async function checkRematchEligibility(
  * tick; this is 3 queries per tick total, whatever the pool size.
  *
  * **Returns an empty set unless the banner would actually use it.** Under
- * `weekly` — production today — `dropOutpacesNotices()` is false, the banner
+ * `weekly` — the env-free default, not daily production — `dropOutpacesNotices()` is false, the banner
  * never reaches its silent-drops branch, and this costs literally nothing: the
  * caller short-circuits before the first query.
  *
@@ -257,7 +257,7 @@ export async function filterRematchEligible(
 
   const limits = rematchLimits();
 
-  // Same admission bar as the weekly batch and as checkRematchEligibility.
+  // Same admission bar as the scheduled batch and as checkRematchEligibility.
   const users = await prisma.user.findMany({
     where: {
       id: { in: userIds },
@@ -489,7 +489,7 @@ export async function runRematch(
   // refunds — we never keep money for a pair that was not created.
   if (!match) return { ok: false, reason: "create_failed" };
 
-  // Mirror the weekly batch: a successful pairing clears both sides' famine
+  // Mirror the scheduled batch: a successful pairing clears both sides' famine
   // counters. Without this she would keep accruing a starvation bonus for a week
   // she was, in fact, matched.
   await prisma.profile.updateMany({

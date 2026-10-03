@@ -22,7 +22,7 @@ import type { Venue } from "./venue.js";
  * One-way notifications to the founder's personal Telegram via a SEPARATE
  * founder bot (`FOUNDER_BOT_TOKEN` → `FOUNDER_TELEGRAM_ID`):
  *   1. `notifyFounderNewUser`      — new registration: full profile + photos.
- *   2. `notifyFounderWeeklyMatches`— weekly matches report link (Thu batch).
+ *   2. `notifyFounderWeeklyMatches`— matches report link (each scheduled batch; legacy weekly name).
  *   3. `notifyFounderDateScheduled`— a date locked in: both date cards + venue.
  *   4. `notifyFounderAccountClosed`— freeze / GDPR delete: profile + phone.
  *   5. `notifyFounderPurchase` / `notifyFounderPurchaseRefunded` — every real
@@ -98,7 +98,7 @@ function getFounderApi(): Api<RawApi> | null {
   founderApi = new Api(env.FOUNDER_BOT_TOKEN);
   // A second bot token means a second, independent set of Bot API limits, and
   // this one sends in bursts: eleven notifiers, several of which fire together
-  // after the Thursday batch. It pays the same rules as the main bot.
+  // after the scheduled batch. It pays the same rules as the main bot.
   installApiLimits(founderApi);
   return founderApi;
 }
@@ -982,7 +982,7 @@ function providerLabel(provider: FounderPurchaseNotice["provider"]): string {
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
- * After the Thursday batch, snapshot the week's matches into a `FounderReport`
+ * After the scheduled batch, snapshot that drop's matches into a `FounderReport`
  * row and DM the founder a tokenized link to the report page
  * (`GET /v1/founder/report/:token`). No-op when the feature is off or no pairs
  * were created.

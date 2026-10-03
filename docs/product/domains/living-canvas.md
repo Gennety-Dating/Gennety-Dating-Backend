@@ -564,7 +564,7 @@ Post-date: the place lands on the date map.
 ### 6.6 Campus Radar — a bonus drop for a campus that just filled up
 
 A university that verifies a dozen students in two days has a pool the product
-cannot use until Thursday. The radar watches for that and runs one extra drop,
+cannot use until the next scheduled drop. The radar watches for that and runs one extra drop,
 scoped to that campus.
 
 **It reuses the real allocator.** Same eligibility predicate, same lifetime
@@ -577,7 +577,7 @@ threshold, so it fires on a campus push rather than on two friends signing up
 together. A cooldown, so one campus cannot be dropped repeatedly — read off the
 newest `campus` match for that domain rather than a counter, because the row IS
 the record of the last drop. And a **pre-batch blackout**, because a
-single-cohort run can take a candidate the globally-optimal Thursday batch
+single-cohort run can take a candidate the globally-optimal scheduled batch
 needed: exactly the protection Rematch carries, for exactly the same reason.
 
 **Growth needs no baseline.** "Verified inside the window" is the growth, and

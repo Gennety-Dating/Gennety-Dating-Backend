@@ -573,7 +573,7 @@ async function finish(userId: string): Promise<void> {
  *
  * Otherwise it only LOOKS finished: a refreshable question becomes eligible
  * again once the cycle rolls over (`profilerCycleId` advances at the next
- * weekly batch), so a true `finish()` here would be a bug — its null
+ * scheduled batch), so a true `finish()` here would be a bug — its null
  * `profilerNextAt` means the dispatch sweep (`profilerNextAt: { lte: now }`)
  * never looks at this user again, EVER, so the "situational questions repeat
  * weekly" mechanic would silently never fire in production. Instead this

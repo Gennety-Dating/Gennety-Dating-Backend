@@ -1,5 +1,5 @@
 /**
- * One-shot: force the drop matching batch outside its cron (Thursday 18:00
+ * One-shot: force the drop matching batch outside its cron (daily 18:00 in production; weekly Thursday 18:00
  * Kyiv under the `weekly` DropCadence profile; every day at 18:00 under
  * `daily` — see packages/shared/src/cadence.ts). Runs `runDropBatch()`,
  * notifies any proposals its own expiry preflight expired, then

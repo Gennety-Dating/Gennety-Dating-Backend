@@ -1,6 +1,7 @@
 # Gennety System Specification (GENNETY_SYSTEM_SPEC)
 
 > **Document Status:** Cross-repository architectural overview; the Prisma schema and current service code govern stored state and behavior.
+> **Authority:** This backend copy owns server schedule documentation; the iOS copy mirrors those sections. Runtime authority remains `cadence.ts`, env and service code.
 > **Source Repositories:**
 > - `Gennety Dating` (Monorepo: Backend, Telegram Bot, Telegram Mini Apps, PostgreSQL/Prisma, Public/Admin HTTP API)
 > - `Gennety-iOS` (Native SwiftUI Client, iOS 26 Liquid Glass, StoreKit 2, MapLibre Release maps, ActivityKit)
@@ -107,13 +108,13 @@ enum VerificationStatus {
 }
 
 enum MatchStatus {
-  proposed           // Pitch dispatched to both sides; 24h reply window
+  proposed           // Pitch dispatched to both sides; profile-derived reply deadline
   negotiating        // Both accepted; resolving ticket gate & scheduling slots
   negotiating_venue  // Timeslot locked; selecting/confirming venue
   scheduled          // Date confirmed with locked time & curated venue
   cancelled          // Explicit emergency cancellation or planning stall timeout
   completed          // T+24h feedback tick closes the scheduled match
-  expired            // 24h decision window lapsed without mutual acceptance
+  expired            // proposal deadline lapsed without mutual acceptance
 }
 
 enum MatchEventActionType {
@@ -123,7 +124,7 @@ enum MatchEventActionType {
   DATE_COMPLETED
   CHEMISTRY_POSITIVE
   CHEMISTRY_NEGATIVE
-  EXPIRED_SILENT        // Actor who remained silent past 24h TTL
+  EXPIRED_SILENT        // Actor who remained silent past the proposal deadline
   EXPIRED_PEER_IGNORED   // Actor who responded, but peer timed out
 }
 
@@ -337,10 +338,10 @@ stateDiagram-v2
         DropBatch --> ProposedMatch: Top 1 Candidate (Assortative League)
 
         state ProposedMatch {
-            PitchShown --> BlindDecision: 24h Countdown TTL
+            PitchShown --> BlindDecision: Profile-Derived Reply Deadline
             BlindDecision --> MutualAccept: Both Say "YES"
             BlindDecision --> SingleDecline: Rematch Offered (150 Stars)
-            BlindDecision --> ExpiredSilent: 24h Window Lapses
+            BlindDecision --> ExpiredSilent: Reply Deadline Lapses
         }
 
         MutualAccept --> DateTicketGate: Male Covers / Wallet / Stars / StoreKit
@@ -555,13 +556,15 @@ Authenticated strictly via `Authorization: Bearer <ADMIN_API_KEY>` with timing-s
 
 ### 4.4 Background Schedulers & Workers (`apps/bot/src/index.ts`)
 
+Production uses `DROP_CADENCE=daily` since 2026-08-10: daily at 18:00 Europe/Kyiv. Without env, `weekly` remains the code default (`0 18 * * 4`, Thursday 18:00; notice fallback `15 18 * * 4`). Daily replies close 30 minutes before the next batch, floored at 90 minutes after dispatch; weekly replies have a fixed 24 h window. Cron env overrides remain supported.
+
 | Schedule / Interval | Timezone | Worker Module | Canonical Function & Side Effects |
 |---|---|---|---|
-| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | `match-engine.ts` | **Drop Batch (`runDropBatch`):** Preflight expire stale matches, refresh dirty embeddings, compute global greedy assortative matching by city, dispatch pitches. |
-| `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | `no-match-notifier.ts` | **Famine Notices:** Sends tiered empathetic notice to unpaired active users; runs `autoResumeStarvedUsers`. |
-| `*/15 * * * *` | UTC | `match-expiry.ts` | **Match Expiry Sweep:** Sweeps `proposed` matches where 24h deadline lapsed; writes `EXPIRED_SILENT` & `EXPIRED_PEER_IGNORED` events. |
+| `0 18 * * *` (daily 18:00, production) | Europe/Kyiv | `match-engine.ts` | **Drop Batch (`runDropBatch`):** Preflight expire stale matches, refresh dirty embeddings, compute global greedy assortative matching by city, dispatch pitches. |
+| `15 18 * * *` (daily 18:15 fallback, production) | Europe/Kyiv | `no-match-notifier.ts` | **Famine Notices:** After dispatch, sends tiered empathetic notice to unpaired active users, at most once per 7 days; runs `autoResumeStarvedUsers`. |
+| `*/15 * * * *` | UTC | `match-expiry.ts` | **Match Expiry Sweep:** Sweeps `proposed` matches where the profile-derived proposal deadline lapsed; writes `EXPIRED_SILENT` & `EXPIRED_PEER_IGNORED` events. |
 | `* * * * *` | UTC | `proposal-countdown.ts`| **Countdown Button Render:** Updates hours/minutes label on Telegram pitch inline keyboard button (`editMessageReplyMarkup`). |
-| `0 * * * *` | UTC | `match-nudge.ts` | **Match Nudges & Stall Chain:** Evaluates whose turn it is; dispatches reminders at 3h/10h, check-in at 24h, cancellations at 48h. |
+| `0 * * * *` | UTC | `match-nudge.ts` | **Match Nudges & Stall Chain:** Evaluates whose turn it is; dispatches reminders at 2h/8h for proposals (3h/6h scheduling and venue), check-in at 12h, cancellations at 24h in daily; weekly retains 3h/10h proposals, 24h/48h stall chain. |
 | `*/5 * * * *` | UTC | `re-engagement.ts` | **Onboarding Re-engagement:** 5-step decay chain targeting incomplete registrations (respects 23:00–09:00 quiet hours). |
 | `*/15 * * * *` | UTC | `profiler.ts` | **Profiler Dispatcher:** Sends post-onboarding Q&A questions during morning/evening windows. |
 | `* * * * *` | UTC | `status-timer.ts` | **Pinned Status Banner:** Updates pinned blue countdown timer button in Telegram chat. |
@@ -610,7 +613,7 @@ Gennety monetizes offline real-world interactions rather than digital swiping. M
 3. **Venue Change Board:**
    - Swapping an assigned curated venue requires 150 Stars or 1 Venue Change consumable.
 4. **Rematch Rerun:**
-   - If a pitch is declined, male users can bypass the weekly cadence by purchasing a Rematch rerun.
+   - If a pitch is declined, male users can request an out-of-cycle introduction before the next daily drop by purchasing a Rematch rerun.
 5. **Gennety Premium Entitlements:**
    - Zero Date Ticket fees on all matches.
    - Automatic unlock of Prime Time calendar slots.

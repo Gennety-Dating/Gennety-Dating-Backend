@@ -160,7 +160,8 @@ const WEEKLY: DropCadence = {
 
 /**
  * Daily — D1–D9 values from DAILY_MATCHING_IMPLEMENTATION_PLAN.md §0.
- * Not live in production; selected only via `DROP_CADENCE=daily`.
+ * Live in production since 2026-08-10, selected via `DROP_CADENCE=daily`.
+ * The code default remains `weekly` when the env key is absent.
  */
 const DAILY: DropCadence = {
   cron: "0 18 * * *",

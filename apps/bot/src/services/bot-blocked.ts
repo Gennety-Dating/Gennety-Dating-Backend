@@ -8,7 +8,7 @@ import { prisma } from "@gennety/db";
  * A 403 from the Bot API is not a hiccup — it is the chat telling us it no
  * longer exists for us. That was already classified in `status-banner.ts`, and
  * the classification went nowhere: every send site read the refusal, swallowed
- * it with a `.catch(() => {})`, and the next weekly drop matched the person
+ * it with a `.catch(() => {})`, and the next scheduled drop matched the person
  * again. Their partner then got a pitch, waited a day for an answer that could
  * not come, and the candidate was spent anyway — the lifetime pair ban is
  * written at creation. In a small pool that is invisible, compounding damage,
