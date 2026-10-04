@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 396 entries
+# Decision index — all 397 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-04 | Основатель явно разрешил обновить каталог обеих БД: шесть исключённых мест удалены (30 строк на БД), ALTO добавлен в premium (5 строк на БД); резервные копии и проверки сохранены вне репозитория | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-04 | Telegram: сведение локального и удалённого main, цветы объединены с контекстным Profiler, пробы шрифтов в архивном теге; одна ветка GitHub; выкат production + demo, исправление preflight и сборки demo; развитие общего API iOS продолжается | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-03 | Profiler: `f_flowers` «любимые цветы» только в женском банке (medium, once, после `f_food`), свободным текстом в `ProfilerAnswer` — кнопки-варианты из брифа не сделаны (в Profiler нет механизма вариантов); питает подсказки мужчине; флористика/теги — ждут «да» основателя | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-04 | AI-модели: GPT-6 Luna для агентов и обычных задач; GPT-6.1 Sol только для начального Elo и vibe-axes; Chat Completions сохранён; gpt-transcribe кроме измерения длительности Whisper; embeddings/moderation прежние | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
