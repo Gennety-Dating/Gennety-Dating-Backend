@@ -1601,6 +1601,19 @@ paths:
           person who opened the app is already looking at it.
         - `{}` otherwise. That is the ordinary state, not an error.
 
+        Bank questions are asked once each (the weekly re-asks were cut
+        2026-10-04). After that, a batch's OPENING question may be a
+        contextual one — opened by something that happened: a date got
+        scheduled ("fresh topic"), a date took place ("same format next
+        time?"), confirmed dates share one experience ("looks like your
+        format is…"), an own plan turned a month old (follow-up), or a
+        matching-candidate answer turned two months old (asked again
+        differently). At most one per batch and two per week. A contextual
+        question that refers to something carries `question.context` — draw
+        it as a card above the question. A live contextual question whose
+        date was cancelled or has passed is released (recorded as a skip)
+        and `{}` comes back.
+
         The text is in `User.language` (English fallback). Poll it when the
         Today screen appears; it is cheap and writes nothing when nothing is
         due.
@@ -1622,9 +1635,10 @@ paths:
         Telegram chat uses, so exactly one reply — from either surface — ever
         counts.
 
-        - `skip: true` is the Skip button: the question returns once later in
-          this cycle, then steps aside until the next one. Any `text` sent with
-          it is ignored.
+        - `skip: true` is the Skip button: a bank question returns once later
+          in this cycle, then steps aside until the next one; a contextual
+          question (`…_ctx:…`) never returns — it was about one moment. Any
+          `text` sent with it is ignored.
         - A text that is a refusal ("later", "не хочу", "skip"…, matched on the
           whole utterance) is recorded as a skip, NOT as an answer, and pauses
           the rest of the batch to the caller's next local window →
@@ -7156,8 +7170,55 @@ components:
       type: object
       required: [id, text]
       properties:
-        id: { type: string, description: 'Bank id, e.g. f_date_spots' }
+        id:
+          type: string
+          description: |
+            Bank id (`f_date_spots`) or a contextual instance
+            (`f_ctx:topic:<matchId>` — `<f|m>_ctx:<family>:<key>`). Opaque to
+            the client: send it back as `questionId`.
         text: { type: string, description: 'Question text in the user language' }
+        context:
+          $ref: '#/components/schemas/ProfilerQuestionContext'
+
+    ProfilerQuestionContext:
+      type: object
+      description: |
+        Present only on a contextual question that refers to something — draw
+        it as a card ABOVE the question, like a quoted message, so the person
+        sees what is being asked about before the question itself (founder
+        decision 2026-10-04). The question text never names the venue or the
+        date; the card does. Never carries the partner. Absent on bank
+        questions and on rechecks (which deliberately hide the earlier answer
+        they re-measure).
+      required: [kind, dates]
+      properties:
+        kind:
+          type: string
+          enum: [upcoming_date, past_date, past_dates, own_answer]
+          description: |
+            upcoming_date = the scheduled date a "fresh topic" question is
+            for (show date AND time); past_date = the date a "same format next
+            time?" question is about (date only); past_dates = up to three
+            recent confirmed dates sharing the experience a "looks like your
+            format is…" question names (date only); own_answer = the person's
+            own earlier answer a follow-up asks about (`answer`).
+        dates:
+          type: array
+          description: 'Newest first. One entry for upcoming_date/past_date, 1–3 for past_dates, empty for own_answer.'
+          items:
+            type: object
+            required: [at]
+            properties:
+              venueName: { type: string, description: 'Absent when the date never got a venue' }
+              at: { type: string, format: date-time, description: 'Format in the device locale and zone' }
+        answer:
+          type: object
+          description: 'own_answer only.'
+          required: [question, text, answeredAt]
+          properties:
+            question: { type: string, description: 'The original question, in the user language' }
+            text: { type: string, description: 'Their answer, whitespace-collapsed, at most 160 characters (cut with …)' }
+            answeredAt: { type: string, format: date-time }
 
     ProfilerAnswerRequest:
       type: object

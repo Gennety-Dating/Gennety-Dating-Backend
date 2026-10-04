@@ -50,6 +50,15 @@ vi.mock("../../services/next-batch.js", async (importOriginal) => ({
   getNextBatchDate: () => nextDrop.at,
 }));
 
+// What happened to the person — the contextual triggers' input. Nothing by
+// default; a test that wants a contextual question sets it.
+const NO_SIGNALS = { upcomingDates: [], attendedDates: [], signatureExperience: null };
+const contextSignals: { current: unknown } = { current: NO_SIGNALS };
+vi.mock("../../services/profiler-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/profiler-context.js")>()),
+  loadProfilerContextSignals: async () => contextSignals.current,
+}));
+
 const editMessageReplyMarkup = vi.fn().mockResolvedValue(true);
 const botApi: { current: unknown } = { current: null };
 vi.mock("../../services/main-bot-api.js", () => ({
@@ -127,6 +136,65 @@ beforeEach(() => {
   answerUpsert.mockReset().mockResolvedValue({});
   matchFindFirst.mockReset().mockResolvedValue(null);
   editMessageReplyMarkup.mockClear();
+  contextSignals.current = NO_SIGNALS;
+});
+
+describe("GET /v1/me/profiler — contextual questions", () => {
+  const MATCH_ID = "3f2b8c4e-9a1d-4e5f-8b7c-6d5e4f3a2b1c";
+  const TOPIC_ID = `f_ctx:topic:${MATCH_ID}`;
+  const DATE_AT = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+
+  /** `hasActiveDatePlanning` finds no negotiation; the card's own-match read finds the date. */
+  function scheduledDate(match: Record<string, unknown> | null) {
+    matchFindFirst.mockImplementation(async (args: { where: { id?: string } }) =>
+      args.where.id === MATCH_ID ? match : null,
+    );
+  }
+
+  it("opens the batch with the fresh-topic question and its date card", async () => {
+    userFindUnique.mockResolvedValue(getUser());
+    contextSignals.current = { ...NO_SIGNALS, upcomingDates: [{ matchId: MATCH_ID, at: DATE_AT }] };
+    scheduledDate({ status: "scheduled", agreedTime: DATE_AT, venueName: " Kofein " });
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body.question).toEqual({
+      id: TOPIC_ID,
+      text: text(TOPIC_ID),
+      context: {
+        kind: "upcoming_date",
+        dates: [{ venueName: "Kofein", at: DATE_AT.toISOString() }],
+      },
+    });
+    const data = profileUpdateMany.mock.calls[0]![0].data as Record<string, unknown>;
+    expect(data.profilerActiveQuestionId).toBe(TOPIC_ID);
+  });
+
+  it("bank questions carry no context key at all", async () => {
+    userFindUnique.mockResolvedValue(getUser());
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body.question).toEqual({ id: FEMALE[0], text: text(FEMALE[0]!) });
+  });
+
+  it("releases a live fresh-topic question once its date was cancelled, and never asks it again", async () => {
+    userFindUnique.mockResolvedValue(getUser({ profilerActiveQuestionId: TOPIC_ID }));
+    scheduledDate({ status: "cancelled", agreedTime: DATE_AT, venueName: "Kofein" });
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body).toEqual({});
+    expect(profileUpdateMany.mock.calls[0]![0]).toEqual(
+      expect.objectContaining({ where: { userId: USER_ID, profilerActiveQuestionId: TOPIC_ID } }),
+    );
+    expect(answerUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_questionId: { userId: USER_ID, questionId: TOPIC_ID } },
+        create: expect.objectContaining({ skipped: true, answerText: null }),
+      }),
+    );
+  });
 });
 
 afterEach(() => {
@@ -271,7 +339,7 @@ describe("GET /v1/me/profiler", () => {
 
   it("parks an exhausted bank at the next local window", async () => {
     userFindUnique.mockResolvedValue(getUser({ profilerStartedAt: NOW }));
-    // Everything answered this cycle — including the refreshable ones.
+    // Everything answered and nothing happened — no contextual question either.
     answerFindMany.mockResolvedValue(
       FEMALE.map((id) => ({ ...answered(id), cycleId: "2026-W24" })),
     );

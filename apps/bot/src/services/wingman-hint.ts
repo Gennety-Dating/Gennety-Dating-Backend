@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import {
+  PRE_DATE_WINGMAN_HOURS,
   generateWingmanHintPrompt,
   formatProfilerAnswersBlock,
   scoreProfilerAnswers,
@@ -126,8 +127,8 @@ export async function generateAndSaveWingmanHints(
 
   // PRIMARY source: each target's own Profiler answers, weighted and rendered
   // in the viewer's language. Null → the prompt falls back to the summary.
-  const profilerA = scoreProfilerAnswers(match.userA.profilerAnswers ?? []);
-  const profilerB = scoreProfilerAnswers(match.userB.profilerAnswers ?? []);
+  const profilerA = scoreProfilerAnswers(match.userA.profilerAnswers ?? [], { matchId });
+  const profilerB = scoreProfilerAnswers(match.userB.profilerAnswers ?? [], { matchId });
 
   const [hintA, hintB] = await Promise.all([
     match.wingmanHintA
@@ -158,4 +159,55 @@ export async function generateAndSaveWingmanHints(
   });
 
   return { a: hintA, b: hintB };
+}
+
+/**
+ * Margin before the reveal (T-`PRE_DATE_WINGMAN_HOURS`) inside which a tip is
+ * no longer rewritten: a regeneration takes seconds, and a tip rewritten as it
+ * is being shown would read as the app changing its mind.
+ */
+const REFRESH_MARGIN_MS = 30 * 60 * 1000;
+
+/**
+ * Rewrite the tip ABOUT `subjectUserId` (the one their partner will read),
+ * because the subject just told the Profiler something new for this date — the
+ * "fresh topic before the date" question. The tip was generated when the venue
+ * locked, before that answer existed.
+ *
+ * Only while the tip is unrevealed: the match is still `scheduled`, the reveal
+ * push has not gone out (`wingmanSentAt`), and the reveal is more than
+ * `REFRESH_MARGIN_MS` away. The partner's slot is cleared with a
+ * compare-and-set on exactly those conditions, then `generateAndSaveWingmanHints`
+ * refills the one empty slot. Returns whether a rewrite happened.
+ */
+export async function refreshWingmanHintAbout(
+  matchId: string,
+  subjectUserId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { status: true, agreedTime: true, userAId: true, userBId: true, wingmanSentAt: true },
+  });
+  if (!match?.agreedTime || match.status !== "scheduled" || match.wingmanSentAt) return false;
+  const revealAt = match.agreedTime.getTime() - PRE_DATE_WINGMAN_HOURS * 60 * 60 * 1000;
+  if (revealAt - now.getTime() <= REFRESH_MARGIN_MS) return false;
+
+  // `wingmanHintA` is read by A and is about B (see `generateOneHint` above),
+  // so the tip about the subject lives in the OTHER side's slot.
+  const readerSlot =
+    match.userAId === subjectUserId
+      ? { wingmanHintB: null }
+      : match.userBId === subjectUserId
+        ? { wingmanHintA: null }
+        : null;
+  if (!readerSlot) return false;
+
+  const { count } = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", wingmanSentAt: null },
+    data: readerSlot,
+  });
+  if (count !== 1) return false;
+  await generateAndSaveWingmanHints(matchId);
+  return true;
 }

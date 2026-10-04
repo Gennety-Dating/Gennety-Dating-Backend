@@ -13,6 +13,17 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
+// The contextual triggers read the date history; these tests are about the
+// batch mechanics, so by default nothing has happened to the person.
+vi.mock("./profiler-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./profiler-context.js")>()),
+  loadProfilerContextSignals: vi.fn().mockResolvedValue({
+    upcomingDates: [],
+    attendedDates: [],
+    signatureExperience: null,
+  }),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   PROFILER_ANSWER_WINDOW_MS,
@@ -107,6 +118,42 @@ beforeEach(() => {
 });
 
 describe("startProfilerBatch", () => {
+  it("opens with a contextual question whose card is quoted above it", async () => {
+    const now = new Date("2026-06-10T07:00:00Z");
+    const matchId = "3f2b8c4e-9a1d-4e5f-8b7c-6d5e4f3a2b1c";
+    const dateAt = new Date("2026-06-11T16:00:00Z");
+    const { loadProfilerContextSignals } = await import("./profiler-context.js");
+    (loadProfilerContextSignals as unknown as MockFn).mockResolvedValueOnce({
+      upcomingDates: [{ matchId, at: dateAt }],
+      attendedDates: [],
+      signatureExperience: null,
+    });
+    mMatchFind.mockResolvedValueOnce({
+      status: "scheduled",
+      agreedTime: dateAt,
+      venueName: "Kofein *Podil*",
+    });
+    mUserFind.mockResolvedValue(userState([]));
+
+    expect(await startProfilerBatch(fakeApi, "u1", now, noWait)).toBe("sent");
+
+    const params = sendRichMessage.mock.calls[0]![0] as {
+      rich_message?: { markdown?: string };
+      reply_markup?: unknown;
+    };
+    const markdown = params.rich_message?.markdown ?? "";
+    // The card first — a quote with the date, the time in the person's zone and
+    // the venue (its Markdown neutralised) — then the question after a blank line.
+    expect(markdown).toBe(
+      `> 🗓 11 June, 19:00 · 📍 Kofein Podil\n\n${profilerQuestionText(
+        profilerQuestionById(`f_ctx:topic:${matchId}`)!,
+        "en",
+      )}`,
+    );
+    expect(JSON.stringify(params.reply_markup)).toContain(`profiler:skip:f_ctx:topic:${matchId}`);
+    expect(activeUpdate()!.profilerActiveQuestionId).toBe(`f_ctx:topic:${matchId}`);
+  });
+
   it("sends the first (highest-priority) question and marks it active", async () => {
     mUserFind.mockResolvedValue(userState([]));
     const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
@@ -156,13 +203,13 @@ describe("startProfilerBatch", () => {
     }
   });
 
-  it("silently defers to the next window when only THIS cycle is exhausted (refreshables pending next cycle)", async () => {
+  it("silently defers to the next window when the bank is exhausted (contextual questions can still open)", async () => {
     // Derived from the bank (not hardcoded) so adding a question can't quietly
-    // turn this into "all but the new ones". Everything answered in the CURRENT
-    // cycle, so nothing is due for a refresh *yet* — but the female bank always
-    // carries refreshable questions, so this must NOT be treated as final: a
-    // null `profilerNextAt` would stop the dispatch sweep from ever checking
-    // this user again, and next week's refresh would silently never fire.
+    // turn this into "all but the new ones". Everything is answered and nothing
+    // has happened — but a contextual question can open at any time (a date
+    // gets scheduled, an answer turns a month old), so this must NOT be treated
+    // as final: a null `profilerNextAt` would stop the dispatch sweep from ever
+    // checking this user again, and no contextual question would ever reach them.
     const allAnswered = profilerQuestionBank("female").map((q) => ({
       questionId: q.id, answerText: "x", skipped: false, skipReturned: false,
       cycleId: profilerCycleId(new Date("2026-06-10T07:00:00Z")),
@@ -174,14 +221,14 @@ describe("startProfilerBatch", () => {
     expect(sendMessage).not.toHaveBeenCalled();
     expect(sendRichMessage).not.toHaveBeenCalled();
     // Rescheduled to the next window, NOT nulled — the silent heartbeat that
-    // lets the schedule revive once the cycle actually rolls over.
+    // is the contextual triggers' "lazy check".
     const last = mProfileUpdate.mock.calls.at(-1)![0].data;
     expect(last.profilerNextAt).toBeInstanceOf(Date);
     expect(last.profilerActiveQuestionId).toBeNull();
   });
 
-  it("truly finishes (nulls the schedule) only when the bank has no refreshable question at all", async () => {
-    // A null gender resolves to an empty bank (no refreshable questions ever),
+  it("truly finishes (nulls the schedule) only for a person without a known gender", async () => {
+    // A null gender resolves to an empty bank and no contextual question,
     // which is the one case where going fully silent is actually correct.
     mUserFind.mockResolvedValue({
       id: "u1",

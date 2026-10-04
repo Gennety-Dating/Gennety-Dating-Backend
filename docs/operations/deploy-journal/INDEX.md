@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 223 entries
+# Deploy journal index — 226 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-04 | 10-04 — Profiler: контекстные вопросы (свежая тема перед свиданием, формат, сигнатура, продолжение, перепроверка) вместо еженедельных повторов; карточка контекста над вопросом (Telegram — цитата, `/v1/me/profiler` — `question.context`); «свежая тема» переписывает совет Wingman; без миграций и env, только рестарт бота; iOS-сборка с карточкой — тем же заходом | [pending](./pending.md) |
 | PENDING | 2026-10-03 | 10-03 — APNs: `BadDeviceToken` повторяется на втором хосте, подошедший хост запоминается — один сервер доставляет и Xcode-, и TestFlight/App Store-токены; только рестарт бота, без миграций и env | [pending](./pending.md) |
 | PENDING | 2026-10-02 | 10-02/03 — Très Branché, CAPULETI, Prynada, две Чорноморки и Trullo D'oro удалены из каталога Киева, ALTO добавлен в premium: файлы каталога + витрина в `main`; ALTO в базы — импортом каталога; удаление строк в прод- и демо-базе (6 мест × 5 строк на базу, `deleteMany` по placeId) — отдельная запись данных, не код | [pending](./pending.md) |
 | Deployed | 2026-10-02 | 10-02 22:09–22:18 UTC — выкат A/B/C всего `main` (`52ab95f6`) скриптом `deploy-abc-1002.sh`: 5 миграций (2 деструктивные после рестарта), Mini App, онбординг iOS проверен насквозь синтетическим аккаунтом; все PENDING-блоки уехали им; демо не выкачено | [pending](./pending.md) |

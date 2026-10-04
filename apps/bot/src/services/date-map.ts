@@ -56,6 +56,7 @@ export interface DateMap {
 }
 
 interface AttendedDate {
+  id: string;
   agreedTime: Date;
   venueName: string | null;
   venuePlaceId: string | null;
@@ -82,6 +83,7 @@ async function attendedDates(userId: string, now: Date): Promise<AttendedDate[]>
     },
     orderBy: { agreedTime: "desc" },
     select: {
+      id: true,
       agreedTime: true,
       venueName: true,
       venuePlaceId: true,
@@ -102,7 +104,7 @@ async function attendedDates(userId: string, now: Date): Promise<AttendedDate[]>
  * on any map a person would draw.
  */
 export function groupPlaces(
-  dates: readonly AttendedDate[],
+  dates: readonly Omit<AttendedDate, "id">[],
   tagsByPlaceId: ReadonlyMap<string, readonly string[]>,
 ): DateMapPlace[] {
   const byKey = new Map<string, DateMapPlace>();
@@ -164,12 +166,40 @@ async function tagsFor(placeIds: readonly string[]): Promise<Map<string, string[
 }
 
 export async function readDateMap(userId: string, now: Date = new Date()): Promise<DateMap> {
+  return (await readDateHistory(userId, now)).map;
+}
+
+/** One confirmed date, as the Profiler's contextual questions refer to it. */
+export interface ConfirmedDate {
+  matchId: string;
+  at: Date;
+  venueName: string | null;
+}
+
+/**
+ * The date map plus the dates it was built from, newest first — for the
+ * Profiler's contextual questions, which ask about one particular date
+ * ("same format next time?") and about the map's leading experience. Same
+ * query, same attendance rule, so the questions can never see a date the map
+ * would not show.
+ */
+export async function readDateHistory(
+  userId: string,
+  now: Date = new Date(),
+): Promise<{ dates: ConfirmedDate[]; map: DateMap }> {
   const dates = await attendedDates(userId, now);
   const placeIds = [
     ...new Set(dates.map((date) => date.venuePlaceId).filter((id): id is string => !!id)),
   ];
   const places = groupPlaces(dates, await tagsFor(placeIds));
-  return { confirmedDates: dates.length, places, vibes: topVibes(places) };
+  return {
+    dates: dates.map((date) => ({
+      matchId: date.id,
+      at: date.agreedTime,
+      venueName: date.venueName?.trim() || null,
+    })),
+    map: { confirmedDates: dates.length, places, vibes: topVibes(places) },
+  };
 }
 
 /**

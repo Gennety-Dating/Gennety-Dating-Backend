@@ -415,8 +415,8 @@ export async function generateAndStoreBumpDeck(matchId: string): Promise<BumpDec
   if (!match) return null;
 
   const [topicsForA, topicsForB] = await Promise.all([
-    topicsFor(match.userA, match.userB),
-    topicsFor(match.userB, match.userA),
+    topicsFor(match.userA, match.userB, matchId),
+    topicsFor(match.userB, match.userA, matchId),
   ]);
 
   const deck: BumpDeck = { topicsForA, topicsForB };
@@ -451,7 +451,11 @@ type Participant = {
   }[];
 };
 
-async function topicsFor(viewer: Participant, partner: Participant): Promise<string[]> {
+async function topicsFor(
+  viewer: Participant,
+  partner: Participant,
+  matchId: string,
+): Promise<string[]> {
   const language: Language = viewer.language ?? "en";
   const fallback = staticDeck(language);
 
@@ -462,6 +466,7 @@ async function topicsFor(viewer: Participant, partner: Participant): Promise<str
       priority: a.priority as never,
       skipped: a.skipped,
     })),
+    { matchId },
   );
 
   const prompt = generateBumpDeckPrompt({

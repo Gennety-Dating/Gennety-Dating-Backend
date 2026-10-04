@@ -1126,10 +1126,13 @@ a flag of its own — a nudge into a disabled feed has nothing to deliver.
 One row per (user, Profiler question) — `questionId`, `priority`
 (`ProfilerPriority`), `answerText`, `skipped`, `skipReturned`, `cycleId`;
 `@@unique([userId, questionId])`, `onDelete: Cascade` from `users`. `cycleId`
-carries the drop cycle the row was last written in, which is also what makes a
-**situational** question (`refresh: "cycle"` in the bank) eligible to be asked
-again next cycle — its new answer overwrites the row, since only the current
-snapshot is useful icebreaker fuel. Backs the
+carries the calendar week the row was last written in — the cycle a skipped
+question returns in, and the week the contextual-question cap counts.
+`questionId` is either a bank id (`f_date_spots`) or a **contextual instance**
+(`f_ctx:topic:<matchId>`, `<f|m>_ctx:<family>:<key>` — founder decision
+2026-10-04, §Phase 1b): the unique key makes "asked already" a row of any kind,
+and the id alone rebuilds the question, so no extra table or column exists for
+them. `answeredAt` ages the follow-up and recheck triggers. Backs the
 Phase 1b Profiler (see [PRODUCT_SPEC.md](../product/product-spec.md) §Phase 1b): timed
 post-onboarding Q&A that is the **primary source** for icebreakers
 (`date-lifecycle.ts`) and wingman hints (`wingman-hint.ts`).

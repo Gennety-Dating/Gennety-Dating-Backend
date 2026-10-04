@@ -4,7 +4,6 @@ import {
   profilerQuestionById,
   profilerQuestionText,
   profilerPriorityWeight,
-  isRefreshableProfilerQuestion,
   profilerQuestionAcceptsImage,
   scoreProfilerAnswers,
   formatProfilerAnswersBlock,
@@ -30,19 +29,30 @@ describe("profilerQuestionBank", () => {
     }
   });
 
-  it("carries situational questions that are re-asked each cycle", () => {
-    // Without refreshables the bank runs dry in a couple of days and the
-    // Profiler goes silent; these are what keep the icebreaker fuel current.
-    for (const gender of ["female", "male"] as const) {
-      const refreshable = profilerQuestionBank(gender).filter((q) =>
-        isRefreshableProfilerQuestion(q),
-      );
-      expect(refreshable.length, `${gender} bank has no refreshable question`).toBeGreaterThan(0);
+  it("has no weekly snapshots and no shared-interests question (founder decision 2026-10-04)", () => {
+    // The weekly re-asks were cut, and the two pure snapshots with them — an
+    // answer about one weekend fed to an icebreaker months later is wrong.
+    // "Shared interests or mutual interest?" told the generators nothing.
+    // The sport preference stays: the founder judged it worth asking.
+    const ids = [...profilerQuestionBank("female"), ...profilerQuestionBank("male")].map((q) => q.id);
+    for (const gone of [
+      "f_weekend_plans",
+      "m_weekend_plans",
+      "f_week_highlight",
+      "m_week_highlight",
+      "f_shared_interests",
+    ]) {
+      expect(ids).not.toContain(gone);
     }
+    expect(ids).toContain("f_sport_pref");
+    expect(ids).toContain("f_media");
   });
 
-  it("treats a question without an explicit policy as ask-once", () => {
-    expect(isRefreshableProfilerQuestion(profilerQuestionById("f_chronotype")!)).toBe(false);
+  it("bank questions are free text: no options, no context", () => {
+    for (const q of [...profilerQuestionBank("female"), ...profilerQuestionBank("male")]) {
+      expect(q.options, q.id).toBeUndefined();
+      expect(q.context, q.id).toBeUndefined();
+    }
   });
 
   it("only the humour question accepts an image, and it invites one in the copy", () => {
@@ -112,8 +122,9 @@ describe("scoreProfilerAnswers", () => {
       { questionId: "f_media", answerText: "a podcast" }, // low 0.2
       { questionId: "f_date_spots", answerText: "rooftop cafes" }, // high 1.0
       { questionId: "f_turnoffs", answerText: "" }, // blank → dropped
-      { questionId: "f_shared_interests", answerText: "  " }, // whitespace → dropped
+      { questionId: "f_food", answerText: "  " }, // whitespace → dropped
       { questionId: "unknown_q", answerText: "x" }, // not in bank → dropped
+      { questionId: "f_shared_interests", answerText: "both" }, // retired question → dropped
     ]);
     expect(scored.map((s) => s.question.id)).toEqual(["f_date_spots", "f_media"]);
     expect(scored[0].weight).toBe(1.0);

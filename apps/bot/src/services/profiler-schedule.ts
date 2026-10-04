@@ -14,12 +14,25 @@ import {
   PROFILER_ANSWER_WINDOW_MS,
   PROFILER_BATCH_SIZE_NORMAL,
   PROFILER_BATCH_SIZE_RUSH,
+  PROFILER_CONTEXT_WEEKLY_CAP,
   PROFILER_EVENING_HOUR,
+  PROFILER_FOLLOWUP_AFTER_MS,
+  PROFILER_FORMAT_COOLDOWN_MS,
+  PROFILER_FORMAT_MAX_AGE_MS,
+  PROFILER_FORMAT_MIN_AGE_MS,
   PROFILER_MORNING_HOUR,
+  PROFILER_RECHECK_AFTER_MS,
   PROFILER_STALL_TIMEOUT_MS,
-  isRefreshableProfilerQuestion,
+  PROFILER_TOPIC_MAX_LEAD_MS,
+  PROFILER_TOPIC_MIN_LEAD_MS,
+  contextualProfilerQuestion,
+  parseContextualProfilerQuestionId,
+  profilerFollowupSourceIds,
   profilerQuestionBank,
+  profilerRecheckSourceIds,
+  type ProfilerContextFamily,
   type ProfilerQuestion,
+  type ProfilerSignatureExperience,
 } from "@gennety/shared";
 import type { Gender } from "@gennety/shared";
 import { isQuietHourIn } from "@gennety/shared";
@@ -165,13 +178,10 @@ export function firstQuestionAt(entryAt: Date, timeZone: string | null | undefin
 /**
  * ISO-8601 week key ("2026-W31", UTC-based — a few hours off calendar-week-in-
  * Kyiv at the boundary, which doesn't matter for this use). Used as the
- * Profiler's drop-cycle id (`profilerCycleId` in `profiler.ts`) instead of
- * `getNextBatchDate(now).toISOString().slice(0, 10)`, which used to change
- * every single day once `DROP_CADENCE=daily` — making every `refresh: "cycle"`
- * situational question (PRODUCT_SPEC §Phase 1b) eligible to re-ask daily
- * instead of weekly, regardless of how often the matching batch itself runs.
- * A calendar week is deliberately cadence-INDEPENDENT: nothing about "what are
- * you watching this week" should change just because the batch got faster.
+ * Profiler's cycle id (`profilerCycleId` in `profiler.ts`): a skipped question
+ * returns once per cycle, and the contextual questions count against a weekly
+ * cap. A calendar week is deliberately cadence-INDEPENDENT — it used to be the
+ * next drop date, which changes daily under `DROP_CADENCE=daily`.
  */
 export function isoWeekKey(date: Date): string {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -189,33 +199,35 @@ export function isoWeekKey(date: Date): string {
 export interface ProfilerAnswerRow {
   questionId: string;
   answerText: string | null;
+  /** When the answer was given; null on a skip. Ages the follow-up and recheck triggers. */
+  answeredAt: Date | null;
   skipped: boolean;
   skipReturned: boolean;
   cycleId: string;
 }
 
 /**
- * Pick the next question to ask, in priority (bank) order:
- *   1. The first never-asked question (no row at all).
- *   2. Otherwise the first skipped question eligible to "return once" — i.e.
- *      a skip that has NOT already been re-offered-and-re-skipped in the
- *      current cycle. A question skip-suppressed in a *previous* cycle
- *      becomes eligible again (spec §2.3/§2.4).
- *   3. Otherwise the first **refreshable** question whose answer is from an
- *      earlier drop cycle. These are the situational ones ("what are you
- *      watching", "plans for the weekend") whose answer is a snapshot of the
- *      moment: re-asking them each cycle is what keeps icebreaker fuel current
- *      and stops the bank from running dry after a couple of days. The new
- *      answer overwrites the stale one.
+ * Pick the next question to ask:
+ *   0. `contextual`, when the caller found one (`selectContextualProfilerQuestion`)
+ *      — only ever passed for a batch's OPENING question, which is what keeps
+ *      contextual questions to one per batch.
+ *   1. The first never-asked bank question (no row at all), in priority order.
+ *   2. Otherwise the first skipped bank question eligible to "return once" —
+ *      i.e. a skip that has NOT already been re-offered-and-re-skipped in the
+ *      current cycle. A question skip-suppressed in a *previous* cycle becomes
+ *      eligible again (spec §2.3/§2.4).
  *
- * Answered `once` questions are done forever. Returns null when nothing's
- * pending.
+ * Answered bank questions are done forever (the weekly re-asks were cut
+ * 2026-10-04). A skipped contextual question never returns: it was about one
+ * moment, and pass 2 walks the bank only. Returns null when nothing's pending.
  */
 export function selectNextProfilerQuestion(
   gender: Gender | null,
   rows: ProfilerAnswerRow[],
   currentCycleId: string,
+  contextual: ProfilerQuestion | null = null,
 ): ProfilerQuestion | null {
+  if (contextual) return contextual;
   const bank = profilerQuestionBank(gender);
   const byId = new Map(rows.map((r) => [r.questionId, r]));
 
@@ -227,19 +239,129 @@ export function selectNextProfilerQuestion(
   for (const q of bank) {
     const row = byId.get(q.id);
     if (!row) continue;
-    if (row.answerText) continue; // answered → done (unless refreshable, pass 3)
+    if (row.answerText) continue; // answered → done
     if (!row.skipped) continue;
     const suppressedThisCycle = row.skipReturned && row.cycleId === currentCycleId;
     if (!suppressedThisCycle) return q;
   }
-  // Pass 3: refreshable questions answered in an earlier cycle.
-  for (const q of bank) {
-    if (!isRefreshableProfilerQuestion(q)) continue;
-    const row = byId.get(q.id);
-    if (!row?.answerText) continue;
-    if (row.cycleId === currentCycleId) continue; // already refreshed this cycle
-    return q;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Contextual questions — what opens them
+// ---------------------------------------------------------------------------
+
+/**
+ * What happened to the person, as the contextual triggers need it. Loaded by
+ * `loadProfilerContextSignals` (`services/profiler-context.ts`) only when a
+ * batch is about to open — the "lazy check": no background job, no counters,
+ * nothing on the phone.
+ */
+export interface ProfilerContextSignals {
+  /** `scheduled` dates still ahead, soonest first. */
+  upcomingDates: Array<{ matchId: string; at: Date }>;
+  /** Dates this side confirmed attending, newest first. */
+  attendedDates: Array<{ matchId: string; at: Date }>;
+  /**
+   * The leading experience across confirmed dates, when it is shared by at
+   * least `PROFILER_SIGNATURE_MIN_DATES` of them; null otherwise.
+   */
+  signatureExperience: ProfilerSignatureExperience | null;
+}
+
+function contextFamilyOf(questionId: string): ProfilerContextFamily | null {
+  return parseContextualProfilerQuestionId(questionId)?.ref.family ?? null;
+}
+
+function answerAge(row: ProfilerAnswerRow | undefined, now: Date): number | null {
+  if (!row?.answerText || !row.answeredAt) return null;
+  return now.getTime() - row.answeredAt.getTime();
+}
+
+/**
+ * The contextual question to open a batch with, or null. Pure: a function of
+ * the answer rows, what happened (`signals`) and the clock.
+ *
+ * Rare by construction — at most `PROFILER_CONTEXT_WEEKLY_CAP` per calendar
+ * week (counted on the rows' `cycleId`, which an answer or a skip stamps with
+ * the current week), and one per instance ever (`@@unique([userId, questionId])`
+ * — a row of any kind means "asked"). In order of how perishable the moment is:
+ *
+ *   1. `topic`     — a scheduled date between `PROFILER_TOPIC_MIN_LEAD_MS`
+ *                    (the answer must still reach the T-5h icebreakers) and
+ *                    `PROFILER_TOPIC_MAX_LEAD_MS` ahead.
+ *   2. `format`    — a confirmed date `PROFILER_FORMAT_MIN_AGE_MS`…
+ *                    `PROFILER_FORMAT_MAX_AGE_MS` old, at most one answered per
+ *                    `PROFILER_FORMAT_COOLDOWN_MS`.
+ *   3. `signature` — the leading experience, once per experience.
+ *   4. `followup`  — an own plan answered `PROFILER_FOLLOWUP_AFTER_MS` ago.
+ *   5. `recheck`   — a matching-candidate dimension answered
+ *                    `PROFILER_RECHECK_AFTER_MS` ago.
+ */
+export function selectContextualProfilerQuestion(
+  gender: Gender | null,
+  rows: ProfilerAnswerRow[],
+  signals: ProfilerContextSignals,
+  now: Date,
+  currentCycleId: string,
+): ProfilerQuestion | null {
+  if (!gender) return null;
+  const byId = new Map(rows.map((r) => [r.questionId, r]));
+  const contextualThisWeek = rows.filter(
+    (r) => r.cycleId === currentCycleId && contextFamilyOf(r.questionId) !== null,
+  ).length;
+  if (contextualThisWeek >= PROFILER_CONTEXT_WEEKLY_CAP) return null;
+
+  const fresh = (family: ProfilerContextFamily, key: string): ProfilerQuestion | null => {
+    const question = contextualProfilerQuestion(gender, family, key);
+    return question && !byId.has(question.id) ? question : null;
+  };
+
+  // 1. topic
+  for (const date of signals.upcomingDates) {
+    const lead = date.at.getTime() - now.getTime();
+    if (lead < PROFILER_TOPIC_MIN_LEAD_MS || lead > PROFILER_TOPIC_MAX_LEAD_MS) continue;
+    const question = fresh("topic", date.matchId);
+    if (question) return question;
   }
+
+  // 2. format
+  const lastFormatAnswer = rows
+    .filter((r) => contextFamilyOf(r.questionId) === "format" && r.answeredAt)
+    .reduce<number | null>((latest, r) => Math.max(latest ?? 0, r.answeredAt!.getTime()), null);
+  const formatCooled =
+    lastFormatAnswer === null || now.getTime() - lastFormatAnswer >= PROFILER_FORMAT_COOLDOWN_MS;
+  if (formatCooled) {
+    for (const date of signals.attendedDates) {
+      const age = now.getTime() - date.at.getTime();
+      if (age < PROFILER_FORMAT_MIN_AGE_MS || age > PROFILER_FORMAT_MAX_AGE_MS) continue;
+      const question = fresh("format", date.matchId);
+      if (question) return question;
+    }
+  }
+
+  // 3. signature
+  if (signals.signatureExperience) {
+    const question = fresh("signature", signals.signatureExperience);
+    if (question) return question;
+  }
+
+  // 4. followup
+  for (const sourceId of profilerFollowupSourceIds(gender)) {
+    const age = answerAge(byId.get(sourceId), now);
+    if (age === null || age < PROFILER_FOLLOWUP_AFTER_MS) continue;
+    const question = fresh("followup", sourceId);
+    if (question) return question;
+  }
+
+  // 5. recheck
+  for (const sourceId of profilerRecheckSourceIds(gender)) {
+    const age = answerAge(byId.get(sourceId), now);
+    if (age === null || age < PROFILER_RECHECK_AFTER_MS) continue;
+    const question = fresh("recheck", sourceId);
+    if (question) return question;
+  }
+
   return null;
 }
 
@@ -271,8 +393,9 @@ export function nextProfilerBatchStep(
   rows: ProfilerAnswerRow[],
   batchRemaining: number,
   currentCycleId: string,
+  contextual: ProfilerQuestion | null = null,
 ): ProfilerBatchStep {
-  const question = selectNextProfilerQuestion(gender, rows, currentCycleId);
+  const question = selectNextProfilerQuestion(gender, rows, currentCycleId, contextual);
   if (!question) return { kind: "exhausted" };
   if (batchRemaining <= 0) return { kind: "boundary" };
   return { kind: "ask", question };
@@ -391,7 +514,7 @@ export function shouldCaptureProfilerAnswer(
  *     skipReturned = true (suppress until next cycle).
  */
 export function skipTransition(
-  existing: ProfilerAnswerRow | undefined,
+  existing: Pick<ProfilerAnswerRow, "skipped" | "cycleId"> | undefined,
   currentCycleId: string,
 ): { skipped: boolean; skipReturned: boolean } {
   const skippedThisCycleAlready =

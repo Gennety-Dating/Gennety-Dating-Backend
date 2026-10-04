@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   PROFILER_ANSWER_WINDOW_MS,
+  PROFILER_CONTEXT_WEEKLY_CAP,
+  PROFILER_FOLLOWUP_AFTER_MS,
+  PROFILER_FORMAT_COOLDOWN_MS,
+  PROFILER_FORMAT_MAX_AGE_MS,
+  PROFILER_FORMAT_MIN_AGE_MS,
+  PROFILER_RECHECK_AFTER_MS,
   PROFILER_STALL_TIMEOUT_MS,
+  PROFILER_TOPIC_MAX_LEAD_MS,
+  PROFILER_TOPIC_MIN_LEAD_MS,
+  contextualProfilerQuestion,
   profilerQuestionBank,
 } from "@gennety/shared";
 import {
@@ -12,13 +21,16 @@ import {
   nextWindowAt,
   profilerActiveQuestionPatch,
   resolveZone,
+  selectContextualProfilerQuestion,
   selectNextProfilerQuestion,
   shouldCaptureProfilerAnswer,
   skipTransition,
   type ProfilerAnswerRow,
+  type ProfilerContextSignals,
 } from "./profiler-schedule.js";
 
 const KYIV = "Europe/Kyiv";
+const MATCH_ID = "3f2b8c4e-9a1d-4e5f-8b7c-6d5e4f3a2b1c";
 
 function kyivHour(d: Date): number {
   return Number(
@@ -92,6 +104,7 @@ describe("selectNextProfilerQuestion", () => {
   function row(over: Partial<ProfilerAnswerRow> & { questionId: string }): ProfilerAnswerRow {
     return {
       answerText: null,
+      answeredAt: null,
       skipped: false,
       skipReturned: false,
       cycleId: CYCLE,
@@ -151,33 +164,135 @@ describe("selectNextProfilerQuestion", () => {
     expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
   });
 
-  it("re-asks a situational question answered in an EARLIER cycle", () => {
-    // Everything answered, but the refreshables were answered last week — those
-    // are exactly the questions worth asking again ("what are you watching").
+  it("never re-asks an answer from an earlier cycle — the weekly re-asks were cut", () => {
     const rows = profilerAllAsked().map((id) =>
       row({ questionId: id, answerText: "x", cycleId: "2026-06-04" }),
-    );
-    const next = selectNextProfilerQuestion("female", rows, CYCLE);
-    expect(next?.refresh).toBe("cycle");
-    expect(next?.id).toBe("f_weekend_plans");
-  });
-
-  it("does not re-ask a situational question already refreshed this cycle", () => {
-    const refreshable = profilerQuestionBank("female").filter((q) => q.refresh === "cycle");
-    expect(refreshable.length).toBeGreaterThan(0);
-    const rows = profilerAllAsked().map((id) =>
-      row({
-        questionId: id,
-        answerText: "x",
-        cycleId: refreshable.some((q) => q.id === id) ? CYCLE : "2026-06-04",
-      }),
     );
     expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
   });
 
-  it("prefers a never-asked question over a stale situational one", () => {
-    const rows = [row({ questionId: "f_media", answerText: "a book", cycleId: "2026-06-04" })];
-    expect(selectNextProfilerQuestion("female", rows, CYCLE)?.id).toBe("f_date_spots");
+  it("opens with the contextual question when the caller found one", () => {
+    const contextual = contextualProfilerQuestion("female", "topic", MATCH_ID)!;
+    expect(selectNextProfilerQuestion("female", [], CYCLE, contextual)?.id).toBe(contextual.id);
+  });
+
+  it("never brings a skipped contextual question back", () => {
+    const rows = [
+      ...profilerAllAsked().map((id) => row({ questionId: id, answerText: "x" })),
+      row({ questionId: `f_ctx:topic:${MATCH_ID}`, skipped: true, cycleId: "2026-06-04" }),
+    ];
+    expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
+  });
+});
+
+describe("selectContextualProfilerQuestion", () => {
+  const NOW = new Date("2026-10-04T10:00:00Z");
+  const CYCLE = "2026-W40";
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const NONE: ProfilerContextSignals = {
+    upcomingDates: [],
+    attendedDates: [],
+    signatureExperience: null,
+  };
+
+  function row(over: Partial<ProfilerAnswerRow> & { questionId: string }): ProfilerAnswerRow {
+    return {
+      answerText: null,
+      answeredAt: null,
+      skipped: false,
+      skipReturned: false,
+      cycleId: "2026-W30",
+      ...over,
+    };
+  }
+  const at = (offsetMs: number) => new Date(NOW.getTime() + offsetMs);
+  const pick = (rows: ProfilerAnswerRow[], signals: Partial<ProfilerContextSignals> = {}) =>
+    selectContextualProfilerQuestion("female", rows, { ...NONE, ...signals }, NOW, CYCLE)?.id ??
+    null;
+
+  it("asks nothing when nothing happened", () => {
+    expect(pick([])).toBeNull();
+    expect(selectContextualProfilerQuestion(null, [], NONE, NOW, CYCLE)).toBeNull();
+  });
+
+  it("topic: only while the answer can still reach the T-5h icebreakers, and not days early", () => {
+    const date = (lead: number) => ({ upcomingDates: [{ matchId: MATCH_ID, at: at(lead) }] });
+    expect(pick([], date(24 * HOUR))).toBe(`f_ctx:topic:${MATCH_ID}`);
+    expect(pick([], date(PROFILER_TOPIC_MIN_LEAD_MS - 1))).toBeNull();
+    expect(pick([], date(PROFILER_TOPIC_MAX_LEAD_MS + 1))).toBeNull();
+  });
+
+  it("topic: once per date — any row means asked", () => {
+    const rows = [row({ questionId: `f_ctx:topic:${MATCH_ID}`, skipped: true })];
+    expect(pick(rows, { upcomingDates: [{ matchId: MATCH_ID, at: at(24 * HOUR) }] })).toBeNull();
+  });
+
+  it("format: two days to three weeks after a confirmed date", () => {
+    const date = (age: number) => ({ attendedDates: [{ matchId: MATCH_ID, at: at(-age) }] });
+    expect(pick([], date(3 * DAY))).toBe(`f_ctx:format:${MATCH_ID}`);
+    expect(pick([], date(PROFILER_FORMAT_MIN_AGE_MS - 1))).toBeNull();
+    expect(pick([], date(PROFILER_FORMAT_MAX_AGE_MS + 1))).toBeNull();
+  });
+
+  it("format: one per cooldown however many dates happened", () => {
+    const rows = [
+      row({ questionId: "f_ctx:format:older-match", answerText: "same", answeredAt: at(-5 * DAY) }),
+    ];
+    expect(pick(rows, { attendedDates: [{ matchId: MATCH_ID, at: at(-3 * DAY) }] })).toBeNull();
+    const cooled = [
+      row({
+        questionId: "f_ctx:format:older-match",
+        answerText: "same",
+        answeredAt: at(-PROFILER_FORMAT_COOLDOWN_MS - 1),
+      }),
+    ];
+    expect(pick(cooled, { attendedDates: [{ matchId: MATCH_ID, at: at(-3 * DAY) }] })).toBe(
+      `f_ctx:format:${MATCH_ID}`,
+    );
+  });
+
+  it("signature: the leading experience, once", () => {
+    expect(pick([], { signatureExperience: "coffee_treats" })).toBe("f_ctx:signature:coffee_treats");
+    const asked = [row({ questionId: "f_ctx:signature:coffee_treats", answerText: "yes" })];
+    expect(pick(asked, { signatureExperience: "coffee_treats" })).toBeNull();
+  });
+
+  it("followup: a month after the person's own plan, never for a skip", () => {
+    const learned = (age: number) => [
+      row({ questionId: "f_learning", answerText: "guitar", answeredAt: at(-age) }),
+    ];
+    expect(pick(learned(PROFILER_FOLLOWUP_AFTER_MS + DAY))).toBe("f_ctx:followup:f_learning");
+    expect(pick(learned(PROFILER_FOLLOWUP_AFTER_MS - DAY))).toBeNull();
+    expect(pick([row({ questionId: "f_learning", skipped: true })])).toBeNull();
+  });
+
+  it("recheck: two months after a matching-candidate answer", () => {
+    const rows = [
+      row({ questionId: "f_chronotype", answerText: "owl", answeredAt: at(-PROFILER_RECHECK_AFTER_MS - DAY) }),
+    ];
+    expect(pick(rows)).toBe("f_ctx:recheck:f_chronotype");
+  });
+
+  it("orders by how perishable the moment is: topic first", () => {
+    const rows = [
+      row({ questionId: "f_learning", answerText: "guitar", answeredAt: at(-40 * DAY) }),
+    ];
+    expect(
+      pick(rows, {
+        upcomingDates: [{ matchId: MATCH_ID, at: at(24 * HOUR) }],
+        signatureExperience: "walk_view",
+      }),
+    ).toBe(`f_ctx:topic:${MATCH_ID}`);
+  });
+
+  it("asks at most the weekly cap of contextual questions", () => {
+    const thisWeek = Array.from({ length: PROFILER_CONTEXT_WEEKLY_CAP }, (_, i) =>
+      row({ questionId: `f_ctx:topic:match-${i}`, skipped: true, cycleId: CYCLE }),
+    );
+    expect(pick(thisWeek, { signatureExperience: "walk_view" })).toBeNull();
+    const lastWeek = thisWeek.map((r) => ({ ...r, cycleId: "2026-W39" }));
+    expect(pick(lastWeek, { signatureExperience: "walk_view" })).toBe("f_ctx:signature:walk_view");
   });
 });
 
@@ -271,6 +386,7 @@ describe("nextProfilerBatchStep", () => {
   const answeredRow = (questionId: string): ProfilerAnswerRow => ({
     questionId,
     answerText: "x",
+    answeredAt: null,
     skipped: false,
     skipReturned: false,
     cycleId: CYCLE,
