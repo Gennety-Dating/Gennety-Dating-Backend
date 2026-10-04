@@ -2218,6 +2218,13 @@ questions too — see **Native app** at the end of this list.
   answers already cover were **removed** to avoid duplication: `f_activity_pref`
   ("active vs calm" = the energy axis) and `m_ideal_evening` (≈ the ideal-Friday
   question).
+- **Favourite flowers — women only (`f_flowers`, 2026-10-03).** Medium,
+  asked once, placed after `f_food`. It feeds the man's pre-date hint ("she
+  loves peonies") through the same weighted Profiler block as every other
+  answer; the copy invites "bouquets aren't my thing" so the hint generator never
+  reads silence as permission. Free text like the rest of the bank — no option
+  chips, no new storage. Women who had already exhausted the bank get it in their
+  next batch (pass 1 of `selectNextProfilerQuestion` — no backfill).
 - **The humour question takes a meme (`acceptsImage`, 2026-09-03).**
   `f_humor` / `m_humor` ask "what actually makes you laugh? Feel free to just
   send your favourite meme" and are the only questions in the bank that read an

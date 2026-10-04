@@ -77,6 +77,16 @@ describe("profilerQuestionBank", () => {
     expect(profilerQuestionAcceptsImage(profilerQuestionById("f_chronotype")!)).toBe(false);
   });
 
+  it("asks about favourite flowers in the women's bank only", () => {
+    const flowers = profilerQuestionById("f_flowers");
+    expect(flowers?.gender).toBe("female");
+    expect(flowers && profilerQuestionAcceptsImage(flowers)).toBe(false);
+    expect(profilerQuestionBank("female").map((q) => q.id)).toContain("f_flowers");
+    expect(profilerQuestionBank("male").map((q) => q.id)).not.toContain("f_flowers");
+    expect(profilerQuestionBank(null).map((q) => q.id)).not.toContain("f_flowers");
+    expect(profilerQuestionText(flowers!, "ru")).toContain("цветы");
+  });
+
   it("returns empty for unknown gender", () => {
     expect(profilerQuestionBank(null)).toEqual([]);
   });
