@@ -115,7 +115,9 @@ export async function sendCompletedUserEntry(
     if (handled) return;
   }
 
-  await ctx.reply(t(ctx.session.language, "onboardingComplete"));
+  await ctx.reply(t(ctx.session.language, "onboardingComplete"), {
+    parse_mode: "Markdown",
+  });
   await showMainMenu(ctx);
   if (user.status === "active") {
     await pinStatusBanner(ctx.api, telegramId, ctx.session.language);

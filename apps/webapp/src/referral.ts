@@ -4,6 +4,7 @@ import "./referral.css";
 import { icon, type IconName } from "./icons";
 import { butterflyLoaderMarkup } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton, type ReturnPage } from "./return-to.js";
 
 /**
@@ -125,7 +126,6 @@ interface Copy {
   share: string;
   /** Said next to the button, so nobody expects the ticket on send. */
   timing: string;
-  shareHint: string;
   shareSent: string;
   shareFail: string;
   loadFail: string;
@@ -145,7 +145,6 @@ const COPY: Record<Lang, Copy> = {
     maxed: "You've earned every reward — thank you\u00a0💛",
     share: "Invite a friend",
     timing: "Tickets arrive once your friend passes verification.",
-    shareHint: "Forwarded in one tap — nothing to fill in.",
     shareSent: "Invite sent",
     shareFail: "Couldn't open the share sheet — try again.",
     loadFail: "Couldn't load your referrals — try again.",
@@ -163,7 +162,6 @@ const COPY: Record<Lang, Copy> = {
     maxed: "Все награды получены — спасибо\u00a0💛",
     share: "Пригласить друга",
     timing: "Билеты придут, когда друг пройдёт верификацию.",
-    shareHint: "Пересылается одним тапом — ничего заполнять не нужно.",
     shareSent: "Приглашение отправлено",
     shareFail: "Не удалось открыть окно шеринга — попробуй ещё раз.",
     loadFail: "Не удалось загрузить рефералов — попробуй ещё раз.",
@@ -181,7 +179,6 @@ const COPY: Record<Lang, Copy> = {
     maxed: "Усі нагороди отримано — дякуємо\u00a0💛",
     share: "Запросити друга",
     timing: "Квитки прийдуть, коли друг пройде верифікацію.",
-    shareHint: "Пересилається одним тапом — нічого заповнювати не треба.",
     shareSent: "Запрошення надіслано",
     shareFail: "Не вдалося відкрити вікно поширення — спробуй ще раз.",
     loadFail: "Не вдалося завантажити рефералів — спробуй ще раз.",
@@ -199,7 +196,6 @@ const COPY: Record<Lang, Copy> = {
     maxed: "Du hast alle Belohnungen geholt — danke\u00a0💛",
     share: "Freund einladen",
     timing: "Die Tickets kommen, sobald dein Freund die Verifizierung besteht.",
-    shareHint: "In einem Tap geteilt — nichts auszufüllen.",
     shareSent: "Einladung gesendet",
     shareFail: "Teilen-Fenster ließ sich nicht öffnen — versuch es erneut.",
     loadFail: "Empfehlungen konnten nicht geladen werden — versuch es erneut.",
@@ -217,7 +213,6 @@ const COPY: Record<Lang, Copy> = {
     maxed: "Masz już wszystkie nagrody — dziękujemy\u00a0💛",
     share: "Zaproś znajomego",
     timing: "Bilety przyjdą, gdy znajomy przejdzie weryfikację.",
-    shareHint: "Przesyłane jednym dotknięciem — nic do wypełnienia.",
     shareSent: "Zaproszenie wysłane",
     shareFail: "Nie udało się otworzyć okna udostępniania — spróbuj ponownie.",
     loadFail: "Nie udało się wczytać poleconych — spróbuj ponownie.",
@@ -287,7 +282,6 @@ function render(state: ReferralState): void {
           "ref-ic ref-share-ic",
         )}<span>${esc(s.share)}</span></button>
         <p class="ref-timing">${esc(s.timing)}</p>
-        <p class="ref-share-hint">${esc(s.shareHint)}</p>
       </div>
     </div>`;
 
@@ -371,6 +365,7 @@ const BACK_TARGETS: readonly ReturnPage[] = ["ticket-store", "ticket-gate"];
 async function boot(): Promise<void> {
   app?.ready?.();
   app?.expand?.();
+  keepOpenOnVerticalSwipe(app);
   // Bot API 8.0+ immersive fullscreen — removes the top sheet header so the page
   // fills the screen natively (older clients silently fall through to expand()).
   const chromeColor = document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";

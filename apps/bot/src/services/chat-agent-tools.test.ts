@@ -63,6 +63,25 @@ vi.mock("./chat-profile-tools.js", () => ({
   attachChatProfilePhoto: () => attachChatProfilePhoto(),
 }));
 vi.mock("./storage.js", () => ({ createChatImageSignedUrl: async () => null }));
+vi.mock("./chat-sessions.js", () => ({
+  continueOrOpenChatSession: async () => "s-legacy",
+  touchChatSession: async () => undefined,
+}));
+vi.mock("./chat-session-digest.js", () => ({ afterChatTurn: () => undefined }));
+// Прошлые чаты: настоящие описания и классы инструментов, подменён только
+// исполнитель — здесь проверяется проводка, а не поиск.
+const executePastChatTool = vi.fn(
+  async (_userId: string, _sessionId: string, _name: string, _args: unknown) =>
+    JSON.stringify({ success: true, hits: [] }),
+);
+vi.mock("./chat-past-tools.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./chat-past-tools.js")>();
+  return {
+    ...original,
+    executePastChatTool: (u: string, s: string, n: string, a: unknown) =>
+      executePastChatTool(u, s, n, a),
+  };
+});
 
 /** Ответ модели: сначала вызовы инструментов, потом текст. */
 function completion(calls: Array<{ name: string; args?: string }>) {
@@ -102,7 +121,50 @@ beforeEach(() => {
   buildSystemPrompt.mockClear();
   applyChatProfilePatch.mockClear();
   attachChatProfilePhoto.mockClear();
+  executePastChatTool.mockClear();
   queue = [];
+});
+
+/**
+ * Прошлые чаты (решение 2026-09-30): поиск и чтение — ЧТЕНИЕ. Они не тратят
+ * единственную запись хода и получают текущий чат, чтобы не вернуть его же.
+ */
+describe("инструменты прошлых чатов", () => {
+  it("поиск, чтение и ответ укладываются в ход, а запись после них ещё доступна", async () => {
+    queue = [
+      completion([{ name: "search_past_chats", args: '{"query":"dress code with Anna"}' }]),
+      completion([
+        { name: "read_past_chat", args: '{"chatId":"55555555-5555-4555-8555-555555555555"}' },
+        { name: "update_bio", args: '{"bio":"после чтения"}' },
+      ]),
+      plain,
+    ];
+
+    const turn = await runChatTurn(
+      { userId: "u1", text: "что я говорил про Аню?", imageUrls: [], sessionId: "s-now" },
+      { fetchFn },
+    );
+
+    expect(executePastChatTool).toHaveBeenNthCalledWith(1, "u1", "s-now", "search_past_chats", {
+      query: "dress code with Anna",
+    });
+    expect(executePastChatTool).toHaveBeenNthCalledWith(2, "u1", "s-now", "read_past_chat", {
+      chatId: "55555555-5555-4555-8555-555555555555",
+    });
+    // Два чтения не съели бюджет: запись того же хода прошла.
+    expect(executeAgentTool).toHaveBeenCalledWith(4242n, "update_bio", { bio: "после чтения" });
+    expect(turn.receipts).toEqual(["«О себе» обновлено"]);
+    // Поиск → чтение → ответ: три вызова модели, ровно `MAX_TOOL_ITERATIONS`.
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("общий исполнитель про прошлые чаты не знает", async () => {
+    queue = [completion([{ name: "search_past_chats", args: '{"query":"x"}' }]), plain];
+
+    await runChatTurn({ userId: "u1", text: "помнишь?", imageUrls: [], sessionId: "s-now" }, { fetchFn });
+
+    expect(executeAgentTool).not.toHaveBeenCalled();
+  });
 });
 
 describe("чат приложения ходит в общий набор инструментов", () => {

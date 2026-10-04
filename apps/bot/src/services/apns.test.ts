@@ -31,6 +31,8 @@ const {
   buildLiveActivityPayload,
   liveActivityTopic,
   resetApnsCachesForTest,
+  sendApnsNotification,
+  __setApnsTransportForTests,
   isProviderCredentialFailure,
   TIME_SENSITIVE_PUSH_TYPES,
 } = await import("./apns.js");
@@ -106,6 +108,28 @@ describe("payload builders", () => {
     expect(payload.aps.category).toBe("proxy.message");
   });
 
+
+  /** A date's chat lines stack as one conversation in Notification Centre. */
+  it("threads proxy-chat pushes by match, and nothing else", () => {
+    const proxy = buildAlertPayload({
+      title: "Anna",
+      body: "I'm at the door",
+      data: { type: "proxy.message", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(proxy.aps["thread-id"]).toBe("proxy.m-7");
+    const opened = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "proxy.opened", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(opened.aps["thread-id"]).toBe("proxy.m-7");
+    const other = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "match.proposed", matchId: "m-7" },
+    }) as { aps: Record<string, unknown> };
+    expect(other.aps["thread-id"]).toBeUndefined();
+  });
   it("omits the category when there is no type to name it", () => {
     const payload = buildAlertPayload({ title: "T", body: "B" }) as {
       aps: Record<string, unknown>;
@@ -255,5 +279,79 @@ describe("isProviderCredentialFailure", () => {
     expect(isProviderCredentialFailure(400, "BadDeviceToken")).toBe(false);
     expect(isProviderCredentialFailure(500, "InternalServerError")).toBe(false);
     expect(isProviderCredentialFailure(0, "transport")).toBe(false);
+  });
+});
+
+describe("sandbox / production token routing", () => {
+  const SANDBOX = "https://api.sandbox.push.apple.com";
+  const PRODUCTION = "https://api.push.apple.com";
+  const bad = { status: 400, body: JSON.stringify({ reason: "BadDeviceToken" }) };
+  const ok = { status: 200, body: "" };
+
+  /** Each host accepts only the tokens listed for it. */
+  function fakeApple(accepts: Record<string, string[]>, calls: string[]) {
+    __setApnsTransportForTests(async (host, path) => {
+      const token = path.split("/").pop() ?? "";
+      calls.push(`${host === SANDBOX ? "sandbox" : "production"}:${token}`);
+      return accepts[host]?.includes(token) ? ok : bad;
+    });
+  }
+  const send = (token: string) =>
+    sendApnsNotification(token, { aps: {} }, { pushType: "alert" });
+
+  it("delivers a production token from a sandbox-configured server", async () => {
+    const calls: string[] = [];
+    fakeApple({ [PRODUCTION]: ["prodtok"] }, calls);
+    expect(await send("prodtok")).toEqual({ ok: true });
+    expect(calls).toEqual(["sandbox:prodtok", "production:prodtok"]);
+  });
+
+  it("remembers the host that worked and goes there first next time", async () => {
+    const calls: string[] = [];
+    fakeApple({ [PRODUCTION]: ["prodtok"] }, calls);
+    await send("prodtok");
+    calls.length = 0;
+    expect(await send("prodtok")).toEqual({ ok: true });
+    expect(calls).toEqual(["production:prodtok"]);
+  });
+
+  it("delivers a sandbox token from a production-configured server", async () => {
+    envMock.APNS_ENVIRONMENT = "production";
+    const calls: string[] = [];
+    fakeApple({ [SANDBOX]: ["devtok"] }, calls);
+    expect(await send("devtok")).toEqual({ ok: true });
+    expect(calls).toEqual(["production:devtok", "sandbox:devtok"]);
+  });
+
+  it("does not retry a token the configured host accepts", async () => {
+    const calls: string[] = [];
+    fakeApple({ [SANDBOX]: ["devtok"] }, calls);
+    expect(await send("devtok")).toEqual({ ok: true });
+    expect(calls).toEqual(["sandbox:devtok"]);
+  });
+
+  it("reports BadDeviceToken only when both hosts refuse", async () => {
+    const calls: string[] = [];
+    fakeApple({}, calls);
+    expect(await send("junk")).toEqual({ ok: false, status: 400, reason: "BadDeviceToken" });
+    expect(calls).toEqual(["sandbox:junk", "production:junk"]);
+  });
+
+  it("keeps a token alive when the retry fails in transport", async () => {
+    __setApnsTransportForTests(async (host) => {
+      if (host === PRODUCTION) throw new Error("socket hang up");
+      return bad;
+    });
+    expect(await send("prodtok")).toEqual({ ok: false, status: 0, reason: "transport" });
+  });
+
+  it("does not retry other refusals such as Unregistered", async () => {
+    const calls: string[] = [];
+    __setApnsTransportForTests(async (host) => {
+      calls.push(host);
+      return { status: 410, body: JSON.stringify({ reason: "Unregistered" }) };
+    });
+    expect(await send("gone")).toEqual({ ok: false, status: 410, reason: "Unregistered" });
+    expect(calls).toEqual([SANDBOX]);
   });
 });

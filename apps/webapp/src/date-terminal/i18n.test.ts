@@ -22,19 +22,41 @@ describe("terminal copy", () => {
     }
   });
 
-  it("keeps the product names in English everywhere", () => {
+  it("never shows the internal product names (copy audit 2026-10-01)", () => {
     for (const lang of LANGS) {
-      expect(TERMINAL_TABLES[lang].kicker).toBe("Date Terminal");
-      expect(TERMINAL_TABLES[lang].titleSynced).toContain("Contact Sync");
+      for (const [key, text] of Object.entries(TERMINAL_TABLES[lang])) {
+        expect(text, `${lang}.${key}`).not.toMatch(/Date Terminal|Contact Sync/u);
+      }
     }
   });
 
   it("never addresses the user formally in ru/uk", () => {
     // «вы» is allowed only where it means the two of them, which is always the
-    // plural imperative to shake together — never a capitalised «Вы»/«Ви».
+    // plural imperative to hold together — never a capitalised «Вы»/«Ви».
     for (const lang of ["ru", "uk"] as const) {
       for (const text of Object.values(TERMINAL_TABLES[lang])) {
         expect(text).not.toMatch(/(^|[\s«])(Вы|Вас|Ваш|Ви|Вам)\b/u);
+      }
+    }
+  });
+});
+
+describe("the ceremony's words", () => {
+  it("fit the stand's capsule and plaque in every language", () => {
+    for (const lang of LANGS) {
+      const t = TERMINAL_TABLES[lang];
+      // The capsule is 280 px at 17 px semibold; the plaque 300 px wide.
+      expect(t.holdLabel.length, `${lang}.holdLabel`).toBeLessThanOrEqual(24);
+      expect(t.ceremonyWaiting.length, `${lang}.ceremonyWaiting`).toBeLessThanOrEqual(26);
+      expect(t.ceremonyTitle.length, `${lang}.ceremonyTitle`).toBeLessThanOrEqual(26);
+      expect(t.ceremonySub.length, `${lang}.ceremonySub`).toBeLessThanOrEqual(34);
+    }
+  });
+
+  it("speak of holding, never of shaking", () => {
+    for (const lang of LANGS) {
+      for (const [key, text] of Object.entries(TERMINAL_TABLES[lang])) {
+        expect(text, `${lang}.${key}`).not.toMatch(/shak|тряс|струс|schüttel|potrząś/iu);
       }
     }
   });

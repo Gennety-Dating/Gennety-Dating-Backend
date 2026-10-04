@@ -115,10 +115,6 @@
       "name": "Kaffa"
     },
     {
-      "name": "Tres BRANCHE",
-      "tier": "premium"
-    },
-    {
       "name": "Steak House Grill do Brasil"
     },
     {
@@ -146,9 +142,6 @@
     },
     {
       "name": "ONE LOVE Coffee"
-    },
-    {
-      "name": "Montecchi v Capuleti"
     },
     {
       "name": "Casa Nori",
@@ -198,9 +191,6 @@
     },
     {
       "name": "Ygli"
-    },
-    {
-      "name": "Trullo D'Oro Osteria"
     },
     {
       "name": "Boulangerie Artisan",
@@ -332,9 +322,6 @@
     },
     {
       "name": "Trishki Bilshe"
-    },
-    {
-      "name": "Prynada Ukrainian Cafe"
     },
     {
       "name": "NlSN & FRNDS CF"
@@ -598,6 +585,11 @@
     },
     {
       "name": "SARTO",
+      "tier": "premium"
+    },
+    {
+      "name": "ALTO",
+      "query": "ALTO вулиця Петра Сагайдачного 19 Київ",
       "tier": "premium"
     }
   ],

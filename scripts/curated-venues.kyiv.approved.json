@@ -30897,136 +30897,6 @@
   {
     "approved": true,
     "universityDomain": "kneu.edu.ua",
-    "name": "Très Branché",
-    "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-    "lat": 50.4487568,
-    "lng": 30.5121607,
-    "googleMapsUri": "https://maps.google.com/?cid=482998872991822690&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "premium",
-    "vibeTags": [
-      "dinner",
-      "wine",
-      "romantic"
-    ],
-    "facetTags": [
-      "romantic_public",
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–22:00",
-        "вівторок: 10:00–22:00",
-        "середа: 10:00–22:00",
-        "четвер: 10:00–22:00",
-        "пʼятниця: 10:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 972,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "french_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
     "name": "Grill do Brasil",
     "address": "бульвар Лесі Українки, 24, Київ, 01133",
     "lat": 50.4301745,
@@ -31537,135 +31407,6 @@
     "_reviews": 217,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "coffee_shop"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
-    "name": "CAPULETI",
-    "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-    "lat": 50.424793900000004,
-    "lng": 30.533982299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5588563927300129868&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 09:00–22:00",
-        "вівторок: 09:00–22:00",
-        "середа: 09:00–22:00",
-        "четвер: 09:00–22:00",
-        "пʼятниця: 09:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 1288,
-    "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -32436,135 +32177,6 @@
   {
     "approved": true,
     "universityDomain": "kneu.edu.ua",
-    "name": "Чорноморка Велика Васильківська",
-    "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-    "lat": 50.4344514,
-    "lng": 30.5164521,
-    "googleMapsUri": "https://maps.google.com/?cid=1770899957862026842&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "seafood",
-      "lively"
-    ],
-    "facetTags": [
-      "lively"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 3566,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
     "name": "Чорноморка Поділ",
     "address": "вулиця Ярославська, 5/2, Київ, 04071",
     "lat": 50.4664101,
@@ -32819,135 +32431,6 @@
     "_reviews": 2643,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
-    "name": "Чорноморка на Лаврській",
-    "address": "вулиця Лаврська, 6, Київ, 04070",
-    "lat": 50.4371529,
-    "lng": 30.551770400000002,
-    "googleMapsUri": "https://maps.google.com/?cid=6543423430788611940&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "coffee",
-      "cozy",
-      "casual"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.3,
-    "_reviews": 1158,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -33853,135 +33336,6 @@
     "_reviews": 424,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "ukrainian_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
-    "name": "Trullo D'oro Cafe",
-    "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-    "lat": 50.4333239,
-    "lng": 30.422367299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5673241001655944523&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-    "category": "restaurant",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 21,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–21:00",
-        "вівторок: 10:00–21:00",
-        "середа: 10:00–21:00",
-        "четвер: 10:00–21:00",
-        "пʼятниця: 10:00–21:00",
-        "субота: 10:00–21:00",
-        "неділя: 10:00–21:00"
-      ],
-      "nextOpenTime": "2026-08-15T07:00:00Z"
-    },
-    "_rating": 4.6,
-    "_reviews": 605,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -37074,135 +36428,6 @@
     "_reviews": 2289,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "cafe"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kneu.edu.ua",
-    "name": "Prynada Ukrainian Cafe",
-    "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-    "lat": 50.5117573,
-    "lng": 30.507341,
-    "googleMapsUri": "https://maps.google.com/?cid=18155972741619786643&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-    "category": "cafe",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "local",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 12:00–22:30",
-        "вівторок: 12:00–22:30",
-        "середа: 12:00–22:30",
-        "четвер: 12:00–22:30",
-        "пʼятниця: 12:00–22:30",
-        "субота: 12:00–22:30",
-        "неділя: 12:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T09:00:00Z"
-    },
-    "_rating": 4.7,
-    "_reviews": 3074,
-    "_priceLevel": null,
-    "_primaryType": "ukrainian_restaurant"
   },
   {
     "approved": true,
@@ -58192,135 +57417,6 @@
   {
     "approved": true,
     "universityDomain": "knu.ua",
-    "name": "Très Branché",
-    "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-    "lat": 50.4487568,
-    "lng": 30.5121607,
-    "googleMapsUri": "https://maps.google.com/?cid=482998872991822690&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "premium",
-    "vibeTags": [
-      "dinner",
-      "wine",
-      "romantic"
-    ],
-    "facetTags": [
-      "romantic_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–22:00",
-        "вівторок: 10:00–22:00",
-        "середа: 10:00–22:00",
-        "четвер: 10:00–22:00",
-        "пʼятниця: 10:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 972,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "french_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
     "name": "Grill do Brasil",
     "address": "бульвар Лесі Українки, 24, Київ, 01133",
     "lat": 50.4301745,
@@ -58833,135 +57929,6 @@
     "_reviews": 217,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "coffee_shop"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
-    "name": "CAPULETI",
-    "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-    "lat": 50.424793900000004,
-    "lng": 30.533982299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5588563927300129868&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 09:00–22:00",
-        "вівторок: 09:00–22:00",
-        "середа: 09:00–22:00",
-        "четвер: 09:00–22:00",
-        "пʼятниця: 09:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 1288,
-    "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -59731,135 +58698,6 @@
   {
     "approved": true,
     "universityDomain": "knu.ua",
-    "name": "Чорноморка Велика Васильківська",
-    "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-    "lat": 50.4344514,
-    "lng": 30.5164521,
-    "googleMapsUri": "https://maps.google.com/?cid=1770899957862026842&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "seafood",
-      "lively"
-    ],
-    "facetTags": [
-      "lively"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 3566,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
     "name": "Чорноморка Поділ",
     "address": "вулиця Ярославська, 5/2, Київ, 04071",
     "lat": 50.4664101,
@@ -60114,135 +58952,6 @@
     "_reviews": 2643,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
-    "name": "Чорноморка на Лаврській",
-    "address": "вулиця Лаврська, 6, Київ, 04070",
-    "lat": 50.4371529,
-    "lng": 30.551770400000002,
-    "googleMapsUri": "https://maps.google.com/?cid=6543423430788611940&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "coffee",
-      "cozy",
-      "casual"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.3,
-    "_reviews": 1158,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -61148,135 +59857,6 @@
     "_reviews": 424,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "ukrainian_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
-    "name": "Trullo D'oro Cafe",
-    "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-    "lat": 50.4333239,
-    "lng": 30.422367299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5673241001655944523&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-    "category": "restaurant",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 21,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–21:00",
-        "вівторок: 10:00–21:00",
-        "середа: 10:00–21:00",
-        "четвер: 10:00–21:00",
-        "пʼятниця: 10:00–21:00",
-        "субота: 10:00–21:00",
-        "неділя: 10:00–21:00"
-      ],
-      "nextOpenTime": "2026-08-15T07:00:00Z"
-    },
-    "_rating": 4.6,
-    "_reviews": 605,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -64369,135 +62949,6 @@
     "_reviews": 2289,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "cafe"
-  },
-  {
-    "approved": true,
-    "universityDomain": "knu.ua",
-    "name": "Prynada Ukrainian Cafe",
-    "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-    "lat": 50.5117573,
-    "lng": 30.507341,
-    "googleMapsUri": "https://maps.google.com/?cid=18155972741619786643&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-    "category": "cafe",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "local",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 12:00–22:30",
-        "вівторок: 12:00–22:30",
-        "середа: 12:00–22:30",
-        "четвер: 12:00–22:30",
-        "пʼятниця: 12:00–22:30",
-        "субота: 12:00–22:30",
-        "неділя: 12:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T09:00:00Z"
-    },
-    "_rating": 4.7,
-    "_reviews": 3074,
-    "_priceLevel": null,
-    "_primaryType": "ukrainian_restaurant"
   },
   {
     "approved": true,
@@ -85492,135 +83943,6 @@
   {
     "approved": true,
     "universityDomain": "kpi.ua",
-    "name": "Très Branché",
-    "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-    "lat": 50.4487568,
-    "lng": 30.5121607,
-    "googleMapsUri": "https://maps.google.com/?cid=482998872991822690&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "premium",
-    "vibeTags": [
-      "dinner",
-      "wine",
-      "romantic"
-    ],
-    "facetTags": [
-      "romantic_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–22:00",
-        "вівторок: 10:00–22:00",
-        "середа: 10:00–22:00",
-        "четвер: 10:00–22:00",
-        "пʼятниця: 10:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 972,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "french_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
     "name": "Grill do Brasil",
     "address": "бульвар Лесі Українки, 24, Київ, 01133",
     "lat": 50.4301745,
@@ -86133,135 +84455,6 @@
     "_reviews": 217,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "coffee_shop"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
-    "name": "CAPULETI",
-    "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-    "lat": 50.424793900000004,
-    "lng": 30.533982299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5588563927300129868&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 09:00–22:00",
-        "вівторок: 09:00–22:00",
-        "середа: 09:00–22:00",
-        "четвер: 09:00–22:00",
-        "пʼятниця: 09:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 1288,
-    "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -87031,135 +85224,6 @@
   {
     "approved": true,
     "universityDomain": "kpi.ua",
-    "name": "Чорноморка Велика Васильківська",
-    "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-    "lat": 50.4344514,
-    "lng": 30.5164521,
-    "googleMapsUri": "https://maps.google.com/?cid=1770899957862026842&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "seafood",
-      "lively"
-    ],
-    "facetTags": [
-      "lively"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 3566,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
     "name": "Чорноморка Поділ",
     "address": "вулиця Ярославська, 5/2, Київ, 04071",
     "lat": 50.4664101,
@@ -87414,135 +85478,6 @@
     "_reviews": 2643,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
-    "name": "Чорноморка на Лаврській",
-    "address": "вулиця Лаврська, 6, Київ, 04070",
-    "lat": 50.4371529,
-    "lng": 30.551770400000002,
-    "googleMapsUri": "https://maps.google.com/?cid=6543423430788611940&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "coffee",
-      "cozy",
-      "casual"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.3,
-    "_reviews": 1158,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -88448,135 +86383,6 @@
     "_reviews": 424,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "ukrainian_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
-    "name": "Trullo D'oro Cafe",
-    "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-    "lat": 50.4333239,
-    "lng": 30.422367299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5673241001655944523&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-    "category": "restaurant",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 21,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–21:00",
-        "вівторок: 10:00–21:00",
-        "середа: 10:00–21:00",
-        "четвер: 10:00–21:00",
-        "пʼятниця: 10:00–21:00",
-        "субота: 10:00–21:00",
-        "неділя: 10:00–21:00"
-      ],
-      "nextOpenTime": "2026-08-15T07:00:00Z"
-    },
-    "_rating": 4.6,
-    "_reviews": 605,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -91669,135 +89475,6 @@
     "_reviews": 2289,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "cafe"
-  },
-  {
-    "approved": true,
-    "universityDomain": "kpi.ua",
-    "name": "Prynada Ukrainian Cafe",
-    "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-    "lat": 50.5117573,
-    "lng": 30.507341,
-    "googleMapsUri": "https://maps.google.com/?cid=18155972741619786643&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-    "category": "cafe",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "local",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 12:00–22:30",
-        "вівторок: 12:00–22:30",
-        "середа: 12:00–22:30",
-        "четвер: 12:00–22:30",
-        "пʼятниця: 12:00–22:30",
-        "субота: 12:00–22:30",
-        "неділя: 12:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T09:00:00Z"
-    },
-    "_rating": 4.7,
-    "_reviews": 3074,
-    "_priceLevel": null,
-    "_primaryType": "ukrainian_restaurant"
   },
   {
     "approved": true,
@@ -112796,135 +110473,6 @@
   {
     "approved": true,
     "universityDomain": "stud.nau.edu.ua",
-    "name": "Très Branché",
-    "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-    "lat": 50.4487568,
-    "lng": 30.5121607,
-    "googleMapsUri": "https://maps.google.com/?cid=482998872991822690&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "premium",
-    "vibeTags": [
-      "dinner",
-      "wine",
-      "romantic"
-    ],
-    "facetTags": [
-      "romantic_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–22:00",
-        "вівторок: 10:00–22:00",
-        "середа: 10:00–22:00",
-        "четвер: 10:00–22:00",
-        "пʼятниця: 10:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 972,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "french_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
     "name": "Grill do Brasil",
     "address": "бульвар Лесі Українки, 24, Київ, 01133",
     "lat": 50.4301745,
@@ -113437,135 +110985,6 @@
     "_reviews": 217,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "coffee_shop"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
-    "name": "CAPULETI",
-    "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-    "lat": 50.424793900000004,
-    "lng": 30.533982299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5588563927300129868&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 09:00–22:00",
-        "вівторок: 09:00–22:00",
-        "середа: 09:00–22:00",
-        "четвер: 09:00–22:00",
-        "пʼятниця: 09:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 1288,
-    "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -114336,135 +111755,6 @@
   {
     "approved": true,
     "universityDomain": "stud.nau.edu.ua",
-    "name": "Чорноморка Велика Васильківська",
-    "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-    "lat": 50.4344514,
-    "lng": 30.5164521,
-    "googleMapsUri": "https://maps.google.com/?cid=1770899957862026842&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "seafood",
-      "lively"
-    ],
-    "facetTags": [
-      "lively"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 3566,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
     "name": "Чорноморка Поділ",
     "address": "вулиця Ярославська, 5/2, Київ, 04071",
     "lat": 50.4664101,
@@ -114719,135 +112009,6 @@
     "_reviews": 2643,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
-    "name": "Чорноморка на Лаврській",
-    "address": "вулиця Лаврська, 6, Київ, 04070",
-    "lat": 50.4371529,
-    "lng": 30.551770400000002,
-    "googleMapsUri": "https://maps.google.com/?cid=6543423430788611940&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "coffee",
-      "cozy",
-      "casual"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.3,
-    "_reviews": 1158,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -115753,135 +112914,6 @@
     "_reviews": 424,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "ukrainian_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
-    "name": "Trullo D'oro Cafe",
-    "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-    "lat": 50.4333239,
-    "lng": 30.422367299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5673241001655944523&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-    "category": "restaurant",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 21,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–21:00",
-        "вівторок: 10:00–21:00",
-        "середа: 10:00–21:00",
-        "четвер: 10:00–21:00",
-        "пʼятниця: 10:00–21:00",
-        "субота: 10:00–21:00",
-        "неділя: 10:00–21:00"
-      ],
-      "nextOpenTime": "2026-08-15T07:00:00Z"
-    },
-    "_rating": 4.6,
-    "_reviews": 605,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -118974,135 +116006,6 @@
     "_reviews": 2289,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "cafe"
-  },
-  {
-    "approved": true,
-    "universityDomain": "stud.nau.edu.ua",
-    "name": "Prynada Ukrainian Cafe",
-    "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-    "lat": 50.5117573,
-    "lng": 30.507341,
-    "googleMapsUri": "https://maps.google.com/?cid=18155972741619786643&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-    "category": "cafe",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "local",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 12:00–22:30",
-        "вівторок: 12:00–22:30",
-        "середа: 12:00–22:30",
-        "четвер: 12:00–22:30",
-        "пʼятниця: 12:00–22:30",
-        "субота: 12:00–22:30",
-        "неділя: 12:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T09:00:00Z"
-    },
-    "_rating": 4.7,
-    "_reviews": 3074,
-    "_priceLevel": null,
-    "_primaryType": "ukrainian_restaurant"
   },
   {
     "approved": true,
@@ -140102,135 +137005,6 @@
   {
     "approved": true,
     "universityDomain": "ukma.edu.ua",
-    "name": "Très Branché",
-    "address": "вулиця Миколи Лисенка, 4, Київ, 02000",
-    "lat": 50.4487568,
-    "lng": 30.5121607,
-    "googleMapsUri": "https://maps.google.com/?cid=482998872991822690&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "premium",
-    "vibeTags": [
-      "dinner",
-      "wine",
-      "romantic"
-    ],
-    "facetTags": [
-      "romantic_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–22:00",
-        "вівторок: 10:00–22:00",
-        "середа: 10:00–22:00",
-        "четвер: 10:00–22:00",
-        "пʼятниця: 10:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 972,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "french_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
     "name": "Grill do Brasil",
     "address": "бульвар Лесі Українки, 24, Київ, 01133",
     "lat": 50.4301745,
@@ -140743,135 +137517,6 @@
     "_reviews": 217,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "coffee_shop"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
-    "name": "CAPULETI",
-    "address": "вулиця Євгена Коновальця, 36-В, Київ, 01133",
-    "lat": 50.424793900000004,
-    "lng": 30.533982299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5588563927300129868&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-    "category": "restaurant",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 9,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 09:00–22:00",
-        "вівторок: 09:00–22:00",
-        "середа: 09:00–22:00",
-        "четвер: 09:00–22:00",
-        "пʼятниця: 09:00–22:00",
-        "субота: 09:00–22:00",
-        "неділя: 09:00–22:00"
-      ],
-      "nextOpenTime": "2026-08-15T06:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 1288,
-    "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -141643,135 +138288,6 @@
   {
     "approved": true,
     "universityDomain": "ukma.edu.ua",
-    "name": "Чорноморка Велика Васильківська",
-    "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-    "lat": 50.4344514,
-    "lng": 30.5164521,
-    "googleMapsUri": "https://maps.google.com/?cid=1770899957862026842&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "seafood",
-      "lively"
-    ],
-    "facetTags": [
-      "lively"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.5,
-    "_reviews": 3566,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
     "name": "Чорноморка Поділ",
     "address": "вулиця Ярославська, 5/2, Київ, 04071",
     "lat": 50.4664101,
@@ -142026,135 +138542,6 @@
     "_reviews": 2643,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "seafood_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
-    "name": "Чорноморка на Лаврській",
-    "address": "вулиця Лаврська, 6, Київ, 04070",
-    "lat": 50.4371529,
-    "lng": 30.551770400000002,
-    "googleMapsUri": "https://maps.google.com/?cid=6543423430788611940&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-    "category": "cafe",
-    "priority": 2,
-    "tier": "base",
-    "vibeTags": [
-      "coffee",
-      "cozy",
-      "casual"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 11,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 11:00–22:30",
-        "вівторок: 11:00–22:30",
-        "середа: 11:00–22:30",
-        "четвер: 11:00–22:30",
-        "пʼятниця: 11:00–22:30",
-        "субота: 11:00–22:30",
-        "неділя: 11:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T08:00:00Z"
-    },
-    "_rating": 4.3,
-    "_reviews": 1158,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -143060,135 +139447,6 @@
     "_reviews": 424,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "ukrainian_restaurant"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
-    "name": "Trullo D'oro Cafe",
-    "address": "вулиця Героїв Севастополя, 35А, Київ, 03126",
-    "lat": 50.4333239,
-    "lng": 30.422367299999998,
-    "googleMapsUri": "https://maps.google.com/?cid=5673241001655944523&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-    "category": "restaurant",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "italian",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 21,
-            "minute": 0
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 10,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 21,
-            "minute": 0
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 10:00–21:00",
-        "вівторок: 10:00–21:00",
-        "середа: 10:00–21:00",
-        "четвер: 10:00–21:00",
-        "пʼятниця: 10:00–21:00",
-        "субота: 10:00–21:00",
-        "неділя: 10:00–21:00"
-      ],
-      "nextOpenTime": "2026-08-15T07:00:00Z"
-    },
-    "_rating": 4.6,
-    "_reviews": 605,
-    "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
   },
   {
     "approved": true,
@@ -146282,135 +142540,6 @@
     "_reviews": 2289,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "cafe"
-  },
-  {
-    "approved": true,
-    "universityDomain": "ukma.edu.ua",
-    "name": "Prynada Ukrainian Cafe",
-    "address": "проспект Володимира Івасюка, 24, Київ, 04210",
-    "lat": 50.5117573,
-    "lng": 30.507341,
-    "googleMapsUri": "https://maps.google.com/?cid=18155972741619786643&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
-    "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-    "category": "cafe",
-    "priority": 1,
-    "tier": "base",
-    "vibeTags": [
-      "dinner",
-      "local",
-      "cozy"
-    ],
-    "facetTags": [
-      "cozy_public"
-    ],
-    "hardCapabilities": [
-      "indoor",
-      "seated"
-    ],
-    "utcOffsetMinutes": 180,
-    "openingHours": {
-      "openNow": false,
-      "periods": [
-        {
-          "open": {
-            "day": 0,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 0,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 1,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 1,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 2,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 2,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 3,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 3,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 4,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 4,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 5,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 5,
-            "hour": 22,
-            "minute": 30
-          }
-        },
-        {
-          "open": {
-            "day": 6,
-            "hour": 12,
-            "minute": 0
-          },
-          "close": {
-            "day": 6,
-            "hour": 22,
-            "minute": 30
-          }
-        }
-      ],
-      "weekdayDescriptions": [
-        "понеділок: 12:00–22:30",
-        "вівторок: 12:00–22:30",
-        "середа: 12:00–22:30",
-        "четвер: 12:00–22:30",
-        "пʼятниця: 12:00–22:30",
-        "субота: 12:00–22:30",
-        "неділя: 12:00–22:30"
-      ],
-      "nextOpenTime": "2026-08-15T09:00:00Z"
-    },
-    "_rating": 4.7,
-    "_reviews": 3074,
-    "_priceLevel": null,
-    "_primaryType": "ukrainian_restaurant"
   },
   {
     "approved": true,
@@ -155996,5 +152125,655 @@
     "_reviews": 83,
     "_priceLevel": null,
     "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "ALTO",
+    "address": "вулиця Петра Сагайдачного, 19, Київ, 02000",
+    "lat": 50.4595449,
+    "lng": 30.523634599999998,
+    "googleMapsUri": "https://maps.google.com/?cid=2500264839595773577&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 21,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 08:00–21:00",
+        "вівторок: 08:00–21:00",
+        "середа: 08:00–21:00",
+        "четвер: 08:00–21:00",
+        "пʼятниця: 08:00–21:00",
+        "субота: 08:00–21:00",
+        "неділя: 08:00–21:00"
+      ],
+      "nextOpenTime": "2026-10-03T05:00:00Z"
+    },
+    "_rating": 4.9,
+    "_reviews": 129,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "ALTO",
+    "address": "вулиця Петра Сагайдачного, 19, Київ, 02000",
+    "lat": 50.4595449,
+    "lng": 30.523634599999998,
+    "googleMapsUri": "https://maps.google.com/?cid=2500264839595773577&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 21,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 08:00–21:00",
+        "вівторок: 08:00–21:00",
+        "середа: 08:00–21:00",
+        "четвер: 08:00–21:00",
+        "пʼятниця: 08:00–21:00",
+        "субота: 08:00–21:00",
+        "неділя: 08:00–21:00"
+      ],
+      "nextOpenTime": "2026-10-03T05:00:00Z"
+    },
+    "_rating": 4.9,
+    "_reviews": 129,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "ALTO",
+    "address": "вулиця Петра Сагайдачного, 19, Київ, 02000",
+    "lat": 50.4595449,
+    "lng": 30.523634599999998,
+    "googleMapsUri": "https://maps.google.com/?cid=2500264839595773577&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 21,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 08:00–21:00",
+        "вівторок: 08:00–21:00",
+        "середа: 08:00–21:00",
+        "четвер: 08:00–21:00",
+        "пʼятниця: 08:00–21:00",
+        "субота: 08:00–21:00",
+        "неділя: 08:00–21:00"
+      ],
+      "nextOpenTime": "2026-10-03T05:00:00Z"
+    },
+    "_rating": 4.9,
+    "_reviews": 129,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "ALTO",
+    "address": "вулиця Петра Сагайдачного, 19, Київ, 02000",
+    "lat": 50.4595449,
+    "lng": 30.523634599999998,
+    "googleMapsUri": "https://maps.google.com/?cid=2500264839595773577&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 21,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 08:00–21:00",
+        "вівторок: 08:00–21:00",
+        "середа: 08:00–21:00",
+        "четвер: 08:00–21:00",
+        "пʼятниця: 08:00–21:00",
+        "субота: 08:00–21:00",
+        "неділя: 08:00–21:00"
+      ],
+      "nextOpenTime": "2026-10-03T05:00:00Z"
+    },
+    "_rating": 4.9,
+    "_reviews": 129,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "ALTO",
+    "address": "вулиця Петра Сагайдачного, 19, Київ, 02000",
+    "lat": 50.4595449,
+    "lng": 30.523634599999998,
+    "googleMapsUri": "https://maps.google.com/?cid=2500264839595773577&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 21,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 21,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 08:00–21:00",
+        "вівторок: 08:00–21:00",
+        "середа: 08:00–21:00",
+        "четвер: 08:00–21:00",
+        "пʼятниця: 08:00–21:00",
+        "субота: 08:00–21:00",
+        "неділя: 08:00–21:00"
+      ],
+      "nextOpenTime": "2026-10-03T05:00:00Z"
+    },
+    "_rating": 4.9,
+    "_reviews": 129,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "restaurant"
   }
 ]

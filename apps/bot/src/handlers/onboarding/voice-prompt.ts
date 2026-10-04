@@ -307,10 +307,11 @@ function rejectionText(language: Language, reason: MediaValidationReason): strin
  * The label is interpolated rather than written out, so the sentence cannot
  * name a button the panel stopped using.
  */
-export function voicePromptAskText(language: Language, question: string): string {
-  return `${question}\n\n${t(language, "voicePromptSkipHint", {
-    button: t(language, "voicePromptSkipButton"),
-  })}`;
+export function voicePromptAskText(_language: Language, question: string): string {
+  // Copy audit 2026-10-01: the "skip — button at the bottom" hint was dropped;
+  // the panel's own skip button speaks for itself. `voicePromptSkipHint` stays
+  // in i18n, unused.
+  return question;
 }
 
 /**

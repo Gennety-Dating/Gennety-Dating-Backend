@@ -532,9 +532,10 @@ is also set identically whether the radar was submitted, skipped, disabled, or
 never shown for want of a deployed deck at that age band — so the demo needs no
 idea whether a radar step exists at all.
 
-**Message 4 says "regularly", not a number.** Production runs `DROP_CADENCE=weekly`
-— one Thursday drop — with a `daily` profile in code but inert (PRODUCT_SPEC
-§3.1). Copy here must not describe a cadence production does not run.
+**Message 4 says "regularly", not a number.** Production uses `DROP_CADENCE=daily`
+since 2026-08-10: a daily drop at 18:00 Europe/Kyiv. Without env the code defaults
+to `weekly`. Demo matching is session-driven; these documentation corrections
+do not change its scheduler, defaults or copy.
 
 ## Recovery
 
@@ -677,7 +678,7 @@ Three properties keep the exemption narrow, and each is pinned by a test
   same puppet twice — which is why the redo button deletes its own match rows
   (`clearDemoMatches`) rather than relying on this.
 - **With the flag off the query is rebuilt byte-for-byte**, so the production
-  allocator — which also runs the real Thursday drop and the paid Rematch — has
+  allocator — which also runs the real daily drop and the paid Rematch — has
   the same shape, the same plan, and the same guard test pinning it
   (`match-engine-eligibility.test.ts`). `demoPuppetIdsAmong` is not even called.
 
@@ -1000,6 +1001,11 @@ through the public route, which must not grow a demo branch — so making the
 Bump demoable means giving the demo a date that is genuinely minutes away,
 which is a change to how the demo schedules, not to how it puppets.
 
+The HOLD (2026-09-29, the meeting ceremony: `hold: true` on the same route, a
+long-poll for the partner and a common start) changes none of this. It runs
+the same window check before anything else, so a visitor's hold is refused
+`too-early` by days exactly like a shake, and no puppet ever holds.
+
 ## The Date Terminal invite is not sent here
 
 The T-45m invite and T-15m reminder that open the Date Terminal (§6.4a,
@@ -1012,16 +1018,16 @@ that cannot work yet. No puppet branch either: the terminal is one side's own
 screen, not a negotiation. It becomes demoable when the Bump does, by the same
 change to how the demo schedules.
 
-## The Scratch Map fills, the Campus Radar cannot fire
+## The date map stays empty, the Campus Radar cannot fire
 
-Two halves of §Scratch Map / §Campus Radar, and they land on opposite sides of
-the demo's line.
-
-**The Scratch Map works here, and needs no puppet branch** — it is one-sided by
-construction, so there is nothing for the puppet to answer. A visitor who turns
-the toggle on and opens the canvas uncovers tiles exactly as a real user would.
-Worth knowing rather than assuming: the demo's own database is separate, so
-those tiles are the visitor's own and nothing reaches production.
+**The date map (living-canvas.md §6.5) shows nothing here, and needs no puppet
+branch.** It is a read over `matches` where the caller's side attended, and
+nothing in the demo writes `dateAttended*`: the Bump is unreachable (section
+above) and the demo's date never reaches the attendance flow. So
+`GET /v1/date-map` answers `confirmedDates: 0`, and the iOS profile section
+that draws it stays hidden — the same as for any real user before a first date.
+(Until 2026-10-02 this section described the Scratch Map's fog, which a demo
+visitor could fill; the fog is retired.)
 
 **The Campus Radar can never fire here, structurally.** Its cron is not
 scheduled under `DEMO_MODE_ENABLED` at all — for the same reason drop matching

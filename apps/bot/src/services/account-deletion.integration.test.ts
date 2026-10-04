@@ -1,11 +1,11 @@
 /**
- * Account deletion against a REAL Postgres (A13-H14, A13-H13).
+ * Account deletion against a REAL Postgres (A13-H14).
  *
  * The unit tests pin the calls; only a database can show what a cascade, a
  * `SET NULL` foreign key or a raw statement actually does. Every defect these
  * cases guard against lived there: ledgers and reports cascading away with the
- * user, a relinked block colliding with the `(blocker_id, blocked_id)` unique,
- * and a Scratch Map upsert Postgres refused to parse.
+ * user, and a relinked block colliding with the `(blocker_id, blocked_id)`
+ * unique.
  *
  * Prerequisites (same as every integration file):
  *   docker compose -f docker-compose.test.yml up -d
@@ -28,7 +28,6 @@ import {
 } from "../../../../packages/db/src/test-integration.js";
 import { AccountDeletionDeferredError, deleteUserAccount } from "./account-deletion.js";
 import { restoreSafetyHistory } from "./safety-tombstone.js";
-import { recordVerifiedVisit } from "./scratch-map.js";
 import { isPairBlocked, loadBlockedPairKeys } from "./user-block.js";
 import { retentionTick } from "../workers/retention.js";
 
@@ -226,21 +225,5 @@ describe("restoreSafetyHistory — the same person comes back", () => {
     expect(await db.userBlock.findUnique({ where: { id: scene.blockAgainst.id } })).toBeNull();
     // Payment rows are not the retention sweep's to touch.
     expect(await db.ticketLedger.findUnique({ where: { id: scene.ledger.id } })).not.toBeNull();
-  });
-});
-
-describe("Scratch Map merge — the statement Postgres used to refuse (A13-H13)", () => {
-  it("inserts, then merges a second writer's tiles and venue into the same row", async () => {
-    const user = await seedUser();
-    await db.user.update({ where: { id: user.id }, data: { scratchMapOptIn: true } });
-
-    // Kyiv centre, then a point in Podil — two different tiles.
-    await recordVerifiedVisit({ userIds: [user.id], venueId: "venue-1", lat: 50.4501, lng: 30.5234 });
-    await recordVerifiedVisit({ userIds: [user.id], venueId: "venue-2", lat: 50.4645, lng: 30.5164 });
-
-    const row = await db.userScratchMap.findUniqueOrThrow({ where: { userId: user.id } });
-    expect(row.exploredTiles).toHaveLength(2);
-    expect(row.discoveredVenues).toEqual(["venue-1", "venue-2"]);
-    expect(row.exploredPercent).toBeGreaterThan(0);
   });
 });

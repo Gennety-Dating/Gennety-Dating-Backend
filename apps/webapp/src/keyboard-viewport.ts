@@ -70,3 +70,50 @@ export function isWorthWriting(previous: number | null, next: number): boolean {
   if (previous === null) return true;
   return Math.abs(next - previous) >= KB_HEIGHT_STEP_PX;
 }
+
+/**
+ * Which way the keyboard is going, as far as the page can tell: a text field
+ * just took focus (`opening`), just lost it (`closing`), or neither recently
+ * (`free`).
+ */
+export type KeyboardMotion = "opening" | "closing" | "free";
+
+/**
+ * How long after a focus change its direction is enforced. Covers the
+ * keyboard's own ~250ms animation plus the beat a resized WebView takes to
+ * catch up with it.
+ */
+export const KEYBOARD_MOTION_MS = 700;
+
+/**
+ * Where the action bar's bottom edge may sit next, in shell coordinates, given
+ * where it sat last and where the raw measurement puts it now.
+ *
+ * Within one keyboard event the edge only ever travels ONE way: up while the
+ * keyboard opens, down while it closes. That is what removes the bounce. A
+ * client that resizes the WebView reports the keyboard twice — first as a
+ * shrunken visual viewport (inset = keyboard), a beat later as a shrunken
+ * layout viewport (inset = 0) — and any frame where those two disagree, or a
+ * transition still easing the inset back to zero after the shell already
+ * shrank, reads as the pill overshooting and dropping back. Clamping the EDGE
+ * rather than the inset is what keeps the two-step arrival continuous: the
+ * inset may fall to zero exactly when the shell shrinks by the same amount,
+ * because the edge itself did not move.
+ */
+export function nextVisibleBottom(
+  previous: number | null,
+  measured: number,
+  motion: KeyboardMotion,
+): number {
+  if (previous === null || motion === "free") return measured;
+  return motion === "opening" ? Math.min(previous, measured) : Math.max(previous, measured);
+}
+
+/** Whether a focused element raises the soft keyboard. */
+export function raisesKeyboard(element: Element | null): boolean {
+  if (!element) return false;
+  if (element.tagName === "TEXTAREA") return true;
+  if (element.tagName !== "INPUT") return (element as HTMLElement).isContentEditable === true;
+  const type = (element as HTMLInputElement).type;
+  return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(type);
+}

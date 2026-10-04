@@ -71,7 +71,7 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
       side({ role: "silent", offenseCount: 1, penalised: false }),
     );
     expect(input.variant).toBe("expired");
-    expect(caption).toMatch(/Next time we'll lower your rating/i);
+    expect(caption).toMatch(/answer at least/i);
   });
 
   it("repeat-offense silent → `penalty` card + penalty caption", async () => {
@@ -79,7 +79,7 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
       side({ role: "silent", offenseCount: 3, penalised: true }),
     );
     expect(input.variant).toBe("penalty");
-    expect(caption).toMatch(/Ignoring proposals is disrespectful/i);
+    expect(caption).toMatch(/rating has been lowered/i);
   });
 
   it("responder → `peer_ignored` card, and nothing promises a priority boost", async () => {
@@ -88,7 +88,7 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
     // promise the code does not keep.
     const { input, caption } = await cardFor(side({ role: "responder" }));
     expect(input.variant).toBe("peer_ignored");
-    expect(caption).toMatch(/next drop/i);
+    expect(caption).toMatch(/next round/i);
     expect(caption).not.toMatch(/priority|boost/i);
     expect(input.subline).not.toMatch(/priority|boost/i);
   });
@@ -117,8 +117,8 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
       expect(api.sendPhoto).not.toHaveBeenCalled();
       expect(api.sendMessage).toHaveBeenCalledTimes(1);
       const [, body] = api.sendMessage.mock.calls[0]!;
-      expect(body).toMatch(/you passed/i);
-      expect(body).toMatch(/next drop/i);
+      expect(body).toMatch(/match is closed/i);
+      expect(body).toMatch(/next round/i);
       // The peer-ignored copy is written for the opposite person.
       expect(body).not.toMatch(/didn't reply|never answered|done on time/i);
     });
@@ -164,7 +164,7 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
       side({ role: "silent", offenseCount: 4, penalised: true, peerAccepted: true }),
     );
     expect(input.variant).toBe("missed_date");
-    expect(caption).toMatch(/Ignoring proposals is disrespectful/i);
+    expect(caption).toMatch(/rating has been lowered/i);
   });
 
   it("silent + peer DECLINED → stays `expired` (blind-decision)", async () => {
@@ -180,7 +180,7 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
       side({ role: "silent", offenseCount: 5, penalised: false }),
     );
     expect(input.variant).toBe("expired");
-    expect(caption).toMatch(/Next time we'll lower your rating/i);
+    expect(caption).toMatch(/answer at least/i);
     expect(caption).not.toMatch(/has been lowered/i);
   });
 
@@ -226,9 +226,9 @@ describe("sendExpiryNotifications", () => {
     }
 
     const captionToA = api.sendPhoto.mock.calls.find((c) => c[0] === 100)![2].caption;
-    expect(captionToA).toMatch(/Next time we'll lower your rating/i);
+    expect(captionToA).toMatch(/answer at least/i);
     const captionToB = api.sendPhoto.mock.calls.find((c) => c[0] === 200)![2].caption;
-    expect(captionToB).toMatch(/Увидимся в следующем дропе/i);
+    expect(captionToB).toMatch(/Увидимся в следующем подборе/i);
   });
 
   it("degrades to the full plain-text notice when the render fails", async () => {
@@ -245,8 +245,8 @@ describe("sendExpiryNotifications", () => {
     expect(r.notified).toBe(1);
     expect(api.sendPhoto).not.toHaveBeenCalled();
     const sent = api.sendMessage.mock.calls[0]![1];
-    expect(sent).toMatch(/you missed a real date/i);
-    expect(sent).toMatch(/Next time we'll lower your rating/i);
+    expect(sent).toMatch(/could have been a real date/i);
+    expect(sent).toMatch(/answer at least/i);
   });
 
   it("keeps the neutral text on the fallback when the peer declined", async () => {

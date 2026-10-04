@@ -13,6 +13,16 @@ import { withRedactedSummary } from "./outbound-recorder.js";
 import { buildChatControlsKeyboard, isProxyOpen } from "./coordination.js";
 import { reactToMessage, type EmojiReaction } from "./message-reactions.js";
 import { telegramReachable } from "./telegram-reach.js";
+import {
+  NOBODY,
+  bumpProxyChat,
+  markPresence,
+  presenceOf,
+  proxyChatVersion,
+  stopTyping,
+  type PartnerPresence,
+  type PresencePlace,
+} from "./proxy-presence.js";
 
 /**
  * Anonymous pre-date proxy chat — the mechanics, shared by both surfaces
@@ -44,7 +54,8 @@ export type ProxyChatRefusal =
   | "too-long"
   | "no-message"
   | "own-message"
-  | "bad-reaction";
+  | "bad-reaction"
+  | "bad-presence";
 
 /**
  * The five emoji a person may put on their partner's message.
@@ -112,6 +123,15 @@ export interface ProxyChatView {
   maxMessageLength: number;
   partnerFirstName: string | null;
   serverNow: Date;
+  /**
+   * What the reader is shown about the partner right now — in the app, on this
+   * screen, typing (`proxy-presence.ts`). All false outside the open window:
+   * presence is part of the chat, and a closed chat says nothing about anyone.
+   * A Telegram partner is always all-false — the Bot API reports no presence.
+   */
+  partnerPresence: PartnerPresence;
+  /** Change counter for `GET …/chat?after=` — see `proxy-presence.ts`. */
+  version: string;
 }
 
 export type ProxyChatResult =
@@ -230,6 +250,32 @@ function partnerReadAt(match: ProxyMatch, callerId: string): Date | null {
   return callerId === match.userAId ? match.proxyReadAtB : match.proxyReadAtA;
 }
 
+/** How far `callerId` THEMSELVES has read. Null = never opened the screen. */
+function ownReadAt(
+  match: { userAId: string; proxyReadAtA: Date | null; proxyReadAtB: Date | null },
+  callerId: string,
+): Date | null {
+  return callerId === match.userAId ? match.proxyReadAtA : match.proxyReadAtB;
+}
+
+/**
+ * "The partner said it and the caller has not opened the chat since" — the one
+ * definition of unread, asked by the cursor (`markRead`) and by the badge
+ * (`proxyChatUnreadCount`). Kept in one place so the badge can never count a
+ * line that opening the chat would not mark read, or miss one it would.
+ *
+ * Nothing is excluded beyond that: a message is never deleted or hidden once
+ * logged (the log is the moderation trail), and delivery does not matter — a
+ * line no rail accepted is still waiting on the screen.
+ */
+function unreadFromPartner(matchId: string, callerId: string, cursor: Date | null) {
+  return {
+    matchId,
+    senderId: { not: callerId },
+    ...(cursor ? { createdAt: { gt: cursor } } : {}),
+  };
+}
+
 /**
  * The sender's own three states, from three facts the server actually holds.
  *
@@ -253,6 +299,10 @@ async function buildView(
   since: string | undefined,
   now: Date,
 ): Promise<ProxyChatView> {
+  // Read BEFORE the rows: a change landing while this view is being built
+  // must leave the caller holding a stale version (answered at once on the
+  // next read), never a fresh one over old rows (held for nothing).
+  const version = proxyChatVersion(match.id);
   const window = proxyChatWindow(match);
   const { partner } = sidesOf(match, callerId);
 
@@ -283,9 +333,10 @@ async function buildView(
   });
 
   const readAt = partnerReadAt(match, callerId);
+  const open = proxyChatIsOpen(match, now);
 
   return {
-    open: proxyChatIsOpen(match, now),
+    open,
     opensAt: window?.opensAt ?? null,
     closesAt: window?.closesAt ?? null,
     // Fetched newest-first so the cap keeps the RECENT end of a long window,
@@ -304,6 +355,10 @@ async function buildView(
     maxMessageLength: PROXY_MAX_MESSAGE_LEN,
     partnerFirstName: partner.firstName,
     serverNow: now,
+    partnerPresence: proxyChatAcceptsMessages(match, now)
+      ? presenceOf(match.id, partner.id, now.getTime())
+      : NOBODY,
+    version,
   };
 }
 
@@ -318,7 +373,9 @@ async function buildView(
  * the partner's "read" tick rests entirely on that: this endpoint is called by
  * the app, and the app calls it only while its chat screen is on the phone. A
  * background refresh or a prefetch would turn the cursor into a lie, so if one
- * is ever added it must not come through this function.
+ * is ever added it must not come through this function. The one that exists —
+ * the unread badge polled with `/v1/matches/current` — is
+ * `proxyChatUnreadCount`, which reads the cursor and never writes it.
  */
 export async function readProxyChat(input: {
   matchId: string;
@@ -342,6 +399,93 @@ export async function readProxyChat(input: {
 }
 
 /**
+ * The gate a held read passes BEFORE it waits (`GET …/chat?after=`), so a
+ * stranger cannot park connections on someone else's date or stamp presence
+ * onto it. Same verdicts as `readProxyChat`, which the read still goes through
+ * once the wait is over — the match may have been cancelled meanwhile.
+ *
+ * `live` says whether the chat accepts lines right now; only then does reading
+ * count as being on the chat screen (`proxy-presence.ts`).
+ */
+export async function proxyChatReader(input: {
+  matchId: string;
+  userId: string;
+  now?: Date;
+}): Promise<{ ok: true; live: boolean } | { ok: false; error: ProxyChatRefusal }> {
+  if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
+  const match = await loadMatch(input.matchId);
+  if (!match) return { ok: false, error: "not-found" };
+  if (input.userId !== match.userAId && input.userId !== match.userBId) {
+    return { ok: false, error: "forbidden" };
+  }
+  if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
+  return { ok: true, live: proxyChatAcceptsMessages(match, input.now ?? new Date()) };
+}
+
+const PRESENCE_PLACES: readonly PresencePlace[] = ["app", "chat", "away"];
+
+/**
+ * A phone saying where its owner is — in the app, on the chat screen, typing,
+ * or gone — and hearing the same about the partner in return
+ * (`POST /v1/matches/{id}/chat/presence`).
+ *
+ * **Only inside the window.** Presence is part of the date's chat and ends with
+ * it: outside `proxyChatAcceptsMessages` nothing is recorded and the answer is
+ * `closed`, so the app stops beating. `away` is the exception — clearing costs
+ * nobody anything and a phone leaving at T+2h must still be able to say so.
+ *
+ * **Only between the two of them.** The answer is about the caller's partner on
+ * this one date; nothing here is readable by anyone else, and nothing is kept.
+ */
+export async function reportProxyChatPresence(input: {
+  matchId: string;
+  userId: string;
+  place: unknown;
+  typing?: unknown;
+  now?: Date;
+}): Promise<
+  | { ok: true; partnerPresence: PartnerPresence; version: string }
+  | { ok: false; error: ProxyChatRefusal }
+> {
+  if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
+  if (typeof input.place !== "string" || !PRESENCE_PLACES.includes(input.place as PresencePlace)) {
+    return { ok: false, error: "bad-presence" };
+  }
+  if (input.typing !== undefined && typeof input.typing !== "boolean") {
+    return { ok: false, error: "bad-presence" };
+  }
+  const place = input.place as PresencePlace;
+
+  const match = await loadMatch(input.matchId);
+  if (!match) return { ok: false, error: "not-found" };
+  if (input.userId !== match.userAId && input.userId !== match.userBId) {
+    return { ok: false, error: "forbidden" };
+  }
+  const now = input.now ?? new Date();
+  const { partner } = sidesOf(match, input.userId);
+
+  if (place === "away") {
+    markPresence({ matchId: match.id, userId: input.userId, place, now: now.getTime() });
+    return { ok: true, partnerPresence: NOBODY, version: proxyChatVersion(match.id) };
+  }
+  if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
+  if (!proxyChatAcceptsMessages(match, now)) return { ok: false, error: "closed" };
+
+  markPresence({
+    matchId: match.id,
+    userId: input.userId,
+    place,
+    ...(place === "chat" && typeof input.typing === "boolean" ? { typing: input.typing } : {}),
+    now: now.getTime(),
+  });
+  return {
+    ok: true,
+    partnerPresence: presenceOf(match.id, partner.id, now.getTime()),
+    version: proxyChatVersion(match.id),
+  };
+}
+
+/**
  * Advance the caller's read cursor — but only when something of the partner's
  * is actually sitting above it.
  *
@@ -352,14 +496,9 @@ export async function readProxyChat(input: {
  */
 async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise<void> {
   const mine = callerId === match.userAId;
-  const current = mine ? match.proxyReadAtA : match.proxyReadAtB;
 
   const unread = await prisma.proxyMessage.findFirst({
-    where: {
-      matchId: match.id,
-      senderId: { not: callerId },
-      ...(current ? { createdAt: { gt: current } } : {}),
-    },
+    where: unreadFromPartner(match.id, callerId, ownReadAt(match, callerId)),
     select: { id: true },
   });
   if (!unread) return;
@@ -367,6 +506,54 @@ async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise
   await prisma.match.update({
     where: { id: match.id },
     data: mine ? { proxyReadAtA: now } : { proxyReadAtB: now },
+  });
+  // The partner's ticks just turned to "read" — wake their screen.
+  bumpProxyChat(match.id);
+}
+
+/**
+ * How many of the partner's lines sit above the caller's own read cursor — the
+ * "3 new" badge on the app's chat entry (`SerializedMatch.proxyChatUnreadCount`),
+ * so the app can say there is something to read without opening the chat.
+ *
+ * **A pure read, and that is its whole contract.** `/v1/matches/current` asks
+ * this on every poll (every 20 s per app user), which is exactly the
+ * "background refresh" `readProxyChat` warns about: routed through there, it
+ * would move the cursor and hand the partner a "read" tick for a screen nobody
+ * opened. So it never touches the cursor, the delivery stamps, or anything else
+ * — one indexed `count` over `(match_id, created_at)`, and only when a line
+ * could exist at all.
+ *
+ * **Skipped only while nothing could have been sent**: before the scheduled
+ * window opens AND before the tick has announced it. Not on `now < opensAt`
+ * alone — the announced window can open before the scheduled one (demo's date
+ * sits days out while its replay stamps the window on a shifted clock; the same
+ * divergence `proxyChatAcceptsMessages` folds in), and a 0 there would hide
+ * lines that are really there.
+ *
+ * **Still counted after the window**, and after a force-close: reading is
+ * ungated, so what the partner said last is still waiting to be read.
+ *
+ * `callerId` must be one of the pair — the caller has already established that.
+ */
+export async function proxyChatUnreadCount(
+  match: {
+    id: string;
+    userAId: string;
+    agreedTime: Date | null;
+    proxyOpenedAt: Date | null;
+    proxyReadAtA: Date | null;
+    proxyReadAtB: Date | null;
+  },
+  callerId: string,
+  now: Date,
+): Promise<number> {
+  const window = proxyChatWindow(match);
+  const announced = match.proxyOpenedAt !== null;
+  if (!announced && (!window || now < window.opensAt)) return 0;
+
+  return prisma.proxyMessage.count({
+    where: unreadFromPartner(match.id, callerId, ownReadAt(match, callerId)),
   });
 }
 
@@ -450,6 +637,10 @@ export async function relayProxyMessage(input: {
     },
     select: { id: true },
   });
+  // The line is on the record: the partner's held read can answer with it now,
+  // before any rail has been tried, and whoever wrote it has stopped typing.
+  stopTyping(match.id, input.senderUserId, now.getTime());
+  bumpProxyChat(match.id);
 
   const { me, partner } = sidesOf(match, input.senderUserId);
   // Best-effort by rule: an unreachable partner must not fail the sender's
@@ -469,6 +660,7 @@ export async function relayProxyMessage(input: {
       where: { id: message.id },
       data: { deliveredAt: now },
     });
+    bumpProxyChat(match.id);
   }
 
   return { ok: true, view: await buildView(match, input.senderUserId, undefined, now) };
@@ -533,6 +725,7 @@ export async function reactToProxyMessage(input: {
     where: { id: message.id },
     data: { reaction: input.reaction },
   });
+  bumpProxyChat(match.id);
 
   // Best-effort onto the author's rail, exactly like delivery: a Telegram hiccup
   // must not fail the tap. The row is already written, so the author sees it the

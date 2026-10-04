@@ -63,10 +63,12 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
 
   // Nudge users with no profile video toward the always-visible menu entry, and
   // surface the free-ticket hook while the bonus is still claimable.
+  // Copy audit 2026-10-01: the plain "add a video" tip was dropped; only the
+  // free-ticket hook remains, while that bonus is still claimable.
   if (!hasVideo) {
     const rewardAvailable =
       env.TICKET_FEATURE_ENABLED && !user.profile?.videoBonusTicketAt;
-    body += `\n\n${t(lang, rewardAvailable ? "myProfileAddVideoHintReward" : "myProfileAddVideoHint")}`;
+    if (rewardAvailable) body += `\n\n${t(lang, "myProfileAddVideoHintReward")}`;
   }
 
   if ((hasLivePhoto || hasVideo) && ctx.chat) {

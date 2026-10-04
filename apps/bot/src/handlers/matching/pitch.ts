@@ -784,7 +784,7 @@ export async function sendMatchProposal(
 
   // M-17: skip mobile-only users — their pitch goes via the Expo push path,
   // not Telegram drafts. Sending to a negative chat id used to throw and
-  // crash the entire weekly-batch dispatch loop.
+  // crash the entire scheduled-batch dispatch loop.
   //
   // Per side the chat reads: album (cards + the partner's motion) → the
   // streamed pitch, whose persisted message also carries the verified trust

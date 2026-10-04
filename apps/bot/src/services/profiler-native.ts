@@ -19,8 +19,9 @@ import {
   selectNextProfilerQuestion,
 } from "./profiler-schedule.js";
 import {
+  awaitNextProfilerWindow,
   claimActiveQuestion,
-  finishOrAwaitNextCycle,
+  contextualQuestionFor,
   hasActiveDatePlanning,
   loadProfilerState,
   pauseBatchUntilNextWindow,
@@ -30,6 +31,10 @@ import {
   upsertProfilerSkip,
   type ProfilerUserState,
 } from "./profiler.js";
+import {
+  resolveProfilerQuestionContext,
+  type ProfilerContextCard,
+} from "./profiler-context.js";
 
 /**
  * The Profiler (PRODUCT_SPEC §Phase 1b) for the NATIVE app —
@@ -61,6 +66,12 @@ import {
 export interface NativeProfilerQuestion {
   id: string;
   text: string;
+  /**
+   * What a contextual question refers to — the app draws it as a card above
+   * the question (the date and the venue, or the person's own earlier answer).
+   * Absent on bank questions and on rechecks.
+   */
+  context?: ProfilerContextCard;
 }
 
 /** `GET /v1/me/profiler`. Empty = nothing to ask right now. */
@@ -77,22 +88,50 @@ export type NativeProfilerAnswerResult =
   | { ok: true; outcome: "done" | "paused" }
   | { ok: false; error: "question_not_active" };
 
-function view(question: ProfilerQuestion, language: Language): NativeProfilerQuestion {
-  return { id: question.id, text: profilerQuestionText(question, language) };
+/**
+ * The question as the app sees it, with its context card when it has one.
+ * `null` when the question's moment is gone (`stale` — its date was cancelled
+ * or has passed): it must not be shown any more.
+ */
+async function view(
+  userId: string,
+  question: ProfilerQuestion,
+  language: Language,
+  now: Date,
+): Promise<NativeProfilerQuestion | null> {
+  const base = { id: question.id, text: profilerQuestionText(question, language) };
+  const resolution = await resolveProfilerQuestionContext(userId, question, language, now);
+  if (resolution.kind === "stale") return null;
+  return resolution.kind === "card" ? { ...base, context: resolution.card } : base;
 }
 
 /**
- * The live question as the app sees it. `Profile.profilerBatchRemaining` does
- * NOT count the live question (a batch of 3 stores 2 while its first question
- * is out — that is how the Telegram path has always kept it), while the API's
- * `remaining` does, so a client can say "last one" when it reads 1.
+ * The live batch from a question already viewed. `Profile.profilerBatchRemaining`
+ * does NOT count the live question (a batch of 3 stores 2 while its first
+ * question is out — that is how the Telegram path has always kept it), while
+ * the API's `remaining` does, so a client can say "last one" when it reads 1.
  */
-function liveBatch(
-  question: ProfilerQuestion,
-  language: Language,
-  storedRemaining: number,
-): NativeProfilerBatch {
-  return { question: view(question, language), remaining: Math.max(storedRemaining, 0) + 1 };
+function liveBatch(question: NativeProfilerQuestion, storedRemaining: number): NativeProfilerBatch {
+  return { question, remaining: Math.max(storedRemaining, 0) + 1 };
+}
+
+/**
+ * Release a live question nobody can answer any more — a bank id that no
+ * longer exists, or a contextual question whose moment is gone — without
+ * stranding a mobile-only user, whom nothing else ever expires. A contextual
+ * one is recorded as a skip, so it is never chosen again. Its stall deadline
+ * stays, so the next batch opens once that passes.
+ */
+async function releaseDeadQuestion(
+  userId: string,
+  questionId: string,
+  question: ProfilerQuestion | undefined,
+  now: Date,
+): Promise<void> {
+  const claim = await claimActiveQuestion(userId, questionId);
+  if (claim.claimed && question) {
+    await upsertProfilerSkip(userId, question, profilerCycleId(now));
+  }
 }
 
 /**
@@ -150,19 +189,11 @@ export async function getNativeProfilerBatch(
   const activeId = profile.profilerActiveQuestionId;
   if (activeId) {
     const active = profilerQuestionById(activeId);
-    if (active) return liveBatch(active, language, profile.profilerBatchRemaining);
-    // An id the bank no longer has (a question retired while it was live) can
-    // never be answered, and nothing expires it for a mobile-only user — so
-    // release it instead of stranding them. Its stall deadline stays, so the
-    // next batch opens once that passes.
-    await prisma.profile.updateMany({
-      where: { userId, profilerActiveQuestionId: activeId },
-      data: {
-        profilerActiveQuestionId: null,
-        profilerAnswerWindowUntil: null,
-        profilerQuestionMessageId: null,
-      },
-    });
+    const shown = active ? await view(userId, active, language, now) : null;
+    if (shown) return liveBatch(shown, profile.profilerBatchRemaining);
+    // An id the bank no longer has (a question retired while it was live), or a
+    // contextual question about a date that was cancelled or has passed.
+    await releaseDeadQuestion(userId, activeId, active, now);
     return {};
   }
 
@@ -175,12 +206,22 @@ export async function getNativeProfilerBatch(
     select: {
       questionId: true,
       answerText: true,
+      answeredAt: true,
       skipped: true,
       skipReturned: true,
       cycleId: true,
     },
   });
-  const question = selectNextProfilerQuestion(user.gender, answers, profilerCycleId(now));
+  // A batch's opening question may be contextual — the same "lazy check" the
+  // Telegram path runs when it opens a batch (`contextualQuestionFor`).
+  const cycleId = profilerCycleId(now);
+  const contextual = await contextualQuestionFor({ userId, gender: user.gender, answers }, now);
+  let question = selectNextProfilerQuestion(user.gender, answers, cycleId, contextual);
+  let shown = question ? await view(userId, question, language, now) : null;
+  if (question && !shown) {
+    question = selectNextProfilerQuestion(user.gender, answers, cycleId);
+    shown = question ? await view(userId, question, language, now) : null;
+  }
 
   // Compare-and-set on exactly what was read: no live question AND the same
   // `profilerNextAt`. The worker (for a `both` user) or a parallel request that
@@ -189,9 +230,9 @@ export async function getNativeProfilerBatch(
   const guard = { userId, profilerActiveQuestionId: null, profilerNextAt: nextAt };
   const startedAt = profile.profilerStartedAt ?? now;
 
-  if (!question) {
-    // Nothing pending this cycle: re-check at the next window, the same place
-    // `finishOrAwaitNextCycle` parks a Telegram user.
+  if (!question || !shown) {
+    // Nothing pending right now: re-check at the next window, the same place
+    // `awaitNextProfilerWindow` parks a Telegram user.
     await prisma.profile.updateMany({
       where: guard,
       data: {
@@ -213,12 +254,16 @@ export async function getNativeProfilerBatch(
       ...profilerActiveQuestionPatch(question.id, batchSize - 1, now, null),
     },
   });
-  if (count === 1) return liveBatch(question, language, batchSize - 1);
-  return currentLiveBatch(userId, language);
+  if (count === 1) return liveBatch(shown, batchSize - 1);
+  return currentLiveBatch(userId, language, now);
 }
 
 /** Whatever is live after a lost race — possibly nothing (the winner is still sending). */
-async function currentLiveBatch(userId: string, language: Language): Promise<NativeProfilerBatch> {
+async function currentLiveBatch(
+  userId: string,
+  language: Language,
+  now: Date,
+): Promise<NativeProfilerBatch> {
   const profile = await prisma.profile.findUnique({
     where: { userId },
     select: { profilerActiveQuestionId: true, profilerBatchRemaining: true },
@@ -227,7 +272,8 @@ async function currentLiveBatch(userId: string, language: Language): Promise<Nat
     ? profilerQuestionById(profile.profilerActiveQuestionId)
     : undefined;
   if (!profile || !active) return {};
-  return liveBatch(active, language, profile.profilerBatchRemaining);
+  const shown = await view(userId, active, language, now);
+  return shown ? liveBatch(shown, profile.profilerBatchRemaining) : {};
 }
 
 /**
@@ -296,12 +342,16 @@ async function advance(
     state.profilerBatchRemaining,
     profilerCycleId(now),
   );
-  if (step.kind === "exhausted") {
-    await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
-    return { ok: true, outcome: "done" };
-  }
   if (step.kind === "boundary") {
     await pauseBatchUntilNextWindow(state.userId, now, state.timeZone);
+    return { ok: true, outcome: "done" };
+  }
+  // Mid-batch steps are bank questions (only an opening question is ever
+  // contextual), which never go stale — `shown` is null only for an exhausted step.
+  const shown =
+    step.kind === "ask" ? await view(state.userId, step.question, state.language, now) : null;
+  if (step.kind === "exhausted" || !shown) {
+    await awaitNextProfilerWindow(state.userId, state.gender, now, state.timeZone);
     return { ok: true, outcome: "done" };
   }
   await prisma.profile.update({
@@ -311,7 +361,7 @@ async function advance(
   return {
     ok: true,
     outcome: "next",
-    question: view(step.question, state.language),
+    question: shown,
     remaining: state.profilerBatchRemaining,
   };
 }

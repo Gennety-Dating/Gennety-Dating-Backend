@@ -8,6 +8,14 @@ import { chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-lim
 import { runChatTurn } from "../../services/chat-agent.js";
 import { listChatTopics } from "../../services/chat-topics.js";
 import {
+  claimChatSession,
+  listChatSessions,
+  normalizeChatSessionTitle,
+  ownsChatSession,
+  parseChatSessionIdField,
+  renameChatSession,
+} from "../../services/chat-sessions.js";
+import {
   parseChatContextRef,
   readChatContextSnapshot,
   resolveChatContextSnapshot,
@@ -16,18 +24,29 @@ import {
 import {
   uploadChatImage,
   createChatImageSignedUrl,
+  createChatImageSignedUrls,
 } from "../../services/storage.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
+import { isUuid } from "../../utils/uuid.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/shared";
 
 /**
  * Gennety chat agent — multimodal AI chat for the mobile app.
  *
- * Four endpoints:
- *   POST /v1/chat/upload   multipart image → opaque storage path
- *   POST /v1/chat/message  { text?, imageUrl?, context? } → assistant reply
- *   GET  /v1/chat/history  newest page, `before` pages backwards
- *   GET  /v1/chat/topics   read-only index of past conversations
+ * Endpoints:
+ *   POST  /v1/chat/upload         multipart image → opaque storage path
+ *   POST  /v1/chat/message        { text?, imageUrl?, context?, sessionId? } → assistant reply
+ *   POST  /v1/chat/voice          the same turn from a voice note
+ *   GET   /v1/chat/history        newest page, `before` pages backwards, `sessionId` = one chat
+ *   GET   /v1/chat/sessions       the person's chats, most recently active first
+ *   PATCH /v1/chat/sessions/:id   rename a chat
+ *   GET   /v1/chat/topics         the pre-sessions index, kept for older builds
+ *
+ * Chats (decision journal 2026-09-30): every turn lands in one chat — the one
+ * the client names with a `sessionId` it minted, or, for an older build that
+ * names none, the most recent chat under six hours quiet (else a new one).
+ * See `services/chat-sessions.ts`.
  *
  * Mobile flow: upload image first (returns `imageUrl`), then send a
  * `/message` referencing it. Either field is sufficient; both can be
@@ -158,12 +177,15 @@ chatRouter.post(
     }
     const context = await contextFromRequest(req.body?.context, req.userId!, res);
     if (context === false) return;
+    const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
+    if (sessionId === false) return;
 
     const turn = await runChatTurn({
       userId: req.userId!,
       text,
       imageUrls,
       context,
+      sessionId,
     });
 
     res.json({
@@ -174,6 +196,7 @@ chatRouter.post(
         imageUrl: turn.imageUrl,
         createdAt: turn.createdAt.toISOString(),
       },
+      sessionId: turn.sessionId,
       // Hybrid-chat contract slot (same shape as the interview's uiHint).
       // Chat turns are free-form, so no hint is derived yet — the field
       // exists so the generated client handles both surfaces uniformly.
@@ -212,7 +235,7 @@ chatRouter.post(
     }
     // Multipart carries no nested object, so the chip rides as two plain form
     // fields. Checked BEFORE transcription: a refused context must not cost a
-    // Whisper call.
+    // Whisper call. The chat id likewise.
     const rawKind: unknown = req.body?.contextKind;
     const rawId: unknown = req.body?.contextId;
     const context = await contextFromRequest(
@@ -221,6 +244,8 @@ chatRouter.post(
       res,
     );
     if (context === false) return;
+    const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
+    if (sessionId === false) return;
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
@@ -241,6 +266,7 @@ chatRouter.post(
       text: transcript,
       imageUrls: [],
       context,
+      sessionId,
     });
 
     res.json({
@@ -251,6 +277,7 @@ chatRouter.post(
         imageUrl: turn.imageUrl,
         createdAt: turn.createdAt.toISOString(),
       },
+      sessionId: turn.sessionId,
       uiHint: null,
       transcript,
       ...(turn.receipts ? { receipts: turn.receipts } : {}),
@@ -273,21 +300,45 @@ chatRouter.post(
  * `system` rows are excluded. The client already drops them before rendering,
  * and `/topics` counts messages the same way — a slice that disagreed with
  * the topic index would make `depth` point a page short.
+ *
+ * `sessionId` pages ONE chat (decision journal 2026-09-30): an unknown or
+ * foreign id is a 404, and so is a `before` from another chat. Without it the
+ * route is what it always was — the whole stream across chats, which is what
+ * older builds read.
+ *
+ * Every photo of the page is signed in ONE Storage request
+ * (`createChatImageSignedUrls`), and `signedImageUrl` is simply the first of
+ * `signedImageUrls` — it used to be a second signature of the same object.
  */
 chatRouter.get("/history", async (req: Request, res: Response): Promise<void> => {
+  const startedAt = Date.now();
   const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 100);
   const rawBefore = req.query.before;
   const before = typeof rawBefore === "string" && rawBefore ? rawBefore : null;
+  const rawSession = req.query.sessionId;
+  const sessionId = typeof rawSession === "string" && rawSession ? rawSession.toLowerCase() : null;
+
+  if (rawSession !== undefined && typeof rawSession !== "string") {
+    res.status(404).json({ error: "Unknown chat" });
+    return;
+  }
+  if (sessionId && !(await ownsChatSession(req.userId!, sessionId))) {
+    res.status(404).json({ error: "Unknown chat" });
+    return;
+  }
 
   if (before) {
     // A cursor from another user's stream must not page this one. Checking
     // ownership here also turns a stale id (deleted account, wiped history)
-    // into an honest 404 instead of a silently empty page.
-    const owner = await prisma.message.findUnique({
-      where: { id: before },
-      select: { userId: true },
-    });
-    if (!owner || owner.userId !== req.userId!) {
+    // into an honest 404 instead of a silently empty page. A non-UUID is the
+    // same 404 — handed to Prisma it would be a P2023 and a 500.
+    const owner = isUuid(before)
+      ? await prisma.message.findUnique({
+          where: { id: before },
+          select: { userId: true, sessionId: true },
+        })
+      : null;
+    if (!owner || owner.userId !== req.userId! || (sessionId && owner.sessionId !== sessionId)) {
       res.status(404).json({ error: "Unknown cursor" });
       return;
     }
@@ -296,7 +347,11 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   // One row over the page size: its existence is the `hasMore` answer, and
   // it costs nothing next to a second COUNT.
   const rows = await prisma.message.findMany({
-    where: { userId: req.userId!, role: { not: "system" } },
+    where: {
+      userId: req.userId!,
+      role: { not: "system" },
+      ...(sessionId ? { sessionId } : {}),
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     ...(before ? { cursor: { id: before }, skip: 1 } : {}),
@@ -305,30 +360,78 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   const page = hasMore ? rows.slice(0, limit) : rows;
   page.reverse();
 
-  const messages = await Promise.all(
-    page.map(async (row) => ({
+  // Список — источник правды; одиночные поля остаются ПЕРВЫМ снимком для
+  // сборок, которые про список не знают.
+  const images = page.map(rowImages);
+  const paths = images.flat();
+  const signStartedAt = Date.now();
+  const signed = await createChatImageSignedUrls(paths, SIGNED_URL_TTL_S);
+  const signMs = Date.now() - signStartedAt;
+
+  let cursor = 0;
+  const messages = page.map((row, i) => {
+    const rowPaths = images[i]!;
+    const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
+    return {
       id: row.id,
       role: row.role,
       content: row.content,
-      // Список — источник правды; одиночные поля остаются ПЕРВЫМ снимком для
-      // сборок, которые про список не знают.
       imageUrl: row.imageUrl,
-      signedImageUrl: row.imageUrl
-        ? (await createChatImageSignedUrl(row.imageUrl, SIGNED_URL_TTL_S)) ?? ""
-        : null,
-      imageUrls: rowImages(row),
-      signedImageUrls: await Promise.all(
-        rowImages(row).map(
-          async (path) => (await createChatImageSignedUrl(path, SIGNED_URL_TTL_S)) ?? "",
-        ),
-      ),
+      signedImageUrl: row.imageUrl ? (signedUrls[0] ?? "") : null,
+      imageUrls: rowPaths,
+      signedImageUrls: signedUrls,
       createdAt: row.createdAt.toISOString(),
       // The chip the message was sent with. Omitted — not null — when there is
       // none: the generated Swift client drops a nullable object silently.
       ...contextField(readChatContextSnapshot(row.context)),
-    })),
+    };
+  });
+  console.log(
+    `[chat/history] rows=${page.length} images=${paths.length} sign_ms=${signMs} total_ms=${Date.now() - startedAt}${sessionId ? " session=1" : ""}`,
   );
   res.json({ messages, hasMore });
+});
+
+/**
+ * GET /v1/chat/sessions — the person's chats, most recently active first
+ * (decision journal 2026-09-30). `before` is a chat id, exclusive; an unknown
+ * or foreign one is a 404, like `/history`'s cursor.
+ *
+ * Read-only and free, so outside `requireAgentAccess` for the same reason as
+ * `/history`: a list that went blank on suspension would read as data loss.
+ */
+chatRouter.get("/sessions", async (req: Request, res: Response): Promise<void> => {
+  const limit = Math.min(
+    Math.max(Number(req.query.limit ?? CHAT_SESSIONS_PAGE_DEFAULT) || CHAT_SESSIONS_PAGE_DEFAULT, 1),
+    CHAT_SESSIONS_PAGE_MAX,
+  );
+  const rawBefore = req.query.before;
+  const before = typeof rawBefore === "string" && rawBefore ? rawBefore.toLowerCase() : null;
+  const page = await listChatSessions(req.userId!, { limit, before });
+  if (!page) {
+    res.status(404).json({ error: "Unknown cursor" });
+    return;
+  }
+  res.json(page);
+});
+
+/**
+ * PATCH /v1/chat/sessions/:id — rename a chat by hand. From then on the
+ * automatic titler never touches it. Someone else's chat is the same 404 as
+ * one that never existed.
+ */
+chatRouter.patch("/sessions/:id", async (req: Request, res: Response): Promise<void> => {
+  const title = normalizeChatSessionTitle(req.body?.title);
+  if (title === null) {
+    res.status(400).json({ error: "Title must be 1–80 characters" });
+    return;
+  }
+  const session = await renameChatSession(req.userId!, String(req.params.id).toLowerCase(), title);
+  if (!session) {
+    res.status(404).json({ error: "Unknown chat" });
+    return;
+  }
+  res.json(session);
 });
 
 /**
@@ -342,7 +445,8 @@ function rowImages(row: { imageUrl: string | null; imageUrls: string[] }): strin
 /**
  * GET /v1/chat/topics — the read-only index of past conversations.
  *
- * Not threads: see the header of `services/chat-topics.ts`. The agent's
+ * Superseded by `/sessions` (2026-09-30) and kept, unchanged, for app builds
+ * that still read it. Not threads: see the header of `services/chat-topics.ts`. The agent's
  * context is untouched by this route, and nothing here can be sent, renamed
  * or deleted — a topic is a slice of the one continuous transcript, cut at a
  * silence, that the client uses to scroll back to a point in time.
@@ -378,6 +482,33 @@ async function contextFromRequest(
     return false;
   }
   return snapshot;
+}
+
+/**
+ * Parse and claim the optional chat id of a turn. Writes the error response
+ * itself and answers `false` when the request must stop; `null` for a turn
+ * that names no chat (an older build); otherwise the id, now the caller's.
+ *
+ * Not a UUID → 400. Someone else's chat → 404 with the body an unknown inbox
+ * context gets — the two are the same answer on purpose. An id nobody has
+ * used yet becomes the caller's new chat.
+ */
+async function sessionFromRequest(
+  raw: unknown,
+  userId: string,
+  res: Response,
+): Promise<string | null | false> {
+  const parsed = parseChatSessionIdField(raw);
+  if (parsed === "invalid") {
+    res.status(400).json({ error: "Invalid sessionId" });
+    return false;
+  }
+  if (parsed === null) return null;
+  if (!(await claimChatSession(userId, parsed))) {
+    res.status(404).json({ error: "Unknown context" });
+    return false;
+  }
+  return parsed;
 }
 
 function contextField(snapshot: ChatContextSnapshot | null): { context?: ChatContextSnapshot } {

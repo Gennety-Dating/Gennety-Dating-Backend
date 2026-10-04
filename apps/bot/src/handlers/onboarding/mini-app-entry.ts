@@ -42,35 +42,35 @@ function waitlistMiniAppCopy(
         button: "Открыть Gennety",
         message:
           `Ты в списке ожидания: в городе ${city} Gennety пока не работает. ` +
-          "Напишем первым, как только откроемся там. Если готов ходить на свидания в другом городе — открой Mini App и выбери его.",
+          "Напишем первым, как только откроемся там. Если хочешь ходить на свидания в другом городе — открой Gennety и выбери его.",
       };
     case "uk":
       return {
         button: "Відкрити Gennety",
         message:
           `Ти в списку очікування: у місті ${city} Gennety поки не працює. ` +
-          "Напишемо першим, щойно відкриємось там. Якщо готовий ходити на побачення в іншому місті — відкрий Mini App і обери його.",
+          "Напишемо першим, щойно відкриємось там. Якщо хочеш ходити на побачення в іншому місті — відкрий Gennety і обери його.",
       };
     case "de":
       return {
         button: "Gennety öffnen",
         message:
           `Du stehst auf der Warteliste: In ${city} ist Gennety noch nicht am Start. ` +
-          "Wir melden uns bei dir zuerst, sobald wir dort öffnen. Wenn du in einer anderen Stadt auf Dates gehen möchtest, öffne die Mini App und wähle sie aus.",
+          "Wir melden uns bei dir zuerst, sobald wir dort öffnen. Wenn du in einer anderen Stadt auf Dates gehen möchtest, öffne Gennety und wähle sie aus.",
       };
     case "pl":
       return {
         button: "Otwórz Gennety",
         message:
           `Jesteś na liście oczekujących: w mieście ${city} Gennety jeszcze nie działa. ` +
-          "Napiszemy do Ciebie jako do pierwszej osoby, gdy tylko tam ruszymy. Jeśli chcesz chodzić na randki w innym mieście — otwórz Mini App i wybierz je.",
+          "Napiszemy do Ciebie jako do pierwszej osoby, gdy tylko tam ruszymy. Jeśli chcesz chodzić na randki w innym mieście — otwórz Gennety i wybierz je.",
       };
     default:
       return {
         button: "Open Gennety",
         message:
           `You're on the waitlist: Gennety isn't live in ${city} yet. ` +
-          "We'll write to you first the moment we open there. If you're ready to date in another city, open the Mini App and pick one.",
+          "We'll write to you first the moment we open there. If you're ready to date in another city, open Gennety and pick one.",
       };
   }
 }
@@ -83,39 +83,39 @@ function onboardingMiniAppCopy(
     return {
       button: "Открыть Gennety",
       message: emailVerified
-        ? "Почта уже подтверждена. Открой полноэкранный Mini App — он быстро доведёт вход до конца, а потом я продолжу здесь."
-        : "Запустим Gennety в полноэкранном Mini App. Там будет короткий вход, а потом я продолжу онбординг прямо здесь.",
+        ? "Почта уже подтверждена. Открой Gennety — там быстро закончим вход, потом вернёмся сюда."
+        : "Открой Gennety — там быстрый вход, потом вернёмся сюда.",
     };
   }
   if (lang === "uk") {
     return {
       button: "Відкрити Gennety",
       message: emailVerified
-        ? "Пошту вже підтверджено. Відкрий повноекранний Mini App — він швидко завершить вхід, а потім я продовжу тут."
-        : "Запустимо Gennety у повноекранному Mini App. Там буде короткий вхід, а потім я продовжу онбординг тут.",
+        ? "Пошту вже підтверджено. Відкрий Gennety — там швидко завершимо вхід, потім повернемося сюди."
+        : "Відкрий Gennety — там швидкий вхід, потім повернемося сюди.",
     };
   }
   if (lang === "de") {
     return {
       button: "Gennety öffnen",
       message: emailVerified
-        ? "Deine E-Mail ist bereits bestätigt. Öffne die Vollbild-Mini-App, um den Einstieg abzuschließen. Danach mache ich hier weiter."
-        : "Öffnen wir Gennety als Vollbild-Mini-App. Dort erledigst du den kurzen Einstieg, danach setze ich das Onboarding hier fort.",
+        ? "Deine E-Mail ist schon bestätigt. Öffne Gennety — dort schließen wir den Einstieg schnell ab, dann geht es hier weiter."
+        : "Öffne Gennety — dort geht der Einstieg schnell, dann geht es hier weiter.",
     };
   }
   if (lang === "pl") {
     return {
       button: "Otwórz Gennety",
       message: emailVerified
-        ? "Twój e-mail jest już potwierdzony. Otwórz pełnoekranową Mini App, aby dokończyć wejście, a potem będę kontynuować tutaj."
-        : "Otwórzmy Gennety w pełnoekranowej Mini App. Tam przejdziesz krótki proces wejścia, a potem będę kontynuować onboarding tutaj.",
+        ? "Twój e-mail jest już potwierdzony. Otwórz Gennety — tam szybko dokończymy wejście, potem wrócimy tutaj."
+        : "Otwórz Gennety — tam szybkie wejście, potem wrócimy tutaj.",
     };
   }
   return {
     button: "Open Gennety",
     message: emailVerified
-      ? "Your email is already verified. Open the full-screen Mini App to finish the handoff, then I'll continue here."
-      : "Let's open Gennety in a full-screen Mini App. It handles the short entry flow, then I'll continue onboarding here.",
+      ? "Your email is already verified. Open Gennety to finish signing in quickly, then we'll come back here."
+      : "Open Gennety — a quick sign-in there, then we'll come back here.",
   };
 }
 

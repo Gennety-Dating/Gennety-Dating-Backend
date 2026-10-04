@@ -2,7 +2,7 @@
  * Rematch offer surface (REMATCH_PRODUCT_SPEC.md, D4).
  *
  * There is deliberately NO permanent menu entry. The offer appears only at the
- * two moments it answers something the user just felt: the weekly batch left him
+ * two moments it answers something the user just felt: the scheduled batch left him
  * unpaired, or his match ended without a date. Anywhere else it would read as a
  * shop rather than a matchmaker.
  *
@@ -112,7 +112,8 @@ export async function sendRematchOfferIfEligible(
   if (text.length > CAPTION_LIMIT) return sendText();
 
   const png = await renderRematchCard({
-    overline: t(lang, "rematchCardOverline"),
+    // Overline dropped by the copy audit (2026-10-01); the key stays in i18n.
+    overline: "",
     headline: t(lang, "rematchCardHeadline"),
     subline: t(lang, "rematchCardSubline"),
     theme,

@@ -5,8 +5,6 @@ import {
   t,
   type Language,
   PROFILER_MAX_ANSWER_LEN,
-  isRefreshableProfilerQuestion,
-  profilerQuestionBank,
   profilerQuestionById,
   profilerQuestionText,
   type ProfilerQuestion,
@@ -27,15 +25,22 @@ import {
   nextWindowAt,
   profilerActiveQuestionPatch,
   resolveZone,
+  selectContextualProfilerQuestion,
   shouldCaptureProfilerAnswer,
   skipTransition,
   type ProfilerAnswerRow,
 } from "./profiler-schedule.js";
 import {
+  loadProfilerContextSignals,
+  profilerContextMarkdown,
+  resolveProfilerQuestionContext,
+} from "./profiler-context.js";
+import {
   MESSAGE_REACTION,
   reactToMessage,
   type MessageReactionTarget,
 } from "./message-reactions.js";
+import { refreshWingmanHintAbout } from "./wingman-hint.js";
 
 /**
  * Profiler orchestration (PRODUCT_SPEC §Phase 1b) — the IO layer over the pure
@@ -50,7 +55,9 @@ import {
  * write the same rows the same way; only delivery differs.
  *
  * The data fuels icebreakers + hints (see `wingman-hint.ts` and
- * `date-lifecycle.ts`); it is NOT consumed by the matching algorithm.
+ * `date-lifecycle.ts`); it is NOT consumed by the matching algorithm yet —
+ * the founder plans that once the app takes quick-tap answers (decision
+ * 2026-10-04), which is why contextual questions already carry closed options.
  */
 
 export const PROFILER_SKIP_PREFIX = "profiler:skip:";
@@ -93,14 +100,10 @@ export function shouldReactToProfilerAnswer(questionId: string): boolean {
 }
 
 /**
- * Drop cycle id for `refresh: "cycle"` situational Profiler questions —
- * calendar week (`isoWeekKey`), deliberately independent of the matching
- * batch's own cadence. Used to be `getNextBatchDate(now)` (the next batch
- * date), which was fine under `weekly` (the batch date already changes
- * exactly once a week) but broke under `daily`: the next-batch date changes
- * every single day, which would make every situational question ("what are
- * you watching this week") eligible to re-ask daily instead of weekly,
- * regardless of what the matching cadence actually is.
+ * The Profiler's cycle id — calendar week (`isoWeekKey`), deliberately
+ * independent of the matching batch's own cadence. A skipped question returns
+ * once per cycle, and contextual questions are capped per cycle
+ * (`PROFILER_CONTEXT_WEEKLY_CAP`).
  */
 export function profilerCycleId(now: Date): string {
   return isoWeekKey(now);
@@ -137,6 +140,7 @@ export async function loadProfilerState(userId: string): Promise<ProfilerUserSta
         select: {
           questionId: true,
           answerText: true,
+          answeredAt: true,
           skipped: true,
           skipReturned: true,
           cycleId: true,
@@ -185,6 +189,11 @@ function profilerSkipKeyboard(questionId: string, lang: Language): InlineKeyboar
  * client reserves and collapses the compose space exactly once. Degrades to the
  * classic edited-message stream when the client can't render rich drafts.
  *
+ * A contextual question arrives with `contextMarkdown` — its card as a quote
+ * (`profilerContextMarkdown`), the date and the place or the person's own
+ * earlier words — and the question follows it in the same message, so what is
+ * being asked about is on screen before the question is.
+ *
  * Returns the sent message id (needed to recognise a later reply and to strip
  * the Skip keyboard), or null on delivery failure so the caller can reschedule.
  */
@@ -194,16 +203,18 @@ async function sendQuestion(
   question: ProfilerQuestion,
   lang: Language,
   mode: "open" | "advance",
+  contextMarkdown: string | null,
   wait?: Wait,
 ): Promise<number | null> {
   if (telegramId <= 0n) return null;
   const beats = mode === "advance" ? profilerNextQuestionSteps(lang) : profilerOpenQuestionSteps(lang);
+  const text = profilerQuestionText(question, lang);
   try {
     const message = await streamComposedRich(
       api,
       Number(telegramId),
       beats,
-      [profilerQuestionText(question, lang)],
+      [contextMarkdown ? `${contextMarkdown}\n\n${text}` : text],
       { replyMarkup: profilerSkipKeyboard(question.id, lang), ...(wait ? { wait } : {}) },
     );
     return message?.message_id ?? null;
@@ -267,8 +278,33 @@ async function retireExpiredQuestion(
 }
 
 /**
+ * The contextual question a batch should OPEN with, or null — the "lazy
+ * check": the signals are read only here, for a person whose batch is due
+ * anyway, never in the background. Shared with the native path.
+ */
+export async function contextualQuestionFor(
+  state: Pick<ProfilerUserState, "userId" | "gender" | "answers">,
+  now: Date,
+): Promise<ProfilerQuestion | null> {
+  if (!state.gender) return null;
+  const signals = await loadProfilerContextSignals(state.userId, now);
+  return selectContextualProfilerQuestion(
+    state.gender,
+    state.answers,
+    signals,
+    now,
+    profilerCycleId(now),
+  );
+}
+
+/**
  * Send one question from the current batch, or pause/finish when the batch is
  * exhausted or nothing's pending. Shared by batch start and post-reply advance.
+ *
+ * Only a batch's opening question (`mode: "open"`) may be contextual, which is
+ * what holds contextual questions to one per batch. A contextual question whose
+ * moment is gone by the time it would be sent (`stale`) is dropped for the
+ * ordinary next question.
  */
 async function sendOneFromBatch(
   api: Api<RawApi>,
@@ -278,16 +314,37 @@ async function sendOneFromBatch(
   wait?: Wait,
 ): Promise<"sent" | "paused" | "done"> {
   const cycleId = profilerCycleId(now);
-  const step = nextProfilerBatchStep(
+  const contextual = mode === "open" ? await contextualQuestionFor(state, now) : null;
+  let step = nextProfilerBatchStep(
     state.gender,
     state.answers,
     state.profilerBatchRemaining,
     cycleId,
+    contextual,
   );
+  let contextMarkdown: string | null = null;
+  if (step.kind === "ask") {
+    const resolution = await resolveProfilerQuestionContext(
+      state.userId,
+      step.question,
+      state.language,
+      now,
+    );
+    if (resolution.kind === "card") {
+      contextMarkdown = profilerContextMarkdown(resolution.card, state.language, state.timeZone);
+    } else if (resolution.kind === "stale") {
+      step = nextProfilerBatchStep(
+        state.gender,
+        state.answers,
+        state.profilerBatchRemaining,
+        cycleId,
+      );
+    }
+  }
   if (step.kind === "exhausted") {
     // All questions exhausted — completion is SILENT per spec §Phase 1b
     // (no "profile complete" ping). Do NOT play a status here.
-    await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
+    await awaitNextProfilerWindow(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
   if (step.kind === "boundary") {
@@ -296,7 +353,15 @@ async function sendOneFromBatch(
   const question = step.question;
   // Every question — first of a batch ("open") or a follow-up ("advance") —
   // goes through the same native AI-compose beat; only the status differs.
-  const messageId = await sendQuestion(api, state.telegramId, question, state.language, mode, wait);
+  const messageId = await sendQuestion(
+    api,
+    state.telegramId,
+    question,
+    state.language,
+    mode,
+    contextMarkdown,
+    wait,
+  );
   if (messageId === null) {
     // Couldn't deliver (e.g. blocked) — retry at the next window rather than
     // burning the active slot. Leaves active=null so the worker re-picks it up.
@@ -567,31 +632,26 @@ async function finish(userId: string): Promise<void> {
 }
 
 /**
- * Nothing is pending in the CURRENT drop cycle. If the bank has no
- * **refreshable** ("cycle") question at all, this really is the end — quiesce
- * forever via `finish()`.
+ * Nothing is pending right now. For a person without a known gender that
+ * really is the end (no bank, no contextual question) — quiesce via `finish()`.
  *
- * Otherwise it only LOOKS finished: a refreshable question becomes eligible
- * again once the cycle rolls over (`profilerCycleId` advances at the next
- * weekly batch), so a true `finish()` here would be a bug — its null
+ * Everyone else only LOOKS finished: a contextual question can open at any
+ * moment — a date gets scheduled, a date takes place, an answer turns a month
+ * old — and a true `finish()` here would be a bug, because its null
  * `profilerNextAt` means the dispatch sweep (`profilerNextAt: { lte: now }`)
- * never looks at this user again, EVER, so the "situational questions repeat
- * weekly" mechanic would silently never fire in production. Instead this
- * schedules a silent re-check at the next window, same as an ordinary pause;
- * `selectNextProfilerQuestion` keeps returning null on each check until the
- * cycle actually changes, at which point the refreshable questions become due
- * and the batch fires for real. Cheap: 2 no-op checks a day, capped by the
- * worker's existing per-tick limits, and every current gender bank guarantees
- * at least one refreshable question (see profiler-questions.test.ts).
+ * never looks at this person again, so no contextual question would ever
+ * reach them. Instead this schedules a silent re-check at the next window,
+ * same as an ordinary pause. That re-check IS the contextual trigger's "lazy
+ * check": two cheap reads a day, only for people whose window came, capped by
+ * the worker's per-tick limits.
  */
-export async function finishOrAwaitNextCycle(
+export async function awaitNextProfilerWindow(
   userId: string,
   gender: "male" | "female" | null,
   now: Date,
   timeZone: string | null,
 ): Promise<void> {
-  const hasRefreshable = profilerQuestionBank(gender).some(isRefreshableProfilerQuestion);
-  if (!hasRefreshable) {
+  if (!gender) {
     await finish(userId);
     return;
   }
@@ -829,6 +889,21 @@ export async function upsertProfilerAnswer(
       ...mediaFields,
     },
   });
+
+  // A fresh topic for an upcoming date exists to reach THAT date's partner. The
+  // wingman tip was written when the venue locked — before this answer — so
+  // the tip about this person is rewritten while it is still unrevealed. Off
+  // the reply path: an LLM call must not hold up the next question, and a
+  // failed rewrite leaves the earlier tip, which is still a valid tip.
+  if (question.context?.family === "topic") {
+    const matchId = question.context.key;
+    void refreshWingmanHintAbout(matchId, userId, now).catch((err: unknown) => {
+      console.warn(
+        `[profiler] wingman refresh failed for match ${matchId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
 }
 
 /** Write the one-time-return skip state for a question (`skipTransition`). */

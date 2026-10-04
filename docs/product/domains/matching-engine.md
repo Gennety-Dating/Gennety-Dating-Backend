@@ -12,13 +12,13 @@ batch cron, the proposal-decision deadline strategy, the match cooldown, the
 starvation-bonus rate, nudge offsets, the famine-notice interval, the Profiler
 rush window, and Rematch's blackout/limits — into one object, selected once at
 boot by the `DROP_CADENCE` env var (`weekly` | `daily`, default `weekly`).
-Everything below in this section describes the **`weekly` profile, which is
-what production runs today** — `DROP_CADENCE` is not set in `/opt/gennety/.env`
-and flipping it to `daily` is a separate, later decision gated on pool size,
-not on anything documented here. The `daily` profile exists in code (nightly
-cron `"0 18 * * *"`, a 30-minute-before-next-drop decision deadline instead of
-a flat 24h, a 6h cooldown, and the §D10 pool-exhaustion pause below) but is
-inert until that env var changes.
+Production uses **`daily` since 2026-08-10**: daily at 18:00 Europe/Kyiv,
+selected through env only ([founder decision](../../architecture/decisions/2026-08-07_2026-08-12.md#2026-08-10--drop_cadencedaily-in-production-and-the-thursday-gate-was-replaced-by-a-dry-run)).
+Without env, local runs and CI still select `weekly` (Thursday 18:00).
+Daily uses an anchored deadline (next batch minus 30 minutes, minimum 90 minutes
+from dispatch), a 6 h candidate cooldown and the pool-exhaustion pause below.
+Fixed 24 h replies and the 24 h candidate cooldown describe `weekly` only;
+profile-specific passages below are labelled accordingly.
 
 **Match daily, apologise weekly (founder decision 2026-08-02).** The notice
 cadence is deliberately NOT tied to the drop cadence: `famineNoticeIntervalMs`
@@ -69,9 +69,9 @@ change, not a migration.
   second reminder would restate it while adding a weekly full-pool matching run.
   The agent's product playbook must not describe a teaser
   (`services/product-playbook.ts`).
-- **Weekly batch** — Thursday 18:00 Europe/Kyiv (`MATCH_CRON_SCHEDULE = "0 18 * * 4"`).
+- **Scheduled drop** — daily at 18:00 Europe/Kyiv in production (`DROP_CADENCE=daily` since 2026-08-10; `CADENCE.cron = "0 18 * * *"`). Without that env key, code defaults to `weekly` (`"0 18 * * 4"`, Thursday 18:00). `MATCH_CRON_SCHEDULE` may override the profile cron; stored `Match.source = weekly` remains a contract name.
 - **No-match notice** — right after the drop's dispatch finishes (the drop job runs it);
-  Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`) is only the
+  daily 18:15 Kyiv in production (`CADENCE.noMatchNoticeCron = "15 18 * * *"`; Thursday 18:15 under the env-free `weekly` default) is only the
   fallback, and it defers while the drop is still dispatching (2026-09-14, A13-H10: a
   large drop used to still be sending pitches at 18:15, so matched users were told
   they had no match). An empathetic DM goes to every eligible-but-unpaired user —
@@ -1102,7 +1102,7 @@ unaffected, and iOS never touched any of this (StoreKit →
   `ticketPurchaseRail()` in `services/ticket-payment.ts` (it replaced the
   mock/Stripe abstraction on 2026-09-11).
 - **Famine discount (single ticket).** A one-time loyalty perk for a user the
-  weekly batch left unpaired for a **2nd consecutive week or more** (no-match
+  scheduled drops left unpaired through a **2nd consecutive weekly notice or more** (no-match
   `tier ≥ CADENCE.famineDiscountMinTier`, 2). The §3.1 no-match DM grants and announces
   a **`FAMINE_DISCOUNT_PCT` (77%) discount on one ticket**, valid
   `FAMINE_DISCOUNT_TTL_DAYS` (30) days. It applies to a **single** ticket

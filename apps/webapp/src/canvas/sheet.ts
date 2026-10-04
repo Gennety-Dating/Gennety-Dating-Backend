@@ -66,16 +66,13 @@ export interface CanvasInput {
   bumpVerified?: boolean;
   deck?: string[];
   radar?: RadarReading | null;
-  /** Share of the city uncovered, already formatted (`fog.ts`). Absent while
-   *  the Scratch Map is off or has nothing to say. */
-  exploredLabel?: string | null;
 }
 
 /**
  * What the sheet does when tapped. `chat` closes the Mini App, which is the
  * honest action for every state whose real flow lives in the bot: the canvas
  * is a map and a status surface in v1, not a second place to accept a pitch.
- * `terminal` opens the Date Terminal, which owns the shake (Contact Sync) since
+ * `terminal` opens the Date Terminal, which owns the bump gesture (Contact Sync) since
  * 2026-09-11 — one bump surface in the Mini App instead of two that could drift.
  */
 export type SheetAction = "chat" | "terminal" | null;
@@ -198,10 +195,10 @@ export function sheetFor(input: CanvasInput): SheetView {
     case "DATE_BUMP_PENDING":
       return {
         title: s.bumpTitle,
-        // The terminal stays offered after this side has shaken. The two shakes
+        // The terminal stays offered after this side has bumped. The two bumps
         // have to land within `BUMP_SHAKE_WINDOW_MS` of each other, so a phone
-        // that shook alone may well have to shake again, together — which the
-        // old "shake once, then nothing" rule left no way to do.
+        // that held (or shook) alone may well have to go again, together —
+        // which the old "shake once, then nothing" rule left no way to do.
         body: input.bumpMine ? s.bumpWaiting : s.bumpBody,
         action: "terminal",
         actionLabel: s.terminalAction,
@@ -237,12 +234,6 @@ export function sheetFor(input: CanvasInput): SheetView {
         // (§2.1 mode 5). The canvas follows the banner rather than inventing
         // a countdown of its own.
         body: left ? s.idleBody.replace("{time}", left) : s.idleNoDrop,
-        // The Scratch Map's one line, and it appears ONLY here. This is the
-        // state where the canvas is a map rather than a status screen; on the
-        // others the line would be a souvenir competing with a date.
-        ...(input.exploredLabel
-          ? { note: s.scratchExplored.replace("{percent}", input.exploredLabel) }
-          : {}),
         action: null,
         tone: "quiet",
       };

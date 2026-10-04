@@ -292,8 +292,8 @@ export async function runDateLifecycleTick(
     const summaryA = profileA?.psychologicalSummary ?? null;
     const summaryB = profileB?.psychologicalSummary ?? null;
 
-    const scoredA = scoreProfilerAnswers(answersA);
-    const scoredB = scoreProfilerAnswers(answersB);
+    const scoredA = scoreProfilerAnswers(answersA, { matchId: match.id });
+    const scoredB = scoreProfilerAnswers(answersB, { matchId: match.id });
     // The block describing the PARTNER, rendered in the reader's language.
     const partnerBlockForA = formatProfilerAnswersBlock(scoredB, langA);
     const partnerBlockForB = formatProfilerAnswersBlock(scoredA, langB);

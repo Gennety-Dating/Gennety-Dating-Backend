@@ -1229,7 +1229,7 @@ describe("Menu — Edit Bio", () => {
       expect.objectContaining({ data: expect.objectContaining({ embeddingDirty: true }) }),
     );
     expect(ctx.reply).toHaveBeenCalledWith(
-      expect.stringContaining("automatic profile sync"),
+      expect.stringContaining("next round"),
     );
   });
 
@@ -1710,7 +1710,7 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("isn't available"));
   });
 
-  it("handleDeleteAccountConfirm shows the final confirmation with one delete + two back-outs", async () => {
+  it("handleDeleteAccountConfirm shows the final confirmation with one delete + one back-out", async () => {
     const ctx = pendingCtx(
       "freeze_or_delete",
       "menu:settings:delete:proceed:nonce",
@@ -1718,11 +1718,12 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     await handleDeleteAccountConfirm(ctx);
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
     const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(body).toContain("permanently delete");
+    expect(body).toContain("Delete your account for good?");
     const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
     const serialized = JSON.stringify(markup);
     expect(serialized).toContain("menu:settings:delete:yes");
     expect(serialized).toContain("menu:back");
+    expect(serialized.match(/menu:back/g)).toHaveLength(1);
   });
 
   it("handleDeleteAccountExecute delegates to the shared deletion workflow", async () => {

@@ -44,7 +44,6 @@ import {
 } from "@gennety/shared";
 
 import { haversineDistanceKm, type LatLng } from "./geo.js";
-import { recordVerifiedVisit } from "./scratch-map.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
@@ -52,6 +51,7 @@ import { callOpenAIText } from "./openai.js";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 import { sideOf } from "./date-state.js";
 import { venueCoordinatesOf } from "./venue-location.js";
+import { notifyBumpVerified, type CeremonySnapshot } from "./bump-ceremony.js";
 
 export type BumpRefusal =
   /** The caller is on neither side of this match. */
@@ -110,6 +110,18 @@ export interface RecordBumpInput {
   coords: LatLng;
 }
 
+/** What a HOLD needs on top of the outcome to answer with a ceremony. */
+export interface HoldBumpOutcome extends BumpOutcome {
+  /** The caller's side of the match; absent on a refusal before it is known. */
+  side?: "A" | "B";
+  /**
+   * The ceremony's source columns, when this call already knows them for
+   * certain — i.e. when it is the call that verified the pair. Every other
+   * verified answer re-reads the row (`CEREMONY_SNAPSHOT_SELECT`).
+   */
+  snapshot?: CeremonySnapshot;
+}
+
 /**
  * Record one side's shake, and verify the pair if this completes it.
  *
@@ -118,6 +130,32 @@ export interface RecordBumpInput {
  * own, because the peer's column is what the alignment check reads.
  */
 export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
+  const { ok, reason, verified, justVerified } = await recordBumpDetailed(input, {
+    hold: false,
+  });
+  return reason === undefined ? { ok, verified, justVerified } : { ok, reason, verified, justVerified };
+}
+
+/**
+ * `recordBump` for a HOLD: the same checks and the same single compare-and-set,
+ * plus the side and — for the verifying call — the ceremony's source columns.
+ *
+ * One behavioural difference, and it is what keeps the ceremony's `role`
+ * derivable: **a hold never writes to a pair that is already verified.** The
+ * role is read off which side's stamp equals `verifiedAt`; an old shake
+ * overwrites its own stamp on every retry, which is harmless for the shake
+ * (nothing reads the column after verification but `bump.mine`, a non-null
+ * check) and would silently flip the role of a hold retried after a dropped
+ * long-poll.
+ */
+export async function recordHold(input: RecordBumpInput): Promise<HoldBumpOutcome> {
+  return recordBumpDetailed(input, { hold: true });
+}
+
+async function recordBumpDetailed(
+  input: RecordBumpInput,
+  options: { hold: boolean },
+): Promise<HoldBumpOutcome> {
   const { matchId, userId, at, coords } = input;
 
   const match = await prisma.match.findUnique({
@@ -133,7 +171,6 @@ export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
       // Признак того, что `venueLat/Lng` означает заведение, а не середину
       // маршрута: `venue-location.ts`.
       venueMidpointLat: true,
-      venuePlaceId: true,
     },
   });
   if (!match) return refuse("wrong-state");
@@ -155,6 +192,14 @@ export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
     return refuse("too-far");
   }
 
+  if (options.hold) {
+    const existing = await prisma.dateBumpSession.findUnique({
+      where: { matchId },
+      select: { isVerified: true },
+    });
+    if (existing?.isVerified) return { ok: true, verified: true, justVerified: false, side };
+  }
+
   const mine = side === "A" ? "userAShakeAt" : "userBShakeAt";
   const session = await prisma.dateBumpSession.upsert({
     where: { matchId },
@@ -164,27 +209,29 @@ export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
   });
 
   // Already credited — say so plainly rather than pretending this shake did it.
-  if (session.isVerified) return { ok: true, verified: true, justVerified: false };
+  if (session.isVerified) return { ok: true, verified: true, justVerified: false, side };
 
   const peerShake = side === "A" ? session.userBShakeAt : session.userAShakeAt;
   if (!peerShake || !shakesAligned(at, peerShake)) {
-    return { ok: true, verified: false, justVerified: false };
+    return { ok: true, verified: false, justVerified: false, side };
   }
 
   const claimed = await verifyBump(match, at);
-  if (claimed) {
-    // The Scratch Map's other writer (§Scratch Map). Fire-and-forget on
-    // purpose: it is the one thing here that is a souvenir rather than a
-    // consequence, and the pair is at a table waiting for this response. It
-    // swallows its own errors and honours each side's opt-in independently.
-    void recordVerifiedVisit({
-      userIds: [match.userAId, match.userBId],
-      venueId: match.venuePlaceId,
-      lat: match.venueLat,
-      lng: match.venueLng,
-    });
-  }
-  return { ok: true, verified: true, justVerified: claimed };
+  if (!claimed) return { ok: true, verified: true, justVerified: false, side };
+  return {
+    ok: true,
+    verified: true,
+    justVerified: true,
+    side,
+    // Exactly what `verifyBump` just committed: `verifiedAt = at`, and this
+    // side's column holds the same `at` from the upsert above.
+    snapshot: {
+      isVerified: true,
+      verifiedAt: at,
+      userAShakeAt: side === "A" ? at : peerShake,
+      userBShakeAt: side === "B" ? at : peerShake,
+    },
+  };
 }
 
 function refuse(reason: BumpRefusal): BumpOutcome {
@@ -235,6 +282,11 @@ async function verifyBump(
   });
 
   if (!claimed) return false;
+
+  // Wake any hold waiting on this pair (bump-ceremony.ts) the moment the
+  // verification is committed — before the tickets, which the waiting phone's
+  // ceremony does not need and would only delay.
+  notifyBumpVerified(match.id);
 
   // Tickets ride their own exactly-once rail rather than the transaction above:
   // `grantTickets` writes a ledger row plus the materialized balance and is the
@@ -363,8 +415,8 @@ export async function generateAndStoreBumpDeck(matchId: string): Promise<BumpDec
   if (!match) return null;
 
   const [topicsForA, topicsForB] = await Promise.all([
-    topicsFor(match.userA, match.userB),
-    topicsFor(match.userB, match.userA),
+    topicsFor(match.userA, match.userB, matchId),
+    topicsFor(match.userB, match.userA, matchId),
   ]);
 
   const deck: BumpDeck = { topicsForA, topicsForB };
@@ -399,7 +451,11 @@ type Participant = {
   }[];
 };
 
-async function topicsFor(viewer: Participant, partner: Participant): Promise<string[]> {
+async function topicsFor(
+  viewer: Participant,
+  partner: Participant,
+  matchId: string,
+): Promise<string[]> {
   const language: Language = viewer.language ?? "en";
   const fallback = staticDeck(language);
 
@@ -410,6 +466,7 @@ async function topicsFor(viewer: Participant, partner: Participant): Promise<str
       priority: a.priority as never,
       skipped: a.skipped,
     })),
+    { matchId },
   );
 
   const prompt = generateBumpDeckPrompt({

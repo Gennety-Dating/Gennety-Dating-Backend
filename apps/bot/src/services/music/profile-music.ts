@@ -60,6 +60,18 @@ export async function listProfileMusic(userId: string): Promise<MusicTrack[]> {
   return rows.map(serializeMusicTrack);
 }
 
+/**
+ * How many tracks the person pinned — a number and nothing else, for the
+ * profile-gaps read (`services/profile-gaps.ts`, decision 2026-10-01), which
+ * only needs "is the music section still empty". It lives HERE, inside the
+ * allow-listed reader, so that read never selects a track: no title, artist or
+ * id leaves this module, and the AI boundary (`ai-boundary.test.ts`) stays as
+ * narrow as it was.
+ */
+export async function countProfileMusic(userId: string): Promise<number> {
+  return prisma.profileMusicTrack.count({ where: { userId } });
+}
+
 export type SetProfileMusicError =
   | "invalid_track_ids"
   | "too_many_tracks"

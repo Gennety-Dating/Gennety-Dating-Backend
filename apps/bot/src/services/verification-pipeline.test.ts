@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TIME_SENSITIVE_PUSH_TYPES } from "./apns.js";
 import {
+  isFaceMatchRunning,
   runFaceMatchVerification,
+  trackFaceMatchRun,
   VERIFICATION_PUSH_TYPE,
   type PersistOutcomeInput,
   type PersistOutcomeResult,
@@ -1354,5 +1356,64 @@ describe("runFaceMatchVerification — which rail hears the outcome", () => {
     // two (ARCHITECTURE → APNs, 2026-08-12); this is the sender that would have
     // been most tempting to add, since the user is actively waiting on it.
     expect(TIME_SENSITIVE_PUSH_TYPES.has(VERIFICATION_PUSH_TYPE)).toBe(false);
+  });
+});
+
+describe("face-match run registry (GET /v1/me/verification `checking`)", () => {
+  function deferred<T = void>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it("marks the run synchronously, before anything is awaited", () => {
+    const run = deferred();
+    expect(isFaceMatchRunning("reg-sync")).toBe(false);
+    void trackFaceMatchRun("reg-sync", run.promise);
+    // No await between the call and this read.
+    expect(isFaceMatchRunning("reg-sync")).toBe(true);
+    run.resolve();
+  });
+
+  it("clears the mark when the run resolves", async () => {
+    const run = deferred<string>();
+    const tracked = trackFaceMatchRun("reg-resolve", run.promise);
+    run.resolve("done");
+    await expect(tracked).resolves.toBe("done");
+    expect(isFaceMatchRunning("reg-resolve")).toBe(false);
+  });
+
+  it("clears the mark when the run rejects, and still hands the rejection back", async () => {
+    const run = deferred();
+    const tracked = trackFaceMatchRun("reg-reject", run.promise);
+    run.reject(new Error("boom"));
+    await expect(tracked).rejects.toThrow("boom");
+    expect(isFaceMatchRunning("reg-reject")).toBe(false);
+  });
+
+  it("keeps a newer run's mark when an older run for the same user settles", async () => {
+    const older = deferred();
+    const newer = deferred();
+    const olderTracked = trackFaceMatchRun("reg-replace", older.promise);
+    const newerTracked = trackFaceMatchRun("reg-replace", newer.promise);
+    older.resolve();
+    await olderTracked;
+    expect(isFaceMatchRunning("reg-replace")).toBe(true);
+    newer.resolve();
+    await newerTracked;
+    expect(isFaceMatchRunning("reg-replace")).toBe(false);
+  });
+
+  it("tracks users independently", async () => {
+    const a = deferred();
+    const trackedA = trackFaceMatchRun("reg-a", a.promise);
+    expect(isFaceMatchRunning("reg-a")).toBe(true);
+    expect(isFaceMatchRunning("reg-b")).toBe(false);
+    a.resolve();
+    await trackedA;
   });
 });

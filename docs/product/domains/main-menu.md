@@ -30,7 +30,7 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   place Gennety operates, and the only city change the product offers after
   onboarding. Non-destructive — only `Profile.home*`/coordinates/`timeZone`
   change; status, profile, photos, verification, tickets and Premium are
-  untouched, so the user lands in the next Thursday drop as they are. A failed
+  untouched, so the user lands in the next daily production drop (18:00 Europe/Kyiv) as they are. A failed
   save says so rather than claiming success. Telegram-only; iOS uses
   `POST /v1/me/home-location`.
 - **My Date** — a conditional row, present **only** while the user has an
@@ -287,7 +287,8 @@ and the re-engagement worker — each turn is APPENDED to it, capped at
 `AGENT_STORED_HISTORY_MAX_MESSAGES` (200). Until 2026-09-14 (A13-L9) the column was
 silently overwritten with the replay window on every turn, so this retention was
 not actually true. The **timeline** is Telegram-only; the mobile
-The mobile chat agent keeps its own `Message`-row history unchanged. The menu agent
+The mobile chat agent keeps its own `Message`-row history unchanged (split into
+separate chats since 2026-09-30 — see "Mobile chat agent" below). The menu agent
 itself is *not* Telegram-only, despite what this paragraph used to claim: the
 same `runMenuAgentTurn`, with the same tools, also backs the JWT
 `/v1/assistant/{ask,voice}` routes (corrected 2026-07-29 — the mistake had a
@@ -510,8 +511,8 @@ visible timer anywhere. The drop mode (5) is the one exception and is
 deliberately left as it was — its label is short enough to survive the badge.
 
 **The banner is stage-aware (2026-07-29): it counts down whatever is actually
-next for this user, not always the weekly drop.** A user occupying a live-match
-slot is *excluded from the Thursday batch* (§3.2 filter 8), so a pinned
+next for this user, not always the scheduled drop.** A user occupying a live-match
+slot is *excluded from the scheduled batch* (§3.2 filter 8), so a pinned
 "your next drop in Xd Yh" above every conversation was the same kind of promise
 the product cannot keep as the unlaunched-city case below — and it pointed at
 the wrong thing anyway, since on a `proposed` match the user's whole attention is
@@ -701,6 +702,19 @@ Supported first-class flows:
   to the dating profile re-runs the same upload-time safety, face-presence,
   identity, duplicate-hash, profile-bucket copy, metadata, and
   verification-rerun path as a normal profile-photo upload.
+  **Separate chats since 2026-09-30** (founder decision, reversing the
+  one-thread index of 2026-09-04): every entry into the chat on iOS opens a NEW
+  chat; older chats live in a history list (`GET /v1/chat/sessions`) titled by
+  a small model — the topic in 2–6 words in the account language, never the
+  person's first line — and can be renamed by hand, after which no model
+  touches the title. Inside a chat the agent sees only that chat (plus the
+  shared system prompt: profile, dates, feed); it reaches older chats only
+  when the person refers to something from before or asks about a past date,
+  through two read tools — `search_past_chats` (summaries + words) and
+  `read_past_chat` — each carrying the dates the person had around that time
+  (partner's first name, venue, time, status, the person's own outcome; never
+  the partner's side). An older app build that names no chat keeps landing in
+  the most recent chat while it is under six hours quiet. Demo behaves as prod.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
 - **Blocking** — `POST /v1/matches/:id/block`, plus `GET /v1/me/blocks` and
@@ -719,6 +733,16 @@ Supported first-class flows:
   `POST /v1/me/profiler/answer`. The app pulls the batch the worker would have
   pushed into the bot chat, and resumes a live question after being closed;
   rules and parity in `onboarding.md` §Phase 1b → "Native app".
+- **Profile gaps** (Today screen, decision 2026-10-01) — `GET /v1/me/profile-gaps`
+  lists the unfinished profile items in the fixed nudge order `video`, `photos`,
+  `music`, `looking_for`, `age_range`, `about`, `interests`, `voice`,
+  `type_radar`, `major`; the app shows one nudge a day and keeps the
+  impressions / "later" / "don't remind me" ledger itself. Items behind an off
+  flag are never listed. `reward: "ticket"` only where finishing really grants
+  one now — the video bonus; the photo bonus is NOT granted by the app's photo
+  upload (only by the Telegram onboarding photo stage), so `photos` carries no
+  reward until that is wired. `about` counts the onboarding-generated
+  `psychologicalSummary` stub as empty. Read-only; demo behaves as prod.
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
   push via `services/push.ts` for the same events that DM Telegram users.
 - `/v1/me/home-location` persists canonical dating city + coordinates for

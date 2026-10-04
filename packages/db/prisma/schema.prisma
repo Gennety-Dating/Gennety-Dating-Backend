@@ -169,6 +169,9 @@ model User {
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
   researchOptIn              Boolean                  @default(false) @map("research_opt_in")
+  /// RETIRED 2026-10-02 with the Scratch Map fog — no longer read or written;
+  /// dropping the column waits for the founder (living-canvas.md §6.5).
+  ///
   /// Consent for the Dating Scratch Map (PRODUCT_SPEC §Living Canvas). Default
   /// FALSE and deliberately its own column rather than a fold into
   /// `researchOptIn`: that one governs analytics use of data the product
@@ -190,13 +193,13 @@ model User {
   /// **Default TRUE — a founder decision (2026-09-11) that departs from the
   /// rule the consent above states** ("a consent that authorises new collection
   /// is never inferred from a broader tick"). It is recorded as an exception,
-  /// not a change of that rule: `scratchMapOptIn` and `biometricConsentAt` keep
+  /// not a change of that rule: `biometricConsentAt` keeps
   /// it. What keeps the default bearable is what is stored — a place id and a
   /// calendar day in `user_place_visits`, never a coordinate or a time — and
   /// that collection still needs the OS location permission and the app open.
   /// Switching it off stops collection and removes the block from the profile
-  /// and from the match at once; stored days are kept, like the Scratch Map's
-  /// tiles, and age out with the 180-day window.
+  /// and from the match at once; stored days are kept and age out with the
+  /// 180-day window.
   frequentPlacesOptIn        Boolean                  @default(true) @map("frequent_places_opt_in")
   emailOtp                   String?                  @map("email_otp")
   emailOtpExpiresAt          DateTime?                @map("email_otp_expires_at")
@@ -457,8 +460,9 @@ model User {
   blocksFiled   UserBlock[] @relation("UserBlockBlocker")
   blocksAgainst UserBlock[] @relation("UserBlockBlocked")
 
-  messages   Message[]
-  inboxItems InboxItem[]
+  messages     Message[]
+  chatSessions ChatSession[]
+  inboxItems   InboxItem[]
 
   noMatchNotices NoMatchNotice[]
 
@@ -969,7 +973,7 @@ model Profile {
   /// Universal Elo rating in [0..1000]. Seeded by the AI vision pass on the
   /// primary photo when Persona flips the user to `verified`
   /// (see `apps/bot/src/services/elo/seed-from-vision.ts`), then updated on
-  /// each Thursday accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
+  /// each drop accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
   /// Drives the `V_league` multiplier in match scoring — large rating gaps
   /// decay the candidate's score so users mostly see opponents in their league.
   eloScore                  Int                          @default(500) @map("elo_score")
@@ -1504,6 +1508,10 @@ model ProfileMusicTrack {
   @@map("profile_music_tracks")
 }
 
+/// RETIRED 2026-10-02 — no longer read or written. The date map that replaced
+/// it is derived from `Match` attendance (`services/date-map.ts`); dropping
+/// this table waits for the founder (living-canvas.md §6.5).
+///
 /// The Dating Scratch Map: which parts of the city this person has actually
 /// been in (PRODUCT_SPEC §Scratch Map). One row per user, created lazily on
 /// their first recorded tile.
@@ -1581,7 +1589,7 @@ model UserPlaceVisit {
   userId String @map("user_id") @db.Uuid
 
   /// Google Place id — the identity every catalog reader dedupes on, for the
-  /// reason `UserScratchMap.discoveredVenues` gives: the catalog holds one row
+  /// reason the date map gives: the catalog holds one row
   /// per university domain. No FK, so retiring a catalog row never rewrites
   /// someone's history; the read simply stops showing a place it cannot find.
   placeId String @map("place_id")
@@ -1638,8 +1646,7 @@ model UserRhythmProfile {
 
 /// A place its owner took off their frequently-visited block. Hiding stops the
 /// SHOWING, not the counting: un-hiding brings the place back at the rank it
-/// earned, the same "a toggle never silently deletes" rule the Scratch Map
-/// keeps. Keyed by Google Place id for the same reason as `UserPlaceVisit`.
+/// earned — a toggle never silently deletes. Keyed by Google Place id for the same reason as `UserPlaceVisit`.
 model UserHiddenPlace {
   userId    String   @map("user_id") @db.Uuid
   placeId   String   @map("place_id")
@@ -2201,7 +2208,7 @@ model Match {
   /// does not increment. Defaulted so historical rows read 0.
   venueChangeCount          Int       @default(0) @map("venue_change_count")
 
-  /// How this pair was allocated: `weekly` (the Thursday batch — the default and
+  /// How this pair was allocated: `weekly` (the scheduled batch — the default and
   /// the only value before Rematch) or `rematch` (a paid, on-demand single-seeker
   /// run bought by one man, REMATCH_PRODUCT_SPEC.md). String, not a Prisma enum,
   /// matching `ticketStatus`/`venueChangeStatus`/`coordMethod`; whitelist lives
@@ -2828,12 +2835,61 @@ model Message {
   /// (`services/chat-context.ts`); when those are gone the chip stays and the
   /// agent simply has nothing more to add.
   context   Json?
+  /// The chat this row belongs to (decision journal 2026-09-30). Nullable only
+  /// for safety: every writer sets it, and the migration that added it put
+  /// every older row into a chat by the six-hour rule. `/v1/chat/history`
+  /// without `sessionId` still pages the whole stream across chats — what
+  /// older app builds read.
+  sessionId String?     @map("session_id") @db.Uuid
   createdAt DateTime    @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
   @@map("messages")
+}
+
+/// One conversation with the app's chat agent — ChatGPT-style chats
+/// (founder decision 2026-09-30, reversing "one endless thread" of 2026-09-04).
+///
+/// The agent's context inside a chat is that chat's own `Message` rows plus the
+/// shared system prompt; older chats reach it only through the
+/// `search_past_chats` / `read_past_chat` tools (`services/chat-past-tools.ts`).
+///
+/// `id` is minted by the CLIENT for a new chat (UUID v4), so a retried first
+/// message lands in the same chat instead of opening a second one; a turn with
+/// no id (older builds, the Telegram photo flow) continues the most recent chat
+/// if it is under six hours old and opens a new one otherwise.
+///
+/// `updatedAt` is NOT `@updatedAt`: it is the time of the newest message, set
+/// by the turn that wrote it. Renaming or titling a chat must not move it to
+/// the top of the history list.
+///
+/// Titles are written by a small model (`services/chat-session-digest.ts`):
+/// `titledAtCount` is the non-system message count at the last automatic
+/// titling (the refresh trigger), `titleByUser` freezes the title forever.
+/// `summary` (English, retrieval language) + `summaryEmbedding` feed the search
+/// tool; `summarizedAtCount` is the count the summary was written at, so a
+/// summary is stale exactly when the chat has grown since.
+model ChatSession {
+  id                String                       @id @default(uuid()) @db.Uuid
+  userId            String                       @map("user_id") @db.Uuid
+  title             String?
+  titleByUser       Boolean                      @default(false) @map("title_by_user")
+  titledAtCount     Int                          @default(0) @map("titled_at_count")
+  summary           String?
+  summaryEmbedding  Unsupported("vector(1536)")? @map("summary_embedding")
+  summarizedAtCount Int                          @default(0) @map("summarized_at_count")
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @default(now()) @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, updatedAt])
+  @@map("chat_sessions")
 }
 
 /// A rich announcement written by the founder in the admin dashboard — a
@@ -2942,7 +2998,7 @@ model InboxItem {
 }
 
 /// Audit row for the empathetic "no match this week" DM that fires ~15 min
-/// after the Thursday batch for every `active` user the matcher couldn't pair.
+/// after the scheduled batch for every `active` user the matcher couldn't pair.
 /// `tier` is the consecutive-famine count (1 = first week without a match,
 /// 2 = second, 3+ = third or more) — drives the escalating warmth of the
 /// template selected from `i18n.noMatchThisWeek*`. `dropDate` is truncated
@@ -3174,7 +3230,7 @@ model ClientEvent {
 }
 
 /// Snapshot of a weekly founder matches report (gated by `FOUNDER_NOTIFY_ENABLED`).
-/// Built after the Thursday batch (`notifyFounderWeeklyMatches`), stored so the
+/// Built after the scheduled batch (`notifyFounderWeeklyMatches`), stored so the
 /// tokenized report page (`GET /v1/founder/report/:token`) renders a stable view
 /// regardless of later profile edits. Contains PII (names, cities, photo refs,
 /// attractiveness scores) but never `psychologicalSummary`. The

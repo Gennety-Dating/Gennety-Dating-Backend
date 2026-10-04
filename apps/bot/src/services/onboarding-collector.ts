@@ -1508,6 +1508,69 @@ export async function applyOnboardingFacts(
   throw new Error("Onboarding progress revision conflict");
 }
 
+/**
+ * The five structured questions the collector asks first, in this order. The
+ * Mini App and the native client answer them on their own screens rather than
+ * in the chat, and the chat opens on whatever the collector asks after them.
+ */
+export const BASICS_QUESTIONS: ReadonlySet<OnboardingQuestion> = new Set<OnboardingQuestion>([
+  "first_name_age",
+  "gender",
+  "preference",
+  "height",
+  "relationship_intent",
+]);
+
+/**
+ * The basics as a screen needs them: what is already saved, so a reopened
+ * session resumes on the first empty screen and a step the user goes back to
+ * shows their answer, and whether the collector still has any of the five left
+ * to ask (DECISIONS 2026-09-30, native twin of `/state.profileBasics`).
+ *
+ * `complete` is the collector's own verdict — `nextOnboardingQuestion` over the
+ * same progress it asks from — not a second copy of the rule. That matters for
+ * the intent: it counts as answered only once `relationship_intent` is in
+ * `completedFields`, whatever `Profile.relationshipIntents` holds.
+ */
+export interface OnboardingBasics {
+  firstName: string | null;
+  age: number | null;
+  gender: Gender | null;
+  preference: GenderPreference | null;
+  height: number | null;
+  relationshipIntents: string[];
+  complete: boolean;
+}
+
+type BasicsUser = Omit<CollectorUser, "profile"> & {
+  profile: (NonNullable<CollectorUser["profile"]> & { relationshipIntents: string[] }) | null;
+};
+
+export function onboardingBasicsOf(user: BasicsUser): OnboardingBasics {
+  return {
+    firstName: user.firstName,
+    age: user.age,
+    gender: user.gender,
+    preference: user.preference,
+    height: user.profile?.height ?? null,
+    relationshipIntents: user.profile?.relationshipIntents ?? [],
+    complete: !BASICS_QUESTIONS.has(nextOnboardingQuestion(progressFromUser(user))),
+  };
+}
+
+export async function loadOnboardingBasics(userId: string): Promise<OnboardingBasics> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: {
+      ...USER_SELECT,
+      profile: {
+        select: { ...USER_SELECT.profile.select, relationshipIntents: true },
+      },
+    },
+  });
+  return onboardingBasicsOf(user as BasicsUser);
+}
+
 export async function markOnboardingField(
   telegramId: bigint,
   field: "photos" | "voice_prompt",

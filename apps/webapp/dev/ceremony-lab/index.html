@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+  Лаборатория церемонии встречи в Mini App — для headless-кадров и глаз.
+  НЕ входит в rollupOptions.input (vite.config.ts), в dist не собирается.
+  Открывается через dev-сервер Vite (модули на TS):
+    pnpm --filter @gennety/webapp dev
+    http://localhost:5173/dev/ceremony-lab/index.html?lang=ru            экран удержания
+    …?mode=waiting                                                       капсула «Ждём партнёра…»
+    …?t=1300&role=A        кадр сцены в момент t (мс от общего старта), роль A или B
+    …?t=4000&role=B&rm=1   ветка Reduce Motion
+  Настоящий экран свидания (App.tsx) со стабами Telegram, fetch и геолокации;
+  поверх — настоящий CeremonyOverlay, часы которого стоят на t.
+    …?flow=hold&role=A     удержание пальцем → ответ с ceremony через 1,2 с → сцена → колода
+    …?flow=legacy          сервер без долгого ожидания: ответ сразу, синхронизация через 2 с
+                           из опроса состояния → сцена локально как B (запасной путь)
+  Headless Chrome по умолчанию отдаёт prefers-reduced-motion: reduce — для полной
+  сцены (не ветки rm) эмулировать no-preference (CDP Emulation.setEmulatedMedia).
+-->
+<html class="dark" lang="ru" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Ceremony lab</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #030303;
+      }
+    </style>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./lab.tsx"></script>
+  </body>
+</html>

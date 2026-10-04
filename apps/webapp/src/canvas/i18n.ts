@@ -18,21 +18,6 @@ export interface CanvasStrings {
   idleTitle: string;
   idleBody: string;
   idleNoDrop: string;
-  /** The Scratch Map's one line. `{percent}` is already formatted. */
-  scratchExplored: string;
-  /**
-   * The Scratch Map's consent, and it has to carry four things (§Scratch Map),
-   * because this is the one control in the product that authorises COLLECTING
-   * a new class of data rather than using data already held: what it does,
-   * that what is stored is an approximate AREA and never a position, that
-   * nothing is recorded while the screen is closed, and that turning it off
-   * later stops the collection without taking the map away.
-   */
-  scratchOffer: string;
-  scratchEnable: string;
-  scratchDisable: string;
-  /** The write is the consent, so a failed one must not look like success. */
-  scratchFailed: string;
   /** A pitch is on the table and THIS side has not answered. */
   decisionTitle: string;
   decisionBody: string;
@@ -47,12 +32,12 @@ export interface CanvasStrings {
   radarPeerEnRoute: string;
   radarPeerArrived: string;
   radarBothArrived: string;
-  /** At the venue, waiting for the two shakes. */
+  /** At the venue, waiting for the two holds (the shake until 2026-09-29). */
   bumpTitle: string;
   bumpBody: string;
   /**
    * The radar and bump states hand the user to the Date Terminal, which owns
-   * the shake and both of its permissions since 2026-09-11.
+   * the gesture since 2026-09-11 — a hold of both phones since 2026-09-29.
    */
   terminalAction: string;
   bumpWaiting: string;
@@ -106,15 +91,9 @@ export interface CanvasStrings {
 }
 
 const en: CanvasStrings = {
-  idleTitle: "I'm looking",
-  idleBody: "Next drop in {time}. Until then the map is yours.",
+  idleTitle: "Finding you a match",
+  idleBody: "Next match in {time}. Until then the map is yours.",
   idleNoDrop: "I check every evening. You'll hear from me the moment I find someone.",
-  scratchExplored: "You've walked {percent} of Kyiv.",
-  scratchOffer:
-    "Want me to colour in the parts of Kyiv you've actually been in? I'd note the rough area — about a kilometre across, never where exactly you are — and only while this screen is open. Turn it off whenever you like; the map stays.",
-  scratchEnable: "Colour in my Kyiv",
-  scratchDisable: "Stop recording",
-  scratchFailed: "That didn't save. Try again.",
   decisionTitle: "Someone's waiting on your answer",
   decisionBody: "Open the chat and tell me yes or no — {time} left.",
   planningTitle: "Sorting out the details",
@@ -126,11 +105,11 @@ const en: CanvasStrings = {
   radarPeerArrived: "They're already there.",
   radarBothArrived: "You're both here ✨",
   bumpTitle: "You're at the table",
-  bumpBody: "Shake your phones together to confirm you both made it.",
-  terminalAction: "Open the Date Terminal",
+  bumpBody: "Put your phones together and hold — that's how I'll know you both made it.",
+  terminalAction: "Open the date screen",
   bumpWaiting: "Got yours. Waiting for the other phone.",
   inProgressTitle: "You made it ✨",
-  inProgressBody: "The date's on me — your next ticket is free. Something to talk about:",
+  inProgressBody: "The date counts — your next ticket is on us. Something to talk about:",
   feedbackTitle: "How did it go?",
   feedbackBody: "Open the chat — it's two questions and it makes the next one better.",
   openChat: "Open the chat",
@@ -158,15 +137,9 @@ const en: CanvasStrings = {
 };
 
 const ru: CanvasStrings = {
-  idleTitle: "Я ищу",
-  idleBody: "Следующий дроп через {time}. А пока карта твоя.",
+  idleTitle: "Ищем тебе пару",
+  idleBody: "Следующий подбор через {time}. А пока карта твоя.",
   idleNoDrop: "Смотрю каждый вечер. Напишу, как только найду.",
-  scratchExplored: "Ты обошёл {percent} Киева.",
-  scratchOffer:
-    "Закрасить те части Киева, где ты правда бывал? Я буду отмечать примерный район — примерно километр в поперечнике, а не то, где ты именно, — и только пока открыт этот экран. Выключить можно когда угодно, карта останется.",
-  scratchEnable: "Закрасить мой Киев",
-  scratchDisable: "Больше не отмечать",
-  scratchFailed: "Не сохранилось. Попробуй ещё раз.",
   decisionTitle: "От тебя ждут ответа",
   decisionBody: "Открой чат и скажи да или нет — осталось {time}.",
   planningTitle: "Договариваемся о деталях",
@@ -178,11 +151,11 @@ const ru: CanvasStrings = {
   radarPeerArrived: "Уже на месте.",
   radarBothArrived: "Вы оба на месте ✨",
   bumpTitle: "Ты за столиком",
-  bumpBody: "Тряхните телефоны вместе — так я пойму, что вы оба дошли.",
-  terminalAction: "Открыть Date Terminal",
+  bumpBody: "Сложите телефоны вместе и удерживайте — так я пойму, что вы оба дошли.",
+  terminalAction: "Открыть экран свидания",
   bumpWaiting: "Твоё поймал. Жду второй телефон.",
   inProgressTitle: "Вы дошли ✨",
-  inProgressBody: "Свидание засчитано, билет на следующее — от меня. О чём поговорить:",
+  inProgressBody: "Свидание засчитано — следующий билет от нас. О чём поговорить:",
   feedbackTitle: "Как всё прошло?",
   feedbackBody: "Открой чат — два вопроса, и следующее свидание будет точнее.",
   openChat: "Открыть чат",
@@ -210,15 +183,9 @@ const ru: CanvasStrings = {
 };
 
 const uk: CanvasStrings = {
-  idleTitle: "Я шукаю",
-  idleBody: "Наступний дроп через {time}. А поки карта твоя.",
+  idleTitle: "Шукаємо тобі пару",
+  idleBody: "Наступний підбір через {time}. А поки карта твоя.",
   idleNoDrop: "Дивлюся щовечора. Напишу, щойно знайду.",
-  scratchExplored: "Ти обійшов {percent} Києва.",
-  scratchOffer:
-    "Зафарбувати ті частини Києва, де ти справді бував? Я відмічатиму приблизний район — десь кілометр завширшки, а не те, де ти саме, — і лише поки відкритий цей екран. Вимкнути можна будь-коли, карта залишиться.",
-  scratchEnable: "Зафарбувати мій Київ",
-  scratchDisable: "Більше не відмічати",
-  scratchFailed: "Не збереглося. Спробуй ще раз.",
   decisionTitle: "Від тебе чекають відповіді",
   decisionBody: "Відкрий чат і скажи так чи ні — лишилось {time}.",
   planningTitle: "Узгоджуємо деталі",
@@ -230,11 +197,11 @@ const uk: CanvasStrings = {
   radarPeerArrived: "Уже на місці.",
   radarBothArrived: "Ви обоє на місці ✨",
   bumpTitle: "Ти за столиком",
-  bumpBody: "Струсіть телефони разом — так я зрозумію, що ви обоє дійшли.",
-  terminalAction: "Відкрити Date Terminal",
+  bumpBody: "Складіть телефони разом і утримуйте — так я зрозумію, що ви обоє дійшли.",
+  terminalAction: "Відкрити екран побачення",
   bumpWaiting: "Твоє впіймав. Чекаю на другий телефон.",
   inProgressTitle: "Ви дійшли ✨",
-  inProgressBody: "Побачення зараховано, квиток на наступне — від мене. Про що поговорити:",
+  inProgressBody: "Побачення зараховано — наступний квиток від нас. Про що поговорити:",
   feedbackTitle: "Як усе минуло?",
   feedbackBody: "Відкрий чат — два питання, і наступне побачення буде точнішим.",
   openChat: "Відкрити чат",
@@ -263,15 +230,9 @@ const uk: CanvasStrings = {
 
 const de: CanvasStrings = {
   ...en,
-  idleTitle: "Ich suche",
-  idleBody: "Nächster Drop in {time}. Bis dahin gehört dir die Karte.",
+  idleTitle: "Wir suchen ein Match für dich",
+  idleBody: "Nächste Auswahl in {time}. Bis dahin gehört dir die Karte.",
   idleNoDrop: "Ich schaue jeden Abend. Du hörst von mir, sobald ich jemanden finde.",
-  scratchExplored: "Du hast {percent} von Kyjiw erlaufen.",
-  scratchOffer:
-    "Soll ich die Teile von Kyjiw einfärben, in denen du wirklich warst? Ich merke mir die ungefähre Gegend — etwa einen Kilometer breit, nie deinen genauen Standort — und nur, solange dieser Screen offen ist. Du kannst es jederzeit abschalten, die Karte bleibt.",
-  scratchEnable: "Mein Kyjiw einfärben",
-  scratchDisable: "Nicht mehr mitschreiben",
-  scratchFailed: "Das wurde nicht gespeichert. Versuch es noch mal.",
   decisionTitle: "Jemand wartet auf deine Antwort",
   decisionBody: "Öffne den Chat und sag ja oder nein — noch {time}.",
   planningTitle: "Wir klären die Details",
@@ -283,11 +244,11 @@ const de: CanvasStrings = {
   radarPeerArrived: "Schon da.",
   radarBothArrived: "Ihr seid beide da ✨",
   bumpTitle: "Du bist am Tisch",
-  bumpBody: "Schüttelt eure Handys gemeinsam — so weiß ich, dass ihr beide da seid.",
-  terminalAction: "Date Terminal öffnen",
+  bumpBody: "Legt eure Handys zusammen und haltet gedrückt — so weiß ich, dass ihr beide da seid.",
+  terminalAction: "Date-Bildschirm öffnen",
   bumpWaiting: "Deins habe ich. Warte auf das andere Handy.",
   inProgressTitle: "Ihr habt es geschafft ✨",
-  inProgressBody: "Das Date geht auf mich — dein nächstes Ticket ist frei. Worüber ihr reden könnt:",
+  inProgressBody: "Das Date zählt — dein nächstes Ticket geht auf uns. Worüber ihr reden könnt:",
   feedbackTitle: "Wie war es?",
   feedbackBody: "Öffne den Chat — zwei Fragen, und das nächste Date wird besser.",
   openChat: "Chat öffnen",
@@ -316,15 +277,9 @@ const de: CanvasStrings = {
 
 const pl: CanvasStrings = {
   ...en,
-  idleTitle: "Szukam",
-  idleBody: "Następny drop za {time}. Na razie mapa jest twoja.",
+  idleTitle: "Szukamy ci pary",
+  idleBody: "Następne dopasowanie za {time}. Na razie mapa jest twoja.",
   idleNoDrop: "Sprawdzam co wieczór. Odezwę się, gdy tylko kogoś znajdę.",
-  scratchExplored: "Przeszedłeś {percent} Kijowa.",
-  scratchOffer:
-    "Zamalować te części Kijowa, w których naprawdę byłeś? Zapiszę przybliżoną okolicę — jakiś kilometr wszerz, nigdy dokładnego miejsca — i tylko wtedy, gdy ten ekran jest otwarty. Możesz to wyłączyć kiedy chcesz, mapa zostanie.",
-  scratchEnable: "Zamaluj mój Kijów",
-  scratchDisable: "Przestań zapisywać",
-  scratchFailed: "Nie zapisało się. Spróbuj jeszcze raz.",
   decisionTitle: "Ktoś czeka na twoją odpowiedź",
   decisionBody: "Otwórz czat i powiedz tak albo nie — zostało {time}.",
   planningTitle: "Ustalamy szczegóły",
@@ -336,11 +291,11 @@ const pl: CanvasStrings = {
   radarPeerArrived: "Już na miejscu.",
   radarBothArrived: "Oboje jesteście na miejscu ✨",
   bumpTitle: "Jesteś przy stoliku",
-  bumpBody: "Potrząśnijcie telefonami razem — tak się dowiem, że oboje dotarliście.",
-  terminalAction: "Otwórz Date Terminal",
+  bumpBody: "Połóżcie telefony razem i przytrzymajcie — tak się dowiem, że oboje dotarliście.",
+  terminalAction: "Otwórz ekran randki",
   bumpWaiting: "Twoje mam. Czekam na drugi telefon.",
   inProgressTitle: "Udało się ✨",
-  inProgressBody: "Randka zaliczona, bilet na następną ode mnie. O czym pogadać:",
+  inProgressBody: "Randka zaliczona — następny bilet od nas. O czym pogadać:",
   feedbackTitle: "Jak poszło?",
   feedbackBody: "Otwórz czat — dwa pytania, a następna randka będzie lepsza.",
   openChat: "Otwórz czat",

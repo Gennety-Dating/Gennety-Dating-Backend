@@ -64,6 +64,11 @@ interface TelegramSafeAreaInset {
   right: number;
 }
 
+/** Payload of the `viewportChanged` Web App event. */
+interface TelegramViewportChanged {
+  isStateStable: boolean;
+}
+
 interface TelegramWebApp {
   /** Raw init data — contains user, auth_date, hash, start_param, etc. */
   initData: string;
@@ -90,8 +95,24 @@ interface TelegramWebApp {
    * fullscreen mode. Not covered by `env(safe-area-inset-*)`.
    */
   contentSafeAreaInset?: TelegramSafeAreaInset;
+  /**
+   * Current height of the visible Web App area, in CSS px (Bot API 6.0+).
+   * Changes continuously while Telegram animates its own sheet or the keyboard.
+   */
+  viewportHeight?: number;
+  /**
+   * Height of the visible area in its last STABLE state — what to lay out
+   * against, because it does not move mid-animation (Bot API 6.0+).
+   */
+  viewportStableHeight?: number;
+  /**
+   * `viewportChanged` reports whether the area has settled. `isStateStable` is
+   * false for every intermediate frame of a resize and true once it ends.
+   */
+  onEvent?(event: "viewportChanged", handler: (event: TelegramViewportChanged) => void): void;
   /** Subscribe to a Web App event, e.g. `contentSafeAreaChanged`. */
   onEvent?(event: string, handler: () => void): void;
+  offEvent?(event: "viewportChanged", handler: (event: TelegramViewportChanged) => void): void;
   /** Unsubscribe from a Web App event. */
   offEvent?(event: string, handler: () => void): void;
   /**
@@ -112,10 +133,10 @@ interface TelegramWebApp {
   exitFullscreen?(): void;
   /**
    * Bot API 7.7+ — stop a vertical drag from minimising/closing the Web App.
-   * Telegram reads a downward drag as "close me" precisely when the page has no
-   * vertical scroll of its own, which is exactly the state a fullscreen photo
-   * viewer is in: swiping around a photo would dismiss the whole Mini App. Such
-   * a viewer turns swipes off while it is open and back on when it closes.
+   * Telegram reads a downward drag from the top of the page (or on a page with
+   * no scroll of its own) as "close me". Every Mini App entry turns it off once
+   * at boot through `keepOpenOnVerticalSwipe` (telegram-swipes.ts) and nothing
+   * turns it back on — call that helper, not these methods directly.
    */
   disableVerticalSwipes?(): void;
   enableVerticalSwipes?(): void;

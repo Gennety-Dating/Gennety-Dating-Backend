@@ -21,11 +21,13 @@ import { apiFetch } from "./api.js";
  */
 
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { rheostatStyle, shouldTickScale } from "./haptics.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Full-screen immersive web app (Bot API 8.0+). Older clients fall back to
 // expand(). Paint Telegram's chrome to match the active theme so the header /
@@ -118,7 +120,7 @@ const T: Record<Lang, I18nStrings> = {
     heroTitle: "Как прошло свидание?",
     heroSub: "Пара тапов — и мы найдём кого-то ещё точнее в следующий раз.",
     cardChemistry: "Химия",
-    cardSecondDate: "Готов(а) на вторую встречу?",
+    cardSecondDate: "Хочешь второе свидание?",
     cardNotes: "Что-то ещё?",
     endLow: "🧊 холодно",
     endHigh: "⚡ искра",
@@ -129,7 +131,7 @@ const T: Record<Lang, I18nStrings> = {
       "Что зацепило — в хорошем или плохом?",
       "Что удивило?",
       "Красные флаги, зелёные флаги — что угодно",
-      "Что бы изменил(а) в формате?",
+      "Что поменять в формате?",
     ],
     footerNote: "Останется между тобой и Gennety. Используем для будущих мэтчей.",
     fallbackNoMatch: "Открой эту форму из сообщения бота про свидание.",
@@ -137,9 +139,9 @@ const T: Record<Lang, I18nStrings> = {
     mainBtnSending: "Отправляю…",
     alertExpired: "Форма устарела. Открой её снова из чата с ботом.",
     alertNotFound: "Не нашли этот мэтч. Открой форму заново.",
-    alertWrongState: "Этот мэтч пока не ждёт фидбэка.",
+    alertWrongState: "Этот мэтч пока не ждёт отзыва.",
     alertNotParticipant: "Ты не участник этого мэтча.",
-    alertAlreadySubmitted: "Ты уже отправил(а) фидбэк об этом свидании — спасибо, он сохранён.",
+    alertAlreadySubmitted: "Отзыв об этом свидании уже отправлен — спасибо, он сохранён.",
     alertGeneric: "Не получилось отправить. Попробуй ещё раз.",
     alertNetwork: "Сеть барахлит. Проверь подключение и попробуй снова.",
   },
@@ -147,7 +149,7 @@ const T: Record<Lang, I18nStrings> = {
     heroTitle: "Як пройшло побачення?",
     heroSub: "Пара тапів — і ми знайдемо когось ще точніше наступного разу.",
     cardChemistry: "Хімія",
-    cardSecondDate: "Готовий(а) на другу зустріч?",
+    cardSecondDate: "Хочеш друге побачення?",
     cardNotes: "Щось іще?",
     endLow: "🧊 холодно",
     endHigh: "⚡ іскра",
@@ -158,7 +160,7 @@ const T: Record<Lang, I18nStrings> = {
       "Що зачепило — у хорошому чи поганому?",
       "Що здивувало?",
       "Червоні прапорці, зелені прапорці — що завгодно",
-      "Що б змінив(ла) у форматі?",
+      "Що змінити у форматі?",
     ],
     footerNote: "Залишиться між тобою та Gennety. Використаємо для майбутніх метчів.",
     fallbackNoMatch: "Відкрий цю форму з повідомлення бота про побачення.",
@@ -166,9 +168,9 @@ const T: Record<Lang, I18nStrings> = {
     mainBtnSending: "Надсилаю…",
     alertExpired: "Форма застаріла. Відкрий її знову з чату з ботом.",
     alertNotFound: "Не знайшли цей метч. Відкрий форму заново.",
-    alertWrongState: "Цей метч поки не чекає на фідбек.",
+    alertWrongState: "Цей метч поки не чекає на відгук.",
     alertNotParticipant: "Ти не учасник цього метчу.",
-    alertAlreadySubmitted: "Ти вже надіслав(ла) фідбек про це побачення — дякую, його збережено.",
+    alertAlreadySubmitted: "Відгук про це побачення вже надіслано — дякую, його збережено.",
     alertGeneric: "Не вийшло надіслати. Спробуй ще раз.",
     alertNetwork: "Мережа барахлить. Перевір з'єднання і спробуй ще раз.",
   },
@@ -216,7 +218,7 @@ const T: Record<Lang, I18nStrings> = {
       "Co się wyróżniło - dobrego albo złego?",
       "Czy coś Cię zaskoczyło?",
       "Czerwona flaga, zielona flaga - cokolwiek?",
-      "Czy zmienił(a)byś coś w organizacji?",
+      "Co zmienić w organizacji?",
     ],
     footerNote: "Zostaje między Tobą a Gennety. Użyjemy tego do lepszych przyszłych dopasowań.",
     fallbackNoMatch: "Otwórz ten formularz z wiadomości po randce w bocie.",
@@ -226,7 +228,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Nie możemy już znaleźć tego dopasowania. Otwórz formularz ponownie.",
     alertWrongState: "To dopasowanie nie czeka jeszcze na feedback.",
     alertNotParticipant: "Nie jesteś częścią tego dopasowania.",
-    alertAlreadySubmitted: "Już wysłałeś(-aś) feedback o tej randce - dzięki, jest zapisany.",
+    alertAlreadySubmitted: "Opinia o tej randce została już wysłana - dzięki, jest zapisana.",
     alertGeneric: "Nie udało się wysłać feedbacku. Spróbuj ponownie.",
     alertNetwork: "Błąd sieci. Sprawdź połączenie i spróbuj ponownie.",
   },

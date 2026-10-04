@@ -10,6 +10,11 @@ vi.mock("@gennety/db", () => ({
 vi.mock("../services/chat-profile-tools.js", () => ({
   attachChatProfilePhoto: vi.fn(),
 }));
+// Чат для пары строк — по правилу старых сборок (решение 2026-09-30).
+vi.mock("../services/chat-sessions.js", () => ({
+  continueOrOpenChatSession: vi.fn(async () => "session-legacy"),
+  touchChatSession: vi.fn(async () => undefined),
+}));
 vi.mock("../services/storage.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/storage.js")>();
   return { ...actual, downloadTelegramFile: vi.fn(), uploadChatImage: vi.fn() };
@@ -178,9 +183,14 @@ describe("photoHandler — что человек получает в ответ"
     expect(mMessage).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: "user-1",
+        sessionId: "session-legacy",
         role: "user",
         imageUrl: "user-1/1700000000000.jpg",
       }),
+    });
+    // Ответ ложится в тот же чат, что и снимок.
+    expect(mMessage).toHaveBeenCalledWith({
+      data: expect.objectContaining({ sessionId: "session-legacy", role: "assistant" }),
     });
     expect(h.texts()).toEqual([
       t("ru", "photoBatchAdded", { n: 1, total: 3, max: MAX_PHOTOS }),

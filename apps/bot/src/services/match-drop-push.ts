@@ -4,7 +4,7 @@ import { sendPushToUser } from "./push.js";
 import { pushReachable } from "./telegram-reach.js";
 
 /**
- * The Thursday drop notification for the native app (iOS task §5.3) — the one
+ * The daily drop notification (18:00 Europe/Kyiv in production) for the native app (iOS task §5.3) — the one
  * push in the product that carries a picture.
  *
  * **It did not exist.** `pitch.ts` skips anyone it cannot address as a Telegram

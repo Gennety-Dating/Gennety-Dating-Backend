@@ -106,13 +106,14 @@ export async function sendWelcomeGiftPreroll(
   const effectId = env.MESSAGE_EFFECT_GIFT_ID || undefined;
   try {
     await api.sendMessage(chatId, text, {
+      parse_mode: "Markdown",
       ...(effectId ? { message_effect_id: effectId } : {}),
     });
   } catch {
     // Retry once without the effect so an unsupported effect id never loses the
     // gift notification. The ticket is already credited; My Tickets shows it.
     try {
-      await api.sendMessage(chatId, text);
+      await api.sendMessage(chatId, text, { parse_mode: "Markdown" });
     } catch {
       // ignore
     }

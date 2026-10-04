@@ -326,6 +326,6 @@ describe("t (translation)", () => {
     expect(body).toContain("Smith");
     expect(body).toContain("21");
     expect(body).toContain("stanford.edu");
-    expect(body.toLowerCase()).toContain("locked in");
+    expect(body.toLowerCase()).toContain("can't be changed");
   });
 });

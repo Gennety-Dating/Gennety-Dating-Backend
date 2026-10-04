@@ -22,6 +22,7 @@ vi.mock("../services/chat-topics.js", () => ({ listChatTopics: vi.fn() }));
 vi.mock("../services/storage.js", () => ({
   uploadChatImage: vi.fn(),
   createChatImageSignedUrl: vi.fn(async () => "https://signed.example/x"),
+  createChatImageSignedUrls: vi.fn(async (paths: string[]) => paths.map(() => "https://signed.example/x")),
 }));
 vi.mock("@gennety/db", () => ({ prisma: { message: { findUnique: vi.fn(), findMany: vi.fn() } } }));
 vi.mock("./auth-middleware.js", () => ({

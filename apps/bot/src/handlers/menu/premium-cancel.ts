@@ -196,10 +196,9 @@ export async function handlePremiumCancelConfirm(ctx: BotContext): Promise<void>
 
   const nonce = newNonce();
   const keyboard = new InlineKeyboard()
+    // Copy audit 2026-10-01: one plain "No, keep it" instead of the joke pair;
+    // `premiumCancelFinalNoHard` stays in i18n, unused.
     .text(t(lang, "premiumCancelFinalNoSoft"), "menu:back")
-    .success()
-    .row()
-    .text(t(lang, "premiumCancelFinalNoHard"), "menu:back")
     .success()
     .row()
     .text(t(lang, "premiumCancelFinalYes"), `${PREM_CANCEL_FINAL_YES_PREFIX}${nonce}`)

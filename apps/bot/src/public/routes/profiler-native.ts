@@ -4,6 +4,7 @@ import {
   answerNativeProfilerQuestion,
   getNativeProfilerBatch,
   type NativeProfilerBatch,
+  type NativeProfilerQuestion,
 } from "../../services/profiler-native.js";
 
 /**
@@ -57,7 +58,11 @@ export function createNativeProfilerRouter(): Router {
       return;
     }
     if (result.outcome === "next") {
-      res.json({ outcome: "next", question: result.question, remaining: result.remaining });
+      res.json({
+        outcome: "next",
+        question: serializeQuestion(result.question),
+        remaining: result.remaining,
+      });
       return;
     }
     res.json({ outcome: result.outcome });
@@ -69,5 +74,35 @@ export function createNativeProfilerRouter(): Router {
 /** Absent keys, never nulls: the Swift client decodes optionals, not unions. */
 function serializeBatch(batch: NativeProfilerBatch): Record<string, unknown> {
   if (!batch.question) return {};
-  return { question: batch.question, remaining: batch.remaining };
+  return { question: serializeQuestion(batch.question), remaining: batch.remaining };
+}
+
+/**
+ * The question and, on a contextual one, its card — dates as ISO instants
+ * (the app formats them in the device's own locale and zone), and a venue name
+ * or a quoted answer only when there is one.
+ */
+function serializeQuestion(question: NativeProfilerQuestion): Record<string, unknown> {
+  const context = question.context;
+  if (!context) return { id: question.id, text: question.text };
+  return {
+    id: question.id,
+    text: question.text,
+    context: {
+      kind: context.kind,
+      dates: context.dates.map((date) => ({
+        ...(date.venueName ? { venueName: date.venueName } : {}),
+        at: date.at.toISOString(),
+      })),
+      ...(context.answer
+        ? {
+            answer: {
+              question: context.answer.question,
+              text: context.answer.text,
+              answeredAt: context.answer.answeredAt.toISOString(),
+            },
+          }
+        : {}),
+    },
+  };
 }

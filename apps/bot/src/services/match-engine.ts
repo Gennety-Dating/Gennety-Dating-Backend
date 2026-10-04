@@ -480,7 +480,7 @@ export interface SeekerProfile {
 }
 
 /**
- * How a pair was allocated (`Match.source`). `weekly` is the Thursday batch and
+ * How a pair was allocated (`Match.source`). `weekly` is the scheduled batch (daily in production) and
  * the default for every historical row; `rematch` is a paid on-demand
  * single-seeker run (REMATCH_PRODUCT_SPEC.md); `synthetic` is the drop batch's
  * second "fill" pass, which offers a seeded test profile to a real user the
@@ -2349,7 +2349,7 @@ export async function runDropBatch(): Promise<DropBatchResult> {
  * are handed to `loadEligibleUsersForIds` as its `requestedIds` filter rather
  * than replacing the predicate.
  *
- * Omitted (the Thursday batch) the behaviour is byte-for-byte what it was
+ * Omitted (the scheduled batch) the behaviour is byte-for-byte what it was
  * before the parameter existed — `loadEligibleUsers()` is called with no
  * arguments, which is what `match-engine-eligibility.test.ts` pins.
  */

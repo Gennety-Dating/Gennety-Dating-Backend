@@ -86,6 +86,34 @@ export const DATE_BUMP_GRACE_HOURS = 2;
 /** Max gap between the two shakes for a Bump to count. */
 export const BUMP_SHAKE_WINDOW_MS = 10_000;
 
+/**
+ * How long a HOLD (`POST /v1/dates/:matchId/bump` with `hold: true`) keeps the
+ * request open waiting for the partner's hold.
+ *
+ * Equal to the alignment window by construction, not by coincidence: a hold
+ * stamps the server's clock, so once this long has passed since ours, the
+ * partner's hold can no longer align with it and waiting longer would only
+ * keep a connection open for an answer that must be "no".
+ */
+export const BUMP_HOLD_WAIT_MS = BUMP_SHAKE_WINDOW_MS;
+
+/**
+ * How far after `verifiedAt` the meeting ceremony starts on both phones.
+ *
+ * Both phones are told the same `startAt` on the server's clock. The lead is
+ * what lets the SECOND response — the partner woken from its long-poll, a
+ * network hop later — still arrive before the first frame, so neither phone
+ * has to join the scene mid-flight.
+ */
+export const BUMP_CEREMONY_LEAD_MS = 900;
+
+/**
+ * How long after `startAt` a repeated hold on an already-verified pair still
+ * receives the ceremony. Covers a long-poll dropped by the network and retried;
+ * past it the scene is over and is never replayed.
+ */
+export const BUMP_CEREMONY_REPLAY_MS = 4_000;
+
 /** How close to the venue each shake must be, in metres. */
 export const BUMP_VENUE_RADIUS_M = 100;
 
@@ -100,15 +128,6 @@ export const PROXIMITY_ARRIVED_RADIUS_M = 50;
 
 /** Reliability granted to BOTH sides when a Bump verifies. */
 export const BUMP_RELIABILITY_REWARD = 50;
-
-/**
- * Geohash precision for a Scratch Map tile — 6 is about 1.2 km × 0.6 km.
- *
- * The privacy guarantee is this number. At 7 (~150 m) a stored tile starts
- * naming a street; at 5 (~5 km) the whole of Kyiv is a handful of tiles and the
- * map stops being a map. This is the coarsest precision that still draws a city.
- */
-export const SCRATCH_TILE_PRECISION = 6;
 
 /** Topics per side in a generated icebreaker deck. */
 export const BUMP_ICEBREAKER_COUNT = 5;

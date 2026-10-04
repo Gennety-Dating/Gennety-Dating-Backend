@@ -64,6 +64,14 @@ export default defineConfig({
     ///     demo-only action stay ONE flex column. Putting the button back
     ///     beside the sentence is a one-line edit that looks harmless and
     ///     shreds the sentence into a word-per-line strip.
+    ///   - `theme.css` — that the document root never rubber-bands past its
+    ///     edge (`overscroll-behavior-y: none`), the CSS half of keeping the
+    ///     sheet from dragging down with swipe-to-close off (2026-09-29).
+    ///   - `fonts.css` and the five stylesheets that set display type
+    ///     (ticket, terminal, store, radar, venue-change) — that headings are
+    ///     the self-hosted Gennety Display and never Space Grotesk again, which
+    ///     has no Cyrillic and split every ru/uk heading into two faces
+    ///     (display-font.test.ts, 2026-10-01).
     /// Scoped rather than `css: true` so no other test starts paying for CSS
     /// processing.
     css: {
@@ -75,6 +83,13 @@ export default defineConfig({
         /canvas\.css/,
         /premium\.css/,
         /location\.css/,
+        /theme\.css/,
+        /fonts\.css/,
+        /ticket\/ticket\.css/,
+        /date-terminal\/terminal\.css/,
+        /tickets\/store\.css/,
+        /radar\/radar\.css/,
+        /venue-change\.css/,
       ],
     },
   },

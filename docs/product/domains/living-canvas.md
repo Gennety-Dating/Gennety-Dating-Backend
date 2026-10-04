@@ -1,12 +1,12 @@
-<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), the transit dock (Uber / maps hand-offs, §6.4b), Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
+<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), the transit dock (Uber / maps hand-offs, §6.4b), Date Radar, the canvas screen, the date map (§6.5, ex-Scratch Map), or Campus Radar (Phase 6). -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 7001-7327) — migrated 2026-09-01 -->
 
 ## Phase 6 — Living Canvas & Viral Mechanics
 
 The clients stop being a chat with screens attached and become a **dark map of
 Kyiv with one sheet on it**. The sheet's contents are decided by the pair's
-current `DateLifecycleState`; the map underneath carries the fog of the Scratch
-Map, the pulsing venue pins, and — in the last forty-five minutes before a date
+current `DateLifecycleState`; the map underneath carries the pulsing venue
+pins and — in the last forty-five minutes before a date
 — the radar.
 
 Four invariants this phase does not touch: no user-to-user chat, the blind
@@ -84,6 +84,47 @@ coordinates are inside `BUMP_VENUE_RADIUS_M` (100 m) of the venue, inside the
 window that opens at `DATE_BUMP_OPENS_MINUTES` (15) before `agreedTime` and
 closes `DATE_BUMP_GRACE_HOURS` (2) after it. `POST /v1/dates/:matchId/bump`.
 
+**Since 2026-09-29 the gesture can be a HOLD** (`hold: true` in the body) —
+the meeting ceremony, where the mascot leaves one phone and lands on the other
+at the same moment on both screens. Same checks, same refusals, same
+compare-and-set; what changes is only how the answer is timed:
+
+- **The server's clock, not the device's.** Both holds are live requests, so
+  the body's `at` is ignored and the stamp is the server's `now`.
+- **The first hold waits for the second.** A hold that does not complete the
+  pair keeps its request open up to `BUMP_HOLD_WAIT_MS` (= `BUMP_SHAKE_WINDOW_MS`,
+  10 s: past that the partner's hold could no longer align with it anyway).
+  The wake-up is an in-process event fired by `verifyBump` the moment its
+  compare-and-set commits (the bot is one process); a 250 ms poll of the
+  `DateBumpSession` row is the fallback; the client closing the connection
+  ends the wait. Nothing is held open meanwhile — no transaction, no
+  connection. Timed out → the old `verified: false`.
+- **One start, two roles.** A verified hold answers
+  `ceremony: { startAt, role, serverNow }`. `startAt` = `verifiedAt` +
+  `BUMP_CEREMONY_LEAD_MS` (900 ms) on the server's clock — the same instant for
+  both phones. `role` is `B` for the side whose shake stamp equals
+  `verifiedAt` (its call completed the pair) and `A` for the side that waited;
+  the mascot jumps from A to B. Both are derived from existing columns
+  (`services/bump-ceremony.ts`), so **the schema did not change**. A same-
+  millisecond tie falls back to the match's own sides so the phones never
+  agree on one role; a hold never writes to an already verified pair, so a
+  retry cannot flip its own role.
+- **No replays.** A repeated hold on a verified pair still gets `ceremony`
+  until `startAt` + `BUMP_CEREMONY_REPLAY_MS` (4 s) — a long-poll dropped by
+  the network and retried — and never after.
+- **The deck is not awaited.** The verifying hold answers at once with
+  `deck: null`; the deck and the announcement run after the response, and both
+  sides read the deck from `/v1/date/state` (below).
+
+**The shake still works, unchanged**, for old iOS builds and a cached Mini App:
+without `hold`, the route answers exactly as before, deck awaited. A mixed pair
+— one side holding, the other shaking — verifies as before; only the holding
+side sees the ceremony, as `A` if the shake completed the pair. There is no
+realtime channel: the long-poll covers the one moment in the date where speed
+matters. Demo mode is unaffected — the demo can never reach
+`DATE_BUMP_PENDING` (`demo-mode.md`), and a hold is refused `too-early` there
+exactly like a shake.
+
 **Verification is the only event that does anything**, and everything it does
 rides one compare-and-set: `isVerified`, `Profile.reliabilityScore += 50` for
 both, `Match.dateAttendedA/B = true`, one bonus Date Ticket each, and the
@@ -134,7 +175,8 @@ countdown button can never name different hours for one pitch.
 
 **Both sides read the deck from `/v1/date/state`, not from the bump response.**
 Only one of the two shakes completes the pair, so only one call can answer with
-a deck; the side that shook first would otherwise have the topics as
+a deck — and a hold answers with none at all, because the deck is generated
+after its response; the side that shook first would otherwise have the topics as
 notification text and nothing else — while the notification is deliberately the
 half that says the thing HAPPENED, and the app is the half that draws it. The
 state endpoint resolves the caller's own side, so no client is ever handed its
@@ -297,7 +339,9 @@ Date Terminal (2026-09-11) is the first entry point: its own Mini App page,
 existing `Ticket3D` card, which links on to `canvas.html` ("Map"). **Contact
 Sync is only the UI name for the Date Bump gesture** — nothing new on the
 server: the page reads `GET /v1/date/state` and posts
-`POST /v1/dates/:matchId/bump` over `initData`, like the canvas.
+`POST /v1/dates/:matchId/bump` over `initData`, like the canvas. The server
+accepts a HOLD there since 2026-09-29 (§6.2), and the terminal holds since the
+same day (below): the shake is gone from the Mini App.
 
 **Two ways in.**
 
@@ -308,30 +352,68 @@ server: the page reads `GET /v1/date/state` and posts
   in §Phase 4.
 - **The canvas.** In `DATE_RADAR_ACTIVE` and `DATE_BUMP_PENDING` the Mini App
   canvas's sheet action is "Open the Date Terminal" — also after this side has
-  already shaken, because the two shakes must land within 10 s of each other,
-  so shaking again together is legitimate. The Mini App canvas no longer reads
-  motion itself; the iOS native canvas is unchanged and keeps its own shake.
+  already bumped, because the two bumps must land within 10 s of each other,
+  so going again together is legitimate. The Mini App canvas no longer reads
+  motion itself; the iOS native canvas keeps its own gesture (its move to the
+  same hold is the iOS half of the meeting-ceremony plan).
 
 **The lock mirrors the server; it does not replace it.** Contact Sync is usable
 only while the state is `DATE_BUMP_PENDING` (T-15m … T+2h) AND the phone's own
 GPS (`navigator.geolocation.watchPosition`) puts it within 100 m of the venue —
 the client's copy of `BUMP_VENUE_RADIUS_M`. The screen shows "Arrival at
 {venue}: X m" with an arrival ring, and **nothing about the partner**, the same
-rule as a single shake in §6.2. The server still re-checks everything on every
+rule as a single bump in §6.2. The server still re-checks everything on every
 post.
 
-**Motion and haptics.** `DeviceMotionEvent` permission is requested from a tap
-(iOS delivers no motion without a gesture). Every shake impulse fires
-`Telegram.WebApp.HapticFeedback.impactOccurred("medium")` and a "Liquid Glass
-Shockwave" — a canvas refraction of the dark glass plus a masked
-`backdrop-filter` ring over the page; every full shake — as §6.4's detector
-(`canvas/shake.ts`) counts it — posts the bump.
+**The gesture is a hold (2026-09-29; a shake until then).** In `ready` the
+action bar shows the stand's placement drawing (two phones top edge to top
+edge, camera to camera), one line — "Put the phones top edge to top edge and
+hold" — and the stand's burgundy capsule. Each person holds it for 0.6 s (it
+fills left to right; `impactOccurred("light")` on touch); at the mark the hold
+is posted to `POST /v1/dates/:id/bump` with `hold: true` (plus the device `at`,
+which a server without holds pairs on, as for a shake). Lifting the finger
+before the mark cancels; after it, nothing does — the phase is `waiting`, the
+server keeps the request open up to 10 s for the partner's hold, and GPS
+jitter at the 100 m edge no longer drops the screen out of it. The waiting
+capsule reads "Waiting for your date…" with the stand's running sheen (the
+screen's one infinite motion, a loading state); the partner's name is not on
+this screen. No motion permission is asked any more; `canvas/shake.ts` is gone.
 
-**A mutual sync tears the ticket.** When the server confirms the pair:
-`impactOccurred("rigid")` + `notificationOccurred("success")`, the ticket tears
-along its perforation (`--perf-y`), and the at-the-table icebreaker deck
-(`match.deck` from `/v1/date/state`, §6.2) slides out. Opened after the sync,
-the page shows the torn ticket and the deck silently.
+**The meeting ceremony replaces the tear.** A hold that verifies the pair — this
+one, or the partner's while this one waited — answers `ceremony: { startAt,
+role, serverNow }`, and both phones play the approved stand
+(`design/meet-ceremony` in the iOS repo) at `startAt` on the server's clock:
+on A (the side that waited) the mascot gathers out of the capsule, looks up
+at the partner's phone, crouches and leaps off, growing and dissolving; on B
+it appears out of the air, falls onto the glass, glances up at the other
+phone, winks and becomes the mark of the plaque "Meeting confirmed · The next
+ticket is on me" (both phones end on it). The terminal dims and defocuses
+under the scene.
+
+- **The motion is the stand's, not a re-creation:** `date-terminal/ceremony/`
+  holds a verbatim copy of `ceremony.js` and the needed part of `render.js`,
+  held to a subset of the iOS parity fixture by a test. A Telegram viewport is
+  described to the stand as `{ w, h, mm ≈ 0.16 mm per CSS px, home = bottom
+  safe inset }`; the scene's capsule stands where the finger held it (the
+  stand's own capsule sits at 74 % of the height on the iOS sheet).
+- **Clock:** the offset to the server comes from `serverNow` in
+  `/v1/date/state`, NTP-style (shortest round trip of the last 8; two quick
+  reads while the capsule fills). A phone that heard late enters mid-scene;
+  after the end it shows the final plaque.
+- **Haptics** follow the stand's beats for the phone's role: launch →
+  `impact soft` then `light` 80 ms later; landing → `impact rigid`; plaque →
+  `notification success`. `prefers-reduced-motion` gets the stand's reduced
+  branch (the mascot fades in and smiles, no flight).
+- **Degrade path.** A server without the long-poll sends no `ceremony`. When
+  the terminal learns of the sync from a state read after having seen the date
+  unverified, and no scene has played, it plays the scene locally as B from
+  "now" — out of step with the other phone, but complete. A read never starts
+  it while a hold is still with the server, and it never plays twice.
+- **After the scene** the torn ticket (already torn, the tear does not play)
+  and the at-the-table icebreaker deck (`match.deck` from `/v1/date/state`,
+  §6.2). The shockwave, the `rigid` + `success` climax and the tear as the
+  climax are gone. Opened after the sync, the page shows the torn ticket and
+  the deck silently, as before.
 
 **Always dark.** The page is dark in both themes, locks orientation and disables
 vertical swipes while it is open.
@@ -437,58 +519,52 @@ map keeps showing through the thing describing it.
 
 The iOS native canvas is unchanged.
 
-### 6.5 Scratch Map — the city you have actually been in
+### 6.5 Date map — places of confirmed dates (was: Scratch Map)
 
-A dark veil over Kyiv with a hole punched through it wherever this person has
-been. It is the answer to what the canvas is FOR on the six evenings a week
-when nobody has a date: a map with nothing on it is a screen you open once.
+**Retired 2026-10-02: the Scratch Map's city fog.** It was a veil over Kyiv
+with a hole punched wherever a person had walked with the canvas open —
+geohash-6 tiles and a "share of the city" percentage, behind its own opt-in.
+The founder's rule for every map in the product is that it serves a date and
+nothing else; a fog that grew while someone walked to class was a background
+tracker with no date in it. Gone with it: `/v1/scratch` (read, ping, opt-in),
+`packages/shared/src/geohash.ts`, the Mini App fog and toggle, the iOS fog
+screen in Settings. The table `user_scratch_maps` and `users.scratch_map_opt_in`
+are no longer read or written; dropping them is a destructive migration and
+waits for the founder's explicit go.
 
-**Tiles, never coordinates, and that is the design rather than the storage.**
-A tile is geohash precision 6 — roughly 1.2 km × 0.61 km — so the column can
-say "they have been around Podil" and cannot say which building. Every other
-geographic value in the product is per-purpose and per-match and disappears
-with the row that held it; this is the first thing that ACCUMULATES, which is
-why the guarantee has to be the shape of what is written rather than a rule
-somebody remembers at the call site. `packages/shared/src/geohash.ts`
-deliberately offers no decode to a point.
+**What replaces it is derived, never stored.** `GET /v1/date-map`
+(`services/date-map.ts`) answers the places where THIS side attended a held
+date — `Match.status ∈ {scheduled, completed}`, `agreedTime` in the past, and
+`dateAttendedA/B` true for the caller's side (a verified Date Bump writes it;
+so does the attendance flow). Per side on purpose: one partner's verified
+presence says nothing about where the other one was.
 
-**Off by default, behind its own consent.** `User.scratchMapOptIn` is not a
-fold into `researchOptIn`: that one governs analytics use of data we already
-hold, this one authorises COLLECTING a new class of it, and a consent that
-authorises new collection is never inferred from a broader tick — the rule
-`biometricConsentAt` already follows. **Switching it off stops collection and
-keeps the map**: the tiles are the person's own, and a toggle that silently
-deleted months of them would be a worse surprise than one that stops
-collecting. Erasure is account deletion.
+- **No collection, no consent of its own.** It reads nothing the date did not
+  already hold. No ping, no user coordinate anywhere: the only point is the
+  venue's, and only on rows where `venueLat/Lng` is the venue rather than the
+  legacy route midpoint (`venueCoordinatesOf`).
+- **Never "with whom".** The answer carries the place, the visit count and the
+  last date — never the partner.
+- **Profile enrichment.** `confirmedDates` counts every attended date (even one
+  with no named venue); `vibes` are the canonical Venue Intent experiences
+  (`mapVibeTagsToFacets` over the catalog's `vibeTags`) weighted by dates spent
+  there, top three. The iOS profile shows them to the owner only.
+- **The venue-change board reads the same source.** "You have been here"
+  (`SEEN_PENALTY` in `venue-change-personalization.ts`) is now the date map's
+  place ids, so the ranking means exactly what the profile shows — and it no
+  longer reads a row the person might have opted out of.
 
-**Nothing is recorded while you are not looking.** The only two writers are a
-ping sent while the canvas is open and a verified Date Bump. There is no
-background-location entitlement in the iOS app and no such permission requested
-in the Mini App, so that promise is structural rather than a policy.
-
-**The Bump writes here for the same reason it may write attendance.** It is not
-a guess about where someone was — two people deliberately shook their phones,
-at the venue, at the time — so it records the venue and its tile for both
-sides. It rides the bump's success path fire-and-forget: a souvenir must never
-cost someone the date their reliability and bonus ticket depend on.
-
-**The percentage is a share of the CITY.** The denominator is a constant of the
-market (2915 tiles for Kyiv), not of anyone's data — derived from visited tiles
-it would move everyone's number whenever a stranger walked somewhere new, and a
-person who explored nothing would watch their own fall. A first tile is 0.034%
-and is shown as 0.1% rather than 0.0%: telling someone who just walked their
-first square that they have walked nothing reads as a broken feature.
-
-**The fog is translucent.** The city under it stays legible — streets, the
-river, where you are. An opaque veil would turn the map into a scratch card
-that happens to be a city, and the canvas exists to show the city. And it is
-drawn only once tiles have arrived: a fully-fogged map with no data hides
-everything, says nothing, and looks exactly like a bug.
+**The journey itself is the existing pipeline, not a new screen.** Pre-date:
+the date-venue spotlight and the route dock. En route / arrived: the Date
+Radar (in-memory presence, `en_route` / `arrived` derived, never stored).
+Unlock: the Date Bump ceremony — on iOS it now ends on one quiet unlock sound
+at the plaque on both phones, and both-arrived plays a two-beat heartbeat.
+Post-date: the place lands on the date map.
 
 ### 6.6 Campus Radar — a bonus drop for a campus that just filled up
 
 A university that verifies a dozen students in two days has a pool the product
-cannot use until Thursday. The radar watches for that and runs one extra drop,
+cannot use until the next scheduled drop. The radar watches for that and runs one extra drop,
 scoped to that campus.
 
 **It reuses the real allocator.** Same eligibility predicate, same lifetime
@@ -501,7 +577,7 @@ threshold, so it fires on a campus push rather than on two friends signing up
 together. A cooldown, so one campus cannot be dropped repeatedly — read off the
 newest `campus` match for that domain rather than a counter, because the row IS
 the record of the last drop. And a **pre-batch blackout**, because a
-single-cohort run can take a candidate the globally-optimal Thursday batch
+single-cohort run can take a candidate the globally-optimal scheduled batch
 needed: exactly the protection Rematch carries, for exactly the same reason.
 
 **Growth needs no baseline.** "Verified inside the window" is the growth, and

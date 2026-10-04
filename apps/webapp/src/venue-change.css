@@ -4,6 +4,7 @@
    fills, inset light, and shadow — never from outlines). Full-screen web app. */
 
 @import "./theme.css";
+@import "./fonts.css";
 
 :root {
   /* Local aliases onto the shared tokens (theme.css). The two-party colour
@@ -183,10 +184,10 @@ body {
   margin-bottom: 18px;
 }
 .vc-h1 {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
   margin: 0 0 6px;
 }
 .vc-lead {
@@ -223,9 +224,9 @@ body {
   margin-bottom: 9px;
 }
 .vc-current-name {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: var(--font-display-weight-label);
   line-height: 1.25;
 }
 .vc-current-addr {
@@ -290,9 +291,9 @@ body {
   gap: 3px;
 }
 .vc-card-name {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: var(--font-display-weight-label);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -410,10 +411,10 @@ body {
 }
 
 .vc-detail-name {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
   margin: 16px 0 10px;
 }
 .vc-detail-tags {
@@ -773,10 +774,10 @@ a.vc-info-row .vc-info-text {
 }
 
 .vc-detail-name {
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: var(--font-display-weight-title);
+  letter-spacing: var(--font-display-tracking-title);
   margin: 16px 0 10px;
 }
 .vc-detail-tags {

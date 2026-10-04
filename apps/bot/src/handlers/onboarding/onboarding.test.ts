@@ -330,7 +330,7 @@ describe("Onboarding single entry (Mini App)", () => {
     await sendOnboardingEntry(ctx);
 
     const [text, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(text).toContain("Mini App");
+    expect(text).toContain("Открой Gennety");
     expect(options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text).toBe("Открыть Gennety");
   });
 });
@@ -523,7 +523,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(ctx1.api.sendMessage).toHaveBeenCalledTimes(2);
     expect(ctx1.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("free Date Ticket"),
+      expect.stringContaining("free ticket"),
       expect.objectContaining({
         reply_markup: expect.any(Object),
       }),
@@ -723,7 +723,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     // Minimum reached: the initial free-ticket offer + Continue.
     expect(atMinimum.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("free Date Ticket"),
+      expect.stringContaining("free ticket"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     expect(shared.expectingPhoto).toBe(true);
@@ -751,7 +751,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(sixth.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("photo Date Ticket is secured"),
+      expect.stringContaining("free photo ticket is yours"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     expect(shared.pendingPhotos).toHaveLength(6);
@@ -875,7 +875,7 @@ describe("Album (media_group_id) photo coalescing", () => {
 
       expect(firstCtx!.api.sendMessage).toHaveBeenCalledWith(
         99001,
-        expect.stringContaining("profile video"),
+        expect.stringContaining("video"),
         expect.objectContaining({ reply_markup: expect.any(Object) }),
       );
       expect(shared.onboardingStep).toBe("conversational");
@@ -913,7 +913,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("video bonus is secured"),
+      expect.stringContaining("the video ticket is yours"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     expect(ctx.session.onboardingStep).toBe("conversational");
@@ -1237,9 +1237,9 @@ describe("sendVerificationCTABare", () => {
     expect(verificationUrl.searchParams.get("theme")).toBe("dark");
     expect(keyboard[0]?.[0]?.style).toBe("success");
     // The verification-bonus free ticket was retired, so the CTA no longer
-    // promises one — it only frames the ELO cost of skipping.
+    // promises one — it only frames the cost of skipping (fewer matches).
     expect(api.sendMessage.mock.calls[0]?.[1]).not.toContain("Date Ticket");
-    expect(api.sendMessage.mock.calls[0]?.[1]).toContain("ELO");
+    expect(api.sendMessage.mock.calls[0]?.[1]).toContain("fewer matches");
     // The button is always a Mini App `web_app`, never a plain URL — Face
     // Liveness runs in our own page and there is no hosted flow to link to.
     expect(keyboard[0]?.[0]?.url).toBeUndefined();
@@ -1531,7 +1531,7 @@ describe("mandatory verification (Registration v2)", () => {
     expect(
       keyboard.flat().some((b: { callback_data?: string }) => b.callback_data === VERIFY_SKIP_CALLBACK),
     ).toBe(false);
-    expect(text).toContain("Verification is required");
+    expect(text).toContain("Once you pass");
     // Re-arm the re-engagement chain so a stall at this CTA still gets nudges.
     const updateArg = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(updateArg.data.verificationStatus).toBe("pending");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 import type {
   RelationshipIntent,
@@ -44,6 +44,17 @@ import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel
 
 const app = window.Telegram?.WebApp;
 
+/**
+ * How long the outgoing profile screen fades under the incoming one. Long
+ * enough to read as one screen handing over to the next, short enough that the
+ * tap-to-answer screens do not feel held back. Matches `.ob-basics-layer` in
+ * onboarding.css.
+ */
+const BASICS_SWAP_MS = 280;
+
+/** Longest the name field waits for its screen to finish arriving. */
+const ENTRANCE_CEILING_MS = 700;
+
 /** Where the wheel and the slider open when the user has no value yet. */
 const DEFAULT_AGE = 25;
 const DEFAULT_HEIGHT_CM = 175;
@@ -63,6 +74,34 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /* The screen being shown, plus the one fading out under it. The swap used to
+     be a hard cut inside one scene: the gender screen's burst was still in the
+     air when the preference screen's twelve photographs landed in the same
+     frame. Now the outgoing screen keeps its own component instance (same key,
+     so its pop and bloom finish) and fades for `BASICS_SWAP_MS` while the
+     incoming one rises in over it. The outgoing one renders with the answers it
+     was showing, not the freshly saved ones — otherwise the option the user
+     just picked would grow a "selected" outline on its way out. */
+  const [layers, setLayers] = useState<{
+    step: BasicsStep;
+    leaving: { step: BasicsStep; basics: TelegramProfileBasics } | null;
+  }>({ step, leaving: null });
+  const shownBasics = useRef(basics);
+  if (layers.step !== step) {
+    setLayers({ step, leaving: { step: layers.step, basics: shownBasics.current } });
+  }
+  useEffect(() => {
+    shownBasics.current = basics;
+  });
+  useEffect(() => {
+    if (!layers.leaving) return;
+    const timer = window.setTimeout(
+      () => setLayers((current) => ({ step: current.step, leaving: null })),
+      BASICS_SWAP_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [layers.leaving]);
+
   // Clear a stale error when the user moves to another screen.
   useEffect(() => {
     setError(null);
@@ -80,13 +119,20 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
   }, [warmPhotos]);
 
   const save = useCallback(
-    async (patch: TelegramProfilePatch, holdMs = 0): Promise<void> => {
+    async (
+      patch: TelegramProfilePatch,
+      holdMs = 0,
+      /* The tap-to-answer screens already ticked on the tap itself; a second
+         pulse a round-trip later reads as the phone buzzing twice for one
+         answer. */
+      tickOnSuccess = true,
+    ): Promise<void> => {
       if (busy) return;
       setBusy(true);
       setError(null);
       try {
         await props.onSave(patch, holdMs);
-        app?.HapticFeedback?.selectionChanged();
+        if (tickOnSuccess) app?.HapticFeedback?.selectionChanged();
       } catch (err) {
         setError(errorCopy(err, strings));
         app?.HapticFeedback?.notificationOccurred("error");
@@ -97,82 +143,99 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
     [busy, props.onSave, strings],
   );
 
-  const errorNode = error ? <div className="ob-basics-error">{error}</div> : null;
+  /** One screen. `live` is false for the copy fading out under the next one. */
+  const screen = (shown: BasicsStep, values: TelegramProfileBasics, live: boolean): ReactElement => {
+    const screenBusy = live && busy;
+    const screenError = live ? error : null;
+    switch (shown) {
+      case "name":
+        return (
+          <NameScreen
+            strings={strings}
+            initial={values.firstName ?? ""}
+            busy={screenBusy}
+            error={screenError}
+            onSubmit={(firstName) => void save({ firstName })}
+          />
+        );
+      case "age":
+        return (
+          <AgeScreen
+            strings={strings}
+            limits={limits}
+            initial={values.age ?? DEFAULT_AGE}
+            busy={screenBusy}
+            error={screenError}
+            onSubmit={(age) => void save({ age })}
+          />
+        );
+      case "gender":
+        return (
+          <ChoiceScreen
+            title={strings.basicsGenderTitle}
+            busy={screenBusy}
+            error={screenError}
+            selected={values.gender}
+            options={[
+              { value: "male", label: strings.basicsGenderMale, tone: "male" },
+              { value: "female", label: strings.basicsGenderFemale, tone: "female" },
+            ]}
+            onPick={(gender) =>
+              void save({ gender: gender as "male" | "female" }, GENDER_ADVANCE_HOLD_MS, false)
+            }
+          />
+        );
+      case "preference":
+        return (
+          <PreferenceScreen
+            strings={strings}
+            busy={screenBusy}
+            error={screenError}
+            selected={values.preference}
+            onPick={(preference) =>
+              void save({ preference: preference as "men" | "women" | "both" }, 0, false)
+            }
+          />
+        );
+      case "height":
+        return (
+          <HeightScreen
+            strings={strings}
+            limits={limits}
+            initial={values.height ?? DEFAULT_HEIGHT_CM}
+            busy={screenBusy}
+            error={screenError}
+            onSubmit={(height) => void save({ height })}
+          />
+        );
+      case "intent":
+        return (
+          <IntentScreen
+            strings={strings}
+            busy={screenBusy}
+            error={screenError}
+            selected={values.relationshipIntents}
+            onSubmit={(intents) =>
+              void save({ relationshipIntents: intents as RelationshipIntent[] })
+            }
+          />
+        );
+    }
+  };
 
-  switch (step) {
-    case "name":
-      return (
-        <NameScreen
-          strings={strings}
-          initial={basics.firstName ?? ""}
-          busy={busy}
-          error={errorNode}
-          onSubmit={(firstName) => void save({ firstName })}
-        />
-      );
-    case "age":
-      return (
-        <AgeScreen
-          strings={strings}
-          limits={limits}
-          initial={basics.age ?? DEFAULT_AGE}
-          busy={busy}
-          error={errorNode}
-          onSubmit={(age) => void save({ age })}
-        />
-      );
-    case "gender":
-      return (
-        <ChoiceScreen
-          title={strings.basicsGenderTitle}
-          busy={busy}
-          error={errorNode}
-          selected={basics.gender}
-          options={[
-            { value: "male", label: strings.basicsGenderMale, tone: "male" },
-            { value: "female", label: strings.basicsGenderFemale, tone: "female" },
-          ]}
-          onPick={(gender) =>
-            void save({ gender: gender as "male" | "female" }, GENDER_ADVANCE_HOLD_MS)
-          }
-        />
-      );
-    case "preference":
-      return (
-        <PreferenceScreen
-          strings={strings}
-          busy={busy}
-          error={errorNode}
-          selected={basics.preference}
-          onPick={(preference) =>
-            void save({ preference: preference as "men" | "women" | "both" })
-          }
-        />
-      );
-    case "height":
-      return (
-        <HeightScreen
-          strings={strings}
-          limits={limits}
-          initial={basics.height ?? DEFAULT_HEIGHT_CM}
-          busy={busy}
-          error={errorNode}
-          onSubmit={(height) => void save({ height })}
-        />
-      );
-    case "intent":
-      return (
-        <IntentScreen
-          strings={strings}
-          busy={busy}
-          error={errorNode}
-          selected={basics.relationshipIntents}
-          onSubmit={(intents) =>
-            void save({ relationshipIntents: intents as RelationshipIntent[] })
-          }
-        />
-      );
-  }
+  const { leaving } = layers;
+  return (
+    <div className="ob-basics-stack">
+      {leaving && leaving.step !== step ? (
+        <div key={leaving.step} className="ob-basics-layer is-leaving" aria-hidden="true" inert>
+          {screen(leaving.step, leaving.basics, false)}
+        </div>
+      ) : null}
+      <div key={step} className="ob-basics-layer is-entering">
+        {screen(step, basics, true)}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -206,7 +269,7 @@ function IntentScreen(props: {
   strings: OnboardingStrings;
   selected: readonly string[];
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onSubmit: (values: string[]) => void;
 }): ReactElement {
   const { strings } = props;
@@ -233,7 +296,9 @@ function IntentScreen(props: {
       modifier="ob-basics--intent"
       action={
         <ContinuePill
-          label={props.busy ? strings.saving : strings.continue}
+          label={strings.continue}
+          busyLabel={strings.saving}
+          busy={props.busy}
           disabled={props.busy || picked.length === 0}
           onClick={() => props.onSubmit(picked)}
         />
@@ -266,11 +331,13 @@ function IntentScreen(props: {
  * options chosen a second apart should each hold their frame for two seconds,
  * not change together on somebody else's clock.
  *
- * **An unselected tile renders exactly one `<img>`**, and that is load-bearing
- * rather than tidy: the other three frames are ~80-120 kB that nobody who did
- * not choose this option should ever download. Mounting them IS the preload,
- * and the first advance is two seconds later, which is a long head start for
- * one WebP.
+ * **Every frame is mounted from the start**, hidden at opacity 0, and that is
+ * a reversal (founder decision 2026-10-01). Mounting the other three on the tap
+ * saved ~80-120 kB per untouched option, but it put three fresh WebP decodes on
+ * the very frame the selection animates, and on a mid-range phone that frame
+ * was the one that dropped. The screen's whole cost now lands while it is at
+ * rest: `<img decoding="async">` fetches in the background, and the tap only
+ * changes opacity.
  */
 function IntentTile(props: {
   label: string;
@@ -289,9 +356,9 @@ function IntentTile(props: {
      two a hard cut. (It reads as a cut with only two frames, where the incoming
      one IS the outgoing one's neighbour; every cycle here has four.) */
   const [phase, setPhase] = useState<{ live: number; prev: number }>({ live: 0, prev: -1 });
-  /* Which frames have actually decoded. They are fetched by this very
-     selection, so on a slow link the first advance can arrive before the bytes
-     do — and advancing to an undecoded frame fades the tile to nothing. */
+  /* Which frames have actually decoded. On a slow link the first advance can
+     still arrive before the bytes do — and advancing to an undecoded frame
+     fades the tile to nothing. */
   const loaded = useRef(new Set<string>());
 
   useEffect(() => {
@@ -313,36 +380,41 @@ function IntentTile(props: {
     return () => window.clearInterval(timer);
   }, [selected, photos]);
 
-  const frames = selected ? photos : photos.slice(0, 1);
-
   return (
     <button
       type="button"
       className={`ob-intent${selected ? " is-on" : ""}`}
       disabled={props.disabled}
       aria-pressed={selected}
+      aria-label={props.label}
       onClick={props.onToggle}
     >
-      {frames.map((src, index) => (
-        <img
-          key={src}
-          className="ob-intent-photo"
-          style={{
-            opacity: index === phase.live || index === phase.prev ? 1 : 0,
-            zIndex: index === phase.live ? 3 : index === phase.prev ? 2 : 1,
-          }}
-          src={src}
-          alt=""
-          aria-hidden="true"
-          // Both, because either alone has a hole: a cached frame can be
-          // complete before React attaches the listener (so `onLoad` never
-          // fires), and a cold one is not complete when the ref runs.
-          ref={(element) => {
-            if (element?.complete) loaded.current.add(src);
-          }}
-          onLoad={() => loaded.current.add(src)}
-        />
-      ))}
+      {/* The clip that reveals the ring. The photographs AND the label's scrim
+          live inside it, so one `clip-path` change frames all of them at once. */}
+      <span className="ob-intent-frames" aria-hidden="true">
+        {photos.map((src, index) => (
+          <img
+            key={src}
+            className="ob-intent-photo"
+            style={{
+              opacity: index === phase.live || index === phase.prev ? 1 : 0,
+              zIndex: index === phase.live ? 3 : index === phase.prev ? 2 : 1,
+            }}
+            src={src}
+            alt=""
+            decoding="async"
+            draggable={false}
+            // Both, because either alone has a hole: a cached frame can be
+            // complete before React attaches the listener (so `onLoad` never
+            // fires), and a cold one is not complete when the ref runs.
+            ref={(element) => {
+              if (element?.complete) loaded.current.add(src);
+            }}
+            onLoad={() => loaded.current.add(src)}
+          />
+        ))}
+        <span className="ob-intent-label">{props.label}</span>
+      </span>
       <span className="ob-intent-check" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none">
           <path
@@ -354,53 +426,137 @@ function IntentTile(props: {
           />
         </svg>
       </span>
-      <span className="ob-intent-label">{props.label}</span>
     </button>
   );
 }
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */
 function BasicsShell(props: {
-  /** Omitted on the name screen, where the field's placeholder is the ask. */
+  /** Every screen passes one; optional so a future field-only screen may omit it. */
   title?: string;
-  error: ReactNode;
+  error: string | null;
   children: ReactNode;
   /** Omitted on the tap-to-answer screens, where the option IS the action. */
   action?: ReactNode;
   modifier?: string;
 }): ReactElement {
+  const error = <ErrorSlot message={props.error} />;
   return (
     <main className={`ob-basics ${props.modifier ?? ""}`}>
       {props.title ? <h1 className="ob-basics-title">{props.title}</h1> : null}
       <div className="ob-basics-body">{props.children}</div>
-      {props.error}
-      {props.action ? <div className="ob-basics-foot">{props.action}</div> : null}
+      {props.action ? (
+        <div className="ob-basics-foot">
+          {error}
+          {props.action}
+        </div>
+      ) : (
+        error
+      )}
     </main>
   );
 }
 
+/**
+ * The save error, in a slot that takes no room in the layout.
+ *
+ * It used to be inserted into the column between the control and the pill, so
+ * the first failed save shoved the name field up ~10px and the gender options
+ * ~19px under the user's thumb. It is now absolutely positioned — just above
+ * the pill where there is one, in the bottom padding where there is not — and
+ * only its opacity changes. The last message stays in the slot while it fades
+ * out, so it does not blank mid-fade.
+ */
+function ErrorSlot(props: { message: string | null }): ReactElement {
+  const { message } = props;
+  const [shown, setShown] = useState(message);
+  if (message && message !== shown) setShown(message);
+  return (
+    <div
+      className={`ob-basics-error${message ? " is-shown" : ""}`}
+      role="alert"
+      aria-hidden={message ? undefined : true}
+    >
+      {shown}
+    </div>
+  );
+}
+
+/**
+ * Both labels are always laid out in the same grid cell and only one is
+ * visible, so the pill keeps the width of the wider one: "Продолжить" →
+ * "Сохраняю..." used to shrink it by ~4px mid-tap.
+ */
 function ContinuePill(props: {
   label: string;
+  busyLabel: string;
+  busy: boolean;
   disabled: boolean;
   onClick: () => void;
 }): ReactElement {
   return (
     <button
       type="button"
-      className="ob-basics-pill"
+      className={`ob-basics-pill${props.busy ? " is-busy" : ""}`}
       disabled={props.disabled}
+      aria-busy={props.busy}
       onClick={props.onClick}
     >
-      {props.label}
+      <span className="ob-pill-label" aria-hidden={props.busy ? true : undefined}>
+        {props.label}
+      </span>
+      <span
+        className="ob-pill-label ob-pill-label--busy"
+        aria-hidden={props.busy ? undefined : true}
+      >
+        {props.busyLabel}
+      </span>
     </button>
   );
+}
+
+/**
+ * Run `focus` once the screen holding `element` has finished arriving.
+ *
+ * Focusing mid-transition raised the keyboard while the scene was still sliding
+ * and fading in, so the layout made room for a keyboard on a screen that was
+ * itself still moving. This waits for the scene's crossfade and the profile
+ * screen's own entrance (whichever are running), with a ceiling in case a
+ * WebView reports neither.
+ */
+function afterEntrance(element: HTMLElement, focus: () => void): () => void {
+  let done = false;
+  const fire = (): void => {
+    if (done) return;
+    done = true;
+    window.clearTimeout(ceiling);
+    focus();
+  };
+  const ceiling = window.setTimeout(fire, ENTRANCE_CEILING_MS);
+  const hosts = [element.closest(".ob-basics-layer"), element.closest(".scene-stage")];
+  const canAsk = hosts.some((host) => host && typeof host.getAnimations === "function");
+  const running = hosts.flatMap((host) =>
+    host && typeof host.getAnimations === "function" ? host.getAnimations() : [],
+  );
+  if (running.length > 0) {
+    void Promise.all(
+      running.map((animation) => animation.finished.catch(() => undefined)),
+    ).then(fire);
+  } else if (canAsk) {
+    // Nothing is moving (reduced motion, or a re-render): focus on the next frame.
+    window.requestAnimationFrame(fire);
+  }
+  return () => {
+    done = true;
+    window.clearTimeout(ceiling);
+  };
 }
 
 function NameScreen(props: {
   strings: OnboardingStrings;
   initial: string;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onSubmit: (name: string) => void;
 }): ReactElement {
   const [name, setName] = useState(props.initial);
@@ -409,21 +565,34 @@ function NameScreen(props: {
 
   // Raise the keyboard on arrival: this screen is nothing but a field, so
   // making the user tap it first is a wasted step. `--kb-height` (onboarding.tsx)
-  // already shrinks the layout so the pill stays above the keyboard.
+  // lifts the pill above the keyboard. Only once the screen has landed — see
+  // `afterEntrance`.
   useEffect(() => {
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 220);
-    return () => window.clearTimeout(timer);
+    const input = inputRef.current;
+    if (!input) return;
+    return afterEntrance(input, () => input.focus());
   }, []);
+
+  // Drop the keyboard BEFORE the screen changes, not as a side effect of the
+  // field being unmounted: otherwise the keyboard closes while the next screen
+  // is fading in and its layout grows under it.
+  const submit = (): void => {
+    inputRef.current?.blur();
+    props.onSubmit(trimmed);
+  };
 
   return (
     <BasicsShell
+      title={props.strings.basicsNameTitle}
       error={props.error}
       modifier="ob-basics--name"
       action={
         <ContinuePill
-          label={props.busy ? props.strings.saving : props.strings.continue}
+          label={props.strings.continue}
+          busyLabel={props.strings.saving}
+          busy={props.busy}
           disabled={props.busy || trimmed.length < 2}
-          onClick={() => props.onSubmit(trimmed)}
+          onClick={submit}
         />
       }
     >
@@ -437,8 +606,9 @@ function NameScreen(props: {
         spellCheck={false}
         enterKeyHint="done"
         maxLength={40}
-        // The visible question is gone from this screen; the field is the whole
-        // ask. Keep it as the accessible name so a screen reader still says it.
+        // The question is also the visible title again (copy audit 2026-10-01,
+        // same size as every other basics screen); the field keeps it as its
+        // accessible name so a screen reader says it on focus.
         aria-label={props.strings.basicsNameTitle}
         placeholder={props.strings.basicsNamePlaceholder}
         value={name}
@@ -446,7 +616,7 @@ function NameScreen(props: {
         onKeyDown={(event) => {
           if (event.key === "Enter" && trimmed.length >= 2 && !props.busy) {
             event.preventDefault();
-            props.onSubmit(trimmed);
+            submit();
           }
         }}
       />
@@ -459,12 +629,17 @@ function AgeScreen(props: {
   limits: TelegramProfileLimits;
   initial: number;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onSubmit: (age: number) => void;
 }): ReactElement {
   const { minAge, maxAge } = props.limits;
   const [age, setAge] = useState(() => clamp(props.initial, minAge, maxAge));
   const filled = ((age - minAge) / Math.max(1, maxAge - minAge)) * 100;
+  // Same thinning as the height drum: one pulse per value crossed, and a drag
+  // that crosses values faster than `HAPTIC_MIN_GAP_MS` skips the extras rather
+  // than buzzing continuously.
+  const tickedRef = useRef(age);
+  const tickedAtRef = useRef(0);
 
   return (
     <BasicsShell
@@ -472,7 +647,9 @@ function AgeScreen(props: {
       error={props.error}
       action={
         <ContinuePill
-          label={props.busy ? props.strings.saving : props.strings.continue}
+          label={props.strings.continue}
+          busyLabel={props.strings.saving}
+          busy={props.busy}
           disabled={props.busy}
           onClick={() => props.onSubmit(age)}
         />
@@ -495,7 +672,12 @@ function AgeScreen(props: {
         style={{ ["--filled" as string]: `${filled}%` }}
         onChange={(event) => {
           const next = Number(event.currentTarget.value);
-          if (next !== age) app?.HapticFeedback?.selectionChanged();
+          const now = Date.now();
+          if (shouldTickHaptic(tickedRef.current, next, tickedAtRef.current, now)) {
+            tickedRef.current = next;
+            tickedAtRef.current = now;
+            app?.HapticFeedback?.selectionChanged();
+          }
           setAge(next);
         }}
       />
@@ -538,9 +720,11 @@ function useChoiceTap(
   const fire = useCallback(
     (event: MouseEvent, value: string, tone: BurstTone): void => {
       setFiring(value);
-      // A crisper tap than the selection tick the save fires on success: this
-      // one lands with the burst, not a round-trip later.
-      app?.HapticFeedback?.impactOccurred("medium");
+      // The answer's ONE pulse, landing with the burst rather than a
+      // round-trip later; `save` is told not to tick again on success. It was
+      // a medium impact here plus a selection tick after the save — two
+      // different buzzes for one tap.
+      app?.HapticFeedback?.selectionChanged();
       burstFromEvent(event, tone);
       onPick(value);
     },
@@ -570,7 +754,7 @@ function ChoiceScreen(props: {
   options: ChoiceOption[];
   selected: string | null;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onPick: (value: string) => void;
 }): ReactElement {
   const { firing, fire } = useChoiceTap(props.onPick, props.title);
@@ -593,8 +777,24 @@ function ChoiceScreen(props: {
             >
               {avatar ? (
                 <span className="ob-gender-art">
-                  {/* Decorative: the button's accessible name is its label. */}
-                  <img className="ob-gender-shot" src={avatar} alt="" draggable={false} />
+                  {/* Decorative: the button's accessible name is its label.
+                      Two copies of one picture: the colour one underneath, the
+                      monochrome one over it, and the bloom is the top copy
+                      fading out — an opacity change the compositor runs, where
+                      animating `filter` re-rasterised a masked image on every
+                      frame of the 520ms. */}
+                  <img
+                    className="ob-gender-shot ob-gender-shot--color"
+                    src={avatar}
+                    alt=""
+                    draggable={false}
+                  />
+                  <img
+                    className="ob-gender-shot ob-gender-shot--mono"
+                    src={avatar}
+                    alt=""
+                    draggable={false}
+                  />
                 </span>
               ) : null}
               <span className="ob-gender-label">{option.label}</span>
@@ -625,7 +825,7 @@ function PreferenceScreen(props: {
   strings: OnboardingStrings;
   selected: string | null;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onPick: (value: string) => void;
 }): ReactElement {
   const { strings } = props;
@@ -815,7 +1015,7 @@ function HeightScreen(props: {
   limits: TelegramProfileLimits;
   initial: number;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onSubmit: (height: number) => void;
 }): ReactElement {
   const { minHeightCm, maxHeightCm } = props.limits;
@@ -830,7 +1030,9 @@ function HeightScreen(props: {
       modifier="ob-basics--height"
       action={
         <ContinuePill
-          label={props.busy ? props.strings.saving : props.strings.continue}
+          label={props.strings.continue}
+          busyLabel={props.strings.saving}
+          busy={props.busy}
           disabled={props.busy}
           onClick={() => props.onSubmit(height)}
         />
@@ -878,6 +1080,19 @@ function Wheel(props: {
   // buzzes once at the end feels like a list that happened to land somewhere.
   const tickedRef = useRef(value);
   const tickedAtRef = useRef(0);
+  /* The row under the capsule RIGHT NOW, which is what lights up — during the
+     scroll, not 90ms after it stops. Lighting the committed value instead made
+     the highlight trail the drum and then pop onto the row it had landed on,
+     and committing it re-rendered all ~80 rows at once. A row is a memoised
+     `WheelRow`, so a change here re-renders exactly two of them: the one going
+     dark and the one lighting up. */
+  const [centred, setCentred] = useState(value);
+  const centredRef = useRef(value);
+  const centre = useCallback((next: number): void => {
+    if (next === centredRef.current) return;
+    centredRef.current = next;
+    setCentred(next);
+  }, []);
 
   const values = useMemo(
     () => Array.from({ length: max - min + 1 }, (_, index) => min + index),
@@ -893,6 +1108,7 @@ function Wheel(props: {
       // the destination — otherwise the first real scroll afterwards pulses for
       // a row that was never passed.
       tickedRef.current = next;
+      centre(next);
       list.scrollTo({
         top: (next - min) * WHEEL_ITEM_H,
         behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto",
@@ -901,7 +1117,7 @@ function Wheel(props: {
         selfScrollRef.current = false;
       }, 320);
     },
-    [min],
+    [min, centre],
   );
 
   // Open centred on the current value; no animation, it should already be
@@ -919,23 +1135,24 @@ function Wheel(props: {
     const list = listRef.current;
     if (!list || selfScrollRef.current) return;
 
-    const centred = wheelValueAt(list.scrollTop, min, max);
+    const under = wheelValueAt(list.scrollTop, min, max);
+    centre(under);
     const now = Date.now();
-    if (shouldTickHaptic(tickedRef.current, centred, tickedAtRef.current, now)) {
-      tickedRef.current = centred;
+    if (shouldTickHaptic(tickedRef.current, under, tickedAtRef.current, now)) {
+      tickedRef.current = under;
       tickedAtRef.current = now;
       app?.HapticFeedback?.selectionChanged?.();
     }
 
-    // The value itself is still committed on settle rather than per row: the
-    // list re-renders every option on a change, and doing that on each scroll
-    // frame is exactly the jank a native scroll was chosen to avoid.
+    // The value itself is still committed on settle rather than per row: that
+    // re-renders the whole screen, which is not worth doing on every frame of a
+    // fling.
     if (settleRef.current !== null) window.clearTimeout(settleRef.current);
     settleRef.current = window.setTimeout(() => {
       const next = wheelValueAt(list.scrollTop, min, max);
       if (next !== value) onChange(next);
     }, 90);
-  }, [min, max, value, onChange]);
+  }, [min, max, value, onChange, centre]);
 
   useEffect(
     () => () => {
@@ -964,7 +1181,7 @@ function Wheel(props: {
         className="ob-wheel-list"
         role="listbox"
         aria-label={props.label}
-        aria-activedescendant={`ob-wheel-${value}`}
+        aria-activedescendant={`ob-wheel-${centred}`}
         tabIndex={0}
         onScroll={handleScroll}
         onKeyDown={(event) => {
@@ -979,21 +1196,27 @@ function Wheel(props: {
       >
         <div className="ob-wheel-pad" aria-hidden="true" />
         {values.map((item) => (
-          <div
-            key={item}
-            id={`ob-wheel-${item}`}
-            role="option"
-            aria-selected={item === value}
-            className={`ob-wheel-item ${item === value ? "is-active" : ""}`}
-          >
-            {item}
-          </div>
+          <WheelRow key={item} item={item} active={item === centred} />
         ))}
         <div className="ob-wheel-pad" aria-hidden="true" />
       </div>
     </div>
   );
 }
+
+/** One drum row. Memoised: see `centred` in `Wheel`. */
+const WheelRow = memo(function WheelRow(props: { item: number; active: boolean }): ReactElement {
+  return (
+    <div
+      id={`ob-wheel-${props.item}`}
+      role="option"
+      aria-selected={props.active}
+      className={`ob-wheel-item${props.active ? " is-active" : ""}`}
+    >
+      {props.item}
+    </div>
+  );
+});
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));

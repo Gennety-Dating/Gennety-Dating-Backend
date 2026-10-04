@@ -46,6 +46,7 @@ const runFaceMatchVerificationDefault = vi.fn().mockResolvedValue({ kind: "verif
 vi.mock("./verification-pipeline.js", () => ({
   runFaceMatchVerificationDefault,
   activationBlockerFor: actualPipeline.activationBlockerFor,
+  trackFaceMatchRun: actualPipeline.trackFaceMatchRun,
 }));
 
 const buildVerificationKeyboard = vi.fn().mockResolvedValue({ inline_keyboard: [] });
@@ -264,6 +265,26 @@ describe("beginLivenessCheck", () => {
     const result = await beginLivenessCheck("user-1");
 
     expect(result).toEqual({ ok: false, error: "photos_required", language: "uk" });
+    expect(createLivenessSession).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a check below the photo minimum, not only at zero photos", async () => {
+    // Three is one short of MIN_PHOTOS (4): the check would compare against a
+    // set the user still has to finish, so the photo step comes first.
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "unverified",
+      ...READY_FOR_CHECK,
+      profile: { photos: ["u/a.jpg", "u/b.jpg", "u/c.jpg"] },
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: null,
+    });
+
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toEqual({ ok: false, error: "photos_required", language: "en" });
     expect(createLivenessSession).not.toHaveBeenCalled();
     expect(userUpdate).not.toHaveBeenCalled();
   });

@@ -24,7 +24,7 @@ import { countdownRouter } from "./routes/countdown.js";
 import { dateStateRouter } from "./routes/date-state.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
-import { scratchMapRouter } from "./routes/scratch-map.js";
+import { dateMapRouter } from "./routes/date-map.js";
 import { frequentPlacesRouter } from "./routes/frequent-places.js";
 import { rhythmRouter } from "./routes/rhythm.js";
 import { venuesRouter } from "./routes/venues.js";
@@ -52,6 +52,7 @@ import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { ticketsHistoryRouter } from "./routes/tickets-history.js";
+import { profileGapsRouter } from "./routes/profile-gaps.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createProfileVideoRouter } from "./routes/profile-video.js";
 import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
@@ -612,6 +613,9 @@ app.use("/v1/me/rhythm", rhythmRouter);
 app.use("/v1/me/blocks", createUserBlocksRouter());
 // Wallet movements for the native Tickets tab (TH1). Same rule again.
 app.use("/v1/me/tickets/history", ticketsHistoryRouter);
+// Unfinished profile items for the Today nudge (decision journal 2026-10-01).
+// Same rule; read-only, no flag of its own — each item carries its feature's.
+app.use("/v1/me/profile-gaps", profileGapsRouter);
 // Profile video from the native app (decision journal 2026-09-13). Same rule;
 // 404s before auth while the kill switch is off.
 app.use("/v1/me/video", (req, res, next) => {
@@ -646,12 +650,11 @@ app.use("/v1/dates", dateBumpRouter);
 // Same prefix, separate router: the Bump and the Radar share a resource and
 // nothing else — one is a two-sided commit, the other a masked read.
 app.use("/v1/dates", dateRadarRouter);
-// The Scratch Map. Its own prefix and not `/v1/me/*`: it is the only surface a
-// client polls while nothing is happening, and it is gated by a consent of its
-// own rather than by being logged in.
-app.use("/v1/scratch", scratchMapRouter);
-// Frequently visited places. Same shape as the Scratch Map, for the same
-// reasons: its own consent, either rail, and a foreground-only presence call.
+// The date map: places of confirmed dates, derived from `Match` rows. Replaced
+// the Scratch Map's `/v1/scratch` (city fog, retired 2026-10-02).
+app.use("/v1/date-map", dateMapRouter);
+// Frequently visited places: its own consent, either rail, and a
+// foreground-only presence call.
 app.use("/v1/frequent-places", frequentPlacesRouter);
 // Curated places for the iOS standby canvas (IDLE_EXPLORING). The list is a
 // canvas call and takes either rail; the photo route under it is reached by a

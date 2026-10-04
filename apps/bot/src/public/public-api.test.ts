@@ -211,6 +211,17 @@ type MatchRow = {
   safetyAckB: boolean;
   emergencyCancelledBy: string | null;
   emergencyReason: string | null;
+  /** Proxy-chat window stamp and the two read cursors (the unread badge). */
+  proxyOpenedAt: Date | null;
+  proxyReadAtA: Date | null;
+  proxyReadAtB: Date | null;
+  createdAt: Date;
+};
+
+type ProxyMessageRow = {
+  id: string;
+  matchId: string;
+  senderId: string;
   createdAt: Date;
 };
 
@@ -272,6 +283,7 @@ const db = {
   botSessions: [] as { key: string }[],
   /** Rematch purchases a refund sweep still owns (A13-H14 deferral). */
   rematchPurchases: [] as { id: string; userId: string; status: string; createdAt: Date }[],
+  proxyMessages: [] as ProxyMessageRow[],
 };
 
 function resetDb(): void {
@@ -290,6 +302,7 @@ function resetDb(): void {
   db.founderReports.length = 0;
   db.botSessions.length = 0;
   db.rematchPurchases.length = 0;
+  db.proxyMessages.length = 0;
 }
 
 function userById(id: string): UserRow | undefined {
@@ -627,6 +640,18 @@ vi.mock("@gennety/db", async () => {
           for (const m of list) Object.assign(m, applyData(data));
           return { count: list.length };
         }),
+      },
+
+      // ----- proxyMessage ----- (read-only: the unread badge on /current)
+      proxyMessage: {
+        count: vi.fn(async ({ where }: any) =>
+          db.proxyMessages.filter(
+            (p) =>
+              p.matchId === where.matchId &&
+              (where.senderId?.not === undefined || p.senderId !== where.senderId.not) &&
+              (where.createdAt?.gt === undefined || p.createdAt > where.createdAt.gt),
+          ).length,
+        ),
       },
 
       // ----- matchEvent -----
@@ -1030,6 +1055,22 @@ vi.mock("../services/onboarding-agent.js", () => ({
 vi.mock("../services/onboarding-collector.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/onboarding-collector.js")>()),
   markOnboardingField: vi.fn(async () => ({})),
+  // The collector's own tests cover these against its progress rules; here the
+  // routes only need a verdict and a save to observe.
+  applyOnboardingFacts: vi.fn(async () => ({
+    rejectedFields: [],
+    acceptedFields: [],
+    currentQuestion: "gender",
+  })),
+  loadOnboardingBasics: vi.fn(async () => ({
+    firstName: null,
+    age: null,
+    gender: null,
+    preference: null,
+    height: null,
+    relationshipIntents: [],
+    complete: false,
+  })),
 }));
 
 vi.mock("../services/menu-agent.js", () => ({
@@ -1087,6 +1128,14 @@ vi.mock("../services/storage.js", () => ({
   downloadProfileImage: vi.fn(async () => Buffer.from("photo-bytes")),
   downloadTelegramFile: vi.fn(async () => Buffer.from("photo-bytes")),
 }));
+
+// The real pipeline module, with the photo-edit rerun trigger wrapped in a spy
+// so a test can count reruns per request. It only fires when a bot api is
+// injected (`queueVerificationRerun`), which the photo-removal tests do.
+vi.mock("../services/verification-pipeline.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/verification-pipeline.js")>();
+  return { ...actual, triggerVerificationRerun: vi.fn(actual.triggerVerificationRerun) };
+});
 
 vi.mock("../services/vibe-parser.js", () => ({
   parseVibe: vi.fn(async () => ({
@@ -1146,9 +1195,30 @@ const { prisma: prismaMock } = await import("@gennety/db");
 const { runAgentTurn: runAgentTurnMock } = await import(
   "../services/onboarding-agent.js"
 );
-const { markOnboardingField: markOnboardingFieldMock } = await import(
-  "../services/onboarding-collector.js"
-);
+const {
+  markOnboardingField: markOnboardingFieldMock,
+  applyOnboardingFacts: applyOnboardingFactsMock,
+  loadOnboardingBasics: loadOnboardingBasicsMock,
+} = await import("../services/onboarding-collector.js");
+
+const INCOMPLETE_BASICS = {
+  firstName: null,
+  age: null,
+  gender: null,
+  preference: null,
+  height: null,
+  relationshipIntents: [] as string[],
+  complete: false,
+};
+const COMPLETE_BASICS = {
+  firstName: "Alice",
+  age: 22,
+  gender: "female" as const,
+  preference: "men" as const,
+  height: 168,
+  relationshipIntents: ["spark"],
+  complete: true,
+};
 const { env: envMock } = (await import("../config.js")) as unknown as {
   env: Record<string, unknown>;
 };
@@ -1239,6 +1309,9 @@ async function seedMatch(
     safetyAckB: false,
     emergencyCancelledBy: null,
     emergencyReason: null,
+    proxyOpenedAt: null,
+    proxyReadAtA: null,
+    proxyReadAtB: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -2551,6 +2624,46 @@ describe("POST /v1/me/photos", () => {
     // No self-photo identity anchor is created before Persona verification.
     expect(userById(user.id)?.profile?.referenceFaceEmbedding ?? null).toBeNull();
   });
+
+  it("runs no agent turn while the native photo stage is open (2026-09-30)", async () => {
+    const { injectSystemMessage } = await import("../services/onboarding-agent.js");
+    vi.mocked(injectSystemMessage).mockClear();
+    vi.mocked(runAgentTurnMock).mockClear();
+    vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+      currentQuestion: "photos",
+    } as never);
+    const user = await seedUser({ onboardingStep: "conversational" });
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["p/a.jpg", "p/b.jpg", "p/c.jpg"],
+      matchRadius: "campus_only",
+    };
+
+    try {
+      const res = await request(app)
+        .post("/v1/me/photos")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(201);
+      // The upload that reaches the minimum no longer moves the collector on:
+      // the stage stays open for the manager until the user leaves it.
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(injectSystemMessage).not.toHaveBeenCalled();
+      expect(res.body.interviewState).toMatchObject({
+        expectingPhoto: true,
+        photoCount: MIN_PHOTOS,
+      });
+    } finally {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    }
+  });
 });
 
 describe("DELETE /v1/me/photos/:index", () => {
@@ -2672,6 +2785,318 @@ describe("DELETE /v1/me/photos/:index", () => {
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
     expect(res.body.photos).toEqual(["b.jpg"]);
+  });
+
+  describe("during onboarding (the native photo manager, 2026-09-30)", () => {
+    afterEach(() => {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    async function seedOnboarding(photos: string[]) {
+      const user = await seedWithPhotos(photos, "onboarding" as UserRow["status"]);
+      userById(user.id)!.onboardingStep = "conversational";
+      return user;
+    }
+
+    it("has no floor while the photo stage is open", async () => {
+      const user = await seedOnboarding(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        completedFields: ["hobbies"],
+      } as never);
+      const res = await request(app)
+        .delete("/v1/me/photos/3")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+    });
+
+    // Decision journal 2026-10-01: the floor is for `active` users only. In
+    // onboarding the photo step and the liveness gate (`photos_required`)
+    // hold the minimum, so a delete after the photo stage is allowed.
+    it("allows dropping below the minimum after the user has left the photo stage", async () => {
+      const user = await seedOnboarding(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        completedFields: ["hobbies", "photos"],
+      } as never);
+      const res = await request(app)
+        .delete("/v1/me/photos/3")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+      expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+    });
+  });
+
+  it("409 photo_minimum for an active user at exactly the minimum", async () => {
+    const user = await seedWithPhotos(["a.jpg", "b.jpg", "c.jpg", "d.jpg"], "active");
+    const res = await request(app)
+      .delete("/v1/me/photos/3")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photo_minimum");
+    expect(res.body.min).toBe(MIN_PHOTOS);
+    expect(userById(user.id)?.profile?.photos).toHaveLength(4);
+  });
+});
+
+describe("POST /v1/me/photos/remove", () => {
+  beforeEach(resetDb);
+
+  async function seedRemovable(photos: string[], status: UserRow["status"] = "active") {
+    const user = await seedUser({ status });
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos,
+      matchRadius: "campus_only",
+    } as never;
+    return user;
+  }
+
+  function remove(userId: string, body: unknown) {
+    return request(app)
+      .post("/v1/me/photos/remove")
+      .set("Authorization", `Bearer ${signAccess(userId)}`)
+      .send(body as object);
+  }
+
+  it("401 without auth", async () => {
+    const res = await request(app).post("/v1/me/photos/remove").send({ paths: ["a.jpg"] });
+    expect(res.status).toBe(401);
+  });
+
+  it.each([
+    ["no body", {}],
+    ["not an array", { paths: "a.jpg" }],
+    ["empty", { paths: [] }],
+    ["non-string item", { paths: ["a.jpg", 3] }],
+    ["too many", { paths: Array.from({ length: MAX_PHOTOS + 1 }, (_, i) => `${i}.jpg`) }],
+  ])("400 invalid-paths: %s", async (_label, body) => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    const res = await remove(user.id, body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-paths");
+    expect(userById(user.id)?.profile?.photos).toHaveLength(5);
+  });
+
+  it("removes several photos in one call, keeping hashes, scores and media aligned", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    vi.mocked(deleteStorageObject).mockClear();
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"]);
+    const profile = userById(user.id)!.profile! as Record<string, unknown>;
+    profile.uploadedPhotoHashes = ["ha", "hb", "hc", "hd", "he", "hf"];
+    profile.photoFaceScores = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4];
+    profile.profileMedia = [
+      { type: "photo", photo: "a.jpg" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "e.jpg" },
+      { type: "photo", photo: "f.jpg" },
+    ];
+
+    const res = await remove(user.id, { paths: ["e.jpg", "b.jpg"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "f.jpg"]);
+    expect(res.body.signedUrls).toHaveLength(4);
+    const after = userById(user.id)!.profile! as Record<string, unknown>;
+    expect(after.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "f.jpg"]);
+    expect(after.uploadedPhotoHashes).toEqual(["ha", "hc", "hd", "hf"]);
+    expect(after.photoFaceScores).toEqual([0.9, 0.7, 0.6, 0.4]);
+    expect(after.profileMedia).toEqual([
+      { type: "photo", photo: "a.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "f.jpg" },
+    ]);
+    expect(deleteStorageObject).toHaveBeenCalledTimes(2);
+    expect(deleteStorageObject).toHaveBeenCalledWith(expect.any(String), "b.jpg");
+    expect(deleteStorageObject).toHaveBeenCalledWith(expect.any(String), "e.jpg");
+  });
+
+  it("ignores paths that are not among the photos", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    const res = await remove(user.id, { paths: ["nope.jpg", "c.jpg", "c.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "d.jpg", "e.jpg"]);
+  });
+
+  it("answers 200 with the photos as they are when nothing matches", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    vi.mocked(deleteStorageObject).mockClear();
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+    const res = await remove(user.id, { paths: ["gone.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+    expect(deleteStorageObject).not.toHaveBeenCalled();
+  });
+
+  it("409 photo_minimum for an active user and removes nothing", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"], "active");
+    const res = await remove(user.id, { paths: ["a.jpg", "b.jpg"] });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photo_minimum");
+    expect(res.body.min).toBe(MIN_PHOTOS);
+    expect(userById(user.id)?.profile?.photos).toEqual([
+      "a.jpg",
+      "b.jpg",
+      "c.jpg",
+      "d.jpg",
+      "e.jpg",
+    ]);
+  });
+
+  it("lets an onboarding user remove every photo", async () => {
+    const user = await seedRemovable(
+      ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+      "onboarding" as UserRow["status"],
+    );
+    userById(user.id)!.onboardingStep = "conversational";
+    const res = await remove(user.id, { paths: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual([]);
+    expect(userById(user.id)?.profile?.photos).toEqual([]);
+  });
+
+  it("queues exactly one verification rerun per request", async () => {
+    const { __setBotApiForTests } = await import("./server.js");
+    const { triggerVerificationRerun } = await import("../services/verification-pipeline.js");
+    const rerun = vi.mocked(triggerVerificationRerun);
+    rerun.mockClear();
+    rerun.mockImplementationOnce(async () => ({ kind: "no_inquiry" }));
+    __setBotApiForTests({} as never);
+    try {
+      const user = await seedRemovable(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"]);
+      const res = await remove(user.id, { paths: ["a.jpg", "b.jpg"] });
+      expect(res.status).toBe(200);
+      expect(rerun).toHaveBeenCalledTimes(1);
+      expect(rerun).toHaveBeenCalledWith(user.id, expect.anything());
+
+      // Nothing removed → no rerun.
+      rerun.mockClear();
+      await remove(user.id, { paths: ["a.jpg"] });
+      expect(rerun).not.toHaveBeenCalled();
+    } finally {
+      __setBotApiForTests(null);
+    }
+  });
+});
+
+describe("GET /v1/me/verification", () => {
+  beforeEach(resetDb);
+
+  it("reports checking while a face-match run is in flight, and not after", async () => {
+    const { trackFaceMatchRun } = await import("../services/verification-pipeline.js");
+    const user = await seedUser();
+    const auth = `Bearer ${signAccess(user.id)}`;
+
+    const idle = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(idle.status).toBe(200);
+    expect(idle.body.checking).toBe(false);
+    expect(typeof idle.body.status).toBe("string");
+
+    let finish!: () => void;
+    const run = trackFaceMatchRun(
+      user.id,
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const busy = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(busy.body.checking).toBe(true);
+
+    finish();
+    await run;
+    const done = await request(app).get("/v1/me/verification").set("Authorization", auth);
+    expect(done.body.checking).toBe(false);
+  });
+});
+
+describe("PUT /v1/me/photos/order", () => {
+  beforeEach(resetDb);
+
+  async function seedPhotos() {
+    const user = await seedUser();
+    userById(user.id)!.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+      profileMedia: [
+        { type: "photo", photo: "a.jpg" },
+        { type: "photo", photo: "b.jpg" },
+        { type: "video", video: "u/clip.mp4" },
+        { type: "photo", photo: "c.jpg" },
+        { type: "photo", photo: "d.jpg" },
+      ],
+      photoFaceScores: [0.91, 0.82, 0.73, 0.64],
+      uploadedPhotoHashes: ["ha", "hb", "hc", "hd"],
+      matchRadius: "campus_only",
+    } as never;
+    return user;
+  }
+
+  it("401 without auth", async () => {
+    const res = await request(app).put("/v1/me/photos/order").send({ order: [0] });
+    expect(res.status).toBe(401);
+  });
+
+  it("makes the last photo the main one and moves everything aligned with it", async () => {
+    const user = await seedPhotos();
+    const res = await request(app)
+      .put("/v1/me/photos/order")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ order: [3, 0, 1, 2] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["d.jpg", "a.jpg", "b.jpg", "c.jpg"]);
+    expect(res.body.signedUrls).toHaveLength(4);
+    const profile = userById(user.id)!.profile as unknown as Record<string, unknown>;
+    expect(profile.photos).toEqual(["d.jpg", "a.jpg", "b.jpg", "c.jpg"]);
+    expect(profile.uploadedPhotoHashes).toEqual(["hd", "ha", "hb", "hc"]);
+    expect(profile.photoFaceScores).toEqual([0.64, 0.91, 0.82, 0.73]);
+    // The video keeps its place among the media.
+    expect(profile.profileMedia).toEqual([
+      { type: "photo", photo: "d.jpg" },
+      { type: "photo", photo: "a.jpg" },
+      { type: "video", video: "u/clip.mp4" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "photo", photo: "c.jpg" },
+    ]);
+  });
+
+  it("409 photos_changed for an order that no longer fits, and changes nothing", async () => {
+    const user = await seedPhotos();
+    const res = await request(app)
+      .put("/v1/me/photos/order")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ order: [2, 0, 1] });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photos_changed");
+    expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+  });
+
+  it("400 for anything but a list of integers", async () => {
+    const user = await seedPhotos();
+    for (const order of [undefined, "0,1", [0, "1"], [0.5]]) {
+      const res = await request(app)
+        .put("/v1/me/photos/order")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send({ order });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid-order");
+    }
   });
 });
 
@@ -2989,6 +3414,307 @@ describe("/v1/onboarding/interview", () => {
     expect(res.status).toBe(200);
   });
 
+  // The native chat's first question (DECISIONS 2026-09-30): `/consent`
+  // reaches `conversational`; once the basics screens are done, a read with no
+  // question yet opens the collector.
+  describe("GET opens an unstarted interview", () => {
+    const opener = "What do you love doing in your free time?";
+
+    beforeEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = true;
+      vi.mocked(runAgentTurnMock).mockClear();
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(COMPLETE_BASICS as never);
+    });
+    afterEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = undefined;
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+      vi.mocked(loadOnboardingBasicsMock).mockReset().mockResolvedValue(INCOMPLETE_BASICS as never);
+    });
+
+    function seedFresh(overrides: Partial<Parameters<typeof seedUser>[0]> = {}) {
+      return seedUser({
+        onboardingStep: "conversational",
+        isEmailVerified: true,
+        firstName: null,
+        age: null,
+        messageHistory: [],
+        ...overrides,
+      });
+    }
+
+    /** The collector's `resume` turn: records the question, no user message. */
+    function resumeRecordsOpener(user: { messageHistory: unknown[] }, delayMs = 0) {
+      vi.mocked(runAgentTurnMock).mockImplementationOnce(async () => {
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        user.messageHistory = [{ role: "assistant", content: opener }];
+        return { reply: opener, expectingPhoto: false, onboardingComplete: false } as never;
+      });
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "hobbies",
+      } as never);
+    }
+
+    it("runs the resume turn and answers with the first question after the basics", async () => {
+      const user = await seedFresh();
+      resumeRecordsOpener(user);
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.question).toBe(opener);
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+      expect(res.body.basics).toMatchObject({ complete: true, firstName: "Alice" });
+    });
+
+    it("stays closed while the basics screens are unfinished", async () => {
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(INCOMPLETE_BASICS as never);
+      const user = await seedFresh();
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toEqual({
+        ...INCOMPLETE_BASICS,
+        limits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
+      });
+    });
+
+    it("opens once when two reads race", async () => {
+      const user = await seedFresh();
+      resumeRecordsOpener(user, 50);
+      const token = `Bearer ${signAccess(user.id)}`;
+      const [a, b] = await Promise.all([
+        request(app).get("/v1/onboarding/interview").set("Authorization", token),
+        request(app).get("/v1/onboarding/interview").set("Authorization", token),
+      ]);
+      expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+      expect(a.body.question).toBe(opener);
+      expect(b.body.question).toBe(opener);
+    });
+
+    it("never re-opens an interview that already asked something", async () => {
+      const user = await seedFresh({
+        messageHistory: [{ role: "assistant", content: opener }],
+      });
+      await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("leaves it closed without a verified contact, before consent, or without the collector", async () => {
+      const unverified = await seedFresh({ isEmailVerified: false });
+      const beforeConsent = await seedFresh({ onboardingStep: "language" });
+      for (const user of [unverified, beforeConsent]) {
+        const res = await request(app)
+          .get("/v1/onboarding/interview")
+          .set("Authorization", `Bearer ${signAccess(user.id)}`);
+        expect(res.status).toBe(200);
+        expect(res.body.messages).toEqual([]);
+      }
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = false;
+      const noCollector = await seedFresh();
+      await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(noCollector.id)}`);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("still answers when the opening turn fails", async () => {
+      const user = await seedFresh();
+      vi.mocked(runAgentTurnMock).mockRejectedValueOnce(new Error("collector down"));
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      errors.mockRestore();
+      expect(res.status).toBe(200);
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.uiHint).toBeNull();
+    });
+  });
+
+  // The native basics screens (DECISIONS 2026-09-30): saved like the Mini App's
+  // profile screens, never as chat answers, so going back is a re-save; the
+  // save that completes them opens the chat from scratch.
+  describe("POST /basics", () => {
+    const opener = "What do you love doing in your free time?";
+
+    beforeEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = true;
+      vi.mocked(runAgentTurnMock).mockClear();
+      vi.mocked(applyOnboardingFactsMock).mockClear();
+    });
+    afterEach(() => {
+      envMock.ONBOARDING_FACT_COLLECTOR_ENABLED = undefined;
+      vi.mocked(loadOnboardingBasicsMock).mockReset().mockResolvedValue(INCOMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock)
+        .mockReset()
+        .mockResolvedValue({ rejectedFields: [], acceptedFields: [], currentQuestion: "gender" } as never);
+    });
+
+    function seedInterview(overrides: Partial<Parameters<typeof seedUser>[0]> = {}) {
+      return seedUser({
+        onboardingStep: "conversational",
+        isEmailVerified: true,
+        firstName: null,
+        age: null,
+        messageHistory: [],
+        ...overrides,
+      });
+    }
+
+    function save(user: { id: string }, body: Record<string, unknown>) {
+      return request(app)
+        .post("/v1/onboarding/basics")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send(body);
+    }
+
+    it("saves a screen through the collector and leaves the chat alone", async () => {
+      const user = await seedInterview();
+      const res = await save(user, { gender: "female" });
+      expect(res.status).toBe(200);
+      expect(applyOnboardingFactsMock).toHaveBeenCalledWith(user.telegramId, { gender: "female" });
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toMatchObject({ complete: false });
+    });
+
+    it("maps every field onto the collector's names, like the Mini App", async () => {
+      const user = await seedInterview();
+      await save(user, {
+        firstName: "Alice",
+        age: 22,
+        preference: "men",
+        height: 168,
+        relationshipIntents: ["spark"],
+      });
+      expect(applyOnboardingFactsMock).toHaveBeenCalledWith(user.telegramId, {
+        first_name: "Alice",
+        age: 22,
+        preference: "men",
+        height: 168,
+        relationship_intent: ["spark"],
+      });
+    });
+
+    it("answers 400 with the collector's reason and field", async () => {
+      const user = await seedInterview();
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [{ field: "first_name", reason: "invalid_name" }],
+        acceptedFields: [],
+        currentQuestion: "first_name_age",
+      } as never);
+      const res = await save(user, { firstName: "Anna Maria" });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "invalid_name", field: "first_name" });
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed or empty patch before the collector sees it", async () => {
+      const user = await seedInterview();
+      const malformed = await save(user, { age: "22" });
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.error).toBe("invalid-age");
+      const empty = await save(user, {});
+      expect(empty.status).toBe(400);
+      expect(empty.body.error).toBe("no-fields");
+      expect(applyOnboardingFactsMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses before the interview is open and after onboarding", async () => {
+      const early = await seedInterview({ onboardingStep: "language" });
+      const earlyRes = await save(early, { gender: "female" });
+      expect(earlyRes.status).toBe(409);
+      expect(earlyRes.body.error).toBe("interview-not-open");
+      const done = await seedInterview({ onboardingStep: "completed" });
+      expect((await save(done, { gender: "female" })).status).toBe(409);
+      expect(applyOnboardingFactsMock).not.toHaveBeenCalled();
+    });
+
+    it("opens the chat from scratch on the save that completes the basics", async () => {
+      // Began in the old in-chat flow: a stray opener and two basics exchanges.
+      const user = await seedInterview({
+        messageHistory: [
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "What's your first name, and how old are you?" },
+          { role: "user", content: "Alice, 22" },
+          { role: "assistant", content: "Who are you?" },
+        ],
+      });
+      vi.mocked(loadOnboardingBasicsMock)
+        .mockResolvedValueOnce(INCOMPLETE_BASICS as never)
+        .mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      vi.mocked(runAgentTurnMock).mockImplementationOnce(async () => {
+        user.messageHistory = [
+          ...(user.messageHistory as unknown[]),
+          { role: "assistant", content: opener },
+        ] as never;
+        return { reply: opener, expectingPhoto: false, onboardingComplete: false } as never;
+      });
+
+      const res = await save(user, { relationshipIntents: ["spark"] });
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+      expect(res.body.question).toBe(opener);
+      expect(res.body.basics).toMatchObject({ complete: true });
+    });
+
+    it("never resets or re-opens a chat whose basics were already complete", async () => {
+      const user = await seedInterview({
+        messageHistory: [{ role: "assistant", content: opener }],
+      });
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      const res = await save(user, { relationshipIntents: ["longterm"] });
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+      expect(res.body.messages).toEqual([{ role: "assistant", content: opener }]);
+    });
+
+    it("keeps the save when the opening turn fails", async () => {
+      const user = await seedInterview();
+      vi.mocked(loadOnboardingBasicsMock)
+        .mockResolvedValueOnce(INCOMPLETE_BASICS as never)
+        .mockResolvedValue(COMPLETE_BASICS as never);
+      vi.mocked(applyOnboardingFactsMock).mockResolvedValueOnce({
+        rejectedFields: [],
+        acceptedFields: ["relationship_intent"],
+        currentQuestion: "hobbies",
+      } as never);
+      vi.mocked(runAgentTurnMock).mockRejectedValueOnce(new Error("collector down"));
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const res = await save(user, { relationshipIntents: ["spark"] });
+      errors.mockRestore();
+      expect(res.status).toBe(200);
+      expect(res.body.messages).toEqual([]);
+      expect(res.body.basics).toMatchObject({ complete: true });
+    });
+  });
+
   it("POST /answer refuses to start before terms are accepted", async () => {
     const user = await seedUser({
       onboardingStep: "consent",
@@ -3010,6 +3736,99 @@ describe("/v1/onboarding/interview", () => {
       .send({ text: "x".repeat(4_001) });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Text is too long");
+  });
+
+  describe("POST /photos/continue (the native photo manager, 2026-09-30)", () => {
+    beforeEach(() => {
+      vi.mocked(markOnboardingFieldMock).mockClear();
+      vi.mocked(runAgentTurnMock).mockClear();
+    });
+    afterEach(() => {
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockReset().mockResolvedValue(null);
+    });
+
+    async function seedAtPhotos(count: number) {
+      const user = await seedUser({ onboardingStep: "conversational" });
+      userById(user.id)!.profile = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        hobbies: [],
+        partnerPreferences: null,
+        psychologicalSummary: null,
+        ageRangeMin: null,
+        ageRangeMax: null,
+        photos: Array.from({ length: count }, (_, index) => `${index}.jpg`),
+        matchRadius: "campus_only",
+      };
+      return user;
+    }
+
+    it("records the photos and hands the turn to the collector, as Telegram's Continue", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS + 1);
+      vi.mocked(prismaMock.onboardingProgress.findUnique)
+        .mockResolvedValueOnce({ currentQuestion: "photos" } as never)
+        .mockResolvedValueOnce({ currentQuestion: "voice_prompt" } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).toHaveBeenCalledWith(user.telegramId, "photos");
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "photos_continue" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.expectingPhoto).toBe(false);
+    });
+
+    it("409 photos-required below the minimum", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS - 1);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "photos",
+      } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "photos-required", minPhotos: MIN_PHOTOS });
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("changes nothing off the photo question (a retry that already landed)", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "voice_prompt",
+      } as never);
+
+      const res = await request(app)
+        .post("/v1/onboarding/photos/continue")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(markOnboardingFieldMock).not.toHaveBeenCalled();
+      expect(runAgentTurnMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps the stage open past the minimum until the user leaves it", async () => {
+      const user = await seedAtPhotos(MIN_PHOTOS + 2);
+      vi.mocked(prismaMock.onboardingProgress.findUnique).mockResolvedValue({
+        currentQuestion: "photos",
+      } as never);
+
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.expectingPhoto).toBe(true);
+      expect(res.body.photoCount).toBe(MIN_PHOTOS + 2);
+      expect(res.body.uiHint).toMatchObject({ control: "photo_upload" });
+    });
   });
 
   describe("POST /interview/voice-prompt", () => {
@@ -3195,6 +4014,92 @@ describe("/v1/matches/*", () => {
       envMock.COORDINATION_FEATURE_ENABLED = true;
       const res = await current("negotiating_venue");
       expect(res.body.match.proxyChatOpensAt).toBeNull();
+    });
+
+    // The unread badge (2026-09-29): null exactly where the window is, so "no
+    // chat" reads the same in both fields.
+    it("has no unread count wherever there is no window", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = false;
+      const off = await current("scheduled");
+      expect(off.body.match.proxyChatUnreadCount).toBeNull();
+
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const planning = await current("negotiating_venue");
+      expect(planning.body.match.proxyChatUnreadCount).toBeNull();
+    });
+
+    it("counts the partner's lines after each caller's OWN cursor, and polling marks nothing read", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const at = (hhmm: string) => new Date(`2026-07-20T${hhmm}:00Z`);
+      const readA = at("18:10");
+      const readB = at("18:20");
+      const m = await seedMatch(alice.id, bob.id, {
+        status: "scheduled",
+        agreedTime: AGREED,
+        proxyOpenedAt: at("18:00"),
+        proxyReadAtA: readA,
+        proxyReadAtB: readB,
+      });
+      const line = (senderId: string, hhmm: string) =>
+        db.proxyMessages.push({
+          id: crypto.randomUUID(),
+          matchId: m.id,
+          senderId,
+          createdAt: at(hhmm),
+        });
+      line(bob.id, "18:05"); // before Alice's cursor — read
+      line(alice.id, "18:15"); // before Bob's cursor — read
+      line(bob.id, "18:25"); // unread for Alice
+      line(bob.id, "18:30"); // unread for Alice
+      line(alice.id, "18:40"); // unread for Bob; never counted for Alice
+
+      vi.mocked(prismaMock.match.update).mockClear();
+      vi.mocked(prismaMock.match.updateMany).mockClear();
+
+      const forAlice = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      const forBob = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(bob.id)}`);
+      // Polled again: still unread, because nobody opened the chat.
+      const again = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(forAlice.body.match.proxyChatUnreadCount).toBe(2);
+      expect(forBob.body.match.proxyChatUnreadCount).toBe(1);
+      expect(again.body.match.proxyChatUnreadCount).toBe(2);
+      expect(prismaMock.match.update).not.toHaveBeenCalled();
+      expect(prismaMock.match.updateMany).not.toHaveBeenCalled();
+      expect(db.matches.get(m.id)!.proxyReadAtA).toEqual(readA);
+      expect(db.matches.get(m.id)!.proxyReadAtB).toEqual(readB);
+    });
+
+    it("counts every partner line for a caller who never opened the chat", async () => {
+      envMock.COORDINATION_FEATURE_ENABLED = true;
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob" });
+      const m = await seedMatch(alice.id, bob.id, { status: "scheduled", agreedTime: AGREED });
+      for (const [senderId, iso] of [
+        [bob.id, "2026-07-20T18:05:00Z"],
+        [bob.id, "2026-07-20T18:06:00Z"],
+        [alice.id, "2026-07-20T18:07:00Z"],
+      ] as const) {
+        db.proxyMessages.push({
+          id: crypto.randomUUID(),
+          matchId: m.id,
+          senderId,
+          createdAt: new Date(iso),
+        });
+      }
+
+      const res = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      expect(res.body.match.proxyChatUnreadCount).toBe(2);
     });
   });
 

@@ -6,6 +6,7 @@ import {
   formatClock,
   formatDistance,
   syncOpensAt,
+  shownPhase,
   syncUnlocked,
   terminalPhase,
   wantsLocation,
@@ -24,7 +25,7 @@ function input(overrides: Partial<TerminalInput> = {}): TerminalInput {
     venue: VENUE,
     bumpVerified: false,
     distanceM: 40,
-    motion: "idle",
+    holding: false,
     ...overrides,
   };
 }
@@ -64,15 +65,30 @@ describe("terminalPhase", () => {
     expect(syncUnlocked("approach")).toBe(false);
   });
 
-  it("unlocks inside 100 m once the window is open, and arms on request", () => {
+  it("unlocks inside 100 m once the window is open, and waits once a hold is in", () => {
     expect(terminalPhase(input())).toBe("ready");
-    expect(terminalPhase(input({ motion: "armed" }))).toBe("armed");
+    expect(terminalPhase(input({ holding: true }))).toBe("waiting");
     expect(syncUnlocked("ready")).toBe(true);
-    expect(syncUnlocked("armed")).toBe(true);
+    expect(syncUnlocked("waiting")).toBe(true);
   });
 
-  it("drops out of armed the moment the phone walks out of range", () => {
-    expect(terminalPhase(input({ motion: "armed", distanceM: 140 }))).toBe("approach");
+  it("locks again the moment an idle phone walks out of range", () => {
+    expect(terminalPhase(input({ distanceM: 140 }))).toBe("approach");
+  });
+
+  it("keeps waiting through GPS jitter while a hold is with the server", () => {
+    expect(terminalPhase(input({ holding: true, distanceM: 140 }))).toBe("waiting");
+    expect(terminalPhase(input({ holding: true, distanceM: null }))).toBe("waiting");
+  });
+
+  it("never waits outside the sync window", () => {
+    expect(terminalPhase(input({ holding: true, state: "DATE_RADAR_ACTIVE" }))).toBe("early");
+  });
+
+  it("does not show the synced view under a ceremony still playing", () => {
+    expect(shownPhase("synced", true)).toBe("waiting");
+    expect(shownPhase("synced", false)).toBe("synced");
+    expect(shownPhase("ready", true)).toBe("ready");
   });
 
   it("shows the sync as done whatever the GPS says afterwards", () => {
@@ -93,7 +109,7 @@ describe("terminalPhase", () => {
 
   it("watches the position only while it can matter", () => {
     expect(wantsLocation("early")).toBe(true);
-    expect(wantsLocation("armed")).toBe(true);
+    expect(wantsLocation("waiting")).toBe(true);
     expect(wantsLocation("synced")).toBe(false);
     expect(wantsLocation("closed")).toBe(false);
   });

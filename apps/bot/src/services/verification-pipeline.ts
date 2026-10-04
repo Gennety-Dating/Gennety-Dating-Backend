@@ -1466,16 +1466,70 @@ export interface DefaultPipelineOptions extends PipelineRunOptions {
 }
 
 /**
+ * Face-match runs in flight, by user — what `GET /v1/me/verification` reports
+ * as `checking`. `verificationStatus` alone cannot say it: a verified user
+ * whose photos are being re-checked can stay `verified` throughout, and a
+ * `pending` user may be waiting on nothing at all (a liveness session they
+ * never finished). The native client shows "checking your photos" only while
+ * a run actually exists (decision journal 2026-10-01).
+ *
+ * In memory on purpose: the bot is one PM2 process (not a cluster), and a run
+ * does not survive a restart either — after one, `checking` is false, which is
+ * the truth.
+ */
+const faceMatchRuns = new Map<string, Promise<unknown>>();
+
+/** True while a face-match verification run for this user is in flight. */
+export function isFaceMatchRunning(userId: string): boolean {
+  return faceMatchRuns.has(userId);
+}
+
+/**
+ * Register `run` as this user's in-flight face-match run and return it.
+ *
+ * Call it in the same synchronous step that creates the promise — before the
+ * caller's first `await` — so there is no tick in which the run exists but
+ * `checking` reads false. The mark is removed when the run settles either way,
+ * and only if it is still this run's: a newer run that replaced it keeps its
+ * own mark. Nested tracking (an outer run that starts an inner one) is fine for
+ * the same reason.
+ */
+export function trackFaceMatchRun<T>(userId: string, run: Promise<T>): Promise<T> {
+  faceMatchRuns.set(userId, run);
+  const clear = (): void => {
+    if (faceMatchRuns.get(userId) === run) faceMatchRuns.delete(userId);
+  };
+  // `then(clear, clear)` rather than `finally`: `finally` would hand back a
+  // second promise carrying the rejection, unhandled by anyone.
+  run.then(clear, clear);
+  return run;
+}
+
+/**
  * Production wiring: builds default deps from the bot's `Api` + the real
  * services and runs the pipeline. Called by the verification routes right
  * after a liveness pass, by the admin "rerun" button, and by
  * `triggerVerificationRerun` on every profile-photo edit.
+ *
+ * Every run is registered with `trackFaceMatchRun` before its first `await`.
  */
-export async function runFaceMatchVerificationDefault(
+export function runFaceMatchVerificationDefault(
   userId: string,
   sessionId: string,
   api: Api<RawApi>,
   options: DefaultPipelineOptions = {},
+): Promise<VerificationOutcome> {
+  return trackFaceMatchRun(
+    userId,
+    runFaceMatchVerificationWired(userId, sessionId, api, options),
+  );
+}
+
+async function runFaceMatchVerificationWired(
+  userId: string,
+  sessionId: string,
+  api: Api<RawApi>,
+  options: DefaultPipelineOptions,
 ): Promise<VerificationOutcome> {
   return runFaceMatchVerification(
     userId,
@@ -1556,7 +1610,10 @@ export async function runFaceMatchVerificationDefault(
                 kind === "rejected" ? { photoRedoFirst: true } : undefined,
               )
             : null;
+        // Markdown: the rejected verdict carries a bold first line. Every DM
+        // reaching this branch is static i18n copy (no user-provided text).
         await api.sendMessage(Number(telegramId), message, {
+          parse_mode: "Markdown",
           ...(keyboard ? { reply_markup: keyboard } : {}),
         });
       },
@@ -1846,7 +1903,19 @@ export type RerunOutcome =
   | { kind: "reference_expired" }
   | { kind: "started"; sessionId: string };
 
-export async function triggerVerificationRerun(
+export function triggerVerificationRerun(
+  userId: string,
+  api: Api<RawApi>,
+): Promise<RerunOutcome> {
+  // Tracked from the very start, not only from the pipeline kick-off below:
+  // a photo edit answers the client while this is still reading the user, and
+  // the client's next `GET /v1/me/verification` must already say `checking`.
+  // The inner run replaces this mark before this promise settles, so the hand-
+  // over leaves no gap; a rerun that bails early clears it at once.
+  return trackFaceMatchRun(userId, triggerVerificationRerunTracked(userId, api));
+}
+
+async function triggerVerificationRerunTracked(
   userId: string,
   api: Api<RawApi>,
 ): Promise<RerunOutcome> {

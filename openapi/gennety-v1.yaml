@@ -1140,11 +1140,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/profile-gaps:
+    get:
+      tags: [me]
+      operationId: getProfileGaps
+      summary: Unfinished profile items, in nudge priority order
+      description: |
+        What is still open on the caller's profile, for the Today screen's
+        one-a-day "finish your profile" nudge (decision 2026-10-01). Only
+        currently open items are listed, always in this order:
+        `video`, `photos`, `music`, `looking_for`, `age_range`, `about`,
+        `interests`, `voice`, `type_radar`, `major`. An empty list means the
+        profile is complete.
+
+        The server reports WHICH items are open and nothing else: impressions,
+        "later" and "don't remind me" are kept by the client. An item behind a
+        switched-off feature flag (profile video, music, voice prompt, Type
+        Radar) is never listed, so switching a flag on makes its nudge appear
+        without an app release.
+
+        Read-only and cheap — one user lookup plus, while music is on, one
+        count. Poll it on every Today refresh.
+      responses:
+        "200":
+          description: The open items (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfileGapsResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: The token's user no longer exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/verification:
     get:
       tags: [me]
       operationId: getVerificationStatus
       summary: Read-only verification status
+      description: |
+        Poll after `native-event` answered `processing`, or after a photo
+        edit (upload / delete / `POST /v1/me/photos/remove`) that queued a
+        re-check. `status` is written by the face-match pipeline; `checking`
+        says whether a face-match run for this user is in flight right now.
       responses:
         "200":
           description: Current status
@@ -1155,6 +1194,18 @@ paths:
                 required: [status]
                 properties:
                   status: { $ref: "#/components/schemas/VerificationStatus" }
+                  checking:
+                    type: boolean
+                    description: |
+                      True while a face-match verification run for this user
+                      is in flight (a fresh check after liveness, or the
+                      re-check a photo edit queues). `status` alone cannot say
+                      it: a verified user being re-checked can stay `verified`
+                      throughout, and `pending` also covers a liveness session
+                      that was never finished. Always sent by current servers;
+                      optional only so older servers stay valid — treat absent
+                      as false. Held in the bot process's memory, so a restart
+                      mid-run reads false.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/me/verification/consent:
@@ -1253,9 +1304,10 @@ paths:
             - `consent_required` — the user has not yet passed through
               `POST /v1/me/verification/consent`. Show the consent screen,
               record the consent, then retry this call once.
-            - `photos_required` — the profile has no photos, so a passing check
-              would have nothing to be compared against. Send the user to add
-              photos (at least `minPhotos`), then offer the check again.
+            - `photos_required` — the profile has fewer than `minPhotos`
+              photos (not only none), so a check would compare against a set
+              the user still has to finish. Send the user to add photos (at
+              least `minPhotos`), then offer the check again.
               `message` carries the ask in the user's language. Checked before
               consent, so nobody reads the biometric disclosure for a check
               that cannot run yet.
@@ -1549,6 +1601,19 @@ paths:
           person who opened the app is already looking at it.
         - `{}` otherwise. That is the ordinary state, not an error.
 
+        Bank questions are asked once each (the weekly re-asks were cut
+        2026-10-04). After that, a batch's OPENING question may be a
+        contextual one — opened by something that happened: a date got
+        scheduled ("fresh topic"), a date took place ("same format next
+        time?"), confirmed dates share one experience ("looks like your
+        format is…"), an own plan turned a month old (follow-up), or a
+        matching-candidate answer turned two months old (asked again
+        differently). At most one per batch and two per week. A contextual
+        question that refers to something carries `question.context` — draw
+        it as a card above the question. A live contextual question whose
+        date was cancelled or has passed is released (recorded as a skip)
+        and `{}` comes back.
+
         The text is in `User.language` (English fallback). Poll it when the
         Today screen appears; it is cheap and writes nothing when nothing is
         due.
@@ -1570,9 +1635,10 @@ paths:
         Telegram chat uses, so exactly one reply — from either surface — ever
         counts.
 
-        - `skip: true` is the Skip button: the question returns once later in
-          this cycle, then steps aside until the next one. Any `text` sent with
-          it is ignored.
+        - `skip: true` is the Skip button: a bank question returns once later
+          in this cycle, then steps aside until the next one; a contextual
+          question (`…_ctx:…`) never returns — it was about one moment. Any
+          `text` sent with it is ignored.
         - A text that is a refusal ("later", "не хочу", "skip"…, matched on the
           whole utterance) is recorded as a skip, NOT as an answer, and pauses
           the rest of the batch to the caller's next local window →
@@ -1970,6 +2036,15 @@ paths:
       tags: [me]
       operationId: uploadPhoto
       summary: Upload one profile photo (multipart field `photo`, ≤8 MB; profile max 10)
+      description: |
+        Appends the photo at the end. 30 uploads an hour per user — refused
+        ones count too (429 past that).
+
+        During onboarding, while the collector is on the photo question, the
+        upload runs no agent turn: the native photo stage stays open past the
+        minimum (`InterviewState.expectingPhoto`) until the user leaves it with
+        `POST /v1/onboarding/photos/continue`, and `interviewState` in the
+        answer is the state after the upload.
       requestBody:
         required: true
         content:
@@ -2032,6 +2107,11 @@ paths:
       tags: [me]
       operationId: deletePhoto
       summary: Remove a photo by array index
+      description: |
+        Removes one photo; hashes, face scores and `profileMedia` stay
+        aligned, the video stays. Queues one verification re-check. Only
+        `active` users have a floor (409 `photo_minimum`). To remove several,
+        use `POST /v1/me/photos/remove`.
       parameters:
         - name: index
           in: path
@@ -2046,7 +2126,106 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Active users cannot drop below the minimum photo count
+          description: |
+            `code: "photo_minimum"` (with `min`): the delete would drop an
+            `active` user below the minimum photo count. Nobody else has a
+            floor — paused users, and onboarding users whether or not they
+            have left the photo stage (the photo step and the liveness gate's
+            `photos_required` hold the minimum there).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/photos/remove:
+    post:
+      tags: [me]
+      operationId: removeMyPhotos
+      summary: Remove several photos at once, by path
+      description: |
+        The photo manager's multi-select delete. `paths` are entries of
+        `photos` from `GET /v1/me/photos` (not indices, so a selection made
+        on a stale list cannot remove the wrong photo).
+
+        Same rules as `DELETE /v1/me/photos/{index}`, in one transaction:
+        hashes, face scores and `profileMedia` stay aligned, the video stays,
+        and the minimum applies to `active` users only (409 `photo_minimum`,
+        nothing removed). Paths not among the photos are ignored; when none
+        match, the answer is 200 with the photos as they are and nothing
+        changes. One verification re-check per request, not per photo —
+        poll `GET /v1/me/verification` (`checking`) for it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: string }
+                  description: Photo paths as `GET /v1/me/photos` returns them in `photos`
+      responses:
+        "200":
+          description: Remaining photos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotosResponse" }
+        "400":
+          description: '`error: "invalid-paths"` — `paths` is not 1–10 strings'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `code: "photo_minimum"` (with `min`): the removal would drop an
+            `active` user below the minimum photo count. Nothing was removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/photos/order:
+    put:
+      tags: [me]
+      operationId: reorderPhotos
+      summary: New order for the profile photos (the first is the main photo)
+      description: |
+        The native photo manager's "make main" and in-place replace (upload
+        the new photo, delete the old one, move the new one into its place).
+        Hashes, face scores and `profileMedia` move with their photo; a video
+        keeps its place. No verification rerun — the set of photos is
+        unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order]
+              properties:
+                order:
+                  type: array
+                  maxItems: 10
+                  items: { type: integer, minimum: 0 }
+                  description: |
+                    `order[i]` is the current index of the photo that goes to
+                    position `i` — a permutation of every current index.
+      responses:
+        "200":
+          description: Photos in the new order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotosResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `code: "photos_changed"` — the order is not a permutation of the
+            photos as they are now (added or removed meanwhile). Reload them
+            and ask again.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2197,6 +2376,53 @@ paths:
               schema: { $ref: "#/components/schemas/InterviewState" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/onboarding/basics:
+    post:
+      tags: [onboarding]
+      operationId: saveOnboardingBasics
+      summary: Save one or more basics screens (name, age, gender, preference, height, intent)
+      description: |
+        The native twin of the Mini App's `POST /v1/telegram-onboarding/profile`
+        (DECISIONS 2026-09-30): the five basics are answered on their own
+        screens and saved through the collector's structured path, never sent
+        into the chat as answers.
+
+        Going back is re-saving: post the field again and it is overwritten.
+        The save that completes the basics (`basics.complete` turns true) opens
+        the chat from scratch — earlier history is dropped and the collector
+        asks its first free question — so the response then carries that
+        question in `messages`. Later saves never touch the chat.
+
+        All-or-nothing: a rejected value writes nothing and answers 400 with
+        the collector's reason (`invalid_name`, `age_out_of_range`,
+        `height_out_of_range`, `invalid_gender`, `invalid_preference`,
+        `invalid_relationship_intent`) and the field, or a shape error
+        (`invalid-age`, …, `no-fields`) without one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingBasicsPatch" }
+      responses:
+        "200":
+          description: Interview state after the save
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewState" }
+        "400":
+          description: A value was rejected; nothing was written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnboardingBasicsRejection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: >-
+            Onboarding already complete, terms not accepted, language not
+            selected, or the interview is not open yet (`interview-not-open`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/onboarding/interview/answer:
     post:
       tags: [onboarding]
@@ -2300,6 +2526,38 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/onboarding/photos/continue:
+    post:
+      tags: [onboarding]
+      operationId: continueOnboardingPhotos
+      summary: Leave the photo stage (the native twin of Telegram's Continue)
+      description: |
+        The photo stage stays open past the minimum while the user adds,
+        swaps and reorders photos in the manager; uploads there run no agent
+        turn. This call leaves it: `photos` is recorded (from then on a delete
+        cannot drop below the minimum) and the collector asks the next
+        question or finalizes onboarding — the response is the next interview
+        state, exactly like an answer's.
+
+        409 `photos-required` (with `minPhotos`) below the minimum.
+        Idempotent: off the photo question (a retry that already landed) it
+        changes nothing and returns the current state.
+      responses:
+        "200":
+          description: Next interview state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `photos-required` below the minimum; onboarding already complete,
+            terms not accepted or language not selected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/chat/upload:
     post:
       tags: [chat]
@@ -2376,6 +2634,17 @@ paths:
                     агентом"). A reference only — the server resolves the words
                     and grounds this turn and the follow-ups of the next six
                     hours on them. Omit for an ordinary message.
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: |
+                    The chat this turn belongs to. The CLIENT mints the id for a new chat
+                    (UUID v4): the first turn with an id the server has not seen creates
+                    that chat for the caller, so a retried first message cannot open two
+                    chats. An id that belongs to another user is a 404; anything that is
+                    not a UUID is a 400. Omitted (older builds): the turn continues the
+                    caller's most recently active chat if its last message is under six
+                    hours old, and opens a new one otherwise.
       responses:
         "200":
           description: Assistant reply
@@ -2386,6 +2655,13 @@ paths:
                 required: [message]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
+                  sessionId:
+                    type: string
+                    description: >-
+                      The chat the turn landed in — the one named, or the one the
+                      six-hour rule chose. Optional so a build talking to an older
+                      server still decodes the reply. Lower-case, as every id the
+                      server returns (compare ids as UUIDs, not strings).
                   uiHint:
                     $ref: "#/components/schemas/UiHint"
                     description: Always null for chat-agent turns today; contract slot for future hints
@@ -2416,8 +2692,8 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: >-
-            `context` names an inbox item that does not exist or is not the
-            caller's (the same answer for both)
+            `context` names an unknown inbox item, or `sessionId` belongs to
+            another user (the same answer for both)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2464,6 +2740,12 @@ paths:
                 contextId:
                   type: string
                   format: uuid
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: >-
+                    The chat this turn belongs to — same rules as `sessionId` on
+                    `/v1/chat/message`, checked before the audio is transcribed.
       responses:
         "200":
           description: Assistant reply plus what was heard
@@ -2474,6 +2756,9 @@ paths:
                 required: [message, transcript]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
+                  sessionId:
+                    type: string
+                    description: The chat the turn landed in (optional, as on `/v1/chat/message`)
                   transcript:
                     type: string
                     description: What Whisper heard; show it as the person's own message
@@ -2486,6 +2771,13 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
           description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            `contextId` names an unknown inbox item, or `sessionId` belongs to
+            another user (the same answer for both)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2510,6 +2802,11 @@ paths:
         `system` rows are never returned. The client drops them anyway, and
         `/v1/chat/topics` counts messages the same way — a slice that
         disagreed with the topic index would make its `depth` a page short.
+
+        With `sessionId` the page is ONE chat (see `/v1/chat/sessions`);
+        without it, the whole stream across chats, as before. Every photo of
+        a page is signed in one Storage request; `signedImageUrl` is the first
+        entry of `signedImageUrls`.
       parameters:
         - name: limit
           in: query
@@ -2521,6 +2818,14 @@ paths:
             a timestamp: `createdAt` ties are real (one turn writes the user
             row and the assistant row inside the same request), and a
             timestamp cursor would either skip a row or repeat one.
+          schema: { type: string }
+        - name: sessionId
+          in: query
+          description: |
+            Page ONE chat. With it, `before` must belong to the same chat (404
+            otherwise) and an unknown / foreign id is a 404. Without it the route
+            behaves exactly as before — the whole stream across chats — which is
+            what older builds rely on.
           schema: { type: string }
       responses:
         "200":
@@ -2539,7 +2844,94 @@ paths:
                     description: Older messages exist before this page
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
+          description: >-
+            Unknown `before` cursor, one belonging to another user or (with
+            `sessionId`) to another chat; or an unknown / foreign `sessionId`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/sessions:
+    get:
+      tags: [chat]
+      operationId: getChatSessions
+      summary: The person's chats with the agent, most recently active first
+      description: |
+        A chat ("session") is a separate conversation with the agent: the agent's
+        context inside a chat is that chat's own messages plus the shared system
+        prompt (profile, dates, feed) — not the other chats. Older chats stay
+        reachable to the agent through its `search_past_chats` /
+        `read_past_chat` tools.
+
+        A chat exists from its first message on; an empty "new chat" on the
+        client has no row here. Titles are written by a small model after the
+        first reply and refreshed once the conversation has moved on; until the
+        first title lands the server answers with the person's opening line,
+        condensed. A title the person set by hand is never overwritten.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: before
+          in: query
+          description: |
+            Session id to page from, exclusive — the next page holds the chats
+            active before that one. 404 for an id that is unknown or not the
+            caller's.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Chats, most recently active first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions, hasMore]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChatSession" }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
           description: Unknown `before` cursor, or one belonging to another user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/sessions/{id}:
+    patch:
+      tags: [chat]
+      operationId: renameChatSession
+      summary: Rename a chat
+      description: |
+        Sets the title by hand. From then on the automatic titler leaves this
+        chat alone. Whitespace is trimmed (runs of it, line breaks included,
+        become one space); an empty title is a 400.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        "200":
+          description: The renamed chat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Unknown chat, or one belonging to another user
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2550,6 +2942,10 @@ paths:
       operationId: getChatTopics
       summary: Read-only index of past conversations, newest first
       description: |
+        **Superseded by `/v1/chat/sessions` (2026-09-30)** and kept, unchanged,
+        for app builds that still call it: it cuts the whole message stream at
+        silences, across chats. The text below is the pre-sessions contract.
+
         The chat agent holds ONE continuous conversation per user: there is no
         thread id, no per-thread context and no forking, and this route does
         not introduce any. A "topic" is a slice of that single transcript cut
@@ -3210,9 +3606,21 @@ paths:
         "the chat has closed" after — a 409 there would leave it with nothing
         to say. `open` is the only thing that gates sending.
 
-        Poll ~4s while the screen is open, like the calendar. Pass `since` with
-        the id of the newest message already held to get only what is new;
-        omit it for the whole window.
+        **Long-poll while the screen is open** (DECISIONS 2026-09-30). Every
+        answer carries `version`; pass it back as `after` and the read is
+        HELD until something the screen shows changes — a line, a reaction, a
+        read tick, the partner's presence or typing — or ~20 s pass, then it
+        answers with the fresh state. A stale `after` is answered at once.
+        A server predating this ignores `after` and answers at once; a client
+        seeing no `version` in the answer falls back to polling every ~4 s.
+        Pass `since` with the id of the newest message already held to get
+        only what is new; omit it for the whole window.
+
+        **Reading is presence.** While the chat is open for sending, every read
+        marks the caller as on the chat screen for their partner
+        (`partnerPresence.inChat`) — for the whole of a held read. Hanging up
+        mid-hold (the screen closed) takes them off it at once. Nothing about
+        presence is stored; it lives in the server's memory for seconds.
 
         404 while `COORDINATION_FEATURE_ENABLED` is off, matching the Mini App
         routes — the feature does not exist rather than being empty.
@@ -3227,6 +3635,15 @@ paths:
             are returned. An id this match does not carry is NOT an error —
             the whole window comes back, because the alternative is a client
             stuck with a cursor it can never advance.
+        - name: after
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+          description: |
+            `ProxyChatState.version` from the previous answer. Equal to the
+            current version → the read is held until the next change or ~20 s.
+            Anything else (stale, unknown, from before a restart) → answered at
+            once. Opaque: compare for equality, never parse it.
       responses:
         "200":
           description: Window state and messages
@@ -3315,6 +3732,71 @@ paths:
             The window is not open — it has not reached T-1h, it closed at
             T+2h, or this match is not a scheduled date. The client should
             re-read the state rather than retry the send.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/matches/{id}/chat/presence:
+    post:
+      tags: [matches]
+      operationId: reportProxyChatPresence
+      summary: Say where you are (app, chat, typing, gone); hear where the partner is
+      description: |
+        The live half of the pre-date chat (DECISIONS 2026-09-30): the green
+        dot by the partner's photo and «печатает…» under their name.
+
+        **Beats, not state.** Each call is a fact with a short expiry: `app`
+        lasts ~45 s (the app beats every ~20 s in the foreground), `chat` ~12 s
+        (reading the chat refreshes it too), `typing` ~6 s (the composer
+        repeats it every ~3 s while the draft changes, and sends `false` when
+        it empties). `away` clears everything at once — sent when the app
+        leaves the foreground. A phone that vanishes without `away` simply
+        expires.
+
+        **Only inside the window, only between the two of them.** Outside the
+        open window nothing is recorded and the answer is 409 `closed`, so the
+        app stops beating (`away` is always accepted). The answer describes
+        the caller's partner on this date and nothing else. Nothing is stored:
+        presence lives in the server's memory, and a restart forgets it until
+        the next beat. A Telegram partner is never shown as present — the Bot
+        API does not report it.
+
+        A presence change wakes the partner's held read
+        (`GET …/chat?after=`), which is how typing reaches the other screen in
+        well under a second without a socket.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyChatPresenceReport" }
+      responses:
+        "200":
+          description: Recorded; where the partner is
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyChatPresenceAnswer" }
+        "400":
+          description: "`bad-presence` — `place` is not one of the three, or `typing` is not a boolean"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match, or the coordination feature is off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `closed` — the chat is not open for sending, so there is nothing
+            to be present in; stop beating. `wrong-state` — not a scheduled date.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4037,7 +4519,7 @@ paths:
     get:
       tags: [countdown]
       operationId: getCountdown
-      summary: Next weekly drop + per-user weekly status
+      summary: Next scheduled drop + per-user matching status
       responses:
         "200":
           description: Countdown snapshot
@@ -4156,6 +4638,17 @@ paths:
         `verified` is the state of the PAIR, not of this call: the partner's own
         shake also answers true. `deck` is returned only to the call that
         actually completed the pair.
+
+
+        **`hold: true` (added 2026-09-29) is the meeting ceremony's gesture.**
+        Same checks and refusals; three differences. The time is the SERVER's
+        (`at` is ignored). A hold that does not complete the pair is a
+        long-poll: it waits up to 10 s (`BUMP_HOLD_WAIT_MS`) for the partner
+        and answers the moment the pair verifies, or `verified: false` when the
+        wait runs out — so a client's request timeout must exceed 10 s. A
+        verified answer to a hold carries `ceremony` and `deck: null`: the deck
+        is generated after the response, and both sides read it from
+        `GET /v1/date/state`. Without `hold` the answer is exactly as before.
       parameters:
         - $ref: "#/components/parameters/MatchId"
       requestBody:
@@ -4171,10 +4664,20 @@ paths:
                 at:
                   type: string
                   format: date-time
-                  description: When the device registered the shake. Omitted = now.
+                  description: >
+                    When the device registered the shake. Omitted = now.
+                    Ignored for a hold.
+                hold:
+                  type: boolean
+                  description: >
+                    `true` = the gesture is a HOLD (meeting ceremony,
+                    2026-09-29): server-clock timestamp, long-poll for the
+                    partner up to 10 s, `ceremony` in the verified answer, deck
+                    not awaited. Only the literal `true` counts; absent or
+                    anything else is the old shake, answered exactly as before.
       responses:
         "200":
-          description: Shake recorded
+          description: Shake or hold recorded
           content:
             application/json:
               schema:
@@ -4185,6 +4688,16 @@ paths:
                   verified: { type: boolean }
                   deck:
                     $ref: "#/components/schemas/BumpDeck"
+                  ceremony:
+                    $ref: "#/components/schemas/BumpCeremony"
+                    description: >
+                      Only in an answer to a `hold`, only when `verified` is
+                      true, and only while the scene is still worth playing:
+                      the call that verified the pair, a hold woken by the
+                      partner's verification, and a repeated hold on a pair
+                      already verified until 4 s after `startAt` (a dropped
+                      long-poll retried). Absent otherwise — the ceremony is
+                      never replayed, and a shake never gets one.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
@@ -4288,129 +4801,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
-  /v1/scratch:
+  /v1/date-map:
     get:
       tags: [date]
-      operationId: getScratchMap
-      summary: The Dating Scratch Map — which parts of the city you have been in
+      operationId: getDateMap
+      summary: The date map — places of this person's confirmed dates
       description: >
-        Tiles, a percentage and the venues a verified Date Bump has recorded,
-        plus the consent the whole feature runs under, so one call draws the
-        screen.
-
-
-        **Tiles, never coordinates.** A tile is geohash precision 6 — roughly
-        1.2 km × 0.61 km — so this can say "they have been around Podil" and
-        can never say which building. Every other geo value in the product is
-        per-purpose and per-match; this is the first that accumulates, which is
-        why the guarantee is the shape of what is stored rather than a rule at
-        the call site.
+        Derived from `Match` rows where this side attended a held date
+        (`dateAttended*`, written by a verified Date Bump or the attendance
+        flow). Nothing is collected for it: no ping, no opt-in, no user
+        coordinate — the only point is the VENUE's, and only where the row
+        stores the venue rather than the legacy route midpoint. The partner is
+        never part of the answer. Replaced the Scratch Map's `/v1/scratch`
+        (city fog, retired 2026-10-02).
       responses:
         "200":
-          description: The caller's map
+          description: The caller's date map
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ScratchMap" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /v1/scratch/ping:
-    post:
-      tags: [date]
-      operationId: postScratchPing
-      summary: Record one foreground position as a tile
-      description: >
-        The coordinates pick a tile and are then dropped — never stored, never
-        logged, the same rule the Date Radar follows.
-
-
-        Answers the CURRENT map on every call, including the common "you have
-        not moved" case, so the client needs no second request to redraw. A
-        ping that uncovers nothing performs no write at all: someone sitting in
-        a café would otherwise write a row every few seconds for a set that
-        never changes.
-
-
-        Only ever called from the foreground, with the map open. There is no
-        background-location entitlement in the iOS app and no such permission
-        requested in the Mini App, which is what makes "nothing is recorded
-        while you are not looking" structural rather than a promise.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [lat, lng]
-              properties:
-                lat: { type: number }
-                lng: { type: number }
-      responses:
-        "200":
-          description: Position folded into a tile; the whole map returned
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/ScratchMap"
-                  - type: object
-                    required: [ok, uncovered]
-                    properties:
-                      ok: { type: boolean, const: true }
-                      uncovered:
-                        type: boolean
-                        description: Whether this ping revealed new ground.
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "409":
-          description: >
-            `opted-out` (the toggle is off) or `outside-market` (a ping from a
-            city that is not the caller's own — the map is "your Kyiv", and a
-            week abroad would otherwise fill it with squares no percentage of
-            Kyiv can describe). Neither is worth retrying; the client's job is
-            to offer the toggle or say nothing.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
-  /v1/scratch/opt-in:
-    put:
-      tags: [date]
-      operationId: putScratchOptIn
-      summary: Turn the Scratch Map's collection on or off
-      description: >
-        Off by default, and its own consent rather than a fold into
-        `researchOptIn`: that one governs analytics use of data we already
-        hold, this one authorises COLLECTING a new class of it, and a consent
-        that authorises new collection is never inferred from a broader tick —
-        the same rule `biometricConsentAt` follows.
-
-
-        **Switching it off stops collection and keeps the map.** The tiles are
-        the person's own; a toggle that silently deleted months of them would
-        be a worse surprise than one that stops collecting. Erasure is account
-        deletion, which reaches this row by cascade.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [enabled]
-              properties:
-                enabled: { type: boolean }
-      responses:
-        "200":
-          description: The new setting, with the map unchanged
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/ScratchMap"
-                  - type: object
-                    required: [ok]
-                    properties:
-                      ok: { type: boolean, const: true }
-        "400": { $ref: "#/components/responses/BadRequest" }
+              schema: { $ref: "#/components/schemas/DateMap" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/frequent-places:
@@ -4448,8 +4857,8 @@ paths:
       description: >
         **On by default** (founder decision 2026-09-11). Off stops collection
         at once and removes the block from the profile and from the match; the
-        visit days already stored are kept and age out after 180 days — the
-        Scratch Map's rule that a toggle never silently deletes.
+        visit days already stored are kept and age out after 180 days — a
+        toggle never silently deletes.
       requestBody:
         required: true
         content:
@@ -5403,34 +5812,52 @@ components:
           description: Answers kept after filtering.
         completedAt: { type: string, format: date-time }
 
-    ScratchMap:
+    DateMap:
       type: object
-      required: [optIn, exploredTiles, exploredPercent, discoveredVenues]
+      required: [confirmedDates, places, vibes]
       properties:
-        optIn:
-          type: boolean
-          description: Whether this person has authorised collection at all.
-        exploredTiles:
+        confirmedDates:
+          type: integer
+          description: Held dates this side attended, including ones with no named venue.
+        places:
           type: array
-          description: >
-            Geohash precision-6 tiles, sorted and unique. A neighbourhood each,
-            and nothing narrower is representable.
-          items: { type: string }
-        exploredPercent:
-          type: number
-          description: >
-            Share of the caller's own city, in [0..1]. The denominator is a
-            constant of the CITY, not of the data — derived from visited tiles
-            it would move everyone's number whenever a stranger walked
-            somewhere new.
-        discoveredVenues:
+          description: Most recent first.
+          items: { $ref: "#/components/schemas/DateMapPlace" }
+        vibes:
           type: array
-          description: >
-            Google Place ids of venues a verified Date Bump recorded. Place
-            ids rather than catalog row ids: the catalog holds several rows per
-            real venue, so a row id would give two people who sat in the same
-            café different histories.
+          description: Most frequent first, at most three.
+          items: { $ref: "#/components/schemas/DateMapVibe" }
+
+    DateMapPlace:
+      type: object
+      required: [placeId, name, lat, lng, visits, lastDateAt, experiences]
+      properties:
+        placeId:
+          type: [string, "null"]
+          description: Google place id; null on the legacy domain-based venue path.
+        name: { type: string }
+        lat:
+          type: [number, "null"]
+          description: The venue's latitude; null when the row only holds a route midpoint.
+        lng:
+          type: [number, "null"]
+        visits: { type: integer, minimum: 1 }
+        lastDateAt: { type: string, format: date-time }
+        experiences:
+          type: array
+          description: Canonical Venue Intent experience ids (`coffee_treats`, `art_culture`, …) mapped from the catalog's vibe tags.
           items: { type: string }
+
+    DateMapVibe:
+      type: object
+      required: [experience, dates]
+      properties:
+        experience:
+          type: string
+          description: Canonical Venue Intent experience id.
+        dates:
+          type: integer
+          description: Confirmed dates spent at a place with this experience.
 
     FrequentPlaces:
       type: object
@@ -6090,6 +6517,39 @@ components:
             not", which is the class of claim the radar's masking exists to
             prevent.
 
+    BumpCeremony:
+      type: object
+      required: [startAt, role, serverNow]
+      description: >
+        The meeting ceremony both phones play together (2026-09-29). Both sides
+        of a pair of holds receive the same `startAt`; each gets its own
+        `role`. The frame to draw is a function of (server time now −
+        `startAt`), with the server time estimated from `serverNow` and the
+        client's own offset to the server clock. A late answer joins the scene
+        at the right frame; one past the end shows the final state.
+      properties:
+        startAt:
+          type: string
+          format: date-time
+          description: >
+            When the scene starts, on the SERVER's clock — verification plus
+            900 ms (`BUMP_CEREMONY_LEAD_MS`).
+        role:
+          type: string
+          description: >
+            `A` or `B`. `A` is the side that waited, `B` the side whose hold
+            completed the pair — the mascot leaves A's phone and lands on B's.
+            Not the match's userA/userB. A documented string rather than an
+            `enum`, like the other state fields here: an `enum` becomes a
+            closed Swift type that throws on an unknown value, so treat any
+            other value as `A`.
+        serverNow:
+          type: string
+          format: date-time
+          description: >
+            The server's clock when this answer was written, for the client's
+            clock-offset estimate.
+
     BumpDeck:
       type: object
       required: [topicsForA, topicsForB]
@@ -6710,8 +7170,55 @@ components:
       type: object
       required: [id, text]
       properties:
-        id: { type: string, description: 'Bank id, e.g. f_date_spots' }
+        id:
+          type: string
+          description: |
+            Bank id (`f_date_spots`) or a contextual instance
+            (`f_ctx:topic:<matchId>` — `<f|m>_ctx:<family>:<key>`). Opaque to
+            the client: send it back as `questionId`.
         text: { type: string, description: 'Question text in the user language' }
+        context:
+          $ref: '#/components/schemas/ProfilerQuestionContext'
+
+    ProfilerQuestionContext:
+      type: object
+      description: |
+        Present only on a contextual question that refers to something — draw
+        it as a card ABOVE the question, like a quoted message, so the person
+        sees what is being asked about before the question itself (founder
+        decision 2026-10-04). The question text never names the venue or the
+        date; the card does. Never carries the partner. Absent on bank
+        questions and on rechecks (which deliberately hide the earlier answer
+        they re-measure).
+      required: [kind, dates]
+      properties:
+        kind:
+          type: string
+          enum: [upcoming_date, past_date, past_dates, own_answer]
+          description: |
+            upcoming_date = the scheduled date a "fresh topic" question is
+            for (show date AND time); past_date = the date a "same format next
+            time?" question is about (date only); past_dates = up to three
+            recent confirmed dates sharing the experience a "looks like your
+            format is…" question names (date only); own_answer = the person's
+            own earlier answer a follow-up asks about (`answer`).
+        dates:
+          type: array
+          description: 'Newest first. One entry for upcoming_date/past_date, 1–3 for past_dates, empty for own_answer.'
+          items:
+            type: object
+            required: [at]
+            properties:
+              venueName: { type: string, description: 'Absent when the date never got a venue' }
+              at: { type: string, format: date-time, description: 'Format in the device locale and zone' }
+        answer:
+          type: object
+          description: 'own_answer only.'
+          required: [question, text, answeredAt]
+          properties:
+            question: { type: string, description: 'The original question, in the user language' }
+            text: { type: string, description: 'Their answer, whitespace-collapsed, at most 160 characters (cut with …)' }
+            answeredAt: { type: string, format: date-time }
 
     ProfilerAnswerRequest:
       type: object
@@ -6787,6 +7294,119 @@ components:
             Server clock, for the same skew correction the countdowns use: the
             window's edges are the product, so a device clock several minutes
             out must not decide when the composer unlocks.
+        partnerPresence:
+          $ref: "#/components/schemas/ProxyChatPresence"
+        version:
+          type: string
+          description: |
+            Change counter for the long-poll: pass it back as `after`. Opaque —
+            compare for equality only. **Optional in the contract only so a
+            client can tell a server predating the long-poll** (absent → poll
+            every ~4 s); this server always sends it, like `partnerPresence`.
+
+    ProxyChatPresence:
+      type: object
+      description: |
+        What the reader is shown about the partner right now. All false
+        outside the open window and for a Telegram partner. Mirrors
+        `PartnerPresence` in `services/proxy-presence.ts`.
+      required: [online, inChat, typing]
+      properties:
+        online:
+          type: boolean
+          description: The partner's app is in the foreground (or on the chat screen).
+        inChat:
+          type: boolean
+          description: The partner has this chat on screen.
+        typing:
+          type: boolean
+          description: The partner is typing into this chat. Implies `inChat`.
+
+    ProxyChatPresenceReport:
+      type: object
+      required: [place]
+      properties:
+        place:
+          type: string
+          enum: [app, chat, away]
+          description: |
+            `app` — in the foreground anywhere in the app; `chat` — on this
+            chat screen; `away` — leaving the foreground (clears everything).
+        typing:
+          type: boolean
+          description: |
+            Read only with `chat`. `true` while the draft keeps changing
+            (repeat every ~3 s), `false` when it empties or is sent. Absent
+            leaves typing as it was.
+
+    ProxyChatPresenceAnswer:
+      type: object
+      required: [partnerPresence, version]
+      properties:
+        partnerPresence:
+          $ref: "#/components/schemas/ProxyChatPresence"
+        version:
+          type: string
+          description: The chat's current `ProxyChatState.version`.
+
+    ProfileGapsResponse:
+      type: object
+      description: Served by `GET /v1/me/profile-gaps` (`services/profile-gaps.ts`).
+      required: [gaps]
+      properties:
+        gaps:
+          type: array
+          description: |
+            Open items only, in the fixed priority order `video`, `photos`,
+            `music`, `looking_for`, `age_range`, `about`, `interests`, `voice`,
+            `type_radar`, `major`. Empty when the profile is complete.
+          items: { $ref: "#/components/schemas/ProfileGap" }
+
+    ProfileGap:
+      type: object
+      description: One unfinished profile item the Today nudge may point at.
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: |
+            Which item is open. Today one of:
+            - `video` — no profile video (only while the profile-video API is
+              on, the same switch as `videoEnabled` in `GET /v1/me/photos`);
+            - `photos` — fewer than 6 photos AND the one-time photo bonus never
+              claimed (claimed and then deleted down is not a gap);
+            - `music` — no pinned track (only while music is on);
+            - `looking_for` — `partnerPreferences` empty;
+            - `age_range` — neither `ageRangeMin` nor `ageRangeMax` set;
+            - `about` — `psychologicalSummary` empty, or still the text
+              onboarding generated rather than one the person wrote;
+            - `interests` — `hobbies` empty;
+            - `voice` — no voice prompt (only while voice prompts are on);
+            - `type_radar` — Type Radar is available to this person and not
+              calibrated (`available && !calibrated` of `GET /v1/radar/state`;
+              only while Type Radar is on);
+            - `major` — `major` empty.
+
+            Deliberately a plain string and NOT an `enum`: kinds will be added
+            server-side, and swift-openapi-generator turns an `enum` into a
+            closed Swift type that THROWS on an unknown value — one new kind
+            would then fail decoding of the whole list. Clients silently drop a
+            kind they do not know.
+          example: photos
+        reward:
+          type: [string, "null"]
+          description: |
+            What finishing the item earns, when it really earns something right
+            now. Today only `ticket` (one free Date Ticket: the one-time video
+            bonus, or the photo bonus). Absent or null = no reward; never
+            promise one then. A plain string for the same reason as `kind`.
+          example: ticket
+        remaining:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            `photos` only: how many more photos reach the bonus threshold (6).
+          example: 2
 
     TicketHistoryEntry:
       type: object
@@ -6976,6 +7596,65 @@ components:
           description: Inclusive upper bound — a count for wheels/photos, SECONDS for `voice_record`.
         skippable: { type: boolean }
 
+    OnboardingBasics:
+      type: object
+      description: |
+        The five basics the native client asks on its own screens before the
+        chat (DECISIONS 2026-09-30) — the twin of the Mini App's
+        `profileBasics` + `profileLimits`. The client routes to the first empty
+        screen, shows saved values on the screens it goes back to, and opens
+        the chat once `complete` is true.
+      required: [firstName, age, gender, preference, height, relationshipIntents, complete, limits]
+      properties:
+        firstName: { type: [string, "null"] }
+        age: { type: [integer, "null"] }
+        gender:
+          type: [string, "null"]
+          description: "`male` or `female`. Not an enum: a nullable enum gives the Swift client a phantom `_empty_` case."
+        preference:
+          type: [string, "null"]
+          description: "`men`, `women` or `both`."
+        height: { type: [integer, "null"], description: Centimetres }
+        relationshipIntents:
+          type: array
+          items: { type: string }
+          description: "Canonical intents (`spark`, `open`, `falling`, `longterm`); empty when unanswered."
+        complete:
+          type: boolean
+          description: >-
+            The collector has none of the five left to ask. The intent counts
+            only once the collector recorded it, whatever the stored set holds.
+        limits:
+          type: object
+          required: [minAge, maxAge, minHeightCm, maxHeightCm]
+          properties:
+            minAge: { type: integer }
+            maxAge: { type: integer }
+            minHeightCm: { type: integer }
+            maxHeightCm: { type: integer }
+
+    OnboardingBasicsPatch:
+      type: object
+      description: Any subset of the basics; at least one field.
+      properties:
+        firstName: { type: string }
+        age: { type: integer }
+        gender: { type: string, description: "`male` or `female`" }
+        preference: { type: string, description: "`men`, `women` or `both`" }
+        height: { type: integer, description: Centimetres }
+        relationshipIntents:
+          type: array
+          items: { type: string }
+
+    OnboardingBasicsRejection:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        field:
+          type: string
+          description: The collector's field name (`first_name`, `age`, …) when a value was rejected
+
     InterviewState:
       type: object
       description: Mirrors `InterviewStateDto` in `public/routes/onboarding-state.ts`
@@ -6998,7 +7677,12 @@ components:
                 type: string
                 enum: [user, assistant]
               content: { type: string }
-        expectingPhoto: { type: boolean }
+        expectingPhoto:
+          type: boolean
+          description: |
+            The photo stage is open: true while the collector is on the photo
+            question — past the minimum too, until the user leaves it with
+            `POST /v1/onboarding/photos/continue`.
         photoCount: { type: integer }
         minPhotos: { type: integer }
         uiHint:
@@ -7015,6 +7699,9 @@ components:
             `GET` state. Deliberately not nullable: `enum: [..., null]` makes
             swift-openapi-generator emit a phantom `_empty_` case (see
             `PendingFeedback.venueFit` history) — absence expresses "none".
+        basics:
+          $ref: "#/components/schemas/OnboardingBasics"
+          description: The basics screens' state; present on every native interview response
 
     ChatMessage:
       type: object
@@ -7147,7 +7834,11 @@ components:
           description: today | map | inbox_item | chat | chat_topic
         id:
           type: string
-          description: Inbox item id for `inbox_item`, topic anchor id for `chat_topic`
+          description: >-
+            Inbox item id for `inbox_item`; for `chat_topic` the chat SESSION id
+            (since 2026-09-30 — the row is one chat, titled with the chat's
+            title; it used to be a topic anchor message id). Older builds only
+            used the kind to open the chat and never read the id.
 
     ChatHistoryMessage:
       allOf:
@@ -7164,6 +7855,26 @@ components:
               description: >-
                 5-min TTL render URLs for `imageUrls`, same order. An entry is
                 an empty string when that one could not be signed.
+
+    ChatSession:
+      type: object
+      required: [id, title, createdAt, updatedAt, messageCount]
+      properties:
+        id: { type: string }
+        title:
+          type: string
+          description: |
+            Short topic of the chat, written by a small model in the account
+            language (2–6 words). Until the first title lands — the opening
+            line of the person, condensed. A title set by hand wins forever.
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: string
+          format: date-time
+          description: Time of the newest message in the chat
+        messageCount:
+          type: integer
+          description: Messages in the chat, `system` rows excluded
 
     ChatTopic:
       type: object
@@ -7612,6 +8323,26 @@ components:
           description: |
             T+2h. Sent rather than derived so the client never re-implements a
             product constant; the server closes the window regardless.
+        proxyChatUnreadCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Read-only count of the partner's anonymous-chat messages created
+            after the CALLER's own read cursor — the "3 new" badge on the chat
+            entry. A caller who has never opened the chat counts every message
+            the partner sent; the caller's own messages never count.
+
+            Null exactly when `proxyChatOpensAt` is null (this match has no
+            proxy chat), and also when the count could not be read this time —
+            so key the chat entry itself on `proxyChatOpensAt`, never on this
+            field. Absent from servers older than the field: treat as null.
+            0 until the chat has opened. Still counted after `proxyChatClosesAt`
+            and after a force-close, because reading stays allowed.
+
+            Reading this field NEVER marks anything as read and never moves a
+            delivery tick. The caller's cursor moves only when the caller opens
+            the chat (`GET /v1/matches/{id}/chat`); from then on this counts
+            only what the partner sends later.
         proposalDeadlineAt:
           type: [string, "null"]
           format: date-time

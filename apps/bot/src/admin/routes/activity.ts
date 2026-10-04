@@ -143,7 +143,7 @@ activityRouter.get(
     if (monthRaw !== undefined) {
       // A calendar month is offered because reporting asks for one, but it is
       // NOT the default — see MAU_WINDOW_DAYS for why a rolling window is the
-      // comparable number at this product's weekly cadence.
+      // comparable number across calendar months (daily drops in production).
       const parsed = parseMonthKey(String(monthRaw));
       if (!parsed) return badRequest(res, "month must be YYYY-MM");
       ({ from, to } = parsed);
@@ -329,8 +329,9 @@ const COHORT_DEFAULT_SPAN_DAYS = 180;
  *
  * A caller who writes `?milestones=1,7,14,30` is asking the question in the
  * founder's own terms and should get this file's answer to it rather than a
- * literal one-day reading, which at day 30 measures the weekly drop schedule
- * instead of the user. Day 1 stays exact — see `RetentionMilestone`.
+ * literal one-day reading. Under the weekly profile it can measure the drop
+ * weekday instead of the user; production now uses daily. This window remains
+ * unchanged pending a founder review of its rationale. Day 1 stays exact — see `RetentionMilestone`.
  */
 function widenMilestone(day: number): RetentionMilestone {
   return { day, windowDays: day <= 1 ? 1 : Math.min(7, day) };

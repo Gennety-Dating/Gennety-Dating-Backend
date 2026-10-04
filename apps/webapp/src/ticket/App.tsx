@@ -377,7 +377,7 @@ export function App(): ReactElement {
           <>
             <header className="ticket-header">
               <h1>{headerTitle(sc, state, s)}</h1>
-              <p>{headerSub(sc, state, s)}</p>
+              {headerSub(sc, state, s) ? <p>{headerSub(sc, state, s)}</p> : null}
               {/* The partner's remaining window belongs to the sentence above
                   it, not to the bottom of the scroll where it used to live —
                   see PartialTimer for why that position was both unreadable
@@ -632,7 +632,7 @@ function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): st
   }
 }
 
-function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): string {
+function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): string | null {
   switch (sc) {
     case "offer":
       return s.sub;
@@ -644,8 +644,9 @@ function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): stri
       return state.iCoveredPartner
         ? fill(s.coveredHerSub, { name: state.partnerName ?? s.matchFallback })
         : s.successSub;
+    // The title already says the ticket is paid (copy audit 2026-10-01).
     case "partner-paid":
-      return s.partnerPaidSub;
+      return null;
     case "closed":
       return s.closedSub;
   }

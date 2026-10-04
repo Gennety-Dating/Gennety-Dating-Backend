@@ -12,6 +12,7 @@ import type { OutcomeGate } from "./outcome-gate.js";
 import {
   activationBlockerFor,
   runFaceMatchVerificationDefault,
+  trackFaceMatchRun,
 } from "./verification-pipeline.js";
 import { DEMO_MODE_ENABLED } from "../demo/config.js";
 import { releaseDemoLivenessSession, runDemoVerification } from "../demo/verification.js";
@@ -63,8 +64,8 @@ export type BeginLivenessResult =
    */
   | { ok: false; error: "onboarding_incomplete" }
   /**
-   * 409 — the profile has no photos, so a passing check would have nothing to
-   * be compared against (audit A13-H11). `language` lets the route answer in
+   * 409 — the profile has fewer than MIN_PHOTOS photos, so a passing check
+   * would have too little to be compared against (audit A13-H11). `language` lets the route answer in
    * the user's own words.
    */
   | { ok: false; error: "photos_required"; language: Language }
@@ -160,7 +161,10 @@ export async function beginLivenessCheck(
     // Nothing to compare the selfie with. Letting the check run anyway wrote
     // `pending_review` and nulled the stored selfie, a dead end with no button
     // (audit A13-H11); asking for photos first is the step that moves them.
-    if ((user.profile?.photos.length ?? 0) === 0) {
+    // Below the minimum counts the same as none: the client's photo step and
+    // the collector both ask for MIN_PHOTOS, and a check over fewer is a check
+    // the user would have to repeat once they add the rest.
+    if ((user.profile?.photos.length ?? 0) < MIN_PHOTOS) {
       return { ok: false, error: "photos_required", language: user.language ?? "en" };
     }
   }
@@ -318,7 +322,12 @@ export async function completeLivenessCheck(
   // cat still gets through. Everything downstream is the untouched pipeline.
   if (DEMO_MODE_ENABLED) {
     await releaseDemoLivenessSession(user.id);
-    void runDemoVerification(user.id, sessionId, api, options.outcomeGate)
+    // Tracked like the production run, so `GET /v1/me/verification` says
+    // `checking` for a demo visitor too.
+    void trackFaceMatchRun(
+      user.id,
+      runDemoVerification(user.id, sessionId, api, options.outcomeGate),
+    )
       .catch((err) => {
         console.error(`${LOG_PREFIX} demo verification threw`, { userId, err });
       })
@@ -430,6 +439,7 @@ async function sendRetryPrompt(
       photoRedoLabel: t(language, "verifyBtnRedoPhotosSecondary"),
     });
     await api.sendMessage(Number(telegramId), livenessRetryMessage(language, outcome), {
+      parse_mode: "Markdown",
       ...(keyboard ? { reply_markup: keyboard } : {}),
     });
   } catch (err) {

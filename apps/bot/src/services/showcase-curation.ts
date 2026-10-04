@@ -38,6 +38,8 @@ export interface ShowcasePick {
  * mis-resolved into the Kyiv catalog, and was removed from it the same day
  * (the Kyiv place it meant is Купол, listed); then the base places the founder kept or
  * brought back, the most popular Idealist Coffee and five parks.
+ * 2026-10-02: Très Branché struck by the founder and removed from the catalog;
+ * ALTO (Сагайдачного 19) added to the premium catalog and listed here.
  */
 export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> = {
   "ua:kyiv": [
@@ -70,7 +72,6 @@ export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> =
     { placeId: "ChIJX31WnQ_P1EARPNcar64s3Ps", name: "Grill do Brasil" },
     { placeId: "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA", name: "SHO" },
     { placeId: "ChIJw8BMp-TO1EARa6rEcrFvVX0", name: "Sam's Steak House" },
-    { placeId: "ChIJ6ZKeqVnO1EARYnOXe-r0swY", name: "Très Branché" },
     { placeId: "ChIJJ87ob9_P1EARKV3IR4C3uFA", name: "SARTO" },
     { placeId: "ChIJ-QcdtZLP1EARDdqpFJHIuW4", name: "Ink Липки" },
     { placeId: "ChIJV4Y-G6DP1EARHDP4LKundhA", name: "Купол" },
@@ -83,6 +84,7 @@ export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> =
     { placeId: "ChIJIaYEbQDP1EARmi6K2-meTrQ", name: "Elevato" },
     { placeId: "ChIJ-2SifnjP1EARoOX6vivIIW4", name: "Frou Frou" },
     { placeId: "ChIJzwdw7RLP1EARQCg6rI3Hz7k", name: "Porto Maltese" },
+    { placeId: "ChIJ3bKJRaLP1EARiU6B6J-5siI", name: "ALTO" },
     // Fashionable base places.
     { placeId: "ChIJ3_H8OFDO1EAR6SeTa5GIJYg", name: "Éclair Little Artwork" },
     { placeId: "ChIJM7oDHV7P1EAROolLz6ZFUrQ", name: "Passenger Gastro Bar" },

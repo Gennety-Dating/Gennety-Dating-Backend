@@ -40,6 +40,7 @@ describe("sendWelcomeGiftPreroll", () => {
     expect(api.sendVideoNote).not.toHaveBeenCalled();
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage).toHaveBeenCalledWith(555, t("en", "welcomeGiftTicket"), {
+      parse_mode: "Markdown",
       message_effect_id: "fx-gift",
     });
   });
@@ -49,7 +50,9 @@ describe("sendWelcomeGiftPreroll", () => {
     const api = makeApi();
     await sendWelcomeGiftPreroll(api, 555, "ru", "male");
 
-    expect(api.sendMessage).toHaveBeenCalledWith(555, t("ru", "welcomeGiftTicket"), {});
+    expect(api.sendMessage).toHaveBeenCalledWith(555, t("ru", "welcomeGiftTicket"), {
+      parse_mode: "Markdown",
+    });
   });
 
   it("uploads the bundled asset then reuses the cached file_id", async () => {
@@ -85,9 +88,12 @@ describe("sendWelcomeGiftPreroll", () => {
     await sendWelcomeGiftPreroll(api, 555, "pl", "female");
 
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    expect(api.sendMessage.mock.calls[0][2]).toEqual({ message_effect_id: "fx-gift" });
+    expect(api.sendMessage.mock.calls[0][2]).toEqual({
+      parse_mode: "Markdown",
+      message_effect_id: "fx-gift",
+    });
     expect(api.sendMessage.mock.calls[1][1]).toBe(t("pl", "welcomeGiftTicket"));
-    expect(api.sendMessage.mock.calls[1][2]).toBeUndefined();
+    expect(api.sendMessage.mock.calls[1][2]).toEqual({ parse_mode: "Markdown" });
   });
 
   it("still sends the gift DM when the video note send throws", async () => {

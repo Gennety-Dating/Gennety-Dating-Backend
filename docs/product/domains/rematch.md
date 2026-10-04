@@ -18,13 +18,13 @@
 
 **Rematch** is a paid, on-demand re-run of the matching engine for **one man**,
 priced at **$2.99** (Telegram Stars). It answers the two moments where the
-weekly cadence hurts most:
+wait for the next scheduled drop hurts most:
 
-- the Thursday batch left him unpaired ("no match this week"), or
+- the scheduled batch left him unpaired, or
 - he got a match and it went nowhere (he declined, she declined, both ghosted,
   the pair never agreed on a time).
 
-Rather than waiting another week, he pays once and the matchmaker runs again
+Rather than waiting for the next daily drop at 18:00 Europe/Kyiv, he pays once and the matchmaker runs again
 for him alone.
 
 **The core asymmetry.** Rematch is *bought* only by men. Women never buy it,
@@ -37,7 +37,7 @@ from a single code path.
 **Rematch is not a new algorithm.** `findCandidatesFor()`
 ([match-engine.ts:955](../../../apps/bot/src/services/match-engine.ts#L955)) is already a
 single-seeker rematch engine: same candidate SQL, same multi-factor re-rank as
-the weekly batch. Rematch is *orchestration* around it — payment, eligibility,
+the scheduled batch. Rematch is *orchestration* around it — payment, eligibility,
 limits, framing — not new matching logic. Everything below inherits the existing
 invariants for free.
 
@@ -79,8 +79,8 @@ its **top-1**. That inherited filter set is the whole safety story:
 |---|---|
 | **Lifetime pair ban** (§3.2 rule 6) | He can **never** be re-shown a woman he already saw — including the one he just declined. This is what makes "rematch" mean *someone new*, automatically. |
 | **Single-live-match** (§3.2 rule 8) | Candidates currently in a live match are excluded, so a rematch cannot poach a woman mid-date-planning. |
-| **24 h candidate cooldown** (`MATCH_COOLDOWN_MS`) | Deliberately **kept** for rematch. It has a happy side effect: right after the Thursday batch the only available women are exactly the **unpaired** ones — precisely the cohort the famine gift is meant for. Relaxing it would let a rematch grab a woman who was matched an hour ago. |
-| Same `homeCityKey`, verified contact rail, `embeddingDirty = false`, active + verified | Rematch users get the same quality floor as the weekly batch; no "we lowered the bar because he paid". |
+| **Candidate cooldown: 6 h daily / 24 h weekly** (`MATCH_COOLDOWN_MS`) | Used by rematch in both profiles. The original weekly rationale (not established for daily; see the 2026-10-03 cadence report) was: right after the scheduled batch the only available women are exactly the **unpaired** ones — precisely the cohort the famine gift is meant for. Relaxing it would let a rematch grab a woman who was matched an hour ago. |
+| Same `homeCityKey`, verified contact rail, `embeddingDirty = false`, active + verified | Rematch users get the same quality floor as the scheduled batch; no "we lowered the bar because he paid". |
 
 **Rematch-specific filter added on top:** exclude any candidate who already
 received a rematch-sourced pitch within `REMATCH_GIFT_CAP_DAYS` (default 7) —
@@ -109,7 +109,7 @@ state:
 - Never state or imply that anyone **paid** for this introduction.
 - Never reveal the man's decision state (blind-decision invariant, §3.4).
 - Never use the word "rematch" or expose that this came from a purchase flow.
-- Never promise more than the ordinary weekly cadence promises.
+- Never promise more than the ordinary scheduled drop promises.
 
 The framing is a **prefix on her pitch**, not a separate DM, so the pitch stream
 and the decision question stay exactly as they are today.
@@ -226,7 +226,7 @@ derived from these rows, so there is no counter to drift.
 >   run (`rematchSearchSteps`, `NEVER_CUT_SHORT`), including before a refund.
 >   Full reasoning in PRODUCT_SPEC §3.11.
 
-1. **No-match DM** (after the drop's dispatch finishes; Thursday 18:15 is the fallback — `no-match-notifier.ts`) — the offer follows
+1. **No-match DM** (after the drop's dispatch finishes; daily 18:15 Europe/Kyiv is the production fallback — `no-match-notifier.ts`) — the offer follows
    as its **own** short DM rather than being folded into the no-match message.
    That message is a deliberately short, empathetic rich stream (§3.1); bolting a
    price onto it would undercut the empathy and complicate a carefully-tuned
@@ -298,9 +298,9 @@ cannot find anyone. Copy in all five locales, per §Languages.
 | **Pool burn via lifetime ban** | Every rematch permanently consumes one woman from his city pool. A heavy user runs out of *anyone* he has not seen. | D3 limits; the CTA disappears when the engine finds nobody; honest "we could not find anyone" copy instead of an error. |
 | **Paid shopping / swipe-ification** | Buy → look → decline → buy again turns Gennety into a paid swipe app *and* lifetime-bans dozens of women for every other man. | D1 (no refund on decline) + D3 (2/week, 24 h cooldown). The 24 h cooldown specifically prevents decline-and-instantly-retry, preserving the weight of a decision. |
 | **Woman burnout** | A popular woman could be the top-1 candidate for many men and get serially gift-pitched. `single-live-match` prevents *simultaneous* matches but not a *series*. | `REMATCH_GIFT_CAP_DAYS` (default 7): exclude candidates who already received a rematch-sourced pitch in the window. |
-| **Cannibalizing the weekly batch** | The Thursday batch is globally greedy-optimal; a rematch an hour earlier can take a woman the optimal Thursday pairing needed. | `REMATCH_PRE_BATCH_BLACKOUT_HOURS` (default 6) — no rematch in the run-up to `MATCH_CRON_SCHEDULE`. Between cycles the impact is negligible. |
+| **Cannibalizing the scheduled batch** | The scheduled batch is globally greedy-optimal; a rematch an hour earlier can take a woman the optimal scheduled pairing needed. | `REMATCH_PRE_BATCH_BLACKOUT_HOURS` (profile default: 1 h daily / 6 h weekly) — no rematch in the run-up to `MATCH_CRON_SCHEDULE`. The original claim of negligible impact between cycles is not established for daily; see the 2026-10-03 cadence report. |
 | **Paid-into-nothing** | Money taken, no match, no refund. | The check → pay → re-check → deliver-or-refund flow, plus the durable `refund_failed` retry. |
-| **Famine accounting drift** | `standbyCount` / `missedWeeks` reset lives in the weekly diff; a rematch pairing outside it would leave her accruing a false famine bonus. | Reset both sides' starvation counters on a rematch pairing, exactly as the weekly batch does. |
+| **Famine accounting drift** | `standbyCount` / `missedWeeks` reset lives in the weekly diff; a rematch pairing outside it would leave her accruing a false famine bonus. | Reset both sides' starvation counters on a rematch pairing, exactly as the scheduled batch does. |
 | **Analytics pollution** | Rematch pairs are not drawn from the same optimization as weekly pairs; mixing them corrupts `match_score_logs` quality readings. | `Match.source` filter in algorithm analytics and the founder weekly report. |
 | **Chargeback / trust** | "I paid and she said no." | D1 is stated in the offer copy pre-payment, and `RematchPurchase` is a full audit trail per charge. |
 
@@ -393,7 +393,7 @@ master switch.
 | `REMATCH_MAX_PER_WEEK` | `2` | D3 limit, rolling 7 days. |
 | `REMATCH_COOLDOWN_HOURS` | `24` | D3 minimum gap between purchases. |
 | `REMATCH_GIFT_CAP_DAYS` | `7` | Candidate protection window. |
-| `REMATCH_PRE_BATCH_BLACKOUT_HOURS` | `6` | Blackout before the weekly batch. |
+| `REMATCH_PRE_BATCH_BLACKOUT_HOURS` | `6` | Blackout before the scheduled batch. |
 | `REMATCH_FAILED_LOOKBACK_DAYS` | `14` | Window for the `failed` gift framing. |
 | `REMATCH_REFUND_CRON_SCHEDULE` | `0 * * * *` | Refund retry / abandoned-purchase sweep. Registered only when the feature is on. |
 
@@ -452,9 +452,11 @@ crash-loop, per deploy.md), verify inertness, then flip.
 ## Non-goals (v1)
 
 - No woman-side purchase, and no way for a woman to *request* a rematch.
-- **No candidate choice.** One candidate, like the weekly batch — showing a list
+- **No candidate choice.** One candidate, like the scheduled batch — showing a list
   would turn the product into the swipe app it exists to replace.
 - No score/league boost bought with money.
 - No refund for a declined or ghosted match (D1).
 - No Premium bundling (rematch is not free for subscribers in v1 — revisit once
   purchase data exists).
+
+<!-- Cadence review 2026-10-03: the immediate-post-batch cooldown argument and claims of negligible between-cycle cannibalization are not established for daily. See docs/operations/reports/drop-cadence-docs-2026-10-03.md; no behavior change authorized. -->

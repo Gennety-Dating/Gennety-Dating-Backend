@@ -10,7 +10,7 @@ vi.mock("@gennety/db", () => ({ prisma: db }));
 
 const previousBatch = vi.fn();
 vi.mock("./next-batch.js", () => ({ getPreviousBatchDate: (now: Date) => previousBatch(now) }));
-vi.mock("./chat-topics.js", () => ({ listChatTopics: async () => ({ topics: [], hasMore: false }) }));
+vi.mock("./chat-sessions.js", () => ({ listChatSessions: async () => ({ sessions: [], hasMore: false }) }));
 
 const { announcementRows, buildPulse, dropBatchRow } = await import("./pulse.js");
 
@@ -78,5 +78,57 @@ describe("buildPulse", () => {
     db.inboxItem.findMany.mockResolvedValue([{ id: "a", title: "A", body: "a", createdAt: BATCH, readAt: null }]);
     const rows = await buildPulse(USER, { now: minutesAfter(5) });
     expect(rows.map((r) => r.state)).toEqual(["processing", "active"]);
+  });
+
+  /**
+   * Chat rows are CHATS since 2026-09-30: one per recent session, titled with
+   * the chat's title, the session id as target. The kind stays `chat_topic` for
+   * builds that open the chat by it.
+   */
+  it("lists the recent chats as past rows keyed by the session", async () => {
+    db.user.findUnique.mockResolvedValue({ status: "paused" });
+    const sessions = vi.fn(async () => ({
+      sessions: [
+        {
+          id: "s-2",
+          title: "Дресс-код на свидание",
+          createdAt: "2026-09-12T10:00:00.000Z",
+          updatedAt: "2026-09-13T09:00:00.000Z",
+          messageCount: 4,
+        },
+        {
+          id: "s-1",
+          title: "Почему нет пары",
+          createdAt: "2026-09-10T10:00:00.000Z",
+          updatedAt: "2026-09-10T11:00:00.000Z",
+          messageCount: 2,
+        },
+      ],
+      hasMore: true,
+    }));
+
+    const rows = await buildPulse(USER, { now: minutesAfter(30), sessions });
+
+    expect(sessions).toHaveBeenCalledWith(USER, { limit: 2 });
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: "chat_topic:s-2",
+        kind: "chat_topic",
+        state: "past",
+        title: "Дресс-код на свидание",
+        at: "2026-09-13T09:00:00.000Z",
+        target: { kind: "chat_topic", id: "s-2" },
+      }),
+      expect.objectContaining({ id: "chat_topic:s-1", target: { kind: "chat_topic", id: "s-1" } }),
+    ]);
+  });
+
+  it("a failing chat list costs the pulse its chat rows, not the pulse", async () => {
+    db.user.findUnique.mockResolvedValue({ status: "paused" });
+    const sessions = vi.fn(async () => {
+      throw new Error("db down");
+    });
+    const rows = await buildPulse(USER, { now: minutesAfter(30), sessions });
+    expect(rows).toEqual([]);
   });
 });

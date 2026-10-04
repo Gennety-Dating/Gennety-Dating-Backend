@@ -98,28 +98,34 @@ describe("the shared keyboard-following curve", () => {
   });
 
   it("only reaches the screens that can actually raise a keyboard", () => {
-    // The shrink belongs to a screen with a text field, not to the frame the
+    // The room belongs to a screen with a text field, not to the frame the
     // five profile screens share. On the frame, whichever screen came next
     // inherited whatever was left of the keyboard and finished the motion after
     // the cut — measured on the age screen at 375x812, its readout and slider
     // arrived 165px high and its pill 331px high while the top-anchored title
     // sat still. Of the five, only the name screen has a field.
-    for (const selector of [".ob-basics", ".ob-basics--name"]) {
-      const block = ruleBody(selector);
-      const shrinks = block.includes("--kb-height");
-      expect(shrinks, `${selector} { ... } reads --kb-height: ${shrinks}`).toBe(
-        selector === ".ob-basics--name",
-      );
-    }
+    expect(ruleBody(".ob-basics").includes("--kb-height")).toBe(false);
+    expect(ruleBody(".ob-basics--name .ob-basics-foot")).toContain("--kb-height");
   });
 
-  it("is the only curve any keyboard-driven shrink uses", () => {
-    // Every rule that reads --kb-height and transitions because of it must go
+  it("moves the name screen's pill with a transform, never by relaying the screen", () => {
+    // Shrinking the screen's height relaid it on every keyboard frame, and a
+    // height still easing when a resized WebView settled overshot the pill by
+    // 124px (measured). The pill rides on `transform`; nothing reflows.
+    const foot = ruleBody(".ob-basics--name .ob-basics-foot");
+    expect(foot).toMatch(/transform:\s*translate3d\(0,\s*calc\(-1 \* var\(--kb-height/);
+    expect(CSS).not.toMatch(/\.ob-basics--name\s*\{[^}]*height:\s*calc\(100% - var\(--kb-height/);
+  });
+
+  it("is the only curve any keyboard-driven motion uses", () => {
+    // Every rule that moves because of --kb-height and eases it must go
     // through the token, so the profile screens and the gates cannot drift into
     // two different keyboards.
     const shrinking = [...CSS.matchAll(/transition:\s*(height|max-height)\s*([^;]+);/g)];
-    expect(shrinking.length).toBeGreaterThanOrEqual(3);
-    for (const [, property, rest] of shrinking) {
+    expect(shrinking.length).toBeGreaterThanOrEqual(2);
+    const glide = /\[data-kb-glide\][^{]*\{\s*transition:\s*(transform)\s*([^;]+);/.exec(CSS);
+    expect(glide, "the name screen's glide rule is missing").not.toBeNull();
+    for (const [, property, rest] of [...shrinking, glide!]) {
       expect(rest, `transition: ${property} ${rest}`).toContain("var(--kb-ease-ms)");
       expect(rest, `transition: ${property} ${rest}`).toContain("var(--kb-ease)");
     }

@@ -1,5 +1,9 @@
 import type { Gender, Language } from "./types.js";
 import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
+import {
+  contextualProfilerQuestionById,
+  type ProfilerContextRef,
+} from "./profiler-context-questions.js";
 
 /**
  * Profiler question bank (PRODUCT_SPEC §Phase 1b).
@@ -19,18 +23,20 @@ import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
  * so the Profiler questions that duplicated it were removed — `f_activity_pref`
  * ("active vs calm" = the energy axis) and `m_ideal_evening` (≈ the Friday
  * question). The remaining bank is icebreaker-only flavor that onboarding does
- * NOT capture (chronotype, sport, turn-offs, shared-interests, media, surprises,
- * communication style).
+ * NOT capture (chronotype, sport, turn-offs, media, surprises, communication
+ * style).
  *
- * Two kinds of question live here (`refresh`):
- *   - **`"once"`** (default) — a stable trait. Asked once, answered forever
- *     (lark/owl doesn't change).
- *   - **`"cycle"`** — a *situational* question whose answer is a snapshot of
- *     right now ("what are you watching", "plans for the weekend"). Re-asked
- *     each drop cycle, its answer overwriting the previous one. Without these
- *     the bank simply runs out after a couple of days and the Profiler goes
- *     quiet; with them the icebreaker fuel stays current, which is the whole
- *     point of asking weekly rather than at signup.
+ * Every bank question is asked once. The weekly re-asks ("plans for the
+ * weekend", "best part of the week", "what are you watching" each cycle) were
+ * cut on 2026-10-04 by founder decision — people tire of the same question
+ * every week — and the two pure snapshots went with them, since an answer about
+ * one weekend fed to an icebreaker months later is misinformation. "Shared
+ * interests or mutual interest?" went too: nearly everyone picks the second
+ * option, so it told the generators nothing. What keeps the Profiler alive
+ * after the bank is the contextual questions (`profiler-context-questions.ts`),
+ * which open only when something happened — a date got scheduled, a date took
+ * place, an answer aged — and resolve through `profilerQuestionById` like any
+ * bank question.
  *
  * A question that declares `acceptsImage` also states, in its own text, that
  * the picture will be shown to the person's match before the date. That
@@ -53,10 +59,13 @@ import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
 export type ProfilerPriority = "high" | "medium" | "low";
 
 /**
- * Whether a question is asked once for good, or re-asked every drop cycle
- * because its answer is a snapshot of the present.
+ * A closed answer to a question: a stable id (what a future quick-tap answer
+ * stores) and its text in every language.
  */
-export type ProfilerRefresh = "once" | "cycle";
+export interface ProfilerAnswerOption {
+  id: string;
+  text: Record<Language, string>;
+}
 
 export interface ProfilerQuestion {
   /** Stable identifier persisted on `ProfilerAnswer.questionId`. */
@@ -64,8 +73,13 @@ export interface ProfilerQuestion {
   /** Which gender's bank this question belongs to. */
   gender: Gender;
   priority: ProfilerPriority;
-  /** Re-ask policy; omitted = `"once"`. */
-  refresh?: ProfilerRefresh;
+  /**
+   * Set on a contextual question instance only (`profiler-context-questions.ts`):
+   * which family it belongs to and what it is about.
+   */
+  context?: ProfilerContextRef;
+  /** Closed answer options; set on contextual questions, absent on the free-text bank. */
+  options?: readonly ProfilerAnswerOption[];
   /**
    * The question invites a picture and the bot reads one when it arrives
    * (vision → one sentence of description, stored as the answer). Omitted =
@@ -74,11 +88,6 @@ export interface ProfilerQuestion {
   acceptsImage?: boolean;
   /** Localized prompt text, keyed by language. */
   text: Record<Language, string>;
-}
-
-/** True when the question's answer goes stale and should be re-asked each cycle. */
-export function isRefreshableProfilerQuestion(question: ProfilerQuestion): boolean {
-  return question.refresh === "cycle";
 }
 
 /**
@@ -146,19 +155,6 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "f_weekend_plans",
-    gender: "female",
-    priority: "high",
-    refresh: "cycle",
-    text: {
-      en: "Any plans for the coming weekend?",
-      ru: "Какие планы на ближайшие выходные?",
-      uk: "Які плани на найближчі вихідні?",
-      de: "Hast du Pläne für das kommende Wochenende?",
-      pl: "Masz jakieś plany na najbliższy weekend?",
-    },
-  },
-  {
     id: "f_initiative",
     gender: "female",
     priority: "high",
@@ -200,18 +196,6 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "f_shared_interests",
-    gender: "female",
-    priority: "medium",
-    text: {
-      en: "Does it matter that you share interests, or is mutual interest in each other enough?",
-      ru: "Тебе важно, чтобы у вас были общие интересы, или достаточно взаимного интереса друг к другу?",
-      uk: "Тобі важливо, щоб у вас були спільні інтереси, чи достатньо взаємного інтересу одне до одного?",
-      de: "Ist es dir wichtig, gemeinsame Interessen zu haben, oder reicht gegenseitiges Interesse aneinander?",
-      pl: "Czy ważne jest, żebyście mieli wspólne zainteresowania, czy wystarczy wzajemne zainteresowanie sobą?",
-    },
-  },
-  {
     id: "f_food",
     gender: "female",
     priority: "medium",
@@ -224,23 +208,9 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "f_week_highlight",
-    gender: "female",
-    priority: "medium",
-    refresh: "cycle",
-    text: {
-      en: "What was the best part of your week?",
-      ru: "Что было самым классным на этой неделе?",
-      uk: "Що було найкращим цього тижня?",
-      de: "Was war das Beste an deiner Woche?",
-      pl: "Co było najlepsze w twoim tygodniu?",
-    },
-  },
-  {
     id: "f_media",
     gender: "female",
     priority: "low",
-    refresh: "cycle",
     text: {
       en: "What are you watching, reading, or listening to right now?",
       ru: "Что ты сейчас смотришь, читаешь или слушаешь?",
@@ -325,19 +295,6 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "m_weekend_plans",
-    gender: "male",
-    priority: "high",
-    refresh: "cycle",
-    text: {
-      en: "Any plans for the coming weekend?",
-      ru: "Какие планы на ближайшие выходные?",
-      uk: "Які плани на найближчі вихідні?",
-      de: "Hast du Pläne für das kommende Wochenende?",
-      pl: "Masz jakieś plany na najbliższy weekend?",
-    },
-  },
-  {
     // See the note on `f_humor`: last of the high block on purpose.
     id: "m_humor",
     gender: "male",
@@ -400,23 +357,9 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "m_week_highlight",
-    gender: "male",
-    priority: "medium",
-    refresh: "cycle",
-    text: {
-      en: "What was the best part of your week?",
-      ru: "Что было самым классным на этой неделе?",
-      uk: "Що було найкращим цього тижня?",
-      de: "Was war das Beste an deiner Woche?",
-      pl: "Co było najlepsze w twoim tygodniu?",
-    },
-  },
-  {
     id: "m_media",
     gender: "male",
     priority: "low",
-    refresh: "cycle",
     text: {
       en: "What are you watching, reading, or listening to right now?",
       ru: "Что ты сейчас смотришь, читаешь или слушаешь?",
@@ -474,9 +417,16 @@ export function profilerQuestionBank(gender: Gender | null): ProfilerQuestion[] 
   return [];
 }
 
-/** Look up a question by id across both banks (for the answer handler). */
+/**
+ * Look up a question by id across both banks — or rebuild a contextual instance
+ * from its id (`<f|m>_ctx:<family>:<key>`), so every reader (the answer
+ * handler, the stall sweep, the icebreaker prompts) resolves both kinds alike.
+ */
 export function profilerQuestionById(id: string): ProfilerQuestion | undefined {
-  return [...FEMALE_QUESTIONS, ...MALE_QUESTIONS].find((q) => q.id === id);
+  return (
+    [...FEMALE_QUESTIONS, ...MALE_QUESTIONS].find((q) => q.id === id) ??
+    contextualProfilerQuestionById(id)
+  );
 }
 
 /**
@@ -506,12 +456,18 @@ export interface ScoredProfilerAnswer {
 }
 
 /**
- * Join answered Profiler rows to their question bank entry and attach the
- * priority weight, dropping skipped/blank rows. Sorted by weight descending so
- * the highest-signal answers lead the generation prompt.
+ * Join answered Profiler rows to their question and attach the priority weight,
+ * dropping skipped/blank rows. Sorted by weight descending so the
+ * highest-signal answers lead the generation prompt.
+ *
+ * `matchId` is the date the prompt is written for. A "fresh topic before the
+ * date" answer (`topic` family) was offered for THAT date — its question says
+ * "I can slip it in as a topic for your date" — so it is fuel for that match
+ * only, and is dropped everywhere else, including when no match is named.
  */
 export function scoreProfilerAnswers(
   rows: Array<{ questionId: string; answerText: string | null }> | null | undefined,
+  options: { matchId?: string | null } = {},
 ): ScoredProfilerAnswer[] {
   const scored: ScoredProfilerAnswer[] = [];
   if (!Array.isArray(rows)) return scored;
@@ -520,9 +476,23 @@ export function scoreProfilerAnswers(
     if (!answer) continue;
     const question = profilerQuestionById(row.questionId);
     if (!question) continue;
+    if (question.context?.family === "topic" && question.context.key !== options.matchId) continue;
     scored.push({ question, answer, weight: profilerPriorityWeight(question.priority) });
   }
   return scored.sort((a, b) => b.weight - a.weight);
+}
+
+/**
+ * The question as a prompt line names it. A follow-up's own wording points at
+ * "this" — the card above it in the chat — so the prompt names the original
+ * question too, and the model can tie "Started!" to the guitar answer it sees
+ * on another line.
+ */
+function promptQuestionText(question: ProfilerQuestion, language: Language): string {
+  const own = profilerQuestionText(question, language);
+  if (question.context?.family !== "followup") return own;
+  const source = profilerQuestionById(question.context.key);
+  return source ? `${own} (follow-up to: ${profilerQuestionText(source, language)})` : own;
 }
 
 /**
@@ -539,7 +509,7 @@ export function formatProfilerAnswersBlock(
   return scored
     .map(
       (s) =>
-        `- [weight ${s.weight.toFixed(1)}] ${profilerQuestionText(s.question, language)} → ${s.answer}`,
+        `- [weight ${s.weight.toFixed(1)}] ${promptQuestionText(s.question, language)} → ${s.answer}`,
     )
     .join("\n");
 }

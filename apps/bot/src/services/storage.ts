@@ -452,6 +452,19 @@ export async function createChatImageSignedUrl(
 }
 
 /**
+ * Signed URLs for a whole page of chat attachments in ONE Storage request —
+ * `GET /v1/chat/history` used to make one per photo, and an album page is up
+ * to a hundred messages of up to ten each. Answers index for index with
+ * `paths`; `null` where a path is unsafe or the object is gone.
+ */
+export async function createChatImageSignedUrls(
+  paths: readonly string[],
+  expiresInSeconds: number = 300,
+): Promise<Array<string | null>> {
+  return createSignedUrls(env.SUPABASE_CHAT_BUCKET, paths, expiresInSeconds);
+}
+
+/**
  * Upload a native-client voice prompt.
  *
  * Only the native rail ever reaches this: a Telegram-recorded prompt is a
@@ -933,5 +946,93 @@ async function createSignedUrl(
   const json = (await res.json()) as { signedURL?: string; signedUrl?: string };
   const signed = json.signedUrl ?? json.signedURL;
   if (!signed) return null;
+  return absoluteSignedUrl(signed);
+}
+
+/** Storage answers `/object/sign/{bucket}/{path}?token=…`, relative to `/storage/v1`. */
+function absoluteSignedUrl(signed: string): string {
   return signed.startsWith("http") ? signed : `${env.SUPABASE_URL}/storage/v1${signed}`;
+}
+
+/**
+ * Supabase Storage's `maxItems` for one batch sign (`MAX_OBJECTS_PER_REQUEST`
+ * in storage-api `src/storage/limits.ts`).
+ */
+const SIGN_BATCH_MAX = 1000;
+
+/**
+ * Batch signing: `POST /storage/v1/object/sign/{bucket}` with
+ * `{ expiresIn, paths }` answers an array of `{ error, path, signedURL }` — the
+ * same relative `signedURL` the single-object route gives, `null` with an
+ * `error` for an object that does not exist (storage-api
+ * `src/http/routes/object/getSignedURLs.ts`, `Storage.signObjectUrls`; the
+ * shape supabase-js `createSignedUrls` reads).
+ *
+ * Every path passes the same traversal guard as the single route
+ * (`isSafeStorageObjectPath`) before it is sent; a refused path is `null`, the
+ * answer a missing object gets. If the batch call itself fails — an outage, a
+ * refusal, a body of the wrong shape — the page falls back to one request per
+ * object rather than showing no photos at all.
+ */
+async function createSignedUrls(
+  bucket: string,
+  paths: readonly string[],
+  expiresInSeconds: number,
+): Promise<Array<string | null>> {
+  if (paths.length === 0) return [];
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return paths.map(() => null);
+
+  const safe = [...new Set(paths)].filter((path) => isSafeStorageObjectPath(path));
+  const signed = new Map<string, string | null>();
+  for (let start = 0; start < safe.length; start += SIGN_BATCH_MAX) {
+    const chunk = safe.slice(start, start + SIGN_BATCH_MAX);
+    const batch = await signBatch(bucket, chunk, expiresInSeconds);
+    if (batch) {
+      for (const [path, url] of batch) signed.set(path, url);
+      continue;
+    }
+    const single = await Promise.all(
+      chunk.map((path) => createSignedUrl(bucket, path, expiresInSeconds).catch(() => null)),
+    );
+    chunk.forEach((path, i) => signed.set(path, single[i] ?? null));
+  }
+  return paths.map((path) => signed.get(path) ?? null);
+}
+
+/** One batch request; `null` when the call as a whole failed. */
+async function signBatch(
+  bucket: string,
+  paths: string[],
+  expiresInSeconds: number,
+): Promise<Map<string, string | null> | null> {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/sign/${bucket}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ expiresIn: expiresInSeconds, paths }),
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      console.warn(`[storage] batch sign failed: ${res.status} — signing one by one`);
+      return null;
+    }
+    const body: unknown = await res.json();
+    if (!Array.isArray(body)) return null;
+    const asked = new Set(paths);
+    const out = new Map<string, string | null>();
+    for (const item of body) {
+      if (typeof item !== "object" || item === null) return null;
+      const { path, signedURL } = item as { path?: unknown; signedURL?: unknown };
+      if (typeof path !== "string" || !asked.has(path)) return null;
+      out.set(path, typeof signedURL === "string" && signedURL ? absoluteSignedUrl(signedURL) : null);
+    }
+    // Every path must be answered for: a short array is a shape we do not know.
+    return out.size === asked.size ? out : null;
+  } catch (err) {
+    console.warn("[storage] batch sign error — signing one by one:", err);
+    return null;
+  }
 }

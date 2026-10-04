@@ -1,11 +1,13 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { wireContentInsets } from "../telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "../telegram-swipes.js";
 import "./ticket.css";
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();
 tg?.expand();
+keepOpenOnVerticalSwipe(tg);
 // Open as a true full-screen web app (Bot API 8.0) so there's no Mini App
 // header bar — the ticket is a branded, immersive moment. Falls back to a
 // plain expanded view on older clients that don't support requestFullscreen.

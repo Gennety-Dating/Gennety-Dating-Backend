@@ -1,6 +1,7 @@
 /* Type Radar Mini App. Theme tokens (--bg / --text / --accent / …) come from
    theme.css and adapt to the active light/dark theme set pre-paint in radar.html. */
 @import "../theme.css";
+@import "../fonts.css";
 
 * {
   box-sizing: border-box;
@@ -47,12 +48,16 @@ body {
 .radar-head {
   text-align: center;
 }
+/* Display role since the copy audit (2026-10-01): 30px / 800 — the weight
+   fonts.css loads as GennetyDisplay-ExtraBold. */
 .radar-title {
   margin: 0;
-  font-family: "Space Grotesk", "Inter", sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1.08;
+  font-weight: var(--font-display-weight-display);
+  letter-spacing: var(--font-display-tracking-display);
+  text-wrap: balance;
 }
 
 /* Progress — a single hairline bar. No "X / Y" scoreboard: the point is a calm
@@ -323,10 +328,10 @@ body {
 }
 .radar-done-title {
   margin: 0;
-  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-family: var(--font-display);
   font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-weight: var(--font-display-weight-display);
+  letter-spacing: var(--font-display-tracking-display);
   animation: radar-fade-up 460ms 140ms both;
 }
 .radar-done-body {

@@ -628,6 +628,38 @@ export const PROFILER_ANSWER_WINDOW_MS = 90 * 60 * 1000;
  * batchers, which solve the same problem.
  */
 export const PROFILER_ANSWER_DEBOUNCE_MS = 2500;
+
+/**
+ * Contextual Profiler questions (founder decision 2026-10-04): questions that
+ * open only when something happened — a date got scheduled, a date took place,
+ * an answer aged. They replace the weekly re-asks, so they are deliberately
+ * rare: at most one per batch (only a batch's opening question may be one) and
+ * at most this many per calendar week.
+ */
+export const PROFILER_CONTEXT_WEEKLY_CAP = 2;
+/**
+ * "Fresh topic before the date" asks only while its answer can still reach the
+ * icebreakers, which are written at T-`DATE_ALERT_HOURS`: one hour of slack for
+ * the person to actually answer.
+ */
+export const PROFILER_TOPIC_MIN_LEAD_MS = (DATE_ALERT_HOURS + 1) * 60 * 60 * 1000;
+/** …and no earlier than three days out, or the "fresh" topic is stale by the date. */
+export const PROFILER_TOPIC_MAX_LEAD_MS = 72 * 60 * 60 * 1000;
+/**
+ * "Same format next time?" waits two days after a date — the post-date feedback
+ * prompt owns the first 24 h and the evening itself is not the moment — and
+ * stops asking about a date after three weeks, when it is no longer vivid.
+ */
+export const PROFILER_FORMAT_MIN_AGE_MS = 48 * 60 * 60 * 1000;
+export const PROFILER_FORMAT_MAX_AGE_MS = 21 * 24 * 60 * 60 * 1000;
+/** At most one format question per three weeks, however many dates happened. */
+export const PROFILER_FORMAT_COOLDOWN_MS = 21 * 24 * 60 * 60 * 1000;
+/** "Looks like your format is…" needs this many confirmed dates sharing the leading experience. */
+export const PROFILER_SIGNATURE_MIN_DATES = 2;
+/** Follow-up on the person's own plan ("did you start learning it?") after a month. */
+export const PROFILER_FOLLOWUP_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+/** The same dimension asked again, differently, after two months — the honesty check. */
+export const PROFILER_RECHECK_AFTER_MS = 60 * 24 * 60 * 60 * 1000;
 /**
  * Icebreaker / hint generation weighting (spec §5.3). `priority` weights
  * scale how much a partner's answer is emphasised; `penalty` coefficients

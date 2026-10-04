@@ -80,12 +80,16 @@ describe("boot orb inlined into the shell", () => {
     expect(shellStyle).toContain("@keyframes orbBreath");
   });
 
-  it("reserves the height of the heading and lead the orb is centred with", () => {
-    // `.orb-wrap` centres the whole block, not the orb, and React's block is
-    // orb + h1 + p. Without a spacer the orb would sit ~52px lower in the shell
-    // than in the screen that replaces it, and jump on handover. 72px = the
-    // h1's 36px line + 12px margin + the p's 24px line.
-    expect(shellStyle).toMatch(/height:\s*72px/);
+  it("reserves the height of the heading the orb is centred with", () => {
+    // `.orb-wrap` centres the whole block, not the orb, and the syncing
+    // screen's block is orb + h1 (its lead was removed 2026-10-01). Without a
+    // spacer the orb would sit ~26px lower in the shell than in the screen
+    // that replaces it, and jump on handover. 52px = the h1's fixed 40px line
+    // + its 12px margin.
+    expect(shellStyle).toMatch(/height:\s*52px/);
+    const h1 = rule(CSS, ".orb-wrap h1");
+    expect(decl(h1, "line-height")).toBe("40px");
+    expect(decl(h1, "margin")).toBe("0 0 0.75rem");
   });
 });
 
@@ -115,6 +119,13 @@ describe("first-paint blocking in the shell", () => {
     expect(fallbacks.length).toBe(googleLinks.length);
     for (const link of fallbacks) expect(link).not.toMatch(/media="print"/);
     expect(noscript![1]).toContain("icon_names=");
+    // Same families too, not only the same count: the two copies are edited
+    // by hand, and dropping a family from one (Space Grotesk, 2026-10-01 —
+    // display type is the self-hosted Gennety Display now) must hit both.
+    const hrefs = (links: string[]): string[] =>
+      links.map((link) => /href="([^"]+)"/.exec(link)?.[1] ?? "").sort();
+    expect(hrefs(fallbacks)).toEqual(hrefs(googleLinks));
+    for (const link of [...googleLinks, ...fallbacks]) expect(link).not.toMatch(/Space\+Grotesk/);
   });
 
   it("declares no local stylesheet of its own — Vite injects those, blocking", () => {

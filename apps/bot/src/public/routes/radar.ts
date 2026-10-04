@@ -21,6 +21,10 @@ import { dispatchToChat } from "../../chat-queue.js";
 import { validateInitData } from "../init-data.js";
 import { verifyAccessToken } from "../jwt.js";
 import {
+  typeRadarCalibrated,
+  typeRadarUnavailableReason,
+} from "../../services/type-radar-availability.js";
+import {
   runRadarThinkingThenResume,
   resumeOnboardingAfterRadar,
   patchOnboardingSession,
@@ -175,13 +179,10 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       return;
     }
 
-    // The same two gates the deck applies, in the same order.
-    const unavailableReason =
-      user.age == null || !user.preference
-        ? "profile-not-ready"
-        : !radarBandLive(ageBandFor(user.age))
-          ? "band-not-live"
-          : null;
+    // The same two gates the deck applies, in the same order. Shared with the
+    // profile-gaps read (`services/profile-gaps.ts`), which must agree with
+    // this screen about whether there is anything to fill in.
+    const unavailableReason = typeRadarUnavailableReason(user);
     const completedAt = user.profile?.typeRadarCompletedAt ?? null;
 
     res.json({
@@ -191,7 +192,7 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       // Stamped by a submit AND by the Telegram skip button, so it says "the
       // step is behind them", not "we know their type" — that is `calibrated`.
       ...(completedAt ? { completedAt: completedAt.toISOString() } : {}),
-      calibrated: user.profile?.typePrefTags != null,
+      calibrated: typeRadarCalibrated(user.profile?.typePrefTags),
     });
   });
 

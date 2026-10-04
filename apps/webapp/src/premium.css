@@ -465,14 +465,6 @@ body {
   opacity: 0.85;
 }
 
-.pm-more {
-  margin: 16px 4px 0;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-faint);
-  animation: pm-rise 0.5s ease 0.42s both;
-}
-
 /* ── Pinned action bar ────────────────────────────────────────────────── */
 .pm-action {
   position: relative;
@@ -967,8 +959,7 @@ body {
   .pm-sub,
   .pm-plate,
   .pm-benefit-wrap,
-  .pm-benefit-tile.is-play .icon,
-  .pm-more {
+  .pm-benefit-tile.is-play .icon {
     animation: none !important;
     opacity: 0.55;
     transform: none;

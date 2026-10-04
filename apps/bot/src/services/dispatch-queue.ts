@@ -10,7 +10,7 @@ import { isPermanentTelegramRefusal } from "./bot-blocked.js";
 /**
  * Rate-limited dispatch queue for match pitches.
  *
- * After the weekly batch creates `proposed` Match rows, this queue
+ * After the scheduled batch creates `proposed` Match rows, this queue
  * dispatches AI pitches sequentially with a configurable delay between
  * each message pair to avoid Telegram & OpenAI rate limits (429).
  *

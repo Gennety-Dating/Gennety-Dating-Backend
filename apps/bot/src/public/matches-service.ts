@@ -9,7 +9,7 @@ import {
   type LatLng,
 } from "../services/geo.js";
 import { resolveVenue } from "../services/curated-venue.js";
-import { proxyChatWindow } from "../services/proxy-chat.js";
+import { proxyChatUnreadCount, proxyChatWindow } from "../services/proxy-chat.js";
 import { createVoicePromptSignedUrl } from "../services/storage.js";
 import { MUSIC_TRACK_SELECT, serializeMusicTrack } from "../services/music/profile-music.js";
 import type { MusicTrack } from "../services/music/spotify.js";
@@ -167,6 +167,17 @@ export interface SerializedMatch {
   proxyChatOpensAt: string | null;
   proxyChatClosesAt: string | null;
   /**
+   * How many of the partner's proxy-chat lines arrived after the caller last
+   * opened the chat — the badge on the app's chat entry. Null exactly when
+   * `proxyChatOpensAt` is (no chat for this match), and also when the count
+   * could not be read this time: a badge is not worth failing the poll the
+   * date runs on, so the entry itself keys on `proxyChatOpensAt`, never here.
+   *
+   * Computing it never marks anything read — see `proxyChatUnreadCount`. Only
+   * `GET /v1/matches/{id}/chat` moves the caller's cursor.
+   */
+  proxyChatUnreadCount: number | null;
+  /**
    * 24h proposal-response deadline as an ISO timestamp. Populated only
    * for `status === 'proposed'` matches that have been dispatched —
    * `null` everywhere else (already accepted, scheduled, expired, etc.).
@@ -301,12 +312,15 @@ async function notifyParticipant(
     user.telegramId > 0n &&
     (user.platform === "telegram" || user.platform === "both")
   ) {
-    await api.sendMessage(Number(user.telegramId), text).catch(() => {});
+    await api
+      .sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" })
+      .catch(() => {});
   }
   if (user.platform === "mobile" || user.platform === "both") {
     await sendPushToUser(user.id, {
       title: push.title,
-      body: text,
+      // A lock screen renders no Markdown — drop the bold markers.
+      body: text.replace(/[*_`]/g, ""),
       data: { type: push.type, matchId: push.matchId },
     }).catch(() => {});
   }
@@ -375,6 +389,11 @@ export async function getCurrentMatchForUser(
       paidForPartnerByA: true,
       paidForPartnerByB: true,
       partnerPaidSeenAt: true,
+      // For the proxy-chat unread badge — read here, written only by opening
+      // the chat (`readProxyChat`).
+      proxyOpenedAt: true,
+      proxyReadAtA: true,
+      proxyReadAtB: true,
       // `profile.timeZone` is read for the CALLER's side only (see `timeZone`
       // below); it is selected on both because which side the caller is on is
       // not known until the row is picked.
@@ -522,6 +541,8 @@ export async function getCurrentMatchForUser(
     safetyBriefAck: side === "A" ? match.safetyAckA : match.safetyAckB,
     proxyChatOpensAt: proxyWindow?.opensAt.toISOString() ?? null,
     proxyChatClosesAt: proxyWindow?.closesAt.toISOString() ?? null,
+    // Null exactly where the window is, so "no chat" reads the same in both.
+    proxyChatUnreadCount: proxyWindow ? await proxyUnreadBestEffort(match, userId) : null,
     proposalDeadlineAt,
     partnerVoicePrompt: await serializePartnerVoicePrompt(partner.voicePrompt),
     ...(env.PROFILE_MUSIC_ENABLED
@@ -546,6 +567,23 @@ async function partnerPlacesBestEffort(partnerId: string): Promise<PartnerPlace[
   } catch (err) {
     console.error("[frequent-places] partner block failed for", partnerId, err);
     return [];
+  }
+}
+
+/**
+ * The proxy-chat unread badge, or null. Best-effort for the same reason as the
+ * places above: `/current` is the screen the date runs on and a badge is a
+ * garnish on it. Null rather than 0 on failure — 0 would claim "nothing new".
+ */
+async function proxyUnreadBestEffort(
+  match: Parameters<typeof proxyChatUnreadCount>[0],
+  userId: string,
+): Promise<number | null> {
+  try {
+    return await proxyChatUnreadCount(match, userId, new Date());
+  } catch (err) {
+    console.error("[proxy-chat] unread count failed for match", match.id, err);
+    return null;
   }
 }
 

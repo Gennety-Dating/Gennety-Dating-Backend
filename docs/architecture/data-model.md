@@ -43,7 +43,7 @@ Columns (≈ 35; grouped by purpose):
 | Telegram UI | `statusMessageId` (pinned banner) |
 | Push (mobile) | `pushToken`, `pushPlatform` |
 | Verification | `biometricConsentAt` / `biometricConsentVersion` (explicit Art. 9(2)(a) consent, captured on its own screen; `beginLivenessCheck` refuses to mint a session without it, so the gate is server-side and both clients are bound by it), `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). `personaInquiryId` keeps its historical name but now holds the AWS Face Liveness session id (the provider swap was deliberately schema-free); it stays the `(session, faceMatchedAt)` idempotency marker. `pendingLivenessSessionId` is deliberately a SEPARATE column: it holds the session currently in flight (written at `/init`, cleared at a terminal outcome) purely so `completeLivenessCheck` can refuse a client-supplied session id the user did not mint. It cannot be folded into `personaInquiryId`, which means "the session that produced the stored reference selfie" and is what `triggerVerificationRerun` reruns against — a not-yet-completed session must never land there. Production-like startup fails closed unless liveness is enabled and configured (AWS credentials + `LIVENESS_STS_ROLE_ARN`), verification is mandatory, and Rekognition/profile-media validation are enabled — there is no sandbox escape hatch any more. |
-| Location features | `scratchMapOptIn` (default **false** — authorises collecting Scratch Map tiles; its own column because a consent that authorises NEW collection is never inferred from a broader tick) and `frequentPlacesOptIn` (default **true**, founder decision 2026-09-11 — the one deliberate exception to that rule; see `user_place_visits`). Both stop collection when switched off and keep what is already stored. |
+| Location features | `scratchMapOptIn` (RETIRED 2026-10-02 with the Scratch Map — no longer read or written, drop pending) and `frequentPlacesOptIn` (default **true**, founder decision 2026-09-11 — a deliberate exception to the rule that a consent authorising NEW collection is never inferred from a broader tick; see `user_place_visits`). It stops collection when switched off and keeps what is already stored. |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. `ticketDiscountSource` names WHICH mechanism filled that one slot — today only `famine` (the `event_feedback` grant went with Launch Events, 2026-09-16) — analytics only, never read by pricing. |
 | Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. | `premiumReminder3dAt` / `premiumReminder1dAt` are the expiry-reminder once-markers (PRODUCT_SPEC §3.8): the 3-day and 24-hour DMs are sent at most once per PAID PERIOD, so every path that advances `premiumUntil` clears both — otherwise a renewing user is warned once in their life and every later period lapses in silence. Set for BOTH reminder cohorts (PRODUCT_SPEC §3.8): a non-auto-renewing entitlement whose access really is ending, AND a live recurring Telegram Stars subscription, which is warned that the coming charge is taken from the Star balance with no card fallback. (Until 2026-08-24 this was non-renewing only, which left the recurring cohort — the one that can actually lose a subscription to an empty balance — with no warning at all.) A recurring **App Store** subscription is still never marked: Apple runs its own billing retry and there is no Star balance to top up, so neither message is true for that rail. One pair of markers serves both cohorts because they are mutually exclusive at any instant (`premiumAutoRenew` true vs false). Swept by `workers/premium-expiry-reminder.ts` off `@@index([premiumUntil])`, which exists because that hourly sweep asks one question of the whole table and the column is null on most rows. **`activateOrExtendPremium` may only ever EXTEND `premiumUntil`** (a `max()` against the stored value): a monthly subscriber who buys a 3/6-month package holds an expiry months out, and their next 30-day renewal carries an earlier one — writing it through would delete the package they just paid for. `revokePremium` stays the one path allowed to shorten it.
@@ -473,6 +473,33 @@ transcript chip. The agent's grounding is resolved from the live inbox and
 announcement rows at turn time (`services/chat-context.ts`), so the snapshot
 outliving the inbox row only means the chip stays and the agent has less to add.
 
+`session_id` (uuid, nullable, 2026-09-30) → `chat_sessions`, cascade; index
+`(session_id, created_at)`. Every writer sets it (the chat agent, the Telegram
+photo flow); nullable only for safety. The migration that added it
+(`20260930120000_chat_sessions`) put every older row into a chat by the
+six-hour rule.
+
+### `chat_sessions`
+
+One chat with the app's agent (decision journal 2026-09-30 — ChatGPT-style
+chats, reversing the one-thread index of 2026-09-04). The agent's context is
+one chat's rows; other chats reach it through `search_past_chats` /
+`read_past_chat` (`services/chat-past-tools.ts`).
+
+| Field | Notes |
+|---|---|
+| `id` | UUID minted by the CLIENT for a new chat (first turn creates it, `ON CONFLICT DO NOTHING`); server-side `uuid()` for the legacy path, `gen_random_uuid()` in the backfill |
+| `userId` | → `users`, cascade (the chats go with the account) |
+| `title`, `titleByUser`, `titledAtCount` | Model-written (`MODELS.fast`, account language, 2–6 words, never the opener) or hand-set; `titleByUser` freezes it; `titledAtCount` = non-system message count at the last auto-titling (refresh after +6) |
+| `summary`, `summaryEmbedding`, `summarizedAtCount` | English summary for retrieval + `vector(1536)` of `title + summary` (`text-embedding-3-small`, written by raw SQL — `Unsupported`), and the count it was written at: stale exactly when the chat has grown since |
+| `createdAt` | First message |
+| `updatedAt` | **Newest message**, set by the turn that wrote it — NOT `@updatedAt`, so a rename or a new title never moves a chat to the top of the list |
+
+Index `(user_id, updated_at)` for the list, the legacy six-hour lookup and the
+digest scan. No vector index: every search is scoped to one person's chats.
+Writers: `services/chat-sessions.ts` (claim, legacy rule, touch, rename) and
+`services/chat-session-digest.ts` (title/summary/embedding, CAS on the counts).
+
 ### `announcements`
 
 Rich in-app announcements written in the admin dashboard
@@ -749,8 +776,7 @@ minutes was read from two foreground fixes. **No coordinate, no time of day, no
 duration** — the row's shape is the privacy design. Unique
 `(userId, placeId, visitDay)`, so a long stay writes once (`createMany …
 skipDuplicates`); index `(visitDay)` for the 180-day sweep in
-`workers/retention.ts`. `placeId` has no FK, the rule
-`user_scratch_maps.discoveredVenues` follows: retiring a catalog row never
+`workers/retention.ts`. `placeId` has no FK: retiring a catalog row never
 rewrites anyone's history, the read just stops showing a place it cannot find.
 Attended dates count as visits but are read from `matches` at query time, not
 copied here. **No summary table**: at day resolution this log already is the
@@ -1100,10 +1126,13 @@ a flag of its own — a nudge into a disabled feed has nothing to deliver.
 One row per (user, Profiler question) — `questionId`, `priority`
 (`ProfilerPriority`), `answerText`, `skipped`, `skipReturned`, `cycleId`;
 `@@unique([userId, questionId])`, `onDelete: Cascade` from `users`. `cycleId`
-carries the drop cycle the row was last written in, which is also what makes a
-**situational** question (`refresh: "cycle"` in the bank) eligible to be asked
-again next cycle — its new answer overwrites the row, since only the current
-snapshot is useful icebreaker fuel. Backs the
+carries the calendar week the row was last written in — the cycle a skipped
+question returns in, and the week the contextual-question cap counts.
+`questionId` is either a bank id (`f_date_spots`) or a **contextual instance**
+(`f_ctx:topic:<matchId>`, `<f|m>_ctx:<family>:<key>` — founder decision
+2026-10-04, §Phase 1b): the unique key makes "asked already" a row of any kind,
+and the id alone rebuilds the question, so no extra table or column exists for
+them. `answeredAt` ages the follow-up and recheck triggers. Backs the
 Phase 1b Profiler (see [PRODUCT_SPEC.md](../product/product-spec.md) §Phase 1b): timed
 post-onboarding Q&A that is the **primary source** for icebreakers
 (`date-lifecycle.ts`) and wingman hints (`wingman-hint.ts`).
@@ -1222,30 +1251,14 @@ hours BEFORE the date to someone still deciding what to wear; this one is
 unlocked by the pair actually meeting and is written for a conversation already
 under way. The earlier one is untouched.
 
-### `user_scratch_maps`
+### `user_scratch_maps` — RETIRED 2026-10-02
 
-One row per user, created lazily on their first recorded tile (PRODUCT_SPEC
-§6.4). Columns: `userId` (unique, cascade), `exploredTiles` (`String[]`),
-`exploredPercent`, `discoveredVenues` (`String[]`).
-
-**Tiles, not coordinates, and that is the privacy design rather than a storage
-choice.** `exploredTiles` holds geohash precision 6 — roughly 1.2 km × 0.6 km —
-so the column can say "they have been around Podil" and can never say which
-building. Every other geo column in this schema is per-purpose and per-match
-(`Match.vibeLat*` is a departure pin for ONE date); this is the first that
-accumulates, which is why the shape of what is stored has to carry the
-guarantee rather than a rule someone has to remember.
-
-Written only when `User.scratchMapOptIn` is true, and only from a foreground
-ping (the user has the map open) or a verified Date Bump. Nothing writes from
-the background — there is no background-location entitlement in the iOS app and
-no such permission requested in the Mini App, so that promise is structural.
-
-`exploredPercent` is materialized rather than derived because the client draws
-it on every frame and the denominator is a per-market constant the database
-does not know. `discoveredVenues` holds `CuratedVenue.id` values free-form (no
-FK), so deleting a venue from the catalog never erases someone's history of
-having been there — the same rule `TicketLedger.matchId` already follows.
+Was the Scratch Map's city fog: `exploredTiles` (geohash-6), `exploredPercent`,
+`discoveredVenues`. **No longer read or written** — the fog was retired as a
+background tracker with no date in it (living-canvas.md §6.5), and the date map
+that replaced it is derived from `matches` at query time. The table and
+`users.scratch_map_opt_in` stay until the founder approves the destructive
+drop; they still cascade with the user.
 
 ### Date Radar presence (in memory, no table)
 
@@ -1263,40 +1276,17 @@ and something to revisit the day that stops being true. An entry also expires a
 few minutes after its last ping, so a phone that has gone quiet reads as
 `unknown` rather than as a stale ETA.
 
-### The Scratch Map and the Campus Radar
+### The date map and the Campus Radar
 
-`services/scratch-map.ts` owns the tiles; `services/campus-radar.ts` owns the
-Bonus Campus Drop. They share a section because they are the two halves of
-§Scratch Map / §Campus Radar and nothing else — one is per-person and
-per-neighbourhood, the other per-university.
+`services/date-map.ts` owns the date map; `services/campus-radar.ts` owns the
+Bonus Campus Drop.
 
-**The scratch map's privacy guarantee is `packages/shared/src/geohash.ts`, not
-a rule at the call sites.** A tile is precision 6 (~1.2 km × 0.61 km), so
-nothing narrower than a neighbourhood is REPRESENTABLE. The module deliberately
-exposes no decode-to-a-point: handing callers a centre invites treating a tile
-as a location, which is the exact conversion it exists to prevent. `tileBounds`
-returns the box, which is what a map layer and a tile count both actually need.
-
-**The denominator is a constant of the city.** `tilesInMarket` walks the
-market's circle once per process and counts the tiles whose centre falls inside
-it — 2915 for Kyiv, which is π·21² km² to within a percent. Deriving it from
-tiles anyone has visited would make everyone's percentage move whenever a
-stranger walked somewhere new, and a person who explored nothing would watch
-their own number fall.
-
-**Two writers, and the second is the interesting one.** A foreground ping is
-the ordinary path. A verified Date Bump also writes — the venue and its tile,
-for both sides — and it is allowed to for the same reason the Bump may write
-`dateAttended*` while the T+24h evidence classifier may not: it is not a guess
-about where someone was. It rides the bump's success path fire-and-forget, and
-swallows its own errors, because a souvenir must never cost someone the date
-their reliability and bonus ticket depend on.
-
-**`discoveredVenues` holds Google Place ids, not `CuratedVenue.id`.** The
-catalog has no uniqueness constraint and the seeder writes one row per
-`universityDomain` — Kyiv holds ~538 rows for ~127 real venues — so a row id
-would give two people who sat in the same café different histories. Every other
-reader in the product already dedupes by `placeId`.
+**The date map has no table.** A place is on it because a `matches` row says
+this side attended a held date there (`dateAttendedA/B`). Grouped by Google
+place id (by name on a legacy row with none) — the catalog has no uniqueness
+constraint and holds one row per `universityDomain`, so a row id would give two
+people who sat in the same café different histories. The only coordinate is the
+venue's, and only where `venueLat/Lng` is the venue rather than a midpoint.
 
 **The Campus Radar needs no baseline table.** "Verified inside the window" IS
 the growth, and it is a `verifiedAt` range on rows we already keep; a stored
@@ -1311,7 +1301,7 @@ takes a restriction, never an exemption: the ids are handed to
 ordinary eligibility is still excluded. A second pairing implementation would
 be a second definition of what a good match is, and the two would diverge
 silently. It carries a pre-batch blackout for exactly the reason Rematch does —
-a single-cohort run can take a candidate the globally-optimal Thursday batch
+a single-cohort run can take a candidate the globally-optimal scheduled batch
 needed — and it deliberately leaves starvation counters alone: incrementing
 them would punish a lively campus, resetting them would hand one a priority
 advantage in the next batch.
@@ -1459,7 +1449,7 @@ qualification.
 ### `founder_reports`
 
 Snapshot of a weekly founder matches report (feature-flagged ops feed, gated by
-`FOUNDER_NOTIFY_ENABLED`). Built after the Thursday batch by
+`FOUNDER_NOTIFY_ENABLED`). Built after the scheduled batch by
 `notifyFounderWeeklyMatches` (`services/founder-notify.ts`) and read by the
 tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
 (unique crypto-random URL token = the page's sole authorization, never logged),

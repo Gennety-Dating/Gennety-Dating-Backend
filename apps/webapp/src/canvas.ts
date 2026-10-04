@@ -10,13 +10,8 @@
  * The shake is NOT here any more (decision 2026-09-11). The Date Terminal
  * (`date-terminal.html`) owns Contact Sync, and the radar and bump states hand
  * the user to it, so the Mini App has one bump surface rather than two that
- * could drift; it reuses `canvas/shake.ts` and `canvas/api.ts` from here, and
- * links back to this map.
- *
- * The Scratch Map's fog is here now that it has an endpoint to fill it
- * (§Scratch Map). It is drawn only once tiles have actually arrived: a
- * fully-fogged map with no data hides the city the canvas exists to show and
- * looks exactly like a bug.
+ * could drift; it reuses `canvas/api.ts` from here, and links back to this
+ * map. (Its gesture is a hold of both phones since 2026-09-29.)
  *
  * The transit dock is wired here as well (decision 2026-09-11): built once,
  * fed from `tick`, summoned by the venue pin and put away by a tap on the map.
@@ -43,18 +38,14 @@ import {
 import {
   CanvasApiError,
   fetchDateState,
-  fetchScratchMap,
   postProximity,
-  postScratchPing,
-  putScratchOptIn,
   type DateStateResponse,
-  type ScratchState,
 } from "./canvas/api.js";
-import { fogPath, formatExplored } from "./canvas/fog.js";
 import { createTransitDock } from "./canvas/transit-dock.js";
 import { tripCamera } from "./canvas/trip-camera.js";
 import type { DockPresence } from "./canvas/transit.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { apiBase } from "./api.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
@@ -75,6 +66,7 @@ const GEO_OPTIONS: PositionOptions = {
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 /**
  * Fullscreen, like every other Mini App here (change of 2026-09-12).
@@ -114,9 +106,6 @@ const el = {
   list: document.getElementById("sheet-list"),
   action: document.getElementById("sheet-action") as HTMLButtonElement | null,
   sheet: document.getElementById("sheet"),
-  scratch: document.getElementById("scratch"),
-  scratchCopy: document.getElementById("scratch-copy"),
-  scratchToggle: document.getElementById("scratch-toggle") as HTMLButtonElement | null,
 };
 
 let map: MapLibreMap | null = null;
@@ -150,10 +139,6 @@ let radarFailures = 0;
  * word on the sheet is only as fresh as the last good read.
  */
 let connectionTrouble: ConnectionTrouble | null = null;
-let scratch: ScratchState | null = null;
-let scratchBusy = false;
-let scratchError: string | null = null;
-let fogLayer: SVGSVGElement | null = null;
 
 /**
  * The transit dock (decision 2026-09-11): Uber and the phone's maps app on the
@@ -245,9 +230,7 @@ function initMap(): void {
       center: [KYIV[1], KYIV[0]],
       zoom: MAP_ZOOM,
       maxZoom: 20,
-      // The fog is drawn in container pixels against a north-up projection, so
-      // a rotated or pitched map would slide the holes off the streets they
-      // belong to. Both gestures are disabled rather than compensated for.
+      // The map stays north-up: rotate and pitch gestures are disabled.
       dragRotate: false,
       pitchWithRotate: false,
       attributionControl: false,
@@ -271,13 +254,7 @@ function initMap(): void {
   const kick = (): void => {
     sizeMap();
     map?.resize();
-    renderFog();
   };
-  // The veil is drawn in container pixels, so every pan and zoom moves it.
-  // `move`/`zoom` rather than their `*end` twins: waiting for the gesture to
-  // finish would leave the holes visibly lagging the city under them.
-  map.on?.("move", renderFog);
-  map.on?.("zoom", renderFog);
   // The user's own pan or pinch takes the camera back from the trip: from then
   // on a change in the dock's height moves the padding only, never the view
   // they chose. Only gestures carry `originalEvent`; the camera's own eases
@@ -542,81 +519,6 @@ function dressPin(presence: DockPresence): void {
 }
 
 // ---------------------------------------------------------------------------
-// Fog of war
-// ---------------------------------------------------------------------------
-
-/**
- * Redraw the veil.
- *
- * An SVG overlay rather than a map layer: the whole thing is ONE path with
- * one hole per tile, and even-odd fill cuts them out in a single composite.
- * A layer of N rectangles would seam visibly where two uncovered tiles touch,
- * which is the common case — people walk through adjacent tiles.
- */
-function renderFog(): void {
-  if (!map || !el.map) return;
-  const tiles = scratch?.exploredTiles ?? [];
-
-  // Container pixels, which is what `map.project` returns and what the veil is
-  // positioned in. Deliberately not the WebGL canvas's own width/height —
-  // those are device pixels and would be 2–3x too large on a phone.
-  const width = el.map.clientWidth;
-  const height = el.map.clientHeight;
-  const path = fogPath(tiles, {
-    width,
-    height,
-    project: (lat, lng) => map!.project([lng, lat]),
-  });
-
-  if (!path) {
-    fogLayer?.remove();
-    fogLayer = null;
-    return;
-  }
-
-  if (!fogLayer) {
-    fogLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    fogLayer.setAttribute("class", "fog");
-    fogLayer.setAttribute("aria-hidden", "true");
-    el.map.appendChild(fogLayer);
-  }
-  fogLayer.setAttribute("width", String(width));
-  fogLayer.setAttribute("height", String(height));
-  fogLayer.innerHTML =
-    `<path d="${path}" fill-rule="evenodd" class="fog-veil" />`;
-}
-
-async function loadScratchMap(): Promise<void> {
-  try {
-    scratch = await fetchScratchMap(initData);
-    renderFog();
-  } catch {
-    // No fog beats wrong fog: without the tiles the map is simply the map.
-  }
-}
-
-async function pingScratch(): Promise<void> {
-  if (!scratch?.optIn) return;
-  const here = await currentPosition();
-  if (!here) return;
-  try {
-    const res = await postScratchPing(initData, here);
-    scratch = res;
-    // Only a ping that actually uncovered ground is worth redrawing for, and
-    // only that one is worth a haptic: the map does not celebrate standing
-    // still.
-    if (res.uncovered) {
-      haptic("light");
-      renderFog();
-      render();
-    }
-  } catch {
-    // Opted out mid-session, or outside the market. Neither is an error the
-    // screen should shout about.
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Sheet
 // ---------------------------------------------------------------------------
 
@@ -640,11 +542,6 @@ function render(): void {
     // sides' halves and the client is not told which side it is, so it could
     // only guess. `/v1/date/state` resolves the side on the server.
     deck: match?.deck ?? [],
-    // Only once something has actually been uncovered: "0%" on a fresh
-    // account is a feature announcing that it has nothing to show.
-    ...(scratch?.optIn && scratch.exploredPercent > 0
-      ? { exploredLabel: formatExplored(scratch.exploredPercent) }
-      : {}),
     radar,
   });
 
@@ -671,70 +568,11 @@ function render(): void {
   el.action.hidden = view.action === null;
   el.action.textContent = view.actionLabel ?? "";
   el.action.dataset.action = view.action ?? "";
-
-  renderScratchToggle();
 }
 
 /** The note-line sentence for a connection failure — see `connectionTroubleFor`. */
 function troubleText(trouble: ConnectionTrouble): string {
   return trouble === "reopen" ? s.reopenFromChat : s.offline;
-}
-
-/**
- * The Scratch Map's on/off control.
- *
- * It exists because for a while everything behind it did and this did not:
- * the endpoint, the client call, the fog layer, the percentage and the copy
- * were all built while `putScratchOptIn` had no caller anywhere, so the
- * feature could not be switched on by any user on any surface.
- *
- * Only in IDLE_EXPLORING, which is exactly where `pingScratch` runs — a
- * consent control belongs in the state where the collection it authorises
- * actually happens, not on a screen that is about a date. The "N% of Kyiv"
- * readout is the sheet's own note and is not repeated here.
- */
-function renderScratchToggle(): void {
-  const { scratch: box, scratchCopy: copy, scratchToggle: toggle } = el;
-  if (!box || !copy || !toggle) return;
-
-  // `null` means the state has not loaded yet — offering a consent before
-  // knowing whether it was already given would flash the wrong control.
-  const show = latest?.state === "IDLE_EXPLORING" && scratch !== null;
-  box.hidden = !show;
-  if (!show || !scratch) return;
-
-  const on = scratch.optIn;
-  // The copy is the ask, so it belongs to the off state. Once it is on, the
-  // sheet's own note already says what it bought.
-  copy.textContent = scratchError ?? (on ? "" : s.scratchOffer);
-  copy.hidden = !copy.textContent;
-  toggle.textContent = on ? s.scratchDisable : s.scratchEnable;
-  toggle.dataset.on = on ? "1" : "0";
-  toggle.disabled = scratchBusy;
-}
-
-async function toggleScratch(): Promise<void> {
-  if (!scratch || scratchBusy) return;
-  scratchBusy = true;
-  scratchError = null;
-  renderScratchToggle();
-  const next = !scratch.optIn;
-  try {
-    scratch = await putScratchOptIn(initData, next);
-    haptic(next ? "success" : "light");
-    // Turning it ON should show something immediately rather than waiting out
-    // the idle poll, which is a minute away.
-    if (next) await pingScratch();
-    render();
-  } catch {
-    // The write IS the consent, so a failure must not leave a control that
-    // reads as switched.
-    scratchError = s.scratchFailed;
-    haptic("error");
-  } finally {
-    scratchBusy = false;
-    renderScratchToggle();
-  }
 }
 
 el.action?.addEventListener("click", () => {
@@ -749,15 +587,13 @@ el.action?.addEventListener("click", () => {
   if (action === "terminal") openTerminal();
 });
 
-el.scratchToggle?.addEventListener("click", () => void toggleScratch());
-
 // ---------------------------------------------------------------------------
 // Date Terminal
 // ---------------------------------------------------------------------------
 
 /**
- * Hand the user to the Date Terminal — the page that owns the shake since
- * 2026-09-11. Same origin, so a plain navigation keeps the Mini App open, and
+ * Hand the user to the Date Terminal — the page that owns the bump gesture
+ * since 2026-09-11 (a hold since 2026-09-29). Same origin, so a plain navigation keeps the Mini App open, and
  * the terminal carries a link back to this map.
  */
 function openTerminal(): void {
@@ -851,10 +687,6 @@ async function tick(): Promise<void> {
     render();
     dismissBoot();
 
-    // The scratch map fills while the canvas is being used AS a map — the
-    // states where the screen is about a date have something better to do with
-    // the user's attention and their battery.
-    if (latest.state === "IDLE_EXPLORING") void pingScratch();
     if (latest.state === "DATE_RADAR_ACTIVE") void pingRadar();
 
     schedule(pollIntervalFor(latest.state));
@@ -874,5 +706,4 @@ async function tick(): Promise<void> {
 
 window.setTimeout(dismissBoot, BOOT_REVEAL_MAX_MS);
 initMap();
-void loadScratchMap();
 void tick();

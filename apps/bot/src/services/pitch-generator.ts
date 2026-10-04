@@ -309,9 +309,9 @@ function localFallbackSchedulingProposal(input: SchedulingProposalInput): string
 
   switch (input.language) {
     case "ru":
-      return `Мы подобрали несколько вариантов времени для вашей встречи с ${input.otherFirstName}: ${slots}. Какой вам подходит?`;
+      return `Подобрал несколько вариантов времени для встречи с ${input.otherFirstName}: ${slots}. Какой тебе подходит?`;
     case "uk":
-      return `Ми підібрали кілька варіантів часу для вашої зустрічі з ${input.otherFirstName}: ${slots}. Який вам підходить?`;
+      return `Підібрав кілька варіантів часу для зустрічі з ${input.otherFirstName}: ${slots}. Який тобі підходить?`;
     case "de":
       return `Wir haben ein paar Zeiten für dein Date mit ${input.otherFirstName} gefunden: ${slots}. Welche passt dir?`;
     case "pl":
@@ -373,9 +373,9 @@ function localFallbackVenueMessage(input: VenueMessageInput): string {
   const venue = `${input.venueName} — ${input.venueAddress}`;
   switch (input.language) {
     case "ru":
-      return `Всё готово! Ваше свидание с ${input.otherFirstName} состоится в ${venue}. Удачи!`;
+      return `Всё готово! Твоё свидание с ${input.otherFirstName} — в ${venue}. Удачи!`;
     case "uk":
-      return `Все готово! Ваше побачення з ${input.otherFirstName} відбудеться в ${venue}. Удачі!`;
+      return `Усе готово! Твоє побачення з ${input.otherFirstName} — у ${venue}. Удачі!`;
     case "de":
       return `Alles klar! Dein Date mit ${input.otherFirstName} findet bei ${venue} statt. Viel Spaß!`;
     case "pl":

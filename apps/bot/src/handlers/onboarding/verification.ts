@@ -234,7 +234,9 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
     user.verificationStatus === "rejected" ||
     user.verificationStatus === "pending_review"
   ) {
-    await ctx.reply(terminalVerificationMessage(lang, user.verificationStatus));
+    await ctx.reply(terminalVerificationMessage(lang, user.verificationStatus), {
+      parse_mode: "Markdown",
+    });
     return;
   }
 
@@ -365,6 +367,7 @@ export async function sendVerificationGateNotice(
         photoRedoFirst: true,
       });
       await api.sendMessage(chatId, withPrefix(t(lang, "verifyOutcomeRejected")), {
+        parse_mode: "Markdown",
         ...(keyboard ? { reply_markup: keyboard } : {}),
       });
       return true;

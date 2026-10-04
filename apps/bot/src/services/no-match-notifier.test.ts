@@ -50,6 +50,7 @@ import {
   sendNoMatchNotices,
   getDropDate,
   NO_MATCH_PUSH_TYPE,
+  leadBoldEntity,
 } from "./no-match-notifier.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
@@ -369,13 +370,13 @@ describe("sendNoMatchNotices", () => {
 
     const [chatId, body] = api.sendMessage.mock.calls[0]!;
     expect(chatId).toBe(111);
-    expect(body).toMatch(/quality bar/);
+    expect(body).toMatch(/No match this week/);
     // Streamed as a short 2-chunk reveal: a "thinking" lead beat, then the
-    // full empathetic body (no `parse_mode` — the templates carry no Markdown).
+    // full empathetic body (no `parse_mode` — the bold heading rides as an entity).
     const chunks = stream.mock.calls[0]![2] as string[];
     expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toMatch(/pool/i);
-    expect(chunks[1]).toMatch(/quality bar/);
+    expect(chunks[0]).toMatch(/candidates/i);
+    expect(chunks[1]).toMatch(/No match this week/);
 
     expect(mNoticeCreate).toHaveBeenCalledWith({
       data: { userId: "u1", tier: 1, dropDate: getDropDate(NOW) },
@@ -412,7 +413,7 @@ describe("sendNoMatchNotices", () => {
     expect(result.tier1).toBe(0);
 
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/второй раз подряд/i);
+    expect(body).toMatch(/Вторую неделю подряд/i);
 
     expect(mNoticeCreate).toHaveBeenCalledWith({
       data: { userId: "u1", tier: 2, dropDate: getDropDate(NOW) },
@@ -442,8 +443,8 @@ describe("sendNoMatchNotices", () => {
 
     const [, body1] = api.sendMessage.mock.calls[0]!;
     const [, body2] = api.sendMessage.mock.calls[1]!;
-    expect(body1).toMatch(/Знову чесно/);
-    expect(body2).toMatch(/honest update/);
+    expect(body1).toMatch(/Поки без метчу/);
+    expect(body2).toMatch(/Still no match/);
   });
 
   describe("D10: pool-exhaustion pause", () => {
@@ -471,7 +472,7 @@ describe("sendNoMatchNotices", () => {
       // Pause is a plain send (states a fact), not the rich empathy stream.
       expect(api.sendMessage).toHaveBeenCalledTimes(1);
       const [, body] = api.sendMessage.mock.calls[0]!;
-      expect(body).toMatch(/pausing your search/);
+      expect(body).toMatch(/Pausing your search/);
 
       // The CAS + the profile marker stamp both fired — and both ran against
       // the transaction client, not the bare prisma client (NOMATCH-2).
@@ -811,7 +812,7 @@ describe("sendNoMatchNotices", () => {
     const [chatId, body, options] = api.sendMessage.mock.calls[0]!;
     expect(chatId).toBe(111);
     expect(body).toMatch(/Berlin/);
-    expect(body).not.toMatch(/quality bar/);
+    expect(body).not.toMatch(/No match this week/);
     expect(JSON.stringify(options.reply_markup)).toContain("menu:city:switch");
     // No famine discount for a drop they were never in.
     expect(mGrant).not.toHaveBeenCalled();
@@ -839,7 +840,7 @@ describe("sendNoMatchNotices", () => {
 
     expect(stream).toHaveBeenCalled();
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/quality bar/);
+    expect(body).toMatch(/No match this week/);
   });
 
   it("defaults to English when the user has no language set", async () => {
@@ -854,7 +855,7 @@ describe("sendNoMatchNotices", () => {
     await sendNoMatchNotices(api as never, NOW, 0, stream as never);
 
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/quality bar/);
+    expect(body).toMatch(/No match this week/);
   });
 
   /**
@@ -1146,5 +1147,17 @@ describe("sendNoMatchNotices", () => {
       expect(mRematch).toHaveBeenCalledTimes(1);
       expect(mRematch.mock.calls[0]![1]).toBe("tg");
     });
+  });
+});
+
+describe("leadBoldEntity", () => {
+  it("lifts a leading *heading* into a bold entity on plain text", () => {
+    const out = leadBoldEntity("*Нет мэтча* 🤍\n\nТекст");
+    expect(out.text).toBe("Нет мэтча 🤍\n\nТекст");
+    expect(out.entities).toEqual([{ type: "bold", offset: 0, length: "Нет мэтча".length }]);
+  });
+
+  it("leaves text without a leading heading untouched", () => {
+    expect(leadBoldEntity("Plain text")).toEqual({ text: "Plain text" });
   });
 });

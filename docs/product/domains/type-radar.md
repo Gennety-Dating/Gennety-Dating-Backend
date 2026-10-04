@@ -105,7 +105,7 @@ Four things about it are load-bearing:
 
 - **It is an explicit labor illusion** (founder decision, 2026-07-27). Nothing
   is being scanned: the verdicts were persisted before the sequence starts, and
-  the matching it narrates does not run until the Thursday batch — days later,
+  the matching it narrates does not run until the next scheduled drop,
   after photos and liveness. The copy ships as specified anyway; the accepted
   risk is a user reading "scanning profiles 187" as an imminent match.
 - **Submit only, never Skip.** A skipper rated nothing, so "checking your

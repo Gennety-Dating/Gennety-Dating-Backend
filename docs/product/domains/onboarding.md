@@ -592,7 +592,7 @@
   labels: the other two dimensions people reach for here are already measured
   (tempo and process-vs-person are the vibe axes, §3.2), and the ones usually
   bundled with the question — children, marriage — belong to a different
-  product, since this one's horizon is one date on Thursday. Four points and not
+  product, since this one's horizon is one upcoming date. Four points and not
   three or six: at three the middle swallows everyone who is unsure, and past
   four people stop distinguishing neighbours, so the answer becomes noise.
 
@@ -958,6 +958,12 @@ launched market — the conditional menu row and the honest weekly DM in §2.1 /
 Profile synthesis uses questionnaire answers and structured intake exclusively.
 Finalization builds `psychologicalSummary` and its embedding from hobbies, partner
 preferences and the two vibe answers. Type Radar precedes photo collection.
+That text is a machine stub ("Profile source: onboarding answers\nHobbies/interests:
+…\nPartner preferences: …") and every finalize OVERWRITES the column with it — yet
+the same column is the person's "About me" on both clients (iOS `ProfileView`,
+Telegram «Мой профиль» / `edit_bio`), so until they rewrite it the stub is what they
+see as their own bio (found 2026-10-01, not fixed). `GET /v1/me/profile-gaps` counts
+the stub as an empty `about`.
 
 Hard rules enforced by the collector:
 - Required fields (`firstName`, `age`, `gender`, `preference`,
@@ -969,6 +975,26 @@ Hard rules enforced by the collector:
 - Real user text is distinct from `resume` and
   `photos_updated`; synthetic events, assistant text, summaries, and tool
   arguments are never mined as profile facts.
+- **The basics are screens on both apps, never chat answers (2026-09-30).**
+  Name, age, gender, preference, height and relationship intent are saved
+  from their own screens — the Mini App through
+  `POST /v1/telegram-onboarding/profile`, iOS through its JWT twin
+  `POST /v1/onboarding/basics` (same body, same `applyOnboardingFacts` path,
+  all-or-nothing 400 `{error, field}`). Going back on a screen is a re-save:
+  the collector overwrites the value and stays on the first unanswered step.
+  Their answers never enter `messageHistory`; iOS reads what is saved and
+  whether any of the five is left from `InterviewState.basics`.
+- **The chat's first question is asked by the server, on both rails, after
+  the basics.** Telegram gets it from the Mini App handoff (`/complete` runs a
+  `resume` turn). On iOS the save that completes the basics clears the
+  history (an interview begun in the old in-chat flow, a stray opener) and
+  runs the same `resume` turn, so the chat starts from scratch on the first
+  free question; `GET /v1/onboarding/interview` opens it the same way as a
+  safety net, only once the basics are complete, when the collector owns the
+  turn (flag, `conversational`, consent, language, a verified contact) and no
+  assistant prompt exists yet. Concurrent reads and that save share one turn.
+  Before 2026-09-30 the native interview came back empty and iOS drew an
+  empty chat instead of the profile screens.
 - **Relationship intent never reaches the embedding.** It is scored by its own
   `V_intent` multiplier (§3.2) from its own column, and folding it into
   `psychologicalSummary` — the cheap-looking way to make it "count" — would give
@@ -1070,6 +1096,18 @@ Hard rules enforced by the collector:
   the same shape, off the same `reviseStatusScript`).
   At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
+  **The native app has the same open stage (2026-09-30).** Its photo step is a
+  dedicated manager screen (add, delete, replace, make main), so the stage must
+  not close under the user: while the collector is on `photos`, an upload
+  through `POST /v1/me/photos` runs no agent turn and `expectingPhoto` stays
+  true past the minimum; the user leaves with `POST /v1/onboarding/photos/continue`
+  — the same `photos_continue` input as Telegram's button. Until then each
+  upload ran a `photos_updated` turn, which re-asked the photo question into the
+  chat before the minimum and finalized onboarding on the upload that reached
+  it. Leaving records `photos`, and from then on a delete cannot drop below the
+  minimum (finalize would refuse a state the user cannot see); while the stage
+  is open there is no floor, as in Telegram. The order of photos is the user's
+  (`PUT /v1/me/photos/order`): the first one is what a match sees first.
   **The stage is an editor, not an append-only log (2026-07-27).** A persistent
   bottom panel (Telegram *reply* keyboard, one button — "🗂 My photos") sits
   under the chat for the whole stage and opens the **photo editor**: the same
@@ -1209,8 +1247,7 @@ Hard rules enforced by the collector:
   was rated), the verdicts are already persisted before it starts, and at ~10.7s
   it is by far the longest of these beats. It is also the only one whose copy
   describes something that has not happened yet — "looking for matches" /
-  "scanning profiles N" fires mid-onboarding, before photos and liveness, days
-  before the Thursday batch. That is a deliberate, founder-approved labor
+  "scanning profiles N" fires mid-onboarding, before photos and liveness, before the next scheduled batch. That is a deliberate, founder-approved labor
   illusion, and `RADAR_THINKING_ENABLED` is its kill switch. Concierge venue
   selection is hybrid: the first three beats
   always play out, then the final atmosphere beat tracks
@@ -1894,7 +1931,7 @@ and never touch them.
 `verificationStatus='verified'`, or when they belong to the explicit legacy
 cohort `verificationStatus='unverified' AND verificationSkippedAt IS NOT NULL`.
 New `unverified`, `pending`, `pending_review`, and `rejected` users never enter
-candidate or weekly-batch queries. The photo-edit auto-rerun handles
+candidate or scheduled-batch queries. The photo-edit auto-rerun handles
 rehabilitation and admin moderation handles borderline cases.
 
 ### 1.5 Re-engagement chain
@@ -1979,6 +2016,12 @@ The **Profiler** (`workers/profiler.ts` + `services/profiler.ts`,
 `services/profiler-schedule.ts`) collects gender-specific Q&A *after*
 onboarding to fuel the §Phase 4 icebreakers and wingman hints. It is
 **not** an input to the matching algorithm — purely fuel for icebreakers/hints.
+That is a deferral, not a ban (founder decision 2026-10-04): answers are
+meant to enter matching once the app asks with quick-tap answers and the
+answers prove honest — which needs this section and §3.2 edited first
+(decision 2026-08-19). Until then the bot's batch-boundary line "Учту при
+следующем подборе" stays as it is, a deliberate exception to the copy rule
+below.
 Telegram-only until 2026-09-22; since then the native app asks the same
 questions too — see **Native app** at the end of this list.
 
@@ -2056,8 +2099,9 @@ questions too — see **Native app** at the end of this list.
   on a `scheduled` date, never during the pitch/scheduling/venue steps.
 - **Skip.** Every question has a **Skip** button. A skipped question returns
   **once** at the end of the current cycle; skipped twice in a cycle, it drops
-  until the next drop cycle. Answered questions are never re-asked (except the
-  situational ones below). **Silence is an implicit skip**: a question left
+  until the next drop cycle. Answered questions are never re-asked. A skipped
+  **contextual** question (below) never returns: it was about one moment.
+  **Silence is an implicit skip**: a question left
   unanswered for `PROFILER_STALL_TIMEOUT_MS` (**6 h**) is recorded with the same
   return-once semantics, **the question message is deleted**, and the schedule
   re-opens at the user's next local window — without this the Profiler
@@ -2307,32 +2351,83 @@ questions too — see **Native app** at the end of this list.
   allowlists, because the poster URL is read out of a page body — the one value
   in the flow a third party writes. Off by default; with the flag off a link is
   just text again and no outbound request is made on user input.
-- **Situational questions repeat (`refresh: "cycle"`).** A question is one of
-  two kinds. **Stable** traits (lark/owl, sport, turn-offs) are asked once and
-  answered forever. **Situational** ones — "what are you watching / reading /
-  listening to", "plans for the coming weekend", "best part of your week" —
-  describe *right now*, so they are re-asked once per drop cycle and their new
-  answer overwrites the previous one. This is what makes a weekly cadence worth
-  having: without it the bank simply runs out after a couple of days and the
-  Profiler goes quiet, and the icebreakers keep quoting a month-old answer.
-  Selection order is unchanged for the first two passes (never-asked, then a
-  skipped question eligible to return); the refresh pass comes last, so a stale
-  situational question never crowds out something never asked. Once every
-  once-question is answered and the current cycle's refreshables are also
-  answered, the scheduler does not go permanently silent: it keeps a silent,
-  cost-free check at each daily window (`finishOrAwaitNextCycle`) so a
-  refreshable question becomes due again the moment the cycle rolls over — a
-  true `finish()` (which nulls the schedule forever) fires only for the
-  theoretical case of a bank with no refreshable question at all.
+- **No weekly re-asks (founder decision 2026-10-04).** Every bank question is
+  asked once. The weekly repeats of "plans for the weekend", "best part of
+  your week" and "what are you watching" were cut — people tire of the same
+  question every week — and the two pure snapshots left the bank with them: an
+  answer about one weekend fed to an icebreaker months later is wrong. "What
+  are you watching" stays as an ordinary once-question (a taste). "Shared
+  interests or mutual interest?" was cut too — nearly everyone picks the
+  second, so it told the generators nothing; the sport-preference question
+  stays (founder: it matters and gets honest answers).
+- **Contextual questions (founder decision 2026-10-04).** What keeps the
+  Profiler alive after the bank is five families of questions that open only
+  when something happened to the person — never from passive data (no music,
+  no Apple Health rhythm, no frequent places; the last only once the privacy
+  policy discloses it). Hand-written in all five languages
+  (`packages/shared/src/profiler-context-questions.ts`), never LLM-worded:
+  - **Fresh topic** (`topic`) — a date is `scheduled` 6–72 h ahead: "what are
+    you into right now? I can slip it in as a topic for your date". Late
+    enough to be fresh, early enough to reach the T-5h icebreakers. Its answer
+    is fuel for **that** match only (`scoreProfilerAnswers({ matchId })`), and
+    it rewrites the still-unrevealed wingman tip about the person
+    (`refreshWingmanHintAbout`) — the tip was written at venue lock, before
+    the answer existed.
+  - **Format** (`format`) — a confirmed date 2–21 days old: "this format
+    again, or calmer / on the move / an evening dinner?". At most one per 21
+    days. The post-date feedback owns the first day.
+  - **Signature** (`signature`) — two or more confirmed dates share the date
+    map's leading experience: "looks like your format is coffee and something
+    sweet — right?". Once per experience.
+  - **Follow-up** (`followup`) — the person's own plan (what to learn, where
+    to travel, the talk-for-hours topic) answered 30+ days ago: "did it move?".
+  - **Recheck** (`recheck`) — a matching-candidate dimension (chronotype,
+    initiative / planner, sport) answered 60+ days ago, asked again as a scene
+    or a number. Agreement between the two answers is the measure of whether
+    answers can be trusted before they ever enter matching.
+
+  Seasonal questions are deferred. Every contextual question carries closed
+  **answer options** (stable ids, all languages), decided now so they can
+  become quick taps and matching signals later; until the app renders them,
+  each question's own wording names the choices and both surfaces take text.
+
+  **Rare by construction.** Only a batch's **opening** question may be
+  contextual (so one per batch), at most `PROFILER_CONTEXT_WEEKLY_CAP` (2) per
+  calendar week, one per instance ever. Order is by how perishable the moment
+  is: topic, format, signature, follow-up, recheck.
+
+  **The lazy check.** Nothing runs in the background and nothing touches the
+  phone: the triggers' input (`loadProfilerContextSignals` — upcoming
+  `scheduled` dates, and the date map's own query via `readDateHistory`) is
+  read only when a person's batch is due anyway, at their 09:00/18:00 window
+  or when the app pulls. Hence the Profiler never goes permanently silent for
+  a person with a gender: with nothing pending it re-checks at the next window
+  (`awaitNextProfilerWindow`), and `finish()` (a null schedule) is left for a
+  person without a gender.
+
+  **Context is shown, not described.** A question that refers to something
+  carries a **card** above it, like a quoted message: the upcoming date (day,
+  time, venue), the past date, up to three recent dates of the shared
+  experience, or the person's own earlier answer with the question it
+  answered. The question text never names a venue, a date or a count; the
+  card does, and it never shows the partner. A recheck has no card on
+  purpose — showing the earlier answer would make the second one a copy.
+  Telegram renders the card as a Markdown quote above the question in the
+  same message (`profilerContextMarkdown`); the app gets it as
+  `question.context`. A live contextual question whose date was cancelled or
+  has passed is released and recorded as a skip.
+
+  **Ids.** `<f|m>_ctx:<family>:<key>` (key = match id, experience, or source
+  question id). One `ProfilerAnswer` row per instance falls out of the
+  existing unique key, the id alone rebuilds the question for every reader
+  (`profilerQuestionById`), and the longest id keeps the Skip button's
+  `callback_data` inside Telegram's 64 bytes.
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
-  `answerText`, `skipped`, `skipReturned`, `cycleId`. A refreshed answer
-  overwrites the row (only the current snapshot matters for icebreakers).
+  `answerText`, `answeredAt`, `skipped`, `skipReturned`, `cycleId`.
   `cycleId` (`profilerCycleId`, `services/profiler.ts`) is an **ISO-8601
-  calendar-week key** ("2026-W31"), deliberately independent of the matching
-  batch date: it used to derive from `getNextBatchDate`, which changes daily
-  under the `daily` cadence profile and would make every situational question
-  eligible to re-ask once a day instead of once a week regardless of how often
-  matching actually runs.
+  calendar-week key** ("2026-W31") — the cycle a skipped question returns
+  in, and the week the contextual cap counts — deliberately independent of
+  the matching batch date, which changes daily under the `daily` cadence.
 - **Weighting.** Icebreaker/wingman-hint generation emphasises a partner's
   answers by priority weight (`high 1.0 / medium 0.5 / low 0.2`,
   `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;
@@ -2371,9 +2466,10 @@ questions too — see **Native app** at the end of this list.
   answer upsert (`upsertProfilerAnswer`), the Skip transition, the refusal rule
   (`isProfilerRefusal` → skip + pause the batch → `outcome: paused`), the batch
   step (`nextProfilerBatchStep`) and the pause/finish scheduling. So an answer
-  from the app is the same `ProfilerAnswer` row a Telegram answer is, and
-  nothing new fires on it — the icebreakers and the wingman hint read it later,
-  as they always did. Opening a batch is a compare-and-set on the
+  from the app is the same `ProfilerAnswer` row a Telegram answer is, and the
+  icebreakers and the wingman hint read it later, as they always did. The one
+  thing an answer fires, on either surface, is the wingman rewrite after a
+  fresh-topic answer (inside the shared `upsertProfilerAnswer`). Opening a batch is a compare-and-set on the
   `profilerNextAt` value that was read, so the worker and a parallel request
   cannot both open one. An app-opened question sets no
   `profilerAnswerWindowUntil` and no `profilerQuestionMessageId`, so a `both`

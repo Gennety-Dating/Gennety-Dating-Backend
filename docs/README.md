@@ -34,10 +34,10 @@ docs/
 │       ├── scheduling-and-monetization.md   Phase 3.6–3.11: calendar, venue, date card, Premium, referral, promo, rematch
 │       ├── date-lifecycle.md                Phase 4: safety brief, did-you-meet, feedback, emergency
 │       ├── trust-and-safety.md              Phase 5: reports, strikes, blocking
-│       ├── living-canvas.md                 Phase 6: Date Bump, Date Radar, Scratch Map, Campus Radar
+│       ├── living-canvas.md                 Phase 6: Date Bump, Date Radar, date map, Campus Radar
 │       ├── cross-cutting.md                 Quiet hours, standby, embeddings, GDPR, languages, loading marks
 │       ├── venue-intent-v2.md               Venue intent selection (2026-07-21)
-│       ├── daily-matching.md                ACTIVE migration — prod still on `weekly`; see §3.1 for remaining work
+│       ├── daily-matching.md                Daily in production since 2026-08-10; weekly code default; migration history below current status
 │       ├── venue-engine-plan.md             Venue ranking improvements; Stage 5 + Part 6 still open
 │       └── voice-prompts.md · type-radar.md · rematch.md · prime-time.md · profile-music.md
 │           promo-codes.md · referral.md · venue-change.md · ad-spend-tracking.md

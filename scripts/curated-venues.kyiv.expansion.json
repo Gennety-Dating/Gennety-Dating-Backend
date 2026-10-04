@@ -1095,18 +1095,6 @@
       ]
     },
     {
-      "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
-      "name": "Très Branché",
-      "category": "restaurant",
-      "priority": 2,
-      "tier": "premium",
-      "vibeTags": [
-        "dinner",
-        "wine",
-        "romantic"
-      ]
-    },
-    {
       "placeId": "ChIJX31WnQ_P1EARPNcar64s3Ps",
       "name": "Grill do Brasil",
       "category": "cafe",
@@ -1150,17 +1138,6 @@
         "coffee",
         "casual",
         "study"
-      ]
-    },
-    {
-      "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
-      "name": "CAPULETI",
-      "category": "restaurant",
-      "priority": 2,
-      "vibeTags": [
-        "dinner",
-        "italian",
-        "cozy"
       ]
     },
     {
@@ -1232,17 +1209,6 @@
       ]
     },
     {
-      "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-      "name": "Чорноморка Велика Васильківська",
-      "category": "cafe",
-      "priority": 2,
-      "vibeTags": [
-        "dinner",
-        "seafood",
-        "lively"
-      ]
-    },
-    {
       "placeId": "ChIJHbBFuYvP1EARexURbJxw6pA",
       "name": "Чорноморка Поділ",
       "category": "cafe",
@@ -1262,17 +1228,6 @@
         "dinner",
         "seafood",
         "lively"
-      ]
-    },
-    {
-      "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
-      "name": "Чорноморка на Лаврській",
-      "category": "cafe",
-      "priority": 2,
-      "vibeTags": [
-        "coffee",
-        "cozy",
-        "casual"
       ]
     },
     {
@@ -1350,17 +1305,6 @@
       "vibeTags": [
         "dinner",
         "local",
-        "cozy"
-      ]
-    },
-    {
-      "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
-      "name": "Trullo D'oro Cafe",
-      "category": "restaurant",
-      "priority": 1,
-      "vibeTags": [
-        "dinner",
-        "italian",
         "cozy"
       ]
     },
@@ -1634,17 +1578,6 @@
         "coffee",
         "cozy",
         "casual"
-      ]
-    },
-    {
-      "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
-      "name": "Prynada Ukrainian Cafe",
-      "category": "cafe",
-      "priority": 1,
-      "vibeTags": [
-        "dinner",
-        "local",
-        "cozy"
       ]
     },
     {
@@ -2494,6 +2427,18 @@
         "italian",
         "cozy"
       ]
+    },
+    {
+      "placeId": "ChIJ3bKJRaLP1EARiU6B6J-5siI",
+      "name": "ALTO",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
     }
   ],
   "excludedPlaces": [
@@ -2756,6 +2701,36 @@
       "name": "La Coupole",
       "placeId": "ChIJYafZxs5x5kcRiDaXQXadCBY",
       "reason": "Resolved to Google's PARIS La Coupole (102 Bd du Montparnasse) — the Kyiv place meant here is Купол (Лаврська, 13), already in the catalog. Founder decision 2026-09-22."
+    },
+    {
+      "name": "Très Branché",
+      "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
+      "reason": "Founder decision 2026-10-02: removed from Gennety entirely (Très Branché, вул. Миколи Лисенка 4, was premium)."
+    },
+    {
+      "name": "CAPULETI",
+      "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
+      "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: PRICE_LEVEL_VERY_EXPENSIVE in tier base)."
+    },
+    {
+      "name": "Prynada Ukrainian Cafe",
+      "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
+      "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: PRICE_LEVEL_EXPENSIVE in tier base)."
+    },
+    {
+      "name": "Чорноморка Велика Васильківська",
+      "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
+      "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: CLOSED_PERMANENTLY)."
+    },
+    {
+      "name": "Чорноморка на Лаврській",
+      "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
+      "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: CLOSED_PERMANENTLY)."
+    },
+    {
+      "name": "Trullo D'oro Cafe",
+      "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
+      "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: CLOSED_TEMPORARILY)."
     }
   ]
 }

@@ -55,6 +55,7 @@ vi.mock("../../services/storage.js", () => ({
   uploadChatImage: (userId: string, buf: Buffer, mime: string) =>
     uploadChatImage(userId, buf, mime),
   createChatImageSignedUrl: async () => "https://signed.example/x",
+  createChatImageSignedUrls: async (paths: string[]) => paths.map(() => "https://signed.example/x"),
 }));
 
 const { chatRouter } = await import("./chat.js");

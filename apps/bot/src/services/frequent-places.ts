@@ -10,7 +10,7 @@
  *   minute, and every fix in a city asks about the same ~270 places.
  * - One open stay per person, in memory only: which place, and the first and
  *   latest instant. Never a coordinate — a fix is read against the catalog and
- *   dropped, the rule the Date Radar and the Scratch Map already follow. A
+ *   dropped, the rule the Date Radar already follows. A
  *   restart loses at most the stay in progress, and the next fix opens a new
  *   one; that is the same single-process trade `date-radar.ts` names, correct
  *   while the bot runs as one PM2 process.
@@ -223,7 +223,7 @@ async function subjectFor(userId: string): Promise<Subject | null> {
     select: { frequentPlacesOptIn: true, profile: { select: { homeCityKey: true } } },
   });
   if (!user) return null;
-  // The Scratch Map's fallback: a person without a city belongs to the default
+  // A person without a city belongs to the default
   // market, which is where the product is.
   const market = findMarketByCityKey(user.profile?.homeCityKey) ?? DEFAULT_MARKET;
   return {
@@ -540,7 +540,7 @@ export async function partnerFrequentPlaces(
 /**
  * The toggle. Off stops collection at once (the open stay is dropped, fences
  * go empty) and removes the block from the owner and the match; the stored
- * days stay and age out with the window, the Scratch Map's rule for a toggle.
+ * days stay and age out with the window — a toggle never silently deletes.
  */
 export async function setFrequentPlacesOptIn(userId: string, enabled: boolean): Promise<void> {
   await prisma.user.update({

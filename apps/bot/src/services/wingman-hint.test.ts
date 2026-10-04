@@ -5,6 +5,7 @@ vi.mock("@gennety/db", () => ({
     match: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -15,7 +16,7 @@ vi.mock("./openai.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { callOpenAIText } from "./openai.js";
-import { generateAndSaveWingmanHints } from "./wingman-hint.js";
+import { generateAndSaveWingmanHints, refreshWingmanHintAbout } from "./wingman-hint.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mFindUnique = (prisma.match as unknown as { findUnique: MockFn }).findUnique;
@@ -121,5 +122,70 @@ describe("generateAndSaveWingmanHints", () => {
     expect(mCall).toHaveBeenCalledTimes(1);
     expect(result?.a).toBe("cached-from-earlier");
     expect(result?.b).toMatch(/rock-climbing/);
+  });
+});
+
+describe("refreshWingmanHintAbout", () => {
+  const NOW = new Date("2026-06-10T07:00:00Z");
+  const HOUR = 60 * 60 * 1000;
+  const mUpdateMany = (prisma.match as unknown as { updateMany: MockFn }).updateMany;
+
+  function scheduled(overrides: Record<string, unknown> = {}) {
+    return {
+      status: "scheduled",
+      agreedTime: new Date(NOW.getTime() + 24 * HOUR),
+      userAId: "ua",
+      userBId: "ub",
+      wingmanSentAt: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mUpdate.mockResolvedValue(undefined);
+    mUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("rewrites only the tip ABOUT the subject — the one in the partner's slot", async () => {
+    mFindUnique
+      .mockResolvedValueOnce(scheduled())
+      .mockResolvedValueOnce(baseMatchRow({ wingmanHintA: "tip about B, kept" }));
+    mCall.mockResolvedValueOnce("Ask her about the synth she is building.");
+
+    expect(await refreshWingmanHintAbout("m1", "ua", NOW)).toBe(true);
+
+    expect(mUpdateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", wingmanSentAt: null },
+      data: { wingmanHintB: null },
+    });
+    expect(mCall).toHaveBeenCalledTimes(1);
+    expect(mUpdate).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: {
+        wingmanHintA: "tip about B, kept",
+        wingmanHintB: "Ask her about the synth she is building.",
+      },
+    });
+  });
+
+  it("leaves a tip that is revealed, about to be, or no longer for a live date", async () => {
+    for (const row of [
+      scheduled({ wingmanSentAt: new Date(NOW.getTime() - HOUR) }),
+      scheduled({ agreedTime: new Date(NOW.getTime() + 1.9 * HOUR) }),
+      scheduled({ status: "cancelled" }),
+      null,
+    ]) {
+      mFindUnique.mockResolvedValueOnce(row);
+      expect(await refreshWingmanHintAbout("m1", "ua", NOW)).toBe(false);
+    }
+    expect(mUpdateMany).not.toHaveBeenCalled();
+    expect(mCall).not.toHaveBeenCalled();
+  });
+
+  it("ignores someone who is not in the match", async () => {
+    mFindUnique.mockResolvedValueOnce(scheduled());
+    expect(await refreshWingmanHintAbout("m1", "stranger", NOW)).toBe(false);
+    expect(mUpdateMany).not.toHaveBeenCalled();
   });
 });

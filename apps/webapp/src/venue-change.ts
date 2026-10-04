@@ -47,6 +47,7 @@ import {
 } from "./api.js";
 import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { returnParams } from "./return-to.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
@@ -54,6 +55,7 @@ import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+keepOpenOnVerticalSwipe(app);
 
 // Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the design
 // composition fills the screen. Older clients silently fall through to expand().
@@ -122,7 +124,6 @@ interface Strings {
   ctaConfirm: string;
   ctaSaving: string;
   ctaWithdraw: string;
-  confirmHint: string;
   /** The way back to the venue the concierge assigned. */
   keepOriginal: string;
   keepOriginalAgreed: string;
@@ -221,7 +222,6 @@ const T: Record<Lang, Strings> = {
     ctaWithdraw: "Withdraw my marks",
     keepOriginal: "Keep this place",
     keepOriginalAgreed: "Keep the current place",
-    confirmHint: "Nothing changes until you confirm.",
     okSuggestTitle: "Sent to your match",
     okSuggestSub: (name) => `${name} will see the places you marked. Agree on one and your date moves there.`,
     okAgreedTitle: "You picked it together",
@@ -290,41 +290,42 @@ const T: Record<Lang, Strings> = {
   },
   ru: {
     boardTitle: "Место свидания",
-    boardLead: "Отметьте места, которые нравятся. Партнёр их увидит — пока вы не подтвердите, ничего не меняется.",
+    boardLead:
+      "Отметь места, которые нравятся. Твоя пара их увидит — пока не подтвердишь, ничего не меняется.",
     currentBadge: "Текущее место встречи",
     capPeer: (name) => `Выбор ${name}`,
     capBoth: "Вы оба отметили это место",
-    capMine: "Вы отметили",
-    capKeepMine: "Вы хотите остаться здесь",
+    capMine: "Твоя отметка",
+    capKeepMine: "Ты хочешь остаться здесь",
     capKeepPeer: (name) => `${name} хочет остаться здесь`,
     capKeepBoth: "Вы оба хотите остаться здесь",
     ctaKeepConfirm: "Остаёмся здесь",
     ctaKeepSuggest: "Предложить остаться здесь",
-    bannerKeepMatch: "Вы оба хотите остаться — подтвердите, чтобы не менять место.",
-    bannerKeepSuggest: "Вы хотите остаться здесь. Партнёр это увидит — место сохранится, только если вы оба согласитесь.",
+    bannerKeepMatch: "Вы оба хотите остаться — подтверди, чтобы не менять место.",
+    bannerKeepSuggest:
+      "Ты хочешь остаться здесь. Твоя пара это увидит — место сохранится, только если вы оба согласитесь.",
     badgeNew: "Новое",
-    bannerPeerPicked: (name) => `${name} присматривает места ниже. Отметьте те, что нравятся и вам.`,
-    bannerMatch: "Вы сошлись на месте — подтвердите, чтобы закрепить его.",
-    bannerSuggest: "Партнёр увидит ваши отметки. Совпадёте — место сменится.",
+    bannerPeerPicked: (name) => `${name} присматривает места ниже. Отметь те, что нравятся и тебе.`,
+    bannerMatch: "Вы сошлись на месте — подтверди, чтобы закрепить его.",
+    bannerSuggest: "Твоя пара увидит твои отметки. Совпадёте — место сменится.",
     ctaSuggest: "Предложить эти места",
     ctaConfirm: "Подтвердить это место",
     ctaSaving: "Сохраняем…",
     ctaWithdraw: "Убрать мои отметки",
     keepOriginal: "Остаёмся здесь",
     keepOriginalAgreed: "Оставить текущее место",
-    confirmHint: "Пока не подтвердите — ничего не меняется.",
-    okSuggestTitle: "Отправлено партнёру",
-    okSuggestSub: (name) => `${name} увидит отмеченные вами места. Совпадёте — свидание переедет туда.`,
+    okSuggestTitle: "Отправлено твоей паре",
+    okSuggestSub: (name) => `${name} увидит отмеченные тобой места. Совпадёте — свидание переедет туда.`,
     okAgreedTitle: "Вы выбрали его вместе",
     okAgreedSub: "Остался один шаг — и это место станет вашим.",
     okKeptTitle: "Остаётесь на прежнем месте",
     okKeptSub: "Свидание проходит там, где мы для вас выбрали. Ничего не изменилось.",
-    okKeepAskedTitle: "Вы предпочли остаться здесь",
-    okKeepAskedSub: (name) => `Мы сообщили ${name}. Партнёр всё ещё может предложить другое место — и оно сменится, только если вы оба согласитесь.`,
-    okOfferSentTitle: "Отправили партнёру",
+    okKeepAskedTitle: "Твой выбор — остаться здесь",
+    okKeepAskedSub: (name) => `Мы сообщили ${name}. Твоя пара всё ещё может предложить другое место — и оно сменится, только если вы оба согласитесь.`,
+    okOfferSentTitle: "Отправили твоей паре",
     okOfferSentSub: (name) =>
-      `${name || "Партнёр"} получил в чате это место и кнопку, чтобы его закрепить. Как только он это сделает — вы сразу узнаете.`,
-    okOfferSentNote: "Закрепить самой можно в любой момент.",
+      `${name || "Твоя пара"} — в чате уже это место и кнопка, чтобы его закрепить. Как только место закрепят, ты сразу узнаешь.`,
+    okOfferSentNote: "Закрепить место можно в любой момент.",
     okDone: "К местам",
     okContinue: "Продолжить",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
@@ -345,25 +346,25 @@ const T: Record<Lang, Strings> = {
     heartAdd: "Предложить вместе",
     heartRemove: "Убрать отметку",
     expressBtn: (stars) => `Поменять сразу — ${stars}`,
-    expressHint: "Партнёр получит обновлённую карточку свидания.",
+    expressHint: "Твоя пара получит обновлённую карточку свидания.",
     overlapTitle: "Ваши сердечки совпали!",
-    overlapLead: "Вы совпали в нескольких местах — выберите одно.",
+    overlapLead: "Вы совпали в нескольких местах — выбери одно.",
     agreedTitle: "Вы сошлись на новом месте",
-    agreedBothChose: (name) => `${name} тоже выбрал(а) это место — вы сошлись.`,
-    agreedWaitNote: (name) => `Вы оба выбрали это место! Теперь осталось, чтобы ${name} оплатил(а) смену места. Как только это произойдёт, мы окончательно закрепим его и пришлём вам обоим точные детали свидания.`,
+    agreedBothChose: (name) => `${name} тоже за это место — вы сошлись.`,
+    agreedWaitNote: (name) => `Вы оба выбрали это место! Теперь смену места оплачивает ${name}. Как только оплата пройдёт, мы закрепим его и пришлём вам обоим точные детали свидания.`,
     agreedDeclinedNote: "Место пока остаётся прежним.",
-    agreedTapHint: "Нажмите на заведение — фото, рейтинг и карта.",
+    agreedTapHint: "Нажми на заведение — фото, рейтинг и карта.",
     payBtn: (stars) => `Закрепить — ${stars}`,
-    paySelfBtn: (stars) => `Закрепить самой — ${stars}`,
-    offerBtn: "Предложить закрепить партнёру",
+    paySelfBtn: (stars) => `Закрепить самостоятельно — ${stars}`,
+    offerBtn: "Попросить пару закрепить",
     offerSending: (name) =>
-      name ? `Отправляем предложение ${name}…` : "Отправляем предложение партнёру…",
-    offerSendFailed: "Не получилось отправить партнёру. Ничего не потрачено — попробуйте ещё раз.",
-    offerSentNote: "Предложение отправлено. Закрепить самой можно в любой момент.",
+      name ? `Отправляем предложение ${name}…` : "Отправляем предложение твоей паре…",
+    offerSendFailed: "Не получилось отправить твоей паре. Ничего не потрачено — попробуй ещё раз.",
+    offerSentNote: "Предложение отправлено. Закрепить место можно в любой момент.",
     declineBtn: "Не в этот раз",
     finalizing: "Закрепляем новое место…",
     settledTitle: "Новое место закреплено!",
-    settledPeerPaid: "Партнёр закрепил его для вас",
+    settledPeerPaid: "Твоя пара закрепила место за вами",
     settledNote: "Карточки свидания обновлены. До встречи!",
     settledChangeAgain: "Сменить место ещё раз",
     closedChanged: "Место для этого свидания уже меняли.",
@@ -371,10 +372,10 @@ const T: Record<Lang, Strings> = {
     closedCutoff: "Слишком близко к свиданию, чтобы менять место.",
     closedGeneric: "Смена места недоступна для этого свидания.",
     loading: "Загрузка…",
-    fallbackNoMatch: "Откройте это из сообщения о свидании в боте.",
-    errGeneric: "Что-то пошло не так. Попробуйте снова.",
-    errNetwork: "Ошибка сети. Проверьте соединение и попробуйте снова.",
-    payFailed: "Оплата не прошла. Ничего не списано — попробуйте ещё раз.",
+    fallbackNoMatch: "Открой это из сообщения о свидании в боте.",
+    errGeneric: "Что-то пошло не так. Попробуй снова.",
+    errNetwork: "Ошибка сети. Проверь соединение и попробуй снова.",
+    payFailed: "Оплата не прошла. Ничего не списано — попробуй ещё раз.",
     premiumPlate: "Premium",
     premiumUnlockConfirm:
       "Это премиум-место. Gennety Premium открывает его — и делает смену места бесплатной.",
@@ -382,41 +383,42 @@ const T: Record<Lang, Strings> = {
   },
   uk: {
     boardTitle: "Місце побачення",
-    boardLead: "Позначте місця, які подобаються. Партнер їх побачить — доки не підтвердите, нічого не змінюється.",
+    boardLead:
+      "Познач місця, які подобаються. Твоя пара їх побачить — доки не підтвердиш, нічого не змінюється.",
     currentBadge: "Поточне місце зустрічі",
     capPeer: (name) => `Вибір ${name}`,
     capBoth: "Ви обоє позначили це місце",
-    capMine: "Ви позначили",
-    capKeepMine: "Ви хочете залишитися тут",
+    capMine: "Твоя позначка",
+    capKeepMine: "Ти хочеш залишитися тут",
     capKeepPeer: (name) => `${name} хоче залишитися тут`,
     capKeepBoth: "Ви обоє хочете залишитися тут",
     ctaKeepConfirm: "Залишаємось тут",
     ctaKeepSuggest: "Запропонувати залишитися",
-    bannerKeepMatch: "Ви обоє хочете залишитися — підтвердіть, щоб не міняти місце.",
-    bannerKeepSuggest: "Ви хочете залишитися тут. Партнер це побачить — місце збережеться, лише якщо ви обоє погодитесь.",
+    bannerKeepMatch: "Ви обоє хочете залишитися — підтверди, щоб не міняти місце.",
+    bannerKeepSuggest:
+      "Ти хочеш залишитися тут. Твоя пара це побачить — місце збережеться, лише якщо ви обоє погодитесь.",
     badgeNew: "Нове",
-    bannerPeerPicked: (name) => `${name} придивляється до місць нижче. Позначте ті, що подобаються й вам.`,
-    bannerMatch: "Ви зійшлися на місці — підтвердіть, щоб закріпити його.",
-    bannerSuggest: "Партнер побачить ваші позначки. Збіжаться — місце зміниться.",
+    bannerPeerPicked: (name) => `${name} придивляється до місць нижче. Познач ті, що подобаються й тобі.`,
+    bannerMatch: "Ви зійшлися на місці — підтверди, щоб закріпити його.",
+    bannerSuggest: "Твоя пара побачить твої позначки. Збіжитесь — місце зміниться.",
     ctaSuggest: "Запропонувати ці місця",
     ctaConfirm: "Підтвердити це місце",
     ctaSaving: "Зберігаємо…",
     ctaWithdraw: "Прибрати мої позначки",
     keepOriginal: "Залишаємось тут",
     keepOriginalAgreed: "Залишити поточне місце",
-    confirmHint: "Доки не підтвердите — нічого не змінюється.",
-    okSuggestTitle: "Надіслано партнеру",
-    okSuggestSub: (name) => `${name} побачить позначені вами місця. Збіжаться — побачення переїде туди.`,
+    okSuggestTitle: "Надіслано твоїй парі",
+    okSuggestSub: (name) => `${name} побачить позначені тобою місця. Збіжитесь — побачення переїде туди.`,
     okAgreedTitle: "Ви обрали його разом",
     okAgreedSub: "Лишився один крок — і це місце стане вашим.",
     okKeptTitle: "Залишаєтесь на попередньому місці",
     okKeptSub: "Побачення відбудеться там, де ми для вас обрали. Нічого не змінилося.",
-    okKeepAskedTitle: "Ви віддали перевагу цьому місцю",
-    okKeepAskedSub: (name) => `Ми повідомили ${name}. Партнер усе ще може запропонувати інше місце — і воно зміниться, лише якщо ви обоє погодитесь.`,
-    okOfferSentTitle: "Надіслали партнеру",
+    okKeepAskedTitle: "Твій вибір — залишитися тут",
+    okKeepAskedSub: (name) => `Ми повідомили ${name}. Твоя пара все ще може запропонувати інше місце — і воно зміниться, лише якщо ви обоє погодитесь.`,
+    okOfferSentTitle: "Надіслали твоїй парі",
     okOfferSentSub: (name) =>
-      `${name || "Партнер"} отримав у чаті це місце та кнопку, щоб його закріпити. Щойно він це зробить — ви одразу дізнаєтесь.`,
-    okOfferSentNote: "Закріпити самій можна будь-коли.",
+      `${name || "Твоя пара"} — у чаті вже це місце та кнопка, щоб його закріпити. Щойно місце закріплять, ти одразу дізнаєшся.`,
+    okOfferSentNote: "Закріпити місце можна будь-коли.",
     okDone: "До місць",
     okContinue: "Продовжити",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
@@ -437,25 +439,25 @@ const T: Record<Lang, Strings> = {
     heartAdd: "Запропонувати разом",
     heartRemove: "Прибрати позначку",
     expressBtn: (stars) => `Змінити одразу — ${stars}`,
-    expressHint: "Партнер отримає оновлену картку побачення.",
+    expressHint: "Твоя пара отримає оновлену картку побачення.",
     overlapTitle: "Ваші серденька збіглися!",
-    overlapLead: "Ви збіглися в кількох місцях — оберіть одне.",
+    overlapLead: "Ви збіглися в кількох місцях — обери одне.",
     agreedTitle: "Ви зійшлися на новому місці",
-    agreedBothChose: (name) => `${name} теж обрав(ла) це місце — ви зійшлися.`,
-    agreedWaitNote: (name) => `Ви обоє обрали це місце! Тепер лишилося, щоб ${name} оплатив(ла) зміну місця. Щойно це станеться, ми остаточно закріпимо його й надішлемо вам обом точні деталі побачення.`,
+    agreedBothChose: (name) => `${name} теж за це місце — ви зійшлися.`,
+    agreedWaitNote: (name) => `Ви обоє обрали це місце! Тепер зміну місця оплачує ${name}. Щойно оплата пройде, ми закріпимо його й надішлемо вам обом точні деталі побачення.`,
     agreedDeclinedNote: "Місце поки залишається тим самим.",
-    agreedTapHint: "Натисніть на заклад — фото, рейтинг і карта.",
+    agreedTapHint: "Натисни на заклад — фото, рейтинг і карта.",
     payBtn: (stars) => `Закріпити — ${stars}`,
-    paySelfBtn: (stars) => `Закріпити самій — ${stars}`,
-    offerBtn: "Запропонувати закріпити партнеру",
+    paySelfBtn: (stars) => `Закріпити самостійно — ${stars}`,
+    offerBtn: "Попросити пару закріпити",
     offerSending: (name) =>
-      name ? `Надсилаємо пропозицію ${name}…` : "Надсилаємо пропозицію партнеру…",
-    offerSendFailed: "Не вдалося надіслати партнеру. Нічого не витрачено — спробуйте ще раз.",
-    offerSentNote: "Пропозицію надіслано. Закріпити самій можна будь-коли.",
+      name ? `Надсилаємо пропозицію ${name}…` : "Надсилаємо пропозицію твоїй парі…",
+    offerSendFailed: "Не вдалося надіслати твоїй парі. Нічого не витрачено — спробуй ще раз.",
+    offerSentNote: "Пропозицію надіслано. Закріпити місце можна будь-коли.",
     declineBtn: "Не цього разу",
     finalizing: "Закріплюємо нове місце…",
     settledTitle: "Нове місце закріплено!",
-    settledPeerPaid: "Партнер закріпив його для вас",
+    settledPeerPaid: "Твоя пара закріпила місце за вами",
     settledNote: "Картки побачення оновлено. До зустрічі!",
     settledChangeAgain: "Змінити місце ще раз",
     closedChanged: "Місце для цього побачення вже змінювали.",
@@ -463,10 +465,10 @@ const T: Record<Lang, Strings> = {
     closedCutoff: "Занадто близько до побачення, щоб змінювати місце.",
     closedGeneric: "Зміна місця недоступна для цього побачення.",
     loading: "Завантаження…",
-    fallbackNoMatch: "Відкрийте це з повідомлення про побачення в боті.",
-    errGeneric: "Щось пішло не так. Спробуйте ще раз.",
-    errNetwork: "Помилка мережі. Перевірте з'єднання та спробуйте ще раз.",
-    payFailed: "Оплата не пройшла. Нічого не списано — спробуйте ще раз.",
+    fallbackNoMatch: "Відкрий це з повідомлення про побачення в боті.",
+    errGeneric: "Щось пішло не так. Спробуй ще раз.",
+    errNetwork: "Помилка мережі. Перевір з'єднання та спробуй ще раз.",
+    payFailed: "Оплата не пройшла. Нічого не списано — спробуй ще раз.",
     premiumPlate: "Premium",
     premiumUnlockConfirm:
       "Це преміум-місце. Gennety Premium відкриває його — і робить зміну місця безкоштовною.",
@@ -496,7 +498,6 @@ const T: Record<Lang, Strings> = {
     ctaWithdraw: "Markierungen zurücknehmen",
     keepOriginal: "Hier bleiben",
     keepOriginalAgreed: "Beim aktuellen Ort bleiben",
-    confirmHint: "Bis zur Bestätigung ändert sich nichts.",
     okSuggestTitle: "An dein Match gesendet",
     okSuggestSub: (name) => `${name} sieht die markierten Orte. Stimmt ihr überein, zieht euer Date dorthin.`,
     okAgreedTitle: "Ihr habt ihn gemeinsam gewählt",
@@ -589,7 +590,6 @@ const T: Record<Lang, Strings> = {
     ctaWithdraw: "Wycofaj zaznaczenia",
     keepOriginal: "Zostajemy tutaj",
     keepOriginalAgreed: "Zostaw obecne miejsce",
-    confirmHint: "Dopóki nie potwierdzisz, nic się nie zmienia.",
     okSuggestTitle: "Wysłano do pary",
     okSuggestSub: (name) => `${name} zobaczy zaznaczone miejsca. Zgodzicie się — randka przeniesie się tam.`,
     okAgreedTitle: "Wybraliście je razem",
@@ -601,7 +601,7 @@ const T: Record<Lang, Strings> = {
     okOfferSentTitle: "Wysłane do pary",
     okOfferSentSub: (name) =>
       `${name || "Twoja para"} właśnie dostał na czacie to miejsce i przycisk, żeby je zatwierdzić. Dowiesz się od razu, gdy to zrobi.`,
-    okOfferSentNote: "Możesz zatwierdzić samodzielnie w każdej chwili.",
+    okOfferSentNote: "Możesz zatwierdzić miejsce w każdej chwili.",
     okDone: "Do miejsc",
     okContinue: "Dalej",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
@@ -626,8 +626,8 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Wasze serduszka się spotkały!",
     overlapLead: "Zgadzacie się w kilku miejscach — wybierz jedno.",
     agreedTitle: "Zgodziliście się na nowe miejsce",
-    agreedBothChose: (name) => `${name} też wybrał(a) to miejsce — zgadzacie się.`,
-    agreedWaitNote: (name) => `Oboje wybraliście to miejsce! Teraz wystarczy, aby ${name} opłacił(a) zmianę miejsca. Gdy tylko to nastąpi, zatwierdzimy je i wyślemy wam obojgu dokładne szczegóły randki.`,
+    agreedBothChose: (name) => `${name} też jest za tym miejscem — zgadzacie się.`,
+    agreedWaitNote: (name) => `Oboje wybraliście to miejsce! Teraz zmianę miejsca opłaca ${name}. Gdy tylko płatność przejdzie, zatwierdzimy je i wyślemy wam obojgu dokładne szczegóły randki.`,
     agreedDeclinedNote: "Miejsce na razie zostaje bez zmian.",
     agreedTapHint: "Dotknij miejsca — zdjęcia, ocena i mapa.",
     payBtn: (stars) => `Zatwierdź — ${stars}`,
@@ -635,7 +635,7 @@ const T: Record<Lang, Strings> = {
     offerBtn: "Zaproponuj parze zatwierdzenie",
     offerSending: (name) => (name ? `Wysyłamy prośbę do ${name}…` : "Wysyłamy prośbę…"),
     offerSendFailed: "Nie udało się wysłać do pary. Nic nie zostało zużyte — spróbuj ponownie.",
-    offerSentNote: "Propozycja wysłana. Możesz zatwierdzić samodzielnie w każdej chwili.",
+    offerSentNote: "Propozycja wysłana. Możesz zatwierdzić miejsce w każdej chwili.",
     declineBtn: "Nie tym razem",
     finalizing: "Zatwierdzamy nowe miejsce…",
     settledTitle: "Nowe miejsce zatwierdzone!",
@@ -1151,10 +1151,9 @@ function renderBoard(): void {
   }) as HTMLButtonElement;
   // Floating, not a flex child: an in-flow bar would reserve a dead strip at
   // the bottom of the board even while there is nothing to submit.
-  barEl = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [
-    ctaBtn,
-    el("p", { class: "vc-note vc-note-center", text: s.confirmHint }),
-  ]);
+  // No "nothing changes until you confirm" note under the button any more:
+  // the board's lead already says it (copy audit 2026-10-01).
+  barEl = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [ctaBtn]);
 
   pageEl = el("div", { class: "vc-page" }, [el("div", { class: "vc-scroll" }, nodes), barEl]);
   mount(pageEl);
@@ -1655,11 +1654,6 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
     // installs the new screen's handler BEFORE tearing us down, so restoring
     // unconditionally would clobber it and strand the user.
     if (backHandler === viewerBack) setBack(prevBack);
-    try {
-      app?.enableVerticalSwipes?.();
-    } catch {
-      /* best-effort */
-    }
   };
 
   document.body.append(overlay);
@@ -1678,11 +1672,9 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
 
   document.addEventListener("keydown", onKey);
   setBack(viewerBack);
-  try {
-    app?.disableVerticalSwipes?.();
-  } catch {
-    /* best-effort — an older client simply keeps its swipe-to-close */
-  }
+  // Swipe-to-close is already off for the whole page (`keepOpenOnVerticalSwipe`
+  // at boot), so the viewer neither disables it on open nor — the old bug —
+  // turns it back on when it closes.
 }
 
 /**
@@ -2149,10 +2141,7 @@ function renderOverlapSheet(keys: string[]): void {
       void confirmOverlap(picked);
     },
   });
-  const bar = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [
-    confirmBtn,
-    el("p", { class: "vc-note vc-note-center", text: s.confirmHint }),
-  ]);
+  const bar = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [confirmBtn]);
   const pageEl = el("div", { class: "vc-page" }, [
     el("div", { class: "vc-scroll" }, [header, el("div", { class: "vc-list" }, cards)]),
     bar,

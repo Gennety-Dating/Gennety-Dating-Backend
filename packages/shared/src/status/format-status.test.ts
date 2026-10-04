@@ -132,7 +132,7 @@ describe("formatStatusText", () => {
       },
       "en",
     );
-    expect(text).toBe("⏳ Matches drop in 5h 30m");
+    expect(text).toBe("⏳ Matches arrive in 5h 30m");
   });
 
   it("renders minutes with the almost-ready emoji in English", () => {
@@ -143,7 +143,7 @@ describe("formatStatusText", () => {
       },
       "en",
     );
-    expect(text).toBe("✨ Almost ready! Matches drop in 40m");
+    expect(text).toBe("✨ Almost ready! Matches arrive in 40m");
   });
 
   it("renders processing", () => {

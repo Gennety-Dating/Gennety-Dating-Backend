@@ -2,7 +2,7 @@
  * HTTP boundary of `/v1/venues/*` — the iOS standby canvas.
  *
  * The list is the canvas talking (either rail, mocked here the way
- * `scratch-map-api.test.ts` mocks it); the photo route is reached by a signed
+ * `date-map-api.test.ts` mocks it); the photo route is reached by a signed
  * link and nothing else, so most of what is worth pinning is which links it
  * refuses. Prisma and Google are mocked: no SQL, no Places bill.
  */

@@ -3,7 +3,7 @@ import { prisma } from "@gennety/db";
 /**
  * Universal Elo rating for the matching engine.
  *
- * The system proposes a Thursday match simultaneously to both users
+ * The system proposes a drop match simultaneously to both users
  * (double-blind — no inviter / invitee). Each user's Accept/Decline is treated
  * as one independent rating "game" against the other side: A's decision moves
  * B's rating, and B's decision moves A's. So a single match resolves into two
@@ -141,7 +141,7 @@ export interface EloPairResult {
 }
 
 /**
- * Resolve one Thursday match into two independent Elo updates.
+ * Resolve one drop match into two independent Elo updates.
  *
  * The convention matches the product spec:
  *   - User A's decision determines User B's rating change.

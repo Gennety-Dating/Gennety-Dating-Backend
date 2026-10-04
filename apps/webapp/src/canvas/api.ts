@@ -52,24 +52,26 @@ export interface BumpResponse {
    * belongs to the call that completed the pair.
    */
   deck: { topicsForA: string[]; topicsForB: string[] } | null;
+  /**
+   * Only on a HOLD (`hold: true`) that verified the pair — this call's or the
+   * partner's while this one waited (2026-09-29). Both phones start the
+   * meeting ceremony at `startAt` on the SERVER's clock; `role` says which
+   * half of the scene this phone plays (A waited, B completed the pair).
+   * Absent when the pair was verified long before this call: the scene is
+   * never replayed. A server without the long-poll never sends it.
+   */
+  ceremony?: BumpCeremony;
+}
+
+export interface BumpCeremony {
+  startAt: string;
+  role: "A" | "B";
+  serverNow: string;
 }
 
 export interface ProximityResponse extends RadarReading {
   ok: true;
   arrived: boolean;
-}
-
-export interface ScratchState {
-  optIn: boolean;
-  /** Geohash-6 tiles. Never coordinates — see `services/scratch-map.ts`. */
-  exploredTiles: string[];
-  exploredPercent: number;
-  discoveredVenues: string[];
-}
-
-export interface ScratchPingResponse extends ScratchState {
-  ok: true;
-  uncovered: boolean;
 }
 
 /** Refused for a reason the screen can act on, rather than a network fault. */
@@ -108,14 +110,22 @@ export async function postBump(
   initData: string,
   matchId: string,
   at: { lat: number; lng: number; when: Date },
+  options: { hold?: boolean } = {},
 ): Promise<BumpResponse> {
   const res = await apiFetch(`${apiBase}/v1/dates/${matchId}/bump`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...auth(initData) },
-    // The device clock is sent deliberately: the alignment check compares the
-    // two phones' own clocks, so the server cannot substitute its own — it
-    // clamps ours instead when it is implausible.
-    body: JSON.stringify({ lat: at.lat, lng: at.lng, at: at.when.toISOString() }),
+    // `hold: true` is the meeting ceremony's gesture: the server stamps its
+    // own time and keeps the request open (up to 10 s) for the partner's hold.
+    // The device clock still goes along — a server from before holds ignores
+    // `hold` and pairs the two phones by their own clocks, as for a shake,
+    // and clamps ours when it is implausible.
+    body: JSON.stringify({
+      lat: at.lat,
+      lng: at.lng,
+      at: at.when.toISOString(),
+      ...(options.hold ? { hold: true } : {}),
+    }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as BumpResponse;
@@ -133,36 +143,4 @@ export async function postProximity(
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as ProximityResponse;
-}
-
-export async function fetchScratchMap(initData: string): Promise<ScratchState> {
-  const res = await apiFetch(`${apiBase}/v1/scratch`, { headers: auth(initData) });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as ScratchState;
-}
-
-export async function postScratchPing(
-  initData: string,
-  at: { lat: number; lng: number },
-): Promise<ScratchPingResponse> {
-  const res = await apiFetch(`${apiBase}/v1/scratch/ping`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...auth(initData) },
-    body: JSON.stringify(at),
-  });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as ScratchPingResponse;
-}
-
-export async function putScratchOptIn(
-  initData: string,
-  enabled: boolean,
-): Promise<ScratchState> {
-  const res = await apiFetch(`${apiBase}/v1/scratch/opt-in`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...auth(initData) },
-    body: JSON.stringify({ enabled }),
-  });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as ScratchState;
 }

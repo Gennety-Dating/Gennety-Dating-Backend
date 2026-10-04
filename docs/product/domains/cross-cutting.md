@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are touching a concern that spans every flow: the loading/success marks, quiet hours, standby/starvation, embedding freshness, GDPR, or languages. -->
+<!-- WHEN_TO_READ: You are touching a concern that spans every flow: the loading/success marks, Mini App swipe-to-close, quiet hours, standby/starvation, embedding freshness, GDPR, or languages. -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 7328-7583) — migrated 2026-09-01 -->
 
 ## Cross-Cutting Concerns
@@ -141,6 +141,19 @@ Telegram-only: the native iOS client draws its own success states and no `/v1/*`
 shape changed. Demo mode (DEMO_MODE.md) builds the same bundle and inherits it —
 no gate, no paid step, no puppet branch.
 
+### The Mini App sheet does not close on a vertical swipe (2026-09-29)
+
+Every Mini App page turns Telegram's swipe-to-minimise/close off at boot
+(`keepOpenOnVerticalSwipe` in `apps/webapp/src/telegram-swipes.ts`, called right
+after `ready()`/`expand()`; Bot API 7.7+). Scrolling back up from the top of a
+screen used to drag the whole sheet down. The ways out are Telegram's own:
+Close and the ⋯ menu in the header, or a swipe on the Telegram header itself.
+Older clients keep swipe-to-close. Nothing turns it back on — no screen, sheet
+or viewer may call `enableVerticalSwipes`. The document root also does not
+rubber-band past its edge (`overscroll-behavior-y: none` on `html, body` in
+`theme.css`, inlined in `index.html` and `verification.html`). Demo: identical.
+A test checks every HTML entry's module for the call.
+
 ### Quiet Hours
 
 23:00–09:00 Europe/Kyiv. Enforced inside the **re-engagement** and
@@ -153,7 +166,7 @@ quiet-hours guard like the other nudges.)
 ### Standby / Starvation
 
 `Profile.standbyCount` (canonical) + `missedWeeks` (legacy alias) increment
-on every weekly batch where the user was eligible but unpaired, and also as
+on every scheduled batch where the user was eligible but unpaired, and also as
 a compensating boost when the user accepted a proposal but the peer declined.
 They reset to 0 on a successful pairing. `lastMissedAt` powers the "priority
 boosted" UX ping. The matching score adds `starvationBonus(standbyCount)`
@@ -182,7 +195,7 @@ in truth it had refused to look. (The same window is what stopped the demo:
 it pitches seconds after the reason is given, so it lost that race every time.)
 A caller appending several constraints at once — post-date feedback — refreshes
 once at the end rather than per line.
-Before every weekly batch, matching takes and processes the complete dirty
+Before every scheduled batch, matching takes and processes the complete dirty
 snapshot without the cron's 20-row cap, logging only aggregate counts.
 Eligibility requires `embeddingDirty = false`: a still-dirty profile is skipped
 fail-closed, receives no stale match, and does not gain a false standby penalty.

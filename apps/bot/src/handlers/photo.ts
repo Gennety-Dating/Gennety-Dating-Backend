@@ -8,6 +8,7 @@ import {
   type ChatPhotoRejection,
   type ChatToolResult,
 } from "../services/chat-profile-tools.js";
+import { continueOrOpenChatSession, touchChatSession } from "../services/chat-sessions.js";
 import { downloadTelegramFile, uploadChatImage } from "../services/storage.js";
 import { sniffImageMime } from "../utils/image-sniff.js";
 import { photoValidationMessage } from "./menu/edit-profile.js";
@@ -139,14 +140,20 @@ photoHandler.on("message:photo", async (ctx, next) => {
 
   const userId = account.id;
   let result: ChatToolResult;
+  let sessionId: string;
   try {
     const uploaded = await uploadChatImage(userId, buffer, mime);
     // Строка в `Message` — не журнал, а условие входа: `attachChatProfilePhoto`
     // требует, чтобы картинка уже была ходом ЭТОГО человека в чате, и проверяет
     // это по таблице. Мобильный `/v1/chat/message` пишет её ровно так же.
+    // Чат — по правилу старых сборок (решение 2026-09-30): последний, если в
+    // нём писали меньше шести часов назад, иначе новый. Без чата пара строк
+    // не попала бы ни в один разговор в истории приложения.
+    sessionId = await continueOrOpenChatSession(userId);
     await prisma.message.create({
       data: {
         userId,
+        sessionId,
         role: "user",
         content: ctx.message.caption?.trim() ?? "",
         imageUrl: uploaded.path,
@@ -166,7 +173,8 @@ photoHandler.on("message:photo", async (ctx, next) => {
   // модели ПОСЛЕДНЕЕ изображение — мобильный чат при следующем открытии
   // попытался бы приложить этот же снимок ещё раз.
   await prisma.message
-    .create({ data: { userId, role: "assistant", content: reply } })
+    .create({ data: { userId, sessionId, role: "assistant", content: reply } })
+    .then((row) => touchChatSession(sessionId, row.createdAt))
     .catch((err: unknown) => {
       console.warn("[photo] chat history write failed:", err);
     });

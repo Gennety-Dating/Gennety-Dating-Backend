@@ -11,8 +11,88 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**ПОРЯДОК СЛЕДУЮЩЕГО ВЫКАТА (записано 2026-09-26 при посадке трёх забытых веток на ствол) — читать до любого PENDING ниже.**
-В очереди четыре миграции, и у них противоположные требования к порядку:
+**PENDING 2026-10-04 — Портрет девушки в онбординге: продолжение руки (вариант 3).**
+Обновлён только ассет `apps/webapp/src/gender/female.webp` и комментарий о его
+подготовке. Для пользователей нужен выпуск статической сборки Mini App; БД,
+env и бот не меняются. Демо использует тот же портрет. iOS содержит исправленные
+@2x/@3x в своём `main`; до телефона правка доедет с новой сборкой приложения.
+Проверки: 6 тестов экрана пола, typecheck, production build и визуальная проверка
+настоящего экрана через dev-preview. Исходное лицо и плавные маски сохранены.
+Откат — прежний портрет и повторная статическая сборка.
+
+**PENDING 2026-10-04 — Profiler: контекстные вопросы вместо еженедельных повторов, карточка контекста над вопросом.**
+Код бота и `@gennety/shared`, без миграций и env (новые вопросы — экземпляры с id `<f|m>_ctx:<семья>:<ключ>` в
+существующей `profiler_answers`). Решения — журнал решений 2026-10-04 (две записи). Контракт `/v1/me/profiler`
+расширен аддитивно (`question.context`); старые сборки iOS поле не читают и показывают текст вопроса как раньше.
+- **Что изменится на проде сразу после рестарта:** еженедельные повторы «планы на выходные» / «лучшее за неделю» /
+  «что смотришь» прекращаются, первые два вопроса и «общие интересы» уходят из банка (их старые ответы перестают
+  попадать в промпты айсбрейкеров — так и задумано). Открывающий вопрос партии может быть контекстным (не больше 2 в
+  неделю): «свежая тема» перед назначенным свиданием (6–72 ч), «тот же формат?» через 2–21 день после подтверждённого
+  свидания, «похоже, твой формат — …» при 2+ свиданиях одного впечатления, продолжение своего плана через 30 дней,
+  перепроверка через 60 дней. В Telegram карточка — цитата над вопросом; «свежая тема» переписывает ещё не раскрытый
+  совет Wingman о человеке (один вызов модели на ответ).
+- **Выкат:** rsync кода + `pm2 restart gennety-bot`; Mini App не меняется. От порядка других блоков не зависит.
+- **Проверка:** `pnpm --filter @gennety/shared exec vitest run src/profiler` и
+  `pnpm --filter @gennety/bot exec vitest run src/services/profiler src/services/wingman src/public/routes/profiler-native`;
+  на проде — `GET /v1/me/profiler` без токена → 401; SQL «после» через сутки:
+  `SELECT split_part(question_id, ':', 2) AS family, count(*) FROM profiler_answers WHERE question_id LIKE '%\_ctx:%' GROUP BY 1;`
+  — семьи появляются, на человека за неделю не больше двух строк.
+- **Откат:** вернуть коммит и рестарт. Строки `…_ctx:…`, записанные новым кодом, старый код не узнаёт и молча
+  пропускает (`profilerQuestionById` → undefined): живой контекстный вопрос у приложения освобождается веткой
+  «вопроса нет в банке», у Telegram — стоп-таймером через 6 ч.
+- **Демо:** демо-бот использует тот же Profiler — поведение то же.
+- **iOS:** карточка над вопросом — сборка iOS с `ProfilerQuestionContext` (тот же заход, `main` iOS); без неё вопрос
+  показывается без карточки. Текст самодостаточен у «сигнатуры» и перепроверки; «свежая тема» и «формат» без
+  карточки теряют, о каком свидании речь, а продолжение («Получилось начать — или пока откладываешь?») — сам
+  предмет: тексты укорочены под карточку (2026-10-04, кадры стенда iOS) — выкатывать бэкенд вместе со сборкой или
+  принять, что у пользователей старой сборки продолжения будут непонятны. Продолжения и перепроверки пойдут сразу
+  после выката у всех, кто ответил на исходный вопрос больше 30 / 60 дней назад (по одному в партию, до двух в неделю).
+
+---
+
+**PENDING 2026-10-03 — APNs: доставка и sandbox-, и production-токенов с одного сервера.**
+Только код бота (`apps/bot/src/services/apns.ts`): на `BadDeviceToken` один повтор на втором хосте Apple, подошедший
+хост запоминается для токена в памяти; токен стирается, только если отказали оба хоста. Без миграций, без env,
+без правки iOS и контракта `/v1`; от порядка других блоков не зависит. Решение — журнал решений 2026-10-03.
+- **Выкат:** только рестарт бота (rsync кода + `pm2 restart gennety-bot`), Mini App не меняется.
+- **Env (по желанию, не обязательно для этого блока):** к выходу в App Store — `APNS_ENVIRONMENT=production`, чтобы
+  первый запрос шёл на хост большинства токенов.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/apns.test.ts` (блок «sandbox / production
+  token routing»); на проде — пуш на сборку из Xcode и на сборку из TestFlight доходят оба, `pushToken` у обоих
+  после пуша не обнулён.
+- **Откат:** вернуть `apns.ts` из предыдущего коммита и рестарт.
+- **Демо:** не затрагивается (APNs только у iOS).
+- **iOS:** изменений не требует.
+
+---
+
+**Deployed 2026-10-02 — выкат A/B/C: прод `c372883f` (+ знак `f60f27b2`) → `52ab95f6` (весь `main`), 22:09–22:18 UTC.**
+Скрипт `~/gennety-backups/deploy-abc-1002.sh a|b|c` (вне репо), по «Порядку» ниже. Бэкап до: `prod-backup-2026-10-02T22-08-09Z.json`
+(28 users, 68 таблиц; таблицы мероприятий пусты). Гейты скрипта: бэкап < 6 ч; набор применённых миграций ровно под заход
+(из `_prisma_migrations`); удаления rsync — только пути из git известных коммитов; `*.brand-backup-*` исключён (на
+сервере лежит копия знака от 09-28).
+- **A** `a4ac094d` — `db:deploy` (`user_block_reason`) → drift OK → рестарт `online 1 → 1`.
+- **B** `c1644d50` — гейт мероприятий `{0,0,0,0}`; «до»: `ai_memory_export_preference` declined 1 / undecided 27, онбординг со
+  старыми инструкциями 0, `negotiating` с предложенными слотами 0 → рестарт `online 2 → 2` → `db:deploy` трёх миграций
+  (`drop_launch_events`, `retire_external_profile_import`, `time_agreement_activity`) → drift OK; `events` = NULL, колонок
+  `ai_memory_export%` 0, `time_agreement_activities` есть; `/v1/events` → 404.
+- **C** `52ab95f6` — «до»: 6 сообщений / 1 человек → `db:deploy` (`chat_sessions`) → drift OK → рестарт `online 3 → 3`;
+  сообщений без чата 0, чатов 1; `/v1/date-map` без токена → 401.
+Mini App пересобрана и залита на каждом заходе (страницы 200). **Проверка онбординга насквозь** (`~/gennety-backups/
+deploy-verify-1002.sh`: синтетический мобильный аккаунт `findOrCreateMobileUserByPhone` + `signAccessToken`, живой API
+`:3101`, затем `deleteUserAccount`): согласие → `conversational`; город `ua:kyiv` 200; `GET /interview` → `messages 0`,
+`basics.complete false` (iOS по `basicsPending` показывает экраны анкеты — «Повторить» больше нет); `POST /basics` →
+complete + вопрос об увлечениях; ответ → вопрос о партнёре; `photos/continue`, `chat/sessions`, `date-map`,
+`profile-gaps`, `me/verification` — 200; аккаунт удалён. Фото и голосовая визитка не проверены (фото проходят проверку
+лица; финал шлёт уведомление основателю). **Демо НЕ выкачено** (Mini App-блоки с `pnpm demo:deploy` — только прод).
+**Откат:** снимки `/opt/gennety-prev-20261002-220906` (A), `…-221224` (B), `…-221556` (C), Mini App `/var/www/dating-app.prev-<те же>`;
+миграции B односторонние (данные — из бэкапа).
+
+---
+
+**[ВЫПОЛНЕН 2026-10-02 — см. блок «Deployed 2026-10-02» ниже] ПОРЯДОК ВЫКАТА A/B/C (записано 2026-09-26 при посадке трёх забытых веток на ствол) — читать до любого PENDING ниже.**
+В очереди четыре миграции (с 2026-09-30 — пять, пятая `20260930120000_chat_sessions` — выкат C в п. 5), и у них
+противоположные требования к порядку:
 - `20260926120000_user_block_reason` — аддитивная; новый код пишет колонку при каждом блоке → `db:deploy` ДО рестарта;
 - `20260926200000_drop_launch_events` и `20260926200100_retire_external_profile_import` — деструктивные; работающий
   код читает то, что они удаляют (джойн `events`, колонки `users.ai_memory_export_*` в каждом чтении `user`) →
@@ -30,12 +110,462 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
    знает удаляемых таблиц и колонок, а без `time_agreement_activities` только пишет предупреждения. Для B нужен режим
    скрипта «рестарт, потом миграции» или ручные шаги — обычный прогон здесь неверен.
 4. Проверки после выката — в каждом блоке ниже.
+5. **Выкат C (добавлено 2026-09-30)** — чаты агента, миграция `20260930120000_chat_sessions` (аддитивная + бэкфилл).
+   Требование ОБРАТНОЕ, чем у B: `db:deploy` ДО рестарта (новый код читает `messages.session_id` в `/v1/chat/history` и
+   пишет в `chat_sessions` — без миграции чат приложения отвечает 500). Поэтому B катится на коммите ДО посадки чатов
+   (`c1644d50` — ствол, от которого ветвились чаты, — или любой коммит ствола до коммита чатов), а C — любым коммитом
+   после, ОБЫЧНЫМ прогоном скрипта (миграции, потом рестарт). Если B
+   всё же катится коммитом, в котором уже есть чаты, окно между рестартом и `db:deploy` ломает чат приложения — держать
+   его секундами и после выката выполнить починку из блока C ниже. Подробности — блок «чаты агента» ниже.
 
-**iOS:** для выката правок не требуется (подробности — в блоках).
+**iOS:** для выкатов A и B правок не требуется; сборке iOS с чатами (новый экран истории) нужен выкат C.
 
 ---
 
-**PENDING — время свидания: пятичасовой запас + Live Activity `time_agreement` (2026-09-23, на ствол посажено 2026-09-26).**
+**PENDING (2026-10-02) — Très Branché удалён из каталога Киева (DECISIONS 2026-10-02).**
+Файлы каталога и витрина — в `main`. **Запись данных — прод И демо, отдельно от кода (агенту запись
+на дроплет закрыта классификатором):** удалить строки `curated_venues` с
+`place_id = 'ChIJ6ZKeqVnO1EARYnOXe-r0swY'` (5 на базу, по копии на вуз; координаты 50.4488, 30.5122) —
+`deleteMany` из `/opt/gennety` и `/opt/gennety-demo` тем же способом, что выключение La Coupole в
+`~/gennety-backups/deploy-showcase.sh`, предварительно сохранив строки в JSON (откат — `createMany`
+из него). Внешних ключей на таблицу нет. Пока код не выкачен, на дроплете старый `approved.json` с
+этими строками — ручной `seed-venues:import` там вернул бы их. Витрина: выбор, которого нет в базе,
+выпадает сам — после удаления строк Très Branché исчезает и со старым кодом.
+Проверка: `select count(*) from curated_venues where place_id = 'ChIJ6ZKeqVnO1EARYnOXe-r0swY'` → 0.
+**Плюс ALTO в premium** (`ChIJ3bKJRaLP1EARiU6B6J-5siI`, 5 строк в `approved.json`): в базы попадёт только
+импортом каталога (`seed-venues:import`, upsert по `universityDomain` + `placeId`) — после выката кода, когда на
+дроплете новый `approved.json`; проверка — `count(*) … where place_id = 'ChIJ3bKJRaLP1EARiU6B6J-5siI' and active` → 5.
+Пункт витрины ALTO без строк в базе просто выпадает — ошибки нет.
+**Плюс 2026-10-03 — ещё пять мест удалить так же** (прод и демо, `deleteMany` по `place_id` с сохранением строк в
+JSON): `ChIJmXMfBxHP1EARTERJS0iRjk0` (CAPULETI), `ChIJG_R5BxfS1EARkyPslwP59vs` (Prynada Ukrainian Cafe),
+`ChIJy3gqpUvP1EARWs4eCSGAkxg` и `ChIJGWt6D0bP1EARZH8fF_Hozlo` (две Чорноморки), `ChIJ85hE68vN1EARS0XiBKJmu04`
+(Trullo D'oro Cafe). Проверка — `count(*)` по этим `place_id` → 0.
+**iOS:** не затрагивает. **Демо:** та же запись.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-02) — Scratch Map снят, `GET /v1/date-map` — карта подтверждённых свиданий (DECISIONS 2026-10-02).**
+**Рестарт бота + пересборка Mini App:** без миграции, env, флагов и зависимостей. От порядка A/B/C выше не зависит.
+Что меняется на проде: `/v1/scratch`, `/v1/scratch/ping`, `/v1/scratch/opt-in` удалены (404); новая ручка
+`GET /v1/date-map` (JWT или `tma`) — только чтение `matches` + `curated_venues`; Date Bump больше не пишет в
+`user_scratch_maps`; доска смены места берёт «уже были» из посещённых свиданий. Mini App: туман и тумблер с канвы
+сняты. **В БД ничего не пишется и не удаляется** — `user_scratch_maps` и `users.scratch_map_opt_in` остаются как
+есть до отдельного решения основателя об удалении (деструктивная миграция, правило 5).
+**Демо:** `GET /v1/date-map` отвечает `confirmedDates: 0` — демо не пишет `dateAttended*` (Bump недостижим).
+**iOS:** старые сборки зовут `/v1/scratch` из настроек и канвы — получают 404, обе ошибки клиент глотает
+(`CanvasModel` `loadScratchMap`/`pingScratch` — `try?`); как выглядит экран «Scratch Map» в настройках старой сборки
+после 404 — не проверено (TestFlight-сборки обновятся сборкой с картой свиданий, где экрана нет).
+Сборке iOS с разделом «Карта свиданий» в профиле выкат нужен; до него раздел не появляется.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/scratch   # 404
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/date-map   # {"confirmedDates":…,"places":[…],"vibes":[…]}
+psql "$DATABASE_URL" -c "select max(updated_at) from user_scratch_maps;"            # не растёт после выката
+```
+
+**Откат:** предыдущий коммит, рестарт, пересборка Mini App — схема не менялась.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01) — фото и проверка: `checking` в `GET /v1/me/verification`, `POST /v1/me/photos/remove`, пол удаления только у `active`, `photos_required` ниже минимума (DECISIONS 2026-10-01).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
+A/B/C выше не зависит — едет с любым заходом (A/B/C), в который попадёт коммит. Что меняется на проде:
+`GET /v1/me/verification` добавляет `checking` (реестр запусков проверки лица в памяти процесса — после рестарта
+пуст, это верно: запуски рестарт не переживают); новая ручка `POST /v1/me/photos/remove` `{paths}` (только JWT);
+`DELETE /v1/me/photos/:index` больше не отказывает онбордингу после выхода со стадии фото — 409 `photo_minimum`
+только у `active`; начало проверки (`native-init` и Mini App проверки) отвечает `photos_required` при 1–3 фото, а не
+только при нуле. Пишет в БД то же, что DELETE: `profiles.photos` и выровненные массивы.
+**Демо:** те же ручки, то же поведение (демо-проверка тоже отмечается в реестре).
+**iOS:** старые сборки не ломаются (`checking` — лишнее поле, новую ручку не зовут). Сборке iOS с мультивыбором фото
+и честным «проверяем» выкат нужен; до него `POST /v1/me/photos/remove` отвечает 404, а `checking` отсутствует.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/me/verification | jq
+# → 200 {"status":"…","checking":false}
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"paths":[]}' https://dating-api.gennety.com/v1/me/photos/remove                    # → 400 (invalid-paths)
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"paths":["no-such-photo.jpg"]}' https://dating-api.gennety.com/v1/me/photos/remove | jq '.photos | length'
+#   → 200, список без изменений
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; схема не менялась. Сборка iOS после отката получает 404 на
+`POST /v1/me/photos/remove` и не видит `checking`.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01) — `GET /v1/me/profile-gaps`: незаполненные пункты профиля для подсказки «Сегодня» (DECISIONS 2026-10-01).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций
+A/B/C выше не зависит — едет с тем заходом, в который попадёт коммит. Ручка новая и только читает: один запрос
+пользователя (профиль + id голосовой записи) и при `PROFILE_MUSIC_ENABLED=true` один `count` треков; в БД ничего не
+пишет. Попутно `GET /v1/radar/state` берёт свои ворота из общего `services/type-radar-availability.ts` — ответ тот же.
+Пункты `music` / `voice` / `type_radar` / `video` появляются только при включённых `PROFILE_MUSIC_ENABLED` /
+`VOICE_PROMPT_ENABLED` / `TYPE_RADAR_ENABLED` / `PROFILE_VIDEO_API_ENABLED`; `reward: "ticket"` — только у `video`
+(бонус за видео не получен и `TICKET_FEATURE_ENABLED`), у `photos` награды нет (бонус за фото приложение не выдаёт).
+**Демо:** та же ручка, то же поведение.
+**iOS:** старые сборки ручку не зовут. Сборке iOS с подсказками профиля (план «Сегодня», этап C) выкат нужен; до него
+она получает 404 и подсказок не показывает.
+
+Проверка после выката (JWT тестового аккаунта iOS):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/me/profile-gaps | jq
+# → 200 {"gaps":[...]} — kind только из video, photos, music, looking_for, age_range, about, interests, voice,
+#   type_radar, major, в этом порядке; у photos есть remaining и нет reward; у video reward "ticket", пока бонус
+#   за видео не получен. Пустой профиль после онбординга почти наверняка содержит "about" (заготовка онбординга).
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/me/profile-gaps   # → 401 без токена
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется. Сборка iOS с подсказками после отката
+получает 404 и просто не показывает их.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01, ночь) — аудит текстов: Mini App + бот (`1fc84c42`; DECISIONS 2026-10-01).**
+Без миграций. **Mini App:** `./scripts/deploy-webapp.sh` + `pnpm demo:deploy` (едет вместе с блоками Mini App ниже).
+**Бот:** нужен рестарт бота на коммите не раньше `1fc84c42` — тексты живут в `packages/shared/src/i18n.ts`; рестарт
+идёт в общем выкате по порядку вверху файла (A/B/C), отдельного требования к миграциям нет.
+**Проверка:** Mini App — новый аккаунт: заголовки ворот крупные и жирные, у «Выбери язык» нет подзаголовка,
+согласие «Прежде чем начать»; анкета — на маленьком телефоне фото предпочтения не наезжают на заголовок. Бот —
+/start: первая строка «*Привет! Это Gennety*» жирная, звёздочек в тексте не видно; памятка перед свиданием —
+подзаголовки пунктов жирные.
+**Rollback:** `git revert 1fc84c42` и тот же прогон.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01, вечер) — Mini App: анкета «основ» без рывков (`ead97137`, `30eac0f2`; DECISIONS 2026-10-01).**
+**Только Mini App**, без миграций и без рестарта бота: `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`; едет вместе
+с блоками Mini App ниже одним прогоном. Меняются `onboarding.tsx`, `onboarding-basics.tsx`, `onboarding.css`,
+`keyboard-viewport.ts` — одна живая сцена онбординга, клавиатура на `transform` + `viewportChanged`, плитка цели на
+`clip-path`, один `selectionChanged` на выбор.
+**Проверка на телефоне в Telegram** (headless этого не видел): новый аккаунт → имя: клавиатура поднимает «Продолжить»
+одним ходом, без подскока; возраст: заголовок и число не растут после ухода клавиатуры; пол → предпочтение → цель:
+выбор без замирания, одна вибрация на касание; вернуться «назад» с темы на город — поиск сохранил набранное.
+**Rollback:** `git revert 30eac0f2 ead97137` и тот же прогон.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01, позже) — Mini App: Gennety Display на резкости 50 (DECISIONS 2026-10-01).**
+**Только Mini App**, тот же путь, что у блока ниже (`./scripts/deploy-webapp.sh` + `pnpm demo:deploy`), и едет
+вместе с ним: в стволе это те же три файла `GennetyDisplay-*.woff2`, перерезанные из Geologica `SHRP` 50 вместо
+100 (имена, `@font-face` и веса прежние, ~24,8 КБ каждый). Если блок ниже уже выкачен отдельно — повторить тот же
+прогон; Vite даст файлам новые хеши, так что телефон с закэшированным старым шрифтом получит новый.
+**iOS:** тот же шрифт в iOS-стволе — выходит с ближайшей сборкой приложения, от выката сервера не зависит.
+Проверка — команды блока ниже (три файла, 200, immutable); глазами: в карточке места длинное название с «С»
+(«Кафе «Старое место»») может уйти на вторую строку — известное следствие более широкой «С», а не поломка выката.
+**Rollback:** `git revert` коммита и тот же прогон.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-10-01) — Mini App: заголовки на Gennety Display вместо Space Grotesk (у того нет кириллицы) (DECISIONS 2026-10-01).**
+**Только Mini App**: нет схемы, env, флагов и изменений сервера — дифф это `apps/webapp/**` плюс документация.
+Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё
+`pnpm demo:deploy` — демо собирает свой бандл из того же исходника (поведение в демо то же, что в проде).
+Независим от порядка миграций выше: можно выкатить отдельно или вместе с любым заходом. До выката на проде
+по-прежнему смешанные заголовки (латиница Space Grotesk + кириллица запасным шрифтом) на страницах билета,
+магазина билетов, Date Terminal, Type Radar и смены места. В бандле появляются три файла
+`assets/GennetyDisplay-{SemiBold,Bold,ExtraBold}-<hash>.woff2` (~24,6 КБ каждый; качаются только нужные странице
+веса); Caddy уже отдаёт `*.woff2` как immutable — правка Caddyfile не нужна.
+**iOS:** не затронут.
+
+Проверка после выката:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -s https://dating-calendar.gennety.com/ticket.html | grep -c 'Space+Grotesk'          # 0
+CSS=$(curl -s https://dating-calendar.gennety.com/ticket.html | grep -o 'assets/ticket-[^"]*\.css' | head -1)
+curl -s "https://dating-calendar.gennety.com/$CSS" | grep -o 'assets/GennetyDisplay-[A-Za-z]*-[^)]*\.woff2' | sort -u
+#   → три файла; каждый: curl -sI …/<файл> → 200, content-type font/woff2, cache-control … immutable
+# На телефоне (Telegram, язык uk): Date Terminal / билет — «Ти на місці», «Це метч», корешок «ВХІД» одним шрифтом.
+```
+
+**Rollback:** `git revert` коммита и снова `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-30, ночь) — нативный шаг фото открыт до «Продолжить»: `POST /v1/onboarding/photos/continue`, `PUT /v1/me/photos/order`, лимит загрузок 30/ч (DECISIONS 2026-09-30, ночь).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App и Telegram не затронуты (обе ручки — только
+JWT, `/v1/me/photos` зовёт только натив). Едет вместе с двумя блоками анкеты ниже (тот же день) и с iOS той же даты:
+её менеджер фото зовёт обе новые ручки, а без выката шаг фото закрывался бы сам на четвёртом фото. Старые сборки iOS
+не ломаются: их «Продолжить» шлёт слово в чат, и коллектор на ≥ 4 фото идёт дальше. Пишет в БД: `profiles.photos` и
+выровненные с ним массивы (порядок), `onboarding_progress.completed_fields` (`photos` на выходе со стадии).
+**Демо:** те же ручки.
+
+Проверка после выката (JWT тестового аккаунта iOS на шаге фото, ≥ 4 фото):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/interview \
+  | jq '{expectingPhoto, photoCount, hint: .uiHint.control}'
+# → expectingPhoto true и после 4 фото, hint photo_upload
+curl -s -X PUT -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"order":[1,0,2,3]}' https://dating-api.gennety.com/v1/me/photos/order | jq '.photos | length'
+# → 4 (первые два поменялись местами); '{"order":[0]}' → 409 photos_changed
+curl -s -X POST -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/photos/continue \
+  | jq '{expectingPhoto, question}'
+# → expectingPhoto false, question — следующий вопрос (голос) или финал
+```
+
+**Rollback:** `git revert` коммита + рестарт бота (вместе с iOS той же даты). Порядок фото, уже заданный людьми, остаётся
+валидным — это те же выровненные массивы.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-30, ночь) — прокси-чат: присутствие («в сети», «печатает…») и долгий опрос `GET …/chat?after=`, `POST …/chat/presence`, `thread-id` у пушей прокси-чата (DECISIONS 2026-09-30).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций A/B/C
+выше не зависит — едет с тем заходом, в который попадёт коммит. Что меняется: у `ProxyChatState` два новых поля
+(`partnerPresence`, `version`); `GET /v1/matches/{id}/chat` с `?after=` держит запрос до 20 с (без `after` — как
+раньше); новый `POST /v1/matches/{id}/chat/presence`; у `proxy.message`/`proxy.opened` в `aps` появляется `thread-id`.
+Присутствие живёт только в памяти процесса — рестарт его забывает, следующий удар телефона восстанавливает.
+Нагрузка: одно открытое соединение на открытый экран чата (вместо запроса раз в 4 с), удар присутствия раз в ~20 с
+на человека в окне чата и раз в ~3 с, пока он печатает. Caddy держит 20-секундный запрос без настроек (таймауты по
+умолчанию больше), глобальный лимит 600/мин на IP не задевается.
+**Демо:** как в проде; кукла-партнёр присутствия не шлёт — всегда «не в сети».
+**iOS:** старые сборки не шлют `after` и не замечают новых полей — ведут себя как раньше. Сборке iOS с «в сети» /
+«печатает…» этот выкат нужен; до него она видит ответ без `version`, опрашивает раз в 4 с, на `POST …/presence`
+получает 404 и перестаёт бить — точки и «печатает» просто нет.
+
+Проверка после выката (JWT двух тестовых аккаунтов одной `scheduled`-пары в окне T-1ч…T+2ч):
+
+```sh
+M=<matchId>
+curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq '{open, version, partnerPresence}'
+# → version — строка вида "<штамп>.<n>", partnerPresence — три false
+curl -s -X POST -H "Authorization: Bearer $JWT_B" -H 'content-type: application/json' \
+  -d '{"place":"chat","typing":true}' https://dating-api.gennety.com/v1/matches/$M/chat/presence | jq
+V=$(curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq -r .version)
+curl -s -H "Authorization: Bearer $JWT_A" https://dating-api.gennety.com/v1/matches/$M/chat | jq .partnerPresence
+# → {"online":true,"inChat":true,"typing":true} в течение ~6 с после удара B
+time curl -s -H "Authorization: Bearer $JWT_A" "https://dating-api.gennety.com/v1/matches/$M/chat?after=$V" | jq .version
+# → без событий отвечает через ~20 с той же версией; напечатать/отправить из второго телефона — ответ сразу
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется, откатывать нечего. Сборка iOS с
+присутствием после отката сама падает на опрос раз в 4 с (нет `version`) и без точки (404 на `presence`).
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-30) — чат агента: отдельные чаты как в ChatGPT (`chat_sessions`), заголовки/саммари маленькой моделью, инструменты `search_past_chats`/`read_past_chat` (DECISIONS 2026-09-30).**
+**Миграция `20260930120000_chat_sessions` — `db:deploy` ДО рестарта (выкат C в «Порядке» выше).** Аддитивная: таблица
+`chat_sessions` + `messages.session_id` (nullable, FK с каскадом, два индекса) и бэкфилл в той же транзакции — сообщения
+каждого человека режутся на чаты по паузе >6 ч, каждому сообщению ставится чат. Старый код её переживает (про таблицу и
+колонку не знает). Без новых env и зависимостей; необязательный `CHAT_SESSION_DIGEST_CRON_SCHEDULE` (по умолчанию
+`2-59/5 * * * *`). Mini App не пересобирать. Что меняется: `GET /v1/chat/sessions`, `PATCH /v1/chat/sessions/{id}`,
+`sessionId` у `/v1/chat/message`/`/voice` (ответ несёт `sessionId`) и `?sessionId=` у `/history`; агент видит только
+текущий чат, прошлые — через два инструмента чтения; строки Pulse `chat_topic` — теперь чаты; `/history` подписывает
+снимки страницы одним запросом к Storage; новый воркер `chat-session-digest` пишет заголовки и саммари молчащим 30 мин
+чатам — сразу после выката это весь бэкфилл, по 10 чатов за тик (≈120/ч), каждый = один вызов `MODELS.fast` + один
+эмбеддинг. `/v1/chat/topics` не изменён (старые сборки).
+**Демо:** как прод (та же миграция и тот же код; отдельных веток поведения нет).
+**iOS:** сборке с чатами нужен этот выкат — до него `/v1/chat/sessions` отвечает 404, и клиент должен это пережить.
+Старые сборки не меняются: без `sessionId` ход идёт в последний чат моложе шести часов. Id чатов сервер отдаёт в нижнем
+регистре — сравнивать как UUID, не как строки.
+
+SQL «до» (оценка бэкфилла и очереди воркера; только чтение):
+
+```sql
+SELECT count(*) AS messages, count(DISTINCT user_id) AS people FROM messages;
+```
+
+Проверка после выката:
+
+```sql
+SELECT count(*) AS chats FROM chat_sessions;                        -- ≈ число бывших «тем» по всем людям
+SELECT count(*) AS orphans FROM messages WHERE session_id IS NULL;  -- → 0
+SELECT count(*) AS untitled FROM chat_sessions WHERE title IS NULL; -- убывает ~120/ч, пока воркер разбирает бэкфилл
+```
+
+Если `orphans` > 0 — это ходы, которые старый процесс успел записать между `db:deploy` и рестартом. Починка (кладёт их
+в последний чат человека и двигает его `updated_at`; человек без единого чата остаётся без чата — ищется тем же SELECT):
+
+```sql
+UPDATE messages m SET session_id = (
+  SELECT s.id FROM chat_sessions s WHERE s.user_id = m.user_id ORDER BY s.updated_at DESC, s.id DESC LIMIT 1
+) WHERE m.session_id IS NULL;
+UPDATE chat_sessions s SET updated_at = x.last
+FROM (SELECT session_id, max(created_at) AS last FROM messages WHERE session_id IS NOT NULL GROUP BY session_id) x
+WHERE x.session_id = s.id AND x.last > s.updated_at;
+```
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/chat/sessions?limit=5" | jq '.sessions[] | {id, title, messageCount}'
+# → чаты своего тестового аккаунта, новые сверху; у старых title сначала — первая реплика, через ~полчаса — заголовок модели
+curl -s -H "Authorization: Bearer $JWT" "https://dating-api.gennety.com/v1/chat/history?sessionId=<id>&limit=5" | jq '.messages | length'
+pm2 logs gennety-bot --lines 300 --nostream | grep -E "Chat-session digest scheduled|chat-session-digest\]|chat/history\]|chat-digest\]"
+# → расписание при старте; строки "scanned=… digested=… failed=…" каждые 5 мин, пока есть бэкфилл;
+#   строки "[chat/history] rows=… images=… sign_ms=… total_ms=…" — одна на запрос истории
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; миграция остаётся (аддитивна, старый код её не видит). Сообщения,
+записанные старым кодом после отката, будут без чата — при повторном выкате выполнить починку выше.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-30, вечер) — нативная анкета сохраняется экранами: `POST /v1/onboarding/basics`, чат после неё с чистого листа (DECISIONS 2026-09-30, вечер).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать (её маршрут лишь переехал
+на общий разбор тела). Едет вместе с блоком ниже (тот же день, те же файлы) и с iOS той же даты: iOS до неё шлёт
+анкету в чат и с этим сервером увидит «Повторить». Что меняется: экраны анкеты iOS сохраняют ответы новой ручкой, «назад»
+на них — пересохранение; завершающее сохранение сбрасывает `users.message_history` и задаёт первый свободный вопрос;
+`GET /interview` открывает чат только после анкеты и несёт `basics`. Пишет в БД: колонки анкеты (`users`, `profiles`),
+`onboarding_progress` и — на завершающем сохранении — `users.message_history` (сброс + одна реплика ассистента).
+**Демо:** те же ручки в `demo-api`.
+
+Проверка после выката (JWT нового тестового аккаунта iOS после согласия и города):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/interview \
+  | jq '{messages: (.messages | length), basics}'
+# → messages 0, basics.complete false, basics.limits {18,55,140,220}
+curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+  -d '{"firstName":"Test","age":25,"gender":"female","preference":"men","height":170,"relationshipIntents":["spark"]}' \
+  https://dating-api.gennety.com/v1/onboarding/basics | jq '{messages, basics: .basics.complete}'
+# → одна реплика ассистента (вопрос об увлечениях), basics true
+pm2 logs gennety-bot --lines 200 --nostream | grep "opening turn"   # → пусто
+```
+
+**Rollback:** `git revert` коммита + рестарт бота (вместе с iOS той же даты). Сохранённые анкеты остаются валидными —
+это те же колонки, что пишет Mini App.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-30) — нативная анкета открывается первым вопросом: `GET /v1/onboarding/interview` делает ход `resume` (DECISIONS 2026-09-30).**
+**Только рестарт бота:** без миграции, env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций выше не
+зависит — едет с тем заходом, в который попадёт коммит. Что меняется: новый человек из iOS после согласия и города больше
+не попадает в пустой чат — первое чтение интервью задаёт вопрос «Имя и возраст» (ход коллектора `resume`, тот же, что при
+передаче из Mini App), и iOS показывает экраны анкеты. Уже застрявшие аккаунты (согласие есть, реплик нет) открываются тем
+же чтением при следующем входе на экран. Пишет в БД только у таких аккаунтов: `onboarding_progress` (создаётся) и одна
+реплика ассистента в `users.message_history`.
+**Демо:** та же ручка в `demo-api`, поведение одинаковое; Telegram-демо не затронуто.
+**iOS:** правок не требует; экраны анкеты начинают показываться сами. Клиент с 2026-09-30 вместо пустого чата показывает
+ожидание и «Повторить» — после выката повтор открывает анкету.
+
+Проверка после выката (JWT нового тестового аккаунта iOS после согласия и города, до первого ответа):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/onboarding/interview \
+  | jq '{stepIndex, question, messages: (.messages | length), uiHint}'
+# → stepIndex 2, question — вопрос имени и возраста, messages 1, uiHint.control "name_age"
+# повторный запрос: messages по-прежнему 1 (второй раз не открывается)
+pm2 logs gennety-bot --lines 200 --nostream | grep "opening turn failed"   # → пусто
+```
+
+**Rollback:** `git revert` коммита + рестарт бота. Записанные реплики-вопросы остаются в истории и безвредны: это тот же
+вопрос, который коллектор задал бы первым ответом.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-29) — счётчик непрочитанного анонимного чата: `SerializedMatch.proxyChatUnreadCount` (DECISIONS 2026-09-29).**
+**Только рестарт бота:** без миграции (запрос покрыт существующим индексом `proxy_messages (match_id, created_at)`),
+без env, флагов и зависимостей; Mini App не пересобирать. От порядка миграций выше не зависит — едет с тем заходом, в
+который попадёт коммит. Что меняется: у `/v1/matches/current` новое поле — число сообщений партнёра после собственного
+курсора вызывающего, null без окна чата. Поле только читает: курсоры `proxy_read_at_*` и отметки доставки двигает
+по-прежнему лишь открытие чата (`GET /v1/matches/{id}/chat`). Нагрузка — один `count` на опрос и только у
+`scheduled`-пары с флагом `COORDINATION_FEATURE_ENABLED`; до открытия чата запроса нет.
+**Демо:** как в проде (поле только читает).
+**iOS:** поле необязательное, старые сборки его не замечают; значок «N новых» на кнопке чата — задача iOS «Chat Hub»,
+которой нужен этот выкат (до него поля в ответе нет — клиент читает как null, значка нет).
+
+Проверка после выката (JWT своего тестового аккаунта в `scheduled`-паре):
+
+```sh
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/matches/current \
+  | jq '.match | {proxyChatOpensAt, proxyChatUnreadCount}'
+# → до T-1ч: число 0; без пары или вне `scheduled`: оба null
+# прод-БД, только чтение: два опроса /current подряд курсоры не меняют
+SELECT proxy_read_at_a, proxy_read_at_b FROM matches WHERE id = '<matchId>'::uuid;
+# на свидании: партнёр пишет 2 сообщения → поле 2; открыть чат в приложении → на следующем опросе 0
+```
+
+**Rollback:** `git revert` коммита + рестарт бота; в БД ничего не пишется, откатывать нечего.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-29) — экран свидания Mini App: удержание вместо встряхивания + церемония встречи (DECISIONS 2026-09-29).**
+**Только Mini App**: нет схемы, env, флагов; дифф — `apps/webapp/**` плюс документация. Путь **Deploy Mini App Only**
+(`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё `pnpm demo:deploy` (демо собирает свой бандл из
+того же исходника; экран в демо не достижим, поведение то же, что в проде).
+**Порядок с ботом:** синхронная сцена на двух телефонах требует серверной половины — `hold: true` с долгим ожиданием и
+`ceremony` в ответе `POST /v1/dates/:id/bump` (работа в `apps/bot`, свой PENDING-блок). Выкатывать Mini App **вместе с
+ботом или после него**. Если Mini App уедет раньше, экран всё равно работает: старый сервер игнорирует `hold`, спаривает
+по `at` как встряхивание и отвечает сразу без `ceremony`; сцена тогда играет на каждом телефоне локально (ролью B), когда
+опрос состояния увидит подтверждение, — не в такт, но целиком. Смешанная пара «новый Mini App + старый iOS со
+встряхиванием» подтверждается как раньше.
+**iOS:** не затронут этим выкатом (перенос церемонии в Swift — отдельная работа в репо iOS).
+
+Проверка после выката:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+JS=$(curl -s https://dating-calendar.gennety.com/date-terminal.html | grep -o 'assets/date-terminal-[^"]*\.js' | head -1)
+curl -s "https://dating-calendar.gennety.com/$JS" | grep -c 'hold-capsule'   # ≥ 1 (новый экран)
+# На двух телефонах (Telegram iOS/Android) у места свидания в окне T-15м…T+2ч:
+# 1) открыть «Date Terminal» из бота на обоих; внизу — рисунок двух телефонов и капсула «Удерживай»;
+# 2) положить телефоны верхними краями друг к другу, на первом удержать капсулу 0,6 с — капсула
+#    «Ждём партнёра…» с бликом; на втором удержать в течение 10 с;
+# 3) после выката бота: на первом маскот прыгает с капсулы и исчезает, на втором падает сверху,
+#    подмигивает и становится знаком плашки «Встреча подтверждена»; вибрации — толчок на первом,
+#    щелчок на втором, «успех» на первом; затем разорванный билет и темы разговора;
+#    до выката бота: сцена на обоих ролью B, с задержкой до ~1,5 с после подтверждения.
+```
+
+**Rollback:** `git revert` коммита и снова `./scripts/deploy-webapp.sh` + `pnpm demo:deploy` (вернётся встряхивание;
+сервер его по-прежнему принимает).
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-29) — Mini App не закрывается вертикальным свайпом; корень страниц не пружинит (DECISIONS 2026-09-29).**
+**Только Mini App**: нет схемы, env, флагов и изменений сервера — дифф это `apps/webapp/**` плюс документация.
+Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`), `pm2 restart` не нужен; обязательно ещё
+`pnpm demo:deploy` — демо собирает свой бандл из того же исходника (поведение в демо то же, что в проде).
+Независим от порядка миграций выше: можно выкатить отдельно или вместе с любым заходом.
+**iOS:** не затронут.
+
+Проверка после выката:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -s https://dating-calendar.gennety.com/index.html | grep -c 'overscroll-behavior-y'   # 1
+# На телефоне (Telegram iOS/Android ≥ 7.7) открыть календарь, смену места (и просмотр фото в ней),
+# билеты, Premium: потянуть вниз от верха страницы — лист остаётся на месте; «Закрыть»/⋯ закрывают.
+```
+
+**Rollback:** `git revert` коммита и снова `./scripts/deploy-webapp.sh` + `pnpm demo:deploy`.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) — Date Bump: удержание (`hold: true`) и общий старт церемонии встречи (2026-09-29).**
+Коммит «feat(bump): hold gesture with a common ceremony start» на стволе. **Только рестарт бота** — без
+миграций (схема не менялась), без env, без новых зависимостей; Mini App не пересобирать (терминал
+переходит на удержание отдельным коммитом). В сводном выкате порядок безразличен. Решение — журнал
+решений, 2026-09-29.
+
+**Что изменится на проде сразу:** `POST /v1/dates/:matchId/bump` с `hold: true` становится долгим запросом
+(до 10 с) и отвечает `ceremony { startAt, role, serverNow }`. Без `hold` — ответ байт в байт прежний: старые
+сборки iOS и закешированный Mini App не замечают выката. Пользователей удержания до выхода новых клиентов нет.
+
+**Проверка после выката:**
+- `pm2 logs gennety-bot --lines 50 --nostream` — без ошибок `[bump-ceremony]` / `[date-bump]` на старте.
+- Живой смоук (нужна назначенная пара в окне T-15м…T+2ч у заведения — обычно проверяется на свидании
+  основателя): два удержания в пределах 10 с → оба ответа с одинаковым `ceremony.startAt`, роли `A`/`B`;
+  одиночное удержание → через ~10 с `{ ok: true, verified: false, deck: null }`; колода появляется в
+  `GET /v1/date/state` через несколько секунд после подтверждения.
+- Регрессия встряхивания: `pnpm --filter @gennety/bot exec vitest run src/public/date-bump-api.test.ts
+  src/services/date-bump.test.ts` зелёные на выкатываемом коммите.
+
+**Откат:** `git revert` коммита + рестарт бота; данных не пишет ничего нового, откатывать в БД нечего.
+**Демо:** не затронуто — демо не входит в `DATE_BUMP_PENDING`, удержание получает `too-early`.
+**iOS:** клиент переходит на удержание по фазе 5 плана `docs/architecture/meet-ceremony-plan.md` (репо iOS);
+спека — `hold`, `BumpCeremony`, `ceremony` в `openapi/gennety-v1.yaml`. Таймаут запроса клиента > 10 с.
+
+---
+
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) — время свидания: пятичасовой запас + Live Activity `time_agreement` (2026-09-23, на ствол посажено 2026-09-26).**
 Ветка `time-agreement` посажена на ствол 2026-09-26: коммиты «feat(db): time_agreement_activities …»
 (таблица + миграция), «feat(scheduler): the five-hour rule, and the `time_agreement` lock-screen card»
 (правило и карточка) и следующий за ними `fix(land)`. **Миграция + рестарт бота:**
@@ -103,7 +633,7 @@ actions»); `currentMatchStatus: negotiating` = слот ушёл за пяти�
 
 ---
 
-**PENDING — внешний импорт AI-контекста (Magic Prompt / ai-memory export) удалён из онбординга (2026-09-24, на ствол посажено 2026-09-26).**
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) — внешний импорт AI-контекста (Magic Prompt / ai-memory export) удалён из онбординга (2026-09-24, на ствол посажено 2026-09-26).**
 **Бот + Mini App + СХЕМА (деструктивная миграция, переписывает данные).** Решение основателя, запись в журнале решений
 2026-09-24. Коммит «refactor(onboarding): purge magic prompt and ai-memory export pipeline» и следующий за ним
 `fix(land)`. Ветка своего блока в очереди не написала — этот блок дописан при посадке. Онбординг теперь: анкета (с двумя
@@ -154,7 +684,7 @@ SELECT count(*) FROM pg_type WHERE typname = 'AiMemoryExportPreference';  -- 0
 
 ---
 
-**PENDING — Launch Events удалены из кода и из схемы (2026-09-16).**
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) — Launch Events удалены из кода и из схемы (2026-09-16).**
 **Бот + webapp + СХЕМА (деструктивная миграция).** Решение основателя, запись в журнале решений
 2026-09-16. Подсистема офлайн-мероприятий вырезана целиком, а не выключена флагом: ушли сервисы
 `services/event-*`, роутер `/v1/events/*`, портал двери `/gk/*`, админ-хаб `/admin/events/*`,
@@ -221,7 +751,7 @@ SELECT migration_name, finished_at FROM _prisma_migrations
 
 ---
 
-**PENDING (2026-09-26) — необязательная причина блокировки, только для модерации: `user_blocks.reason` + тело `{ reason?: string }` у `POST /v1/matches/:id/block`. НУЖНА МИГРАЦИЯ.**
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-26) — необязательная причина блокировки, только для модерации: `user_blocks.reason` + тело `{ reason?: string }` у `POST /v1/matches/:id/block`. НУЖНА МИГРАЦИЯ.**
 Коммит 2026-09-26 «блокировка: необязательная причина…» (этот блок в том же пуше). **Миграция
 `20260926120000_user_block_reason`** — `ALTER TABLE "user_blocks" ADD COLUMN "reason" TEXT;`, чисто аддитивная
 (nullable, без дефолта, строки не переписываются). **Порядок: `db:deploy` ДО рестарта бота** — новый клиент Prisma
@@ -248,7 +778,7 @@ SELECT count(*) FILTER (WHERE reason IS NOT NULL) FROM user_blocks;
 
 ---
 
-**PENDING (2026-09-26) — до свидания только анонимный чат, у каждой пары; опросник T-3ч и обмен Telegram-хэндлами удалены; отмена — в любой момент (копия).**
+**Deployed 2026-10-02 (was PENDING; выкат A/B/C, прод `52ab95f6`) (2026-09-26) — до свидания только анонимный чат, у каждой пары; опросник T-3ч и обмен Telegram-хэндлами удалены; отмена — в любой момент (копия).**
 Коммиты 2026-09-26 «координация: …» (этот блок в том же пуше). **Только код бота:** без миграций (колонки `coord*`
 оставлены, в схеме правка только комментариев), без env, Mini App не пересобирать. Флаг `COORDINATION_FEATURE_ENABLED`
 на проде уже `true` (проверено `/v1/app/config` 2026-09-26) — остаётся как рубильник чата.

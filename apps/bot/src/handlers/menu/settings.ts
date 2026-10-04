@@ -224,10 +224,9 @@ export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void>
   const nonce = newAccountActionNonce();
 
   const keyboard = new InlineKeyboard()
+    // Copy audit 2026-10-01: one plain "No, keep it" instead of the joke pair;
+    // `deleteFinalNoHard` stays in i18n, unused.
     .text(t(lang, "deleteFinalNoSoft"), "menu:back")
-    .success()
-    .row()
-    .text(t(lang, "deleteFinalNoHard"), "menu:back")
     .success()
     .row()
     .text(t(lang, "deleteFinalYes"), `menu:settings:delete:yes:${nonce}`)
