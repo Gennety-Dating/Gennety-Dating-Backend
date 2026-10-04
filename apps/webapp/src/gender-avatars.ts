@@ -24,8 +24,14 @@
  * separate decision from where the face sits.
  *
  * Prepared by `~/Desktop/gennety-gender-avatars/prepare.mjs`. Never copy an
- * original in by hand: they are 2000x3555 PNGs against ~47 KB of WebP here, on
+ * original in by hand: they are 2000x3555 PNGs rather than the WebP here, on
  * the onboarding path. Same rule and same reason as the preference photographs.
+ *
+ * The female portrait includes the hand continuation selected on 2026-10-04
+ * (variant 3): the straight lower-left cut is reconstructed in the asset,
+ * while the face, composition and runtime fades stay unchanged. Preserve this
+ * repair when regenerating. The matching iOS patch and recipe live in
+ * `design/onboarding-choices/` and `scripts/prepare-onboarding-choices.py`.
  */
 import femaleAvatar from "./gender/female.webp";
 import maleAvatar from "./gender/male.webp";
