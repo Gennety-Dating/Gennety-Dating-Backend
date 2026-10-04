@@ -122,12 +122,15 @@ export function isContextualProfilerQuestionId(id: string): boolean {
 
 const TOPIC: ContextualText = {
   priority: "high",
+  // Short on purpose: the card above names the date, so the text does not.
+  // Next to the card, the long first version no longer fit the app's bubble
+  // beside the mascot (stand frames, 2026-10-04).
   text: {
-    en: "Before you meet: what are you most into right now — a project, a new hobby, a trip? I can slip it in as a topic for your date.",
-    ru: "Перед встречей: чем ты сейчас больше всего горишь — проект, новое хобби, поездка? Могу подкинуть это как тему для разговора.",
-    uk: "Перед зустріччю: чим ти зараз найбільше гориш — проєкт, нове хобі, поїздка? Можу підкинути це як тему для розмови.",
-    de: "Vor eurem Treffen: Was begeistert dich gerade am meisten — ein Projekt, ein neues Hobby, eine Reise? Ich kann es als Gesprächsthema einbringen.",
-    pl: "Przed spotkaniem: czym teraz najbardziej żyjesz — projekt, nowe hobby, wyjazd? Mogę to podrzucić jako temat do rozmowy.",
+    en: "What are you into right now — a project, a hobby, a trip? I'll slip it in as a topic for your date.",
+    ru: "Чем ты сейчас горишь — проект, хобби, поездка? Подкину это как тему для встречи.",
+    uk: "Чим ти зараз гориш — проєкт, хобі, поїздка? Підкину це як тему для зустрічі.",
+    de: "Was begeistert dich gerade — ein Projekt, ein Hobby, eine Reise? Ich bringe es als Thema für euer Treffen ein.",
+    pl: "Czym teraz żyjesz — projekt, hobby, wyjazd? Podrzucę to jako temat na spotkanie.",
   },
   options: [
     {
@@ -173,12 +176,13 @@ const TOPIC: ContextualText = {
 
 const FORMAT: ContextualText = {
   priority: "medium",
+  // "The same" points at the date on the card above.
   text: {
-    en: "Next date — this format again, or something different: calmer at a table, on the move, or an evening dinner?",
-    ru: "Следующее свидание — снова в таком формате или по-другому: спокойнее за столиком, в движении или вечером за ужином?",
-    uk: "Наступне побачення — знову в такому форматі чи інакше: спокійніше за столиком, у русі чи ввечері за вечерею?",
-    de: "Das nächste Date — wieder in diesem Format oder anders: ruhiger am Tisch, in Bewegung oder abends beim Essen?",
-    pl: "Następna randka — znowu w takim formacie czy inaczej: spokojniej przy stoliku, w ruchu czy wieczorem przy kolacji?",
+    en: "Next time — the same, or different: calmer, on the move, or an evening dinner?",
+    ru: "В следующий раз — так же или иначе: спокойнее, в движении или вечером за ужином?",
+    uk: "Наступного разу — так само чи інакше: спокійніше, у русі чи ввечері за вечерею?",
+    de: "Nächstes Mal — genauso oder anders: ruhiger, in Bewegung oder abends beim Essen?",
+    pl: "Następnym razem — tak samo czy inaczej: spokojniej, w ruchu czy wieczorem przy kolacji?",
   },
   options: [
     {
@@ -396,11 +400,11 @@ const FOLLOWUPS: Readonly<Record<string, ContextualText>> = {
   f_learning: {
     priority: "medium",
     text: {
-      en: "You wanted to learn this. Did you get started — or is it still on hold?",
-      ru: "Ты хотела этому научиться. Получилось начать — или пока откладываешь?",
-      uk: "Ти хотіла цього навчитися. Вдалося почати — чи поки відкладаєш?",
-      de: "Das wolltest du lernen. Hast du angefangen — oder schiebst du es noch auf?",
-      pl: "Chciałaś się tego nauczyć. Udało się zacząć — czy wciąż odkładasz?",
+      en: "Did you get started — or is it still on hold?",
+      ru: "Получилось начать — или пока откладываешь?",
+      uk: "Вдалося почати — чи поки відкладаєш?",
+      de: "Hast du angefangen — oder schiebst du es noch auf?",
+      pl: "Udało się zacząć — czy wciąż odkładasz?",
     },
     options: [
       {
@@ -420,11 +424,11 @@ const FOLLOWUPS: Readonly<Record<string, ContextualText>> = {
   m_learning: {
     priority: "medium",
     text: {
-      en: "You wanted to learn this. Did you get started — or is it still on hold?",
-      ru: "Ты хотел этому научиться. Получилось начать — или пока откладываешь?",
-      uk: "Ти хотів цього навчитися. Вдалося почати — чи поки відкладаєш?",
-      de: "Das wolltest du lernen. Hast du angefangen — oder schiebst du es noch auf?",
-      pl: "Chciałeś się tego nauczyć. Udało się zacząć — czy wciąż odkładasz?",
+      en: "Did you get started — or is it still on hold?",
+      ru: "Получилось начать — или пока откладываешь?",
+      uk: "Вдалося почати — чи поки відкладаєш?",
+      de: "Hast du angefangen — oder schiebst du es noch auf?",
+      pl: "Udało się zacząć — czy wciąż odkładasz?",
     },
     options: [
       {
@@ -444,11 +448,11 @@ const FOLLOWUPS: Readonly<Record<string, ContextualText>> = {
   f_travel: {
     priority: "low",
     text: {
-      en: "You wanted to go here. Did you make it — or is it still a plan?",
-      ru: "Ты хотела сюда поехать. Получилось — или всё ещё в планах?",
-      uk: "Ти хотіла сюди поїхати. Вдалося — чи досі в планах?",
-      de: "Da wolltest du hin. Hat es geklappt — oder ist es noch ein Plan?",
-      pl: "Chciałaś tam pojechać. Udało się — czy to wciąż plan?",
+      en: "Did you make it there — or is it still a plan?",
+      ru: "Получилось съездить — или всё ещё в планах?",
+      uk: "Вдалося з'їздити — чи досі в планах?",
+      de: "Hat es geklappt — oder ist es noch ein Plan?",
+      pl: "Udało się pojechać — czy to wciąż plan?",
     },
     options: [
       {
@@ -468,11 +472,11 @@ const FOLLOWUPS: Readonly<Record<string, ContextualText>> = {
   m_travel: {
     priority: "low",
     text: {
-      en: "You wanted to go here. Did you make it — or is it still a plan?",
-      ru: "Ты хотел сюда поехать. Получилось — или всё ещё в планах?",
-      uk: "Ти хотів сюди поїхати. Вдалося — чи досі в планах?",
-      de: "Da wolltest du hin. Hat es geklappt — oder ist es noch ein Plan?",
-      pl: "Chciałeś tam pojechać. Udało się — czy to wciąż plan?",
+      en: "Did you make it there — or is it still a plan?",
+      ru: "Получилось съездить — или всё ещё в планах?",
+      uk: "Вдалося з'їздити — чи досі в планах?",
+      de: "Hat es geklappt — oder ist es noch ein Plan?",
+      pl: "Udało się pojechać — czy to wciąż plan?",
     },
     options: [
       {
