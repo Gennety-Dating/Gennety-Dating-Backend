@@ -35,7 +35,7 @@
     "dev:reset-onboarding:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-onboarding.mjs --apply",
     "dev:reset-verification": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-verification.mjs",
     "dev:watch-and-match": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-watch-and-match.mjs",
-  "dev:meme-reveal": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-meme-reveal-demo.mjs",
+    "dev:meme-reveal": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-meme-reveal-demo.mjs",
     "dev:short-video": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-short-video-demo.mjs",
     "audit:stuck-matches": "pnpm --filter @gennety/bot exec tsx ../../scripts/audit-stuck-matches.mjs",
     "cadence:normalize-standby": "pnpm --filter @gennety/bot exec tsx ../../scripts/normalize-standby-count.mjs",
@@ -69,19 +69,21 @@
     "overrides": {
       "baseline-browser-mapping": "2.11.0",
       "body-parser": "2.3.0",
-      "brace-expansion": "5.0.9",
+      "brace-expansion": "5.0.12",
       "browserslist": "4.28.7",
       "deepmerge-ts": "8.0.1",
-      "fast-uri": "3.1.6",
+      "fast-uri": "3.1.8",
       "fast-xml-parser": "5.7.0",
       "fflate": "0.7.5",
       "form-data": "4.0.6",
-      "ip-address": "10.3.1",
+      "ip-address": "10.7.1",
       "js-yaml": "4.3.2",
       "nanoid": "3.3.18",
       "postcss": "8.5.23",
       "qs": "6.16.0",
-      "vite": "6.4.3"
+      "vite": "6.4.3",
+      "multer": "2.4.0",
+      "@remotion/eslint-config-flat>typescript-eslint": "8.64.0"
     },
     "auditConfig": {
       "ignoreGhsas": [

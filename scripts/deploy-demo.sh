@@ -146,8 +146,8 @@ rsync -az --delete --dry-run --itemize-changes "${RSYNC_EXCLUDES[@]}" \
 echo "→ Syncing source to ${SERVER}:${REMOTE_PATH}…"
 rsync -az --delete "${RSYNC_EXCLUDES[@]}" ./ "$SERVER:$REMOTE_PATH/"
 
-echo "→ Installing, generating Prisma client, building…"
-ssh "$SERVER" "cd $REMOTE_PATH && pnpm install --frozen-lockfile && pnpm --filter @gennety/db db:generate && pnpm build"
+echo "→ Installing and generating Prisma client…"
+ssh "$SERVER" "cd $REMOTE_PATH && pnpm install --frozen-lockfile && pnpm --filter @gennety/db db:generate"
 
 # The demo runs the same Prisma schema against its own database, so a schema
 # change has to be pushed to BOTH. `db:drift-check` is the gate: a demo database
