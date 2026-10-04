@@ -1386,8 +1386,8 @@ button {
   flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: none;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;

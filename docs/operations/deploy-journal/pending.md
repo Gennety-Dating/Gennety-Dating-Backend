@@ -11,6 +11,17 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-04 — Mini App city picker: Kyiv, Odesa and Dnipro only.**
+Germany, Lviv and Kryvyi Rih are hidden from the list, search and geolocation
+selection; the shared catalog remains intact. Odesa and Dnipro retain the
+waitlist action with a borderless, softer “coming soon” badge. Requires the
+static Mini App build to be released to production and demo; no bot restart,
+schema or env changes. Demo has the same three-city picker; iOS is unaffected.
+Verification: `pnpm --filter @gennety/webapp typecheck`, `lint` and `build` passed.
+After release, check the three rows, hidden-city search and both waitlist badges.
+Rollback: revert the change and release the static build again.
+
+
 **Deployed 2026-10-04 (production + demo `6febc945`; see [release record](./2026-10-04-telegram.md)) 2026-10-04 — Портрет девушки в онбординге: продолжение руки (вариант 3).**
 Обновлён только ассет `apps/webapp/src/gender/female.webp` и комментарий о его
 подготовке. Для пользователей нужен выпуск статической сборки Mini App; БД,

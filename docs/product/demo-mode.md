@@ -318,20 +318,17 @@ demographic plausibility, and the alternative — a Ukrainian name for everyone
 
 ### The city waitlist has no demo branch, on purpose
 
-The demo market is Kyiv, and the city picker offers the same two tiers it does
-in production (§1.3) — so a visitor who taps Berlin lands on the real waitlist
-screen and the walkthrough stops there. That is correct: the screens are
-production code, and a demo that hid the waitlist would be showing a picker that
-does not exist.
+The demo market is Kyiv. Since 2026-10-04 the Mini App picker shows the same
+three cities in production and demo: Kyiv, Odesa and Dnipro. Germany, Lviv and
+Kryvyi Rih are hidden from the list, search and geolocation selection while
+remaining in the shared catalog. Odesa and Dnipro have a borderless "coming
+soon" badge; choosing either opens the real waitlist screen and stops the
+walkthrough there.
 
-It is not a trap, which is the only reason it needs no special case. "Choose
-another city" drops the row and returns to the picker in one tap, so the
-walkthrough resumes on Kyiv. Nothing is written to `Profile`, so an aborted
-detour leaves no state behind. **The demo script says pick Kyiv;** if a visitor
-wanders, hand them the button rather than restarting the demo. Adding a
-demo-only branch here would mean the one screen a founder most wants to show
-investors — "we already have N people waiting in Berlin" — is the one screen the
-demo cannot show.
+"Choose another city" drops the waitlist row and returns to the picker in one
+tap, so the walkthrough resumes on Kyiv. Nothing is written to `Profile` by
+that detour. **The demo script says pick Kyiv.** There is no demo-only picker
+or waitlist branch.
 
 ### Blind decision, preserved
 

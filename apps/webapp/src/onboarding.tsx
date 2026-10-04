@@ -2019,6 +2019,14 @@ function OtpGate(props: {
   );
 }
 
+// Presentation only: keep the full server catalog intact for later expansion.
+// Restore a city on this screen by adding its canonical key here.
+const CITY_PICKER_VISIBLE_KEYS: ReadonlySet<string> = new Set([
+  "ua:kyiv",
+  "ua:odesa",
+  "ua:dnipro",
+]);
+
 /**
  * Dating-city gate. The list is the server's city catalog
  * (`/state.cityCatalog`), grouped by country, and it has two kinds of entry:
@@ -2056,11 +2064,13 @@ function CityGate(props: {
   const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // No search yet → the whole catalog is the option list.
-  const options = results ?? props.cities;
+  // Apply the same visibility policy to the initial list and search hits.
+  const options = useMemo(
+    () => (results ?? props.cities).filter((city) => CITY_PICKER_VISIBLE_KEYS.has(city.homeCityKey)),
+    [results, props.cities],
+  );
 
-  // Country runs, in the order the server sent them. Grouping is presentation
-  // only — the server owns the order, so a new country needs no bundle change.
+  // Country runs, in the order the server sent the visible cities.
   const groups = useMemo(() => {
     const out: Array<{ countryCode: string; cities: TelegramCityHit[] }> = [];
     for (const city of options) {
@@ -2096,11 +2106,8 @@ function CityGate(props: {
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  // A query that matches nothing in the catalog is not a typo to shrug at — it
-  // is a city this product has no plans for at all, and it deserves the same
-  // explanation the geolocation branch gives. (A city we HAVE plans for is now
-  // a hit with `status: "waitlist"`, not an empty result.)
-  const searchMissed = results !== null && results.length === 0 && !searching && !error;
+  // Hidden catalog cities are unavailable on this screen, including in search.
+  const searchMissed = results !== null && options.length === 0 && !searching && !error;
 
   // Reveal the city list above the keyboard. Telegram's WebView overlays the
   // keyboard without scrolling the focused field up, so when matches land we
@@ -2173,11 +2180,8 @@ function CityGate(props: {
         position.coords.latitude,
         position.coords.longitude,
       );
-      // Outside every city we know: say so and leave the choice open, with the
-      // catalog already on screen. A waitlist city resolves with a city and
-      // `supported: false` — that is a real answer, so it goes through
-      // `choose` like any tap and lands on the waitlist screen.
-      if (!resolved.city) {
+      // Geolocation must not select a city hidden from this picker.
+      if (!resolved.city || !CITY_PICKER_VISIBLE_KEYS.has(resolved.city.homeCityKey)) {
         setNote(s.cityOutsideMarket);
         app.HapticFeedback?.notificationOccurred("warning");
         return;

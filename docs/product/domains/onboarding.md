@@ -840,7 +840,7 @@ have not launched landed in a **pool of one** — no ad spend there, no curated
 venue catalog, no operations, and no possible partner — while the app kept
 counting down to a drop they could never be in.
 
-**Since 2026-09-04 the picker offers more cities than we serve, and the extra
+**Since 2026-09-04 the catalog contains more cities than we serve, and the extra
 ones are a waitlist rather than a dating city.** The catalog has two tiers and
 the difference is a hard product boundary, not a label:
 
@@ -850,6 +850,12 @@ the difference is a hard product boundary, not a label:
 | What the tap does | writes `Profile.homeCityKey`, registration continues | writes `city_waitlist_entries`, registration **stops** |
 | Can be matched | yes | no — and nothing about them is ever paired, scored or scheduled |
 | Venues, ads, ops | exist | do not |
+
+Since 2026-10-04 the Telegram Mini App picker shows only Kyiv, Odesa and
+Dnipro. Germany, Lviv and Kryvyi Rih remain in the shared catalog for later
+restoration, but are hidden from this screen's list, search and geolocation
+selection. Odesa and Dnipro keep the borderless "coming soon" badge and the
+existing waitlist behavior. The same presentation applies in demo mode.
 
 The reason it is a separate table rather than a flag is the same reason the gate
 exists at all: `homeCityKey` IS the matching boundary, so a waitlist key sitting
