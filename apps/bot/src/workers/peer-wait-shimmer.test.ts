@@ -496,6 +496,18 @@ describe("peerWaitShimmerTick", () => {
 
   // --- fallback path (clients that can't render rich drafts) ---------------
 
+  it("declines the Russian partner name in the plain fallback too", async () => {
+    const api = createApi({ richWorks: false });
+    mMatch.findMany.mockResolvedValue([
+      dbRow({
+        status: "proposed", acceptedByA: true, acceptedByB: null,
+        userA: { language: "ru" }, userB: { firstName: "Игорь", gender: "male" },
+      }),
+    ]);
+    await peerWaitShimmerTick(api, { now: NOW });
+    expect(typed(api).sendMessage.mock.calls[0]?.[1]).toBe("Передали Игорю, ждём ответа");
+  });
+
   it("establishes the plain fallback line when the draft is rejected", async () => {
     const api = createApi({ richWorks: false });
     mMatch.findMany.mockResolvedValue([

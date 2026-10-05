@@ -153,6 +153,7 @@ interface SideWork {
   chatId: number;
   lang: Language;
   partnerName: string | null;
+  partnerGender: "male" | "female" | null;
   fallbackMessageId: number | null;
   fallbackEditedAt: Date | null;
   waiting: boolean;
@@ -243,6 +244,7 @@ export async function peerWaitShimmerTick(
         chatId: toTelegramChatId(me.telegramId),
         lang: (me.language ?? "en") as Language,
         partnerName: peer.firstName,
+        partnerGender: peer.gender,
         fallbackMessageId,
         fallbackEditedAt: isA ? match.peerWaitEditedAtA : match.peerWaitEditedAtB,
         waiting,
@@ -300,6 +302,7 @@ export async function peerWaitShimmerTick(
           side: item.side,
           lang: item.lang,
           partnerName: item.partnerName,
+          partnerGender: item.partnerGender,
           startedAt: item.startedAt,
           now,
         });
@@ -354,7 +357,7 @@ async function sendFallback(
 ): Promise<void> {
   const sent = await api.sendMessage(
     item.chatId,
-    peerWaitLabel(item.lang, item.partnerName, item.startedAt, now),
+    peerWaitLabel(item.lang, item.partnerName, item.startedAt, now, item.partnerGender),
   );
   await prisma.match.update({
     where: { id: item.matchId },
@@ -376,7 +379,7 @@ async function editFallback(
     await api.editMessageText(
       item.chatId,
       item.fallbackMessageId!,
-      peerWaitLabel(item.lang, item.partnerName, item.startedAt, now),
+      peerWaitLabel(item.lang, item.partnerName, item.startedAt, now, item.partnerGender),
     );
     result.fallbackEdited++;
   } catch (err) {

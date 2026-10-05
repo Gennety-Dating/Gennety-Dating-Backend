@@ -117,6 +117,26 @@ describe("peerWaitLabel — tier ladder", () => {
     expect(label).not.toContain("{name}");
   });
 
+  it.each([
+    [0, "Передали Ане, ждём ответа"],
+    [10 * MIN, "Аня ещё думает над ответом"],
+    [2 * HOUR, "Аня пока молчит, ждём"],
+    [8 * HOUR, "Напомнили Ане о тебе, ждём ответа"],
+    [30 * HOUR, "Аня долго не отвечает"],
+  ])("uses the Russian case required by the unchanged tier at %s ms", (elapsed, expected) => {
+    expect(peerWaitLabel("ru", "Аня", ago(elapsed), NOW)).toBe(expected);
+  });
+
+  it("uses partner gender for Russian consonant endings only", () => {
+    expect(peerWaitLabel("ru", "Игорь", null, NOW, "male")).toBe("Передали Игорю, ждём ответа");
+    expect(peerWaitLabel("ru", "Николь", null, NOW, "female")).toBe("Передали Николь, ждём ответа");
+    for (const lang of ["en", "uk", "de", "pl"] as const) {
+      expect(peerWaitLabel(lang, "Аня", null, NOW, "female")).toBe(
+        t(lang, "peerWaitT1Sent", { name: "Аня" }),
+      );
+    }
+  });
+
   it("falls back to the anonymous line when there is no name", () => {
     // Substituting a generic noun into the personalised templates breaks case
     // agreement in de/pl, so a nameless partner gets its own sentence.
@@ -148,6 +168,14 @@ describe("issuePeerWaitDraft", () => {
     lang: "en" as const,
     partnerName: "Anna",
   };
+
+  it("passes partner gender to the Russian draft formatter", async () => {
+    const { api, drafts } = createApi();
+    await issuePeerWaitDraft(api, {
+      ...base, lang: "ru", partnerName: "Игорь", partnerGender: "male", startedAt: null, now: NOW,
+    });
+    expect(drafts[0]!.html).toContain("Передали Игорю, ждём ответа");
+  });
 
   it("sends a tg-thinking draft under the stable id", async () => {
     const { api, drafts } = createApi();

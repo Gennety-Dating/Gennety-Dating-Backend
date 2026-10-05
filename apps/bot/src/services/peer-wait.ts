@@ -4,6 +4,7 @@ import { t, type Language } from "@gennety/shared";
 import { telegramReachable } from "./telegram-reach.js";
 import { toTelegramChatId } from "../utils/telegram-target.js";
 import { sendRichMessageDraft, thinkingHtml } from "./telegram-rich.js";
+import { russianNameDative, type NameGender } from "../utils/russian-name.js";
 
 /**
  * The "waiting on your partner" shimmer (PRODUCT_SPEC §3.6b).
@@ -101,13 +102,17 @@ export function peerWaitLabel(
   partnerName: string | null | undefined,
   startedAt: Date | null | undefined,
   now: Date = new Date(),
+  partnerGender?: NameGender | null,
 ): string {
   const elapsed = elapsedMs(startedAt, now);
   const name = partnerName?.trim();
   if (!name) return t(lang, "peerWaitAnon");
 
   const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
-  return t(lang, tier.key, { name });
+  const needsDative = tier.key === "peerWaitT1Sent" || tier.key === "peerWaitT4Nudged";
+  return t(lang, tier.key, {
+    name: lang === "ru" && needsDative ? russianNameDative(name, partnerGender) : name,
+  });
 }
 
 /** Everything `issuePeerWaitDraft` needs to render one beat. */
@@ -117,6 +122,7 @@ export interface PeerWaitDraftInput {
   side: "A" | "B";
   lang: Language;
   partnerName: string | null | undefined;
+  partnerGender?: NameGender | null;
   /** When this side started waiting; null renders tier 1. */
   startedAt: Date | null | undefined;
   now?: Date;
@@ -140,6 +146,7 @@ export async function issuePeerWaitDraft(
     input.partnerName,
     input.startedAt,
     input.now ?? new Date(),
+    input.partnerGender,
   );
   // No `emojiId`: these lines carry no glyph at all (see the TIERS comment).
   await sendRichMessageDraft(api, {
@@ -186,8 +193,8 @@ export function startPeerWaitShimmer(
         // Without it the only available test was "not A", which is exactly the
         // degenerate rule this resolution exists to avoid.
         userBId: true,
-        userA: { select: { telegramId: true, platform: true, language: true, firstName: true } },
-        userB: { select: { telegramId: true, platform: true, language: true, firstName: true } },
+        userA: { select: { telegramId: true, platform: true, language: true, firstName: true, gender: true } },
+        userB: { select: { telegramId: true, platform: true, language: true, firstName: true, gender: true } },
       },
     });
     if (!match) return;
@@ -212,6 +219,7 @@ export function startPeerWaitShimmer(
       side: isA ? "A" : "B",
       lang: (me.language ?? "en") as Language,
       partnerName: peer.firstName,
+      partnerGender: peer.gender,
       startedAt: null,
     });
   })().catch(() => {});
