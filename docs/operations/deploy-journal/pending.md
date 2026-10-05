@@ -11,6 +11,11 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING production 2026-10-05 — Calendar NULL grid initialization.**
+Deploy the shared scheduler backend fix: normalize SQL NULL `proposed_times`
+before the existing grid-opening CAS. Already deployed and verified in demo;
+no schema, env or static bundle change. See [demo release](./2026-10-05-calendar-null.md).
+
 **PENDING 2026-10-04 — Mini App city picker: Kyiv, Odesa and Dnipro only.**
 Germany, Lviv and Kryvyi Rih are hidden from the list, search and geolocation
 selection; the shared catalog remains intact. Odesa and Dnipro retain the

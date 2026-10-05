@@ -9,6 +9,7 @@ afterAll(() => setVariantRng(null));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
+    $executeRaw: vi.fn().mockResolvedValue(0),
     user: {
       findUnique: vi.fn(),
     },
@@ -301,6 +302,12 @@ describe("scheduler: startScheduling", () => {
 
     const api = createApi();
     await startScheduling(api, "match-1");
+
+    const normalize = vi.mocked(prisma.$executeRaw).mock.calls.at(-1)!;
+    const normalizeSql = (normalize[0] as TemplateStringsArray).join("?");
+    expect(normalizeSql).toContain("proposed_times IS NULL");
+    expect(normalizeSql).toContain("status = 'negotiating'");
+    expect(normalize[1]).toBe("match-1");
 
     const updateArg = mMatch.updateMany.mock.calls[0]![0] as {
       where: Record<string, unknown>;

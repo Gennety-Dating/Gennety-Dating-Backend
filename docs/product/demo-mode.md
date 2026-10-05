@@ -536,6 +536,13 @@ do not change its scheduler, defaults or copy.
 
 ## Recovery
 
+Calendar initialization uses the production scheduler. Since 2026-10-05 it
+normalizes a SQL NULL `proposed_times` array before claiming the unopened grid:
+Prisma reads NULL as an empty list, but its `isEmpty` filter excludes NULL.
+This prevents a completed demo ticket gate from opening a blank Calendar.
+Existing grids and availability are preserved on retries; no demo-only grid
+or schema change is needed.
+
 - **A pass is shown honestly.** The real decline card, the real reason prompt,
   the real "this pair will never be shown again" consequence — then the demo
   offers a button that deletes its own match history and re-pitches. The

@@ -236,6 +236,14 @@ export async function startScheduling(
   // could only ever disagree with each other.
   const resend = opts?.afterTicketGate === true;
   const slots = generateProposalSlots();
+  // PostgreSQL arrays without a default can be NULL; Prisma reads those as []
+  // but `isEmpty: true` does not match them. Normalize only unopened grids so
+  // the existing CAS still owns initialization and never resets live picks.
+  await prisma.$executeRaw`
+    UPDATE matches SET proposed_times = ARRAY[]::timestamp[]
+    WHERE id = ${matchId}::uuid AND status = 'negotiating'
+      AND proposed_times IS NULL
+  `;
   const opened = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating", proposedTimes: { isEmpty: true } },
     data: {
