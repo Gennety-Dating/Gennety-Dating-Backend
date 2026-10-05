@@ -766,6 +766,7 @@ export const env = {
   /// once to re-run the engine for himself. The woman never buys and never sees
   /// a price: she receives an ordinary pitch wrapped in gift framing.
   /// Telegram-only in v1 (explicit decision — Stars is a Telegram rail).
+  /// Refund recovery and existing matches remain active when sales are off.
   REMATCH_FEATURE_ENABLED: process.env.REMATCH_FEATURE_ENABLED === "true",
   /// Telegram Stars (XTR) price of one rematch. 150⭐ matches VENUE_CHANGE_STARS
   /// and the ticket rate ($8.49 / 425⭐ = $0.02/⭐ → 150⭐ ≈ $3.00 ≈ the $2.99

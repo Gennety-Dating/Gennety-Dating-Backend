@@ -178,8 +178,8 @@ export interface VenueChangeRefundSweepResult {
 
 /**
  * Hourly sweep: retry `refund_failed` rows and refund abandoned `processing`
- * rows. Registered only when `VENUE_CHANGE_FEATURE_ENABLED`, mirroring how
- * `rematch-refund` is registered only under `REMATCH_FEATURE_ENABLED`.
+ * rows. Registered only when `VENUE_CHANGE_FEATURE_ENABLED`. Rematch recovery
+ * is independent of its sales flag.
  *
  * The user is DM'd once, at the moment the refund actually lands — which is the
  * first point at which "your Stars were returned" is a true statement.

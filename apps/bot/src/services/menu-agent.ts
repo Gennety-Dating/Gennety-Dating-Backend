@@ -577,7 +577,10 @@ export const AGENT_TOOLS = [
     function: {
       name: "open_screen",
       description:
-        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription), help (how the product works — offer it whenever someone is confused about the flow), referral (invite a friend — give a date, get a date), city (move the account to a launched market — only for someone registered in a city we have not launched; the tool refuses on its own otherwise), rematch (search for a new person right now — see the Rematch section of the playbook for who may hear about it at all; the tool refuses on its own for everyone else, so a refusal means say nothing about it).",
+        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription), help (how the product works — offer it whenever someone is confused about the flow), referral (invite a friend — give a date, get a date), city (move the account to a launched market — only for someone registered in a city we have not launched; the tool refuses on its own otherwise)." +
+        (env.REMATCH_FEATURE_ENABLED
+          ? " Also available: rematch (search for a new person right now — see the Rematch section of the playbook for who may hear about it at all; the tool refuses on its own for everyone else, so a refusal means say nothing about it)."
+          : ""),
       parameters: {
         type: "object",
         properties: {
@@ -593,7 +596,7 @@ export const AGENT_TOOLS = [
               "help",
               "referral",
               "city",
-              "rematch",
+              ...(env.REMATCH_FEATURE_ENABLED ? ["rematch"] : []),
             ],
           },
         },

@@ -45,6 +45,7 @@ beforeEach(() => {
   findUnique.mockReset();
   findUnique.mockResolvedValue({ language: "en", profile: { homeCityKey: "kyiv" } });
   env.REFERRAL_FEATURE_ENABLED = true;
+  env.REMATCH_FEATURE_ENABLED = true;
 });
 
 describe("open_screen — новые экраны", () => {
@@ -94,5 +95,23 @@ describe("open_screen — новые экраны", () => {
 
     expect(out.action).toBeNull();
     expect(JSON.parse(out.result).error).toMatch(/Unknown screen/);
+  });
+});
+
+describe("disabled Rematch concierge", () => {
+  it("refuses the entry even if user eligibility would otherwise pass", async () => {
+    env.REMATCH_FEATURE_ENABLED = false;
+    const out = await open("rematch");
+    expect(out.action).toBeNull();
+    expect(JSON.parse(out.result).success).toBe(false);
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it("omits Rematch from the AI tool schema and description on startup", async () => {
+    env.REMATCH_FEATURE_ENABLED = false;
+    vi.resetModules();
+    const { AGENT_TOOLS } = await import("./menu-agent.js");
+    const screen = AGENT_TOOLS.find((tool) => tool.function.name === "open_screen");
+    expect(JSON.stringify(screen)).not.toContain("rematch");
   });
 });

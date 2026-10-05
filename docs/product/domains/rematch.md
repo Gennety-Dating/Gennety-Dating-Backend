@@ -4,6 +4,7 @@
 # Gennety Rematch — Product Specification
 
 > **Version:** 1.1 (2026-07-26 — implemented; reconciled with the shipped code).
+> Temporarily disabled by founder decision on 2026-10-05.
 > Feature-flagged (`REMATCH_FEATURE_ENABLED`, default **off**). Telegram-only in
 > v1 (explicit, recorded decision — see *Two clients*). Product invariants live in
 > [PRODUCT_SPEC.md](../product-spec.md) §3.11; architecture in
@@ -160,10 +161,10 @@ The flow is therefore **check → pay → re-check → deliver-or-refund**:
       is then unknown, and reversing a charge for a card the partner may be
       reading is the one error this rail must not make.
 
-**Refund retry.** A small hourly worker (`workers/rematch-refund-retry.ts`,
-registered only when `REMATCH_FEATURE_ENABLED`, mirroring how `ticket-expiry` is
-registered only under `TICKET_FEATURE_ENABLED`) retries `refund_failed` rows and
-DMs the user once the refund actually lands.
+**Refund retry.** The hourly `services/rematch-refund.ts` sweep is registered
+regardless of `REMATCH_FEATURE_ENABLED`. It retries `refund_failed` rows,
+refunds abandoned `processing` purchases, and DMs the user once the refund
+actually lands. Disabling sales must never strand money already charged.
 
 ## Data model (additive)
 
@@ -387,7 +388,7 @@ master switch.
 
 | Key | Default | Purpose |
 |---|---|---|
-| `REMATCH_FEATURE_ENABLED` | `false` | Master switch; everything inert when off. |
+| `REMATCH_FEATURE_ENABLED` | `false` | Sales master switch; offers, banner entry, concierge tooling, invoices and new searches disabled when off. Existing matches and refunds continue. |
 | `REMATCH_STARS` | `150` | Telegram Stars price (≈ $2.99). |
 | `REMATCH_PRICE_USD_DISPLAY` | `$2.99` | Display-only. |
 | `REMATCH_MAX_PER_WEEK` | `2` | D3 limit, rolling 7 days. |
@@ -395,7 +396,7 @@ master switch.
 | `REMATCH_GIFT_CAP_DAYS` | `7` | Candidate protection window. |
 | `REMATCH_PRE_BATCH_BLACKOUT_HOURS` | `6` | Blackout before the scheduled batch. |
 | `REMATCH_FAILED_LOOKBACK_DAYS` | `14` | Window for the `failed` gift framing. |
-| `REMATCH_REFUND_CRON_SCHEDULE` | `0 * * * *` | Refund retry / abandoned-purchase sweep. Registered only when the feature is on. |
+| `REMATCH_REFUND_CRON_SCHEDULE` | `0 * * * *` | Refund retry / abandoned-purchase sweep. Always registered, including when sales are off. |
 
 **Pricing note.** 150⭐ follows the ticket rate ($8.49 / 425⭐ = $0.02/⭐ → 150⭐ ≈
 $3.00 ≈ the $2.99 label). `PREMIUM_STARS` documents a more conservative
@@ -460,3 +461,20 @@ crash-loop, per deploy.md), verify inertness, then flip.
   purchase data exists).
 
 <!-- Cadence review 2026-10-03: the immediate-post-batch cooldown argument and claims of negligible between-cycle cannibalization are not established for daily. See docs/operations/reports/drop-cadence-docs-2026-10-03.md; no behavior change authorized. -->
+
+## Temporary shutdown (2026-10-05)
+
+Set `REMATCH_FEATURE_ENABLED=false` and restart the bot. Production, demo and
+local development use the same switch. The implementation and purchase
+history remain intact; no schema or native iOS release is required.
+
+1. Disabled behavior
+    - Post-drop, decline and expiry offers do not send; the daily status banner falls back to the ordinary menu action on its next reconciliation.
+    - The concierge playbook and `open_screen` schema omit Rematch, and executing a stale tool call cannot return its button.
+    - Old offer buttons cannot mint invoices. Previously minted invoice links fail pre-checkout without a new charge.
+    - A successful payment arriving after shutdown is still recorded idempotently, then refunded without running the search or its animation.
+2. Continuing obligations
+    - Existing proposed/scheduled matches retain their normal decision, dispatch and date lifecycle.
+    - Purchase history remains visible, and refund recovery remains scheduled regardless of the sales flag.
+3. Re-enabling
+    - Set `REMATCH_FEATURE_ENABLED=true` and restart only after the founder approves resuming the feature. Existing financial audit findings are not resolved by this suspension.

@@ -836,7 +836,9 @@ async function completeRematchPurchase(
   // The pitch carries its own rich compose stream (§3.3), so covering it too
   // would put two drafts in one chat competing for the same space, and the
   // pitch's own arrival would collapse ours instead of tearing it down cleanly.
-  const runPromise = runRematch(userId);
+  const runPromise = env.REMATCH_FEATURE_ENABLED
+    ? runRematch(userId)
+    : Promise.resolve({ ok: false as const, reason: "feature_off" as const });
   // Mark handled so a rejection mid-animation is not an unhandledRejection. The
   // real throw is re-raised at the await below, where the existing contract
   // holds unchanged: the row stays `processing` and the hourly sweep refunds it.
@@ -844,13 +846,17 @@ async function completeRematchPurchase(
 
   // A decorative status may never cost a paid match, so this swallows its own
   // failures — same rule the venue-change banner push follows at its call site.
-  await runStatusSequence(ctx.api, Number(telegramId), rematchSearchSteps(lang), {
-    rich: true,
-    until: runPromise,
-    untilFromStepIndex: NEVER_CUT_SHORT,
-  }).catch((err) => {
-    console.warn("[rematch] search status failed:", err);
-  });
+  // A payment approved before shutdown can still arrive afterwards. Record and
+  // refund it through the normal path, without advertising a disabled search.
+  if (env.REMATCH_FEATURE_ENABLED) {
+    await runStatusSequence(ctx.api, Number(telegramId), rematchSearchSteps(lang), {
+      rich: true,
+      until: runPromise,
+      untilFromStepIndex: NEVER_CUT_SHORT,
+    }).catch((err) => {
+      console.warn("[rematch] search status failed:", err);
+    });
+  }
 
   const run = await runPromise;
 

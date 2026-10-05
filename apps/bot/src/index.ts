@@ -364,7 +364,7 @@ const PREMIUM_REMINDER_CRON_SCHEDULE =
  * whose provider call failed, and refunds purchases abandoned mid-run (the
  * process died between "Stars moved" and the terminal write). This is what makes
  * "we never keep money without delivering a match" durable rather than
- * best-effort. Registered only when REMATCH_FEATURE_ENABLED.
+ * best-effort. Always registered, even when new Rematch sales are disabled.
  */
 const REMATCH_REFUND_CRON_SCHEDULE =
   process.env.REMATCH_REFUND_CRON_SCHEDULE ?? "0 * * * *";
@@ -902,16 +902,15 @@ function registerSchedules(): void {
     );
   }
 
-  // Rematch refunds: retry failed refunds + reverse abandoned purchases.
-  if (env.REMATCH_FEATURE_ENABLED) {
-    cron.schedule(
-      REMATCH_REFUND_CRON_SCHEDULE,
-      guardedTick("rematch-refund", () =>
-        sweepRematchRefunds(bot.api).then(() => undefined),
-      ),
-    );
-    console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
-  }
+  // Financial recovery must outlive the sales flag: disabling Rematch cannot
+  // strand an already charged purchase or stop retrying a failed refund.
+  cron.schedule(
+    REMATCH_REFUND_CRON_SCHEDULE,
+    guardedTick("rematch-refund", () =>
+      sweepRematchRefunds(bot.api).then(() => undefined),
+    ),
+  );
+  console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
 
   // Venue-change refunds: retry failed refunds + reverse purchases abandoned
   // mid-settle. Same discipline as the rematch sweep above — this is what

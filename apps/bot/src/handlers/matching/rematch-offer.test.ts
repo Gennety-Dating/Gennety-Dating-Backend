@@ -25,7 +25,7 @@ import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { checkRematchEligibility } from "../../services/rematch.js";
 import { renderRematchCard } from "../../services/rematch-card.js";
-import { sendRematchOfferIfEligible } from "./rematch.js";
+import { sendRematchOfferIfEligible, handleRematchBuyCallback } from "./rematch.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const eligibility = checkRematchEligibility as unknown as ReturnType<typeof vi.fn>;
@@ -42,6 +42,7 @@ function api() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (env as { REMATCH_FEATURE_ENABLED: boolean }).REMATCH_FEATURE_ENABLED = true;
   (env as { REMATCH_PRICE_USD_DISPLAY: string }).REMATCH_PRICE_USD_DISPLAY = "$2.99";
   eligibility.mockResolvedValue({ ok: true });
   findUnique.mockResolvedValue({ telegramId: 111n, language: "ru", theme: "dark" });
@@ -164,5 +165,31 @@ describe("rematch offer delivery", () => {
     await expect(sendRematchOfferIfEligible(a as never, "buyer-1", "failed")).resolves.toBe(false);
     expect(a.sendPhoto).not.toHaveBeenCalled();
     expect(a.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("Rematch disabled", () => {
+  it("sends no offer and does not query eligibility or render a card", async () => {
+    (env as { REMATCH_FEATURE_ENABLED: boolean }).REMATCH_FEATURE_ENABLED = false;
+    const a = api();
+    expect(await sendRematchOfferIfEligible(a as never, "buyer-1", "failed")).toBe(false);
+    expect(eligibility).not.toHaveBeenCalled();
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
+    expect(a.sendMessage).not.toHaveBeenCalled();
+    expect(a.sendPhoto).not.toHaveBeenCalled();
+  });
+
+  it("refuses an old buy button without minting an invoice", async () => {
+    (env as { REMATCH_FEATURE_ENABLED: boolean }).REMATCH_FEATURE_ENABLED = false;
+    const ctx = {
+      from: { id: 111 },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      api: { createInvoiceLink: vi.fn() },
+    };
+    await handleRematchBuyCallback(ctx as never);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({ text: expect.any(String) });
+    expect(ctx.api.createInvoiceLink).not.toHaveBeenCalled();
+    expect(eligibility).not.toHaveBeenCalled();
   });
 });

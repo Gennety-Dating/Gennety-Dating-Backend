@@ -92,6 +92,15 @@ function successCtx(payment: {
 }
 
 describe("handlePreCheckout", () => {
+  it("refuses an old Rematch invoice when the feature is disabled", async () => {
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "rematch:v1", currency: "XTR", total_amount: 150,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, { error_message: expect.any(String) });
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
   it("approves a valid store bundle at the correct Star amount", async () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "store:3",

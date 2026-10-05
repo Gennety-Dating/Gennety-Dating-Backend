@@ -152,8 +152,7 @@ export interface RematchRefundSweepResult {
 
 /**
  * Hourly sweep: retry `refund_failed` rows and refund abandoned `processing`
- * rows. Registered only when `REMATCH_FEATURE_ENABLED`, mirroring how
- * `ticket-expiry` is registered only under `TICKET_FEATURE_ENABLED`.
+ * rows. Always registered: the sales flag must never stop financial recovery.
  *
  * A user whose refund finally lands here is DM'd once, at that moment — which is
  * the first point at which the statement "your Stars were returned" is true.

@@ -85,6 +85,7 @@ const MATCH_ID = "33333333-3333-4333-8333-333333333333";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (env as { REMATCH_FEATURE_ENABLED: boolean }).REMATCH_FEATURE_ENABLED = true;
   (env as { MESSAGE_EFFECT_REMATCH_ID: string }).MESSAGE_EFFECT_REMATCH_ID = "";
   findUnique.mockResolvedValue({ id: "buyer-1", language: "ru" });
   createPurchase.mockResolvedValue({
@@ -380,5 +381,19 @@ describe("a pitch that reached nobody", () => {
     expect(dispatch).toHaveBeenCalledWith(ctx.api, [MATCH_ID]);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("left processing"));
     error.mockRestore();
+  });
+});
+
+describe("Rematch shutdown after pre-checkout", () => {
+  it("records and refunds a late charge without searching, animating or dispatching", async () => {
+    (env as { REMATCH_FEATURE_ENABLED: boolean }).REMATCH_FEATURE_ENABLED = false;
+    const { ctx } = payCtx();
+    await pay(ctx);
+    expect(createPurchase).toHaveBeenCalledTimes(1);
+    expect(refund).toHaveBeenCalledTimes(1);
+    expect(engine).not.toHaveBeenCalled();
+    expect(status).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(updatePurchase).not.toHaveBeenCalled();
   });
 });
