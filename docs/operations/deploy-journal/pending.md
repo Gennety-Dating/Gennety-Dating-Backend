@@ -11,6 +11,19 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-07 — Bot PNG cards: date card in Gennety Display, venue photo −3°, «Gennety» in the brand face (`bd58c865`).**
+Bot only (production + demo, the same renderers); no schema, env or Mini App change. The date card's slogan
+(800, 82 px, no full stops), venue name (700) and header word «Gennety» (800, 42 px) are set in Gennety Display —
+before, Archivo Black had no Cyrillic and satori silently drew the slogan and venue name in thin Roboto. Venue photo
+920×635 tilted −3°, butterfly lower and left. Every other card (expiry, proxy chat, referral, partner profile, locked
+time) is byte-identical to production; the disabled rematch card is untouched. Approved by the founder 07.10 on the
+comparison page. New files ride the standard bot rsync: `apps/bot/src/assets/fonts/GennetyDisplay-{Bold,ExtraBold}.ttf`.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/card-fonts.test.ts src/services/date-card`;
+  on the host `pnpm tsx apps/bot/scripts/dev/verify-date-card-prod.ts --lang=ru --chat=skip --dump=/tmp` and look at
+  the PNG: slogan and venue name heavy (not thin Roboto), «Gennety» in the same face as the slogan, photo tilted left.
+- **Rollback:** the previous bot release directory; nothing stored depends on it.
+- **Demo:** identical — same renderers, mechanics unchanged; deploy both bots together.
+
 **Deployed 2026-10-07 06:30–06:33 UTC — production `6febc945` (+ Rematch-off files `7543d22c`) → `f9648948` (whole `main`).**
 Script `~/gennety-backups/deploy-1007.sh check|deploy` (outside the repo; started by the founder — the agent's
 auto-mode classifier refuses production deploys). Rode along: Profiler quick answers + «На потом» (migration
