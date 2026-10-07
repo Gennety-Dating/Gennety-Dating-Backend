@@ -6,9 +6,9 @@
  * black / white design system 2026-07-09): a near-black card with two faint
  * burgundy corner discs, a soft burgundy glow behind the hero photo, and faint
  * film grain; a wide duotone venue photo as the hero; an
- * overlapping tilted polaroid of the partner; a bold Archivo Black headline
+ * overlapping tilted polaroid of the partner; a Gennety Display headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
- * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
+ * The drawn "Gennety" logotype sits top-left and the brand butterfly logo sits
  * top-right (slightly tilted, nudged toward the edge like the polaroid). The
  * "made with Gennety" credit sits beside the venue address when the address
  * leaves room for it, and is stamped into the hero photo's lower-left corner
@@ -24,6 +24,9 @@
  * is pure layout.
  */
 
+import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
+import { WORDMARK_ASPECT, wordmarkSrc, type WordmarkImage } from "../brand-wordmark.js";
+
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 /** Card's own horizontal padding; `CONTENT_W` is derived from it. */
@@ -35,6 +38,39 @@ export const CREDIT_FONT_PX = 22;
 export const ADDRESS_FONT_PX = 30;
 
 const BURGUNDY = "#8B253B";
+
+/**
+ * Headline slot (2026-10-07). The slogan is set in Gennety Display 800 and
+ * wraps inside `SLOGAN_MAX_W`, which keeps every line of every locale clear of
+ * the butterfly top-right ("Straight to real life." and "Direkt im echten
+ * Leben." used to run under it). The slot is always THREE lines tall, so the
+ * hero photo sits at the same height whatever the copy: the card's look was
+ * tuned on the three-line "Error 404" slogan, and when the copy audit of
+ * 2026-10-01 made the slogan two lines the whole photo block rode up by a
+ * line. A fourth line (no current copy needs one) grows the slot rather than
+ * clipping text — the bottom block's 46px of slack absorbs half a line.
+ */
+const SLOGAN_PX = 78;
+const SLOGAN_LINE_HEIGHT = 1.04;
+const SLOGAN_SLOT_LINES = 3;
+const SLOGAN_MAX_W = 664;
+
+/** Logotype width top-left; its cap height matches the old typed 36px word. */
+const WORDMARK_W = 150;
+
+/**
+ * The venue photo (2026-10-07, founder's description): a little narrower than
+ * the old full-bleed 1000 × 690 and tilted LEFT by 10deg, against the partner
+ * polaroid's +7deg to the right — the two lean apart and balance each other.
+ * Its box is exported because the duotone is cut to it upstream
+ * (`prepareVenuePhoto`), so the two cannot drift apart.
+ */
+export const HERO_W = 880;
+export const HERO_H = 620;
+const HERO_LEFT = 10;
+const HERO_TOP = 50;
+/** Counter-tilt to the polaroid's +7deg (negative = counter-clockwise). */
+const HERO_TILT_DEG = -10;
 
 /**
  * Where the credit goes on one card. Resolved by `credit-placement.ts`, which
@@ -54,7 +90,7 @@ interface Palette {
 }
 
 /** Card chrome colors per theme (the burgundy accent + photos are theme-agnostic). */
-function palette(theme: CardTheme): Palette {
+export function palette(theme: CardTheme): Palette {
   return theme === "light"
     ? { bg: "#F5F5F5", ink: "#1D1D1D", muted: "#6B6670" }
     : { bg: "#030303", ink: "#F2EFF7", muted: "#8E8895" };
@@ -103,6 +139,12 @@ export interface CardElementInput {
   grain: Buffer | null;
   /** Brand butterfly mark (rasterized, alpha-trimmed). Sits top-right. Optional. */
   logo: LogoMark | null;
+  /**
+   * Drawn "Gennety" logotype, already tinted to the theme's ink. `null` falls
+   * back to the word set in Gennety Display, so a missing asset never blocks
+   * the card.
+   */
+  wordmark: WordmarkImage | null;
   venueName: string;
   venueAddress: string;
   /** Headline slogan; split on `\n` into stacked lines, last line accented. */
@@ -124,7 +166,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
       height: `${CARD_H}px`,
       padding: `70px ${CARD_PADDING_X}px`,
       backgroundColor: p.bg,
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       color: p.ink,
     },
     [
@@ -145,7 +187,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
             ),
           ]
         : []),
-      header(p),
+      header(input.wordmark, p),
       heroSlogan(input.slogan, p),
       venueSection(input),
       el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
@@ -177,25 +219,23 @@ function logoImg(logo: LogoMark): CardNode {
   );
 }
 
-function header(p: Palette): CardNode {
-  return el(
-    "div",
-    {
-      display: "flex",
-      alignItems: "center",
-      marginBottom: "34px",
-    },
-    [
-      el(
+function header(wordmark: WordmarkImage | null, p: Palette): CardNode {
+  const mark = wordmark
+    ? el(
+        "img",
+        { width: `${WORDMARK_W}px`, height: `${Math.round(WORDMARK_W / WORDMARK_ASPECT)}px` },
+        undefined,
+        { src: wordmarkSrc(wordmark) },
+      )
+    : el(
         "div",
-        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: p.ink },
+        { display: "flex", fontFamily: DISPLAY_FAMILY, fontWeight: 800, fontSize: "36px", color: p.ink },
         "Gennety",
-      ),
-    ],
-  );
+      );
+  return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [mark]);
 }
 
-/** Archivo Black headline; the final line is the burgundy accent. */
+/** Gennety Display headline in a fixed three-line slot; the final line is the burgundy accent. */
 function heroSlogan(slogan: string, p: Palette): CardNode {
   const raw = slogan.split("\n");
   const lines = raw.map((line, i) =>
@@ -206,10 +246,13 @@ function heroSlogan(slogan: string, p: Palette): CardNode {
     {
       display: "flex",
       flexDirection: "column",
-      fontFamily: "Archivo Black",
-      fontSize: "78px",
-      lineHeight: 1.0,
-      letterSpacing: "-2px",
+      width: `${SLOGAN_MAX_W}px`,
+      minHeight: `${Math.round(SLOGAN_PX * SLOGAN_LINE_HEIGHT * SLOGAN_SLOT_LINES)}px`,
+      fontFamily: DISPLAY_FAMILY,
+      fontWeight: 800,
+      fontSize: `${SLOGAN_PX}px`,
+      lineHeight: SLOGAN_LINE_HEIGHT,
+      letterSpacing: "-1.5px",
       marginBottom: "10px",
     },
     lines,
@@ -268,13 +311,14 @@ function venueSection(input: CardElementInput): CardNode {
         {
           display: "flex",
           position: "absolute",
-          left: "-44px",
-          top: "22px",
-          width: "1000px",
-          height: "690px",
+          left: `${HERO_LEFT}px`,
+          top: `${HERO_TOP}px`,
+          width: `${HERO_W}px`,
+          height: `${HERO_H}px`,
           borderRadius: "30px",
           overflow: "hidden",
           boxShadow: "0 34px 80px rgba(0,0,0,0.6)",
+          transform: `rotate(${HERO_TILT_DEG}deg)`,
         },
         // When the credit is on the photo it lives INSIDE this box, so the
         // box's own `overflow: hidden` + 30px radius clip it to the photograph.
@@ -357,7 +401,7 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
     // into the polaroid. So this is not the 2026-08-20 off-canvas failure in
     // miniature; it is the silhouette drift the block's own comment forbids.
     inline ? `${inline.addressWidth}px` : "100%",
-    { fontFamily: "Roboto", fontSize: `${ADDRESS_FONT_PX}px`, color: p.muted },
+    { fontFamily: BODY_FAMILY, fontSize: `${ADDRESS_FONT_PX}px`, color: p.muted },
   );
 
   // The credit is a plain muted line here, not the scrimmed pill it wears on
@@ -371,7 +415,7 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
           {
             display: "flex",
             marginLeft: "auto",
-            fontFamily: "Roboto",
+            fontFamily: BODY_FAMILY,
             fontSize: `${CREDIT_FONT_PX}px`,
             color: p.muted,
           },
@@ -384,9 +428,14 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
     "div",
     { display: "flex", flexDirection: "column", width: "100%" },
     [
+      // Gennety Display 700, not the slogan's 800: the name is a label under
+      // the photo, and venue names are mostly Cyrillic — the old Archivo Black
+      // had no Cyrillic, so most of them were silently set in Roboto.
       line(input.venueName, "100%", {
-        fontFamily: "Archivo Black",
-        fontSize: "54px",
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 700,
+        fontSize: "52px",
+        letterSpacing: "-0.5px",
         color: p.ink,
       }),
       addressRow,
@@ -448,7 +497,7 @@ function photoCredit(): CardNode {
       paddingBottom: "10px",
       borderRadius: "999px",
       backgroundColor: "rgba(3,3,3,0.6)",
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       fontSize: `${CREDIT_FONT_PX}px`,
       color: "rgba(255,255,255,0.95)",
     },

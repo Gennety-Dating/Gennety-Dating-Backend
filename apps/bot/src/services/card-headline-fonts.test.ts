@@ -1,68 +1,41 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 
-import { loadFonts as timeCardFonts } from "./time-card.js";
-import { loadFonts as matchCardFonts } from "./match-card/index.js";
-import { loadFonts as rematchCardFonts } from "./rematch-card.js";
+import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY, type SatoriFonts } from "./card-fonts.js";
 
 /**
- * Headline-font coverage for the PNG cards that render localized display type.
+ * Display-type coverage for every rendered card (they all share `cardFonts()`).
  *
  * Satori never reports a missing glyph. It silently resolves it from another
- * registered family, so a headline face that doesn't cover the user's script
- * renders in Roboto mid-word and nothing anywhere fails. Two real regressions
- * came out of exactly that silence:
+ * registered family, so a display face that doesn't cover the user's script
+ * renders in Roboto and nothing anywhere fails. That silence is how the copy
+ * audit of 2026-10-01 changed the date card without anyone noticing: its
+ * slogan became Russian, the card's Archivo Black had no Cyrillic, and the
+ * headline came out in thin Roboto. Before that the Unbounded subsets had done
+ * the same to Latin ("Gennety" itself) and to Polish ("WRZEŚNIA").
  *
- *   - The match card registered Unbounded's `cyrillic` and `latin` subset woffs
- *     BOTH under the family name "Unbounded", believing satori would fall
- *     through per glyph. It does not — fallback crosses FAMILIES in
- *     registration order, never within one. Cyrillic was listed first, so it
- *     owned the family and every Latin glyph (including the "Gennety" wordmark
- *     on every card) dropped to Roboto.
- *   - The time card sidestepped that correctly, but both subsets together still
- *     miss `latin-ext`, so Polish dates ("WRZEŚNIA", "PAŹDZIERNIKA") rendered
- *     ĄŁŚŹ in Roboto.
- *
- * Both now load the full `unbounded-700.woff` under one name. There is no font
- * parser here (not worth a dependency), so coverage is proven the same way
- * `expiry-card.test.ts` proves it: differential render. Draw the same string
- * with the card's REAL font array versus Roboto alone — if the headline face
- * carries the glyphs the rasters differ; if it doesn't, both fall through to
- * Roboto and come out byte-identical.
- *
- * Using each module's actual `loadFonts()` is the point: a test that
- * re-declared the font list would keep passing while the renderer regressed.
+ * Coverage is proven by differential render: the same string drawn with the
+ * real font list versus the body font alone. If the display face carries the
+ * glyphs the rasters differ; if not, both fall through to Roboto and come out
+ * byte-identical. The last case below proves the method can see a gap.
  */
 
-type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
+const bodyOnly = (fonts: SatoriFonts): SatoriFonts => fonts.filter((f) => f.name === BODY_FAMILY);
 
-/**
- * The control must be the card's OWN body font at the OWN weight — not a
- * hand-rolled Roboto list. The match card registers Roboto at 400/500/700; a
- * fixed Roboto-Medium-500 control would differ from a failed render simply
- * because the fallback landed on Roboto Bold 700, and the assertion would pass
- * while the headline face contributed nothing. Deriving the control from the
- * same array leaves exactly one variable: whether the display family resolved.
- */
-const bodyOnly = (fonts: SatoriFonts): SatoriFonts =>
-  fonts.filter((f) => f.name === "Roboto");
-
-async function rasterize(
-  text: string,
-  family: string,
-  fonts: SatoriFonts,
-): Promise<Buffer> {
+async function rasterize(text: string, family: string, weight: number, fonts: SatoriFonts): Promise<Buffer> {
   const svg = await satori(
     {
       type: "div",
       props: {
         style: {
           display: "flex",
-          width: "700px",
+          width: "760px",
           height: "150px",
           fontFamily: family,
-          fontWeight: 700,
+          fontWeight: weight,
           fontSize: "60px",
           color: "#FFFFFF",
           backgroundColor: "#000000",
@@ -70,65 +43,81 @@ async function rasterize(
         children: text,
       },
     } as unknown as Parameters<typeof satori>[0],
-    { width: 700, height: 150, fonts },
+    { width: 760, height: 150, fonts },
   );
   return Buffer.from(new Resvg(svg).render().asPng());
 }
 
-/**
- * The three scripts the five supported locales actually produce:
- *   latin      — en (and the "Gennety" wordmark, in every locale)
- *   latinExt   — pl
- *   cyrillic   — ru + the uk-only letters
- * German's ÄÖÜß is Latin-1 and inside every `latin` subset, so it needs no case.
- */
+/** What the five locales actually put on a card. */
 const SCRIPTS: ReadonlyArray<[string, string]> = [
-  ["latin", "WRZESNIA"],
-  ["latin-ext (Polish)", "ŁĄŻŚĆŹŃĘ"],
-  ["cyrillic", "ВЫШЛОЇЄҐІ"],
+  ["latin (en, and the typed fallback wordmark)", "Gennety WRZESNIA"],
+  ["latin-ext (pl)", "ŁĄŻŚĆŹŃĘ"],
+  ["german", "ÄÖÜß"],
+  ["cyrillic (ru + uk-only letters)", "ВЫШЛОЇЄҐІ"],
+  ["uk apostrophe + punctuation", "Здоровʼя — «так»."],
+  ["digits (time card)", "19:30 09.10"],
 ];
 
-const CARDS: ReadonlyArray<[string, string, () => SatoriFonts]> = [
-  // Family name is the one each renderer actually asks for in its styles.
-  ["time-card", "Unbounded", timeCardFonts],
-  ["match-card", "Unbounded", matchCardFonts],
-  ["rematch-card", "Unbounded", rematchCardFonts],
-];
+const WEIGHTS = [600, 700, 800] as const;
 
-describe("card headline font coverage", () => {
-  for (const [cardName, family, fonts] of CARDS) {
+describe("card display font coverage", () => {
+  for (const weight of WEIGHTS) {
     for (const [scriptName, sample] of SCRIPTS) {
-      it(
-        `${cardName} renders ${scriptName} in the headline face, not Roboto`,
-        async () => {
-          const registered = fonts();
-          const [withHeadlineFace, control] = await Promise.all([
-            rasterize(sample, family, registered),
-            rasterize(sample, "Roboto", bodyOnly(registered)),
-          ]);
-          // Identical rasters mean every glyph fell through to the body font —
-          // i.e. the headline face contributed nothing for this script.
-          expect(withHeadlineFace.equals(control)).toBe(false);
-        },
-        60_000,
-      );
+      it(`Gennety Display ${weight} draws ${scriptName}, not Roboto`, async () => {
+        const fonts = cardFonts();
+        const [withDisplay, control] = await Promise.all([
+          rasterize(sample, DISPLAY_FAMILY, weight, fonts),
+          rasterize(sample, BODY_FAMILY, weight, bodyOnly(fonts)),
+        ]);
+        expect(withDisplay.equals(control)).toBe(false);
+      }, 60_000);
     }
   }
 
-  it("registers each headline family name exactly once", () => {
-    // The match-card regression was a duplicate family name, not a missing
-    // file: two fonts under "Unbounded" meant the first one silently won for
-    // every glyph. Guarding the shape catches a reintroduction even if the
-    // subset files happen to cover the sampled strings above.
-    for (const [cardName, , fonts] of CARDS) {
-      const names = fonts().map((f) => f.name);
-      const duplicated = names.filter((n, i) => names.indexOf(n) !== i);
-      const unique = [...new Set(duplicated)];
-      // Roboto legitimately repeats across weights; a display face must not.
-      expect(
-        unique.filter((n) => n !== "Roboto"),
-        `${cardName} registers a non-Roboto family more than once: ${unique.join(", ")}`,
-      ).toEqual([]);
-    }
+  it("proves the differential detects a gap", async () => {
+    // Ɓ Ɔ Ɗ (Latin Extended-B) are in Roboto but not in Gennety Display, so
+    // they must fall through and come out identical to the body-only render.
+    // Without this the cases above could pass for the wrong reason. (The
+    // sample must exist in Roboto: a glyph missing from both draws each
+    // face's own .notdef box, and those differ.)
+    const fonts = cardFonts();
+    const [withDisplay, control] = await Promise.all([
+      rasterize("ƁƆƊ", DISPLAY_FAMILY, 800, fonts),
+      rasterize("ƁƆƊ", BODY_FAMILY, 800, bodyOnly(fonts)),
+    ]);
+    expect(withDisplay.equals(control)).toBe(true);
+  }, 60_000);
+
+  it("registers one file per display weight, and only the brand weights", () => {
+    const display = cardFonts().filter((f) => f.name === DISPLAY_FAMILY);
+    expect(display.map((f) => f.weight).sort()).toEqual([600, 700, 800]);
+  });
+});
+
+/**
+ * Every renderer must take its display type from `card-fonts.ts`. A card that
+ * registered its own face again (Archivo Black, Unbounded, a subset under a
+ * private family name) is exactly how the cards drifted apart before.
+ */
+describe("card renderers use the shared brand face", () => {
+  const RENDERERS = [
+    "date-card/template.ts",
+    "date-card/compose.ts",
+    "coordination-card/template.ts",
+    "coordination-card/index.ts",
+    "referral-card/index.ts",
+    "match-card/template.ts",
+    "match-card/index.ts",
+    "rematch-card.ts",
+    "expiry-card.ts",
+    "time-card.ts",
+  ];
+  const source = (rel: string) =>
+    readFileSync(fileURLToPath(new URL(`./${rel}`, import.meta.url)), "utf8");
+
+  it.each(RENDERERS)("%s names no private display family", (rel) => {
+    const code = source(rel);
+    expect(code).not.toMatch(/fontFamily:\s*"(Archivo Black|Unbounded|Headline Cyr)"/);
+    expect(code).not.toMatch(/name:\s*"(Archivo Black|Unbounded|Headline Cyr)"/);
   });
 });

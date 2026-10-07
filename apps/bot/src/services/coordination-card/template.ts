@@ -20,6 +20,8 @@
  */
 
 import type { CoordCardCopy, CoordCardVariant } from "./copy.js";
+import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
+import { wordmarkNode, type WordmarkImage } from "../brand-wordmark.js";
 
 export const CARD_W = 900;
 export const CARD_H = 1040;
@@ -44,7 +46,7 @@ interface Palette {
   glowAlpha: string;
 }
 
-function palette(theme: CoordCardTheme): Palette {
+export function palette(theme: CoordCardTheme): Palette {
   return theme === "light"
     ? {
         bg: "linear-gradient(158deg, #FFFFFF 0%, #F5F1F1 46%, #EFE2E5 100%)",
@@ -191,10 +193,13 @@ export interface CoordCardElementInput {
   logoCream: LogoMark | null;
   /** Film-grain overlay tile (full-card PNG); dark theme only. */
   grain: Buffer | null;
-  /** Display family for the headline (Latin vs Cyrillic — see index.ts). */
-  headlineFamily: string;
+  /** Drawn logotype tinted to the ink; `null` → the word set in Gennety Display. */
+  wordmark: WordmarkImage | null;
   theme: CoordCardTheme;
 }
+
+/** Logotype width in the lockup — cap height level with the 52px butterfly's body. */
+const WORDMARK_W = 150;
 
 export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
   const p = palette(input.theme);
@@ -218,7 +223,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
       height: `${CARD_H}px`,
       padding: "64px 72px 72px 72px",
       backgroundImage: p.bg,
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       color: p.ink,
     },
     [
@@ -252,11 +257,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
               ),
             ]
           : []),
-        el(
-          "div",
-          { fontFamily: "Archivo Black", fontSize: "34px", letterSpacing: "-1px", color: p.ink },
-          "Gennety",
-        ),
+        wordmarkNode(input.wordmark, WORDMARK_W, p.ink),
       ]),
 
       // The gap under the lockup carries the most weight of the three, so a
@@ -303,9 +304,13 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
           flexDirection: "column",
           alignItems: "center",
           marginTop: "18px",
-          fontFamily: input.headlineFamily,
-          fontSize: "58px",
-          lineHeight: 1.06,
+          // One face for every language (`card-fonts.ts`): the Cyrillic-only
+          // Unbounded subset that used to set ru/uk had no Latin, digits or
+          // punctuation, so "открыта." dropped its full stop into Roboto.
+          fontFamily: DISPLAY_FAMILY,
+          fontWeight: 800,
+          fontSize: "62px",
+          lineHeight: 1.04,
           letterSpacing: "-1px",
         },
         [

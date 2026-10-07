@@ -29,12 +29,12 @@
  * plain text offer that ships today.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
 import { grainPng, svgToPng} from "./date-card/image.js";
+import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY } from "./card-fonts.js";
+import { wordmarkPng, wordmarkNode, type WordmarkImage } from "./brand-wordmark.js";
 
 /** Square poster, matching the expiry card — the offer belongs to that family. */
 export const REMATCH_CARD_W = 1080;
@@ -210,29 +210,13 @@ async function loadLogo(): Promise<ButterflyMark | null> {
   return cachedLogo;
 }
 
-type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
-let cachedFonts: SatoriFonts | null = null;
-
 /**
- * The FULL Unbounded (`unbounded-700.woff`), not the two subset files — same
- * reason `expiry-card.ts` documents at length: the Google Fonts `latin` +
- * `cyrillic` subsets carry no Polish, so `PODEJŚCIE` would drop Ś into Roboto
- * mid-word and satori reports nothing when it does. One file also removes the
- * registration-order hazard entirely (satori does not fall through *within* a
- * family), which is the trap the match card walked into.
+ * Headline size. Gennety Display 800 at 98px matches the cap height the card
+ * was designed with (Unbounded 700 at 92px, cap 0.75 em → Display cap 0.70 em);
+ * the brand face is narrower, so every locale's lines keep their room.
  */
-export function loadFonts(): SatoriFonts {
-  if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
-  cachedFonts = [
-    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
-  ];
-  return cachedFonts;
-}
+const HEADLINE_PX = 98;
+const WORDMARK_W = 140;
 
 /* ------------------------------------------------------------------ */
 /* Layout                                                              */
@@ -253,6 +237,8 @@ interface BuildInput extends RematchCardInput {
   motif: Buffer | null;
   logo: ButterflyMark | null;
   grain: Buffer | null;
+  /** Drawn logotype tinted to the ink; `null` → the word set in Gennety Display. */
+  wordmark: WordmarkImage | null;
 }
 
 export function buildRematchCardElement(input: BuildInput): CardNode {
@@ -268,7 +254,7 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
       height: `${REMATCH_CARD_H}px`,
       padding: "72px 76px",
       backgroundColor: p.bg,
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       color: p.ink,
     },
     [
@@ -290,12 +276,7 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
           ]
         : []),
 
-      // Wordmark. Latin-only string, so Archivo Black is safe here.
-      el(
-        "div",
-        { display: "flex", fontFamily: "Archivo Black", fontSize: "34px", color: p.ink },
-        "Gennety",
-      ),
+      wordmarkNode(input.wordmark, WORDMARK_W, p.ink),
       ...(input.logo ? [logoImg(input.logo)] : []),
 
       el("div", { display: "flex", flexGrow: 10, minHeight: "0px" }),
@@ -339,7 +320,7 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
           "div",
           {
             display: "flex",
-            fontFamily: "Roboto",
+            fontFamily: BODY_FAMILY,
             fontSize: "24px",
             fontWeight: 500,
             letterSpacing: "5px",
@@ -356,11 +337,11 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
         {
           display: "flex",
           flexDirection: "column",
-          fontFamily: "Unbounded",
-          fontWeight: 700,
-          fontSize: "92px",
-          lineHeight: 1.04,
-          letterSpacing: "-1px",
+          fontFamily: DISPLAY_FAMILY,
+          fontWeight: 800,
+          fontSize: `${HEADLINE_PX}px`,
+          lineHeight: 1.02,
+          letterSpacing: "-1.5px",
         },
         headlineLines.map((line, i) =>
           el(
@@ -377,7 +358,7 @@ export function buildRematchCardElement(input: BuildInput): CardNode {
           display: "flex",
           flexDirection: "column",
           marginTop: "34px",
-          fontFamily: "Roboto",
+          fontFamily: BODY_FAMILY,
           fontSize: "31px",
           lineHeight: 1.42,
           color: p.muted,
@@ -413,6 +394,7 @@ export async function renderRematchCard(input: RematchCardInput): Promise<Buffer
       ...input,
       motif: motifPng(input.theme),
       logo: await loadLogo(),
+      wordmark: await wordmarkPng(palette(input.theme).ink),
       // The dark film grain would dirty the cream light card — skip it there.
       grain: input.theme === "light" ? null : grainTile(),
     });
@@ -420,7 +402,7 @@ export async function renderRematchCard(input: RematchCardInput): Promise<Buffer
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
       width: REMATCH_CARD_W,
       height: REMATCH_CARD_H,
-      fonts: loadFonts(),
+      fonts: cardFonts(),
     });
     return await svgToPng(svg, REMATCH_CARD_W, palette(input.theme).bg);
   } catch (err) {

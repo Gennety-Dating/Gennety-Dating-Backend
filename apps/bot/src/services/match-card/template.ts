@@ -6,11 +6,20 @@
  * layers and typography.
  *
  * Brand palette (finalized 2026-07-02): graphite #111111, deep wine #8B253B,
- * soft white #F5F5F5. Headlines use Unbounded (Cyrillic + Latin subsets are
- * bundled); body is Roboto. Card text stays emoji-free — the bundled fonts
- * have no color-emoji glyphs and satori would drop them.
+ * soft white #F5F5F5. The name is Gennety Display 800 and the brand line is
+ * the drawn logotype (2026-10-07, `card-fonts.ts` / `brand-wordmark.ts`; it
+ * was Unbounded until then); body is Roboto. Card text stays emoji-free — the
+ * bundled fonts have no color-emoji glyphs and satori would drop them.
  */
 import { CARD_W, CARD_H, type ButterflyMark, type CollageSpec } from "./collage.js";
+import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
+import { wordmarkNode, type WordmarkImage } from "../brand-wordmark.js";
+
+/**
+ * Name size factor: Gennety Display's cap height is 0.70 em against
+ * Unbounded's 0.75, so the same visual size needs ~7 % more px.
+ */
+const NAME_SCALE = 1.07;
 
 export const GRAPHITE = "#111111";
 export const WINE = "#8B253B";
@@ -87,6 +96,10 @@ export interface CardLayers {
   grain: Buffer | null;
   /** Alpha-trimmed butterfly mark (real aspect ratio) for wordmark rows. Optional. */
   butterfly: ButterflyMark | null;
+  /** Drawn logotype in wine (the paper set's signature). `null` → typed fallback. */
+  logotype: WordmarkImage | null;
+  /** Drawn logotype in soft white (graphite / wine headers). `null` → typed fallback. */
+  logotypeSoft: WordmarkImage | null;
 }
 
 /** Butterfly <img> sized by display height, preserving the mark's real ratio. */
@@ -111,13 +124,7 @@ function fullBleed(buffer: Buffer): CardNode {
 function wordmark(layers: CardLayers, texts: MatchCardTexts, ink: string, pos: Record<string, unknown>): CardNode {
   const children: (CardNode | string)[] = [];
   if (layers.butterfly) children.push(butterflyImg(layers.butterfly, 38));
-  children.push(
-    el(
-      "div",
-      { display: "flex", fontFamily: "Unbounded", fontSize: "30px", fontWeight: 700, color: ink, letterSpacing: "1px" },
-      texts.wordmark,
-    ),
-  );
+  children.push(wordmarkNode(layers.logotypeSoft, 128, ink, {}, texts.wordmark));
   return el("div", { display: "flex", position: "absolute", alignItems: "center", gap: "14px", ...pos }, children);
 }
 
@@ -140,7 +147,7 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
         "div",
         {
           display: "flex",
-          fontFamily: "Roboto",
+          fontFamily: BODY_FAMILY,
           fontWeight: 700,
           fontSize: "23px",
           letterSpacing: "4px",
@@ -162,9 +169,10 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
       "div",
       {
         display: "flex",
-        fontFamily: "Unbounded",
-        fontWeight: 700,
-        fontSize: `${s.nameSize}px`,
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 800,
+        fontSize: `${Math.round(s.nameSize * NAME_SCALE)}px`,
+        letterSpacing: "-0.5px",
         color: s.nameColor,
         marginTop: "10px",
         lineHeight: 1.1,
@@ -175,7 +183,7 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
       "div",
       {
         display: "flex",
-        fontFamily: "Roboto",
+        fontFamily: BODY_FAMILY,
         fontWeight: 700,
         fontSize: `${s.taglineSize ?? 30}px`,
         lineHeight: 1.3,
@@ -192,7 +200,7 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
         "div",
         {
           display: "flex",
-          fontFamily: "Roboto",
+          fontFamily: BODY_FAMILY,
           fontWeight: 400,
           fontSize: `${s.bodySize}px`,
           lineHeight: 1.42,
@@ -222,11 +230,7 @@ function brandSignature(layers: CardLayers, texts: MatchCardTexts): CardNode {
     { display: "flex", alignItems: "center", gap: "10px", marginTop: "26px", alignSelf: "flex-end" },
     [
       ...(layers.butterfly ? [butterflyImg(layers.butterfly, 26)] : []),
-      el(
-        "div",
-        { display: "flex", fontFamily: "Unbounded", fontSize: "21px", fontWeight: 700, color: WINE },
-        texts.wordmark,
-      ),
+      wordmarkNode(layers.logotype, 96, WINE, {}, texts.wordmark),
     ],
   );
 }

@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 397 entries
+# Decision index — all 398 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-07 | PNG-карточки бота: один шрифт Gennety Display (резкость 50) + рисованный логотип iOS вместо Archivo Black / Unbounded; карточка свидания — слоган в слоте на три строки (фото на прежней высоте), фото места уже и с наклоном −10° (новое, по описанию основателя; варианты A/B/C на выбор); `CARD_REVISION` 4; демо идентично; ветка до выбора | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-05 | Telegram peer-wait: только имя в русских «Передали»/«Напомнили» склоняется в дательном локальными правилами; шаблоны прежние, без LLM, demo идентично | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-05 | Calendar: SQL NULL в proposed_times нормализуется перед CAS; исправлена пустая сетка демо после билета, повтор не сбрасывает выбор | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-05 | Rematch временно выключен единым флагом в production/demo/dev; все новые входы и покупки закрыты, возвраты и существующие мэтчи продолжаются; код сохранён | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

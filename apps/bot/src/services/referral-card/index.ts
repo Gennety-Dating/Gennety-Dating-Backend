@@ -7,6 +7,8 @@ import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { dateTicketsPhrase, t } from "@gennety/shared";
 import { butterflyPng } from "../match-card/collage.js";
+import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
+import { wordmarkPng, wordmarkNode } from "../brand-wordmark.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
@@ -43,8 +45,10 @@ const CARD_JPEG_QUALITY = 88;
  * also why a single failed fetch used to be permanent for a given referrer.
  * "3" (2026-09-22): the gift line promises a date ticket instead of Premium —
  * same default count (1), so only the revision can change the URL.
+ * "4" (2026-10-07): brand type — Gennety Display headline and the drawn
+ * logotype instead of Archivo Black / the Cyrillic Unbounded subset.
  */
-export const CARD_REVISION = "3";
+export const CARD_REVISION = "4";
 
 /**
  * Encoded cards, keyed by `contentVersion`. The card is a pure function of
@@ -61,27 +65,10 @@ const cardCache = new Map<string, ReferralCardImage>();
 /** How many portrait slots the card lays out. */
 const PORTRAIT_SLOTS = 5;
 
-type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
-let cachedFonts: SatoriFonts | null = null;
-function loadFonts(): SatoriFonts {
-  if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
-  cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
-    // Archivo Black ships Latin-only (no Cyrillic glyphs at all) — registering
-    // a second font under the SAME name does NOT give satori per-glyph
-    // fallthrough within a family (verified empirically: it only ever primary-
-    // matches the first entry for a given name/weight/style, same trap
-    // ARCHITECTURE.md flags for Unbounded). The fix is a distinct family name
-    // that resolves unambiguously, picked per-language below.
-    { name: "Headline Cyr", data: read("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
-  ];
-  return cachedFonts;
-}
+/** Headline size — one for every language now that one face covers them all. */
+const HEADLINE_PX = 66;
+/** Logotype width — the cap height of the old 46px typed word. */
+const WORDMARK_W = 196;
 
 // Minimal satori node helpers (this is a .ts file, so no JSX). Every box carries
 // an explicit display so satori never has to guess.
@@ -134,11 +121,6 @@ export function referralCardContentVersion(input: ReferralCardInput): string {
     )
     .digest("hex")
     .slice(0, 12);
-}
-
-/** The brand wordmark, set in the logo's own typeface (title-case, not caps). */
-function wordmark(style: Record<string, unknown>): Node {
-  return txt({ fontFamily: "Archivo Black", letterSpacing: -1, ...style }, "Gennety");
 }
 
 /**
@@ -282,41 +264,29 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
     // Everything is centre-formatted: a full-width row with the text centred.
     const center = { width: "100%", justifyContent: "center", textAlign: "center" } as const;
 
-    // Archivo Black has no Cyrillic glyphs, so ru/uk headlines use the bundled
-    // Unbounded Cyrillic weight instead (see loadFonts) — same bold display
-    // register, different (but already-established, match-card) typeface.
-    // Unbounded's letterforms run wider than Archivo Black's at the same size,
-    // so the Cyrillic headline is set a size down to keep each line to one row
-    // (the same two-line "Head A. / Head B." shape every other language gets).
-    const isCyrillicHeadline = input.lang === "ru" || input.lang === "uk";
-    const headlineFontFamily = isCyrillicHeadline ? "Headline Cyr" : "Archivo Black";
-
-    // Archivo Black/Unbounded are already the heaviest weight each family
-    // ships, so "bolder" is faked with a same-colour text stroke that thickens
-    // the strokes without changing the letterforms (satori honors
-    // WebkitTextStroke).
+    // Gennety Display 800 for every language (`card-fonts.ts`). It replaced
+    // Archivo Black for Latin and a Cyrillic-only Unbounded subset for ru/uk —
+    // two typefaces for one card, a size apart, and the subset dropped the
+    // full stops into Roboto. The faux-bold text stroke those needed is gone
+    // too: 800 is the brand's own heaviest cut.
     const headline = box(
       {
         width: "100%",
         flexDirection: "column",
         alignItems: "center",
-        fontFamily: headlineFontFamily,
-        fontSize: isCyrillicHeadline ? 56 : 76,
-        lineHeight: 1.03,
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 800,
+        fontSize: HEADLINE_PX,
+        lineHeight: 1.04,
+        letterSpacing: -1,
       },
       [
-        txt(
-          { ...center, color: "#F7ECEC", WebkitTextStroke: "2px #F7ECEC" },
-          t(input.lang, "referralCardHeadA"),
-        ),
-        txt(
-          { ...center, color: "#F0B7A0", WebkitTextStroke: "2px #F0B7A0" },
-          t(input.lang, "referralCardHeadB"),
-        ),
+        txt({ ...center, color: "#F7ECEC" }, t(input.lang, "referralCardHeadA")),
+        txt({ ...center, color: "#F0B7A0" }, t(input.lang, "referralCardHeadB")),
       ],
     );
 
-    const butterfly = await butterflyMark();
+    const [butterfly, logotype] = await Promise.all([butterflyMark(), wordmarkPng(CREAM)]);
     // Header lockup mark, aspect-correct (never squished into a square box).
     const markH = 74;
     const markW = butterfly ? Math.round((butterfly.w / butterfly.h) * markH) : markH;
@@ -331,7 +301,7 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
         padding: 72,
         background: "linear-gradient(158deg, #17090D 0%, #2A0E17 42%, #6E1B2E 100%)",
         color: "#F7ECEC",
-        fontFamily: "Roboto",
+        fontFamily: BODY_FAMILY,
       },
       [
         // Portraits come FIRST so they paint behind everything else — satori
@@ -348,7 +318,7 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
               },
             }
           : box({}, []),
-        wordmark({ ...center, fontSize: 46 }),
+        wordmarkNode(logotype, WORDMARK_W, CREAM, { display: "flex" }),
         txt(
           {
             ...center,
@@ -394,7 +364,7 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
     return await satori(tree as unknown as Parameters<typeof satori>[0], {
       width: CARD_W,
       height: CARD_H,
-      fonts: loadFonts(),
+      fonts: cardFonts(),
     });
   } catch (err) {
     console.warn("[referral-card] render failed", err);

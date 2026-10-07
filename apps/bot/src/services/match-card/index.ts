@@ -9,10 +9,10 @@
  * caller falls back to the classic photo media-group — a match proposal must
  * never be blocked by cosmetics.
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { grainPng, toPngBuffer, svgToPng} from "../date-card/image.js";
+import { cardFonts } from "../card-fonts.js";
+import { wordmarkPng, type WordmarkImage } from "../brand-wordmark.js";
 import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } from "./collage.js";
 import {
   buildMatchCardElement,
@@ -23,6 +23,8 @@ import {
   paperSoloSpec,
   paperPalette,
   GRAPHITE,
+  SOFT,
+  WINE,
   type CardNode,
   type MatchCardTexts,
   type MatchCardVariant,
@@ -41,36 +43,10 @@ export interface MatchCardInput {
   variant: MatchCardVariant;
 }
 
-type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
-let cachedFonts: SatoriFonts | null = null;
-
-/** Exported as a test seam: the registration SHAPE is the thing that broke. */
-export function loadFonts(): SatoriFonts {
-  if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
-  cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    // The FULL Unbounded, under one family name.
-    //
-    // This used to register the `cyrillic` and `latin` subset woffs BOTH as
-    // "Unbounded", on the belief that one family name lets satori fall through
-    // per glyph. It does not: satori falls through across *families* in
-    // registration order, never within one. The cyrillic subset was listed
-    // first, so it owned the family outright and every Latin glyph — including
-    // the "Gennety" wordmark on every card, and any Latin partner name —
-    // silently resolved to Roboto instead of the display face. Nothing failed;
-    // the brand type just quietly wasn't there.
-    //
-    // One complete file removes the ordering hazard entirely rather than
-    // navigating it, and additionally covers Polish (Ą Ł Ż Ś Ć Ź Ń Ę live in
-    // `latin-ext`, which neither subset carries). Same call, and the same
-    // asset, as `services/expiry-card.ts`.
-    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
-  ];
-  return cachedFonts;
+/** The drawn logotype in the two inks the layouts use (cached per colour). */
+async function logotypes(): Promise<{ logotype: WordmarkImage | null; logotypeSoft: WordmarkImage | null }> {
+  const [logotype, logotypeSoft] = await Promise.all([wordmarkPng(WINE), wordmarkPng(SOFT)]);
+  return { logotype, logotypeSoft };
 }
 
 /** Full-card film-grain tile, generated once and reused for every render. */
@@ -95,7 +71,7 @@ async function rasterize(element: CardNode, bg: string = GRAPHITE): Promise<Buff
   const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
     width: CARD_W,
     height: CARD_H,
-    fonts: loadFonts(),
+    fonts: cardFonts(),
   });
   return await svgToPng(svg, CARD_W, bg);
 }
@@ -114,6 +90,7 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
       collage,
       grain: grainTile(),
       butterfly: await headerButterfly(input.variant),
+      ...(await logotypes()),
     });
     return await rasterize(element);
   } catch (err) {
@@ -149,6 +126,7 @@ export async function renderMatchCardSet(
     const textCardIndex = lastIsSolo ? chunks.length - 1 : 0;
 
     const butterfly = await headerButterfly("paper");
+    const marks = await logotypes();
     const grain = grainTile();
     const cards: Buffer[] = [];
     for (const [i, chunk] of chunks.entries()) {
@@ -156,7 +134,7 @@ export async function renderMatchCardSet(
       const spec =
         chunk.length === 1 ? paperSoloSpec(pal.dotNeutral) : paperDuoSpec(withPanel, pal.dotNeutral);
       const collage = await buildCollageLayer(chunk, spec, `${input.seed}#${i}`);
-      const layers = { collage, grain, butterfly };
+      const layers = { collage, grain, butterfly, ...marks };
       const element =
         chunk.length === 1
           ? paperSoloCard(input.texts, layers, pal)

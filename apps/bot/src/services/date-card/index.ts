@@ -1,16 +1,12 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardButton } from "grammy/types";
-import satori from "satori";
 import { t, type Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
-import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
-import { toPngBuffer, duotonePng, grainPng, svgToPng} from "./image.js";
+import { toPngBuffer, duotonePng } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
-import { buildCardElement, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
-import { resolveCreditPlacement } from "./credit-placement.js";
+import { HERO_W, HERO_H, type CardNode, type CardTheme } from "./template.js";
+import { composeDateCard } from "./compose.js";
 
 /**
  * Date-card renderer (PRODUCT_SPEC.md §3.7). Produces a shareable PNG for a
@@ -60,44 +56,6 @@ export interface RenderDateCardOptions {
   venuePhoto?: Buffer | null;
 }
 
-type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
-let cachedFonts: SatoriFonts | null = null;
-
-function loadFonts(): SatoriFonts {
-  if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
-  const archivoBlack = read("ArchivoBlack-Regular.ttf");
-  cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    // Archivo Black is a single heavy weight — register it under 400 and 700.
-    { name: "Archivo Black", data: archivoBlack, weight: 400, style: "normal" },
-    { name: "Archivo Black", data: archivoBlack, weight: 700, style: "normal" },
-  ];
-  return cachedFonts;
-}
-
-/** Full-card film-grain tile, generated once and reused for every render. */
-let cachedGrain: Buffer | null = null;
-function grainTile(): Buffer {
-  if (!cachedGrain) cachedGrain = grainPng(CARD_W, CARD_H, 9);
-  return cachedGrain;
-}
-
-/**
- * Brand butterfly mark, rasterized once and reused for every render. The
- * burgundy radial gradient is baked into `butterfly-logo.svg`, so no tint is
- * applied here. Shared with the match-card renderer.
- */
-let cachedLogo: ButterflyMark | null | undefined;
-async function loadLogo(): Promise<ButterflyMark | null> {
-  if (cachedLogo !== undefined) return cachedLogo;
-  cachedLogo = await butterflyPng(600);
-  return cachedLogo;
-}
-
 /**
  * Fetch the venue's Places photo and duotone it into the brand palette, ready
  * to drop into the card. Returns `null` when there is no usable photo — the
@@ -132,7 +90,7 @@ export async function prepareVenuePhoto(
   // Duotone into the brand palette so a stock Places photo reads as part of the
   // card; a plain PNG, then the gradient, are the fallbacks.
   return (
-    (await duotonePng(raw.buffer, "#1C0710", "#F7E7EB", 1000, 690, 0.7)) ??
+    (await duotonePng(raw.buffer, "#1C0710", "#F7E7EB", HERO_W, HERO_H, 0.7)) ??
     (await toPngBuffer(raw.buffer))
   );
 }
@@ -165,33 +123,17 @@ export async function renderDateCard(
       ? opts.venuePhoto
       : await prepareVenuePhoto(input.venuePhotoName);
 
-  // Brand logo (best-effort; absent → no logo, never blocks the render).
-  const logo = await loadLogo();
-
-  // 3. Compose + rasterize.
+  // 3. Compose + rasterize (brand marks, grain, fonts — `compose.ts`).
   try {
-    const element = buildCardElement({
+    return await composeDateCard({
       partnerName: input.partnerFirstName,
       partnerPhoto,
       venuePhoto,
-      // The dark film grain would dirty the cream light card — skip it there.
-      grain: input.theme === "light" ? null : grainTile(),
-      logo,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
-      // Beside the address when it fits, on the photo when it does not — the
-      // measurement lives next to the layout constants it depends on.
-      creditPlacement: resolveCreditPlacement(input.venueAddress),
       slogan: input.slogan ?? t(input.language, "dateCardSlogan"),
       theme: input.theme,
     });
-
-    const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
-      width: CARD_W,
-      height: CARD_H,
-      fonts: loadFonts(),
-    });
-    return await svgToPng(svg, CARD_W);
   } catch (err) {
     console.warn("[date-card] render failed:", err);
     return null;
