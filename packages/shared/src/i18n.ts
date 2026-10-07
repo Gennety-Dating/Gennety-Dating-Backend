@@ -682,7 +682,7 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Open in Maps",
     matchScheduledBtnShare: "📤 Share this card",
     dateCardWhen: "WHEN",
-    dateCardSlogan: "No texting.\nStraight to real life.",
+    dateCardSlogan: "No texting\nStraight to real life",
     dateCardShareCaption:
       "Share away — your match's face is hidden to protect their privacy 💞",
     dateCardShareFailed:
@@ -1872,7 +1872,7 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
     matchScheduledBtnShare: "📤 Поделиться карточкой",
     dateCardWhen: "КОГДА",
-    dateCardSlogan: "Без переписки.\nСразу вживую.",
+    dateCardSlogan: "Без переписки\nСразу вживую",
     dateCardShareCaption:
       "Делись смело — лицо твоего мэтча скрыто, чтобы сохранить его приватность 💞",
     dateCardShareFailed: "Не получилось подготовить карточку для отправки — попробуй через минуту.",
@@ -2946,7 +2946,7 @@ const translations = {
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
     matchScheduledBtnShare: "📤 Поділитися карткою",
     dateCardWhen: "КОЛИ",
-    dateCardSlogan: "Без листування.\nОдразу наживо.",
+    dateCardSlogan: "Без листування\nОдразу наживо",
     dateCardShareCaption:
       "Ділися сміливо — обличчя твого метчу приховане, щоб зберегти його приватність 💞",
     dateCardShareFailed: "Не вдалося підготувати картку для надсилання — спробуй за хвилину.",
@@ -4008,7 +4008,7 @@ const deTranslations: TranslationTable = {
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
   matchScheduledBtnShare: "📤 Karte teilen",
   dateCardWhen: "WANN",
-  dateCardSlogan: "Kein Chatten.\nDirekt im echten Leben.",
+  dateCardSlogan: "Kein Chatten\nDirekt im echten Leben",
   dateCardShareCaption:
     "Teile sie ruhig — das Gesicht deines Matches ist zum Schutz seiner Privatsphäre verdeckt 💞",
   dateCardShareFailed:
@@ -5067,7 +5067,7 @@ const plTranslations: TranslationTable = {
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
   matchScheduledBtnShare: "📤 Udostępnij kartę",
   dateCardWhen: "KIEDY",
-  dateCardSlogan: "Bez pisania.\nOd razu na żywo.",
+  dateCardSlogan: "Bez pisania\nOd razu na żywo",
   dateCardShareCaption:
     "Udostępniaj śmiało — twarz Twojego matcha jest zasłonięta dla ochrony jego prywatności 💞",
   dateCardShareFailed:

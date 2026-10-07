@@ -6,9 +6,10 @@
  * black / white design system 2026-07-09): a near-black card with two faint
  * burgundy corner discs, a soft burgundy glow behind the hero photo, and faint
  * film grain; a wide duotone venue photo as the hero; an
- * overlapping tilted polaroid of the partner; a bold Archivo Black headline
+ * overlapping tilted polaroid of the partner; a Gennety Display headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
- * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
+ * The word "Gennety" sits top-left, typed in Gennety Display like the slogan,
+ * and the brand butterfly logo sits
  * top-right (slightly tilted, nudged toward the edge like the polaroid). The
  * "made with Gennety" credit sits beside the venue address when the address
  * leaves room for it, and is stamped into the hero photo's lower-left corner
@@ -24,6 +25,8 @@
  * is pure layout.
  */
 
+import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
+
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 /** Card's own horizontal padding; `CONTENT_W` is derived from it. */
@@ -35,6 +38,54 @@ export const CREDIT_FONT_PX = 22;
 export const ADDRESS_FONT_PX = 30;
 
 const BURGUNDY = "#8B253B";
+
+/**
+ * Headline slot (2026-10-07). The slogan is set in Gennety Display 800 and
+ * wraps inside `SLOGAN_MAX_W`, which keeps every line of every locale clear of
+ * the butterfly top-right ("Straight to real life" and "Direkt im echten
+ * Leben" used to run under it). The slot is always THREE lines tall, so the
+ * hero photo sits at the same height whatever the copy: the card's look was
+ * tuned on the three-line "Error 404" slogan, and when the copy audit of
+ * 2026-10-01 made the slogan two lines the whole photo block rode up by a
+ * line. A two-line slogan sits in the MIDDLE of the slot, not at its top.
+ * At the top it read as "the text is too high", with an empty line under it
+ * (founder, 2026-10-07, together with "a little bigger": 78 -> 82px). 82 is
+ * as far as it goes. The first line of a two-line slogan sits level with the
+ * butterfly's lower wing, and "Без листування" (uk, the widest) ends 20px
+ * short of it at 82; at 84 the two touch. A line that wraps (en, de) never
+ * leaves its last word alone (`keepLastWordsTogether`). A fourth line (no
+ * current copy needs one) grows the slot rather than clipping text.
+ */
+const SLOGAN_PX = 82;
+const SLOGAN_LINE_HEIGHT = 1.04;
+const SLOGAN_SLOT_LINES = 3;
+const SLOGAN_MAX_W = 664;
+
+/**
+ * The venue photo (founder's choice of 2026-10-07): the old 1000 × 690 box
+ * ("variant A") scaled down to 92 % and tilted slightly LEFT, against the
+ * partner polaroid's +7deg to the right, so the two lean apart and balance.
+ * The tilt is -3deg: the founder picked it from -3, -4 and -6 on 2026-10-07.
+ * At full size the photo ran to 20px from the card's left edge, and that thin
+ * strip of background read as a mistake. Smaller and tilted, the left edge is
+ * a slant 46–79px in, which reads as placed. Its centre stays where the
+ * 1000 × 690 photo's was (x 530, y 769 on the card), so the card keeps its
+ * balance. The box is exported because the duotone is cut to it upstream
+ * (`prepareVenuePhoto`), so the two cannot drift apart.
+ */
+export const HERO_W = 920;
+export const HERO_H = 635;
+/** Inside the venue block, which starts at y 415 on the card. */
+const HERO_LEFT = 6;
+const HERO_TOP = 37;
+/** Counter-tilt to the polaroid's +7deg (negative = counter-clockwise). */
+const HERO_TILT_DEG = -3;
+/**
+ * Height of the venue block. The polaroid hangs from its bottom edge. The
+ * slot of the bigger slogan pushed the block 13px down, so the block is 13px
+ * shorter (it was 726) and the polaroid stays where it always sat.
+ */
+const VENUE_BLOCK_H = 713;
 
 /**
  * Where the credit goes on one card. Resolved by `credit-placement.ts`, which
@@ -54,7 +105,7 @@ interface Palette {
 }
 
 /** Card chrome colors per theme (the burgundy accent + photos are theme-agnostic). */
-function palette(theme: CardTheme): Palette {
+export function palette(theme: CardTheme): Palette {
   return theme === "light"
     ? { bg: "#F5F5F5", ink: "#1D1D1D", muted: "#6B6670" }
     : { bg: "#030303", ink: "#F2EFF7", muted: "#8E8895" };
@@ -124,7 +175,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
       height: `${CARD_H}px`,
       padding: `70px ${CARD_PADDING_X}px`,
       backgroundColor: p.bg,
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       color: p.ink,
     },
     [
@@ -166,8 +217,12 @@ function logoImg(logo: LogoMark): CardNode {
     "img",
     {
       position: "absolute",
-      top: "68px",
-      right: "40px",
+      // A little lower and further in than the 2026-06 placement (founder,
+      // 2026-10-07): pressed into the corner it read as cut off. Only 8px in,
+      // because the slogan's first line ends beside the lower wing (see
+      // SLOGAN_PX).
+      top: "92px",
+      right: "48px",
       width: `${displayW}px`,
       height: `${displayH}px`,
       transform: "rotate(13deg)",
@@ -177,39 +232,72 @@ function logoImg(logo: LogoMark): CardNode {
   );
 }
 
+/**
+ * The word "Gennety" in the brand face, the slogan's weight (founder's pick of
+ * 2026-10-07; the drawn logotype was tried and rejected the same day). 42px
+ * rather than the old 36px: Gennety Display runs narrower than the Archivo
+ * Black it replaced, and at 36px the word read small.
+ *
+ * `lineHeight` is the old Archivo Black line at 36px. Gennety Display's own
+ * line is taller (1.25 em), and without the pin the slogan and both photos
+ * slid 6–21px down. Pinned, the word grows around the line's centre and the
+ * rest of the card stays where it was approved.
+ */
 function header(p: Palette): CardNode {
-  return el(
-    "div",
-    {
-      display: "flex",
-      alignItems: "center",
-      marginBottom: "34px",
-    },
-    [
-      el(
-        "div",
-        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: p.ink },
-        "Gennety",
-      ),
-    ],
-  );
+  return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [
+    el(
+      "div",
+      {
+        display: "flex",
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 800,
+        fontSize: "42px",
+        letterSpacing: "-1px",
+        lineHeight: "39.168px",
+        color: p.ink,
+      },
+      "Gennety",
+    ),
+  ]);
 }
 
-/** Archivo Black headline; the final line is the burgundy accent. */
+/**
+ * Glues a line's last two words with a no-break space, so that a wrap never
+ * leaves one word alone: "Straight to / real life", not "Straight to real /
+ * life". Only for lines of three words or more, since a glued two-word line
+ * could no longer wrap at all and would run past the slot. Satori's
+ * `textWrap: "balance"` was tried first. It makes the lines even, not
+ * meaningful ("Straight / to real life").
+ */
+export function keepLastWordsTogether(line: string): string {
+  const words = line.split(" ");
+  if (words.length < 3) return line;
+  return `${words.slice(0, -1).join(" ")}\u00A0${words[words.length - 1]}`;
+}
+
+/** Gennety Display headline, centred in a fixed three-line slot; the final line is the burgundy accent. */
 function heroSlogan(slogan: string, p: Palette): CardNode {
   const raw = slogan.split("\n");
   const lines = raw.map((line, i) =>
-    el("div", { display: "flex", color: i === raw.length - 1 ? BURGUNDY : p.ink }, line),
+    el(
+      "div",
+      { display: "flex", color: i === raw.length - 1 ? BURGUNDY : p.ink },
+      keepLastWordsTogether(line),
+    ),
   );
   return el(
     "div",
     {
       display: "flex",
       flexDirection: "column",
-      fontFamily: "Archivo Black",
-      fontSize: "78px",
-      lineHeight: 1.0,
-      letterSpacing: "-2px",
+      justifyContent: "center",
+      width: `${SLOGAN_MAX_W}px`,
+      minHeight: `${Math.round(SLOGAN_PX * SLOGAN_LINE_HEIGHT * SLOGAN_SLOT_LINES)}px`,
+      fontFamily: DISPLAY_FAMILY,
+      fontWeight: 800,
+      fontSize: `${SLOGAN_PX}px`,
+      lineHeight: SLOGAN_LINE_HEIGHT,
+      letterSpacing: "-1.5px",
       marginBottom: "10px",
     },
     lines,
@@ -246,7 +334,7 @@ function venueSection(input: CardElementInput): CardNode {
       display: "flex",
       position: "relative",
       width: "100%",
-      height: "726px",
+      height: `${VENUE_BLOCK_H}px`,
       marginTop: "8px",
       marginBottom: "8px",
     },
@@ -255,8 +343,8 @@ function venueSection(input: CardElementInput): CardNode {
       el("div", {
         display: "flex",
         position: "absolute",
-        left: "180px",
-        top: "90px",
+        left: "190px",
+        top: "77px",
         width: "680px",
         height: "470px",
         borderRadius: "999px",
@@ -268,13 +356,14 @@ function venueSection(input: CardElementInput): CardNode {
         {
           display: "flex",
           position: "absolute",
-          left: "-44px",
-          top: "22px",
-          width: "1000px",
-          height: "690px",
+          left: `${HERO_LEFT}px`,
+          top: `${HERO_TOP}px`,
+          width: `${HERO_W}px`,
+          height: `${HERO_H}px`,
           borderRadius: "30px",
           overflow: "hidden",
           boxShadow: "0 34px 80px rgba(0,0,0,0.6)",
+          transform: `rotate(${HERO_TILT_DEG}deg)`,
         },
         // When the credit is on the photo it lives INSIDE this box, so the
         // box's own `overflow: hidden` + 30px radius clip it to the photograph.
@@ -357,7 +446,7 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
     // into the polaroid. So this is not the 2026-08-20 off-canvas failure in
     // miniature; it is the silhouette drift the block's own comment forbids.
     inline ? `${inline.addressWidth}px` : "100%",
-    { fontFamily: "Roboto", fontSize: `${ADDRESS_FONT_PX}px`, color: p.muted },
+    { fontFamily: BODY_FAMILY, fontSize: `${ADDRESS_FONT_PX}px`, color: p.muted },
   );
 
   // The credit is a plain muted line here, not the scrimmed pill it wears on
@@ -371,7 +460,7 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
           {
             display: "flex",
             marginLeft: "auto",
-            fontFamily: "Roboto",
+            fontFamily: BODY_FAMILY,
             fontSize: `${CREDIT_FONT_PX}px`,
             color: p.muted,
           },
@@ -384,9 +473,14 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
     "div",
     { display: "flex", flexDirection: "column", width: "100%" },
     [
+      // Gennety Display 700, not the slogan's 800: the name is a label under
+      // the photo, and venue names are mostly Cyrillic — the old Archivo Black
+      // had no Cyrillic, so most of them were silently set in Roboto.
       line(input.venueName, "100%", {
-        fontFamily: "Archivo Black",
-        fontSize: "54px",
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 700,
+        fontSize: "52px",
+        letterSpacing: "-0.5px",
         color: p.ink,
       }),
       addressRow,
@@ -448,7 +542,7 @@ function photoCredit(): CardNode {
       paddingBottom: "10px",
       borderRadius: "999px",
       backgroundColor: "rgba(3,3,3,0.6)",
-      fontFamily: "Roboto",
+      fontFamily: BODY_FAMILY,
       fontSize: `${CREDIT_FONT_PX}px`,
       color: "rgba(255,255,255,0.95)",
     },

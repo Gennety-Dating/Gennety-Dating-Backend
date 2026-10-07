@@ -862,23 +862,35 @@ light ink) or light (cream `#F5F5F5`, dark ink) — with the burgundy (`#8B253B`
 accent, a soft burgundy glow behind the hero photo, and faint film grain on the
 dark card only (skipped on the light one). (The two burgundy corner discs were
 removed.) It carries
-a wide **duotone**-treated venue photo as the hero (the stock Places/curated
-image is remapped into the burgundy brand palette so it reads as part of the card), an
-overlapping tilted **polaroid** of the partner, a bold Archivo Black headline
-**slogan** whose last line is the burgundy accent (`dateCardSlogan`; the brand
-voice is intentionally a fixed English line —
-"Error 404: Chat not found. Try real life." — across all five locales), the
-"Gennety" wordmark top-left, the brand **butterfly** logo (`butterfly-logo.svg`,
-shared with the match card) tilted top-right, and the venue name + address. The card
+a **duotone**-treated venue photo as the hero (the stock Places/curated
+image is remapped into the burgundy brand palette so it reads as part of the card;
+920 × 635, tilted 3° to the left), an
+overlapping **polaroid** of the partner tilted 7° to the right, a
+**Gennety Display** 800 (Geologica, sharpness 50, the apps' display face) headline
+**slogan** whose last line is the burgundy accent (`dateCardSlogan`, localized
+since the 2026-10-01 copy audit and written without full stops since
+2026-10-07: "Без переписки / Сразу вживую"; until 2026-10-01 it was a fixed
+English "Error 404: Chat not found. Try real life." in all locales), the
+word "Gennety" top-left in Gennety Display 800 at 42px (founder's pick of
+2026-10-07, on the old 39px header line so nothing below it moved; the drawn
+iOS logotype was tried and rejected the same day), the brand **butterfly** logo (`butterfly-logo.svg`,
+shared with the match card) tilted top-right, and the venue name + address. The
+slogan is 82px and sits centred in a fixed three-line slot that wraps at
+664px, so the photo keeps one height for every locale and line count. A
+wrapped line never leaves its last word alone ("Straight to / real life").
+Before 2026-10-07 a two-line slogan lifted the whole photo block by a line.
+Only this card uses Gennety Display. The other cards keep Archivo Black /
+Unbounded by the founder's call of 2026-10-07. The card
 deliberately **omits the
 date/time** — the exact slot already lives in the Telegram caption right below,
 so repeating it on the card adds nothing and the freed space is spent on a
 cleaner keepsake. Rendered server-side with `satori` (→ SVG) + `@resvg/resvg-js`
 (→ PNG), with `@napi-rs/canvas` doing the venue duotone and grain tile; the
 partner-face blur uses AWS Rekognition `DetectFaces` boxes + pixelation.
-Rendered text is emoji-free (the bundled Roboto + Archivo Black fonts carry no
+Rendered text is emoji-free (the bundled Roboto and Gennety Display carry no
 color-emoji glyphs, so all card accents are vector shapes, not emoji); emoji
-live only in the Telegram caption.
+live only in the Telegram caption. Its fonts come from `services/card-fonts.ts`:
+Roboto and Gennety Display only, no Archivo Black.
 
 - **Live render progress.** The render (partner-photo download + Places venue
   photo + rasterize) takes several seconds, so each side sees a per-side

@@ -1,9 +1,17 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import satori from "satori";
-import { buildCardElement, CARD_W, CARD_H, CARD_PADDING_X, CREDIT_TEXT } from "./template.js";
+import {
+  buildCardElement,
+  keepLastWordsTogether,
+  CARD_W,
+  CARD_H,
+  CARD_PADDING_X,
+  CREDIT_TEXT,
+  HERO_W,
+  HERO_H,
+} from "./template.js";
 import { resolveCreditPlacement, measureRoboto, CREDIT_MIN_GAP } from "./credit-placement.js";
+import { cardFonts, DISPLAY_FAMILY } from "../card-fonts.js";
 
 /**
  * Geometry guard for the card's bottom block.
@@ -25,17 +33,7 @@ import { resolveCreditPlacement, measureRoboto, CREDIT_MIN_GAP } from "./credit-
  * renderer does rather than being handed one.
  */
 
-const read = (file: string) =>
-  readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
-
-const archivoBlack = read("ArchivoBlack-Regular.ttf");
-const fonts = [
-  { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400 as const, style: "normal" as const },
-  { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500 as const, style: "normal" as const },
-  { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700 as const, style: "normal" as const },
-  { name: "Archivo Black", data: archivoBlack, weight: 400 as const, style: "normal" as const },
-  { name: "Archivo Black", data: archivoBlack, weight: 700 as const, style: "normal" as const },
-];
+const fonts = cardFonts();
 
 interface Box { x: number; y: number; w: number; h: number }
 
@@ -75,11 +73,16 @@ function card(venueName: string, venueAddress: string, slogan = "x") {
   });
 }
 
-async function layout(venueName: string, venueAddress: string): Promise<Box[]> {
-  const svg = await satori(
-    card(venueName, venueAddress, "Error 404:\nChat not found.\nTry real life.") as never,
-    { width: CARD_W, height: CARD_H, fonts },
-  );
+async function layout(
+  venueName: string,
+  venueAddress: string,
+  slogan = "Error 404:\nChat not found.\nTry real life.",
+): Promise<Box[]> {
+  const svg = await satori(card(venueName, venueAddress, slogan) as never, {
+    width: CARD_W,
+    height: CARD_H,
+    fonts,
+  });
   return [
     ...svg.matchAll(
       /<mask id="satori_om-id[^"]*"><rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/g,
@@ -168,6 +171,47 @@ describe("date card layout", () => {
     );
     expect((credit?.x ?? 0) + (credit?.w ?? 0)).toBeLessThanOrEqual(CARD_W - CARD_PADDING_X + 1);
   }, 60_000);
+
+  it("keeps the venue photo at one height whatever the slogan's line count", async () => {
+    // The 2026-10-07 report: the copy audit made the slogan two lines instead
+    // of three and the whole photo block rode up by a line. The headline now
+    // sits in a fixed three-line slot, so the photo box must not move between
+    // a two-line slogan, a three-line one, and a long line that wraps.
+    const heroTop = async (slogan: string) => {
+      const boxes = await layout("Aroma Kava", SHORT, slogan);
+      const hero = boxes.find((b) => Math.abs(b.w - HERO_W) < 1 && Math.abs(b.h - HERO_H) < 1);
+      expect(hero).toBeDefined();
+      return hero?.y ?? -1;
+    };
+    const twoLines = await heroTop("Без переписки\nСразу вживую");
+    expect(await heroTop("Error 404:\nChat not found.\nTry real life.")).toBe(twoLines);
+    expect(await heroTop("Kein Chatten\nDirekt im echten Leben")).toBe(twoLines);
+  }, 60_000);
+
+  it("never leaves a wrapped slogan line's last word alone", () => {
+    // "Straight to real / life" was the first render of the en slogan.
+    expect(keepLastWordsTogether("Straight to real life")).toBe("Straight to real\u00A0life");
+    expect(keepLastWordsTogether("Direkt im echten Leben")).toBe("Direkt im echten\u00A0Leben");
+    // Two words stay breakable: glued, the pair could not wrap at all.
+    expect(keepLastWordsTogether("Сразу вживую")).toBe("Сразу вживую");
+    expect(keepLastWordsTogether("Gennety")).toBe("Gennety");
+  });
+
+  it("types the header word Gennety in the brand face on the old line height", () => {
+    // Founder's pick of 2026-10-07: Gennety Display 800 at 42px. The line stays
+    // the old Archivo Black one (39.168px at 36px); Gennety Display's own line
+    // is taller and pushed the slogan and photos 6–21px down.
+    const built = card("Кав'ярня «Ранок»", "вул. Хрещатик, 1", "Без переписки\nСразу вживую");
+    const [word] = findNodes(built, (n) => childText(n) === "Gennety");
+    expect(word.props.style).toMatchObject({
+      fontFamily: DISPLAY_FAMILY,
+      fontWeight: 800,
+      fontSize: "42px",
+      lineHeight: "39.168px",
+    });
+    // Archivo Black has no Cyrillic and nothing on this card is set in it now.
+    expect(fonts.map((f) => f.name)).not.toContain("Archivo Black");
+  });
 
   it("clips the venue name and address to one line each", async () => {
     // The bottom block sits behind a `flexGrow` spacer on a fixed-height card,
