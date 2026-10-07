@@ -1,20 +1,20 @@
 # Gennety — Privacy Policy
 
-**Last Updated: 26 September 2026**
+**Last Updated: 8 October 2026**
 
-**Version: 4.2** — adds one optional feature: **Tempo Sync**, which reads your
-step count from Apple Health on your iPhone, reduces it on the phone to two
-coarse labels, and uses them to plan the date and as one small factor in
-matching. It is off unless you switch it on, and you can switch it off at any
-time. Everything else is unchanged from version 4.1 (27 August 2026), which
-added the optional map-colouring feature ("explored areas") to version 4.0.
-Version 4.0 was rewritten after a full audit of the running code: we no longer
-collect nationality or ethnic origin at all; identity verification moved from
-Persona to Amazon Rekognition Face Liveness; the optional "personal AI export"
-feature has been retired; we disclose the short-lived chat timeline and the
-promo-code attribution that earlier versions did not mention; and Section 12.2
-states directly what our internal operations feed receives when an account is
-deleted, and what you can do about it.
+**Version: 4.3** — adds two things that happen after a date. **The Morning
+After**: the morning after a date, each of you is asked privately whether you
+would like to see the other person again. A "didn't click" is never passed on;
+only when you both say it was great are you both told. **The Date Wishlist**: an
+optional list of things you love — places, drinks, flowers, perfume, gifts —
+that you build with our AI agent and that, only with your separate consent, a
+person with whom the interest is mutual can use as a cheat sheet for a second
+date. To find real products, we send what you type to our AI provider's web
+search and read the public product details of shop pages. The new data, its
+legal bases, who sees it and for how long are in Sections 4, 7, 9, 12.1, 14, 16
+and 18. Everything else is unchanged from version 4.2 (26 September 2026), which
+added Tempo Sync, the optional Apple Health feature. Earlier versions are
+available on request (Section 21).
 
 This Privacy Policy explains how Gennety ("**Gennety**", "**we**", "**us**", or
 "**our**") collects, uses, shares, and protects your personal data when you use
@@ -44,11 +44,11 @@ below.
 | Question | Short answer |
 |---|---|
 | Who is responsible? | Gennety, operated from Kyiv, Ukraine. Contact: **legal@gennety.com** (Section 2). |
-| What do you collect? | Account and contact-verification data (email **or** phone), profile answers, photos and optional video, a liveness selfie, location for your dating city and date logistics, your messages with our AI, payment records, and technical data (Section 4). |
+| What do you collect? | Account and contact-verification data (email **or** phone), profile answers, photos and optional video, a liveness selfie, location for your dating city and date logistics, your messages with our AI, your answers after a date, your Date Wishlist if you make one, payment records, and technical data (Section 4). |
 | Do you use AI on my data? | Yes. AI builds your psychological summary, an embedding, an attractiveness/"league" rating, icebreakers, and venue choices (Sections 7 and 8). |
 | Do you use biometrics? | Yes — a liveness selfie and face comparison against your photos, only with your explicit consent. The selfie is deleted after 90 days (Sections 6 and 10). |
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
-| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form (Section 12). |
+| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form. If you both want to see each other again after a date, and only if you agreed to it, that person can also see your Date Wishlist (Section 12.1). |
 | Does a human see my data? | Yes — the operator of the service, through an internal administration interface and a private operations feed (Section 12.2 and 12.3). |
 | Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure), with one disclosed exception: an internal operational notification (Section 12.2). |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
@@ -88,8 +88,9 @@ This Policy applies to all personal data we process about:
 It does **not** cover:
 
 - third-party services you reach through our links or embeds — for example the
-  Telegram app itself, the Apple App Store, or the Spotify player embedded on
-  our website. Those services process data under their own privacy policies;
+  Telegram app itself, the Apple App Store, the Spotify player embedded on our
+  website, or an online shop a Date Wishlist item links to. Those services
+  process data under their own privacy policies;
 - what another user does with information you choose to share with them.
 
 **Note on the website.** Since 19 July 2026, the website runs **no part of
@@ -117,13 +118,15 @@ the Service, and data we derive or generate to power matchmaking.
 | **Profile details** | Height, hobbies/interests, a free-text description of the partner you are looking for, your preferred partner age range, the city where you want to receive matches, and free-text "vibe" answers (for example, your ideal Friday night, and whether the experience or the company matters more to you). **We do not ask for, and do not store, your nationality or ethnic origin.** |
 | **Photos & video** | Profile photos (including the static frame of a Telegram "Live Photo") and an optional short profile video. Images you attach to a chat with our AI concierge, including any you choose to add to your profile. |
 | **Identity verification (biometric)** | A liveness selfie captured by our verification provider, used to confirm you are a real person and that your profile photos are of you. See Section 10. |
-| **Follow-up questionnaire answers** | Short optional questions we send after onboarding ("Profiler") to fuel icebreakers and date hints — you can skip any of them. |
+| **Follow-up questionnaire answers** | Short optional questions we send after onboarding ("Profiler") to fuel icebreakers, date hints and Date Wishlist suggestions — you can skip any of them. One answer (today: your favourite flowers) can be shown to a match as a hint after mutual interest — see Section 12.1. |
 | **Visual type preference (optional feature)** | Where we offer the visual "type" calibration step, the picks you make from a set of sample portraits, and the compiled preference this produces. |
 | **Location** | The dating city you select and its coordinates; coordinates resolved from your browser/device geolocation or a place you pick on a map; the departure point you mark for a date, with its human-readable label if you selected it via search. |
 | **Explored areas (optional, off by default)** | Only if you switch on map colouring: the **approximate areas** you have been in, stored as grid squares roughly 1.2 km across — never your exact position, and never a coordinate. Recorded only while the map screen is open, and only inside a city we operate in. |
 | **Date preferences ("venue intent")** | What kind of date you want — experience, atmosphere, format — plus any requirements you explicitly confirm, including **dietary requirements** (e.g. vegan, vegetarian, halal, kosher, gluten-free), an **alcohol-free** requirement, and a **step-free access** requirement. See Section 6 — some of these can reveal special-category data. |
-| **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
-| **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
+| **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); your **morning-after answer** — the one question we ask the morning after a date ("It was great, I want to see them again" or "Didn't click") and when you answered; free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
+| **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links), and whether each item came from our catalog, a search, a link, or your own words. See Sections 9 and 12.1. |
+| **Consent records** | Which version of these documents you accepted and when; your biometric consent (Section 10); and, if you make a Date Wishlist, your consent to show it to a match after mutual interest — when you gave it and the version of the wording you agreed to. |
+| **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, Date Wishlist unlocks, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
 | **Subscription cancellation reason** | If you cancel Gennety Premium in chat and choose to answer, the free-text reason you give. |
 | **Support correspondence** | Anything you send us at our support handle or at legal@gennety.com. |
 
@@ -140,6 +143,7 @@ the Service, and data we derive or generate to power matchmaking.
 | **Usage metering** | Per-user counters for how many messages and how much AI processing you use, so we can enforce fair-use limits and stop abuse. These are held in memory and are not a long-term profile. |
 | **Chat timeline** | A short-lived record of what happened in your Telegram chat — the messages we sent, the buttons you tapped (by their visible label), what you typed, and actions you took in a Mini App. It lets our assistant answer a follow-up like "why?" against the message directly above it instead of guessing. A verification code you type is masked before storage. Kept **30 days**. |
 | **Promo attribution** | If you arrive through a promo link, a short-lived, hashed device fingerprint (IP + browser + language) and the promo code, so the reward survives an App Store install. Held in memory only, for up to an hour, then discarded. |
+| **Product look-up cache** | When a Date Wishlist search or a pasted link is looked up, the search or link and what was found (product name, image link, price, shop page) are kept for **30 days**, so the same look-up is not repeated. The cache does not record who asked. Separately, the day's catalog suggestions for you are kept for **24 hours** under a one-way code derived from your account, so they are not worked out again each time you open the wishlist. |
 | **Website cookie-consent records** | See Section 5.4. |
 
 ### 4.3 Data we derive or generate
@@ -154,6 +158,7 @@ the Service, and data we derive or generate to power matchmaking.
 | **Face-match scores** | Similarity scores between your verification selfie and each of your profile photos. |
 | **Safety signals** | Strikes, reports about you, suspension/investigation status, and records of media we rejected at upload (reason and time only — never the rejected media itself). |
 | **Venue selection logs** | A structured, raw-text-free record of how a venue was chosen for your date, used to debug and improve the concierge. |
+| **Mutual interest** | Whether the two of you **both** answered "It was great" the morning after a date, and when — derived from both answers and stored with the match. |
 | **Life rhythm (Tempo Sync)** — two labels: your usual activity level (calm / moderate / active) and when your day tends to be most active (earlier / middle / later, or unknown), plus how many days of data they are based on | Computed **on your iPhone** from the last 28 days of your step count in Apple Health, only if you connect it. Only the labels reach us — never step counts, sleep, workouts, heart rate or any other Health data |
 
 We **do not** create per-message embeddings of your conversations. **We do not
@@ -203,6 +208,15 @@ them — and turns it **on the phone** into the two life-rhythm labels described
 in Section 4.3. Only those labels are sent to us; the step counts never leave
 your device.
 
+### 5.6 From public web pages (Date Wishlist)
+
+When you look for a product for your Date Wishlist, our AI provider's web search
+returns public shop pages that match what you typed, and our server reads the
+public product details (title, image, price) that a shop page publishes about
+itself — from the pages the search found or the links you pasted. This is
+information about products, not about you; it becomes part of your wishlist
+only when you choose an item.
+
 ---
 
 ## 6. Special-Category Data (GDPR Article 9)
@@ -218,7 +232,7 @@ and you can withdraw it at any time (Section 18).
 | **Dietary requirements** — if you confirm halal or kosher (which can reveal religious belief), or a medical requirement such as gluten-free | Only if you explicitly confirm one when telling the concierge what kind of date you want. | The concierge simply does not filter venues on that requirement. Nothing else changes. |
 | **Accessibility needs** — a step-free venue requirement, which can reveal health data | Only if you explicitly confirm it in the same flow. | As above. |
 | **Life rhythm from Apple Health** — derived from your step count, which can reveal health | Only if you tap "Connect Apple Health" and allow access in the iOS permission sheet. Refreshed when you open the iPhone app, at most once a day. | Nothing changes: you are matched and dates are planned exactly as for everyone else. |
-| **Free-text you write** — you may voluntarily reveal special-category information in a vibe answer, a chat message, a report, or feedback | Only if you choose to write it. | We ask you not to share more than you need to. |
+| **Free-text you write** — you may voluntarily reveal special-category information in a vibe answer, a chat message, a report, feedback, or a Date Wishlist item | Only if you choose to write it. | We ask you not to share more than you need to — and a Date Wishlist item can be seen by a match, so leave out anything about your health, beliefs or sex life. |
 
 Dietary and accessibility requirements are used **only** to filter and rank
 date venues. They are never used to rank you, to score you, or to decide who
@@ -278,7 +292,11 @@ data).
 | Generate pitches, icebreakers, date hints, and venue choices | Profile, follow-up answers, location, vibe, date preferences | Contract; legitimate interests |
 | Arrange and confirm dates; select and change venues | Availability, departure point, date preferences, agreed time | Contract |
 | Filter venues on dietary / alcohol-free / step-free requirements | The requirement you confirmed | **Explicit consent** (Art. 9(2)(a)) where the requirement is special-category; otherwise contract |
-| Process purchases (tickets, bundles, paid venue changes) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
+| Ask each of you privately, the morning after a date, whether you want to see the other again; tell you both only when the interest is mutual; use your answer, like other post-date feedback, in future matching | Your morning-after answer, the match record | Contract; legitimate interests in better matches |
+| Help you build a Date Wishlist — the catalog, personalised suggestions, finding products from what you type or paste, reading shop pages, keeping the product image | What you type or paste, your wishlist items, your profile and follow-up answers, the places of your past dates and the places you saved; the places you visit often **only if** that setting is on | **Contract** (Art. 6(1)(b)) — it is a feature you choose to use |
+| Show your Date Wishlist to a person with whom the interest is mutual — part of it free, the rest once they buy the unlock or have Premium | Your wishlist items | **Consent** (Art. 6(1)(a)) — a separate, explicit step before your first item is saved; you can withdraw it at any time |
+| Show a person with whom the interest is mutual one of your follow-up answers as a hint (today: your favourite flowers) | That one answer | Contract; legitimate interests in helping a mutual match plan a second date. Used only if you accepted this version of the Policy or gave the wishlist consent; you can object (Section 18) |
+| Process purchases (tickets, bundles, paid venue changes, Date Wishlist unlocks) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
 | Handle cancellations and understand why people leave | Subscription records, the cancellation reason if you give one | Contract; **consent** for the free-text reason |
 | Trust & safety: moderation, reports, strikes, suspensions, investigations | Reports, photos/video safety scans, relay-chat logs, strikes | Legitimate interests in user safety; legal obligation |
 | Send service messages, reminders, push notifications and Live Activities | Account, usage, push tokens | Contract; legitimate interests |
@@ -310,7 +328,11 @@ Matchmaking is **automated**. We use algorithms and AI to:
   ethnicity, or any proxy for either) and score them against another user's
   stated visual preference;
 - decide which person (if any) you are matched with in each weekly round, and in
-  what priority order;
+  what priority order — taking into account, like other post-date feedback,
+  your morning-after answers about earlier dates;
+- personalise the Date Wishlist catalog and suggestions from your profile, your
+  follow-up answers, the places of your past dates and the places you saved
+  (and the places you visit often, only if that setting is on);
 - bucket each of your photos as pass / borderline / fail / no-face during
   identity verification, which routes your account to verified, manual review,
   or rejected;
@@ -354,6 +376,22 @@ moderation, and visual scoring.
   models on our API data.**
 - AI outputs can be wrong. Nothing our AI produces is advice; see the
   [Terms of Service](https://gennety.com/terms).
+
+**Date Wishlist.** If you build a wishlist with our AI agent, that conversation
+is processed like any other chat with our concierge. To find a real product:
+
+- the text you type to look for it is sent to **OpenAI's web search**, which
+  looks for matching products on public shop websites. We do not send your
+  name, photos or profile with it — at most your city and language, so it can
+  find shops near you;
+- our server then opens the shop pages the search found, or the links you
+  pasted, and reads only the product details the page publishes (title, image,
+  price). The shop receives a request from our server, not from your device, and
+  learns nothing about you;
+- the image of the item you choose is **copied to our private storage**, so
+  viewing a wishlist — yours, or yours as your match sees it — does not load
+  anything from the shop's website (only following a shop link does). The price
+  is kept only as a **range** (from € to €€€€), never as an exact figure.
 
 **Retired: the personal AI export.** Earlier versions of the Service invited you
 to paste in a psychological analysis produced by your own AI assistant (the
@@ -441,6 +479,13 @@ only while you have the map screen open in front of you, and which is off until
 you switch it on. Map tiles shown in our Mini Apps are proxied through our own
 servers, so the map provider does not receive your IP address.
 
+**Date Wishlist suggestions collect no location.** They draw only on what we
+already hold: the places of your past Gennety dates, the places you saved, and —
+only while your "frequently visited places" setting is on — the places you keep
+coming back to. A place on your wishlist is a public venue you chose, not your
+position. If you share your wishlist, though, a match can see which places you
+love, so add only the ones you are happy for a date to know.
+
 ---
 
 ## 12. Who We Share Data With
@@ -462,6 +507,37 @@ Your match never receives your life-rhythm labels, or any statement that
 rhythm influenced the match, the venue or an after-date suggestion. An
 after-date suggestion, when there is one, is shown to both of you with the
 same neutral wording.
+
+**The Morning After.** Your answer is never shown to the other person on its
+own. If either of you says "Didn't click", neither of you is told what the
+other answered — the "it's mutual" message simply does not come. Only when you
+**both** say "It was great" are you both told that the interest is mutual.
+
+**Your Date Wishlist — only after mutual interest, and only with your
+consent.** If you have made a Date Wishlist and agreed, on its own separate
+screen, to share it, then a person with whom the interest is mutual can see it
+as a cheat sheet for a second date:
+
+- **about a tenth of it for free** (for example one place or one drink;
+  nothing, if your list has only one or two items), and **the rest once they
+  buy a one-off unlock** or have Gennety Premium. The money is paid to us;
+  you are not paid and you pay nothing;
+- for each item they see its category, title, brand, your note, the product
+  image, the price range, and the shop link where there is one;
+- **nobody else ever sees it** — not a match before you have both said "It was
+  great", and not any other user;
+- it always shows your list **as it is now**: what you edit or delete changes
+  or disappears for them too, and what you add later appears. Once they have
+  opened it, they can come back to it later;
+- **withdrawing your consent hides the whole list** from every match at once;
+  blocking the person hides it from them; deleting your account deletes it.
+
+**A taste hint.** Together with that offer, a person with whom the interest is
+mutual may see one of your answers to our follow-up questions as a hint — today
+only your favourite flowers (for example, "Her favourite flowers: peonies"). It
+is shown only after mutual interest, only if you answered that question, and
+only if you have accepted this version of the Policy or agreed to share your
+Date Wishlist.
 
 ### 12.2 Internal operations feed
 
@@ -529,8 +605,8 @@ may process data outside Ukraine or your country (see Section 15).
 |---|---|---|
 | **Amazon Web Services (Rekognition Face Liveness)** | Identity / liveness verification. Your device streams the liveness video directly to AWS; it never passes through our servers | Liveness video and the reference selfie it produces |
 | **Amazon Web Services (Rekognition)** | Face comparison, face detection, and content-safety analysis of photos and video frames | Profile photos, verification selfie, transient video frames |
-| **OpenAI** | Psychological analysis, embeddings, conversational agents, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos |
-| **Supabase** | PostgreSQL database hosting and private file storage (verification selfies, mobile profile photos, chat images) | Account, profile, photos, embeddings, all relational data |
+| **OpenAI** | Psychological analysis, embeddings, conversational agents (including the Date Wishlist agent), web search for Date Wishlist products, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos; for web search, the text you typed to find a product (with at most your city and language) |
+| **Supabase** | PostgreSQL database hosting and private file storage (verification selfies, mobile profile photos, chat images, Date Wishlist product images) | Account, profile, photos, embeddings, all relational data |
 | **Resend** | Delivering university-email verification codes | Email address, one-time code |
 | **Twilio** | Delivering phone verification codes by SMS to mobile-app users (primary rail) | Phone number, verification status |
 | **Telegram Gateway** | Optional secondary rail for delivering a phone verification code as an official Telegram service message | Phone number, verification code |
@@ -544,6 +620,12 @@ may process data outside Ukraine or your country (see Section 15).
 
 We update this list as our providers change. A current list is available on
 request at **legal@gennety.com**.
+
+**Online shops are not on this list, because we send them nothing about you.**
+When we read a product page for a Date Wishlist, our server asks the shop's
+website for that public page, the way any visitor's browser would; the shop
+receives our server's address, not yours, and no information about who the
+wishlist belongs to.
 
 ### 12.5 Legal and safety disclosures
 
@@ -595,9 +677,15 @@ Paid features are optional. When you buy something:
   those under their own terms and privacy policies.
 - **We retain a record of the transaction** — amount, currency, status, time,
   the provider's transaction identifier, and what it relates to (a match, a
-  bundle, a venue change, or a subscription period). This append-only ledger is
-  what makes a purchase count exactly once, makes a refund possible, and meets
-  our accounting obligations.
+  bundle, a venue change, a Date Wishlist unlock, or a subscription period).
+  This append-only ledger is what makes a purchase count exactly once, makes a
+  refund possible, and meets our accounting obligations.
+- **For a Date Wishlist unlock** — a one-off purchase, per match, that opens
+  the rest of a mutual match's cheat sheet — the record also notes which match
+  it belongs to and whose list it opened, so the sheet stays open for the buyer
+  and a refund can be traced. It holds no wishlist content. If your list is the
+  one unlocked, that record is therefore partly about you, and it is kept as
+  part of the buyer's payment records (Section 16).
 - **For the Gennety Premium subscription**, we additionally store when your
   entitlement started and ends, whether auto-renewal is on, which rail it came
   from, and the recurring transaction identifier we use to recognise renewals.
@@ -639,18 +727,21 @@ We keep personal data only as long as necessary for the purposes above.
 | Promo attribution fingerprint | Up to **1 hour**, held in memory only |
 | Explored areas (map colouring) | While your account exists; erased on account deletion. Switching the feature off stops new recording and keeps what you have uncovered |
 | Life rhythm (Tempo Sync) | While connected. Replaced on every refresh; **deleted 35 days after the last refresh**, immediately on "Disconnect", and on account deletion |
-| Match records, score breakdowns, venue selection logs | While your account exists; erased on account deletion |
+| Match records (including morning-after answers and mutual interest), score breakdowns, venue selection logs | While your account exists; erased on account deletion |
+| Date Wishlist items and their product images | Until you delete them, or your account. Deleting an item removes it from your match's cheat sheet too |
+| Date Wishlist consent | While your account exists, as proof of when you agreed and to which wording. Withdrawing it hides your list from every match; the items stay yours to edit or delete |
+| Product look-up cache | **30 days**, then automatically deleted; it does not record who asked. Your day's wishlist suggestions: **24 hours** |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
-| Payment and subscription ledger entries | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
+| Payment and subscription ledger entries (including Date Wishlist unlocks) | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
 | Safety records after account deletion (moderation status, strikes, and reports and blocks made against the account) | Kept only if the deleted account had them, linked solely to keyed hashes of its Telegram ID, verified phone number and verified email — never the identifiers themselves — and used only to stop a restricted or blocked person from resetting them by registering again; **24 months** after deletion, then deleted |
 | Internal weekly-report snapshots | Deleted for your account when you delete your account |
 | Website cookie-consent records | Kept as proof of consent for as long as required to demonstrate compliance (append-only; see the Cookie Policy) |
 | Diagnostic / technical logs | Short-term, then rotated |
 
 **On account deletion** we erase the storage objects we hold for you
-(verification selfies, profile media, chat attachments, voice recordings —
-everything stored under your account, not only what your profile currently
-shows), remove any internal report snapshot containing your account, and then
+(verification selfies, profile media, chat attachments, voice recordings, Date
+Wishlist images — everything stored under your account, not only what your
+profile currently shows), remove any internal report snapshot containing your account, and then
 delete your account and the data tied to it across our database. Two kinds of
 record remain afterwards: payment and subscription ledger entries, detached from
 your profile, and — only if your account had them — the safety records described
@@ -710,8 +801,9 @@ right to:
 - **Data portability** — receive the data you provided in a structured,
   commonly used, machine-readable format;
 - **Withdraw consent** at any time — including biometric verification, the
-  optional visual type step, dietary/accessibility requirements, and the
-  research opt-in — without affecting processing already carried out;
+  optional visual type step, dietary/accessibility requirements, the research
+  opt-in, and sharing your Date Wishlist with a match — without affecting
+  processing already carried out;
 - **Not be subject to solely automated decisions** that significantly affect
   you: you may request human intervention, express your view, and contest a
   decision (Section 8);
@@ -731,7 +823,11 @@ that the request comes from you.
   counterpart is told neutrally. You are silently reactivated the next time you
   open the bot or the app;
 - **Delete** your account — permanent and irreversible erasure as described in
-  Section 16.
+  Section 16;
+- **Edit or delete your Date Wishlist** — one item or the whole list — and
+  **withdraw your consent to share it**, at any time, from the wishlist itself.
+  Deleted items disappear from your match's cheat sheet too, and withdrawing
+  consent hides the whole list from every match at once.
 
 **Withdrawing biometric consent.** There is no self-service button for this yet:
 write to **legal@gennety.com** and we will erase the verification selfie and the

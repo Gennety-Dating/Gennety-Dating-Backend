@@ -4,8 +4,8 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 
 | File | Publish to | Live version to publish |
 |---|---|---|
-| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.2 — "Last Updated: 26 September 2026" |
-| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.0 — "Last Updated: 1 August 2026" |
+| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.3 — "Last Updated: 8 October 2026" |
+| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.1 — "Last Updated: 8 October 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
 
 Two further documents in this directory are **internal** and are never
@@ -23,7 +23,7 @@ processor**, exactly like the published documents above.
 **The Terms and the Privacy Policy share one version stamp**, because the
 consent screen accepts them with a single checkbox. That stamp lives in code as
 `LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
-`"2026-09-26"`) and is written to `User.policyVersion` at the moment of the
+`"2026-10-08"`) and is written to `User.policyVersion` at the moment of the
 click, so we can demonstrate WHICH text any given user agreed to (GDPR Art.
 7(1)). **Bump the constant in the same commit as any material edit to either
 document.**
@@ -61,6 +61,37 @@ legal review.** Have a qualified lawyer review them before publishing —
 especially the biometric-data (GDPR Art. 9), dietary/accessibility special-
 category (Art. 9), automated-decision (Art. 22), payment/refund/subscription,
 and Apple App Store sections.
+
+## What changed in v4.3 / Terms v3.1 (2026-10-08)
+
+Founder decisions of 2026-10-08: **The Morning After** (a double-blind
+two-button question the morning after a date), the **Date Wishlist** (built with
+the AI agent; OpenAI web search + server-side reads of public shop pages; image
+copied to private storage; price kept as a band) shown to a mutual match as a
+cheat sheet — a tenth free, the rest for a one-off unlock (150⭐ / $2.99 Apple
+IAP) or with Premium — and **Premium without the Date Ticket cover**
+(grandfathered to the end of the period already paid for).
+
+- **Privacy** §1, §3, §4.1 (morning-after answer, wishlist, consent records,
+  unlock purchases), §4.2 (look-up cache), §4.3 (mutual interest), new §5.6,
+  §6, §7 (four rows; wishlist disclosure on Art. 6(1)(a) consent), §8, §9, §11,
+  §12.1 (what the match sees and when; the flowers hint), §12.4 (OpenAI web
+  search, Supabase images; shops are not processors), §14, §16, §18.
+- **Terms** §2 (three definitions), §5 (The Morning After), §6 (wishlist rules,
+  product images belong to their owners, takedown on request), §7, §11.2,
+  §11.4 (benefits, grandfathering, notice of reduced benefits), new §11.5
+  (Date Wishlist unlock), Refunds renumbered §11.6 (the survival clause in §12
+  follows), §13.
+- **ROPA v1.2** adds §2.5d–2.5f and the unlock in §2.8; open items 9–12.
+  **DPIA v1.2** adds R12–R14 and actions 12–15.
+- **Re-consent.** `LEGAL_DOCS_VERSION` → `2026-10-08`. Nothing in this release
+  relies on accepting the new text as *consent*: the wishlist disclosure has its
+  own consent act (`users.wishlist_consent_*`, `WISHLIST_CONSENT_VERSION`), and
+  the flowers hint is gated on `policyVersion ≥ LEGAL_DOCS_TASTE_HINTS_FROM` or
+  that consent. Existing users are still owed a notice (Art. 13) — ROPA §6 item 9.
+- **Website:** body generated with `scripts/legal-md-to-tsx.py`; the header line
+  is hand-set to `Last Updated: 8 October 2026 · Version 4.3` (privacy) and
+  `Last Updated: 8 October 2026 · Version 3.1` (terms).
 
 ## What changed in v4.2 (2026-09-26)
 

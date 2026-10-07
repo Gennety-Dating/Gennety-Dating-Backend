@@ -1,6 +1,8 @@
 # Gennety — Record of Processing Activities (GDPR Article 30)
 
-**Version 1.1 — 26 September 2026** (adds §2.5c, Tempo Sync; v1.0 — 1 August
+**Version 1.2 — 8 October 2026** (adds §2.5d–2.5f, The Morning After and the
+Date Wishlist, and the wishlist unlock in §2.8; carries the 2026-10-02
+retirement of §2.5b; v1.1 — 26 September 2026, Tempo Sync; v1.0 — 1 August
 2026). Internal document. Not published; produced to a
 supervisory authority on request.
 
@@ -115,6 +117,50 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Retention** | Replaced on each refresh; deleted after 35 days without one, on "Disconnect", and on account deletion (cascade) |
 | **Note** | Only the iOS app can read Apple Health; Telegram-only accounts never have a rhythm and are matched exactly as before. Analytics see only pair-level aggregates with cells under 20 suppressed (`/admin/analytics/rhythm-outcomes`) |
 
+### 2.5d–2.5f Date Wishlist & The Morning After (2026-10-08)
+
+One feature set, recorded as three purposes because each has its own legal
+basis: asking about the date (2.5d), building the list (2.5e), and showing it to
+the other person (2.5f). Shipped behind `MORNING_AFTER_ENABLED` and
+`WISHLIST_FEATURE_ENABLED` (plus `WISHLIST_APPSTORE_ENABLED` for the iOS
+purchase), all off by default — to be switched on only once Privacy Policy v4.3
+and Terms v3.1 are live on gennety.com. Schema: migration `20261008120000`;
+shared rules in `packages/shared/src/wishlist.ts`.
+
+### 2.5d The Morning After
+
+| | |
+|---|---|
+| **Purpose** | The morning after a date (first local 11:00 at least 6 h after it; nothing after 14:00, nothing for a date older than 48 h) ask each participant separately one two-button question; tell both only when both said "great"; use the answer, like the existing post-date feedback, as a matching signal |
+| **Legal basis** | Art. 6(1)(b) contract; Art. 6(1)(f) legitimate interest in better matches (the matching use) |
+| **Data categories** | Per match and side: answer (`great` / `pass`) and its time (`matches.morning_after_a/b`, `morning_after_at_a/b`), when the question was sent (`morning_after_sent_at`), and the derived `mutual_interest_at` |
+| **Recipients** | None beyond hosting (Supabase, DigitalOcean) and the delivery rail (Telegram, Apple APNs). Not OpenAI |
+| **Retention** | With the match record: while the account exists; erased on deletion |
+| **Safeguard** | **Double-blind.** A `pass` is never disclosed to the partner, directly or by wording; only `great` + `great` produces a message, to both. The honest limit is inference from silence, which no design removes |
+
+### 2.5e Date Wishlist — building the list
+
+| | |
+|---|---|
+| **Purpose** | Let a user build a wishlist with the AI agent (catalog, pasted list or links, free-text search); find real products; keep a product image; personalise the catalog and suggestions |
+| **Legal basis** | Art. 6(1)(b) contract — a feature the user chooses to use. Personalisation inputs already held under 2.3/2.5 are reused for a compatible purpose; frequently visited places are read **only** where `users.frequent_places_opt_in` is on |
+| **Data categories** | `wishlist_items`: category (whitelist of 9), title (≤120), brand, note (≤200), stored image path, product URL, price **band** (€–€€€€, never an exact price), source (`catalog` / `search` / `link` / `text`), position; at most 30 items. Inputs: the text the user types or pastes (≤4000 chars, ≤12 look-ups per paste, ≤60 look-ups per day). Personalisation: profile, Profiler answers, date map (attendance already held), saved places, frequently visited places (opt-in only). Profile session slot timestamps (`profiles.wishlist_offered_at` / `_snoozed_until` / `_done_at`). `web_lookup_cache`: search or link → found product details, **no user id**, 30-day expiry; and `suggest:` rows keyed by sha256(user id + day) holding that day's picked catalog keys, 24-hour expiry (pseudonymous, not anonymous) |
+| **Recipients** | OpenAI (the wishlist agent; catalog ranking from up to 20 Profiler answers and hobbies — no name or photos; **web search** with the typed text and at most city + language — no name, photos or profile); Supabase (database; product images copied into the private chat bucket under `{userId}/w…`, ≤4 MB each, JPEG/PNG/WebP only); DigitalOcean. **Shops are not recipients:** our server fetches their public page (OpenGraph tags) the way a browser would and sends nothing about the user; the shop sees the server's IP |
+| **Transfers** | OpenAI, US — SCCs (§4) |
+| **Retention** | Items and images: until the user deletes them, or on account deletion (storage first by the `{userId}/` prefix sweep, fail-closed, then cascade). Look-up cache: **30 days**; suggestion rows: **24 hours** |
+| **Note** | Images are copied rather than hot-linked, so neither the owner nor a match's device ever contacts the shop by viewing the list. Copying third-party product photos is a copyright question, not a data-protection one — see §6 item 11 |
+
+### 2.5f Date Wishlist — disclosure to a mutual match, and the taste hint
+
+| | |
+|---|---|
+| **Purpose** | After mutual interest (2.5d), show the other person the user's wishlist as a cheat sheet for a second date — about a tenth free (none for a list of one or two items; places, drinks and flowers first), the rest after a one-off unlock (§2.8) or with Premium — and, with the offer, one Profiler answer as a hint (today: favourite flowers) |
+| **Legal basis** | **Wishlist: Art. 6(1)(a) consent**, captured as a distinct act before the first item is saved (`users.wishlist_consent_at` + `wishlist_consent_version`, current `2026-10-08`). Deliberately NOT inferred from the sign-up terms tick: disclosure *to another user* needs its own act. No consent → items cannot be saved and no match sees anything. Withdrawal hides the list from every match at once. **Taste hint: Art. 6(1)(b) contract / 6(1)(f)** — the same purpose for which Profiler answers already feed date hints shown to the match (Privacy §4.1, §12.1), now shown directly; gated on `policyVersion ≥ LEGAL_DOCS_TASTE_HINTS_FROM` (`2026-10-08`) **or** the wishlist consent, so no answer is shown for a user who has not been told |
+| **Data categories** | The wishlist items as stored (2.5e), read live; one Profiler answer (`f_flowers`) |
+| **Recipients** | **One other user per mutual match** — never before mutual interest, never anyone else. Gennety receives the unlock price from the viewer; the owner is neither paid nor charged |
+| **Retention** | No copy is made for the viewer: the sheet is read from the owner's live list, so an edit, a deletion, a withdrawal or the owner's account deletion takes effect for the viewer immediately. An unlocked sheet stays openable for the viewer; the offer itself is shown for 7 days after mutual interest |
+| **Safeguard** | See DPIA R12–R13 |
+
 ### 2.6 Communications with the AI, and the chat timeline
 
 | | |
@@ -124,6 +170,7 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Data categories** | Messages, voice notes and their transcripts, images sent to the concierge; timeline of outbound messages, button taps (by visible label), Mini App actions. **Typed verification codes are masked before storage.** Phone numbers are never stored in the timeline. |
 | **Recipients** | OpenAI, Telegram, Supabase, DigitalOcean |
 | **Retention** | Conversation history: while the account exists. **Chat timeline: 30 days.** Relayed proxy-chat messages: **90 days**, and deleted with the match. |
+| **Note** | The Date Wishlist conversation with the agent is part of this activity; its look-ups and stored items are §2.5e |
 
 ### 2.7 Trust and safety
 
@@ -140,9 +187,9 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 
 | | |
 |---|---|
-| **Purpose** | Sell Date Tickets, venue changes and the Premium subscription; refund; account |
+| **Purpose** | Sell Date Tickets, venue changes, Date Wishlist unlocks and the Premium subscription; refund; account |
 | **Legal basis** | Art. 6(1)(b) contract; Art. 6(1)(c) legal obligation (accounting) |
-| **Data categories** | Purchase records, provider transaction identifiers, amounts, entitlement periods, ledger audit rows, optional free-text cancellation reason (**consent**) |
+| **Data categories** | Purchase records, provider transaction identifiers, amounts, entitlement periods, ledger audit rows, optional free-text cancellation reason (**consent**). **Date Wishlist unlock** (`wishlist_unlocks`, one per buyer and match): buyer (`user_id`, set to null when the buyer's account is deleted), the list's owner (`owner_id`) and the match (`match_id`) as bare ids, rail, external payment id, Stars or cents, `refunded_at` — no wishlist content. **Premium ticket cover** grandfathering: `users.premium_ticket_cover_until`, set once by the migration to the then-current `premium_until` and never moved by a renewal |
 | **Recipients** | Telegram (Stars), Apple (App Store Server API) |
 | **Retention** | **As required by accounting and tax law — survives account deletion**, kept minimal and separated from the profile |
 | **Note** | **We never receive or store card numbers.** |
@@ -198,7 +245,7 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | Erasure (17) | In-product delete (Telegram Settings, `DELETE /v1/me`): storage erased first and fail-closed, then a cascading database delete, then partner compensation |
 | Restriction (18) | Pause matching (self-service) or freeze the account |
 | Objection (21) | legal@gennety.com |
-| Withdraw consent (7(3)) | Research opt-in: self-service. Biometric consent: support path — it must also erase the reference selfie and remove the user from matching |
+| Withdraw consent (7(3)) | Research opt-in: self-service. Biometric consent: support path — it must also erase the reference selfie and remove the user from matching. Date Wishlist sharing: self-service — withdrawal hides the list from every match at once; items stay editable and deletable by the owner, one by one or all |
 | Art. 22 safeguards | Human review on request; fail-safe routing to manual review on any infrastructure failure; automatic re-verification on photo change; suspensions expire automatically |
 
 ---
@@ -210,7 +257,7 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | Supabase | EU (`eu-west-1`) | Within the EEA |
 | AWS Rekognition | EU (`eu-west-1`, `eu-central-1`) | Within the EEA |
 | DigitalOcean | *confirm droplet region* | SCCs where outside the EEA |
-| OpenAI | US | SCCs; API data excluded from public-model training |
+| OpenAI | US | SCCs; API data excluded from public-model training. Includes the `web_search` tool used for Date Wishlist look-ups |
 | Twilio | US | SCCs |
 | Apple | US | SCCs |
 | Google (Places) | US | SCCs |
@@ -234,8 +281,11 @@ they are, Privacy Policy §15's assurance runs ahead of the paperwork.
 3. **Sexual orientation, by inference.** Gender plus gender preference together
    reveal it. Unavoidable for a matchmaking service and disclosed in Privacy §6.
    Used only to match; never shared beyond the match.
-4. **Free text the user volunteers** — a vibe answer, a report, feedback.
-   Unsolicited; users are asked not to share more than they need to.
+4. **Free text the user volunteers** — a vibe answer, a report, feedback, a
+   Date Wishlist item or note. Unsolicited; users are asked not to share more
+   than they need to. A wishlist item is the one place where such text can
+   reach **another user** (§2.5f), so Privacy §6 and Terms §6 tell people to
+   leave health, beliefs and sex life off it.
 5. **Life rhythm derived from Apple Health** (§2.5c) — Art. 9(2)(a) explicit
    consent, captured as a distinct act with version and time.
 
@@ -256,6 +306,10 @@ opinions, trade-union membership, genetic data.
 | 6 | Per-person admin access + audit trail | Single shared key today; no record of who viewed what |
 | 7 | Breach response procedure (Art. 33, 72 hours) | Not written |
 | 8 | Manual deletion of founder-feed messages on an erasure request | No tooling; operator must do it by hand (see §2.10) |
+| 9 | Existing users and v4.3 | `LEGAL_DOCS_VERSION` moved to `2026-10-08`, but nothing re-presents the documents to people who accepted an earlier version. Nothing in §2.5d–2.5f relies on that acceptance as *consent*: the wishlist disclosure has its own consent act, and the taste hint is gated on the version or that consent. Art. 13 still requires informing existing users of the new purposes — a one-time in-product notice is owed before the flags go on |
+| 10 | Hide the cheat sheet and the taste hint when either side blocks or reports the other, or the match is cancelled for safety | A block in either direction already closes both (`services/wishlist.ts`, `loadMutualPair`); a report without a block, and a safety cancellation, still to confirm — see DPIA R12 |
+| 11 | Product images copied from shop pages | Copyright, not data protection: keep the notice-and-takedown route in Terms §6 working (remove on a rights holder's request) |
+| 12 | Frequently visited places, saved places, date map — no activity row here, no section in the Privacy Policy | Found while writing §2.5e, which reads them. Frequently visited places (`user_place_visits`, live since 2026-09-22) is location-derived, **on by default** (`frequent_places_opt_in` defaults to true) and shown to the match — it needs its own row with a basis that fits an opt-out default (Art. 6(1)(f) with a balancing test, not consent), and its own Privacy §4/§11/§12.1/§16 text. Saved places and the date map need at least a §4 row |
 
 **DPO assessment (Art. 37).** A DPO is required where core activities involve
 regular and systematic monitoring of data subjects **on a large scale**, or

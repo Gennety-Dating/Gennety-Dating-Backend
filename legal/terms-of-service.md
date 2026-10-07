@@ -1,12 +1,17 @@
 # Gennety — Terms of Service
 
-**Last Updated: 1 August 2026**
+**Last Updated: 8 October 2026**
 
-**Version: 3.0** — republished alongside Privacy Policy v4.0 after a full audit
-of the running code, so that both documents carry the same version stamp and we
-can prove which version any given user accepted. The substantive change here is
-Section 4: identity verification now names Amazon Rekognition Face Liveness and
-the separate consent step that precedes it.
+**Version: 3.1** — published alongside Privacy Policy v4.3. It adds **The
+Morning After** (Section 5), the optional **Date Wishlist** and the rules for
+what goes on it (Section 6), and the **Date Wishlist unlock**, a new one-off
+purchase (Section 11.5). It also changes **Gennety Premium**: Premium no longer
+covers your own Date Ticket — if you paid for a Premium period before this
+change took effect, your ticket stays covered until the end of that period —
+and it now includes opening the Date Wishlist cheat sheet (Section 11.4).
+Refunds move to Section 11.6. Version 3.0 (1 August 2026) named Amazon
+Rekognition Face Liveness and the separate consent step for identity
+verification (Section 4).
 
 These Terms of Service ("**Terms**") are a binding agreement between you and
 Gennety ("**Gennety**", "**we**", "**us**", or "**our**") governing your use of
@@ -47,6 +52,15 @@ phone number (Section 3).
   assistant during onboarding.
 - **Virtual Items** — Tickets, bonuses, discounts, and any other non-monetary
   in-service item.
+- **Mutual interest** — when, the morning after a date, you and your match
+  **both** answer that it was great and you want to see each other again
+  (Section 5).
+- **Date Wishlist** — an optional list of things you love (places, drinks,
+  flowers, perfume, beauty, fashion, jewellery, gifts, experiences) that you
+  build with our AI agent and may agree to share with a person with whom you
+  have mutual interest, as a **cheat sheet** for a second date (Section 6).
+- **Date Wishlist unlock** — a one-off purchase that opens the rest of one
+  match's cheat sheet (Section 11.5).
 
 ---
 
@@ -135,8 +149,14 @@ accuracy and honesty of your profile, answers, photos, and any AI Export.
   carefully.
 - If you do not respond to a proposal within the stated window, it expires, and
   repeatedly ignoring proposals affects your internal rating and priority.
-- AI-generated suggestions (pitches, icebreakers, hints, venue choices, bios)
-  are **aids, not advice**, and may be inaccurate. Use your own judgement.
+- **The Morning After.** The morning after a date, we ask each of you,
+  separately, one question: "It was great, I want to see them again" or
+  "Didn't click". The same blind rule applies: a "Didn't click" is **never**
+  passed on, and only if you **both** say it was great are you both told that
+  the interest is mutual. Your answer also helps us choose your future matches.
+- AI-generated suggestions (pitches, icebreakers, hints, venue choices, bios,
+  Date Wishlist suggestions) are **aids, not advice**, and may be inaccurate.
+  Use your own judgement.
 - We use an internal rating derived in part from an automated assessment of your
   photos. It influences who you are considered compatible with. It is an
   operational signal, not a statement about you as a person, and we do not
@@ -167,7 +187,37 @@ screenshot-and-share, forward, publish, reverse-image-search, or otherwise
 misuse another user's photos or personal information. Doing so is a breach of
 these Terms and may be unlawful. Where we offer a shareable date card, it is
 deliberately produced with your partner's face blurred — do not attempt to
-defeat that.
+defeat that. The same applies to a match's Date Wishlist and to any taste hint
+you are shown about them: they are that person's personal information, to be
+used only to plan a date with them, and not to be shared.
+
+**Your Date Wishlist.** The Date Wishlist is optional. Before your first item is
+saved, we ask you, on its own screen, to agree that your wishlist may be shown
+to a person with whom you have mutual interest — about a tenth of it for free,
+and the rest once they buy an unlock or if they have Premium (Section 11.5;
+Privacy Policy, Section 12.1). Nobody else sees it. You can edit or delete any
+item, or the whole list, and withdraw that agreement at any time; your changes
+reach the cheat sheet too. When you put something on your wishlist:
+
+- add only things **you** would like, and no one's personal information — no
+  names, photos, contact details, social-media handles or addresses, yours or
+  anyone else's;
+- add nothing illegal, nothing that cannot lawfully be sold or given to you
+  (for example weapons, drugs or prescription medicines), and nothing sexually
+  explicit, hateful or offensive;
+- a link must be a **public page of a shop or a venue** — not a private,
+  personal or log-in page, a file, a payment request or fundraiser, or a
+  referral or affiliate link;
+- a wishlist is an idea for a date, **not a request**: nobody is obliged to buy
+  anything, and you must not use it to ask for money, to ask for gifts in
+  exchange for a date, or to advertise or sell (Section 8).
+
+Product names, brands, images and prices belong to the shops and brands they
+come from and are shown for reference only. Prices are shown as approximate
+ranges and may be out of date. We do not sell, endorse or deliver the products;
+anything you or your match buy from a shop is between you and that shop. We
+may remove an item that breaks these rules, or that a rights holder asks us to
+remove.
 
 ---
 
@@ -187,8 +237,10 @@ The only exceptions apply **after** you are matched and scheduled:
   control.
 
 You must not use these, or any free-text field the Service provides (a decline
-reason, an emergency-cancellation reason, feedback, or a report), to harass,
-threaten, solicit, advertise, or share another person's private information.
+reason, an emergency-cancellation reason, feedback, a report, or a Date
+Wishlist item or note), to harass, threaten, solicit, advertise, or share
+another person's private information. A Date Wishlist is not a way round the
+no-chat rule: do not put messages or contact details in it.
 
 ---
 
@@ -288,6 +340,8 @@ charged, are always shown to you **before** you confirm a purchase.
 - If a ticket-gated date does not proceed because payment stalls or the window
   expires, we return the ticket or the Stars charge and open scheduling anyway —
   an accepted match is never cancelled by a payment problem.
+- **Gennety Premium does not cover your Date Ticket**, except for the remainder
+  of a Premium period paid for before that change took effect (Section 11.4).
 
 ### 11.3 Venue changes
 
@@ -312,12 +366,49 @@ charged, are always shown to you **before** you confirm a purchase.
   current period**.
 - Cancel at least 24 hours before the renewal date to avoid being charged for
   the next period.
+- **What Premium includes.** The current benefits are listed on the Premium
+  screen before you subscribe. They include opening the **Date Wishlist cheat
+  sheet** of a person with whom you have mutual interest, without buying an
+  unlock (Section 11.5). **Premium does not cover your own Date Ticket.**
+- **Ticket cover paid for before the change.** Premium used to cover your own
+  Date Ticket. If you paid for a Premium period before that change took effect,
+  your own ticket stays covered until the end of that period. A renewal or a
+  new purchase after the change does not include it.
 - We may change Premium's price or benefits for **future** periods. We will tell
-  you before a price change takes effect, and you may cancel.
+  you before a price change, or a change that reduces what Premium includes,
+  takes effect for you, and you may cancel before your next renewal.
 - An entitlement you have already paid for stays valid even if we change or
   withdraw the offer.
 
-### 11.5 Refunds
+### 11.5 Date Wishlist unlock
+
+- When you and your match have **mutual interest** (Section 5), you may be
+  offered their Date Wishlist as a cheat sheet for a second date — but only if
+  they have made one and agreed to share it. About a tenth of it is visible for
+  free. Opening the rest is a **one-off purchase for that match** (at launch,
+  $2.99 through Apple In-App Purchase or 150 Telegram Stars; the price that
+  applies to you is always shown before you confirm), or it is included with
+  Gennety Premium.
+- It is **digital content supplied immediately**: the rest of the list opens as
+  soon as your payment is confirmed, and you can come back to it later. You buy
+  it once per match; it does not open anyone else's list.
+- **You are buying access to a list that its owner controls.** The list is that
+  person's personal information. They may add, edit or delete items, or
+  withdraw their agreement to share it, at any time — that is their right, and
+  we respect it immediately. When they do, the cheat sheet changes or closes
+  for you as well. **The price is not refunded, in whole or in part, because
+  the other person later changes, shortens or withdraws their list**, or
+  because a second date does not happen. If the list could not be opened at
+  all when you paid — for example because it was withdrawn at that same
+  moment — write to **legal@gennety.com**: we refund a Telegram Stars purchase,
+  and for an Apple purchase we support your refund request to Apple
+  (Section 11.6). Your rights under mandatory consumer law are not affected.
+- You pay Gennety. The owner of the list is not paid and pays nothing, and
+  nobody is obliged to buy anything from it.
+- Use the cheat sheet only to plan a date with that person, and do not share
+  it (Section 6). We do not sell or deliver the products on it.
+
+### 11.6 Refunds
 
 - **EEA/UK consumers — right of withdrawal.** You normally have 14 days to
   withdraw from a distance contract for digital content. By confirming a
@@ -333,6 +424,10 @@ charged, are always shown to you **before** you confirm a purchase.
   the **ticket or charge** automatically as described above.
 - A no-show, a bad date, a declined match, or your own change of mind does
   **not** entitle you to a refund.
+- A **Date Wishlist unlock** is fully supplied when the cheat sheet opens. It
+  is not refunded because the owner later changes, shortens or withdraws the
+  list (Section 11.5); if it could not be opened at all, it is refunded as
+  described there.
 - **Apple purchases are refunded by Apple**, under Apple's policies. Contact
   Apple Support; we cannot issue a refund for an App Store transaction.
 - **Telegram Stars purchases** are refunded through the Telegram rail; contact
@@ -364,7 +459,7 @@ will review it.
 We may suspend or terminate your account, with or without notice, if you breach
 these Terms or applicable law, or where necessary to protect users or the
 Service. We may also discontinue the Service or any feature. On termination,
-Sections 6 (as to licences already granted), 10, 11.5, 14, 15, 16, 17, 19 and 20
+Sections 6 (as to licences already granted), 10, 11.6, 14, 15, 16, 17, 19 and 20
 survive.
 
 ---
@@ -379,7 +474,8 @@ survive.
 - You may **delete** your account at any time. Deletion is **permanent and
   irreversible**: it erases your stored media and triggers a cascading wipe-out
   of your data, subject to records we must keep by law or hold in anonymised
-  form (see the Privacy Policy, Section 16).
+  form (see the Privacy Policy, Section 16). It also deletes your Date
+  Wishlist, so a match who unlocked it no longer sees it.
 
 ---
 

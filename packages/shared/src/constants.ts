@@ -286,7 +286,7 @@ export const FAMINE_PAUSE_AFTER_DAYS = 28;
  * **Bump this whenever `legal/privacy-policy.md` or `legal/terms-of-service.md`
  * changes materially**, and publish the same version to the website.
  */
-export const LEGAL_DOCS_VERSION = "2026-09-26";
+export const LEGAL_DOCS_VERSION = "2026-10-08";
 
 /** Age boundaries */
 export const MIN_AGE = 18;
