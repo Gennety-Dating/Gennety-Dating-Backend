@@ -21,8 +21,9 @@ import { renderDateCard, type CardTheme } from "./date-card/index.js";
  * Fixed English brand-voice headline (mirrors `dateCardSlogan`'s policy). Split
  * onto two lines: as one line the 78px headline runs under the butterfly mark
  * top-right — two short lines clear it, and the last line takes the accent.
+ * No full stops, like the date card's slogan (founder, 2026-10-07).
  */
-const WISH_SLOGAN = "Her pick.\nYour move.";
+const WISH_SLOGAN = "Her pick\nYour move";
 
 const USER_SELECT = {
   id: true,

@@ -1374,7 +1374,7 @@ fields. The Mini App ignores the field.
   - *she initiated, she finalized* → her fork `[Lock it in myself — ⭐]` /
     `[Ask him to lock it in 💌]`. The offer sends him the **wish card** — the
     date-card layout re-rendered with HER polaroid over the new venue's duotone
-    hero (`services/venue-wish-card.ts`, headline "Her pick. Your move.",
+    hero (`services/venue-wish-card.ts`, headline "Her pick / Your move", no full stops,
     protected; text fallback so the offer never wedges) with pay/decline
     buttons. Its caption is **her ask only** — the card already renders the venue
     name and address, so repeating them in text was pure duplication

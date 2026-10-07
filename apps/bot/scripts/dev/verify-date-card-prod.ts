@@ -7,7 +7,7 @@
  *
  *   pnpm tsx apps/bot/scripts/dev/verify-date-card-prod.ts \
  *     [--lang=ru] [--theme=dark|light] [--partner=a.jpg] [--venue=b.jpg] \
- *     [--slogan="Her pick.\nYour move."] [--dump=/tmp] [--chat=<id>|skip]
+ *     [--slogan="Her pick\nYour move"] [--dump=/tmp] [--chat=<id>|skip]
  *
  * Without --partner / --venue it pulls two stock photos from picsum.
  */
