@@ -36,6 +36,11 @@ build; the iOS build needs this deployed. Telegram is unchanged. Decision journa
   on production `GET /v1/me/profiler` without a token → 401; SQL after a day:
   `SELECT answer_source, count(*) FROM profiler_answers WHERE answered_at > now() - interval '1 day' GROUP BY 1;`
   and `SELECT count(*) FROM profiler_answers WHERE postponed_at IS NOT NULL AND answer_text IS NULL AND NOT skipped;`.
+- **Migration fixed before any apply (2026-10-07):** the first version declared
+  `option_ids TEXT[] NOT NULL`; Prisma keeps scalar lists nullable, so `db:drift-check`
+  after `db:deploy` would have reported `DROP NOT NULL` (exit 2) and stopped the deploy.
+  Now the DDL is `migrate diff` verbatim, checked on PGlite (old schema + migration =
+  new schema, 812 columns/enums). Order: `db:deploy` → `db:drift-check` = 0 → restart.
 - **Откат:** revert the commit; the columns can stay (nothing old reads them).
 - **Демо:** same code; the demo bot is Telegram-only.
 

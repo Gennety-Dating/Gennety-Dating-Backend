@@ -4,10 +4,12 @@
 --
 -- Additive: three nullable / defaulted columns and one enum. Old code never
 -- reads them; old rows keep option_ids = {} and answer_source = NULL.
+-- DDL is `prisma migrate diff` verbatim: a Prisma scalar list is a nullable
+-- column with a default (as `messages.image_urls`), so no NOT NULL here —
+-- with it `db:drift-check` reports DROP NOT NULL and stops the deploy.
 
 CREATE TYPE "profiler_answer_source" AS ENUM ('tap', 'text', 'both');
 
-ALTER TABLE "profiler_answers"
-  ADD COLUMN "option_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-  ADD COLUMN "answer_source" "profiler_answer_source",
-  ADD COLUMN "postponed_at" TIMESTAMP(3);
+ALTER TABLE "profiler_answers" ADD COLUMN     "answer_source" "profiler_answer_source",
+ADD COLUMN     "option_ids" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN     "postponed_at" TIMESTAMP(3);
