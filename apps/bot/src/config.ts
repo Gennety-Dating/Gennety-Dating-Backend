@@ -626,6 +626,37 @@ export const env = {
   PRIME_TIME_APPSTORE_PRODUCT_ID:
     process.env.PRIME_TIME_APPSTORE_PRODUCT_ID ?? "prime_time_pass",
 
+  // ── «The Morning After» + Date Wishlist (decision journal 2026-10-08) ──
+  /// The two-button check at 11:00 local the morning after a date, the mutual
+  /// reveal, and the offer that follows it. Off by default: nothing is sent
+  /// and `/v1/me/after-date` answers empty.
+  MORNING_AFTER_ENABLED: process.env.MORNING_AFTER_ENABLED === "true",
+  /// Building a wishlist with the agent on «Сегодня» (the Profiler slot, the
+  /// look-ups, the items) and the cheat sheet in the mutual offer. Off: the
+  /// Profiler never hands a slot to the wishlist, every `/v1/me/wishlist*`
+  /// route answers `feature-disabled`, and the offer shows no sheet.
+  WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
+  /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
+  /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
+  WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),
+  /// The app's till for the sheet: a StoreKit CONSUMABLE ($2.99 tier) reported
+  /// to `POST /v1/me/after-date/:matchId/wishlist/appstore`. Off until the
+  /// product is approved in App Store Connect AND a build carrying the sheet is
+  /// out — same rule as the Prime Time pass.
+  WISHLIST_APPSTORE_ENABLED: process.env.WISHLIST_APPSTORE_ENABLED === "true",
+  WISHLIST_APPSTORE_PRODUCT_ID:
+    process.env.WISHLIST_APPSTORE_PRODUCT_ID ?? "date_wishlist_unlock",
+  /// The agent's web look-up (OpenAI Responses API with the `web_search`
+  /// tool — founder's choice 2026-10-08, no new provider). A model that takes
+  /// tools on the Responses API; overridable without a deploy of code.
+  WISHLIST_SEARCH_MODEL: process.env.WISHLIST_SEARCH_MODEL ?? "gpt-6-luna",
+  /// Budget for one look-up (search + reading the found page). The person is
+  /// watching the search animation; past this the agent says it found nothing.
+  WISHLIST_LOOKUP_TIMEOUT_MS: Math.min(
+    45_000,
+    Math.max(5_000, Number(process.env.WISHLIST_LOOKUP_TIMEOUT_MS ?? "20000")),
+  ),
+
   // ── Short-video links (TikTok / Instagram Reels as a Profiler answer) ──
   /// Master switch. Off by default because this is the first and only path in
   /// the bot that opens a URL a user typed: with it off, a link is just text
@@ -1214,6 +1245,7 @@ export interface RuntimeConfiguration {
   APPSTORE_KEY_ID: string;
   APPSTORE_ISSUER_ID: string;
   PRIME_TIME_APPSTORE_ENABLED: boolean;
+  WISHLIST_APPSTORE_ENABLED: boolean;
   PROFILE_MUSIC_ENABLED: boolean;
   SPOTIFY_CLIENT_ID: string;
   SPOTIFY_CLIENT_SECRET: string;
@@ -1263,6 +1295,11 @@ export function runtimeConfigurationErrors(
   if (config.PRIME_TIME_APPSTORE_ENABLED) {
     for (const [name, value] of appstore) {
       if (!value) errors.push(`${name} must be set while PRIME_TIME_APPSTORE_ENABLED is true`);
+    }
+  }
+  if (config.WISHLIST_APPSTORE_ENABLED) {
+    for (const [name, value] of appstore) {
+      if (!value) errors.push(`${name} must be set while WISHLIST_APPSTORE_ENABLED is true`);
     }
   }
   if (config.PROFILE_MUSIC_ENABLED) {

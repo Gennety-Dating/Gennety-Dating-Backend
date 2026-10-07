@@ -117,58 +117,66 @@ enum ProfilerPriority {
 }
 
 model User {
-  id                         String                   @id @default(uuid()) @db.Uuid
-  telegramId                 BigInt                   @unique @map("telegram_id")
+  id                       String             @id @default(uuid()) @db.Uuid
+  telegramId               BigInt             @unique @map("telegram_id")
   /// Public Telegram username (without @), captured opportunistically from
   /// `ctx.from.username`. Used to build `t.me/<username>` deep links for the
   /// pre-date coordination contact-exchange variants — Telegram never issues
   /// a phone number to bots, so this is the only reliable contact handle.
-  telegramUsername           String?                  @map("telegram_username")
-  email                      String?                  @unique
-  universityDomain           String?                  @map("university_domain")
-  firstName                  String?                  @map("first_name")
-  surname                    String?
-  age                        Int?
-  gender                     Gender?
-  preference                 GenderPreference?
-  major                      String?
-  language                   Language?
+  telegramUsername         String?            @map("telegram_username")
+  email                    String?            @unique
+  universityDomain         String?            @map("university_domain")
+  firstName                String?            @map("first_name")
+  surname                  String?
+  age                      Int?
+  gender                   Gender?
+  preference               GenderPreference?
+  major                    String?
+  language                 Language?
   /// User-selected app color theme (Mini Apps + rendered cards). Defaults to
   /// `dark` (brand default); chosen in onboarding and changeable in Settings.
-  theme                      Theme                    @default(dark)
+  theme                    Theme              @default(dark)
   /// Set the first time the user explicitly picks a theme (onboarding theme
   /// screen or Settings). Distinguishes an explicit choice from the `dark`
   /// default, so the onboarding theme picker is shown exactly once.
-  themeChosenAt              DateTime?                @map("theme_chosen_at")
+  themeChosenAt            DateTime?          @map("theme_chosen_at")
   /// How `theme` was chosen (iOS Settings; the bot writes only light/dark).
   /// `system` means the iPhone decides and the client keeps `theme` in step
   /// with it, so Telegram cards match what the app is showing right now.
-  themeMode                  ThemeMode                @default(dark) @map("theme_mode")
-  status                     UserStatus               @default(onboarding)
-  onboardingStep             OnboardingStep           @default(consent) @map("onboarding_step")
-  hasConsented               Boolean                  @default(false) @map("has_consented")
-  consentedAt                DateTime?                @map("consented_at")
+  themeMode                ThemeMode          @default(dark) @map("theme_mode")
+  status                   UserStatus         @default(onboarding)
+  onboardingStep           OnboardingStep     @default(consent) @map("onboarding_step")
+  hasConsented             Boolean            @default(false) @map("has_consented")
+  consentedAt              DateTime?          @map("consented_at")
   /// Explicit Terms of Service acceptance from the Initialization & Consent
   /// screen. Distinct from `hasConsented` (broader onboarding gate) — this
   /// is the legal ToS click and MUST be true to leave the `consent` step.
-  termsAccepted              Boolean                  @default(false) @map("terms_accepted")
-  termsAcceptedAt            DateTime?                @map("terms_accepted_at")
+  termsAccepted            Boolean            @default(false) @map("terms_accepted")
+  termsAcceptedAt          DateTime?          @map("terms_accepted_at")
   /// Which version of the Terms + Privacy Policy the user actually accepted
   /// (`LEGAL_DOCS_VERSION` at the moment of the click). GDPR Art. 7(1) requires
   /// demonstrating WHAT was agreed to; a timestamp alone cannot, once the
   /// documents change. Null for consents recorded before 2026-08-01.
-  policyVersion              String?                  @map("policy_version")
+  policyVersion            String?            @map("policy_version")
+  /// Date Wishlist consent (decision 2026-10-08): the explicit "my wishlist
+  /// will be shown to a match after mutual interest" act, captured before the
+  /// first item is saved. Separate from `policyVersion` because the general
+  /// ToS tick is not a specific act for disclosure TO ANOTHER USER; the version
+  /// records which disclosure text was shown. Null = never consented — the
+  /// item routes refuse to save and no match ever sees the list.
+  wishlistConsentAt        DateTime?          @map("wishlist_consent_at")
+  wishlistConsentVersion   String?            @map("wishlist_consent_version")
   /// Explicit consent to biometric processing (GDPR Art. 9(2)(a)), captured on
   /// its own screen before a liveness session is ever minted. Separate from
   /// `termsAccepted` on purpose: Art. 9 requires an explicit act for THIS
   /// processing specifically, and a general ToS tick is not one. The version
   /// records which disclosure text was shown. Null = never consented, which
   /// the liveness `/init` routes refuse.
-  biometricConsentAt         DateTime?                @map("biometric_consent_at")
-  biometricConsentVersion    String?                  @map("biometric_consent_version")
+  biometricConsentAt       DateTime?          @map("biometric_consent_at")
+  biometricConsentVersion  String?            @map("biometric_consent_version")
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
-  researchOptIn              Boolean                  @default(false) @map("research_opt_in")
+  researchOptIn            Boolean            @default(false) @map("research_opt_in")
   /// RETIRED 2026-10-02 with the Scratch Map fog — no longer read or written;
   /// dropping the column waits for the founder (living-canvas.md §6.5).
   ///
@@ -184,7 +192,7 @@ model User {
   /// recorded only when the user themselves has the map open (a foreground
   /// ping) or when a Date Bump is verified at a venue, and what is stored is
   /// a geohash-6 tile (~1.2 km), never a raw coordinate.
-  scratchMapOptIn            Boolean                  @default(false) @map("scratch_map_opt_in")
+  scratchMapOptIn          Boolean            @default(false) @map("scratch_map_opt_in")
   /// Consent for frequently visited places (docs/product/domains/
   /// frequent-places.md): noticing which catalog venues this person keeps
   /// coming back to, and showing the top three on their profile and to their
@@ -200,9 +208,9 @@ model User {
   /// Switching it off stops collection and removes the block from the profile
   /// and from the match at once; stored days are kept and age out with the
   /// 180-day window.
-  frequentPlacesOptIn        Boolean                  @default(true) @map("frequent_places_opt_in")
-  emailOtp                   String?                  @map("email_otp")
-  emailOtpExpiresAt          DateTime?                @map("email_otp_expires_at")
+  frequentPlacesOptIn      Boolean            @default(true) @map("frequent_places_opt_in")
+  emailOtp                 String?            @map("email_otp")
+  emailOtpExpiresAt        DateTime?          @map("email_otp_expires_at")
   /// True once the user has successfully verified an OTP for `email`.
   /// Set in two places: `findOrCreateMobileUser` (mobile API after
   /// `/v1/auth/otp/verify`) and `execVerifyOtp` in the onboarding agent
@@ -210,40 +218,40 @@ model User {
   /// onboarding agent to skip the email-collection step entirely when a
   /// user arrives with their email already verified (e.g. mobile-first
   /// user later opens the Telegram bot, or restarts onboarding mid-flow).
-  isEmailVerified            Boolean                  @default(false) @map("is_email_verified")
+  isEmailVerified          Boolean            @default(false) @map("is_email_verified")
   /// Registration v2 (general track): phone captured via the Telegram Mini App
   /// one-tap `requestContact`. The bot receives a trusted `message.contact`
   /// (contact.user_id == from.id); client JS never sees the number. E.164.
   /// `@unique` = one account per number (curbs duplicate accounts).
-  phone                      String?                  @unique
+  phone                    String?            @unique
   /// Set when a trusted Telegram contact for THIS user is received. Phone
   /// equivalent of `isEmailVerified`; the general-track contact gate.
-  phoneVerifiedAt            DateTime?                @map("phone_verified_at")
+  phoneVerifiedAt          DateTime?          @map("phone_verified_at")
   /// Registration v2 track chosen at the sign-up fork: "student" (university
   /// email OTP) or "general" (phone). Null for users registered before the
   /// fork existed (legacy = student in practice: they all verified email).
-  registrationTrack          String?                  @map("registration_track")
-  messageHistory             Json[]                   @default([]) @map("message_history")
-  lastMessageAt              DateTime?                @map("last_message_at")
+  registrationTrack        String?            @map("registration_track")
+  messageHistory           Json[]             @default([]) @map("message_history")
+  lastMessageAt            DateTime?          @map("last_message_at")
   /// Last time the "your match is coming tomorrow" pre-batch teaser was sent.
   /// Prevents re-sending within the same weekly cycle.
-  lastPreMatchAnnounceAt     DateTime?                @map("last_pre_match_announce_at")
+  lastPreMatchAnnounceAt   DateTime?          @map("last_pre_match_announce_at")
   /// Onboarding re-engagement chain: how many touches have been delivered in
   /// the current drop-off streak (0 = chain idle, 5 = fully exhausted).
-  reEngagementStep           Int                      @default(0) @map("re_engagement_step")
+  reEngagementStep         Int                @default(0) @map("re_engagement_step")
   /// Scheduled moment of the next re-engagement touch. Null = chain inactive
   /// (either user is still engaged, onboarding complete, or chain exhausted).
-  reEngagementNextAt         DateTime?                @map("re_engagement_next_at")
+  reEngagementNextAt       DateTime?          @map("re_engagement_next_at")
   /// Accumulated Tier 2 strikes from verified reports.
   /// 1 → warning; 2 → 14-day suspension; ≥3 → ban.
-  strikes                    Int                      @default(0)
+  strikes                  Int                @default(0)
   /// When a `suspended` status should auto-revert to `active`.
   /// Consumed by the match-engine tick; null for all non-suspended users.
-  suspendedUntil             DateTime?                @map("suspended_until")
+  suspendedUntil           DateTime?          @map("suspended_until")
   /// Telegram `message_id` of the pinned "next match in …" status banner.
   /// Null = no banner pinned (either pre-finalize, or user unpinned / deleted).
   /// Cleared by the status-timer worker on 400/403 edit failures.
-  statusMessageId            Int?                     @map("status_message_id")
+  statusMessageId          Int?               @map("status_message_id")
   /// When Telegram last told us this chat is permanently shut: a 403
   /// ("bot was blocked by the user", "chat not found", "user is deactivated").
   ///
@@ -256,24 +264,24 @@ model User {
   ///
   /// Cleared the moment any update arrives from that chat — pressing Start
   /// again is the unblock, and it is the only evidence worth trusting.
-  botBlockedAt               DateTime?                @map("bot_blocked_at")
+  botBlockedAt             DateTime?          @map("bot_blocked_at")
   /// Identity origin. Mobile-first users are created with a synthetic negative
   /// `telegramId` (Telegram never issues negative IDs) — Telegram-targeting
   /// workers MUST filter `telegramId: { gt: 0 }` or `platform: { in: [telegram, both] }`.
-  platform                   Platform                 @default(telegram)
+  platform                 Platform           @default(telegram)
   /// Expo / APNs / FCM push token registered by the mobile app.
-  pushToken                  String?                  @map("push_token")
-  pushPlatform               String?                  @map("push_platform")
+  pushToken                String?            @map("push_token")
+  pushPlatform             String?            @map("push_platform")
   /// Liveness verification state (Phase 6.3 of the product spec).
   /// Backed by Persona hosted flow (withpersona.com) for both mobile and bot.
-  verificationStatus         VerificationStatus       @default(unverified) @map("verification_status")
+  verificationStatus       VerificationStatus @default(unverified) @map("verification_status")
   /// Legacy mobile-side selfie path from the pre-Persona era. No new code
   /// writes here; kept as nullable for historical rows. Safe to drop later.
-  selfiePath                 String?                  @map("selfie_path")
+  selfiePath               String?            @map("selfie_path")
   /// Persona `inquiry` id captured from webhook events. Idempotent marker so
   /// retries don't double-process the same inquiry; also used to cross-link
   /// the Persona dashboard audit trail.
-  personaInquiryId           String?                  @unique @map("persona_inquiry_id")
+  personaInquiryId         String?            @unique @map("persona_inquiry_id")
   /// The AWS Face Liveness session THIS user most recently minted, written at
   /// `beginLivenessCheck` and cleared when the check reaches a terminal state.
   ///
@@ -283,15 +291,15 @@ model User {
   /// there. This column exists purely so `completeLivenessCheck` can refuse a
   /// `sessionId` the caller did not create: the client reports only "I
   /// finished", and without the binding it could report any session id.
-  pendingLivenessSessionId   String?                  @map("pending_liveness_session_id")
+  pendingLivenessSessionId String?            @map("pending_liveness_session_id")
   /// Timestamp the inquiry flipped this user to `verified`. Re-verifications
   /// overwrite.
-  verifiedAt                 DateTime?                @map("verified_at")
+  verifiedAt               DateTime?          @map("verified_at")
   /// Timestamp the user explicitly tapped "Skip" on the verification CTA at
   /// the end of onboarding. Mutually exclusive with `verifiedAt` — a later
   /// successful Persona run clears this. Drives the unverified-Elo penalty
   /// applied at decision time and surfaces in the admin dashboard.
-  verificationSkippedAt      DateTime?                @map("verification_skipped_at")
+  verificationSkippedAt    DateTime?          @map("verification_skipped_at")
   /// Supabase Storage path (in env.SUPABASE_SELFIE_BUCKET) of the selfie
   /// Persona captured during liveness. Set by the verification pipeline
   /// after a successful `inquiry.approved` event; used as the ground-truth
@@ -301,22 +309,22 @@ model User {
   /// the user remains `verified`. Re-verifications (or photo edits past the
   /// 90-day window) re-fetch ephemerally from Persona via `personaInquiryId`
   /// and fail closed if no authoritative reference is available.
-  verifiedSelfiePath         String?                  @map("verified_selfie_path")
+  verifiedSelfiePath       String?            @map("verified_selfie_path")
   /// Minimum face-match similarity (0..1) across all profile photos, taken
   /// against `verifiedSelfiePath`. Below `env.FACE_MATCH_THRESHOLD_VERIFY`
   /// → `pending_review` or `rejected`. Null on legacy verified users (the
   /// migration explicitly opts them out of retroactive face-matching — see
   /// admin dashboard for the manual re-trigger).
-  faceMatchScore             Float?                   @map("face_match_score")
+  faceMatchScore           Float?             @map("face_match_score")
   /// Timestamp of the most recent face-match pass. Distinct from
   /// `verifiedAt` (which only flips on the first successful liveness pass)
   /// — `faceMatchedAt` updates on every photo upload past the initial run.
-  faceMatchedAt              DateTime?                @map("face_matched_at")
+  faceMatchedAt            DateTime?          @map("face_matched_at")
   /// First-touch attribution captured once on user creation. Format is
   /// free-form (`tg:start_param`, `mobile:utm=ig_story`, `referral:USER_ID`)
   /// — the analytics layer parses prefixes. Never overwritten after the
   /// initial write so growth attribution stays stable across re-onboarding.
-  referralSource             String?                  @map("referral_source")
+  referralSource           String?            @map("referral_source")
   /// Materialized ticket wallet balance (Date Ticket monetization, gated by
   /// `TICKET_FEATURE_ENABLED`). A ticket is spent at the §3.5b date gate; it
   /// is topped up by bundle purchases (the store Mini App) and one-time
@@ -324,7 +332,7 @@ model User {
   /// the materialized counter — every change is written atomically alongside a
   /// `TicketLedger` audit row in the same transaction, so the ledger is the
   /// append-only source of truth and this column is its running sum.
-  ticketBalance              Int                      @default(0) @map("ticket_balance")
+  ticketBalance            Int                @default(0) @map("ticket_balance")
   /// One-time "famine" single-ticket discount (Date Ticket monetization, gated
   /// by `TICKET_FEATURE_ENABLED`). Granted when the user is eligible-but-unpaired
   /// for a 2nd consecutive weekly batch (no-match tier >= 2). It discounts a
@@ -333,16 +341,16 @@ model User {
   /// PRODUCT_SPEC.md §3.5b and `services/ticket-discount.ts`.
   /// Active ⇔ `ticketDiscountPct > 0 AND ticketDiscountConsumedAt IS NULL AND
   /// ticketDiscountExpiresAt > now`. `0`/nulls = no active discount.
-  ticketDiscountPct          Int                      @default(0) @map("ticket_discount_pct")
-  ticketDiscountGrantedAt    DateTime?                @map("ticket_discount_granted_at")
-  ticketDiscountExpiresAt    DateTime?                @map("ticket_discount_expires_at")
-  ticketDiscountConsumedAt   DateTime?                @map("ticket_discount_consumed_at")
+  ticketDiscountPct        Int                @default(0) @map("ticket_discount_pct")
+  ticketDiscountGrantedAt  DateTime?          @map("ticket_discount_granted_at")
+  ticketDiscountExpiresAt  DateTime?          @map("ticket_discount_expires_at")
+  ticketDiscountConsumedAt DateTime?          @map("ticket_discount_consumed_at")
   /// Which mechanism granted the discount currently in the slot. Since Launch
   /// Events were removed (2026-09-16) the only writer is `famine` (§3.5b); the
   /// column stays so a future second mechanism needs no migration, and older
   /// rows may still read `event_feedback`. Analytics/audit only: pricing reads
   /// `pct`, never this.
-  ticketDiscountSource       String?                  @map("ticket_discount_source")
+  ticketDiscountSource     String?            @map("ticket_discount_source")
   /// Gennety Premium subscription (gated by `PREMIUM_FEATURE_ENABLED`).
   /// Channel-agnostic per-user entitlement owned by `services/premium.ts`; the
   /// `subscription_ledger` is the append-only source of truth and these columns
@@ -351,11 +359,17 @@ model User {
   /// §Premium). `premiumProvider` ∈ `telegram_stars`/`app_store`;
   /// `premiumExternalId` is the recurring anchor (Stars subscription charge id
   /// or App Store `originalTransactionId`) used to reconcile renewals/cancels.
-  premiumUntil               DateTime?                @map("premium_until")
-  premiumSince               DateTime?                @map("premium_since")
-  premiumProvider            String?                  @map("premium_provider")
-  premiumAutoRenew           Boolean                  @default(false) @map("premium_auto_renew")
-  premiumExternalId          String?                  @map("premium_external_id")
+  premiumUntil             DateTime?          @map("premium_until")
+  premiumSince             DateTime?          @map("premium_since")
+  premiumProvider          String?            @map("premium_provider")
+  premiumAutoRenew         Boolean            @default(false) @map("premium_auto_renew")
+  premiumExternalId        String?            @map("premium_external_id")
+  /// Premium no longer covers the subscriber's own Date Ticket (decision
+  /// 2026-10-08). Subscribers who bought before that keep the cover until the
+  /// end of the period they had already paid for: the migration stamps their
+  /// `premiumUntil` at deploy time here, and renewals never move it.
+  /// `premiumCanSettle` reads ONLY this column — Premium alone settles nothing.
+  premiumTicketCoverUntil  DateTime?          @map("premium_ticket_cover_until")
   /// Expiry-reminder once-markers (PRODUCT_SPEC §3.8 → "Access is not silently
   /// lost"). The 3-day and 24-hour DMs are sent at most once per PAID PERIOD,
   /// so every path that advances `premiumUntil` clears both — otherwise a user
@@ -363,8 +377,8 @@ model User {
   /// non-auto-renewing entitlement: nothing is ending while Telegram or Apple
   /// is still charging, and a "your access is running out" DM to a live
   /// subscriber would be false.
-  premiumReminder3dAt        DateTime?                @map("premium_reminder_3d_at")
-  premiumReminder1dAt        DateTime?                @map("premium_reminder_1d_at")
+  premiumReminder3dAt      DateTime?          @map("premium_reminder_3d_at")
+  premiumReminder1dAt      DateTime?          @map("premium_reminder_1d_at")
   /// Referral program (gated by `REFERRAL_FEATURE_ENABLED`; §Referral). Pays in
   /// Date Tickets only since 2026-09-22 — never Premium. `referralVerifiedCount`
   /// is the referrer's materialized tally of invited friends who cleared
@@ -375,9 +389,9 @@ model User {
   /// (`referral_invitee_premium_at`), whose only remaining job was exactly this.
   /// Each counted invitee is a `ReferralQualification`; the tickets themselves
   /// live in `ticket_ledger` (`referral_reward`).
-  referralVerifiedCount      Int                      @default(0) @map("referral_verified_count")
-  referralCountedAt          DateTime?                @map("referral_counted_at")
-  referralGiftSeenAt         DateTime?                @map("referral_invitee_premium_at")
+  referralVerifiedCount    Int                @default(0) @map("referral_verified_count")
+  referralCountedAt        DateTime?          @map("referral_counted_at")
+  referralGiftSeenAt       DateTime?          @map("referral_invitee_premium_at")
   /// Promo-code program (gated by `PROMO_FEATURE_ENABLED`; see
   /// PROMO_CODES_PRODUCT_SPEC.md). Independent campaign codes (not tied to a
   /// referrer) that grant a new user a Date Ticket + Premium months at the
@@ -386,14 +400,14 @@ model User {
   /// is the once-marker for the wow screen + grant guard; the reward itself is
   /// recorded exactly-once in `PromoRedemption` + `ticket_ledger` (`promo`) +
   /// `subscription_ledger` (`promo`).
-  promoRedeemedAt            DateTime?                @map("promo_redeemed_at")
+  promoRedeemedAt          DateTime?          @map("promo_redeemed_at")
   /// Founder-notify (gated by `FOUNDER_NOTIFY_ENABLED`): stamped the first time
   /// this user becomes `active` and the "new registration" profile card is sent
   /// to the founder's personal Telegram. Idempotency marker — the notifier
   /// updates it with `where: { founderNotifiedAt: null }`, so re-activation
   /// (verified-after-skip, unfreeze on `/start`) never re-sends. Null = never
   /// notified.
-  founderNotifiedAt          DateTime?                @map("founder_notified_at")
+  founderNotifiedAt        DateTime?          @map("founder_notified_at")
   /// Non-null on a SYNTHETIC test profile — a hand-seeded account that exists
   /// only to balance the gender skew in a friends-and-family production test
   /// (PRODUCT_SPEC §3.1c). It is an ordinary `User` + `Profile` in every other
@@ -413,9 +427,9 @@ model User {
   ///
   /// Seeded and removed by `scripts/seed-synthetic-profiles.mjs`. Null on every
   /// real account, so the whole mechanism is inert until a row carries it.
-  syntheticAt                DateTime?                @map("synthetic_at")
-  createdAt                  DateTime                 @default(now()) @map("created_at")
-  updatedAt                  DateTime                 @updatedAt @map("updated_at")
+  syntheticAt              DateTime?          @map("synthetic_at")
+  createdAt                DateTime           @default(now()) @map("created_at")
+  updatedAt                DateTime           @updatedAt @map("updated_at")
 
   profile                   Profile?
   onboardingProgress        OnboardingProgress?
@@ -443,10 +457,12 @@ model User {
   cityWaitlistEntry         CityWaitlistEntry?
   hdyhauResponse            HdyhauResponse?
 
-  matchesAsA          Match[]      @relation("MatchUserA")
-  matchesAsB          Match[]      @relation("MatchUserB")
-  matchEventsAuthored MatchEvent[] @relation("MatchEventActor")
-  matchEventsTargeted MatchEvent[] @relation("MatchEventTarget")
+  matchesAsA          Match[]          @relation("MatchUserA")
+  matchesAsB          Match[]          @relation("MatchUserB")
+  matchEventsAuthored MatchEvent[]     @relation("MatchEventActor")
+  matchEventsTargeted MatchEvent[]     @relation("MatchEventTarget")
+  wishlistItems       WishlistItem[]
+  wishlistUnlocks     WishlistUnlock[]
 
   referralEventsShared   ReferralEvent[] @relation("ReferralEventReferrer")
   referralEventsReceived ReferralEvent[] @relation("ReferralEventInvitee")
@@ -773,6 +789,87 @@ model PrimeTimePurchase {
   /// Backs the hourly `processing` / `refund_failed` sweep.
   @@index([status, createdAt])
   @@map("prime_time_purchases")
+}
+
+/// One item of a person's Date Wishlist (decision 2026-10-08): perfume,
+/// flowers, a place, a drink, a thing they would love. Built with the agent on
+/// «Сегодня» — from the catalog, a pasted list, links, or a text search — and
+/// shown to a match only after MUTUAL interest the morning after, as the
+/// "cheat sheet" (one item free, the rest paid or with Premium).
+///
+/// `category` and `source` are plain strings with whitelists in
+/// `@gennety/shared` (`WISHLIST_CATEGORIES`, `WISHLIST_SOURCES`) — a new value
+/// costs no migration, same rule as the match sub-states. `imageUrl` is the
+/// copy in our storage (never a hotlink to a shop), `productUrl` the page the
+/// person confirmed. `priceBand` is a range, never an exact price.
+model WishlistItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  category   String
+  title      String
+  brand      String?
+  /// The person's own words about it ("the pink one", "size S").
+  note       String?
+  imageUrl   String?  @map("image_url")
+  productUrl String?  @map("product_url")
+  priceBand  String?  @map("price_band")
+  source     String
+  catalogKey String?  @map("catalog_key")
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
+  @@map("wishlist_items")
+}
+
+/// One opened Date Wishlist cheat sheet: the payer may see `owner`'s full list
+/// for the pair `matchId`. A one-off purchase, so its own table like
+/// `PrimeTimePurchase` (not a ledger row); also written with
+/// `provider = premium` when Premium opened it, so the sheet stays open after
+/// Premium lapses.
+model WishlistUnlock {
+  id                String    @id @default(uuid()) @db.Uuid
+  /// Payer / viewer. Null once their account is deleted — kept for accounting.
+  userId            String?   @map("user_id") @db.Uuid
+  /// Whose list. Free-form (no FK), like `matchId`, so neither deletion breaks
+  /// the payment audit trail; reads always re-check the pair.
+  ownerId           String    @map("owner_id") @db.Uuid
+  matchId           String    @map("match_id") @db.Uuid
+  /// `telegram_stars` | `app_store` | `premium`.
+  provider          String
+  /// Stars charge id or App Store transaction id → exactly-once. Null for
+  /// `premium`.
+  externalPaymentId String?   @unique @map("external_payment_id")
+  amountStars       Int?      @map("amount_stars")
+  amountCents       Int?      @map("amount_cents")
+  /// Set by an App Store REFUND notification / a Stars refund; a refunded
+  /// unlock no longer opens the sheet.
+  refundedAt        DateTime? @map("refunded_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([matchId, userId])
+  @@index([ownerId])
+  @@map("wishlist_unlocks")
+}
+
+/// Cache of the wishlist agent's web look-ups (a shop page read by its
+/// OpenGraph tags, or a web search for "Chloé perfume"), keyed by a hash of
+/// the normalised URL / query. Saves a paid search and a fetch when ten people
+/// type the same brand; rows past `expiresAt` are ignored and swept.
+model WebLookupCache {
+  key       String   @id
+  kind      String
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("web_lookup_cache")
 }
 
 model OnboardingProgress {
@@ -1125,6 +1222,19 @@ model Profile {
   profilerBatchRemaining    Int                          @default(0) @map("profiler_batch_remaining")
   profilerAnswerWindowUntil DateTime?                    @map("profiler_answer_window_until")
   profilerQuestionMessageId Int?                         @map("profiler_question_message_id")
+  /// Date Wishlist session (decision 2026-10-08): it takes the slot of ONE
+  /// Profiler batch, never the first, so the app's «Сегодня» alternates
+  /// questions with the agent that builds the wishlist.
+  ///   - `wishlistOfferedAt`: the slot was given to the wishlist (by the app's
+  ///     pull or the push worker). While set and not done/snoozed, the
+  ///     Profiler GET returns the session instead of opening a batch.
+  ///   - `wishlistDoneAt`: the person finished ("Готово" with ≥1 item) — the
+  ///     session is never offered again; the list stays editable in Profile.
+  ///   - `wishlistSnoozedUntil`: «Позже» — the slot is released and the
+  ///     session may take a later batch slot after this moment.
+  wishlistOfferedAt         DateTime?                    @map("wishlist_offered_at")
+  wishlistDoneAt            DateTime?                    @map("wishlist_done_at")
+  wishlistSnoozedUntil      DateTime?                    @map("wishlist_snoozed_until")
   /// One-time onboarding ticket-bonus idempotency markers (gated by
   /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 6+
   /// face-validated photos (`photoBonusTicketAt`) or gains a profile video
@@ -1294,17 +1404,17 @@ enum ProfilerAnswerSource {
 }
 
 model ProfilerAnswer {
-  id            String             @id @default(uuid()) @db.Uuid
-  userId        String             @map("user_id") @db.Uuid
+  id            String                @id @default(uuid()) @db.Uuid
+  userId        String                @map("user_id") @db.Uuid
   /// Stable question identifier from the shared question bank (e.g. "f_date_spots").
-  questionId    String             @map("question_id")
+  questionId    String                @map("question_id")
   priority      ProfilerPriority
   /// Free-text answer. Null while the question is only skipped (not answered).
   ///
   /// For an image answer this is the vision-written one-sentence DESCRIPTION of
   /// the picture, not a transcript — it is what the icebreaker and wingman
   /// generators read, and they only ever consume text.
-  answerText    String?            @map("answer_text")
+  answerText    String?               @map("answer_text")
   /// Telegram `file_id` of the image the answer arrived as, on the questions
   /// that invite one (`acceptsImage`, today only humour: "send your favourite
   /// meme"). Null for a typed answer.
@@ -1318,12 +1428,12 @@ model ProfilerAnswer {
   /// Bot-scoped by construction: a file_id minted by @gennetybot is not
   /// resolvable by the demo bot, which is exactly why the demo path never
   /// re-sends one (see `services/meme-unlock.ts`).
-  memeFileId    String?            @map("meme_file_id")
+  memeFileId    String?               @map("meme_file_id")
   /// Which `send*` method resolves `memeFileId`. Telegram file_ids are
   /// type-tagged — `sendPhoto` with a sticker's id fails — and everything that
   /// is not a still sticker was captured as a JPEG thumbnail, so two values
   /// cover the whole space.
-  memeKind      ProfilerMediaKind? @map("meme_kind")
+  memeKind      ProfilerMediaKind?    @map("meme_kind")
   /// Canonical URL of the TikTok / Reel this answer came from, when it came
   /// from a link rather than an attached picture.
   ///
@@ -1337,25 +1447,25 @@ model ProfilerAnswer {
   /// over time, so the buyer also gets the link and can watch it. A dead link
   /// by then is not a failed sale: the frame and the sentence were already
   /// delivered, which is what they paid for.
-  memeSourceUrl String?            @map("meme_source_url")
-  answeredAt    DateTime?          @map("answered_at")
+  memeSourceUrl String?               @map("meme_source_url")
+  answeredAt    DateTime?             @map("answered_at")
   /// True when the user tapped "Skip" instead of answering.
-  skipped       Boolean            @default(false)
+  skipped       Boolean               @default(false)
   /// True once a skipped question has been re-offered the one allowed time in
   /// its cycle, so it isn't surfaced a third time until the next drop cycle.
-  skipReturned  Boolean            @default(false) @map("skip_returned")
+  skipReturned  Boolean               @default(false) @map("skip_returned")
   /// Quick-answer option ids the person tapped (`profiler-inputs.ts`), in tap
   /// order. Empty for a text-only answer, a skip, or a Telegram answer.
-  optionIds     String[]           @default([]) @map("option_ids")
+  optionIds     String[]              @default([]) @map("option_ids")
   answerSource  ProfilerAnswerSource? @map("answer_source")
   /// Set while the question sits in the app's «На потом» list (the «Позже»
   /// button, at most `PROFILER_LATER_MAX`). Cleared by an answer or a skip.
   /// A postponed row is neither answered nor skipped, so no batch re-asks it.
-  postponedAt   DateTime?          @map("postponed_at")
+  postponedAt   DateTime?             @map("postponed_at")
   /// Drop cycle this row was last asked/answered in (ISO date of the drop).
-  cycleId       String             @map("cycle_id")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  cycleId       String                @map("cycle_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1922,6 +2032,20 @@ model Match {
   /// to `completed` + the null check on `feedbackBy{A,B}` as a dedup, which
   /// re-fired forever for unanswered prompts.
   feedbackPromptedAt   DateTime? @map("feedback_prompted_at")
+  /// «The Morning After» (decision 2026-10-08): one two-button check the
+  /// morning after the date, 11:00 local — "great, want to see them again" /
+  /// "didn't click". `morningAfterSentAt` is the one-shot claim of the tick.
+  /// `morningAfter{A,B}` ∈ `great | pass` (whitelist in
+  /// `services/morning-after.ts`), written only by the person's own tap.
+  /// Double-blind: nobody is told the other side's answer; only when BOTH say
+  /// `great` is `mutualInterestAt` stamped (CAS) and both are told. A `pass`
+  /// is never revealed.
+  morningAfterSentAt   DateTime? @map("morning_after_sent_at")
+  morningAfterA        String?   @map("morning_after_a")
+  morningAfterB        String?   @map("morning_after_b")
+  morningAfterAtA      DateTime? @map("morning_after_at_a")
+  morningAfterAtB      DateTime? @map("morning_after_at_b")
+  mutualInterestAt     DateTime? @map("mutual_interest_at")
 
   /// Timestamp when the AI pitch was dispatched to both users via the queue.
   /// Used by the 24h TTL cron to expire unanswered proposals.

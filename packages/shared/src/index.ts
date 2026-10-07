@@ -330,3 +330,41 @@ export {
 export type { AnnouncementStatus, ChatContextKind, PulseRowKind, PulseRowState } from "./inbox.js";
 
 export * from "./chat-sessions.js";
+export {
+  WISHLIST_CATEGORIES,
+  WISHLIST_SOURCES,
+  WISHLIST_PRICE_BANDS,
+  WISHLIST_MAX_ITEMS,
+  WISHLIST_TITLE_MAX_LEN,
+  WISHLIST_NOTE_MAX_LEN,
+  WISHLIST_PASTE_MAX_ENTRIES,
+  WISHLIST_PASTE_MAX_LEN,
+  WISHLIST_LOOKUP_MAX_CANDIDATES,
+  WISHLIST_LOOKUPS_PER_DAY,
+  WISHLIST_LOOKUP_CACHE_TTL_MS,
+  WISHLIST_IMAGE_MAX_BYTES,
+  WISHLIST_SESSION_MIN_PROFILER_ANSWERS,
+  WISHLIST_SESSION_SNOOZE_MS,
+  WISHLIST_CONSENT_VERSION,
+  LEGAL_DOCS_TASTE_HINTS_FROM,
+  WISHLIST_TEASER_SHARE,
+  MORNING_AFTER_ANSWERS,
+  MORNING_AFTER_HOUR,
+  MORNING_AFTER_LATEST_HOUR,
+  MORNING_AFTER_MIN_GAP_MS,
+  MORNING_AFTER_MAX_AGE_MS,
+  MUTUAL_OFFER_VISIBLE_MS,
+  isWishlistCategory,
+  isWishlistSource,
+  isWishlistPriceBand,
+  isMorningAfterAnswer,
+  wishlistPriceBandFor,
+  wishlistTeaserCount,
+  wishlistTeaserIds,
+} from "./wishlist.js";
+export type {
+  WishlistCategory,
+  WishlistSource,
+  WishlistPriceBand,
+  MorningAfterAnswer,
+} from "./wishlist.js";
