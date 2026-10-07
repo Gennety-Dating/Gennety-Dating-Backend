@@ -11,6 +11,18 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-07 — Mini App Premium: «Premium после покупки» (металл в воде).**
+Webapp only (`scripts/deploy-webapp.sh`; demo — the same bundle): after `"paid"`
+the offer dives "under water" and "Premium" surfaces as liquid metal letter by
+letter, then "Done" → the active plate. No server, schema or env change; the
+bot is untouched. Same motion as the iOS paywall (iOS `9b249424`). Commit
+`846253d9`. Decision journal 2026-10-07. Ship only with the founder's go-ahead.
+- **Проверка:** `pnpm --filter @gennety/webapp exec vitest run src/premium-reveal`;
+  on production open `premium.html?preview=reveal&lang=ru` (no Telegram needed):
+  the reveal plays over the mock offer, `&t=1.0` freezes the liquid phase,
+  `&t=4` the set metal with «Активен до 24 ноября 2026 г.» and «Готово».
+- **Откат:** redeploy the previous webapp bundle; nothing else changed.
+
 **PENDING 2026-10-07 — Profiler: быстрые ответы и «На потом» в приложении.**
 Migration `20261007120000_profiler_quick_answers` (additive: enum
 `profiler_answer_source`, `profiler_answers.option_ids` / `answer_source` /
