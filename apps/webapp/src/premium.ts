@@ -131,8 +131,8 @@ const COPY: Record<Lang, Copy> = {
     b4d: "The late slots in the calendar stay open for you.",
     b4x: "Late evenings are the most wanted time. With Premium they're open on every date, for both of you.",
     b3t: "Free venue changes",
-    b3d: "Swap your date spot as often as you like — no fee.",
-    b3x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
+    b3d: "Change the venue for free — up to twice per date.",
+    b3x: "Changing the venue normally costs a small fee each time. With Premium a swap on the venue board is free — up to twice per date, and no later than 5 hours before you meet.",
     b2t: "Premium venues",
     b2d: "A step-up selection of places",
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
@@ -169,8 +169,8 @@ const COPY: Record<Lang, Copy> = {
     b4x:
       "Поздние вечера — самое востребованное время. С Premium они открыты на каждом свидании, сразу для вас двоих.",
     b3t: "Бесплатная смена места",
-    b3d: "Меняй место свидания сколько угодно — без оплаты.",
-    b3x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
+    b3d: "Сменить место свидания можно без оплаты — до двух раз.",
+    b3x: "Обычно каждая смена места стоит небольшую сумму. С Premium замена в подборе мест бесплатна — до двух раз на одно свидание и не позже чем за 5 часов до встречи.",
     b2t: "Премиум-заведения",
     b2d: "Подборка мест уровнем выше",
     b2x:
@@ -208,8 +208,8 @@ const COPY: Record<Lang, Copy> = {
     b4x:
       "Пізні вечори — найзатребуваніший час. З Premium вони відкриті на кожному побаченні, одразу для вас двох.",
     b3t: "Безкоштовна зміна місця",
-    b3d: "Змінюй місце побачення скільки завгодно — без оплати.",
-    b3x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
+    b3d: "Змінити місце побачення можна без оплати — до двох разів.",
+    b3x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium заміна в підборі місць безкоштовна — до двох разів на одне побачення і не пізніше ніж за 5 годин до зустрічі.",
     b2t: "Преміум-заклади",
     b2d: "Добірка місць рівнем вище",
     b2x:
@@ -248,8 +248,8 @@ const COPY: Record<Lang, Copy> = {
     b4x:
       "Späte Abende sind die gefragteste Zeit. Mit Premium sind sie bei jedem Date offen, für euch beide.",
     b3t: "Kostenlose Ortswechsel",
-    b3d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
-    b3x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
+    b3d: "Den Ort kostenlos wechseln — bis zu zweimal pro Date.",
+    b3x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist ein Wechsel im Ortsboard kostenlos — bis zu zweimal pro Date und spätestens 5 Stunden vor dem Treffen.",
     b2t: "Premium-Orte",
     b2d: "Eine Auswahl gehobener Orte",
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
@@ -288,8 +288,8 @@ const COPY: Record<Lang, Copy> = {
     b4x:
       "Późne wieczory to najbardziej rozchwytywany czas. Z Premium są otwarte na każdej randce, od razu dla was obojga.",
     b3t: "Darmowa zmiana miejsca",
-    b3d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
-    b3x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
+    b3d: "Zmiana miejsca randki bez opłat — do dwóch razy.",
+    b3x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium zmiana w tablicy miejsc jest darmowa — do dwóch razy na jedną randkę i nie później niż 5 godzin przed spotkaniem.",
     b2t: "Miejsca premium",
     b2d: "Wybór miejsc o klasę wyżej",
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
@@ -348,6 +348,8 @@ interface PremiumPlanOffer {
 
 const root = document.getElementById("root")!;
 let busy = false;
+/** `?preview=purchase`: состояние «после оплаты» — кнопка обходится без счёта. */
+let previewPaid: PremiumState | null = null;
 
 function haptic(kind: "success" | "error"): void {
   try {
@@ -786,6 +788,16 @@ async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
   if (busy) return;
   busy = true;
   btn.disabled = true;
+  if (previewPaid) {
+    // Без счёта Stars: «оплата прошла» после паузы, которую в Telegram
+    // занимает лист оплаты, — дальше тот же путь, что на "paid".
+    const paid = previewPaid;
+    window.setTimeout(() => {
+      haptic("success");
+      void celebrate({ state: paid });
+    }, 900);
+    return;
+  }
   let outcome: InvoiceOutcome;
   try {
     outcome = await mintInvoice(plan);
@@ -918,13 +930,15 @@ async function load(): Promise<void> {
   // Standalone visual preview (no Telegram/initData): `?preview=active` shows the
   // subscribed status plate, `?preview=offer` the sales screen, `?preview=error`
   // the could-not-load screen, `?preview=reveal` the post-purchase reveal over the
-  // offer (`&t=<s>` freezes a frame). Harmless in prod.
+  // offer (`&t=<s>` freezes a frame), `?preview=purchase` the whole path: the
+  // offer, whose CTA skips the Stars invoice, then the reveal and the plate.
+  // Harmless in prod.
   const preview = params.get("preview");
   if (preview === "error") {
     renderError();
     return;
   }
-  if (preview === "active" || preview === "offer" || preview === "reveal") {
+  if (preview === "active" || preview === "offer" || preview === "reveal" || preview === "purchase") {
     const mock: PremiumState = {
       ok: true,
       featureEnabled: true,
@@ -963,6 +977,13 @@ async function load(): Promise<void> {
         },
       ],
     };
+    if (preview === "purchase") {
+      previewPaid = {
+        ...mock,
+        active: true,
+        premiumUntil: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+      };
+    }
     if (preview === "active") renderActive(mock);
     else renderOffer(mock);
     // `?preview=reveal` — церемония поверх макета предложения, как после

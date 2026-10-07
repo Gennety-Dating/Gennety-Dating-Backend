@@ -11,6 +11,22 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-07 — Premium: смена места «до двух раз» (Mini App + бот).**
+Text only. The Mini App Premium screen (`apps/webapp/src/premium.ts`, `b3d`/`b3x`)
+and the bot's Premium pitch (`packages/shared/src/i18n.ts`, `premiumPitch`) promised
+free venue changes "as many times as you like"; the server allows two per date and
+only until T-5h, Premium included. Needs the webapp bundle (`scripts/deploy-webapp.sh`;
+demo — the same bundle) and a bot restart for the pitch. No schema or env change.
+Decision journal 2026-10-07. Ship only with the founder's go-ahead. The «Premium после
+покупки» bundle below is already on production (`f9648948`), so the webapp needs its own
+deploy; the bot restart can ride with the PNG-cards bot release (`bd58c865`) below.
+The same commit carries `?preview=purchase`
+(preview only, never read inside Telegram).
+- **Проверка:** `pnpm --filter @gennety/webapp typecheck`; on production open
+  `premium.html?preview=offer&lang=ru` → «Бесплатная смена места» says «до двух раз»;
+  in the bot, the Premium hub pitch's last bullet says «до двух раз за свидание».
+- **Откат:** revert the commit and redeploy the webapp bundle / restart the bot.
+
 **PENDING 2026-10-07 — Bot PNG cards: date card in Gennety Display, venue photo −3°, «Gennety» in the brand face (`bd58c865`).**
 Bot only (production + demo, the same renderers); no schema, env or Mini App change. The date card's slogan
 (800, 82 px, no full stops), venue name (700) and header word «Gennety» (800, 42 px) are set in Gennety Display —

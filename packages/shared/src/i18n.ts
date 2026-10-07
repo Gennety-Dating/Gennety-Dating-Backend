@@ -1157,7 +1157,7 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Top venues* — a selection of places a level above\n• *Free venue changes* — swap your date spot as often as you like, no fee",
+      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Top venues* — a selection of places a level above\n• *Free venue changes* — up to twice per date, no fee",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumOpenCta: "Learn more",
     premiumCancelHint:
@@ -2252,7 +2252,7 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Лучшие заведения* — подборка мест уровнем выше\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты",
+      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Лучшие заведения* — подборка мест уровнем выше\n• *Бесплатная смена места* — до двух раз за свидание, без оплаты",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumOpenCta: "Подробнее",
     premiumCancelHint:
@@ -3336,7 +3336,7 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Найкращі заклади* — добірка місць рівнем вище\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати",
+      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Найкращі заклади* — добірка місць рівнем вище\n• *Безкоштовна зміна місця* — до двох разів за побачення, без оплати",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumOpenCta: "Детальніше",
     premiumCancelHint:
@@ -4404,7 +4404,7 @@ const deTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Die besten Orte* — eine Auswahl an Orten eine Klasse höher\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr",
+    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Die besten Orte* — eine Auswahl an Orten eine Klasse höher\n• *Kostenlose Ortswechsel* — bis zu zweimal pro Date, ohne Gebühr",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumOpenCta: "Mehr erfahren",
   premiumCancelHint:
@@ -5462,7 +5462,7 @@ const plTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, niezależnie od liczby randek\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Najlepsze lokale* — wybór miejsc o poziom wyżej\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat",
+    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, niezależnie od liczby randek\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Najlepsze lokale* — wybór miejsc o poziom wyżej\n• *Darmowa zmiana miejsca* — do dwóch razy na randkę, bez opłat",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumOpenCta: "Dowiedz się więcej",
   premiumCancelHint:
