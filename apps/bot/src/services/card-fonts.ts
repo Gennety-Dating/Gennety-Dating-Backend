@@ -17,23 +17,20 @@ import type satori from "satori";
  * thin Roboto. The OTHER cards keep their own faces (Archivo Black, Unbounded)
  * by the founder's call of 2026-10-07: they "look good in Telegram".
  *
- * Archivo Black stays in this list for one word: "Gennety" in the card's
- * header, typed in its original face (founder, 2026-10-07). It has no
- * Cyrillic, so `template.test.ts` checks that nothing else is set in it.
+ * The header word "Gennety" is set in Gennety Display too (founder, 2026-10-07),
+ * so Archivo Black is not in this list at all.
  *
  * Coverage: all five product languages (ru, uk, en, de, pl, including
  * ʼ ’ « » —) are in the files, checked by `card-fonts.test.ts`.
  *
- * Only the weights the card sets exist here: 800 for the slogan and 700 for
- * the venue name. Ask for one of them explicitly (`fontWeight`). Satori
+ * Only the weights the card sets exist here: 800 for the slogan and the header
+ * word, 700 for the venue name. Ask for one of them explicitly (`fontWeight`). Satori
  * resolves an unregistered weight to the nearest one, which reads as a silent
  * substitution in review.
  */
 
 export const DISPLAY_FAMILY = "Gennety Display";
 export const BODY_FAMILY = "Roboto";
-/** The header word "Gennety" only. Latin-only face, single heavy weight. */
-export const LOGO_FAMILY = "Archivo Black";
 
 export type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 
@@ -51,7 +48,6 @@ export function cardFonts(): SatoriFonts {
     { name: BODY_FAMILY, data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
     { name: DISPLAY_FAMILY, data: read("GennetyDisplay-Bold.ttf"), weight: 700, style: "normal" },
     { name: DISPLAY_FAMILY, data: read("GennetyDisplay-ExtraBold.ttf"), weight: 800, style: "normal" },
-    { name: LOGO_FAMILY, data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
   ];
   return cached;
 }

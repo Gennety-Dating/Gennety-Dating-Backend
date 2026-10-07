@@ -8,7 +8,7 @@
  * film grain; a wide duotone venue photo as the hero; an
  * overlapping tilted polaroid of the partner; a Gennety Display headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
- * The word "Gennety" sits top-left, typed in Archivo Black as it always was,
+ * The word "Gennety" sits top-left, typed in Gennety Display like the slogan,
  * and the brand butterfly logo sits
  * top-right (slightly tilted, nudged toward the edge like the polaroid). The
  * "made with Gennety" credit sits beside the venue address when the address
@@ -25,7 +25,7 @@
  * is pure layout.
  */
 
-import { DISPLAY_FAMILY, BODY_FAMILY, LOGO_FAMILY } from "../card-fonts.js";
+import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -233,14 +233,31 @@ function logoImg(logo: LogoMark): CardNode {
 }
 
 /**
- * The word "Gennety", typed as it was before 2026-10-07. The drawn logotype
- * and the word in Gennety Display were both tried that day; the founder kept
- * the original face. Archivo Black has no Cyrillic, which is safe here and
- * nowhere else: this word is Latin in every locale.
+ * The word "Gennety" in the brand face, the slogan's weight (founder's pick of
+ * 2026-10-07; the drawn logotype was tried and rejected the same day). 42px
+ * rather than the old 36px: Gennety Display runs narrower than the Archivo
+ * Black it replaced, and at 36px the word read small.
+ *
+ * `lineHeight` is the old Archivo Black line at 36px. Gennety Display's own
+ * line is taller (1.25 em), and without the pin the slogan and both photos
+ * slid 6–21px down. Pinned, the word grows around the line's centre and the
+ * rest of the card stays where it was approved.
  */
 function header(p: Palette): CardNode {
   return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [
-    el("div", { display: "flex", fontFamily: LOGO_FAMILY, fontSize: "36px", color: p.ink }, "Gennety"),
+    el(
+      "div",
+      {
+        display: "flex",
+        fontFamily: DISPLAY_FAMILY,
+        fontWeight: 800,
+        fontSize: "42px",
+        letterSpacing: "-1px",
+        lineHeight: "39.168px",
+        color: p.ink,
+      },
+      "Gennety",
+    ),
   ]);
 }
 

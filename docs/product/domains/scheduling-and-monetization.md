@@ -871,8 +871,9 @@ overlapping **polaroid** of the partner tilted 7° to the right, a
 since the 2026-10-01 copy audit and written without full stops since
 2026-10-07: "Без переписки / Сразу вживую"; until 2026-10-01 it was a fixed
 English "Error 404: Chat not found. Try real life." in all locales), the
-word "Gennety" top-left in Archivo Black, as it always was (the drawn iOS
-logotype was tried and rejected 2026-10-07), the brand **butterfly** logo (`butterfly-logo.svg`,
+word "Gennety" top-left in Gennety Display 800 at 42px (founder's pick of
+2026-10-07, on the old 39px header line so nothing below it moved; the drawn
+iOS logotype was tried and rejected the same day), the brand **butterfly** logo (`butterfly-logo.svg`,
 shared with the match card) tilted top-right, and the venue name + address. The
 slogan is 82px and sits centred in a fixed three-line slot that wraps at
 664px, so the photo keeps one height for every locale and line count. A
@@ -886,10 +887,10 @@ so repeating it on the card adds nothing and the freed space is spent on a
 cleaner keepsake. Rendered server-side with `satori` (→ SVG) + `@resvg/resvg-js`
 (→ PNG), with `@napi-rs/canvas` doing the venue duotone and grain tile; the
 partner-face blur uses AWS Rekognition `DetectFaces` boxes + pixelation.
-Rendered text is emoji-free (the bundled Roboto, Gennety Display and Archivo Black carry no
+Rendered text is emoji-free (the bundled Roboto and Gennety Display carry no
 color-emoji glyphs, so all card accents are vector shapes, not emoji); emoji
-live only in the Telegram caption. Its fonts come from `services/card-fonts.ts`;
-Archivo Black is there for the Latin header word only (it has no Cyrillic).
+live only in the Telegram caption. Its fonts come from `services/card-fonts.ts`:
+Roboto and Gennety Display only, no Archivo Black.
 
 - **Live render progress.** The render (partner-photo download + Places venue
   photo + rasterize) takes several seconds, so each side sees a per-side

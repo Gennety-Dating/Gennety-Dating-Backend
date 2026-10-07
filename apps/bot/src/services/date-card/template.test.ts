@@ -11,7 +11,7 @@ import {
   HERO_H,
 } from "./template.js";
 import { resolveCreditPlacement, measureRoboto, CREDIT_MIN_GAP } from "./credit-placement.js";
-import { cardFonts, LOGO_FAMILY } from "../card-fonts.js";
+import { cardFonts, DISPLAY_FAMILY } from "../card-fonts.js";
 
 /**
  * Geometry guard for the card's bottom block.
@@ -197,12 +197,20 @@ describe("date card layout", () => {
     expect(keepLastWordsTogether("Gennety")).toBe("Gennety");
   });
 
-  it("sets the Latin-only Archivo Black on the word Gennety and nothing else", () => {
-    // Archivo Black has no Cyrillic. Under the slogan it was the 2026-10-01
-    // regression, so it may carry the header word only.
+  it("types the header word Gennety in the brand face on the old line height", () => {
+    // Founder's pick of 2026-10-07: Gennety Display 800 at 42px. The line stays
+    // the old Archivo Black one (39.168px at 36px); Gennety Display's own line
+    // is taller and pushed the slogan and photos 6–21px down.
     const built = card("Кав'ярня «Ранок»", "вул. Хрещатик, 1", "Без переписки\nСразу вживую");
-    const set = findNodes(built, (n) => n.props.style?.fontFamily === LOGO_FAMILY);
-    expect(set.map(childText)).toEqual(["Gennety"]);
+    const [word] = findNodes(built, (n) => childText(n) === "Gennety");
+    expect(word.props.style).toMatchObject({
+      fontFamily: DISPLAY_FAMILY,
+      fontWeight: 800,
+      fontSize: "42px",
+      lineHeight: "39.168px",
+    });
+    // Archivo Black has no Cyrillic and nothing on this card is set in it now.
+    expect(fonts.map((f) => f.name)).not.toContain("Archivo Black");
   });
 
   it("clips the venue name and address to one line each", async () => {
