@@ -7,9 +7,10 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| Deployed demo | 2026-10-05 | Calendar: NULL grid initialization fixed; current pair recovered, live API 200 with 77 slots, 7,580 tests passed; production pending | [2026-10-05-calendar-null](./2026-10-05-calendar-null.md) |
+| Deployed | 2026-10-07 | Production `f9648948` (whole main): Profiler quick answers + «На потом» (1 additive migration), calendar NULL fix, name declension, Mini App city picker + «Premium после покупки»; drift OK, 0 restarts; demo not deployed | [pending](./pending.md) |
+| Deployed | 2026-10-05 | (production `f9648948` 2026-10-07) Calendar: NULL grid initialization fixed; current pair recovered, live API 200 with 77 slots, 7,580 tests passed; production pending | [2026-10-05-calendar-null](./2026-10-05-calendar-null.md) |
 | Deployed | 2026-10-05 | Rematch temporarily disabled in production/demo/dev; all sales and new search entries gated, refund recovery continues; 201 tests and typecheck passed | [2026-10-05-rematch](./2026-10-05-rematch.md) |
-| PENDING | 2026-10-04 | Mini App: только Киев, Одесса и Днепр; скрытые города сохранены в каталоге, «Скоро» без рамки; статическая сборка production + demo | [pending](./pending.md) |
+| Deployed | 2026-10-04 | (was PENDING; production `f9648948` 2026-10-07) Mini App: только Киев, Одесса и Днепр; скрытые города сохранены в каталоге, «Скоро» без рамки; статическая сборка production + demo | [pending](./pending.md) |
 | Deployed | 2026-10-04 | Telegram consolidated; production + demo release `6febc945`, demo schema catch-up and catalog reconciliation; 7,574 tests passed, both bots/Mini Apps healthy | [2026-10-04-telegram](./2026-10-04-telegram.md) |
 | Deployed | 2026-10-04 | 10-04 — Profiler: контекстные вопросы (свежая тема перед свиданием, формат, сигнатура, продолжение, перепроверка) вместо еженедельных повторов; карточка контекста над вопросом (Telegram — цитата, `/v1/me/profiler` — `question.context`); «свежая тема» переписывает совет Wingman; без миграций и env, только рестарт бота; iOS-сборка с карточкой — тем же заходом | [pending](./pending.md) |
 | Deployed | 2026-10-03 | 10-03 — APNs: `BadDeviceToken` повторяется на втором хосте, подошедший хост запоминается — один сервер доставляет и Xcode-, и TestFlight/App Store-токены; только рестарт бота, без миграций и env | [pending](./pending.md) |

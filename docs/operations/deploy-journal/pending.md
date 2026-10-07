@@ -11,7 +11,26 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING 2026-10-07 — Mini App Premium: «Premium после покупки» (металл в воде).**
+**Deployed 2026-10-07 06:30–06:33 UTC — production `6febc945` (+ Rematch-off files `7543d22c`) → `f9648948` (whole `main`).**
+Script `~/gennety-backups/deploy-1007.sh check|deploy` (outside the repo; started by the founder — the agent's
+auto-mode classifier refuses production deploys). Rode along: Profiler quick answers + «На потом» (migration
+`20261007120000_profiler_quick_answers`, fixed before apply in `f9648948` — the first text had `option_ids NOT NULL`
+and the drift gate would have stopped the deploy), calendar NULL-grid fix (demo had it since 10-05), Russian
+partner-name declension in waiting statuses (`55057474`), Mini App city picker (Kyiv/Odesa/Dnipro) and
+«Premium после покупки».
+- **Gates:** backup `prod-backup-2026-10-07T06-18-23Z.json` (29 users); prod had all 20 migrations, the only
+  pending one was ours; `REMATCH_FEATURE_ENABLED` not `true` in any env file nor pm2 env (stays off); rsync dry
+  run 46 files, 0 deletions. Tests at `f9648948`: bot 6,497, shared 411, webapp 740 passed; typecheck clean.
+- **Result:** `db:deploy` applied 1 migration, `db:drift-check` OK (5 foreign `canvas_*` tolerated); new columns
+  nullable as in the schema; 55 existing `profiler_answers` kept (`option_ids = {}`); pm2 online, restarts 6 → 6;
+  `/v1/ping` ok, `/v1/me/profiler` 401 without a token, calendar host pages incl. `premium.html` 200. Log after
+  restart: only Telegram 403 «bot was blocked by the user» from fan-out.
+- **Rollback:** `/opt/gennety-prev-20261007-063021`, `/var/www/dating-app.prev-20261007-063021`,
+  `/opt/gennety/.env.bak.20261007-063021`; the three new columns can stay.
+- **Demo:** not deployed (city picker and Premium bundle, Profiler code wait for a demo pass; demo is Telegram-only).
+- **iOS:** the build with quick answers and «На потом» (iOS `55d7a17e` + `d4c7b8d6`) can now go to TestFlight.
+
+**Deployed 2026-10-07 (production `f9648948`, 06:30–06:33 UTC; demo not deployed) 2026-10-07 — Mini App Premium: «Premium после покупки» (металл в воде).**
 Webapp only (`scripts/deploy-webapp.sh`; demo — the same bundle): after `"paid"`
 the offer dives "under water" and "Premium" surfaces as liquid metal letter by
 letter, then "Done" → the active plate. No server, schema or env change; the
@@ -23,7 +42,7 @@ bot is untouched. Same motion as the iOS paywall (iOS `9b249424`). Commit
   `&t=4` the set metal with «Активен до 24 ноября 2026 г.» and «Готово».
 - **Откат:** redeploy the previous webapp bundle; nothing else changed.
 
-**PENDING 2026-10-07 — Profiler: быстрые ответы и «На потом» в приложении.**
+**Deployed 2026-10-07 (production `f9648948`, 06:30–06:33 UTC; demo not deployed) 2026-10-07 — Profiler: быстрые ответы и «На потом» в приложении.**
 Migration `20261007120000_profiler_quick_answers` (additive: enum
 `profiler_answer_source`, `profiler_answers.option_ids` / `answer_source` /
 `postponed_at`), then the bot. `GET /v1/me/profiler` gains `input` on questions
@@ -44,12 +63,12 @@ build; the iOS build needs this deployed. Telegram is unchanged. Decision journa
 - **Откат:** revert the commit; the columns can stay (nothing old reads them).
 - **Демо:** same code; the demo bot is Telegram-only.
 
-**PENDING production 2026-10-05 — Calendar NULL grid initialization.**
+**Deployed 2026-10-07 (production `f9648948`, 06:30–06:33 UTC; demo not deployed) 2026-10-05 — Calendar NULL grid initialization.**
 Deploy the shared scheduler backend fix: normalize SQL NULL `proposed_times`
 before the existing grid-opening CAS. Already deployed and verified in demo;
 no schema, env or static bundle change. See [demo release](./2026-10-05-calendar-null.md).
 
-**PENDING 2026-10-04 — Mini App city picker: Kyiv, Odesa and Dnipro only.**
+**Deployed 2026-10-07 (production `f9648948`, 06:30–06:33 UTC; demo not deployed) 2026-10-04 — Mini App city picker: Kyiv, Odesa and Dnipro only.**
 Germany, Lviv and Kryvyi Rih are hidden from the list, search and geolocation
 selection; the shared catalog remains intact. Odesa and Dnipro retain the
 waitlist action with a borderless, softer “coming soon” badge. Requires the
