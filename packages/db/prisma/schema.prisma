@@ -368,7 +368,9 @@ model User {
   /// 2026-10-08). Subscribers who bought before that keep the cover until the
   /// end of the period they had already paid for: the migration stamps their
   /// `premiumUntil` at deploy time here, and renewals never move it.
-  /// `premiumCanSettle` reads ONLY this column — Premium alone settles nothing.
+  /// `isPremiumTicketCoverActive` requires this column AND a live
+  /// `premiumUntil` (a refund shortens the latter, never this) — Premium alone
+  /// settles nothing.
   premiumTicketCoverUntil  DateTime?          @map("premium_ticket_cover_until")
   /// Expiry-reminder once-markers (PRODUCT_SPEC §3.8 → "Access is not silently
   /// lost"). The 3-day and 24-hour DMs are sent at most once per PAID PERIOD,

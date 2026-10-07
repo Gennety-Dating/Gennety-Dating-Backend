@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { fetchPlatformPage, fetchPosterImage, isPublicAddress } from "./safe-fetch.js";
+import {
+  fetchPlatformPage,
+  fetchPosterImage,
+  fetchPublicImage,
+  fetchPublicPage,
+  isPublicAddress,
+  isPublicWebHostname,
+} from "./safe-fetch.js";
 
 /**
  * The perimeter tests. This module is the only place the bot opens a URL a
@@ -220,5 +227,247 @@ describe("fetchPosterImage", () => {
       resolver: publicResolver,
     });
     expect(result).toEqual({ ok: false, error: "too_large" });
+  });
+});
+
+/* ── open-host fetches (Date Wishlist) ──────────────────────────────────── */
+
+describe("isPublicWebHostname", () => {
+  it("accepts ordinary shop hostnames, IDNs and CDN names", () => {
+    for (const host of [
+      "www.sephora.de",
+      "chloe.com",
+      "example.com",
+      "shop_1.myshopify.com",
+      "xn--80ak6aa92e.com",
+      "shop.xn--j1amh",
+      "cdn.shopify.com.",
+    ]) {
+      expect(isPublicWebHostname(host), host).toBe(true);
+    }
+  });
+
+  it("refuses IP literals, single labels and internal-only names", () => {
+    for (const host of [
+      "localhost",
+      "LOCALHOST.",
+      "api.localhost",
+      "intranet",
+      "printer.lan",
+      "nas.local",
+      "metadata.google.internal",
+      "router.home.arpa",
+      "1.0.0.127.in-addr.arpa",
+      "db.corp",
+      "127.0.0.1",
+      "169.254.169.254",
+      "[::1]",
+      "::ffff:127.0.0.1",
+      "foo.123",
+      "a..b.com",
+      "-bad.com",
+      "",
+    ]) {
+      expect(isPublicWebHostname(host), host).toBe(false);
+    }
+  });
+});
+
+/** Per-host DNS for the open-host tests: anything under `internal-pointer.com` is internal. */
+const splitResolver = (async (host: string) =>
+  host.endsWith("internal-pointer.com")
+    ? [{ address: "10.0.0.7", family: 4 }]
+    : [{ address: "93.184.216.34", family: 4 }]) as never;
+
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+
+function imageResponse(body: Buffer, headers: Record<string, string>): Response {
+  return new Response(new Uint8Array(body), { headers });
+}
+
+describe("fetchPublicPage", () => {
+  it("reads a page from any public host and reports the final URL", async () => {
+    const fetchFn = vi.fn(async () =>
+      response({ body: "<html>shop</html>", headers: { "content-type": "text/html; charset=utf-8" } }),
+    );
+    const result = await fetchPublicPage("https://www.douglas.de/de/p/123", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({
+      ok: true,
+      body: "<html>shop</html>",
+      finalUrl: "https://www.douglas.de/de/p/123",
+    });
+  });
+
+  it("upgrades http to https before the request goes out", async () => {
+    const fetchFn = vi.fn(async (_url: string) => response({ body: "ok" }));
+    await fetchPublicPage("http://shop.example.com/item", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(fetchFn.mock.calls[0]?.[0]).toBe("https://shop.example.com/item");
+  });
+
+  it("refuses IP literals, localhost, odd ports and credentials without a request", async () => {
+    for (const url of [
+      "https://127.0.0.1/",
+      "https://2130706433/", // 127.0.0.1 in integer form
+      "https://0x7f.1/",
+      "https://[::1]/",
+      "https://169.254.169.254/latest/meta-data/",
+      "https://localhost/",
+      "https://shop.example.com:8443/",
+      "https://user:pass@shop.example.com/",
+      "ftp://shop.example.com/",
+      "javascript:alert(1)",
+      "not a url",
+    ]) {
+      const fetchFn = vi.fn();
+      const result = await fetchPublicPage(url, {
+        fetchFn: fetchFn as never,
+        resolver: splitResolver,
+      });
+      expect(result, url).toEqual({ ok: false, error: "blocked" });
+      expect(fetchFn, url).not.toHaveBeenCalled();
+    }
+  });
+
+  it("refuses a public-looking name that resolves to a private address", async () => {
+    const fetchFn = vi.fn();
+    const result = await fetchPublicPage("https://shop.internal-pointer.com/p", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a redirect to a host that resolves to a private address", async () => {
+    const fetchFn = vi.fn(async (url: string) =>
+      url.startsWith("https://shop.example.com")
+        ? response({ status: 302, headers: { location: "https://go.internal-pointer.com/admin" } })
+        : response({ body: "internal secrets" }),
+    );
+    const result = await fetchPublicPage("https://shop.example.com/p", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a redirect to an IP literal (the cloud metadata address)", async () => {
+    const fetchFn = vi.fn(async (url: string) =>
+      url.startsWith("https://shop.example.com")
+        ? response({ status: 301, headers: { location: "http://169.254.169.254/metadata/v1/" } })
+        : response({ body: "metadata" }),
+    );
+    const result = await fetchPublicPage("https://shop.example.com/p", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows a public redirect across hosts", async () => {
+    const fetchFn = vi.fn(async (url: string) =>
+      url.startsWith("https://bit.example.com")
+        ? response({ status: 302, headers: { location: "https://www.zalando.de/item.html" } })
+        : response({ body: "<html>landed</html>", headers: { "content-type": "text/html" } }),
+    );
+    const result = await fetchPublicPage("https://bit.example.com/x", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toMatchObject({ ok: true, finalUrl: "https://www.zalando.de/item.html" });
+  });
+
+  it("refuses a response that is not a page", async () => {
+    const result = await fetchPublicPage("https://shop.example.com/file", {
+      fetchFn: (async () =>
+        response({ body: "PK", headers: { "content-type": "application/zip" } })) as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+  });
+
+  it("refuses a page over the byte cap", async () => {
+    const result = await fetchPublicPage("https://shop.example.com/huge", {
+      fetchFn: (async () =>
+        response({ body: "x", headers: { "content-length": "99999999" } })) as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "too_large" });
+  });
+});
+
+describe("fetchPublicImage", () => {
+  it("reads a JPEG whose bytes match its header", async () => {
+    const result = await fetchPublicImage("https://cdn.shop.example.com/a.jpg", {
+      fetchFn: (async () => imageResponse(JPEG, { "content-type": "image/jpg" })) as never,
+      resolver: splitResolver,
+    });
+    expect(result).toMatchObject({ ok: true, contentType: "image/jpeg" });
+    if (result.ok) expect(result.buffer.equals(JPEG)).toBe(true);
+  });
+
+  it("refuses GIF, SVG, HTML and a missing content-type", async () => {
+    for (const type of ["image/gif", "image/svg+xml", "text/html", null]) {
+      const result = await fetchPublicImage("https://cdn.shop.example.com/a", {
+        fetchFn: (async () =>
+          imageResponse(JPEG, type ? { "content-type": type } : {})) as never,
+        resolver: splitResolver,
+      });
+      expect(result, String(type)).toEqual({ ok: false, error: "blocked" });
+    }
+  });
+
+  it("refuses a body that is not what its header claims", async () => {
+    const result = await fetchPublicImage("https://cdn.shop.example.com/a.png", {
+      fetchFn: (async () => imageResponse(JPEG, { "content-type": "image/png" })) as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+
+    const png = await fetchPublicImage("https://cdn.shop.example.com/a.png", {
+      fetchFn: (async () => imageResponse(PNG, { "content-type": "image/png" })) as never,
+      resolver: splitResolver,
+    });
+    expect(png).toMatchObject({ ok: true, contentType: "image/png" });
+  });
+
+  it("caps the body at maxBytes, never above the wishlist cap", async () => {
+    const result = await fetchPublicImage("https://cdn.shop.example.com/a.jpg", {
+      fetchFn: (async () => imageResponse(JPEG, { "content-type": "image/jpeg" })) as never,
+      resolver: splitResolver,
+      maxBytes: 4,
+    });
+    expect(result).toEqual({ ok: false, error: "too_large" });
+
+    const declared = await fetchPublicImage("https://cdn.shop.example.com/a.jpg", {
+      fetchFn: (async () =>
+        imageResponse(JPEG, { "content-type": "image/jpeg", "content-length": "99999999" })) as never,
+      resolver: splitResolver,
+      maxBytes: 999_999_999,
+    });
+    expect(declared).toEqual({ ok: false, error: "too_large" });
+  });
+
+  it("refuses a redirect into a private address", async () => {
+    const fetchFn = vi.fn(async (url: string) =>
+      url.startsWith("https://cdn.shop.example.com")
+        ? response({ status: 307, headers: { location: "https://img.internal-pointer.com/x.jpg" } })
+        : imageResponse(JPEG, { "content-type": "image/jpeg" }),
+    );
+    const result = await fetchPublicImage("https://cdn.shop.example.com/a.jpg", {
+      fetchFn: fetchFn as never,
+      resolver: splitResolver,
+    });
+    expect(result).toEqual({ ok: false, error: "blocked" });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 });

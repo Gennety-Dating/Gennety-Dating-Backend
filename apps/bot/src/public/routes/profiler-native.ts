@@ -92,7 +92,8 @@ const SOURCES: readonly ProfilerAnswerSource[] = ["tap", "text", "both"];
 /** Absent keys, never nulls: the Swift client decodes optionals, not unions. */
 function serializeBatch(batch: NativeProfilerBatch): Record<string, unknown> {
   const later = batch.later?.length ? { later: batch.later.map(serializeQuestion) } : {};
-  if (!batch.question) return later;
+  const wishlist = batch.wishlist ? { wishlist: batch.wishlist } : {};
+  if (!batch.question) return { ...later, ...wishlist };
   return { question: serializeQuestion(batch.question), remaining: batch.remaining, ...later };
 }
 

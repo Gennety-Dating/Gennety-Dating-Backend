@@ -1,3 +1,4 @@
+import { ownMorningAnswer } from "./morning-after.js";
 import { prisma } from "@gennety/db";
 import { SUPPORTED_LANGUAGES, type Language } from "@gennety/shared";
 import { recordPostDateFeedback } from "../handlers/date/feedback.js";
@@ -49,7 +50,12 @@ export type FeedbackRefusal =
 
 export interface FeedbackSubmission {
   chemistry: number;
-  wantsSecondDate: SecondDateAnswer;
+  /**
+   * Null = the form did not ask: the person already answered «The Morning
+   * After» (2026-10-08), and `submitPostDateFeedback` derives the answer from
+   * it (great → yes, pass → no) rather than asking the same thing twice.
+   */
+  wantsSecondDate: SecondDateAnswer | null;
   text: string;
   venueFit: VenueFitAnswer | null;
   venueFitReasons: string[];
@@ -85,8 +91,9 @@ export function normaliseFeedback(raw: {
     return { ok: false, error: "bad-chemistry" };
   }
 
+  // Absent is allowed (the morning check answered it); present must be valid.
   const second = typeof raw.wantsSecondDate === "string" ? raw.wantsSecondDate : "";
-  if (!ALLOWED_SECOND_DATE.has(second)) return { ok: false, error: "bad-second-date" };
+  if (second && !ALLOWED_SECOND_DATE.has(second)) return { ok: false, error: "bad-second-date" };
 
   const text =
     typeof raw.text === "string" ? raw.text.trim().slice(0, FEEDBACK_MAX_TEXT_LEN) : "";
@@ -111,7 +118,7 @@ export function normaliseFeedback(raw: {
     ok: true,
     value: {
       chemistry: Math.round(chemistryRaw),
-      wantsSecondDate: second as SecondDateAnswer,
+      wantsSecondDate: second ? (second as SecondDateAnswer) : null,
       text,
       venueFit,
       venueFitReasons,
@@ -241,16 +248,33 @@ export function isFormFeedbackAnswer(stored: string | null): boolean {
  * lesser half of the answer, and writing it against a submission the pipeline
  * rejected would leave a row claiming a verdict about a date nobody reviewed.
  */
+/** The form's "second date?" as answered the morning after, if it was. */
+async function secondDateFromMorning(
+  matchId: string,
+  userId: string,
+): Promise<SecondDateAnswer | null> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { userAId: true, userBId: true, morningAfterA: true, morningAfterB: true },
+  });
+  if (!match || (match.userAId !== userId && match.userBId !== userId)) return null;
+  const answer = ownMorningAnswer(match, userId);
+  return answer === "great" ? "yes" : answer === "pass" ? "no" : null;
+}
+
 export async function submitPostDateFeedback(input: {
   userId: string;
   matchId: string;
   language: Language;
   submission: FeedbackSubmission;
 }): Promise<FeedbackResult> {
+  const wantsSecondDate =
+    input.submission.wantsSecondDate ?? (await secondDateFromMorning(input.matchId, input.userId));
+  if (!wantsSecondDate) return { ok: false, error: "bad-second-date" };
   const composed = composeFeedbackText({
     text: input.submission.text,
     chemistry: input.submission.chemistry,
-    wantsSecondDate: input.submission.wantsSecondDate,
+    wantsSecondDate,
     language: input.language,
   });
 
@@ -300,6 +324,11 @@ export interface PendingFeedbackView {
    */
   submitted: boolean;
   /**
+   * The person answered «The Morning After» on this match — the form does not
+   * ask "second date?" again (the client hides the control and omits it).
+   */
+  secondDateKnown: boolean;
+  /**
    * Anything at all is recorded on this side — the form, a voice note or a
    * story. Internal (not serialized): the menu agent records a story only onto
    * an empty side.
@@ -341,6 +370,8 @@ export async function pendingFeedbackFor(
       userBId: true,
       feedbackByA: true,
       feedbackByB: true,
+      morningAfterA: true,
+      morningAfterB: true,
       userA: { select: { firstName: true } },
       userB: { select: { firstName: true } },
     },
@@ -355,6 +386,7 @@ export async function pendingFeedbackFor(
     venueName: match.venueName,
     agreedTime: match.agreedTime,
     submitted: isFormFeedbackAnswer(own),
+    secondDateKnown: ownMorningAnswer(match, userId) != null,
     answered: Boolean(own),
     maxTextLength: FEEDBACK_MAX_TEXT_LEN,
     serverNow: now,

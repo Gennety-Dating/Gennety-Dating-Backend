@@ -1,37 +1,65 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { WISHLIST_IMAGE_MAX_BYTES } from "@gennety/shared";
 import { isPosterHost, isShortVideoHost } from "./links.js";
 
 /**
- * The only place in this codebase that opens a URL a user typed.
+ * The only module in this codebase that opens a URL a user typed — and every
+ * caller that does so must come through here.
  *
  * Everything else the bot fetches is an address we wrote ourselves (OpenAI,
  * Telegram, the weather API), so none of it ever needed an SSRF perimeter.
- * This does: a share link is attacker-controlled by construction, and the
- * poster URL is worse — it is read out of a page body, which is a value a
- * third party writes.
+ * Two features do:
  *
- * Four walls, outermost first:
+ *  - **Short-video links** (`fetchPlatformPage`, `resolveRedirect`,
+ *    `fetchPosterImage`): a share link is attacker-controlled by construction,
+ *    and the poster URL is worse — it is read out of a page body, which is a
+ *    value a third party writes. These are confined to an allowlist of
+ *    TikTok / Instagram hosts and their CDNs.
+ *  - **Date Wishlist** (`fetchPublicPage`, `fetchPublicImage`): a pasted shop
+ *    link, a product URL the search model returned, an `og:image` read out of
+ *    that page. Shops are any host on the internet, so there is NO allowlist
+ *    here — only a host-shape check (a dotted DNS name: no IP literal, no
+ *    `localhost`, no internal-only suffix, default port only).
  *
- *  1. **Host allowlist**, re-checked at EVERY redirect hop. `vm.tiktok.com`
- *     redirecting to `169.254.169.254` fails here, not later.
+ * The walls, outermost first:
+ *
+ *  1. **Host check**, re-run at EVERY redirect hop: the allowlist for the
+ *     short-video callers, the host-shape check for the wishlist ones. A
+ *     redirect to `169.254.169.254` fails here, not later. URLs carrying
+ *     credentials (`user:pass@`) are refused for every caller.
  *  2. **Address check** before each hop: every address the hostname resolves
  *     to must be public unicast. Loopback, RFC1918, link-local (incl. the
  *     cloud metadata address), CGNAT, multicast and the documentation ranges
  *     are all refused, on both IPv4 and IPv6.
- *  3. **HTTPS only**, so a downgrade cannot be used to reach something the
- *     TLS name would have prevented.
+ *  3. **HTTPS only** (plain `http:` is upgraded, never spoken), so a
+ *     downgrade cannot be used to reach something the TLS name would have
+ *     prevented.
  *  4. **Byte cap while streaming**, so a hostile or broken endpoint cannot
- *     make us buffer an unbounded body.
+ *     make us buffer an unbounded body. The image reader also demands an
+ *     image content-type AND matching magic bytes.
  *
  * On the DNS check being advisory: we resolve, verify, then let `fetch`
  * resolve again, so a record that changes in between is not caught (classic
  * rebinding). Pinning would mean connecting by IP with a custom dispatcher and
- * hand-managed SNI. Given wall 1 narrows the input to hostnames under
- * tiktok.com / instagram.com and their CDNs, rebinding here requires control
- * of those zones — at which point the attacker has better options than our
- * bot. The check stays because it is what catches a *legitimately* resolving
- * name that points somewhere internal.
+ * hand-managed SNI.
+ *
+ *  - For the short-video callers wall 1 narrows the input to hostnames under
+ *    tiktok.com / instagram.com and their CDNs, so rebinding requires control
+ *    of those zones — at which point the attacker has better options than our
+ *    bot.
+ *  - For the wishlist callers that argument does NOT hold: anyone can point a
+ *    domain they own at us with a zero TTL and answer a public address to our
+ *    check and an internal one to `fetch`. What still stands is wall 3: the
+ *    connection is TLS to the default port, and certificate verification is
+ *    against the attacker's hostname, which no internal service can present a
+ *    valid certificate for — the handshake fails before a request is sent.
+ *    The cloud metadata endpoint speaks plain HTTP on port 80 and is not
+ *    reachable at all on this path. The residual is a timing/error oracle on
+ *    whether something internal listens on 443, which we accept.
+ *
+ * The check stays for both because it is what catches a *legitimately*
+ * resolving name that points somewhere internal.
  */
 
 export type SafeFetchError =
@@ -229,12 +257,14 @@ interface HopResult {
 
 /**
  * Walk the redirect chain by hand, re-checking the perimeter at every hop.
- * `allow` decides which allowlist applies, so a page fetch can never be
- * redirected into fetching from a CDN host and vice versa.
+ * `allow` decides which host check applies, so a page fetch can never be
+ * redirected into fetching from a CDN host and vice versa. It sees the whole
+ * (already https-upgraded) URL so the open-host check can also refuse a
+ * non-default port.
  */
 async function requestWithGuard(
   startUrl: string,
-  allow: (hostname: string) => boolean,
+  allow: (url: URL) => boolean,
   options: SafeFetchOptions,
 ): Promise<SafeFetchResult<HopResult>> {
   const fetchFn = options.fetchFn ?? fetch;
@@ -255,7 +285,10 @@ async function requestWithGuard(
     // keeps the "https only past this point" rule absolute.
     if (url.protocol === "http:") url.protocol = "https:";
     if (url.protocol !== "https:") return { ok: false, error: "blocked" };
-    if (!allow(url.hostname)) return { ok: false, error: "blocked" };
+    // Nothing we fetch is ever authenticated (module note), so a URL that
+    // carries userinfo is either a mistake or an attempt to smuggle a host.
+    if (url.username || url.password) return { ok: false, error: "blocked" };
+    if (!allow(url)) return { ok: false, error: "blocked" };
     if (!(await hostnameResolvesPublicly(url.hostname, resolver))) {
       return { ok: false, error: "blocked" };
     }
@@ -354,11 +387,19 @@ export async function fetchPlatformPage(
   url: string,
   options: SafeFetchOptions = {},
 ): Promise<SafeFetchResult<{ body: string; finalUrl: string }>> {
-  const hop = await requestWithGuard(url, isShortVideoHost, options);
+  const hop = await requestWithGuard(url, shortVideoUrl, options);
   if (!hop.ok) return hop;
   const buffer = await readCapped(hop.response, MAX_PAGE_BYTES);
   if (!buffer) return { ok: false, error: "too_large" };
   return { ok: true, body: buffer.toString("utf8"), finalUrl: hop.finalUrl };
+}
+
+function shortVideoUrl(url: URL): boolean {
+  return isShortVideoHost(url.hostname);
+}
+
+function posterUrl(url: URL): boolean {
+  return isPosterHost(url.hostname);
 }
 
 /**
@@ -371,7 +412,7 @@ export async function resolveRedirect(
   url: string,
   options: SafeFetchOptions = {},
 ): Promise<SafeFetchResult<{ finalUrl: string }>> {
-  const hop = await requestWithGuard(url, isShortVideoHost, options);
+  const hop = await requestWithGuard(url, shortVideoUrl, options);
   if (!hop.ok) return hop;
   await hop.response.body?.cancel().catch(() => {});
   return { ok: true, finalUrl: hop.finalUrl };
@@ -382,9 +423,173 @@ export async function fetchPosterImage(
   url: string,
   options: SafeFetchOptions = {},
 ): Promise<SafeFetchResult<{ buffer: Buffer }>> {
-  const hop = await requestWithGuard(url, isPosterHost, options);
+  const hop = await requestWithGuard(url, posterUrl, options);
   if (!hop.ok) return hop;
   const buffer = await readCapped(hop.response, MAX_IMAGE_BYTES);
   if (!buffer) return { ok: false, error: "too_large" };
   return { ok: true, buffer };
+}
+
+/* ── open-host fetches (Date Wishlist) ──────────────────────────────────── */
+
+/**
+ * Suffixes that only ever name something on a private network (or nothing at
+ * all). A public DNS name never ends in one of these, so refusing them costs
+ * nothing and closes the "my router answers for `printer.lan`" class of
+ * request before DNS is even asked.
+ */
+const INTERNAL_HOST_SUFFIXES = [
+  "localhost",
+  "localdomain",
+  "local",
+  "lan",
+  "home",
+  "internal",
+  "intranet",
+  "corp",
+  "private",
+  "home.arpa",
+  "arpa",
+  "test",
+  "invalid",
+  "example",
+  "onion",
+] as const;
+
+/**
+ * Is this hostname something a public web page may be served from?
+ *
+ * A dotted DNS name with an alphabetic TLD — never an IP literal (v4 or v6,
+ * in any of the shorthand forms the URL parser normalises into a dotted quad),
+ * never a single-label name (`localhost`, `intranet`, a container name), never
+ * an internal-only suffix. Exported for its own tests, like `isPublicAddress`.
+ */
+export function isPublicWebHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/\.$/u, "");
+  if (!host || host.length > 253) return false;
+  if (host.startsWith("[") || host.includes(":")) return false; // IPv6 literal
+  if (isIP(host)) return false;
+  const labels = host.split(".");
+  if (labels.length < 2) return false;
+  if (!labels.every((label) => /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/u.test(label))) {
+    return false; // includes the empty label of `a..b`
+  }
+  const tld = labels[labels.length - 1]!;
+  // A real TLD is alphabetic (or an `xn--` IDN). An all-numeric last label is
+  // an IPv4 shorthand that slipped past the parser, never a domain.
+  if (!/^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/u.test(tld)) return false;
+  return !INTERNAL_HOST_SUFFIXES.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`),
+  );
+}
+
+/** The open-host check: a public hostname on the default HTTPS port. */
+function publicWebUrl(url: URL): boolean {
+  if (url.port !== "" && url.port !== "443") return false;
+  return isPublicWebHostname(url.hostname);
+}
+
+/** Content types a page read accepts; anything else is not a page. */
+function isPageContentType(raw: string | null): boolean {
+  if (!raw) return true; // a missing header is common on small shops
+  const base = raw.split(";", 1)[0]!.trim().toLowerCase();
+  return (
+    base.startsWith("text/") ||
+    base === "application/xhtml+xml" ||
+    base === "application/json" ||
+    base === "application/ld+json"
+  );
+}
+
+/**
+ * Fetch an HTML page from ANY public HTTPS host — a shop's product page.
+ *
+ * No allowlist (see the module note for why that is acceptable here and what
+ * still guards it); every other wall applies at every hop. A response that is
+ * not a page (an image, a PDF, a download) is refused as `blocked` before its
+ * body is read.
+ */
+export async function fetchPublicPage(
+  url: string,
+  options: SafeFetchOptions = {},
+): Promise<SafeFetchResult<{ body: string; finalUrl: string }>> {
+  const hop = await requestWithGuard(url, publicWebUrl, {
+    ...options,
+    headers: {
+      Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+      ...options.headers,
+    },
+  });
+  if (!hop.ok) return hop;
+  if (!isPageContentType(hop.response.headers.get("content-type"))) {
+    await hop.response.body?.cancel().catch(() => {});
+    return { ok: false, error: "blocked" };
+  }
+  const buffer = await readCapped(hop.response, MAX_PAGE_BYTES);
+  if (!buffer) return { ok: false, error: "too_large" };
+  return { ok: true, body: buffer.toString("utf8"), finalUrl: hop.finalUrl };
+}
+
+/** The only image formats we copy into our storage. GIF/SVG/AVIF are refused. */
+const PUBLIC_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function publicImageType(raw: string | null): string | null {
+  if (!raw) return null;
+  const base = raw.split(";", 1)[0]!.trim().toLowerCase();
+  const normalised = base === "image/jpg" || base === "image/pjpeg" ? "image/jpeg" : base;
+  return PUBLIC_IMAGE_TYPES.has(normalised) ? normalised : null;
+}
+
+/** The body must BE what the header claims — a header is a third party's word. */
+function magicMatches(buffer: Buffer, contentType: string): boolean {
+  if (contentType === "image/jpeg") {
+    return buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (contentType === "image/png") {
+    return (
+      buffer.length > 8 &&
+      buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    );
+  }
+  if (contentType === "image/webp") {
+    return (
+      buffer.length > 12 &&
+      buffer.subarray(0, 4).toString("latin1") === "RIFF" &&
+      buffer.subarray(8, 12).toString("latin1") === "WEBP"
+    );
+  }
+  return false;
+}
+
+/**
+ * Fetch a product photo from ANY public HTTPS host, for copying into our own
+ * storage. Same perimeter as `fetchPublicPage`; additionally the response must
+ * declare JPEG, PNG or WebP and its first bytes must agree, and the body is
+ * capped at `WISHLIST_IMAGE_MAX_BYTES` (or a smaller `maxBytes`).
+ */
+export async function fetchPublicImage(
+  url: string,
+  options: SafeFetchOptions & { maxBytes?: number } = {},
+): Promise<SafeFetchResult<{ buffer: Buffer; contentType: string | null }>> {
+  const { maxBytes: requestedMax, ...rest } = options;
+  const maxBytes = Math.min(requestedMax ?? WISHLIST_IMAGE_MAX_BYTES, WISHLIST_IMAGE_MAX_BYTES);
+  const hop = await requestWithGuard(url, publicWebUrl, {
+    ...rest,
+    headers: {
+      // Image CDNs negotiate on Accept; without this many answer AVIF, which
+      // we neither sniff nor store.
+      Accept: "image/webp,image/jpeg,image/png;q=0.9",
+      ...rest.headers,
+    },
+  });
+  if (!hop.ok) return hop;
+  const contentType = publicImageType(hop.response.headers.get("content-type"));
+  if (!contentType) {
+    await hop.response.body?.cancel().catch(() => {});
+    return { ok: false, error: "blocked" };
+  }
+  const buffer = await readCapped(hop.response, maxBytes);
+  if (!buffer) return { ok: false, error: "too_large" };
+  if (!magicMatches(buffer, contentType)) return { ok: false, error: "blocked" };
+  return { ok: true, buffer, contentType };
 }

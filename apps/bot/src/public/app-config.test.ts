@@ -54,7 +54,17 @@ describe("GET /v1/app/config", () => {
       "supportedCities",
       "ticketProducts",
       "venueChangeProduct",
+      "wishlistProduct",
     ]);
+  });
+
+  // «The Morning After» + Date Wishlist ship dark (2026-10-08): both flags off
+  // and no StoreKit product to sell until the founder switches them on.
+  it("reports the morning check and the wishlist off by default, with no product", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.features.morningAfter).toBe(false);
+    expect(res.body.features.wishlist).toBe(false);
+    expect(res.body.wishlistProduct).toBeNull();
   });
 
   // With the rail off (the default) an app must see no pass to sell — the same

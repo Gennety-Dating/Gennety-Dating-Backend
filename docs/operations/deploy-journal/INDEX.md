@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-08 | «The Morning After» + Date Wishlist + Premium без покрытия билета: миграция `20261008120000_date_wishlist_morning_after` (additive + stamp `premium_ticket_cover_until`), флаги OFF; ждёт сайта v4.3/v3.1, уведомления подписчиков и слова основателя | [pending](./pending.md) |
 | PENDING | 2026-10-07 | Bot PNG cards: date card slogan, venue name and «Gennety» in Gennety Display, venue photo −3°; wish card «Her pick / Your move» without full stops; other cards byte-identical, rematch untouched; production + demo bots (`bd58c865`, `1908ad59`) | [pending](./pending.md) |
 | Deployed | 2026-10-07 | Production `f9648948` (whole main): Profiler quick answers + «На потом» (1 additive migration), calendar NULL fix, name declension, Mini App city picker + «Premium после покупки»; drift OK, 0 restarts; demo not deployed | [pending](./pending.md) |
 | Deployed | 2026-10-05 | (production `f9648948` 2026-10-07) Calendar: NULL grid initialization fixed; current pair recovered, live API 200 with 77 slots, 7,580 tests passed; production pending | [2026-10-05-calendar-null](./2026-10-05-calendar-null.md) |

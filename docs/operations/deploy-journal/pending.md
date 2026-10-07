@@ -11,6 +11,35 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-08 — «The Morning After», Date Wishlist, Premium без покрытия билета (миграция `20261008120000_date_wishlist_morning_after`).**
+Backend + Mini App + legal. Schema: additive columns (`matches.morning_after_*`, `mutual_interest_at`; `profiles.wishlist_*`;
+`users.wishlist_consent_*`, `premium_ticket_cover_until`) and tables `wishlist_items`, `wishlist_unlocks`, `web_lookup_cache`; ONE
+data statement stamps `premium_ticket_cover_until = premium_until` for subscribers paid up at the moment it runs — so the
+migration must run in the same window as the bot restart (the gate reads only the cover column from then on). New routes
+`/v1/me/wishlist*`, `/v1/me/after-date*`; new crons ride the existing schedules (lifecycle tick step 2e, `wishlist-session`
+on `PROFILER_CRON_SCHEDULE`). Flags, all default OFF: `MORNING_AFTER_ENABLED`, `WISHLIST_FEATURE_ENABLED`,
+`WISHLIST_APPSTORE_ENABLED` (+ `WISHLIST_APPSTORE_PRODUCT_ID=date_wishlist_unlock`, `WISHLIST_UNLOCK_STARS=150`,
+`WISHLIST_SEARCH_MODEL`, `WISHLIST_LOOKUP_TIMEOUT_MS`). Domain doc `docs/product/domains/morning-after-and-wishlist.md`;
+decision journal 2026-10-08. **Ship only with the founder's go-ahead, and not before:**
+1. the website shows privacy v4.3 / terms v3.1 (TSX ready, `LEGAL_DOCS_VERSION = 2026-10-08`);
+2. Premium subscribers are told the ticket cover ends with their paid period — BEFORE their next renewal (Digital Content
+   Directive Art. 19; Terms §11.4). The Premium copy (bot hub/DMs, Mini App card, agent playbook) already names the Date
+   Wishlist as the headline benefit, so the copy release and `MORNING_AFTER_ENABLED` + `WISHLIST_FEATURE_ENABLED` must go on
+   together;
+3. for the App Store till: the `date_wishlist_unlock` consumable ($2.99 tier) approved in App Store Connect and an iOS build
+   with the sheet released (iOS UI awaits the founder's approval page https://claude.ai/artifact/Uo9RGBjhRK9n4x95m7Cgvh).
+- **Проверка:** `pnpm --filter @gennety/db exec prisma migrate status` (one pending) → `db:deploy` → `pnpm db:drift-check` = 0;
+  `pnpm --filter @gennety/bot exec vitest run src/services/morning-after.test.ts src/handlers/matching/ticket-gate.test.ts`;
+  after restart `GET /v1/app/config` carries `features.morningAfter`/`features.wishlist` (false until the flags);
+  `SELECT count(*) FROM users WHERE premium_ticket_cover_until IS NOT NULL` = the number of paid-up subscribers at deploy.
+  With the flags on: `GET /v1/me/after-date` → `{check,offers}`; a test pair with `agreed_time` yesterday 19:00 gets the
+  11:00 push/DM; two «great» taps → both get «Взаимно» and the offer; `POST /v1/me/wishlist/lookup {"kind":"query","value":"Chloé perfume"}`
+  answers candidates within ~20 s.
+- **Откат:** flags off (instant, no data touched). Code: previous release directory. The migration is additive and stays;
+  the cover column is harmless to old code (old code ignores it and covers every subscriber again — so a code rollback
+  re-opens the free ticket for all subscribers until re-deployed).
+- **Demo:** same code and flags; the demo bot has no Stars rail, so there the cheat sheet opens only with Premium.
+
 **PENDING 2026-10-07 — Premium: смена места «до двух раз» (Mini App + бот).**
 Text only. The Mini App Premium screen (`apps/webapp/src/premium.ts`, `b3d`/`b3x`)
 and the bot's Premium pitch (`packages/shared/src/i18n.ts`, `premiumPitch`) promised

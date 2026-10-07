@@ -21,6 +21,7 @@ import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendMemeCard } from "./meme-reveal.js";
+import { runMorningAfterTick } from "./morning-after.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
@@ -171,6 +172,7 @@ export interface DateLifecycleResult {
   dateDayBeats: number;
   /** Date Terminal invites (T-45m) / reminders (T-15m) claimed this tick. */
   terminalBeats: number;
+  morningAfter: number;
 }
 
 /**
@@ -189,6 +191,7 @@ export async function runDateLifecycleTick(
     wingmen: 0,
     dateDayBeats: 0,
     terminalBeats: 0,
+    morningAfter: 0,
   };
 
   // 0. Venue change expiry — auto-cancel any stalled `proposed` swap whose
@@ -614,6 +617,17 @@ export async function runDateLifecycleTick(
   result.terminalBeats = await sendDateTerminalBeats(api, now).catch((err: unknown) => {
     console.warn(
       "[date-lifecycle] date terminal messages failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return 0;
+  });
+
+  // 2e. «The Morning After» (2026-10-08): the two-button check at 11:00 local
+  // the day after the date. Isolated like the terminal beats above, so a
+  // failure there never costs the feedback prompt below.
+  result.morningAfter = await runMorningAfterTick(api, now).catch((err: unknown) => {
+    console.warn(
+      "[date-lifecycle] morning-after check failed:",
       err instanceof Error ? err.message : err,
     );
     return 0;

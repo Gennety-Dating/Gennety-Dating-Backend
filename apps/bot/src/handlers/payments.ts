@@ -9,6 +9,7 @@ import {
   parseSubInvoicePayload,
   parseRematchInvoicePayload,
   parsePrimeInvoicePayload,
+  parseWishInvoicePayload,
   ticketBundleFor,
   premiumPlanById,
   premiumPlanStars,
@@ -21,6 +22,7 @@ import { handleBotError } from "../bot-error.js";
 import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
+import { settleWishlistStarsPayment, wishlistPreCheckoutOk } from "./date/morning-after.js";
 import {
   activateOrExtendPremium,
   activatePremiumPackage,
@@ -68,6 +70,28 @@ import {
 export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   const query = ctx.preCheckoutQuery;
   if (!query) return;
+
+  // Date Wishlist cheat sheet — payload `wish:<matchId>` (2026-10-08). Checked
+  // first and answered here: its validation is the whole of the branch.
+  if (parseWishInvoicePayload(query.invoice_payload)) {
+    const wishOk = await wishlistPreCheckoutOk(
+      query.invoice_payload,
+      query.from?.id,
+      query.currency,
+      query.total_amount,
+    ).catch(() => false);
+    try {
+      if (wishOk) {
+        await ctx.answerPreCheckoutQuery(true, undefined);
+      } else {
+        const lang = await langForTelegramId(ctx.from?.id);
+        await ctx.answerPreCheckoutQuery(false, { error_message: t(lang, "ticketStoreCheckoutError") });
+      }
+    } catch {
+      // The 10s window may have elapsed.
+    }
+    return;
+  }
 
   let ok = false;
   // The decline copy. Generic unless a branch knows the precise reason, which
@@ -416,6 +440,15 @@ async function settleSuccessfulPayment(
     const prime = parsePrimeInvoicePayload(payment.invoice_payload);
     if (prime != null) {
       return await handlePrimeTimeSuccessfulPayment(ctx, prime.matchId, payment);
+    }
+    if (parseWishInvoicePayload(payment.invoice_payload) != null) {
+      return await settleWishlistStarsPayment(
+        ctx.api,
+        ctx.from!.id,
+        payment.invoice_payload,
+        payment.telegram_payment_charge_id,
+        payment.total_amount,
+      );
     }
     return await handleGateSuccessfulPayment(ctx, payment);
   }

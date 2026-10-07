@@ -90,6 +90,7 @@ function serialize(view: PendingFeedbackView): Record<string, unknown> {
     venueName: view.venueName,
     agreedTime: view.agreedTime.toISOString(),
     submitted: view.submitted,
+    askSecondDate: !view.secondDateKnown,
     maxTextLength: view.maxTextLength,
     serverNow: view.serverNow.toISOString(),
   };

@@ -64,6 +64,8 @@ import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createVenueChangeAppStoreRouter } from "./routes/venue-change-appstore.js";
 import { createPrimeTimeAppStoreRouter } from "./routes/prime-time-appstore.js";
+import { createWishlistRouter } from "./routes/wishlist.js";
+import { createAfterDateRouter } from "./routes/after-date.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
 import { createPromoRouter } from "./routes/promo.js";
@@ -428,6 +430,12 @@ app.use("/v1/me/feedback", (req, res, next) => {
 // it never sends a Telegram message (see services/profiler-native.ts). Same
 // more-specific-prefix rule as every `/v1/me/*` mount: before `/v1/me`.
 app.use("/v1/me/profiler", createNativeProfilerRouter());
+
+// Date Wishlist (owner side) and «The Morning After» + the mutual offer for the
+// NATIVE client (decision journal 2026-10-08). Both before `/v1/me`; both
+// inert behind their flags (wishlist 404s, after-date answers empty).
+app.use("/v1/me/wishlist", createWishlistRouter());
+app.use("/v1/me/after-date", createAfterDateRouter());
 
 // Anonymous pre-date chat for the NATIVE client — the JWT twin of the Telegram
 // relay, which is a bot chat session and therefore unreachable from the app.

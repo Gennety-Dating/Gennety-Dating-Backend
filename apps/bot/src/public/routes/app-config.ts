@@ -76,6 +76,11 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // "Connect Apple Health" row and no "Твой темп" card, and never asks
       // HealthKit for anything; `/v1/me/rhythm` 404s either way.
       tempoSync: env.TEMPO_SYNC_ENABLED,
+      // «The Morning After» + Date Wishlist (decision journal 2026-10-08): the
+      // morning check / mutual offer only with `morningAfter`, the wishlist
+      // session and the cheat sheet only with `wishlist`.
+      morningAfter: env.MORNING_AFTER_ENABLED,
+      wishlist: env.WISHLIST_FEATURE_ENABLED,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides
@@ -93,6 +98,12 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     // the two above; null whenever the rail is not live, so an app can never
     // sell a pass this server would refuse.
     primeTimeProduct: primeTimePass ? env.PRIME_TIME_APPSTORE_PRODUCT_ID : null,
+    // The StoreKit consumable that opens one Date Wishlist cheat sheet
+    // (2026-10-08); null while its rail is off — then only Premium opens it.
+    wishlistProduct:
+      env.WISHLIST_FEATURE_ENABLED && env.WISHLIST_APPSTORE_ENABLED
+        ? env.WISHLIST_APPSTORE_PRODUCT_ID
+        : null,
     serverNow: new Date().toISOString(),
   });
 });

@@ -83,7 +83,7 @@ export const WISHLIST_PASTE_MAX_LEN = 4000;
 /** Candidates the agent returns per look-up, for the person to confirm. */
 export const WISHLIST_LOOKUP_MAX_CANDIDATES = 3;
 /** Web look-ups (search or link read) one person may run per day. */
-export const WISHLIST_LOOKUPS_PER_DAY = 60;
+export const WISHLIST_LOOKUPS_PER_DAY = 30;
 /** A cached look-up is reused this long. */
 export const WISHLIST_LOOKUP_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Largest image copied into our storage from a shop page. */

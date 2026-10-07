@@ -42,6 +42,11 @@ import {
   resolveProfilerQuestionContext,
   type ProfilerContextCard,
 } from "./profiler-context.js";
+import {
+  openWishlistSession,
+  wishlistSessionEligible,
+  wishlistSessionOpen,
+} from "./wishlist.js";
 
 /**
  * The Profiler (PRODUCT_SPEC §Phase 1b) for the NATIVE app —
@@ -108,6 +113,13 @@ export interface NativeProfilerBatch {
    * not a question is live. Empty / absent = the block is not shown.
    */
   later?: NativeProfilerQuestion[];
+  /**
+   * Date Wishlist (decision journal 2026-10-08): this slot belongs to the
+   * agent that builds the person's wishlist, not to a batch. The app opens the
+   * wishlist session on «Сегодня» instead of a question; it is closed with
+   * `POST /v1/me/wishlist/session` («Готово» / «Позже»). Absent = no session.
+   */
+  wishlist?: { open: true };
 }
 
 export type NativeProfilerReply =
@@ -313,9 +325,29 @@ async function resumeOrOpenBatch(
     return { batch: {}, language };
   }
 
+  // An open wishlist session stands until it is closed, like a live question:
+  // its slot was consumed when it opened, so `profilerNextAt` is already the
+  // window after it and must not hide it.
+  if (await wishlistSessionOpen(userId)) return { batch: { wishlist: { open: true } }, language };
+
   const nextAt = profile.profilerNextAt;
   if (nextAt && nextAt.getTime() > now.getTime()) return { batch: {}, language };
   if (await hasActiveDatePlanning(userId)) return { batch: {}, language };
+
+  // The due slot may go to the wishlist instead of a batch — once, never the
+  // first batches (`wishlistSessionEligible`). The slot is consumed exactly as
+  // a batch would consume it: the next batch waits for the next window.
+  if ((await wishlistSessionEligible(userId, now)) && (await openWishlistSession(userId, now))) {
+    await prisma.profile.updateMany({
+      where: { userId, profilerActiveQuestionId: null, profilerNextAt: nextAt },
+      data: {
+        profilerStartedAt: profile.profilerStartedAt ?? now,
+        profilerBatchRemaining: 0,
+        profilerNextAt: nextWindowAt(now, resolveZone(profile.timeZone)),
+      },
+    });
+    return { batch: { wishlist: { open: true } }, language };
+  }
 
   const answers = await prisma.profilerAnswer.findMany({
     where: { userId },

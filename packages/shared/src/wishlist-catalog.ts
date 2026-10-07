@@ -1,0 +1,808 @@
+import type { Language } from "./types.js";
+import {
+  WISHLIST_CATEGORIES,
+  type WishlistCategory,
+  type WishlistPriceBand,
+} from "./wishlist.js";
+
+/**
+ * The Date Wishlist starter catalog (decision journal 2026-10-08): what people
+ * most often wish for on a date, as one-tap picks on «Сегодня» before they
+ * search or paste anything of their own.
+ *
+ * Two kinds of item:
+ *  - **generic** (peonies, a rooftop bar, a pottery class) — no brand, a
+ *    bundled iOS illustration in `image`, no `query`. A person who means a
+ *    specific place names it through the agent's search instead.
+ *  - **brand products** (Chloé Eau de Parfum, a Polaroid Now) — `image` is
+ *    null; `query` is what the bot's web look-up resolves into a real product
+ *    page and photo, warmed into the cache ahead of time so a tap shows a real
+ *    photo without a live search.
+ *
+ * Titles are natural in every language; brand and product names are never
+ * localised. A title never repeats the brand — the card shows both.
+ */
+
+export type WishlistCatalogAudience = "female" | "male" | "any";
+
+export interface WishlistCatalogItem {
+  key: string;
+  category: WishlistCategory;
+  audience: WishlistCatalogAudience;
+  title: Record<Language, string>;
+  brand: string | null;
+  priceBand: WishlistPriceBand;
+  /** iOS bundled asset key for generic items (e.g. "vibe-option-peony" style); null for brand products */
+  image: string | null;
+  /** search query used to resolve a real product photo + page for brand items */
+  query: string | null;
+  /** For recommendation scoring, e.g. ["floral","sweet","classic","minimal","sport","coffee"]. */
+  tags: string[];
+}
+
+/** A title that is the same proper name in every language. */
+function same(name: string): Record<Language, string> {
+  return { en: name, ru: name, uk: name, de: name, pl: name };
+}
+
+export const WISHLIST_CATALOG: WishlistCatalogItem[] = [
+  /* ── place ──────────────────────────────────────────────────────────── */
+  {
+    key: "rooftop-bar",
+    category: "place",
+    audience: "any",
+    title: { en: "Rooftop bar", ru: "Бар на крыше", uk: "Бар на даху", de: "Rooftop-Bar", pl: "Bar na dachu" },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-rooftop-bar",
+    query: null,
+    tags: ["view", "evening", "cocktail", "romantic"],
+  },
+  {
+    key: "specialty-coffee-shop",
+    category: "place",
+    audience: "any",
+    title: {
+      en: "Specialty coffee shop",
+      ru: "Кофейня спешелти",
+      uk: "Кавʼярня спешелті",
+      de: "Specialty-Coffee-Café",
+      pl: "Kawiarnia specialty",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-specialty-coffee-shop",
+    query: null,
+    tags: ["coffee", "daytime", "minimal"],
+  },
+  {
+    key: "wine-bar",
+    category: "place",
+    audience: "any",
+    title: { en: "Wine bar", ru: "Винный бар", uk: "Винний бар", de: "Weinbar", pl: "Winiarnia" },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-wine-bar",
+    query: null,
+    tags: ["wine", "evening", "cozy"],
+  },
+  {
+    key: "bookstore-cafe",
+    category: "place",
+    audience: "female",
+    title: {
+      en: "Bookstore café",
+      ru: "Книжное кафе",
+      uk: "Книжкове кафе",
+      de: "Buchcafé",
+      pl: "Kawiarnia z książkami",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-bookstore-cafe",
+    query: null,
+    tags: ["books", "quiet", "cozy", "coffee"],
+  },
+  {
+    key: "botanical-garden",
+    category: "place",
+    audience: "female",
+    title: {
+      en: "Botanical garden",
+      ru: "Ботанический сад",
+      uk: "Ботанічний сад",
+      de: "Botanischer Garten",
+      pl: "Ogród botaniczny",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-botanical-garden",
+    query: null,
+    tags: ["nature", "walk", "floral", "daytime"],
+  },
+  {
+    key: "cocktail-bar",
+    category: "place",
+    audience: "male",
+    title: {
+      en: "Cocktail bar",
+      ru: "Коктейльный бар",
+      uk: "Коктейльний бар",
+      de: "Cocktailbar",
+      pl: "Bar koktajlowy",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-cocktail-bar",
+    query: null,
+    tags: ["cocktail", "evening", "classic"],
+  },
+
+  /* ── drink ──────────────────────────────────────────────────────────── */
+  {
+    key: "matcha-latte",
+    category: "drink",
+    audience: "female",
+    title: { en: "Matcha latte", ru: "Матча-латте", uk: "Матча-лате", de: "Matcha Latte", pl: "Matcha latte" },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-matcha-latte",
+    query: null,
+    tags: ["tea", "daytime", "healthy", "minimal"],
+  },
+  {
+    key: "flat-white",
+    category: "drink",
+    audience: "female",
+    title: { en: "Flat white", ru: "Флэт уайт", uk: "Флет вайт", de: "Flat White", pl: "Flat white" },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-flat-white",
+    query: null,
+    tags: ["coffee", "daytime", "classic"],
+  },
+  {
+    key: "aperol-spritz",
+    category: "drink",
+    audience: "female",
+    title: {
+      en: "Aperol Spritz",
+      ru: "Апероль шприц",
+      uk: "Апероль шпріц",
+      de: "Aperol Spritz",
+      pl: "Aperol Spritz",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-aperol-spritz",
+    query: null,
+    tags: ["cocktail", "summer", "evening"],
+  },
+  {
+    key: "natural-wine",
+    category: "drink",
+    audience: "any",
+    title: {
+      en: "Natural wine",
+      ru: "Натуральное вино",
+      uk: "Натуральне вино",
+      de: "Naturwein",
+      pl: "Wino naturalne",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-natural-wine",
+    query: null,
+    tags: ["wine", "evening", "natural"],
+  },
+  {
+    key: "hot-chocolate",
+    category: "drink",
+    audience: "female",
+    title: {
+      en: "Hot chocolate",
+      ru: "Горячий шоколад",
+      uk: "Гарячий шоколад",
+      de: "Heiße Schokolade",
+      pl: "Gorąca czekolada",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-hot-chocolate",
+    query: null,
+    tags: ["sweet", "cozy", "winter"],
+  },
+  {
+    key: "negroni",
+    category: "drink",
+    audience: "male",
+    title: { en: "Negroni", ru: "Негрони", uk: "Негроні", de: "Negroni", pl: "Negroni" },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-negroni",
+    query: null,
+    tags: ["cocktail", "evening", "classic"],
+  },
+  {
+    key: "filter-coffee",
+    category: "drink",
+    audience: "male",
+    title: {
+      en: "Specialty filter coffee",
+      ru: "Фильтр-кофе спешелти",
+      uk: "Фільтр-кава спешелті",
+      de: "Specialty-Filterkaffee",
+      pl: "Kawa przelewowa specialty",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "wishlist-filter-coffee",
+    query: null,
+    tags: ["coffee", "daytime", "minimal"],
+  },
+
+  /* ── flowers ────────────────────────────────────────────────────────── */
+  {
+    key: "peonies",
+    category: "flowers",
+    audience: "female",
+    title: { en: "Peonies", ru: "Пионы", uk: "Півонії", de: "Pfingstrosen", pl: "Piwonie" },
+    brand: null,
+    priceBand: "€€",
+    image: "vibe-option-peony",
+    query: null,
+    tags: ["floral", "romantic", "classic"],
+  },
+  {
+    key: "white-tulips",
+    category: "flowers",
+    audience: "female",
+    title: {
+      en: "White tulips",
+      ru: "Белые тюльпаны",
+      uk: "Білі тюльпани",
+      de: "Weiße Tulpen",
+      pl: "Białe tulipany",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "vibe-option-tulip",
+    query: null,
+    tags: ["floral", "minimal", "fresh"],
+  },
+  {
+    key: "ranunculus",
+    category: "flowers",
+    audience: "female",
+    title: { en: "Ranunculus", ru: "Ранункулюсы", uk: "Ранункулюси", de: "Ranunkeln", pl: "Ranunkulusy" },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-ranunculus",
+    query: null,
+    tags: ["floral", "romantic", "sweet"],
+  },
+  {
+    key: "wildflowers",
+    category: "flowers",
+    audience: "female",
+    title: {
+      en: "Wildflowers",
+      ru: "Полевые цветы",
+      uk: "Польові квіти",
+      de: "Wildblumen",
+      pl: "Polne kwiaty",
+    },
+    brand: null,
+    priceBand: "€",
+    image: "vibe-option-wildflowers",
+    query: null,
+    tags: ["floral", "natural", "fresh"],
+  },
+
+  /* ── perfume ────────────────────────────────────────────────────────── */
+  {
+    key: "chloe-eau-de-parfum",
+    category: "perfume",
+    audience: "female",
+    title: {
+      en: "Eau de Parfum",
+      ru: "Парфюмерная вода",
+      uk: "Парфумована вода",
+      de: "Eau de Parfum",
+      pl: "Woda perfumowana",
+    },
+    brand: "Chloé",
+    priceBand: "€€€",
+    image: null,
+    query: "Chloé Eau de Parfum signature fragrance",
+    tags: ["floral", "classic", "romantic"],
+  },
+  {
+    key: "chanel-chance-eau-tendre",
+    category: "perfume",
+    audience: "female",
+    title: same("Chance Eau Tendre"),
+    brand: "Chanel",
+    priceBand: "€€€",
+    image: null,
+    query: "Chanel Chance Eau Tendre eau de toilette",
+    tags: ["floral", "fruity", "fresh", "classic"],
+  },
+  {
+    key: "le-labo-santal-33",
+    category: "perfume",
+    audience: "any",
+    title: same("Santal 33"),
+    brand: "Le Labo",
+    priceBand: "€€€",
+    image: null,
+    query: "Le Labo Santal 33 eau de parfum",
+    tags: ["woody", "niche", "minimal"],
+  },
+  {
+    key: "byredo-gypsy-water",
+    category: "perfume",
+    audience: "any",
+    title: same("Gypsy Water"),
+    brand: "Byredo",
+    priceBand: "€€€",
+    image: null,
+    query: "Byredo Gypsy Water eau de parfum",
+    tags: ["woody", "niche", "fresh"],
+  },
+  {
+    key: "replica-lazy-sunday-morning",
+    category: "perfume",
+    audience: "female",
+    title: same("Replica Lazy Sunday Morning"),
+    brand: "Maison Margiela",
+    priceBand: "€€€",
+    image: null,
+    query: "Maison Margiela Replica Lazy Sunday Morning eau de toilette",
+    tags: ["clean", "musky", "minimal"],
+  },
+  {
+    key: "jo-malone-peony-blush-suede",
+    category: "perfume",
+    audience: "female",
+    title: same("Peony & Blush Suede"),
+    brand: "Jo Malone London",
+    priceBand: "€€€",
+    image: null,
+    query: "Jo Malone London Peony & Blush Suede cologne",
+    tags: ["floral", "fruity", "romantic"],
+  },
+  {
+    key: "bleu-de-chanel",
+    category: "perfume",
+    audience: "male",
+    title: same("Bleu de Chanel"),
+    brand: "Chanel",
+    priceBand: "€€€",
+    image: null,
+    query: "Bleu de Chanel eau de parfum",
+    tags: ["woody", "fresh", "classic"],
+  },
+  {
+    key: "le-labo-another-13",
+    category: "perfume",
+    audience: "male",
+    title: same("Another 13"),
+    brand: "Le Labo",
+    priceBand: "€€€",
+    image: null,
+    query: "Le Labo Another 13 eau de parfum",
+    tags: ["musky", "niche", "minimal"],
+  },
+
+  /* ── beauty ─────────────────────────────────────────────────────────── */
+  {
+    key: "dior-addict-lip-glow",
+    category: "beauty",
+    audience: "female",
+    title: {
+      en: "Addict Lip Glow balm",
+      ru: "Бальзам для губ Addict Lip Glow",
+      uk: "Бальзам для губ Addict Lip Glow",
+      de: "Addict Lip Glow Lippenbalsam",
+      pl: "Balsam do ust Addict Lip Glow",
+    },
+    brand: "Dior",
+    priceBand: "€€",
+    image: null,
+    query: "Dior Addict Lip Glow lip balm",
+    tags: ["makeup", "classic", "sweet"],
+  },
+  {
+    key: "dyson-airwrap",
+    category: "beauty",
+    audience: "female",
+    title: {
+      en: "Airwrap multi-styler",
+      ru: "Стайлер Airwrap",
+      uk: "Стайлер Airwrap",
+      de: "Airwrap Multi-Styler",
+      pl: "Stylizator Airwrap",
+    },
+    brand: "Dyson",
+    priceBand: "€€€€",
+    image: null,
+    query: "Dyson Airwrap multi-styler",
+    tags: ["hair", "tech", "luxury"],
+  },
+  {
+    key: "aesop-hand-balm",
+    category: "beauty",
+    audience: "female",
+    title: {
+      en: "Resurrection hand balm",
+      ru: "Бальзам для рук Resurrection",
+      uk: "Бальзам для рук Resurrection",
+      de: "Resurrection Handbalsam",
+      pl: "Balsam do rąk Resurrection",
+    },
+    brand: "Aesop",
+    priceBand: "€€",
+    image: null,
+    query: "Aesop Resurrection Aromatique Hand Balm",
+    tags: ["care", "minimal", "natural"],
+  },
+  {
+    key: "rare-beauty-soft-pinch-blush",
+    category: "beauty",
+    audience: "female",
+    title: {
+      en: "Soft Pinch liquid blush",
+      ru: "Жидкие румяна Soft Pinch",
+      uk: "Рідкі румʼяна Soft Pinch",
+      de: "Soft Pinch Liquid Blush",
+      pl: "Róż w płynie Soft Pinch",
+    },
+    brand: "Rare Beauty",
+    priceBand: "€",
+    image: null,
+    query: "Rare Beauty Soft Pinch Liquid Blush",
+    tags: ["makeup", "sweet", "minimal"],
+  },
+
+  /* ── fashion ────────────────────────────────────────────────────────── */
+  {
+    key: "louboutin-so-kate",
+    category: "fashion",
+    audience: "female",
+    title: {
+      en: "So Kate pumps",
+      ru: "Туфли So Kate",
+      uk: "Туфлі So Kate",
+      de: "So Kate Pumps",
+      pl: "Szpilki So Kate",
+    },
+    brand: "Christian Louboutin",
+    priceBand: "€€€€",
+    image: null,
+    query: "Christian Louboutin So Kate 120 pumps",
+    tags: ["luxury", "classic", "evening"],
+  },
+  {
+    key: "jacquemus-le-chiquito",
+    category: "fashion",
+    audience: "female",
+    title: {
+      en: "Le Chiquito mini bag",
+      ru: "Мини-сумка Le Chiquito",
+      uk: "Міні-сумка Le Chiquito",
+      de: "Le Chiquito Minitasche",
+      pl: "Mini torebka Le Chiquito",
+    },
+    brand: "Jacquemus",
+    priceBand: "€€€€",
+    image: null,
+    query: "Jacquemus Le Chiquito mini bag",
+    tags: ["luxury", "minimal", "bag"],
+  },
+  {
+    key: "levis-501",
+    category: "fashion",
+    audience: "female",
+    title: {
+      en: "501 Original jeans",
+      ru: "Джинсы 501 Original",
+      uk: "Джинси 501 Original",
+      de: "501 Original Jeans",
+      pl: "Jeansy 501 Original",
+    },
+    brand: "Levi's",
+    priceBand: "€€",
+    image: null,
+    query: "Levi's 501 Original women's jeans",
+    tags: ["casual", "classic", "denim"],
+  },
+  {
+    key: "cashmere-scarf",
+    category: "fashion",
+    audience: "female",
+    title: {
+      en: "Cashmere scarf",
+      ru: "Кашемировый шарф",
+      uk: "Кашеміровий шарф",
+      de: "Kaschmirschal",
+      pl: "Kaszmirowy szal",
+    },
+    brand: null,
+    priceBand: "€€€",
+    image: "wishlist-cashmere-scarf",
+    query: null,
+    tags: ["cozy", "classic", "winter"],
+  },
+  {
+    key: "new-balance-550",
+    category: "fashion",
+    audience: "male",
+    title: {
+      en: "550 sneakers",
+      ru: "Кроссовки 550",
+      uk: "Кросівки 550",
+      de: "550 Sneaker",
+      pl: "Sneakersy 550",
+    },
+    brand: "New Balance",
+    priceBand: "€€€",
+    image: null,
+    query: "New Balance 550 sneakers",
+    tags: ["sport", "casual", "classic"],
+  },
+
+  /* ── jewelry ────────────────────────────────────────────────────────── */
+  {
+    key: "pandora-moments-bracelet",
+    category: "jewelry",
+    audience: "female",
+    title: {
+      en: "Moments charm bracelet",
+      ru: "Браслет Moments для шармов",
+      uk: "Браслет Moments для шармів",
+      de: "Moments Charm-Armband",
+      pl: "Bransoletka Moments na charmsy",
+    },
+    brand: "Pandora",
+    priceBand: "€€",
+    image: null,
+    query: "Pandora Moments snake chain charm bracelet",
+    tags: ["sweet", "classic", "romantic"],
+  },
+  {
+    key: "cartier-love-bracelet",
+    category: "jewelry",
+    audience: "female",
+    title: {
+      en: "Love bracelet",
+      ru: "Браслет Love",
+      uk: "Браслет Love",
+      de: "Love Armband",
+      pl: "Bransoletka Love",
+    },
+    brand: "Cartier",
+    priceBand: "€€€€",
+    image: null,
+    query: "Cartier Love bracelet",
+    tags: ["luxury", "classic", "romantic"],
+  },
+  {
+    key: "gold-hoops",
+    category: "jewelry",
+    audience: "female",
+    title: {
+      en: "Gold hoop earrings",
+      ru: "Золотые серьги-кольца",
+      uk: "Золоті сережки-кільця",
+      de: "Goldene Creolen",
+      pl: "Złote kolczyki koła",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-gold-hoops",
+    query: null,
+    tags: ["minimal", "classic"],
+  },
+
+  /* ── gift ───────────────────────────────────────────────────────────── */
+  {
+    key: "polaroid-now",
+    category: "gift",
+    audience: "any",
+    title: {
+      en: "Now instant camera",
+      ru: "Камера моментальной печати Now",
+      uk: "Камера миттєвого друку Now",
+      de: "Now Sofortbildkamera",
+      pl: "Aparat natychmiastowy Now",
+    },
+    brand: "Polaroid",
+    priceBand: "€€€",
+    image: null,
+    query: "Polaroid Now instant camera",
+    tags: ["photo", "memories", "creative"],
+  },
+  {
+    key: "kindle-paperwhite",
+    category: "gift",
+    audience: "any",
+    title: same("Kindle Paperwhite"),
+    brand: "Amazon",
+    priceBand: "€€€",
+    image: null,
+    query: "Amazon Kindle Paperwhite e-reader",
+    tags: ["books", "tech", "quiet"],
+  },
+  {
+    key: "jellycat-bashful-bunny",
+    category: "gift",
+    audience: "female",
+    title: {
+      en: "Bashful Bunny plush",
+      ru: "Зайка Bashful Bunny",
+      uk: "Зайчик Bashful Bunny",
+      de: "Bashful Bunny Kuscheltier",
+      pl: "Króliczek Bashful Bunny",
+    },
+    brand: "Jellycat",
+    priceBand: "€",
+    image: null,
+    query: "Jellycat Bashful Bunny medium",
+    tags: ["sweet", "cozy", "playful"],
+  },
+  {
+    key: "diptyque-baies-candle",
+    category: "gift",
+    audience: "female",
+    title: {
+      en: "Baies scented candle",
+      ru: "Свеча Baies",
+      uk: "Свічка Baies",
+      de: "Duftkerze Baies",
+      pl: "Świeca zapachowa Baies",
+    },
+    brand: "Diptyque",
+    priceBand: "€€",
+    image: null,
+    query: "Diptyque Baies scented candle 190g",
+    tags: ["home", "cozy", "floral"],
+  },
+  {
+    key: "airpods-pro",
+    category: "gift",
+    audience: "male",
+    title: same("AirPods Pro"),
+    brand: "Apple",
+    priceBand: "€€€",
+    image: null,
+    query: "Apple AirPods Pro",
+    tags: ["tech", "music", "sport"],
+  },
+  {
+    key: "moleskine-notebook",
+    category: "gift",
+    audience: "male",
+    title: {
+      en: "Classic notebook",
+      ru: "Классический блокнот",
+      uk: "Класичний блокнот",
+      de: "Klassisches Notizbuch",
+      pl: "Klasyczny notes",
+    },
+    brand: "Moleskine",
+    priceBand: "€",
+    image: null,
+    query: "Moleskine Classic notebook hard cover large",
+    tags: ["minimal", "creative", "classic"],
+  },
+
+  /* ── experience ─────────────────────────────────────────────────────── */
+  {
+    key: "pottery-class",
+    category: "experience",
+    audience: "female",
+    title: {
+      en: "Pottery class",
+      ru: "Гончарный мастер-класс",
+      uk: "Гончарний майстер-клас",
+      de: "Töpferkurs",
+      pl: "Warsztaty ceramiczne",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-pottery-class",
+    query: null,
+    tags: ["creative", "handmade", "daytime"],
+  },
+  {
+    key: "spa-day",
+    category: "experience",
+    audience: "female",
+    title: { en: "Spa day", ru: "День в спа", uk: "День у спа", de: "Spa-Tag", pl: "Dzień w spa" },
+    brand: null,
+    priceBand: "€€€",
+    image: "wishlist-spa-day",
+    query: null,
+    tags: ["relax", "care", "luxury"],
+  },
+  {
+    key: "concert-tickets",
+    category: "experience",
+    audience: "any",
+    title: {
+      en: "Concert tickets",
+      ru: "Билеты на концерт",
+      uk: "Квитки на концерт",
+      de: "Konzertkarten",
+      pl: "Bilety na koncert",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-concert-tickets",
+    query: null,
+    tags: ["music", "evening"],
+  },
+  {
+    key: "wine-tasting",
+    category: "experience",
+    audience: "any",
+    title: {
+      en: "Wine tasting",
+      ru: "Дегустация вина",
+      uk: "Дегустація вина",
+      de: "Weinprobe",
+      pl: "Degustacja wina",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-wine-tasting",
+    query: null,
+    tags: ["wine", "evening", "classic"],
+  },
+  {
+    key: "karting",
+    category: "experience",
+    audience: "male",
+    title: { en: "Go-karting", ru: "Картинг", uk: "Картинг", de: "Kartfahren", pl: "Gokarty" },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-karting",
+    query: null,
+    tags: ["sport", "adrenaline", "playful"],
+  },
+  {
+    key: "cooking-class",
+    category: "experience",
+    audience: "any",
+    title: {
+      en: "Cooking class",
+      ru: "Кулинарный мастер-класс",
+      uk: "Кулінарний майстер-клас",
+      de: "Kochkurs",
+      pl: "Warsztaty kulinarne",
+    },
+    brand: null,
+    priceBand: "€€",
+    image: "wishlist-cooking-class",
+    query: null,
+    tags: ["food", "creative", "evening"],
+  },
+];
+
+/**
+ * The catalog one person is shown: their audience's items plus the neutral
+ * ones, in `WISHLIST_CATEGORIES` order (stable within a category).
+ */
+export function wishlistCatalogFor(audience: "female" | "male"): WishlistCatalogItem[] {
+  const rank = (category: WishlistCategory) => WISHLIST_CATEGORIES.indexOf(category);
+  return WISHLIST_CATALOG.filter((item) => item.audience === audience || item.audience === "any")
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => rank(a.item.category) - rank(b.item.category) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+/** One catalog item by key, or null. */
+export function wishlistCatalogItem(key: string): WishlistCatalogItem | null {
+  return WISHLIST_CATALOG.find((item) => item.key === key) ?? null;
+}
