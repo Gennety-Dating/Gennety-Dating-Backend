@@ -1,0 +1,71 @@
+/* «Premium после покупки» — слой поверх экрана Premium. Полоса надписи,
+   срок и «Готово» стоят по координатам стенда (`reveal.ts` их и считает), а
+   кнопка — та же тёмная стеклянная `.pm-cta`, что и «Оформить подписку». */
+
+.pr-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+
+.pr-band,
+.pr-fallback {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Без WebGL2 надпись стоит готовой — серебро «нуара», тот же шрифт. */
+.pr-fallback {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--pm-shimmer-base);
+}
+
+.pr-copy {
+  position: absolute;
+  left: 50%;
+  margin-left: calc(-1 * min(100vw, 480px) / 2 + 20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  opacity: 0;
+}
+
+.pr-until {
+  font: 600 15px/1.3 "Inter", system-ui, sans-serif;
+  color: var(--text);
+}
+
+.pr-works {
+  font: 400 13px/1.35 "Inter", system-ui, sans-serif;
+  color: var(--text-muted, rgba(127, 127, 127, 0.9));
+}
+
+.pr-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  padding: 0 20px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pr-done.pm-cta {
+  max-width: 440px;
+}

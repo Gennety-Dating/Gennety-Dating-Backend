@@ -1580,6 +1580,19 @@ user already paid for stays valid regardless of the flag.
   the honest fallback when the Stars API cancel fails. An **App Store**
   subscriber viewing the hub gets Apple's own steps instead, since the
   concierge cannot cancel their subscription and must not imply otherwise.
+- **After the purchase — «Premium после покупки» (2026-10-07).** On `"paid"`
+  from `openInvoice` the offer dives "under water" (fades and blurs in 0.4 s)
+  and "Premium" surfaces as liquid metal letter by letter — a blurred, inflated
+  drop with a luminous rim, haze and a ripple, then each letter snaps into
+  focus as the noir silver; one pass of light, then light follows the tilt.
+  Under it: "Active until …" and "Works in the app and in Telegram.", then
+  "Done" → the active plate. ≈ 3.8 s, once per purchase; a returning
+  subscriber goes straight to the plate. The server is polled in parallel and
+  the date fills in when it answers. Reduce Motion: the word fades in already
+  set, no blur. No WebGL2: the old loader → plate path. Same motion as the iOS
+  paywall: both are copies of the stand `design/premium-unlock/` in the iOS
+  repo (plan `docs/architecture/premium-reveal-plan.md` there); code
+  `apps/webapp/src/premium-reveal/`, preview `premium.html?preview=reveal`.
 - **In-chat cancellation (Telegram, agent-driven), two-stage confirm
   (2026-08-01).** When a user tells the menu agent they want to cancel / stop /
   turn off Premium — or asks how — the agent calls the `offer_cancel_premium`

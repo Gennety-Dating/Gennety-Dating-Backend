@@ -9,6 +9,7 @@ import { wireContentInsets } from "./telegram-insets";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton } from "./return-to.js";
 import { invoiceOutcomeFor, premiumScreenFor, type InvoiceOutcome } from "./premium-load.js";
+import { playPremiumReveal, prepareRevealField } from "./premium-reveal/reveal.js";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -106,6 +107,15 @@ interface Copy {
    */
   loadFailed: string;
   retry: string;
+  /**
+   * «Premium после покупки» (стенд `design/premium-unlock/` в iOS-репо): строки
+   * под надписью и кнопка. Те же слова, что у iOS (`premium.active.until`,
+   * `premium.subtitle`, `premium.reveal.done`, `premium.active.title`).
+   */
+  revealUntil: (d: string) => string;
+  revealWorks: string;
+  revealDone: string;
+  revealLabel: string;
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -142,6 +152,10 @@ const COPY: Record<Lang, Copy> = {
     payFailed: "That didn't go through. Try again in a moment.",
     loadFailed: "Couldn't load your Premium status.",
     retry: "Try again",
+    revealUntil: (d) => `Active until ${d}`,
+    revealWorks: "Works in the app and in Telegram.",
+    revealDone: "Done",
+    revealLabel: "Premium is active",
   },
   ru: {
     crest: "✨",
@@ -177,6 +191,10 @@ const COPY: Record<Lang, Copy> = {
     payFailed: "Не прошло. Попробуй ещё раз через минуту.",
     loadFailed: "Не удалось загрузить статус Premium.",
     retry: "Повторить",
+    revealUntil: (d) => `Активен до ${d}`,
+    revealWorks: "Работает и в приложении, и в Telegram.",
+    revealDone: "Готово",
+    revealLabel: "Premium активен",
   },
   uk: {
     crest: "✨",
@@ -212,6 +230,10 @@ const COPY: Record<Lang, Copy> = {
     payFailed: "Не вдалося. Спробуй ще раз за хвилину.",
     loadFailed: "Не вдалося завантажити статус Premium.",
     retry: "Спробувати ще",
+    revealUntil: (d) => `Активний до ${d}`,
+    revealWorks: "Працює і в застосунку, і в Telegram.",
+    revealDone: "Готово",
+    revealLabel: "Premium активний",
   },
   de: {
     crest: "✨",
@@ -249,6 +271,10 @@ const COPY: Record<Lang, Copy> = {
     payFailed: "Das hat nicht geklappt. Bitte gleich nochmal.",
     loadFailed: "Dein Premium-Status konnte nicht geladen werden.",
     retry: "Erneut versuchen",
+    revealUntil: (d) => `Aktiv bis ${d}`,
+    revealWorks: "Gilt in der App und in Telegram.",
+    revealDone: "Fertig",
+    revealLabel: "Premium ist aktiv",
   },
   pl: {
     crest: "✨",
@@ -283,6 +309,10 @@ const COPY: Record<Lang, Copy> = {
     payFailed: "Nie udało się. Spróbuj ponownie za chwilę.",
     loadFailed: "Nie udało się wczytać statusu Premium.",
     retry: "Spróbuj ponownie",
+    revealUntil: (d) => `Aktywne do ${d}`,
+    revealWorks: "Działa w aplikacji i w Telegramie.",
+    revealDone: "Gotowe",
+    revealLabel: "Premium jest aktywne",
   },
 };
 
@@ -324,6 +354,15 @@ function haptic(kind: "success" | "error"): void {
     app?.HapticFeedback?.notificationOccurred(kind);
   } catch {
     /* noop */
+  }
+}
+
+/** A soft impact — one per letter of the post-purchase reveal. */
+function softImpact(): void {
+  try {
+    app?.HapticFeedback?.impactOccurred("soft");
+  } catch {
+    /* haptics are optional — absent on desktop and web */
   }
 }
 
@@ -387,6 +426,15 @@ function fmtDateNumeric(iso: string | null): string {
     return `${dd}.${mm}.${d.getFullYear()}`;
   } catch {
     return iso.slice(0, 10);
+  }
+}
+
+/** «6 ноября 2026 г.» — как системная дата в iOS; DD.MM.YYYY остаётся плашке. */
+function fmtDateLong(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", year: "numeric" }).format(new Date(iso));
+  } catch {
+    return fmtDateNumeric(iso);
   }
 }
 
@@ -728,6 +776,10 @@ function renderOffer(state: PremiumState): void {
 
   page.append(scroll, action);
   root.replaceChildren(page);
+  // Поле надписи «Premium после покупки» — заранее и в простое: в момент оплаты
+  // его уже не считать. Не поднялось — на оплате будет прежняя загрузка.
+  const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
+  idle(() => void prepareRevealField());
 }
 
 async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
@@ -763,9 +815,10 @@ async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
   }
   open.call(app, link, (status: string) => {
     if (status === "paid") {
+      // Оплату Telegram уже подтвердил — праздник сразу, как на успехе покупки
+      // в iOS; сервер подтверждает подписку параллельно.
       haptic("success");
-      renderLoading();
-      void pollUntilActive();
+      void celebrate();
     } else {
       busy = false;
       btn.disabled = false;
@@ -777,12 +830,16 @@ async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
   });
 }
 
-async function pollUntilActive(attempt = 0): Promise<void> {
+async function pollUntilActive(
+  attempt = 0,
+  onActive: (state: PremiumState) => void = renderActive,
+  onGiveUp: () => void = () => void load(),
+): Promise<void> {
   try {
     const state = await fetchState();
     if (state.active) {
       busy = false;
-      renderActive(state);
+      onActive(state);
       return;
     }
   } catch {
@@ -790,22 +847,84 @@ async function pollUntilActive(attempt = 0): Promise<void> {
   }
   if (attempt >= 15) {
     busy = false;
-    void load();
+    onGiveUp();
     return;
   }
-  setTimeout(() => void pollUntilActive(attempt + 1), 1500);
+  setTimeout(() => void pollUntilActive(attempt + 1, onActive, onGiveUp), 1500);
+}
+
+/**
+ * «Premium после покупки» (стенд `design/premium-unlock/` в iOS-репо, отделка
+ * «Металл в воде», утверждена 2026-10-07): предложение уходит «под воду», и
+ * «Premium» всплывает жидким металлом по буквам; «Готово» — плашка «Premium
+ * активен». Играет ТОЛЬКО на оплате: холодный вход подписчика — сразу плашка.
+ *
+ * Сервер опрашивается параллельно: дата встаёт в строку, когда он ответил
+ * (до `copyIn` строки всё равно не видно). Сервер так и не подтвердил —
+ * `load()`, как и раньше. Шрифт или холст не поднялись — прежний путь:
+ * загрузка, затем плашка.
+ */
+async function celebrate(preview?: { state: PremiumState; frozen?: number | undefined }): Promise<void> {
+  const page = root.querySelector<HTMLElement>(".pm-page");
+  const field = page ? await prepareRevealField() : null;
+  if (!page || !field) {
+    if (preview) {
+      renderActive(preview.state);
+      return;
+    }
+    renderLoading();
+    void pollUntilActive();
+    return;
+  }
+  let active: PremiumState | null = preview?.state ?? null;
+  let finished = false;
+  const handle = playPremiumReveal({
+    page,
+    field,
+    copy: { works: s.revealWorks, done: s.revealDone, label: s.revealLabel },
+    haptics: { drop: softImpact, settled: () => haptic("success") },
+    frozen: preview?.frozen,
+    decorate: wireGlassPress,
+    onDone: () => {
+      finished = true;
+      handle.destroy();
+      // Сервер ещё молчит — загрузка; опрос сам положит плашку.
+      if (active) renderActive(active);
+      else renderLoading();
+    },
+  });
+  const showUntil = (state: PremiumState): void => {
+    if (state.premiumUntil) handle.setUntil(s.revealUntil(fmtDateLong(state.premiumUntil)));
+  };
+  if (active) {
+    showUntil(active);
+    return;
+  }
+  void pollUntilActive(
+    0,
+    (state) => {
+      active = state;
+      if (finished) renderActive(state);
+      else showUntil(state);
+    },
+    () => {
+      handle.destroy();
+      void load();
+    },
+  );
 }
 
 async function load(): Promise<void> {
   // Standalone visual preview (no Telegram/initData): `?preview=active` shows the
   // subscribed status plate, `?preview=offer` the sales screen, `?preview=error`
-  // the could-not-load screen. Harmless in prod.
+  // the could-not-load screen, `?preview=reveal` the post-purchase reveal over the
+  // offer (`&t=<s>` freezes a frame). Harmless in prod.
   const preview = params.get("preview");
   if (preview === "error") {
     renderError();
     return;
   }
-  if (preview === "active" || preview === "offer") {
+  if (preview === "active" || preview === "offer" || preview === "reveal") {
     const mock: PremiumState = {
       ok: true,
       featureEnabled: true,
@@ -846,6 +965,15 @@ async function load(): Promise<void> {
     };
     if (preview === "active") renderActive(mock);
     else renderOffer(mock);
+    // `?preview=reveal` — церемония поверх макета предложения, как после
+    // оплаты; `&t=1.2` — застывший кадр.
+    if (preview === "reveal") {
+      const t = params.get("t");
+      void celebrate({
+        state: { ...mock, active: true, premiumUntil: "2026-11-24T00:00:00.000Z" },
+        frozen: t != null && t !== "" ? Number(t) : undefined,
+      });
+    }
     return;
   }
   renderLoading();
