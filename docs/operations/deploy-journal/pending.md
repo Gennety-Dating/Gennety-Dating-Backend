@@ -11,6 +11,22 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-07 — Profiler: быстрые ответы и «На потом» в приложении.**
+Migration `20261007120000_profiler_quick_answers` (additive: enum
+`profiler_answer_source`, `profiler_answers.option_ids` / `answer_source` /
+`postponed_at`), then the bot. `GET /v1/me/profiler` gains `input` on questions
+and `later`; `POST …/answer` accepts `optionIds`, `source`, `later`. Old iOS
+builds ignore the new keys and never send them — safe to ship before the iOS
+build; the iOS build needs this deployed. Telegram is unchanged. Decision journal
+2026-10-07.
+- **Проверка:** `pnpm --filter @gennety/shared exec vitest run src/profiler` and
+  `pnpm --filter @gennety/bot exec vitest run src/public/routes/profiler-native src/services/profiler`;
+  on production `GET /v1/me/profiler` without a token → 401; SQL after a day:
+  `SELECT answer_source, count(*) FROM profiler_answers WHERE answered_at > now() - interval '1 day' GROUP BY 1;`
+  and `SELECT count(*) FROM profiler_answers WHERE postponed_at IS NOT NULL AND answer_text IS NULL AND NOT skipped;`.
+- **Откат:** revert the commit; the columns can stay (nothing old reads them).
+- **Демо:** same code; the demo bot is Telegram-only.
+
 **PENDING production 2026-10-05 — Calendar NULL grid initialization.**
 Deploy the shared scheduler backend fix: normalize SQL NULL `proposed_times`
 before the existing grid-opening CAS. Already deployed and verified in demo;

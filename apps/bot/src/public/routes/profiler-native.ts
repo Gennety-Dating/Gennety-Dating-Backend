@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
+import type { ProfilerAnswerSource } from "@gennety/shared";
 import {
   answerNativeProfilerQuestion,
   getNativeProfilerBatch,
@@ -11,7 +12,9 @@ import {
  * The Profiler for the NATIVE client (JWT) — PRODUCT_SPEC §Phase 1b.
  *
  *   GET  /v1/me/profiler         — the question to show now (opens a due batch)
- *   POST /v1/me/profiler/answer  — answer, skip, or refuse the live question
+ *   POST /v1/me/profiler/answer  — answer (typed and/or tapped), skip, refuse,
+ *                                  or put off («Позже») the live question; or
+ *                                  answer / remove one from «На потом»
  *
  * Until this existed the Profiler was Telegram-only: the worker pushes each
  * batch into the bot chat, and an app-only account (the worker filters on
@@ -39,8 +42,13 @@ export function createNativeProfilerRouter(): Router {
     // `skip: true` wins over any text sent beside it — it is the button, and
     // the button is unambiguous.
     const skip = body.skip === true;
+    const later = body.later === true;
     const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!skip && !text) {
+    const optionIds = Array.isArray(body.optionIds)
+      ? body.optionIds.filter((id): id is string => typeof id === "string").slice(0, MAX_OPTION_IDS)
+      : [];
+    const source = SOURCES.find((s) => s === body.source);
+    if (!skip && !later && !text && optionIds.length === 0) {
       res.status(400).json({ error: "empty_answer" });
       return;
     }
@@ -48,13 +56,19 @@ export function createNativeProfilerRouter(): Router {
     const result = await answerNativeProfilerQuestion(
       req.userId!,
       questionId,
-      skip ? { kind: "skip" } : { kind: "text", text },
+      skip
+        ? { kind: "skip" }
+        : later
+          ? { kind: "later" }
+          : { kind: "text", text, optionIds, ...(source ? { source } : {}) },
     );
     if (!result.ok) {
       // 409, not 404: the question exists, it is just no longer this user's
       // live one — answered in Telegram, expired by the stall sweep, or a
-      // double tap. The client re-reads `GET /v1/me/profiler`.
-      res.status(409).json({ error: result.error });
+      // double tap — or «На потом» is full. The client re-reads
+      // `GET /v1/me/profiler`. A malformed quick answer is the client's bug: 400.
+      const conflict = result.error === "question_not_active" || result.error === "later_full";
+      res.status(conflict ? 409 : 400).json({ error: result.error });
       return;
     }
     if (result.outcome === "next") {
@@ -71,10 +85,15 @@ export function createNativeProfilerRouter(): Router {
   return router;
 }
 
+/** More option ids than any input has — the rest is noise, not an answer. */
+const MAX_OPTION_IDS = 12;
+const SOURCES: readonly ProfilerAnswerSource[] = ["tap", "text", "both"];
+
 /** Absent keys, never nulls: the Swift client decodes optionals, not unions. */
 function serializeBatch(batch: NativeProfilerBatch): Record<string, unknown> {
-  if (!batch.question) return {};
-  return { question: serializeQuestion(batch.question), remaining: batch.remaining };
+  const later = batch.later?.length ? { later: batch.later.map(serializeQuestion) } : {};
+  if (!batch.question) return later;
+  return { question: serializeQuestion(batch.question), remaining: batch.remaining, ...later };
 }
 
 /**
@@ -84,10 +103,12 @@ function serializeBatch(batch: NativeProfilerBatch): Record<string, unknown> {
  */
 function serializeQuestion(question: NativeProfilerQuestion): Record<string, unknown> {
   const context = question.context;
-  if (!context) return { id: question.id, text: question.text };
+  const input = question.input ? { input: question.input } : {};
+  if (!context) return { id: question.id, text: question.text, ...input };
   return {
     id: question.id,
     text: question.text,
+    ...input,
     context: {
       kind: context.kind,
       dates: context.dates.map((date) => ({

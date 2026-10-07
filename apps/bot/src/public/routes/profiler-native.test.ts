@@ -5,6 +5,7 @@ import {
   PROFILER_STALL_TIMEOUT_MS,
   profilerQuestionBank,
   profilerQuestionById,
+  profilerQuestionInput,
   profilerQuestionText,
 } from "@gennety/shared";
 
@@ -17,6 +18,7 @@ const profileUpdateMany = vi.fn();
 const answerFindMany = vi.fn();
 const answerFindUnique = vi.fn();
 const answerUpsert = vi.fn();
+const answerCount = vi.fn();
 const matchFindFirst = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -31,6 +33,7 @@ vi.mock("@gennety/db", () => ({
       findMany: (...a: unknown[]) => answerFindMany(...a),
       findUnique: (...a: unknown[]) => answerFindUnique(...a),
       upsert: (...a: unknown[]) => answerUpsert(...a),
+      count: (...a: unknown[]) => answerCount(...a),
     },
     match: { findFirst: (...a: unknown[]) => matchFindFirst(...a) },
   },
@@ -81,6 +84,18 @@ function buildApp() {
 
 function text(id: string, lang: "en" | "ru" = "en"): string {
   return profilerQuestionText(profilerQuestionById(id)!, lang);
+}
+
+/** The quick-answer input the API sends for a bank question, in English. */
+function inputOf(id: string): Record<string, unknown> {
+  const input = profilerQuestionInput(profilerQuestionById(id)!)!;
+  return {
+    kind: input.kind,
+    closed: input.closed,
+    multiple: input.multiple,
+    options: input.options.map((o) => ({ id: o.id, text: o.text.en, ...(o.image ? { image: o.image } : {}) })),
+    ...(input.poles ? { poles: { from: input.poles.from.en, to: input.poles.to.en } } : {}),
+  };
 }
 
 /** The `GET` read: eligibility + scheduler columns. */
@@ -134,6 +149,7 @@ beforeEach(() => {
   answerFindMany.mockReset().mockResolvedValue([]);
   answerFindUnique.mockReset().mockResolvedValue(null);
   answerUpsert.mockReset().mockResolvedValue({});
+  answerCount.mockReset().mockResolvedValue(0);
   matchFindFirst.mockReset().mockResolvedValue(null);
   editMessageReplyMarkup.mockClear();
   contextSignals.current = NO_SIGNALS;
@@ -161,6 +177,13 @@ describe("GET /v1/me/profiler — contextual questions", () => {
     expect(res.body.question).toEqual({
       id: TOPIC_ID,
       text: text(TOPIC_ID),
+      // Contextual = closed: one tap answers, options are the family's own.
+      input: {
+        kind: "chips",
+        closed: true,
+        multiple: false,
+        options: profilerQuestionById(TOPIC_ID)!.options!.map((o) => ({ id: o.id, text: o.text.en })),
+      },
       context: {
         kind: "upcoming_date",
         dates: [{ venueName: "Kofein", at: DATE_AT.toISOString() }],
@@ -383,7 +406,7 @@ describe("POST /v1/me/profiler/answer", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       outcome: "next",
-      question: { id: FEMALE[1], text: text(FEMALE[1]!) },
+      question: { id: FEMALE[1], text: text(FEMALE[1]!), input: inputOf(FEMALE[1]!) },
       remaining: 2,
     });
     // The claim is the same compare-and-set the chat uses.
@@ -405,6 +428,9 @@ describe("POST /v1/me/profiler/answer", () => {
       memeFileId: null,
       memeKind: null,
       memeSourceUrl: null,
+      optionIds: [],
+      answerSource: "text",
+      postponedAt: null,
     });
     expect(profileUpdate.mock.calls[0]![0]).toEqual({
       where: { userId: USER_ID },
@@ -465,7 +491,12 @@ describe("POST /v1/me/profiler/answer", () => {
       update: Record<string, unknown>;
     };
     expect(upsert.create).toMatchObject({ answerText: null, skipped: true, skipReturned: false });
-    expect(upsert.update).toEqual({ skipped: true, skipReturned: false, cycleId: "2026-W24" });
+    expect(upsert.update).toEqual({
+      skipped: true,
+      skipReturned: false,
+      cycleId: "2026-W24",
+      postponedAt: null,
+    });
   });
 
   it("treats a typed refusal as a skip and pauses the rest of the batch", async () => {
@@ -554,5 +585,191 @@ describe("POST /v1/me/profiler/answer", () => {
 
     expect(res.body.outcome).toBe("next");
     expect(editMessageReplyMarkup).toHaveBeenCalledWith(12345, 77);
+  });
+});
+
+describe("quick answers and «На потом»", () => {
+  /** The live question is `id`, the batch has `remaining` left after it. */
+  function live(id: string, remaining = 2, answers: Array<Record<string, unknown>> = []) {
+    userFindUnique.mockResolvedValue(stateUser(remaining, [...answers, answered(id)]));
+  }
+  function upsertOf(call = 0) {
+    return answerUpsert.mock.calls[call]![0] as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+  }
+
+  it("stores tapped photos as their text, with the ids and source", async () => {
+    live("f_flowers");
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_flowers", optionIds: ["peony", "roses"], source: "tap" });
+
+    expect(res.status).toBe(200);
+    expect(upsertOf().update).toEqual(
+      expect.objectContaining({
+        answerText: "Peonies, Roses",
+        optionIds: ["peony", "roses"],
+        answerSource: "tap",
+        postponedAt: null,
+      }),
+    );
+  });
+
+  it("keeps a scale step and the person's words together", async () => {
+    live("f_chronotype");
+
+    await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_chronotype", optionIds: ["to_2"], text: "depends on the day" });
+
+    expect(upsertOf().update).toEqual(
+      expect.objectContaining({
+        answerText: "Mostly a night owl. depends on the day",
+        optionIds: ["to_2"],
+        answerSource: "both",
+      }),
+    );
+  });
+
+  it("400s an unknown option and two options on a pair without claiming the question", async () => {
+    live("f_travel");
+
+    const unknown = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_travel", optionIds: ["desert"] });
+    const two = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_travel", optionIds: ["sea", "mountains"] });
+
+    expect(unknown.status).toBe(400);
+    expect(unknown.body).toEqual({ error: "unknown_option" });
+    expect(two.status).toBe(400);
+    expect(two.body).toEqual({ error: "too_many_options" });
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+    expect(answerUpsert).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a tapped option as a refusal even when the words say 'later'", async () => {
+    live("f_flowers");
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_flowers", optionIds: ["no_bouquets"], text: "later" });
+
+    expect(res.body.outcome).not.toBe("paused");
+    expect(upsertOf().update).toEqual(expect.objectContaining({ optionIds: ["no_bouquets"] }));
+  });
+
+  it("«Позже» postpones the live question and the batch goes on", async () => {
+    live(FEMALE[0]!);
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: FEMALE[0], later: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe("next");
+    expect(upsertOf().create).toEqual(
+      expect.objectContaining({ answerText: null, skipped: false, postponedAt: NOW }),
+    );
+    expect(upsertOf().update).toEqual({ postponedAt: NOW, cycleId: "2026-W24" });
+  });
+
+  it("409s «Позже» when «На потом» is full, keeping the question live", async () => {
+    live(FEMALE[0]!);
+    answerCount.mockResolvedValue(3);
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: FEMALE[0], later: true });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "later_full" });
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("answers a question from «На потом» outside the batch", async () => {
+    live(FEMALE[0]!);
+    answerFindUnique.mockResolvedValue({ postponedAt: NOW, answerText: null, skipped: false });
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_flowers", optionIds: ["lavender"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ outcome: "done" });
+    // The live question is not touched.
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+    expect(profileUpdate).not.toHaveBeenCalled();
+    expect(upsertOf().update).toEqual(
+      expect.objectContaining({ answerText: "Lavender", optionIds: ["lavender"], postponedAt: null }),
+    );
+  });
+
+  it("«Убрать» on «На потом» is a skip that clears the mark", async () => {
+    live(FEMALE[0]!);
+    answerFindUnique.mockResolvedValue({
+      questionId: "f_flowers",
+      postponedAt: NOW,
+      answerText: null,
+      skipped: false,
+      skipReturned: false,
+      cycleId: "2026-W24",
+    });
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: "f_flowers", skip: true });
+
+    expect(res.body).toEqual({ outcome: "done" });
+    expect(upsertOf().update).toEqual(expect.objectContaining({ skipped: true, postponedAt: null }));
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("GET lists «На потом» even when no batch is due", async () => {
+    userFindUnique.mockResolvedValue(
+      getUser({ profilerStartedAt: NOW, profilerNextAt: new Date(NOW.getTime() + 60_000) }),
+    );
+    answerFindMany.mockResolvedValue([
+      { questionId: "f_flowers", postponedAt: new Date(NOW.getTime() - 1000) },
+      { questionId: "f_chronotype", postponedAt: NOW },
+    ]);
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body).toEqual({
+      later: [
+        { id: "f_flowers", text: text("f_flowers"), input: inputOf("f_flowers") },
+        { id: "f_chronotype", text: text("f_chronotype"), input: inputOf("f_chronotype") },
+      ],
+    });
+    expect(answerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER_ID, postponedAt: { not: null }, answerText: null, skipped: false },
+        orderBy: { postponedAt: "asc" },
+      }),
+    );
+  });
+
+  it("GET removes a postponed fresh topic whose date was cancelled", async () => {
+    const matchId = "3f2b8c4e-9a1d-4e5f-8b7c-6d5e4f3a2b1c";
+    const topicId = `f_ctx:topic:${matchId}`;
+    userFindUnique.mockResolvedValue(
+      getUser({ profilerStartedAt: NOW, profilerNextAt: new Date(NOW.getTime() + 60_000) }),
+    );
+    answerFindMany.mockResolvedValue([{ questionId: topicId, postponedAt: NOW }]);
+    matchFindFirst.mockImplementation(async (args: { where: { id?: string } }) =>
+      args.where.id === matchId
+        ? { status: "cancelled", agreedTime: new Date(NOW.getTime() + 86_400_000), venueName: "Kofein" }
+        : null,
+    );
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body).toEqual({});
+    expect(upsertOf().update).toEqual(expect.objectContaining({ skipped: true, postponedAt: null }));
   });
 });

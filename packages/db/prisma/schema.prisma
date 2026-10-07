@@ -1282,6 +1282,17 @@ enum ProfilerMediaKind {
   @@map("profiler_media_kind")
 }
 
+/// How a Profiler answer came about in the app (decision journal 2026-10-07):
+/// `tap` = only quick-answer options, `text` = only the person's own words,
+/// `both` = options plus words. Null on rows written before quick answers.
+enum ProfilerAnswerSource {
+  tap
+  text
+  both
+
+  @@map("profiler_answer_source")
+}
+
 model ProfilerAnswer {
   id            String             @id @default(uuid()) @db.Uuid
   userId        String             @map("user_id") @db.Uuid
@@ -1333,6 +1344,14 @@ model ProfilerAnswer {
   /// True once a skipped question has been re-offered the one allowed time in
   /// its cycle, so it isn't surfaced a third time until the next drop cycle.
   skipReturned  Boolean            @default(false) @map("skip_returned")
+  /// Quick-answer option ids the person tapped (`profiler-inputs.ts`), in tap
+  /// order. Empty for a text-only answer, a skip, or a Telegram answer.
+  optionIds     String[]           @default([]) @map("option_ids")
+  answerSource  ProfilerAnswerSource? @map("answer_source")
+  /// Set while the question sits in the app's «На потом» list (the «Позже»
+  /// button, at most `PROFILER_LATER_MAX`). Cleared by an answer or a skip.
+  /// A postponed row is neither answered nor skipped, so no batch re-asks it.
+  postponedAt   DateTime?          @map("postponed_at")
   /// Drop cycle this row was last asked/answered in (ISO date of the drop).
   cycleId       String             @map("cycle_id")
   createdAt     DateTime           @default(now()) @map("created_at")

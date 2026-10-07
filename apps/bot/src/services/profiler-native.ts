@@ -1,9 +1,15 @@
 import { prisma } from "@gennety/db";
 import {
+  PROFILER_LATER_MAX,
   PROFILER_MAX_ANSWER_LEN,
+  composeProfilerAnswerText,
+  profilerOptionText,
   profilerQuestionById,
+  profilerQuestionInput,
   profilerQuestionText,
   type Language,
+  type ProfilerAnswerSource,
+  type ProfilerInputKind,
   type ProfilerQuestion,
 } from "@gennety/shared";
 import { getMainBotApi } from "./main-bot-api.js";
@@ -28,6 +34,7 @@ import {
   profilerCycleId,
   stripQuestionKeyboard,
   upsertProfilerAnswer,
+  upsertProfilerPostpone,
   upsertProfilerSkip,
   type ProfilerUserState,
 } from "./profiler.js";
@@ -63,9 +70,25 @@ import {
  * button is stripped, the same courtesy the chat path extends.
  */
 
+/**
+ * Quick answers as the app draws them (`profiler-inputs.ts`), in the user's
+ * language. Photos are bundled in the app by `image` key.
+ */
+export interface NativeProfilerInput {
+  kind: ProfilerInputKind;
+  /** true = a tap answers at once (contextual); false = a tap fills the field. */
+  closed: boolean;
+  multiple: boolean;
+  options: Array<{ id: string; text: string; image?: string }>;
+  /** `scale` only. */
+  poles?: { from: string; to: string };
+}
+
 export interface NativeProfilerQuestion {
   id: string;
   text: string;
+  /** Absent = text only. */
+  input?: NativeProfilerInput;
   /**
    * What a contextual question refers to — the app draws it as a card above
    * the question (the date and the venue, or the person's own earlier answer).
@@ -79,14 +102,30 @@ export interface NativeProfilerBatch {
   question?: NativeProfilerQuestion;
   /** Questions left in the batch INCLUDING `question` (1 = the last one). */
   remaining?: number;
+  /**
+   * «На потом»: questions the person put off with «Позже», oldest first, at
+   * most `PROFILER_LATER_MAX`. Independent of the batch — present whether or
+   * not a question is live. Empty / absent = the block is not shown.
+   */
+  later?: NativeProfilerQuestion[];
 }
 
-export type NativeProfilerReply = { kind: "skip" } | { kind: "text"; text: string };
+export type NativeProfilerReply =
+  | { kind: "skip" }
+  | { kind: "later" }
+  | { kind: "text"; text: string; optionIds?: string[]; source?: ProfilerAnswerSource };
+
+export type NativeProfilerAnswerError =
+  | "question_not_active"
+  | "later_full"
+  | "unknown_option"
+  | "too_many_options"
+  | "empty_answer";
 
 export type NativeProfilerAnswerResult =
   | { ok: true; outcome: "next"; question: NativeProfilerQuestion; remaining: number }
   | { ok: true; outcome: "done" | "paused" }
-  | { ok: false; error: "question_not_active" };
+  | { ok: false; error: NativeProfilerAnswerError };
 
 /**
  * The question as the app sees it, with its context card when it has one.
@@ -99,10 +138,39 @@ async function view(
   language: Language,
   now: Date,
 ): Promise<NativeProfilerQuestion | null> {
-  const base = { id: question.id, text: profilerQuestionText(question, language) };
+  const input = inputView(question, language);
+  const base = {
+    id: question.id,
+    text: profilerQuestionText(question, language),
+    ...(input ? { input } : {}),
+  };
   const resolution = await resolveProfilerQuestionContext(userId, question, language, now);
   if (resolution.kind === "stale") return null;
   return resolution.kind === "card" ? { ...base, context: resolution.card } : base;
+}
+
+/** The question's quick answers in `language`, or null for text only. */
+function inputView(question: ProfilerQuestion, language: Language): NativeProfilerInput | null {
+  const input = profilerQuestionInput(question);
+  if (!input) return null;
+  return {
+    kind: input.kind,
+    closed: input.closed,
+    multiple: input.multiple,
+    options: input.options.map((option) => ({
+      id: option.id,
+      text: profilerOptionText(option, language),
+      ...(option.image ? { image: option.image } : {}),
+    })),
+    ...(input.poles
+      ? {
+          poles: {
+            from: input.poles.from[language] ?? input.poles.from.en,
+            to: input.poles.to[language] ?? input.poles.to.en,
+          },
+        }
+      : {}),
+  };
 }
 
 /**
@@ -155,6 +223,54 @@ export async function getNativeProfilerBatch(
   userId: string,
   now: Date = new Date(),
 ): Promise<NativeProfilerBatch> {
+  const { batch, language } = await resumeOrOpenBatch(userId, now);
+  if (!language) return batch;
+  const later = await laterQuestions(userId, language, now);
+  return later.length > 0 ? { ...batch, later } : batch;
+}
+
+/**
+ * «На потом», oldest first. A postponed question whose moment is gone (a
+ * fresh topic for a date that was cancelled or has passed) or whose id the
+ * bank no longer knows is removed as a skip, the way a dead live question is.
+ */
+async function laterQuestions(
+  userId: string,
+  language: Language,
+  now: Date,
+): Promise<NativeProfilerQuestion[]> {
+  const rows = await prisma.profilerAnswer.findMany({
+    where: { userId, postponedAt: { not: null }, answerText: null, skipped: false },
+    select: { questionId: true, postponedAt: true },
+    orderBy: { postponedAt: "asc" },
+  });
+  const later: NativeProfilerQuestion[] = [];
+  for (const row of rows ?? []) {
+    if (!row.postponedAt) continue;
+    const question = profilerQuestionById(row.questionId);
+    const shown = question ? await view(userId, question, language, now) : null;
+    if (shown) {
+      later.push(shown);
+    } else if (question) {
+      await upsertProfilerSkip(userId, question, profilerCycleId(now));
+    }
+    if (later.length >= PROFILER_LATER_MAX) break;
+  }
+  return later;
+}
+
+/** How many questions sit in «На потом» right now. */
+async function laterCount(userId: string): Promise<number> {
+  return prisma.profilerAnswer.count({
+    where: { userId, postponedAt: { not: null }, answerText: null, skipped: false },
+  });
+}
+
+/** The live question part of `GET`; `language` is null for an ineligible user. */
+async function resumeOrOpenBatch(
+  userId: string,
+  now: Date,
+): Promise<{ batch: NativeProfilerBatch; language: Language | null }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -181,7 +297,7 @@ export async function getNativeProfilerBatch(
     user.onboardingStep !== "completed" ||
     !user.gender
   ) {
-    return {};
+    return { batch: {}, language: null };
   }
   const language = (user.language ?? "en") as Language;
 
@@ -190,16 +306,16 @@ export async function getNativeProfilerBatch(
   if (activeId) {
     const active = profilerQuestionById(activeId);
     const shown = active ? await view(userId, active, language, now) : null;
-    if (shown) return liveBatch(shown, profile.profilerBatchRemaining);
+    if (shown) return { batch: liveBatch(shown, profile.profilerBatchRemaining), language };
     // An id the bank no longer has (a question retired while it was live), or a
     // contextual question about a date that was cancelled or has passed.
     await releaseDeadQuestion(userId, activeId, active, now);
-    return {};
+    return { batch: {}, language };
   }
 
   const nextAt = profile.profilerNextAt;
-  if (nextAt && nextAt.getTime() > now.getTime()) return {};
-  if (await hasActiveDatePlanning(userId)) return {};
+  if (nextAt && nextAt.getTime() > now.getTime()) return { batch: {}, language };
+  if (await hasActiveDatePlanning(userId)) return { batch: {}, language };
 
   const answers = await prisma.profilerAnswer.findMany({
     where: { userId },
@@ -241,7 +357,7 @@ export async function getNativeProfilerBatch(
         profilerNextAt: nextWindowAt(now, resolveZone(profile.timeZone)),
       },
     });
-    return {};
+    return { batch: {}, language };
   }
 
   // Same sizing as the worker's `startProfilerBatch`: rush mode shrinks the
@@ -254,8 +370,8 @@ export async function getNativeProfilerBatch(
       ...profilerActiveQuestionPatch(question.id, batchSize - 1, now, null),
     },
   });
-  if (count === 1) return liveBatch(shown, batchSize - 1);
-  return currentLiveBatch(userId, language, now);
+  if (count === 1) return { batch: liveBatch(shown, batchSize - 1), language };
+  return { batch: await currentLiveBatch(userId, language, now), language };
 }
 
 /** Whatever is live after a lost race — possibly nothing (the winner is still sending). */
@@ -277,17 +393,30 @@ async function currentLiveBatch(
 }
 
 /**
- * Resolve the live question from the app — an answer, the Skip button, or a
- * refusal typed as an answer — then advance the batch.
+ * Resolve a question from the app — an answer (typed, tapped, or both), the
+ * Skip button, «Позже», or a refusal typed as an answer — then advance the
+ * batch.
  *
  * Telegram parity, step for step:
  *   - the question is claimed with the same compare-and-set as the chat, so a
  *     question already answered in Telegram (or expired, or answered by a
  *     double tap) is refused with `question_not_active`;
  *   - Skip → `skipTransition` via `upsertProfilerSkip` (returns once per cycle);
- *   - a refusal ("later", "не хочу"…, `isProfilerRefusal`) is recorded as a skip
- *     and PAUSES the rest of the batch to the next local window — `paused`;
- *   - anything else is stored exactly as `recordProfilerAnswer` stores it.
+ *   - a refusal ("later", "не хочу"…, `isProfilerRefusal`) typed with no option
+ *     tapped is recorded as a skip and PAUSES the rest of the batch to the next
+ *     local window — `paused`;
+ *   - anything else is stored exactly as `recordProfilerAnswer` stores it, plus
+ *     the tapped option ids and the answer's source.
+ *
+ * App only:
+ *   - «Позже» moves the live question to «На потом» (at most
+ *     `PROFILER_LATER_MAX`, else `later_full`) and the batch goes on as after
+ *     a skip;
+ *   - a question from «На потом» is not live — it is answered or removed
+ *     («Убрать» = skip) outside any batch, and the reply is `done`.
+ *
+ * Options are checked BEFORE the claim, so a bad request never costs the
+ * person their live question.
  */
 export async function answerNativeProfilerQuestion(
   userId: string,
@@ -298,16 +427,45 @@ export async function answerNativeProfilerQuestion(
   const question = profilerQuestionById(questionId);
   if (!question) return { ok: false, error: "question_not_active" };
 
+  let language: Language | null = null;
+  let quick: { answerText: string; optionIds: string[]; source: ProfilerAnswerSource } | null = null;
+  let refusal = false;
+  if (reply.kind === "text") {
+    language = await userLanguage(userId);
+    const composed = composeProfilerAnswerText(
+      question,
+      reply.optionIds ?? [],
+      reply.text,
+      language,
+      PROFILER_MAX_ANSWER_LEN,
+      reply.source,
+    );
+    if (!composed.ok) return { ok: false, error: composed.error };
+    quick = composed;
+    refusal = composed.optionIds.length === 0 && isProfilerRefusal(reply.text);
+  }
+
+  if (await isPostponed(userId, questionId)) {
+    return resolveLater(userId, question, reply, quick, refusal, language, now);
+  }
+
+  if (reply.kind === "later" && (await laterCount(userId)) >= PROFILER_LATER_MAX) {
+    return { ok: false, error: "later_full" };
+  }
+
   const claim = await claimActiveQuestion(userId, questionId);
   if (!claim.claimed) return { ok: false, error: "question_not_active" };
 
   const cycleId = profilerCycleId(now);
-  const refusal = reply.kind === "text" && isProfilerRefusal(reply.text);
   if (reply.kind === "skip" || refusal) {
     await upsertProfilerSkip(userId, question, cycleId);
-  } else {
-    const answerText = reply.text.trim().slice(0, PROFILER_MAX_ANSWER_LEN);
-    await upsertProfilerAnswer(userId, question, answerText, now, cycleId);
+  } else if (reply.kind === "later") {
+    await upsertProfilerPostpone(userId, question, cycleId, now);
+  } else if (quick) {
+    await upsertProfilerAnswer(userId, question, quick.answerText, now, cycleId, undefined, {
+      optionIds: quick.optionIds,
+      source: quick.source,
+    });
   }
 
   // Re-read AFTER the write, so selection sees the row just recorded.
@@ -320,6 +478,52 @@ export async function answerNativeProfilerQuestion(
     return { ok: true, outcome: "paused" };
   }
   return advance(state, now);
+}
+
+async function userLanguage(userId: string): Promise<Language> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { language: true } });
+  return (user?.language ?? "en") as Language;
+}
+
+/** The row sits in «На потом»: postponed, not yet answered or skipped. */
+async function isPostponed(userId: string, questionId: string): Promise<boolean> {
+  const row = await prisma.profilerAnswer.findUnique({
+    where: { userId_questionId: { userId, questionId } },
+    select: { postponedAt: true, answerText: true, skipped: true },
+  });
+  return Boolean(row?.postponedAt) && !row?.answerText && !row?.skipped;
+}
+
+/**
+ * Answer or remove a question from «На потом». Nothing about the live batch
+ * changes: «Ответить» on «Сегодня» walks the list in the app and re-reads
+ * `GET` at the end. A question whose moment is gone is removed and refused,
+ * like a dead live one. A typed refusal leaves the question where it is.
+ */
+async function resolveLater(
+  userId: string,
+  question: ProfilerQuestion,
+  reply: NativeProfilerReply,
+  quick: { answerText: string; optionIds: string[]; source: ProfilerAnswerSource } | null,
+  refusal: boolean,
+  language: Language | null,
+  now: Date,
+): Promise<NativeProfilerAnswerResult> {
+  const cycleId = profilerCycleId(now);
+  const shown = await view(userId, question, language ?? (await userLanguage(userId)), now);
+  if (!shown) {
+    await upsertProfilerSkip(userId, question, cycleId);
+    return { ok: false, error: "question_not_active" };
+  }
+  if (reply.kind === "skip") {
+    await upsertProfilerSkip(userId, question, cycleId);
+  } else if (reply.kind === "text" && quick && !refusal) {
+    await upsertProfilerAnswer(userId, question, quick.answerText, now, cycleId, undefined, {
+      optionIds: quick.optionIds,
+      source: quick.source,
+    });
+  }
+  return { ok: true, outcome: refusal ? "paused" : "done" };
 }
 
 /**

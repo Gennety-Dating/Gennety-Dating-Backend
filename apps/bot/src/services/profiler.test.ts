@@ -362,7 +362,12 @@ describe("recordProfilerSkip", () => {
     const ok = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
     expect(ok).toBe(true);
     const update = mAnswerUpsert.mock.calls[0]![0].update;
-    expect(update).toEqual({ skipped: true, skipReturned: false, cycleId: expect.any(String) });
+    expect(update).toEqual({
+      skipped: true,
+      skipReturned: false,
+      cycleId: expect.any(String),
+      postponedAt: null,
+    });
   });
 
   it("streams the next question when the batch continues after a skip", async () => {

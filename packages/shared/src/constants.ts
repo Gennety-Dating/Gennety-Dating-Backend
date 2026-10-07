@@ -585,6 +585,12 @@ export const PROFILER_EVENING_HOUR = 18;
 /** Max characters stored for a single free-text Profiler answer. */
 export const PROFILER_MAX_ANSWER_LEN = 1000;
 /**
+ * How many questions the app's «На потом» list holds at once (the «Позже»
+ * button under a question). One batch's worth: the founder wants to come back
+ * to all of them, and a longer list turns into homework (decision 2026-10-07).
+ */
+export const PROFILER_LATER_MAX = 3;
+/**
  * How long an unanswered Profiler question stays "active" before the worker
  * treats the silence as an implicit skip and re-opens the schedule.
  *

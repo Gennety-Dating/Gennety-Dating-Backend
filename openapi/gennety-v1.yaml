@@ -1665,17 +1665,21 @@ paths:
               schema: { $ref: "#/components/schemas/ProfilerAnswerResult" }
         "400":
           description: |
-            `missing_question_id`, or `empty_answer` — neither a non-empty
-            `text` nor `skip: true`.
+            `missing_question_id`; `empty_answer` — no `text`, no
+            `optionIds`, no `skip`/`later`; `unknown_option` — an id the
+            question's input does not have; `too_many_options` — several ids
+            on a single-choice input. Nothing was recorded or claimed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409":
           description: |
-            `question_not_active` — `questionId` is not the caller's live
-            question: already answered in Telegram, reclaimed by the stall
-            sweep, or a double tap. Nothing was recorded; re-read
+            `question_not_active` — `questionId` is neither the caller's live
+            question nor one in «На потом»: already answered in Telegram,
+            reclaimed by the stall sweep, a double tap, or a postponed
+            question whose moment is gone (removed now). `later_full` —
+            «На потом» already holds 3. Nothing else was recorded; re-read
             `GET /v1/me/profiler`.
           content:
             application/json:
@@ -7165,6 +7169,16 @@ components:
         remaining:
           type: integer
           description: Questions left in the current batch INCLUDING `question` (1 = this is the last one).
+        later:
+          type: array
+          description: |
+            «На потом» — questions put off with `later: true`, oldest first, at
+            most 3 (`PROFILER_LATER_MAX`). Independent of `question`: present
+            whether or not a batch is live; absent = empty. Answer or remove one
+            (`skip: true`) by posting its id like any question; the reply is
+            `done` and the live batch is untouched (decision 2026-10-07).
+          items:
+            $ref: '#/components/schemas/ProfilerQuestion'
 
     ProfilerQuestion:
       type: object
@@ -7177,8 +7191,46 @@ components:
             (`f_ctx:topic:<matchId>` — `<f|m>_ctx:<family>:<key>`). Opaque to
             the client: send it back as `questionId`.
         text: { type: string, description: 'Question text in the user language' }
+        input:
+          $ref: '#/components/schemas/ProfilerQuestionInput'
         context:
           $ref: '#/components/schemas/ProfilerQuestionContext'
+
+    ProfilerQuestionInput:
+      type: object
+      description: |
+        Quick answers (decision 2026-10-07). Absent = text only. `closed` =
+        a contextual question whose options are exhaustive: one tap answers.
+        Otherwise the options are hints: a tap fills the field, the person
+        sends (and may add words); «Своими словами» comes first in the app.
+      required: [kind, closed, multiple, options]
+      properties:
+        kind:
+          type: string
+          enum: [photos, pair, chips, scale]
+          description: |
+            photos = a ribbon of photo cards (an option without `image` is a
+            text card); pair = two photo tiles, this or that; chips = text
+            capsules; scale = seven detents from `poles.from` to `poles.to`,
+            options in that order (ids from_3…from_1, middle, to_1…to_3).
+        closed: { type: boolean }
+        multiple: { type: boolean, description: 'Several options may be picked together' }
+        options:
+          type: array
+          items:
+            type: object
+            required: [id, text]
+            properties:
+              id: { type: string, description: 'Send back in `optionIds`' }
+              text: { type: string, description: 'Label in the user language' }
+              image: { type: string, description: 'Key of a photo bundled in the app' }
+        poles:
+          type: object
+          description: 'scale only'
+          required: [from, to]
+          properties:
+            from: { type: string }
+            to: { type: string }
 
     ProfilerQuestionContext:
       type: object
@@ -7225,8 +7277,19 @@ components:
       required: [questionId]
       properties:
         questionId: { type: string }
-        text: { type: string, description: 'Answer text; trimmed and capped at PROFILER_MAX_ANSWER_LEN (1000). Omit when skip=true.' }
-        skip: { type: boolean, description: 'true = the Skip button' }
+        text: { type: string, description: 'Answer text; trimmed and capped at PROFILER_MAX_ANSWER_LEN (1000). Omit when skip=true. May be empty when `optionIds` is not.' }
+        optionIds:
+          type: array
+          items: { type: string }
+          description: 'Ids of the tapped `input.options`, in tap order. Stored with the answer; its text becomes the options'' labels plus `text`.'
+        source:
+          type: string
+          enum: [tap, text, both]
+          description: 'How the answer came about: tap = only options (the field holds just their labels), text = only words, both. Derived when omitted.'
+        skip: { type: boolean, description: 'true = the Skip button; on a «На потом» question = «Убрать»' }
+        later:
+          type: boolean
+          description: 'true = «Позже»: the live question moves to «На потом» and the batch goes on as after a skip. 409 `later_full` when it already holds 3.'
 
     ProfilerAnswerResult:
       type: object

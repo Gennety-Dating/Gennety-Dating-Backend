@@ -7,6 +7,7 @@ import {
   PROFILER_MAX_ANSWER_LEN,
   profilerQuestionById,
   profilerQuestionText,
+  type ProfilerAnswerSource,
   type ProfilerQuestion,
 } from "@gennety/shared";
 import { dispatchToChat } from "../chat-queue.js";
@@ -861,11 +862,19 @@ export async function upsertProfilerAnswer(
   now: Date,
   cycleId: string,
   media?: { fileId: string; kind: "photo" | "sticker"; sourceUrl?: string },
+  quick?: { optionIds: string[]; source: ProfilerAnswerSource },
 ): Promise<void> {
   const mediaFields = {
     memeFileId: media?.fileId ?? null,
     memeKind: media?.kind ?? null,
     memeSourceUrl: media?.sourceUrl ?? null,
+  };
+  // Every answer resolves «На потом» and states what was tapped — a re-answer in
+  // words must not keep the options of an earlier tap.
+  const quickFields = {
+    optionIds: quick?.optionIds ?? [],
+    answerSource: quick?.source ?? ("text" as const),
+    postponedAt: null,
   };
   await prisma.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId: question.id } },
@@ -879,6 +888,7 @@ export async function upsertProfilerAnswer(
       skipReturned: false,
       cycleId,
       ...mediaFields,
+      ...quickFields,
     },
     update: {
       answerText,
@@ -887,6 +897,7 @@ export async function upsertProfilerAnswer(
       skipReturned: false,
       cycleId,
       ...mediaFields,
+      ...quickFields,
     },
   });
 
@@ -935,7 +946,36 @@ export async function upsertProfilerSkip(
       skipReturned,
       cycleId,
     },
-    update: { skipped, skipReturned, cycleId },
+    // A skip also takes the question off «На потом» — «Убрать» in the app is a skip.
+    update: { skipped, skipReturned, cycleId, postponedAt: null },
+  });
+}
+
+/**
+ * «Позже» in the app: the question goes to «На потом» — neither answered nor
+ * skipped, so no batch asks it again (`selectNextProfilerQuestion` re-offers
+ * only skipped rows, and a contextual one is never re-picked once it has a
+ * row). It stays there until it is answered or removed (a skip).
+ */
+export async function upsertProfilerPostpone(
+  userId: string,
+  question: ProfilerQuestion,
+  cycleId: string,
+  now: Date,
+): Promise<void> {
+  await prisma.profilerAnswer.upsert({
+    where: { userId_questionId: { userId, questionId: question.id } },
+    create: {
+      userId,
+      questionId: question.id,
+      priority: question.priority,
+      answerText: null,
+      skipped: false,
+      skipReturned: false,
+      cycleId,
+      postponedAt: now,
+    },
+    update: { postponedAt: now, cycleId },
   });
 }
 

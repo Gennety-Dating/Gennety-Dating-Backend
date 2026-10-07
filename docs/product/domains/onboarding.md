@@ -2493,5 +2493,28 @@ questions too — see **Native app** at the end of this list.
   **Text only.** The humour question's meme/reel reading (`acceptsImage`) is a
   Telegram extra; in the app the question is answered in words, which the paid
   pre-date meme reveal therefore never offers.
+  **Quick answers (2026-10-07).** A question may carry `input`
+  (`packages/shared/src/profiler-inputs.ts`): a ribbon of photo cards, two photo
+  tiles ("this or that"), text chips, or a seven-step scale between two poles.
+  Contextual questions are *closed* — chips from their own options, one tap
+  answers. Bank questions are *open* — the options are hints, a tap puts the
+  option into the field, the person sends and may add their own words, and
+  "In your own words" is the first card. The pilot covers 12 bank questions
+  (flowers, travel, chronotype, communication style, plan vs spontaneity, sport,
+  pets, who plans the date); the questions whose value is the person's own words
+  stay text only. The row keeps the tapped `optionIds` and `answerSource`
+  (`tap`/`text`/`both`); `answerText` stays the readable sentence (option labels
+  + own words) the icebreaker and wingman prompts read. Photos are bundled in the
+  app by `image` key. Telegram keeps answering in text; nothing here feeds
+  matching yet.
+  **«Позже» / «На потом» (2026-10-07).** `later: true` moves the live question
+  to the app's «На потом» list (`ProfilerAnswer.postponedAt`, at most
+  `PROFILER_LATER_MAX` = 3, else 409 `later_full`) and the batch goes on as after
+  a skip. A postponed row is neither answered nor skipped, so no batch asks it
+  again; `GET` lists it in `later` whether or not a batch is live, and the app
+  answers it or removes it (`skip: true` = «Убрать») by posting its id — the
+  reply is `done` and the live batch is untouched. A postponed contextual
+  question whose moment is gone is removed as a skip when the list is read. No
+  push ever points at «На потом».
   Demo mode: no separate behaviour — the demo bot is Telegram-only, and the
   endpoints run the same code for any JWT the demo API issues.
