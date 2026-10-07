@@ -823,13 +823,22 @@ An optional premium step sits between mutual accept and the Calendar. It is
 gated by `TICKET_FEATURE_ENABLED` (default **off** → the bot hands off straight
 to the Calendar exactly as documented in §3.6).
 
-**Gennety Premium covers a subscriber's OWN slot, and only that (2026-08-22).**
-An active subscription (§3.8) settles that side's ticket at the moment the gate
+**Premium covers no ticket since 2026-10-08; only the grandfathered cover
+settles a slot, and only the holder's OWN.** From 2026-08-22 an active
+subscription (§3.8) settled the subscriber's own ticket. The founder ended that
+on 2026-10-08 («за билет на свидание платят всегда — это повышает
+ответственность»): every date costs a ticket, Premium or not. Subscribers who
+were paid up at that moment keep the cover until the end of the period they had
+already paid for — the migration stamped it into `User.premiumTicketCoverUntil`,
+no renewal moves it, and the gate reads it through `isPremiumTicketCoverActive`
+(which also requires `premiumUntil` to be live, so a refunded period stops
+covering). §3.8 has the full rule.
+
+While that cover runs it settles the holder's ticket at the moment the gate
 arms, spending no money and — the part that is easy to get backwards — **no
-wallet ticket**: routing Premium through `useTicketFromBalance` would make a
-subscriber pay, out of their own wallet, for the one thing the subscription
-promises. Bought tickets are left untouched and never expire into the
-subscription.
+wallet ticket**: routing it through `useTicketFromBalance` would make the
+holder pay, out of their own wallet, for the one thing the paid period
+promised. Bought tickets are left untouched.
 
 **Covering the partner is deliberately NOT included.** It costs one ticket's
 price, which is the already-existing `partner` scope rather than any new
@@ -849,67 +858,45 @@ implementation is wrong:
   and its `message_effect_id`, so skipping it for a covered pair would delete
   the moment rather than the payment. What changes is only what it opens on: a
   covered woman lands on `waiting`, a covered man on `cover-partner` — the one
-  screen where he still has a choice — and when BOTH subscribe it carries the
-  reveal with **no keyboard at all** (`ticketCardCaptionPremium`), because a
-  payment button pointing at a settled gate is the dead affordance §2.1
-  forbids. The durable way back into that date is the My Date hub.
+  screen where he still has a choice — and when BOTH hold the cover it carries
+  the reveal with **no keyboard at all** (`ticketCardCaptionPremium`, the only
+  place that caption is used), because a payment button pointing at a settled
+  gate is the dead affordance §2.1 forbids. The durable way back into that date
+  is the My Date hub.
 - **The Calendar never overtakes the reveal.** With both sides covered the gate
   completes only AFTER both cards are delivered — the same rule §2.1 states for
   the pinned banner, and the reason `settlePremiumSlots` deliberately does not
   complete the gate itself.
 - **A settled slot is permanent.** `ticketPaid{A,B}` is a timestamp, not an
-  entitlement check, so a subscription that lapses between the settle and the
-  date revokes nothing and is never re-verified. The alternative would have the
+  entitlement check, so a cover that ends between the settle and the date
+  revokes nothing and is never re-verified. The alternative would have the
   product cancelling dates two people had already agreed to.
 
-**Self-healing for a subscription bought AFTER the gate opened.** Premium is
-granted through four rails (Telegram Stars, App Store, and the referral and
-promo comp grants), so instead of a hook on each, the gate's own state read
-settles a premium caller's slot — the screen is polled, so it lands within
-seconds whichever rail was used, and the claim is the same compare-and-set as
-every other slot, so a read racing the offer settles nothing twice. The read
-also completes the gate when that closed it; without that, a pair whose second
-slot was closed by a late subscription would sit fully paid in `partial` until
-the expiry sweep refunded them out of a date they had already secured.
+**Self-healing on the polled read.** The gate's own state read settles a slot
+the offer left open for a caller whose grandfathered cover still runs — a
+subscription bought mid-gate just before 2026-10-08, or an offer whose own
+settle lost a race. Since that date a new subscription covers nothing, so the
+read never settles for one. The claim is the same compare-and-set as every
+other slot, so a read racing the offer settles nothing twice, and the read also
+completes the gate when that closed it; without that, a pair whose second slot
+was closed late would sit fully paid in `partial` until the expiry sweep
+refunded them out of a date they had already secured.
 
-**The gate carries the counterfactual, and only where it is true (founder
-decision 2026-08-22).** A user without a subscription sees one quiet line under
-the ticket card — "your ticket is free with Premium" — opening the Premium
-screen rather than a payment sheet. This is the same in-flow device
-`premiumWouldWaive` already runs at the venue board's pay step, at the moment
-of maximum willingness to pay, and the founder's reasoning is that a per-date
-charge is exactly the cost a user cannot feel in aggregate until something
-names it.
-
-Four rules keep it from becoming the marketing §3.5b otherwise forbids on this
-screen:
-
-- **The `offer` screen only.** On the cover screen the money buys the
-  PARTNER's ticket, which Premium never covers, so the same line one screen
-  later would be false about the button directly beneath it. Guarded against
-  the source, because the failure is silent.
-- **Never burgundy.** The venue board's counterfactual is a filled accent
-  button because it is the loudest thing on its own screen; here the hero pay
-  button sits a few pixels below, and this screen's rule is exactly one loud
-  button. It is a glass row whose only accent is the padlock — one step above
-  the referral chip, several below the pay button, so three tap targets in one
-  column read in three plainly different weights.
-- **Never in the action bar.** That footer is `flex: none`, so anything added
-  there grows it and pushes up the button the user came to tap — the regression
-  §3.9 records against the referral chip on the Premium screen.
-- **Telegram-only, deliberately.** It is withheld from the `/v1/*` gate state
-  entirely rather than shipped and hidden client-side: `premium_monthly` cannot
-  currently be bought on iOS at all (the subscription group has never been
-  submitted, see deploy.md), so an upsell there would point at a product with
-  no purchase path. It is gated on `PREMIUM_FEATURE_ENABLED` — unlike
-  `myPremiumActive`, which reports an entitlement the flag may not revoke,
-  this opens a NEW purchase surface, which is what the flag exists to close.
+**The pay-step counterfactual is gone (2026-10-08).** From 2026-08-22 a user
+without a subscription saw one quiet line under the ticket card on the `offer`
+screen — "your ticket is free with Premium" — opening the Premium screen. With
+Premium no longer covering tickets that line would be false for every new
+subscriber, so it was deleted together with the benefit: the Mini App row and
+its copy (`premiumWouldCover`), its CSS, and the `premiumWouldCoverMe` field of
+the Mini App gate state (an older bundle reads the missing field as false and
+draws nothing). The gate sells no Premium now; the referral chip is the only
+cross-promo on it.
 
 **Every premium settle writes a zero-delta `premium_gate` row to
 `ticket_ledger`.** Without it the admin purchase view cannot tell "Premium
 covered this date" from "the gate lapsed and the Calendar opened for free" —
-which is precisely the number that says whether the subscription is paying for
-the dates it hands out.
+which is precisely the number that says what the grandfathered cover still
+costs until the last paid-up period runs out.
 
 **Both surfaces, since 2026-08-06.** This section used to say the gate was
 Telegram-only and that the mobile mutual-accept path scheduled directly. The

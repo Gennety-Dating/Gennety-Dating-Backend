@@ -31,7 +31,7 @@ import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
 import { Avatar } from "./Avatar.js";
-import { HeartMark, LockMark } from "./marks.js";
+import { HeartMark } from "./marks.js";
 import { returnParams } from "../return-to.js";
 import { ReferralChip } from "../referral-hint-react.js";
 
@@ -389,9 +389,12 @@ export function App(): ReactElement {
 
             {/* Premium closed this slot, and nothing else on the screen says
                 so — "waiting on them" with no account of why YOUR half is done
-                reads as the gate having skipped you. Drawn from the live
-                subscription rather than from the slot, so a lapse quietly stops
-                claiming it instead of asserting something stale. */}
+                reads as the gate having skipped you. Since 2026-10-08 only the
+                grandfathered ticket cover closes a slot, and `myPremiumActive`
+                is the server's word for exactly that cover (a subscription
+                alone reads false). Drawn from the live cover rather than from
+                the slot, so an ended cover quietly stops claiming it instead
+                of asserting something stale. */}
             {state.myPremiumActive && state.iPaid && (sc === "waiting" || sc === "cover-partner") && (
               <p className="tkt-premium-note">{s.premiumCovered}</p>
             )}
@@ -421,35 +424,11 @@ export function App(): ReactElement {
               strings={s}
             />
 
-            {/* The counterfactual, at the one moment it is both true and
-                useful: this date is about to cost something, and on a
-                subscription it would not have.
-
-                Three placement rules, each one a mistake this codebase has
-                already made somewhere else. It is in the SCROLL, never in the
-                sticky action bar — that footer is `flex: none`, so anything
-                added there grows it and pushes the pay button the user came
-                for up the screen (§3.9). It is NOT burgundy: the venue board's
-                own counterfactual is a filled accent button because it is the
-                loudest thing on that screen, whereas here the hero pay button
-                is directly below, and two burgundy blocks would be two
-                answers to one question. And it renders on `offer` ONLY — on
-                the cover screen the money buys the partner's ticket, which
-                Premium never covers, so the same line one screen later would
-                be false about the button under it. */}
-            {sc === "offer" && state.premiumWouldCoverMe && (
-              <button
-                type="button"
-                className="tkt-premium-hint"
-                onClick={() => {
-                  haptic("light");
-                  location.href = `premium.html?${returnParams("ticket-gate", { match: matchId, lang })}`;
-                }}
-              >
-                <LockMark />
-                <span>{s.premiumWouldCover}</span>
-              </button>
-            )}
+            {/* No Premium upsell here. The "your ticket is free with Premium"
+                row that used to sit at this spot was deleted on 2026-10-08:
+                Premium no longer covers Date Tickets ("за билет на свидание
+                платят всегда"), so the line would be false for every new
+                subscriber. */}
 
             {/* Referral cross-promo: invite a friend, earn a Date Ticket.
                 Shown only while the wallet is genuinely empty and only at the
@@ -458,10 +437,8 @@ export function App(): ReactElement {
                 content), never in the sticky action bar, so it can't compete
                 with the pay/use buttons below.
 
-                It is its own element at the chip's normal spacing, NOT
-                tightened under the Premium row above: the referral program
-                pays in tickets only and is never part of a Premium pitch, so
-                pairing the two as "offer + footnote" would read as one. */}
+                It never sits next to a Premium pitch: the referral program
+                pays in tickets only and is never part of one. */}
             {sc === "offer" && state.myBalance === 0 && state.referralEnabled && (
               <ReferralChip
                 lang={lang}

@@ -283,7 +283,8 @@ export function buildProductPlaybook(
 
   if (features.premium) {
     sections.push(`## Gennety Premium (currently ON)
-- Premium is optional. Perks: every date covered (no Date Ticket needed), free venue changes, and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars).
+- Premium is optional. Perks: the Date Wishlist — when both people say the date was great the morning after, Premium opens the partner's whole wishlist (favourite places, drinks, ideas for a perfect second date) for free, where without Premium that cheat sheet is a one-off purchase; free venue changes (up to twice per date); and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars).
+- Premium does NOT cover Date Tickets: every date costs a ticket, Premium or not. The only exception is subscribers who were already paid up on 2026-10-08 — their own ticket stays covered until the end of that already-paid period, and a renewal does not extend it. Never promise a new subscriber free dates.
 - THREE ways to buy it, all the same Premium: ${pricing.premiumPrice}/month, which RENEWS every 30 days until cancelled;${
       pricing.premiumPackagePrices[3]
         ? ` 3 months for ${pricing.premiumPackagePrices[3]} (15% off);`

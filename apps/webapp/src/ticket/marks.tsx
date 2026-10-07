@@ -26,10 +26,10 @@ export function HeartMark(): ReactElement {
 }
 
 /**
- * Padlock — the Premium counterfactual at the pay step (React twin of
- * `icons.ts`'s `lock`, same path data). Stroked rather than filled, so it sits
- * a step quieter than the filled marks around it: the row it leads is a
- * footnote to the pay button, not a rival to it.
+ * Padlock — React twin of `icons.ts`'s `lock`, same path data; today the Date
+ * Terminal's locked button. (It was drawn for the ticket gate's Premium
+ * counterfactual row, deleted on 2026-10-08.) Stroked rather than filled, so it
+ * sits a step quieter than the filled marks around it.
  */
 export function LockMark(): ReactElement {
   return (

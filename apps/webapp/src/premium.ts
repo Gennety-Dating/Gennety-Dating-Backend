@@ -51,8 +51,10 @@ interface Copy {
   crest: string;
   title: string;
   sub: string;
-  // Benefits, in display order. Unlimited dates leads: it is the one perk that
-  // changes what the product costs rather than what it looks like.
+  // Benefits, in display order. The Date Wishlist leads: it replaced the ticket
+  // cover as the headline perk on 2026-10-08, when Premium stopped covering
+  // Date Tickets (decision journal) — nothing on this screen may promise a
+  // free ticket any more.
   b1t: string; // benefit 1 title
   b1d: string; // benefit 1 detail (short, always visible)
   b1x: string; // benefit 1 explanation (revealed on tap)
@@ -123,10 +125,10 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "The good stuff, unlocked.",
-    b1t: "Unlimited dates",
-    b1d: "Every date is covered — no ticket, no per-date fee.",
+    b1t: "Date Wishlist",
+    b1d: "After a date you both loved, your match's whole wishlist is free.",
     b1x:
-      "Your own seat on every date is always paid for. A ticket for your match is separate, if you'd like to treat them.",
+      "The morning after, if you both say the date was great, Gennety opens your match's Date Wishlist — favourite places, drinks and little things for a perfect second date. Without Premium the whole cheat sheet is a one-off purchase; with Premium it's free.",
     b4t: "Every evening time",
     b4d: "The late slots in the calendar stay open for you.",
     b4x: "Late evenings are the most wanted time. With Premium they're open on every date, for both of you.",
@@ -161,9 +163,10 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Лучшее — открыто.",
-    b1t: "Безлимитные свидания",
-    b1d: "Каждое свидание покрыто — без билета и без оплаты за раз.",
-    b1x: "Твоё место на свидании всегда оплачено. Билет для пары — отдельно, если захочешь угостить.",
+    b1t: "Шпаргалка ко второму свиданию",
+    b1d: "Если свидание понравилось вам обоим — весь вишлист пары бесплатно.",
+    b1x:
+      "Утром после свидания, если вы оба скажете, что было круто, Gennety откроет вишлист твоей пары: любимые места, напитки и мелочи для идеального второго свидания. Без Premium вся шпаргалка — разовая покупка, с Premium — бесплатно.",
     b4t: "Любое вечернее время",
     b4d: "Поздние слоты в календаре открыты для тебя.",
     b4x:
@@ -200,9 +203,10 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Найкраще — відкрито.",
-    b1t: "Безлімітні побачення",
-    b1d: "Кожне побачення покрите — без квитка й без оплати за раз.",
-    b1x: "Твоє місце на побаченні завжди оплачено. Квиток для пари — окремо, якщо захочеш пригостити.",
+    b1t: "Шпаргалка до другого побачення",
+    b1d: "Якщо побачення сподобалося вам обом — увесь вішліст пари безкоштовно.",
+    b1x:
+      "Зранку після побачення, якщо ви обоє скажете, що було класно, Gennety відкриє вішліст твоєї пари: улюблені місця, напої та дрібниці для ідеального другого побачення. Без Premium уся шпаргалка — разова покупка, з Premium — безкоштовно.",
     b4t: "Будь-який вечірній час",
     b4d: "Пізні слоти в календарі відкриті для тебе.",
     b4x:
@@ -239,10 +243,10 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Das Beste, freigeschaltet.",
-    b1t: "Unbegrenzte Dates",
-    b1d: "Jedes Date ist abgedeckt — kein Ticket, keine Gebühr pro Date.",
+    b1t: "Spickzettel fürs zweite Date",
+    b1d: "Hat euch beiden das Date gefallen, ist die ganze Wunschliste gratis.",
     b1x:
-      "Dein Platz beim Date ist immer bezahlt. Ein Ticket für dein Match kommt extra, falls du es einladen willst.",
+      "Sagt ihr am Morgen danach beide, dass das Date toll war, öffnet Gennety die Wunschliste deines Matches: Lieblingsorte, Drinks und kleine Dinge fürs perfekte zweite Date. Ohne Premium kostet der ganze Spickzettel einmalig extra, mit Premium ist er gratis.",
     b4t: "Jede Abendzeit",
     b4d: "Die späten Slots im Kalender bleiben für dich offen.",
     b4x:
@@ -280,9 +284,10 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "To, co najlepsze — odblokowane.",
-    b1t: "Nielimitowane randki",
-    b1d: "Każda randka jest pokryta — bez biletu i bez opłaty za randkę.",
-    b1x: "Twoje miejsce na randce jest zawsze opłacone. Bilet dla pary — osobno, jeśli zechcesz zaprosić.",
+    b1t: "Ściąga na drugą randkę",
+    b1d: "Jeśli randka spodobała się wam obojgu — cała lista życzeń pary za darmo.",
+    b1x:
+      "Rano po randce, jeśli oboje powiecie, że było super, Gennety otworzy listę życzeń twojej pary: ulubione miejsca, napoje i drobiazgi na idealną drugą randkę. Bez Premium cała ściąga to jednorazowy zakup, z Premium — za darmo.",
     b4t: "Każda wieczorna godzina",
     b4d: "Późne sloty w kalendarzu są dla ciebie otwarte.",
     b4x:

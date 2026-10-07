@@ -644,6 +644,9 @@ const translations = {
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption: "It's a match 🤍 Get your ticket and we'll pick a time.",
+    // Only when BOTH sides still hold the grandfathered Premium ticket cover
+    // (`premiumTicketCoverUntil`, decision 2026-10-08) — a subscription alone
+    // covers no ticket, so this caption is true only for those pairs.
     ticketCardCaptionPremium:
       "It's a match 🤍 Premium covers both tickets — straight to picking a time.",
     ticketButton: "🎟️ Get your date ticket",
@@ -1157,18 +1160,18 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Top venues* — a selection of places a level above\n• *Free venue changes* — up to twice per date, no fee",
+      "*Gennety Premium*\n\n• *Date Wishlist* — after a date you both loved, your match's whole wishlist opens for free\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Top venues* — a selection of places a level above\n• *Free venue changes* — up to twice per date, no fee",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumOpenCta: "Learn more",
     premiumCancelHint:
       "You can cancel anytime — just tell me here, and I'll do it once you confirm.",
     premiumManageNote: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     premiumWelcomeDm:
-      "Welcome to Gennety Premium ✨\n\nYour dates are covered from now on — no ticket needed. Every evening time in the calendar is open to you, venue changes are on us, and the premium venue tier is unlocked. Active until {date}.",
+      "Welcome to Gennety Premium ✨\n\nAfter a date you both loved, you get your match's whole Date Wishlist for free. Every evening time in the calendar is open to you, venue changes are on us, and the premium venue tier is unlocked. Active until {date}.",
     premiumExpiring3d:
-      "Your Gennety Premium runs out on {date} — three days from now.\n\nNothing renews automatically on this plan, so covered dates, free venue changes and the premium venue tier stop on that day. Pick your next stretch below — a month, or 3 / 6 months at a lower rate.",
+      "Your Gennety Premium runs out on {date} — three days from now.\n\nNothing renews automatically on this plan, so Date Wishlist access, free venue changes and the premium venue tier stop on that day. Pick your next stretch below — a month, or 3 / 6 months at a lower rate.",
     premiumExpiring1d:
-      "Last day of your Gennety Premium — it ends {date}.\n\nAfter that, dates go back to costing a ticket and the premium venues lock again. One tap picks the next period: a month, or 3 / 6 months at a lower rate.",
+      "Last day of your Gennety Premium — it ends {date}.\n\nAfter that, a match's Date Wishlist costs extra again and the premium venues lock. One tap picks the next period: a month, or 3 / 6 months at a lower rate.",
     premiumExpiringCta: "Choose a plan",
     // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
     // premiumExpiring* above: nothing is ending here — the charge is coming,
@@ -1185,7 +1188,7 @@ const translations = {
     premiumPlanSaveBadge: "−{pct}%",
     premiumPlanPerMonth: "{price}/mo",
     premiumPackageWelcomeDm:
-      "Gennety Premium is yours for {months} months ✨\n\nDates covered, venue changes free, premium venues unlocked — through {date}. This one doesn't auto-renew, so I'll remind you before it runs out.",
+      "Gennety Premium is yours for {months} months ✨\n\nDate Wishlist included, venue changes free, premium venues unlocked — through {date}. This one doesn't auto-renew, so I'll remind you before it runs out.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Monthly subscription — free venue changes + premium venues. Renews every 30 days; cancel anytime.",
@@ -2252,18 +2255,18 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Лучшие заведения* — подборка мест уровнем выше\n• *Бесплатная смена места* — до двух раз за свидание, без оплаты",
+      "*Gennety Premium*\n\n• *Шпаргалка ко второму свиданию* — если свидание понравилось вам обоим, весь вишлист твоей пары открывается бесплатно\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Лучшие заведения* — подборка мест уровнем выше\n• *Бесплатная смена места* — до двух раз за свидание, без оплаты",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumOpenCta: "Подробнее",
     premiumCancelHint:
       "Отменить можно в любой момент — просто напиши мне, и я отменю подписку после твоего подтверждения.",
     premiumManageNote: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     premiumWelcomeDm:
-      "Добро пожаловать в Gennety Premium ✨\n\nТвои свидания теперь покрыты — билет не нужен. Любое вечернее время в календаре тебе открыто, смена места бесплатна, премиум-заведения открыты. Активно до {date}.",
+      "Добро пожаловать в Gennety Premium ✨\n\nТеперь, если свидание понравится вам обоим, весь вишлист твоей пары — бесплатно. Любое вечернее время в календаре тебе открыто, смена места бесплатна, премиум-заведения открыты. Активно до {date}.",
     premiumExpiring3d:
-      "Твой Gennety Premium заканчивается {date} — через три дня.\n\nЭтот тариф не продлевается сам, так что покрытые свидания, бесплатная смена места и премиум-заведения в этот день отключатся. Выбери следующий период: месяц или 3 / 6 месяцев по цене ниже.",
+      "Твой Gennety Premium заканчивается {date} — через три дня.\n\nЭтот тариф не продлевается сам, так что шпаргалки ко второму свиданию, бесплатная смена места и премиум-заведения в этот день отключатся. Выбери следующий период: месяц или 3 / 6 месяцев по цене ниже.",
     premiumExpiring1d:
-      "Последний день твоего Gennety Premium — он заканчивается {date}.\n\nПосле этого свидания снова будут стоить билет, а премиум-заведения закроются. Одно нажатие — и выбираешь следующий период: месяц или 3 / 6 месяцев по цене ниже.",
+      "Последний день твоего Gennety Premium — он заканчивается {date}.\n\nПосле этого шпаргалка ко второму свиданию снова станет платной, а премиум-заведения закроются. Одно нажатие — и выбираешь следующий период: месяц или 3 / 6 месяцев по цене ниже.",
     premiumExpiringCta: "Выбрать тариф",
     // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
     // premiumExpiring* above: nothing is ending here — the charge is coming,
@@ -2280,7 +2283,7 @@ const translations = {
     premiumPlanSaveBadge: "−{pct}%",
     premiumPlanPerMonth: "{price}/мес",
     premiumPackageWelcomeDm:
-      "Gennety Premium твой на {months} мес. ✨\n\nСвидания покрыты, смена места бесплатна, премиум-заведения открыты — до {date}. Этот тариф не продлевается сам, так что я напомню заранее.",
+      "Gennety Premium твой на {months} мес. ✨\n\nШпаргалки ко второму свиданию включены, смена места бесплатна, премиум-заведения открыты — до {date}. Этот тариф не продлевается сам, так что я напомню заранее.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Месячная подписка — бесплатная смена места + премиум-заведения. Продление каждые 30 дней; отмена в любой момент.",
@@ -3336,18 +3339,18 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Найкращі заклади* — добірка місць рівнем вище\n• *Безкоштовна зміна місця* — до двох разів за побачення, без оплати",
+      "*Gennety Premium*\n\n• *Шпаргалка до другого побачення* — якщо побачення сподобалося вам обом, увесь вішліст твоєї пари відкривається безкоштовно\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Найкращі заклади* — добірка місць рівнем вище\n• *Безкоштовна зміна місця* — до двох разів за побачення, без оплати",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumOpenCta: "Детальніше",
     premiumCancelHint:
       "Скасувати можна будь-коли — просто напиши мені, і я скасую підписку після твого підтвердження.",
     premiumManageNote: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     premiumWelcomeDm:
-      "Ласкаво просимо до Gennety Premium ✨\n\nТвої побачення тепер покриті — квиток не потрібен. Будь-який вечірній час у календарі тобі відкритий, зміна місця безкоштовна, преміум-заклади відкриті. Активно до {date}.",
+      "Ласкаво просимо до Gennety Premium ✨\n\nТепер, якщо побачення сподобається вам обом, увесь вішліст твоєї пари — безкоштовно. Будь-який вечірній час у календарі тобі відкритий, зміна місця безкоштовна, преміум-заклади відкриті. Активно до {date}.",
     premiumExpiring3d:
-      "Твій Gennety Premium завершується {date} — за три дні.\n\nЦей тариф не продовжується сам, тож покриті побачення, безкоштовна зміна місця та преміум-заклади цього дня вимкнуться. Обери наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
+      "Твій Gennety Premium завершується {date} — за три дні.\n\nЦей тариф не продовжується сам, тож шпаргалки до другого побачення, безкоштовна зміна місця та преміум-заклади цього дня вимкнуться. Обери наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
     premiumExpiring1d:
-      "Останній день твого Gennety Premium — він завершується {date}.\n\nПісля цього побачення знову коштуватимуть квиток, а преміум-заклади зачиняться. Одне натискання — і обираєш наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
+      "Останній день твого Gennety Premium — він завершується {date}.\n\nПісля цього шпаргалка до другого побачення знову стане платною, а преміум-заклади зачиняться. Одне натискання — і обираєш наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
     premiumExpiringCta: "Обрати тариф",
     // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
     // premiumExpiring* above: nothing is ending here — the charge is coming,
@@ -3364,7 +3367,7 @@ const translations = {
     premiumPlanSaveBadge: "−{pct}%",
     premiumPlanPerMonth: "{price}/міс",
     premiumPackageWelcomeDm:
-      "Gennety Premium твій на {months} міс. ✨\n\nПобачення покриті, зміна місця безкоштовна, преміум-заклади відкриті — до {date}. Цей тариф не продовжується сам, тож я нагадаю заздалегідь.",
+      "Gennety Premium твій на {months} міс. ✨\n\nШпаргалки до другого побачення включено, зміна місця безкоштовна, преміум-заклади відкриті — до {date}. Цей тариф не продовжується сам, тож я нагадаю заздалегідь.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Місячна підписка — безкоштовна зміна місця + преміум-заклади. Продовження кожні 30 днів; скасування будь-коли.",
@@ -4404,18 +4407,18 @@ const deTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Die besten Orte* — eine Auswahl an Orten eine Klasse höher\n• *Kostenlose Ortswechsel* — bis zu zweimal pro Date, ohne Gebühr",
+    "*Gennety Premium*\n\n• *Spickzettel fürs zweite Date* — hat euch beiden das Date gefallen, bekommst du die ganze Wunschliste deines Matches gratis\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Die besten Orte* — eine Auswahl an Orten eine Klasse höher\n• *Kostenlose Ortswechsel* — bis zu zweimal pro Date, ohne Gebühr",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumOpenCta: "Mehr erfahren",
   premiumCancelHint:
     "Du kannst jederzeit kündigen — schreib es mir einfach hier, ich erledige es nach deiner Bestätigung.",
   premiumManageNote: "Verwalten oder kündigen jederzeit in Telegram → Einstellungen → Abos.",
   premiumWelcomeDm:
-    "Willkommen bei Gennety Premium ✨\n\nDeine Dates sind ab jetzt abgedeckt — kein Ticket nötig. Jede Abendzeit im Kalender steht dir offen, Ortswechsel gehen auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
+    "Willkommen bei Gennety Premium ✨\n\nHat euch beiden ein Date gefallen, bekommst du ab jetzt die ganze Wunschliste deines Matches gratis. Jede Abendzeit im Kalender steht dir offen, Ortswechsel gehen auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
   premiumExpiring3d:
-    "Dein Gennety Premium endet am {date} — in drei Tagen.\n\nDieser Tarif verlängert sich nicht von selbst: abgedeckte Dates, kostenlose Ortswechsel und die Premium-Orte hören an dem Tag auf. Wähle den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
+    "Dein Gennety Premium endet am {date} — in drei Tagen.\n\nDieser Tarif verlängert sich nicht von selbst: Spickzettel fürs zweite Date, kostenlose Ortswechsel und die Premium-Orte hören an dem Tag auf. Wähle den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
   premiumExpiring1d:
-    "Letzter Tag deines Gennety Premium — es endet am {date}.\n\nDanach kostet ein Date wieder ein Ticket und die Premium-Orte sind wieder gesperrt. Ein Tipp genügt für den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
+    "Letzter Tag deines Gennety Premium — es endet am {date}.\n\nDanach kostet der Spickzettel fürs zweite Date wieder extra und die Premium-Orte sind wieder gesperrt. Ein Tipp genügt für den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
   premiumExpiringCta: "Tarif wählen",
   // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
   // premiumExpiring* above: nothing is ending here — the charge is coming,
@@ -4432,7 +4435,7 @@ const deTranslations: TranslationTable = {
   premiumPlanSaveBadge: "−{pct}%",
   premiumPlanPerMonth: "{price}/Mon.",
   premiumPackageWelcomeDm:
-    "Gennety Premium gehört dir für {months} Monate ✨\n\nDates abgedeckt, Ortswechsel kostenlos, Premium-Orte frei — bis {date}. Dieser Tarif verlängert sich nicht automatisch, also erinnere ich dich rechtzeitig.",
+    "Gennety Premium gehört dir für {months} Monate ✨\n\nSpickzettel fürs zweite Date inklusive, Ortswechsel kostenlos, Premium-Orte frei — bis {date}. Dieser Tarif verlängert sich nicht automatisch, also erinnere ich dich rechtzeitig.",
   premiumInvoiceTitle: "Gennety Premium",
   premiumInvoiceDesc:
     "Monatliches Abo — kostenlose Ortswechsel + Premium-Orte. Verlängert alle 30 Tage; jederzeit kündbar.",
@@ -5462,18 +5465,18 @@ const plTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, niezależnie od liczby randek\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Najlepsze lokale* — wybór miejsc o poziom wyżej\n• *Darmowa zmiana miejsca* — do dwóch razy na randkę, bez opłat",
+    "*Gennety Premium*\n\n• *Ściąga na drugą randkę* — jeśli randka spodobała się wam obojgu, cała lista życzeń twojej pary otwiera się za darmo\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Najlepsze lokale* — wybór miejsc o poziom wyżej\n• *Darmowa zmiana miejsca* — do dwóch razy na randkę, bez opłat",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumOpenCta: "Dowiedz się więcej",
   premiumCancelHint:
     "Możesz anulować w każdej chwili — po prostu napisz do mnie, a anuluję po Twoim potwierdzeniu.",
   premiumManageNote: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
   premiumWelcomeDm:
-    "Witaj w Gennety Premium ✨\n\nTwoje randki są od teraz pokryte — bilet niepotrzebny. Każda wieczorna godzina w kalendarzu jest dla ciebie otwarta, zmiany miejsca na nasz koszt, miejsca premium odblokowane. Aktywne do {date}.",
+    "Witaj w Gennety Premium ✨\n\nOd teraz, jeśli randka spodoba się wam obojgu, cała lista życzeń twojej pary jest za darmo. Każda wieczorna godzina w kalendarzu jest dla ciebie otwarta, zmiany miejsca na nasz koszt, miejsca premium odblokowane. Aktywne do {date}.",
   premiumExpiring3d:
-    "Twoje Gennety Premium kończy się {date} — za trzy dni.\n\nTen plan nie odnawia się sam, więc pokryte randki, darmowe zmiany miejsca i miejsca premium przestaną działać tego dnia. Wybierz kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
+    "Twoje Gennety Premium kończy się {date} — za trzy dni.\n\nTen plan nie odnawia się sam, więc ściągi na drugą randkę, darmowe zmiany miejsca i miejsca premium przestaną działać tego dnia. Wybierz kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
   premiumExpiring1d:
-    "Ostatni dzień twojego Gennety Premium — kończy się {date}.\n\nPotem randka znów kosztuje bilet, a miejsca premium się zamykają. Jedno tapnięcie wybiera kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
+    "Ostatni dzień twojego Gennety Premium — kończy się {date}.\n\nPotem ściąga na drugą randkę znów jest płatna, a miejsca premium się zamykają. Jedno tapnięcie wybiera kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
   premiumExpiringCta: "Wybierz plan",
   // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
   // premiumExpiring* above: nothing is ending here — the charge is coming,
@@ -5490,7 +5493,7 @@ const plTranslations: TranslationTable = {
   premiumPlanSaveBadge: "−{pct}%",
   premiumPlanPerMonth: "{price}/mies.",
   premiumPackageWelcomeDm:
-    "Gennety Premium jest twoje na {months} mies. ✨\n\nRandki pokryte, zmiany miejsca za darmo, miejsca premium odblokowane — do {date}. Ten plan nie odnawia się sam, więc przypomnę zawczasu.",
+    "Gennety Premium jest twoje na {months} mies. ✨\n\nŚciągi na drugą randkę w cenie, zmiany miejsca za darmo, miejsca premium odblokowane — do {date}. Ten plan nie odnawia się sam, więc przypomnę zawczasu.",
   premiumInvoiceTitle: "Gennety Premium",
   premiumInvoiceDesc:
     "Miesięczna subskrypcja — darmowe zmiany miejsca + miejsca premium. Odnawia się co 30 dni; anulujesz kiedy chcesz.",

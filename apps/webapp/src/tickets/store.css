@@ -288,8 +288,11 @@
    restating that — and it sat a few pixels from the saving pill, which is the
    thing on this row actually worth looking at. */
 
-/* "Premium covers your own dates" — a framing line for the bundles below, so
-   it reads as quiet context rather than a second offer competing with them.
+/* "Your current Premium period still covers your own dates" — shown only to
+   a holder of the grandfathered ticket cover (Premium stopped covering tickets
+   on 2026-10-08; `premiumActive` from the wallet route means that cover). A
+   framing line for the bundles below, so it reads as quiet context rather than
+   a second offer competing with them.
    `--accent-bright` for the same reason the ticket gate's plate uses it: the
    plain burgundy sinks into the near-black theme. */
 .store-premium-note {

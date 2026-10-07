@@ -1771,17 +1771,43 @@ there already mints a real invoice for a real charge; the packages stay out so o
 accidental tap cannot cost a visitor ~$75 instead of ~$18. Refused server-side
 rather than merely hidden — the catalog is the client's list, not the boundary.
 
-**Benefit #1 — unlimited dates (2026-08-22).** An active subscription covers the
-subscriber's own Date Ticket at the §3.5b gate, every time, with no per-date
-charge and no wallet spend — see that section for the mechanics and for why
-covering a partner stays priced. It leads the benefit list on every surface
-that describes the subscription (the Premium Mini App's three benefit cards,
-the menu hub's `premiumHubBody`, and `premiumWelcomeDm`), because it is the one
-perk that changes what the product COSTS rather than what it looks like. The
-break-even is ~2.6 dates a month at `TICKET_PRICE_CENTS`; there is deliberately
-**no cap and no fine print** — a ceiling that never binds is an obligation with
-none of the benefit — and the trigger for revisiting it is a metric (a
-subscriber exceeding ~4 dates in a month), never a mechanism.
+**Premium does not cover Date Tickets (2026-10-08).** The founder's decision:
+«за билет на свидание платят всегда — это повышает ответственность». Every date
+costs a ticket at the §3.5b gate whether or not either side subscribes. This
+retires the 2026-08-22 benefit "unlimited dates", under which an active
+subscription settled the subscriber's own slot for free.
+
+Subscribers who were paid up when the change shipped are grandfathered. They
+keep their own ticket covered until the END of the period they had already paid
+for, and not a day longer:
+
+1. The migration `20261008120000_date_wishlist_morning_after` stamps each such
+   user's `premiumUntil` into `User.premiumTicketCoverUntil`.
+2. No grant, renewal or package ever writes that column, so a renewal extends
+   Premium but not the cover.
+3. The gate settles a slot only while both `premiumTicketCoverUntil` and
+   `premiumUntil` are in the future (`isPremiumTicketCoverActive`,
+   `services/premium.ts`). The second condition exists for refunds: a refund
+   shortens `premiumUntil` and never the cover column, and a refunded period
+   must not go on paying for dates.
+4. Every surface that used to say "Premium covers your ticket" now derives it
+   from that cover: the gate's `myPremiumActive` (Mini App and `/v1`) and the
+   ticket store's `premiumActive` keep their wire names and mean "Premium covers
+   my own ticket". The pay-step counterfactual "your ticket is free with
+   Premium" (`premiumWouldCoverMe`) was deleted.
+
+**Benefit #1 — the Date Wishlist (2026-10-08).** The morning after a date both
+people are asked how it went; when BOTH answer that it was great, each is
+offered the other's Date Wishlist — favourite places, drinks and things for a
+perfect second date — as a cheat sheet. Without Premium a small free share is
+shown and the whole sheet is a one-off purchase (150⭐ / $2.99); with Premium
+the whole sheet opens for free. It replaced the ticket cover as the headline
+benefit and leads the list on every surface that describes the subscription:
+the Premium Mini App's first benefit card (`b1t`/`b1d`/`b1x`), the menu hub's
+`premiumHubBody`, `premiumWelcomeDm`, `premiumPackageWelcomeDm`, the expiry
+reminders (`premiumExpiring3d`/`premiumExpiring1d`), and the concierge's
+product playbook. Its own mechanics live with the feature (Morning After /
+Date Wishlist, flags `MORNING_AFTER_ENABLED` and `WISHLIST_FEATURE_ENABLED`).
 
 **Benefit #2 — every evening time (2026-08-26).** A subscription on EITHER side
 opens the paid evening band in the calendar (§3.6) for that pair, on every date
@@ -1791,7 +1817,7 @@ writes `Match.primeTimeUnlockedAt` — so a lapse cannot re-lock a slot the pair
 already agreed on, and nothing is ever revoked from a date in flight.
 
 It leads the benefit list on the Premium Mini App **second**, right after
-unlimited dates, and that is a routing decision rather than a ranking one: the
+the Date Wishlist, and that is a routing decision rather than a ranking one: the
 one path this feature creates onto that screen is the calendar's locked slot,
 and a reader who arrived that way is looking for exactly this line. The card
 carries the same padlock the calendar plates a locked row with — recognition
@@ -1918,8 +1944,9 @@ and rides the already-on `TICKET_FEATURE_ENABLED`. Full spec:
   statement rather than a question — now "Invite a friend · earn a ticket"
   (a test holds the bound); **(c) never full width** — a 30px auto-width pill.
   The "tight" pairing under a Premium counterfactual is gone with the Premium
-  placements: on the ticket gate the chip is its own element, not a footnote to
-  the "free with Premium" row.
+  placements: on the ticket gate the chip is its own element, and the "free
+  with Premium" row it once sat under was deleted on 2026-10-08 together with
+  Premium's ticket cover.
 
 ### 3.10 Promo Codes (feature-flagged, independent campaign links)
 

@@ -937,24 +937,21 @@ export interface TicketState {
   /** Drives the "invite a friend · earn a ticket" referral cross-promo chip. */
   referralEnabled?: boolean;
   /**
-   * An active Gennety Premium subscription covers MY own slot, so it cost me
-   * nothing — the server settled it before this screen was ever drawn.
+   * Premium covers MY own slot, so it cost me nothing — the server settled it
+   * before this screen was ever drawn. Since 2026-10-08 that means only the
+   * grandfathered ticket cover (a period paid before Premium stopped covering
+   * tickets); an active subscription alone reads `false`. The name is kept for
+   * wire compatibility.
    *
-   * It describes the subscription rather than the slot, which is what keeps it
-   * honest after a lapse: the flag goes false, the slot stays settled, and the
+   * It describes the cover rather than the slot, which is what keeps it honest
+   * after the cover ends: the flag goes false, the slot stays settled, and the
    * plate simply stops being drawn instead of claiming something the product no
    * longer stands behind. Covering the PARTNER is never free.
+   *
+   * (`premiumWouldCoverMe`, the pay-step "free with Premium" counterfactual,
+   * was removed on 2026-10-08; the server no longer sends it.)
    */
   myPremiumActive?: boolean;
-  /**
-   * A subscription would have covered MY slot and I do not have one — the
-   * in-flow counterfactual at the pay step.
-   *
-   * Render it on the OFFER screen only. On the cover screen the money buys the
-   * partner's ticket, which Premium never covers, so the same line there would
-   * be false about the button beneath it.
-   */
-  premiumWouldCoverMe?: boolean;
 }
 
 /**
@@ -1066,8 +1063,10 @@ export interface WalletState {
   /** Drives the "invite a friend · earn a ticket" referral cross-promo chip. */
   referralEnabled?: boolean;
   /**
-   * The wallet holder subscribes to Gennety Premium, so their OWN dates cost
-   * nothing (§3.5b). Tickets are still worth buying — covering a partner is
+   * Premium covers the wallet holder's OWN dates (§3.5b). Since 2026-10-08 only
+   * the grandfathered ticket cover does — a subscription bought or renewed
+   * after that covers no ticket, and reads `false` here; the name is kept for
+   * wire compatibility. Tickets are still worth buying — covering a partner is
    * not included — which is what the plate on this screen says. Bundles stay on
    * sale either way.
    */

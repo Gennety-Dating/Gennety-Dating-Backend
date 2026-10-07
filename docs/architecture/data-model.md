@@ -840,7 +840,9 @@ or a durable refund/surplus state. The hourly worker retries pending provider
 refunds and wallet credits; a `gate_payment` row still unprocessed after five
 minutes is treated as an abandoned pre-transaction charge and safely refunded.
 **`premium_gate`** (added 2026-08-22) is a **zero-delta** row marking a date
-slot covered by an active Gennety Premium subscription (PRODUCT_SPEC §3.5b).
+slot covered by Gennety Premium (PRODUCT_SPEC §3.5b) — since 2026-10-08 only by
+the grandfathered ticket cover (`User.premiumTicketCoverUntil`, §3.8), because
+an active subscription alone no longer covers a ticket.
 Zero-delta because Premium spends nothing — not money, and deliberately not a
 wallet ticket, which would have a subscriber paying for the very thing the
 subscription promises. It exists purely so a reader can tell "Premium covered

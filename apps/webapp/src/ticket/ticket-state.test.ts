@@ -213,11 +213,13 @@ describe("formatting helpers", () => {
   });
 });
 
-describe("Gennety Premium covers the subscriber's own slot", () => {
-  // The server settles a subscriber's slot before this screen is ever drawn, so
-  // from here Premium looks exactly like "iPaid". These pin the consequence the
-  // founder actually chose (Variant A): the subscription closes YOUR half and
-  // deliberately not your date's.
+describe("the grandfathered Premium cover closes the holder's own slot", () => {
+  // Since 2026-10-08 only a period paid before Premium stopped covering tickets
+  // still covers one, and `myPremiumActive` is the server's word for that
+  // cover. The server settles the slot before this screen is ever drawn, so
+  // from here the cover looks exactly like "iPaid". These pin the consequence
+  // the founder chose (Variant A): it closes YOUR half and deliberately not
+  // your date's.
   it("drops a covered male onto the cover screen, where his choice still is", () => {
     const s = state({ myGender: "male", iPaid: true, myPremiumActive: true, ticketStatus: "partial" });
     expect(deriveScreen(s)).toBe("cover-partner");
@@ -248,31 +250,14 @@ describe("Gennety Premium covers the subscriber's own slot", () => {
   });
 });
 
-describe("the pay-step Premium counterfactual belongs to the offer screen only", () => {
-  // The rule lives in JSX, so it is asserted against the source: there is no
-  // pure function to call, and the failure it guards is silent — a line that
-  // reads "your ticket is free with Premium" directly above a button that buys
-  // the PARTNER's ticket, which Premium never covers.
-  it("is rendered only when the screen is `offer`", () => {
-    const marker = "state.premiumWouldCoverMe && (";
-    const at = appSource.indexOf(marker);
-    expect(at).toBeGreaterThan(-1);
-    // The condition immediately preceding it must pin the screen. Reached the
-    // cover screen, the same flag is still true — see the next test — so the
-    // flag alone is not a gate.
-    const condition = appSource.slice(Math.max(0, at - 40), at);
-    expect(condition).toContain('sc === "offer"');
-  });
-
-  it("stays true on the cover screen, which is why the screen check is the gate", () => {
-    const s = state({
-      myGender: "male",
-      iPaid: true,
-      premiumWouldCoverMe: true,
-      ticketStatus: "partial",
-    });
-    expect(deriveScreen(s)).toBe("cover-partner");
-    expect(s.premiumWouldCoverMe).toBe(true);
+describe("the pay-step Premium counterfactual is gone (2026-10-08)", () => {
+  // "Your ticket is free with Premium" advertised a benefit Premium no longer
+  // has. Asserted against the source: the row was JSX, and a stray copy of it
+  // would be a silent false promise on the screen that takes the money.
+  it("is not rendered anywhere on the gate", () => {
+    expect(appSource).not.toContain("premiumWouldCoverMe");
+    expect(appSource).not.toContain("premiumWouldCover");
+    expect(appSource).not.toContain("tkt-premium-hint");
   });
 });
 

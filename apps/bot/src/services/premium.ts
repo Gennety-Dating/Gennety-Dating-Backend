@@ -94,6 +94,31 @@ export function hasLiveRecurringPremium(
 }
 
 /**
+ * Whether Premium still covers this user's OWN Date Ticket (§3.5b).
+ *
+ * Premium stopped covering tickets on 2026-10-08 ("за билет на свидание платят
+ * всегда"). Only subscribers who were paid up when that shipped keep the cover,
+ * and only until the end of the period they had already paid for: the
+ * migration stamped their `premiumUntil` into `premiumTicketCoverUntil`, and no
+ * grant or renewal ever moves that column. A subscription bought or renewed
+ * after the change therefore covers nothing here.
+ *
+ * Both columns must still be in the future. The cover column alone would
+ * survive a refund — a refund shortens `premiumUntil` by what it gave back and
+ * never touches the cover — so a refunded period would go on paying for dates.
+ */
+export function isPremiumTicketCoverActive(
+  head: { premiumUntil: Date | null; premiumTicketCoverUntil: Date | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return (
+    head?.premiumTicketCoverUntil != null &&
+    head.premiumTicketCoverUntil.getTime() > now.getTime() &&
+    isPremiumHeadActive(head, now)
+  );
+}
+
+/**
  * Whether a Telegram Stars pre-checkout for the RECURRING plan must be declined
  * because the payer already holds a live recurring subscription — the
  * last-line twin of the invoice route's 409, for an invoice link minted before

@@ -123,6 +123,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       ticketDiscountExpiresAt: null,
       ticketDiscountConsumedAt: null,
       premiumUntil: null,
+      premiumTicketCoverUntil: null,
       profile: { photos: ["alex-photo"] },
     },
     userB: {
@@ -137,6 +138,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       ticketDiscountExpiresAt: null,
       ticketDiscountConsumedAt: null,
       premiumUntil: null,
+      premiumTicketCoverUntil: null,
       profile: { photos: ["bea-photo"] },
     },
     ...overrides,
@@ -1176,20 +1178,40 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
   });
 });
 
-// ── Gennety Premium covers a subscriber's own slot (§3.5b / §3.8) ───────────
+// ── The grandfathered Premium ticket cover (§3.5b / §3.8) ────────────────────
+//
+// Premium stopped covering Date Tickets on 2026-10-08 ("за билет на свидание
+// платят всегда"). Only subscribers paid up at that moment keep their own slot
+// covered, until the end of the period they had already paid for — the
+// migration stamped it into `premiumTicketCoverUntil`, and no renewal moves it.
 
-/** A subscription that is still live, vs one that has already run out. */
+/** An instant still ahead, vs one already behind. */
 const ACTIVE_PREMIUM = new Date(Date.now() + 30 * 24 * 3_600_000);
 const LAPSED_PREMIUM = new Date(Date.now() - 24 * 3_600_000);
 
-function premiumRow(a: Date | null, b: Date | null, overrides: Record<string, unknown> = {}) {
+interface Head {
+  premiumUntil: Date | null;
+  premiumTicketCoverUntil: Date | null;
+}
+const NONE: Head = { premiumUntil: null, premiumTicketCoverUntil: null };
+/** Paid up when the change shipped: the cover runs to the end of that period. */
+const GRANDFATHERED: Head = { premiumUntil: ACTIVE_PREMIUM, premiumTicketCoverUntil: ACTIVE_PREMIUM };
+/** Subscribed after the change: Premium, but no ticket cover at all. */
+const NEW_SUBSCRIBER: Head = { premiumUntil: ACTIVE_PREMIUM, premiumTicketCoverUntil: null };
+/** Grandfathered and renewed: the subscription runs on, the cover ended with the old period. */
+const COVER_ENDED: Head = { premiumUntil: ACTIVE_PREMIUM, premiumTicketCoverUntil: LAPSED_PREMIUM };
+/** The grandfathered period was refunded: a refund shortens `premiumUntil`, never the cover. */
+const REFUNDED: Head = { premiumUntil: LAPSED_PREMIUM, premiumTicketCoverUntil: ACTIVE_PREMIUM };
+const LAPSED: Head = { premiumUntil: LAPSED_PREMIUM, premiumTicketCoverUntil: LAPSED_PREMIUM };
+
+function premiumRow(a: Head, b: Head, overrides: Record<string, unknown> = {}) {
   const base = matchRow(overrides) as Record<string, any>;
-  base.userA = { ...base.userA, premiumUntil: a };
-  base.userB = { ...base.userB, premiumUntil: b };
+  base.userA = { ...base.userA, ...a };
+  base.userB = { ...base.userB, ...b };
   return base;
 }
 
-describe("premium covers the subscriber's own ticket slot", () => {
+describe("the grandfathered Premium cover settles the holder's own ticket slot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mMatch.findUnique.mockReset();
@@ -1199,13 +1221,13 @@ describe("premium covers the subscriber's own ticket slot", () => {
     mLedger.create.mockResolvedValue({ id: "ledger-premium" });
   });
 
-  it("settles only the subscriber's own slot and leaves the gate half-open", async () => {
-    // A subscribes; B does not. One slot closes, the other still has to be paid.
+  it("settles only the cover holder's own slot and leaves the gate half-open", async () => {
+    // A holds the grandfathered cover; B does not. One slot closes, the other still has to be paid.
     mMatch.findUnique
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null)) // sendTicketOffer's own load
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null)) // settlePremiumSlots
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }))
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }));
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE)) // sendTicketOffer's own load
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE)) // settlePremiumSlots
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date() }))
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date() }));
     const api = createApi();
 
     await sendTicketOffer(api, "match-1");
@@ -1214,7 +1236,7 @@ describe("premium covers the subscriber's own ticket slot", () => {
       Object.prototype.hasOwnProperty.call((c[0] as any).data, "ticketPaidA"),
     );
     expect(paidClaims).toHaveLength(1);
-    // B is NOT a subscriber, so nothing may touch their slot.
+    // B holds no cover, so nothing may touch their slot.
     const bClaims = mMatch.updateMany.mock.calls.filter((c) =>
       Object.prototype.hasOwnProperty.call((c[0] as any).data, "ticketPaidB"),
     );
@@ -1239,10 +1261,10 @@ describe("premium covers the subscriber's own ticket slot", () => {
 
   it("writes a zero-delta `premium_gate` ledger row rather than spending a ticket", async () => {
     mMatch.findUnique
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null))
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null))
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }))
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }));
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE))
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE))
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date() }))
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date() }));
 
     await sendTicketOffer(createApi(), "match-1");
 
@@ -1254,17 +1276,17 @@ describe("premium covers the subscriber's own ticket slot", () => {
     expect(row).toBeDefined();
     expect((row![0] as any).data).toMatchObject({ userId: "uid-A", delta: 0, matchId: "match-1" });
 
-    // A subscription that drained the wallet would be charging for the very
-    // thing it promises — the opposite of unlimited.
+    // A cover that drained the wallet would be charging for the very thing the
+    // already-paid period promised.
     expect(spendTickets).not.toHaveBeenCalled();
   });
 
-  it("closes the gate for two subscribers and puts the mutual reveal BEFORE the Calendar", async () => {
+  it("closes the gate for two cover holders and puts the mutual reveal BEFORE the Calendar", async () => {
     const bothPaid = { ticketPaidA: new Date(), ticketPaidB: new Date() };
     mMatch.findUnique
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM))
-      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM))
-      .mockResolvedValue(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM, bothPaid));
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, GRANDFATHERED))
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, GRANDFATHERED))
+      .mockResolvedValue(premiumRow(GRANDFATHERED, GRANDFATHERED, bothPaid));
     const api = createApi();
 
     // Order is recorded when a send RESOLVES, not when it is called: the sends
@@ -1299,7 +1321,7 @@ describe("premium covers the subscriber's own ticket slot", () => {
 
   it("claims nothing on a second run, so a poll racing the offer cannot double-settle", async () => {
     mMatch.findUnique.mockResolvedValue(
-      premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }),
+      premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date() }),
     );
 
     const claimed = await settlePremiumSlots("match-1");
@@ -1310,7 +1332,7 @@ describe("premium covers the subscriber's own ticket slot", () => {
   });
 
   it("does not settle for a subscription that has already run out", async () => {
-    mMatch.findUnique.mockResolvedValue(premiumRow(LAPSED_PREMIUM, LAPSED_PREMIUM));
+    mMatch.findUnique.mockResolvedValue(premiumRow(LAPSED, LAPSED));
 
     const claimed = await settlePremiumSlots("match-1");
 
@@ -1318,12 +1340,51 @@ describe("premium covers the subscriber's own ticket slot", () => {
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
-  it("refuses to settle once the gate is closed, whatever the subscription says", async () => {
+  it("settles nothing for a subscriber who bought Premium after the change", async () => {
+    // Premium alone covers no ticket any more: both sides subscribe, both still pay.
+    mMatch.findUnique.mockResolvedValue(premiumRow(NEW_SUBSCRIBER, NEW_SUBSCRIBER));
+    const api = createApi();
+
+    await sendTicketOffer(api, "match-1");
+
+    const slotClaims = mMatch.updateMany.mock.calls.filter((c) => {
+      const data = (c[0] as any).data ?? {};
+      return "ticketPaidA" in data || "ticketPaidB" in data;
+    });
+    expect(slotClaims).toHaveLength(0);
+    expect(
+      mLedger.create.mock.calls.some((c) => (c[0] as any).data?.reason === "premium_gate"),
+    ).toBe(false);
+    // Both cards keep the ordinary caption and the pay button — never the
+    // "Premium covers both tickets" reveal.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    for (const call of api.sendMessage.mock.calls) {
+      expect(call[1]).toBe(t("en", "ticketCardCaption"));
+      expect((call[2] as any).reply_markup).toBeDefined();
+    }
+    expect(mStartScheduling).not.toHaveBeenCalled();
+  });
+
+  it("stops covering once the grandfathered period is over, even though the subscription renewed", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(COVER_ENDED, NONE));
+
+    expect(await settlePremiumSlots("match-1")).toEqual([]);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not cover a refunded period, although the cover column still runs", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(REFUNDED, NONE));
+
+    expect(await settlePremiumSlots("match-1")).toEqual([]);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses to settle once the gate is closed, whatever the cover says", async () => {
     // `status` alone does not close the gate — the expiry sweep leaves the match
     // `negotiating` and only flips `ticketStatus`. A stale poll must not claim a
     // slot for a date that no longer costs anything.
     mMatch.findUnique.mockResolvedValue(
-      premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM, { ticketStatus: "refunded" }),
+      premiumRow(GRANDFATHERED, GRANDFATHERED, { ticketStatus: "refunded" }),
     );
 
     expect(await settlePremiumSlots("match-1")).toEqual([]);
@@ -1331,37 +1392,66 @@ describe("premium covers the subscriber's own ticket slot", () => {
   });
 });
 
-describe("the pay-step counterfactual flag", () => {
+describe("myPremiumActive reports the ticket cover, not the subscription", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mMatch.findUnique.mockReset();
+    mMatch.update.mockResolvedValue({});
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mLedger.create.mockResolvedValue({ id: "ledger-premium" });
   });
 
-  it("is true for a non-subscriber and false for a subscriber", async () => {
-    mMatch.findUnique.mockResolvedValue(premiumRow(ACTIVE_PREMIUM, null));
+  it("is true for a grandfathered cover and false for everyone else", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(GRANDFATHERED, NONE));
 
-    const covered = await getTicketState(1001n, "match-1"); // A subscribes
-    const paying = await getTicketState(1002n, "match-1"); // B does not
+    const covered = await getTicketState(1001n, "match-1"); // A: grandfathered
+    const paying = await getTicketState(1002n, "match-1"); // B: no Premium
 
     expect(covered.ok && covered.state.myPremiumActive).toBe(true);
-    expect(covered.ok && covered.state.premiumWouldCoverMe).toBe(false);
     expect(paying.ok && paying.state.myPremiumActive).toBe(false);
-    expect(paying.ok && paying.state.premiumWouldCoverMe).toBe(true);
   });
 
-  it("is withheld entirely when the Premium feature is off", async () => {
-    // The split from `myPremiumActive` is the point: that one reports an
-    // entitlement the flag may not revoke, while this opens a NEW purchase
-    // surface — exactly what the flag exists to close.
-    const { env } = await import("../../config.js");
-    const previous = env.PREMIUM_FEATURE_ENABLED;
-    (env as { PREMIUM_FEATURE_ENABLED: boolean }).PREMIUM_FEATURE_ENABLED = false;
-    try {
-      mMatch.findUnique.mockResolvedValue(premiumRow(null, null));
-      const res = await getTicketState(1001n, "match-1");
-      expect(res.ok && res.state.premiumWouldCoverMe).toBe(false);
-    } finally {
-      (env as { PREMIUM_FEATURE_ENABLED: boolean }).PREMIUM_FEATURE_ENABLED = previous;
-    }
+  it("is false for a subscriber who bought Premium after the change", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(NEW_SUBSCRIBER, COVER_ENDED));
+
+    const fresh = await getTicketState(1001n, "match-1");
+    const renewed = await getTicketState(1002n, "match-1");
+
+    expect(fresh.ok && fresh.state.myPremiumActive).toBe(false);
+    expect(renewed.ok && renewed.state.myPremiumActive).toBe(false);
+  });
+
+  it("no longer carries the pay-step \"free with Premium\" counterfactual", async () => {
+    // Removed with the benefit it advertised; an older Mini App bundle reads the
+    // missing field as false and draws nothing.
+    mMatch.findUnique.mockResolvedValue(premiumRow(NONE, NONE));
+
+    const res = await getTicketState(1001n, "match-1");
+
+    expect(res.ok).toBe(true);
+    expect(res.ok && res.state).not.toHaveProperty("premiumWouldCoverMe");
+  });
+
+  it("a polled read settles nothing for a new subscriber", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(NEW_SUBSCRIBER, NONE));
+
+    const res = await getTicketState(1001n, "match-1", createApi());
+
+    expect(res.ok && res.state.iPaid).toBe(false);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("a polled read still settles a grandfathered slot the offer left open", async () => {
+    mMatch.findUnique
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE)) // getTicketState
+      .mockResolvedValueOnce(premiumRow(GRANDFATHERED, NONE)) // settlePremiumSlots
+      .mockResolvedValue(premiumRow(GRANDFATHERED, NONE, { ticketPaidA: new Date(), ticketStatus: "partial" }));
+
+    const res = await getTicketState(1001n, "match-1", createApi());
+
+    const claim = mMatch.updateMany.mock.calls.find((c) => "ticketPaidA" in ((c[0] as any).data ?? {}));
+    expect(claim).toBeDefined();
+    expect(res.ok && res.state.iPaid).toBe(true);
+    expect(res.ok && res.state.myPremiumActive).toBe(true);
   });
 });

@@ -135,9 +135,10 @@ interface LoadedState {
  * Resolve + authorize the gate state, answering the error itself on failure.
  *
  * `api` is passed only by the GET read, which is what lets `getTicketState`
- * settle a slot for a caller who became a Premium subscriber after the gate
- * opened (§3.5b). Withheld elsewhere on purpose: the settle is a write, and it
- * belongs on the polled read rather than bolted onto every action.
+ * settle a slot the offer left open for a caller whose grandfathered Premium
+ * ticket cover is still running (§3.5b; a subscription alone covers no ticket
+ * since 2026-10-08). Withheld elsewhere on purpose: the settle is a write, and
+ * it belongs on the polled read rather than bolted onto every action.
  */
 async function loadState(
   req: Request,
@@ -254,10 +255,12 @@ async function nativeState(
     balance: state.myBalance,
     priceCents: state.priceCents,
     expiresAt: state.expiresAt,
-    // Whether an active subscription is what covers this caller's own slot
-    // (§3.8). The client renders the "covered by Premium" plate from it; the
-    // slot itself is already settled server-side either way, so a client that
-    // ignores the field is merely quieter, never wrong.
+    // Whether Premium covers this caller's own slot (§3.8). Since 2026-10-08
+    // that is only the grandfathered cover (`premiumTicketCoverUntil`) — an
+    // active subscription alone reads `false`; the name stays for wire
+    // compatibility. The client renders the "covered by Premium" plate from
+    // it; the slot itself is already settled server-side either way, so a
+    // client that ignores the field is merely quieter, never wrong.
     myPremiumActive: state.myPremiumActive,
     serverNow: new Date().toISOString(),
   };

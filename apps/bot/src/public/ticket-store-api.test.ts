@@ -101,6 +101,46 @@ describe("GET /v1/tickets/wallet", () => {
     const res = await request(buildApp()).get("/v1/tickets/wallet").set("Authorization", `tma ${auth()}`);
     expect(res.body.rail).toBe("stars");
   });
+
+  // Premium stopped covering Date Tickets on 2026-10-08. `premiumActive` keeps
+  // its name but now means "Premium covers my own dates", which only the
+  // grandfathered cover (a period paid before the change) still does.
+  it("reports the Premium ticket cover only for a grandfathered holder", async () => {
+    getActiveDiscount.mockResolvedValue(null);
+    const ahead = new Date(Date.now() + 86_400_000);
+    const behind = new Date(Date.now() - 86_400_000);
+    const wallet = () =>
+      request(buildApp()).get("/v1/tickets/wallet").set("Authorization", `tma ${auth()}`);
+
+    userFindUnique.mockResolvedValueOnce({
+      id: "u1",
+      ticketBalance: 2,
+      language: "en",
+      premiumUntil: ahead,
+      premiumTicketCoverUntil: ahead,
+    });
+    expect((await wallet()).body.premiumActive).toBe(true);
+
+    // Subscribed after the change: Premium, no cover.
+    userFindUnique.mockResolvedValueOnce({
+      id: "u1",
+      ticketBalance: 2,
+      language: "en",
+      premiumUntil: ahead,
+      premiumTicketCoverUntil: null,
+    });
+    expect((await wallet()).body.premiumActive).toBe(false);
+
+    // Grandfathered, renewed past the old period: the cover has ended.
+    userFindUnique.mockResolvedValueOnce({
+      id: "u1",
+      ticketBalance: 2,
+      language: "en",
+      premiumUntil: ahead,
+      premiumTicketCoverUntil: behind,
+    });
+    expect((await wallet()).body.premiumActive).toBe(false);
+  });
 });
 
 describe("POST /v1/tickets/store/settle-no-charge", () => {
