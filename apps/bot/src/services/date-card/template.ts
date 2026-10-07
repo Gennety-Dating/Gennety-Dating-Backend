@@ -8,7 +8,8 @@
  * film grain; a wide duotone venue photo as the hero; an
  * overlapping tilted polaroid of the partner; a Gennety Display headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
- * The drawn "Gennety" logotype sits top-left and the brand butterfly logo sits
+ * The word "Gennety" sits top-left, typed in Archivo Black as it always was,
+ * and the brand butterfly logo sits
  * top-right (slightly tilted, nudged toward the edge like the polaroid). The
  * "made with Gennety" credit sits beside the venue address when the address
  * leaves room for it, and is stamped into the hero photo's lower-left corner
@@ -24,8 +25,7 @@
  * is pure layout.
  */
 
-import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
-import { WORDMARK_ASPECT, wordmarkSrc, type WordmarkImage } from "../brand-wordmark.js";
+import { DISPLAY_FAMILY, BODY_FAMILY, LOGO_FAMILY } from "../card-fonts.js";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -61,16 +61,14 @@ const SLOGAN_LINE_HEIGHT = 1.04;
 const SLOGAN_SLOT_LINES = 3;
 const SLOGAN_MAX_W = 664;
 
-/** Logotype width top-left; its cap height matches the old typed 36px word. */
-const WORDMARK_W = 150;
-
 /**
  * The venue photo (founder's choice of 2026-10-07): the old 1000 × 690 box
  * ("variant A") scaled down to 92 % and tilted slightly LEFT, against the
  * partner polaroid's +7deg to the right, so the two lean apart and balance.
+ * The tilt is -3deg: the founder picked it from -3, -4 and -6 on 2026-10-07.
  * At full size the photo ran to 20px from the card's left edge, and that thin
  * strip of background read as a mistake. Smaller and tilted, the left edge is
- * a slant 40–85px in, which reads as placed. Its centre stays where the
+ * a slant 46–79px in, which reads as placed. Its centre stays where the
  * 1000 × 690 photo's was (x 530, y 769 on the card), so the card keeps its
  * balance. The box is exported because the duotone is cut to it upstream
  * (`prepareVenuePhoto`), so the two cannot drift apart.
@@ -81,7 +79,7 @@ export const HERO_H = 635;
 const HERO_LEFT = 6;
 const HERO_TOP = 37;
 /** Counter-tilt to the polaroid's +7deg (negative = counter-clockwise). */
-const HERO_TILT_DEG = -4;
+const HERO_TILT_DEG = -3;
 /**
  * Height of the venue block. The polaroid hangs from its bottom edge. The
  * slot of the bigger slogan pushed the block 13px down, so the block is 13px
@@ -156,12 +154,6 @@ export interface CardElementInput {
   grain: Buffer | null;
   /** Brand butterfly mark (rasterized, alpha-trimmed). Sits top-right. Optional. */
   logo: LogoMark | null;
-  /**
-   * Drawn "Gennety" logotype, already tinted to the theme's ink. `null` falls
-   * back to the word set in Gennety Display, so a missing asset never blocks
-   * the card.
-   */
-  wordmark: WordmarkImage | null;
   venueName: string;
   venueAddress: string;
   /** Headline slogan; split on `\n` into stacked lines, last line accented. */
@@ -204,7 +196,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
             ),
           ]
         : []),
-      header(input.wordmark, p),
+      header(p),
       heroSlogan(input.slogan, p),
       venueSection(input),
       el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
@@ -240,20 +232,16 @@ function logoImg(logo: LogoMark): CardNode {
   );
 }
 
-function header(wordmark: WordmarkImage | null, p: Palette): CardNode {
-  const mark = wordmark
-    ? el(
-        "img",
-        { width: `${WORDMARK_W}px`, height: `${Math.round(WORDMARK_W / WORDMARK_ASPECT)}px` },
-        undefined,
-        { src: wordmarkSrc(wordmark) },
-      )
-    : el(
-        "div",
-        { display: "flex", fontFamily: DISPLAY_FAMILY, fontWeight: 800, fontSize: "36px", color: p.ink },
-        "Gennety",
-      );
-  return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [mark]);
+/**
+ * The word "Gennety", typed as it was before 2026-10-07. The drawn logotype
+ * and the word in Gennety Display were both tried that day; the founder kept
+ * the original face. Archivo Black has no Cyrillic, which is safe here and
+ * nowhere else: this word is Latin in every locale.
+ */
+function header(p: Palette): CardNode {
+  return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [
+    el("div", { display: "flex", fontFamily: LOGO_FAMILY, fontSize: "36px", color: p.ink }, "Gennety"),
+  ]);
 }
 
 /**

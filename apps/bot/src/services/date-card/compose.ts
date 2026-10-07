@@ -1,9 +1,8 @@
 import satori from "satori";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { cardFonts } from "../card-fonts.js";
-import { wordmarkPng } from "../brand-wordmark.js";
 import { grainPng, svgToPng } from "./image.js";
-import { buildCardElement, palette, CARD_W, CARD_H, type CardTheme } from "./template.js";
+import { buildCardElement, CARD_W, CARD_H, type CardTheme } from "./template.js";
 import { resolveCreditPlacement } from "./credit-placement.js";
 
 /**
@@ -57,7 +56,6 @@ export async function composeDateCard(input: ComposeDateCardInput): Promise<Buff
     grain: input.theme === "light" ? null : grainTile(),
     // Brand marks are best-effort; absent → the card renders without them.
     logo: await loadLogo(),
-    wordmark: await wordmarkPng(palette(input.theme).ink),
     venueName: input.venueName,
     venueAddress: input.venueAddress,
     // Beside the address when it fits, on the photo when it does not — the

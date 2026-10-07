@@ -11,7 +11,6 @@
  * have no color-emoji glyphs and satori would drop them.
  */
 import { CARD_W, CARD_H, type ButterflyMark, type CollageSpec } from "./collage.js";
-import { wordmarkNode, type WordmarkImage } from "../brand-wordmark.js";
 
 export const GRAPHITE = "#111111";
 export const WINE = "#8B253B";
@@ -88,10 +87,6 @@ export interface CardLayers {
   grain: Buffer | null;
   /** Alpha-trimmed butterfly mark (real aspect ratio) for wordmark rows. Optional. */
   butterfly: ButterflyMark | null;
-  /** Drawn logotype in wine (the paper set's signature). `null` → the typed word. */
-  logotype: WordmarkImage | null;
-  /** Drawn logotype in soft white (graphite / wine headers). `null` → the typed word. */
-  logotypeSoft: WordmarkImage | null;
 }
 
 /** Butterfly <img> sized by display height, preserving the mark's real ratio. */
@@ -117,14 +112,10 @@ function wordmark(layers: CardLayers, texts: MatchCardTexts, ink: string, pos: R
   const children: (CardNode | string)[] = [];
   if (layers.butterfly) children.push(butterflyImg(layers.butterfly, 38));
   children.push(
-    wordmarkNode(
-      layers.logotypeSoft,
-      128,
-      el(
-        "div",
-        { display: "flex", fontFamily: "Unbounded", fontSize: "30px", fontWeight: 700, color: ink, letterSpacing: "1px" },
-        texts.wordmark,
-      ),
+    el(
+      "div",
+      { display: "flex", fontFamily: "Unbounded", fontSize: "30px", fontWeight: 700, color: ink, letterSpacing: "1px" },
+      texts.wordmark,
     ),
   );
   return el("div", { display: "flex", position: "absolute", alignItems: "center", gap: "14px", ...pos }, children);
@@ -231,14 +222,10 @@ function brandSignature(layers: CardLayers, texts: MatchCardTexts): CardNode {
     { display: "flex", alignItems: "center", gap: "10px", marginTop: "26px", alignSelf: "flex-end" },
     [
       ...(layers.butterfly ? [butterflyImg(layers.butterfly, 26)] : []),
-      wordmarkNode(
-        layers.logotype,
-        96,
-        el(
-          "div",
-          { display: "flex", fontFamily: "Unbounded", fontSize: "21px", fontWeight: 700, color: WINE },
-          texts.wordmark,
-        ),
+      el(
+        "div",
+        { display: "flex", fontFamily: "Unbounded", fontSize: "21px", fontWeight: 700, color: WINE },
+        texts.wordmark,
       ),
     ],
   );

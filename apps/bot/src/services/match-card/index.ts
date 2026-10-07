@@ -13,7 +13,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { grainPng, toPngBuffer, svgToPng} from "../date-card/image.js";
-import { wordmarkPng, type WordmarkImage } from "../brand-wordmark.js";
 import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } from "./collage.js";
 import {
   buildMatchCardElement,
@@ -24,8 +23,6 @@ import {
   paperSoloSpec,
   paperPalette,
   GRAPHITE,
-  SOFT,
-  WINE,
   type CardNode,
   type MatchCardTexts,
   type MatchCardVariant,
@@ -76,12 +73,6 @@ export function loadFonts(): SatoriFonts {
   return cachedFonts;
 }
 
-/** The drawn logotype in the two inks the layouts use (cached per colour). */
-async function logotypes(): Promise<{ logotype: WordmarkImage | null; logotypeSoft: WordmarkImage | null }> {
-  const [logotype, logotypeSoft] = await Promise.all([wordmarkPng(WINE), wordmarkPng(SOFT)]);
-  return { logotype, logotypeSoft };
-}
-
 /** Full-card film-grain tile, generated once and reused for every render. */
 let cachedGrain: Buffer | null = null;
 function grainTile(): Buffer {
@@ -123,7 +114,6 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
       collage,
       grain: grainTile(),
       butterfly: await headerButterfly(input.variant),
-      ...(await logotypes()),
     });
     return await rasterize(element);
   } catch (err) {
@@ -159,7 +149,6 @@ export async function renderMatchCardSet(
     const textCardIndex = lastIsSolo ? chunks.length - 1 : 0;
 
     const butterfly = await headerButterfly("paper");
-    const marks = await logotypes();
     const grain = grainTile();
     const cards: Buffer[] = [];
     for (const [i, chunk] of chunks.entries()) {
@@ -167,7 +156,7 @@ export async function renderMatchCardSet(
       const spec =
         chunk.length === 1 ? paperSoloSpec(pal.dotNeutral) : paperDuoSpec(withPanel, pal.dotNeutral);
       const collage = await buildCollageLayer(chunk, spec, `${input.seed}#${i}`);
-      const layers = { collage, grain, butterfly, ...marks };
+      const layers = { collage, grain, butterfly };
       const element =
         chunk.length === 1
           ? paperSoloCard(input.texts, layers, pal)

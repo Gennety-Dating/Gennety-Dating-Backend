@@ -20,7 +20,6 @@
  */
 
 import type { CoordCardCopy, CoordCardVariant } from "./copy.js";
-import { wordmarkNode, type WordmarkImage } from "../brand-wordmark.js";
 
 export const CARD_W = 900;
 export const CARD_H = 1040;
@@ -45,7 +44,7 @@ interface Palette {
   glowAlpha: string;
 }
 
-export function palette(theme: CoordCardTheme): Palette {
+function palette(theme: CoordCardTheme): Palette {
   return theme === "light"
     ? {
         bg: "linear-gradient(158deg, #FFFFFF 0%, #F5F1F1 46%, #EFE2E5 100%)",
@@ -194,13 +193,8 @@ export interface CoordCardElementInput {
   grain: Buffer | null;
   /** Display family for the headline (Latin vs Cyrillic — see index.ts). */
   headlineFamily: string;
-  /** Drawn logotype tinted to the ink; `null` → the word typed in Archivo Black. */
-  wordmark: WordmarkImage | null;
   theme: CoordCardTheme;
 }
-
-/** Logotype width in the lockup: its cap height matches the old typed 34px word. */
-const WORDMARK_W = 150;
 
 export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
   const p = palette(input.theme);
@@ -258,14 +252,10 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
               ),
             ]
           : []),
-        wordmarkNode(
-          input.wordmark,
-          WORDMARK_W,
-          el(
-            "div",
-            { fontFamily: "Archivo Black", fontSize: "34px", letterSpacing: "-1px", color: p.ink },
-            "Gennety",
-          ),
+        el(
+          "div",
+          { fontFamily: "Archivo Black", fontSize: "34px", letterSpacing: "-1px", color: p.ink },
+          "Gennety",
         ),
       ]),
 

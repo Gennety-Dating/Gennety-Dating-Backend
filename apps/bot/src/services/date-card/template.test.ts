@@ -11,7 +11,7 @@ import {
   HERO_H,
 } from "./template.js";
 import { resolveCreditPlacement, measureRoboto, CREDIT_MIN_GAP } from "./credit-placement.js";
-import { cardFonts } from "../card-fonts.js";
+import { cardFonts, LOGO_FAMILY } from "../card-fonts.js";
 
 /**
  * Geometry guard for the card's bottom block.
@@ -63,7 +63,6 @@ function card(venueName: string, venueAddress: string, slogan = "x") {
     venuePhoto: null,
     grain: null,
     logo: null,
-    wordmark: null,
     venueName,
     venueAddress,
     slogan,
@@ -196,6 +195,14 @@ describe("date card layout", () => {
     // Two words stay breakable: glued, the pair could not wrap at all.
     expect(keepLastWordsTogether("Сразу вживую")).toBe("Сразу вживую");
     expect(keepLastWordsTogether("Gennety")).toBe("Gennety");
+  });
+
+  it("sets the Latin-only Archivo Black on the word Gennety and nothing else", () => {
+    // Archivo Black has no Cyrillic. Under the slogan it was the 2026-10-01
+    // regression, so it may carry the header word only.
+    const built = card("Кав'ярня «Ранок»", "вул. Хрещатик, 1", "Без переписки\nСразу вживую");
+    const set = findNodes(built, (n) => n.props.style?.fontFamily === LOGO_FAMILY);
+    expect(set.map(childText)).toEqual(["Gennety"]);
   });
 
   it("clips the venue name and address to one line each", async () => {

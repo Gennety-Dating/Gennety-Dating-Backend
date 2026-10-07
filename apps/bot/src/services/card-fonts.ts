@@ -15,8 +15,11 @@ import type satori from "satori";
  * which has no Cyrillic at all. That is how the copy audit of 2026-10-01
  * silently changed the card: the slogan became Russian and satori drew it in
  * thin Roboto. The OTHER cards keep their own faces (Archivo Black, Unbounded)
- * by the founder's call of 2026-10-07: they "look good in Telegram". They take
- * only the drawn logotype (`brand-wordmark.ts`).
+ * by the founder's call of 2026-10-07: they "look good in Telegram".
+ *
+ * Archivo Black stays in this list for one word: "Gennety" in the card's
+ * header, typed in its original face (founder, 2026-10-07). It has no
+ * Cyrillic, so `template.test.ts` checks that nothing else is set in it.
  *
  * Coverage: all five product languages (ru, uk, en, de, pl, including
  * ʼ ’ « » —) are in the files, checked by `card-fonts.test.ts`.
@@ -29,6 +32,8 @@ import type satori from "satori";
 
 export const DISPLAY_FAMILY = "Gennety Display";
 export const BODY_FAMILY = "Roboto";
+/** The header word "Gennety" only. Latin-only face, single heavy weight. */
+export const LOGO_FAMILY = "Archivo Black";
 
 export type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 
@@ -46,6 +51,7 @@ export function cardFonts(): SatoriFonts {
     { name: BODY_FAMILY, data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
     { name: DISPLAY_FAMILY, data: read("GennetyDisplay-Bold.ttf"), weight: 700, style: "normal" },
     { name: DISPLAY_FAMILY, data: read("GennetyDisplay-ExtraBold.ttf"), weight: 800, style: "normal" },
+    { name: LOGO_FAMILY, data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
   ];
   return cached;
 }

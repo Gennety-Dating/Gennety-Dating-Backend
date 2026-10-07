@@ -7,7 +7,6 @@ import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { dateTicketsPhrase, t } from "@gennety/shared";
 import { butterflyPng } from "../match-card/collage.js";
-import { wordmarkPng, wordmarkNode } from "../brand-wordmark.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
@@ -44,10 +43,8 @@ const CARD_JPEG_QUALITY = 88;
  * also why a single failed fetch used to be permanent for a given referrer.
  * "3" (2026-09-22): the gift line promises a date ticket instead of Premium —
  * same default count (1), so only the revision can change the URL.
- * "4" (2026-10-07): the drawn logotype instead of the word typed in Archivo
- * Black (the headline faces stay as they were).
  */
-export const CARD_REVISION = "4";
+export const CARD_REVISION = "3";
 
 /**
  * Encoded cards, keyed by `contentVersion`. The card is a pure function of
@@ -139,13 +136,7 @@ export function referralCardContentVersion(input: ReferralCardInput): string {
     .slice(0, 12);
 }
 
-/** Logotype width: its cap height matches the old typed 46px word. */
-const WORDMARK_W = 196;
-
-/**
- * The brand word typed in Archivo Black — the fallback for the drawn logotype
- * (`brand-wordmark.ts`) when its asset cannot be read.
- */
+/** The brand wordmark, set in the logo's own typeface (title-case, not caps). */
 function wordmark(style: Record<string, unknown>): Node {
   return txt({ fontFamily: "Archivo Black", letterSpacing: -1, ...style }, "Gennety");
 }
@@ -325,7 +316,7 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
       ],
     );
 
-    const [butterfly, logotype] = await Promise.all([butterflyMark(), wordmarkPng(CREAM)]);
+    const butterfly = await butterflyMark();
     // Header lockup mark, aspect-correct (never squished into a square box).
     const markH = 74;
     const markW = butterfly ? Math.round((butterfly.w / butterfly.h) * markH) : markH;
@@ -357,7 +348,7 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
               },
             }
           : box({}, []),
-        wordmarkNode(logotype, WORDMARK_W, wordmark({ ...center, fontSize: 46 }), { display: "flex" }),
+        wordmark({ ...center, fontSize: 46 }),
         txt(
           {
             ...center,

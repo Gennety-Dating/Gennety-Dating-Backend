@@ -35,7 +35,6 @@ import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
 import { hourglassArt } from "./expiry-card-hourglass.js";
 import { grainPng, svgToPng} from "./date-card/image.js";
-import { wordmarkPng, wordmarkNode, type WordmarkImage } from "./brand-wordmark.js";
 
 /** Square poster: dominant enough for an emotional beat, lighter than the 1350 keepsake date card. */
 export const EXPIRY_CARD_W = 1080;
@@ -281,12 +280,7 @@ interface BuildInput extends ExpiryCardInput {
   motif: Buffer | null;
   logo: ButterflyMark | null;
   grain: Buffer | null;
-  /** Drawn logotype tinted to the ink; `null` → the word typed in Archivo Black. */
-  wordmark: WordmarkImage | null;
 }
-
-/** Logotype width: its cap height matches the old typed 34px word. */
-const WORDMARK_W = 140;
 
 export function buildExpiryCardElement(input: BuildInput): CardNode {
   const p = palette(input.theme);
@@ -323,16 +317,11 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
           ]
         : []),
 
-      // The drawn logotype (`brand-wordmark.ts`). Its fallback is the word as
-      // it used to be typed — Latin-only, so Archivo Black is safe there.
-      wordmarkNode(
-        input.wordmark,
-        WORDMARK_W,
-        el(
-          "div",
-          { display: "flex", fontFamily: "Archivo Black", fontSize: "34px", color: p.ink },
-          "Gennety",
-        ),
+      // Wordmark. Latin-only string, so Archivo Black is safe here.
+      el(
+        "div",
+        { display: "flex", fontFamily: "Archivo Black", fontSize: "34px", color: p.ink },
+        "Gennety",
       ),
       ...(input.logo ? [logoImg(input.logo)] : []),
 
@@ -451,7 +440,6 @@ export async function renderExpiryCard(input: ExpiryCardInput): Promise<Buffer |
       ...input,
       motif: motifPng(input.variant, input.theme),
       logo: await loadLogo(),
-      wordmark: await wordmarkPng(palette(input.theme).ink),
       // The dark film grain would dirty the cream light card — skip it there.
       grain: input.theme === "light" ? null : grainTile(),
     });

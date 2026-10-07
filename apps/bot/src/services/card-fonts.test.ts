@@ -52,7 +52,7 @@ async function rasterize(text: string, family: string, weight: number, fonts: Sa
 
 /** What the five locales put on the date card (slogan + venue name). */
 const SCRIPTS: ReadonlyArray<[string, string]> = [
-  ["latin (en, and the typed fallback wordmark)", "Gennety WRZESNIA"],
+  ["latin (en)", "Gennety WRZESNIA"],
   ["latin-ext (pl)", "ŁĄŻŚĆŹŃĘ"],
   ["german", "ÄÖÜß"],
   ["cyrillic (ru + uk-only letters)", "ВЫШЛОЇЄҐІ"],
@@ -98,8 +98,9 @@ describe("date card display font coverage", () => {
 
 /**
  * The date card must take its display type from `card-fonts.ts`. Archivo Black
- * coming back is exactly the 2026-10-01 regression: a Latin-only face under a
- * Cyrillic slogan.
+ * under the slogan is exactly the 2026-10-01 regression: a Latin-only face
+ * under a Cyrillic slogan. Its one sanctioned use, the Latin header word, goes
+ * through `LOGO_FAMILY` and is pinned by `template.test.ts`.
  */
 describe("date card uses the brand face", () => {
   const FILES = ["date-card/template.ts", "date-card/compose.ts"];

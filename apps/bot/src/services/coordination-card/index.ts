@@ -4,11 +4,9 @@ import satori from "satori";
 import type { Language } from "@gennety/shared";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { grainPng, svgToPng } from "../date-card/image.js";
-import { wordmarkPng } from "../brand-wordmark.js";
 import { coordCardCopy, type CoordCardVariant } from "./copy.js";
 import {
   buildCoordCardElement,
-  palette,
   CARD_W,
   CARD_H,
   type CardNode,
@@ -92,10 +90,9 @@ async function brandMark(width: number, tint: string): Promise<ButterflyMark | n
 
 export async function renderCoordinationCard(input: CoordCardInput): Promise<Buffer | null> {
   try {
-    const [logo, logoCream, wordmark] = await Promise.all([
+    const [logo, logoCream] = await Promise.all([
       brandMark(220, input.theme === "light" ? "#8B253B" : "#F7ECEC"),
       brandMark(320, "#F7ECEC"),
-      wordmarkPng(palette(input.theme).ink),
     ]);
 
     const element = buildCoordCardElement({
@@ -106,7 +103,6 @@ export async function renderCoordinationCard(input: CoordCardInput): Promise<Buf
       // The dark film grain would dirty the light card's cream ground.
       grain: input.theme === "light" ? null : grainTile(),
       headlineFamily: headlineFamily(input.language),
-      wordmark,
       theme: input.theme,
     });
 
