@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import satori from "satori";
-import { buildCardElement, CARD_W, CARD_H, CARD_PADDING_X, CREDIT_TEXT, HERO_W, HERO_H } from "./template.js";
+import {
+  buildCardElement,
+  keepLastWordsTogether,
+  CARD_W,
+  CARD_H,
+  CARD_PADDING_X,
+  CREDIT_TEXT,
+  HERO_W,
+  HERO_H,
+} from "./template.js";
 import { resolveCreditPlacement, measureRoboto, CREDIT_MIN_GAP } from "./credit-placement.js";
 import { cardFonts } from "../card-fonts.js";
 
@@ -175,10 +184,19 @@ describe("date card layout", () => {
       expect(hero).toBeDefined();
       return hero?.y ?? -1;
     };
-    const twoLines = await heroTop("Без переписки.\nСразу вживую.");
+    const twoLines = await heroTop("Без переписки\nСразу вживую");
     expect(await heroTop("Error 404:\nChat not found.\nTry real life.")).toBe(twoLines);
-    expect(await heroTop("Kein Chatten.\nDirekt im echten Leben.")).toBe(twoLines);
+    expect(await heroTop("Kein Chatten\nDirekt im echten Leben")).toBe(twoLines);
   }, 60_000);
+
+  it("never leaves a wrapped slogan line's last word alone", () => {
+    // "Straight to real / life" was the first render of the en slogan.
+    expect(keepLastWordsTogether("Straight to real life")).toBe("Straight to real\u00A0life");
+    expect(keepLastWordsTogether("Direkt im echten Leben")).toBe("Direkt im echten\u00A0Leben");
+    // Two words stay breakable: glued, the pair could not wrap at all.
+    expect(keepLastWordsTogether("Сразу вживую")).toBe("Сразу вживую");
+    expect(keepLastWordsTogether("Gennety")).toBe("Gennety");
+  });
 
   it("clips the venue name and address to one line each", async () => {
     // The bottom block sits behind a `flexGrow` spacer on a fixed-height card,

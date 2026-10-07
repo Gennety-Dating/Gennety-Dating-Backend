@@ -20,7 +20,6 @@
  */
 
 import type { CoordCardCopy, CoordCardVariant } from "./copy.js";
-import { DISPLAY_FAMILY, BODY_FAMILY } from "../card-fonts.js";
 import { wordmarkNode, type WordmarkImage } from "../brand-wordmark.js";
 
 export const CARD_W = 900;
@@ -193,12 +192,14 @@ export interface CoordCardElementInput {
   logoCream: LogoMark | null;
   /** Film-grain overlay tile (full-card PNG); dark theme only. */
   grain: Buffer | null;
-  /** Drawn logotype tinted to the ink; `null` → the word set in Gennety Display. */
+  /** Display family for the headline (Latin vs Cyrillic — see index.ts). */
+  headlineFamily: string;
+  /** Drawn logotype tinted to the ink; `null` → the word typed in Archivo Black. */
   wordmark: WordmarkImage | null;
   theme: CoordCardTheme;
 }
 
-/** Logotype width in the lockup — cap height level with the 52px butterfly's body. */
+/** Logotype width in the lockup: its cap height matches the old typed 34px word. */
 const WORDMARK_W = 150;
 
 export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
@@ -223,7 +224,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
       height: `${CARD_H}px`,
       padding: "64px 72px 72px 72px",
       backgroundImage: p.bg,
-      fontFamily: BODY_FAMILY,
+      fontFamily: "Roboto",
       color: p.ink,
     },
     [
@@ -257,7 +258,15 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
               ),
             ]
           : []),
-        wordmarkNode(input.wordmark, WORDMARK_W, p.ink),
+        wordmarkNode(
+          input.wordmark,
+          WORDMARK_W,
+          el(
+            "div",
+            { fontFamily: "Archivo Black", fontSize: "34px", letterSpacing: "-1px", color: p.ink },
+            "Gennety",
+          ),
+        ),
       ]),
 
       // The gap under the lockup carries the most weight of the three, so a
@@ -304,13 +313,9 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
           flexDirection: "column",
           alignItems: "center",
           marginTop: "18px",
-          // One face for every language (`card-fonts.ts`): the Cyrillic-only
-          // Unbounded subset that used to set ru/uk had no Latin, digits or
-          // punctuation, so "открыта." dropped its full stop into Roboto.
-          fontFamily: DISPLAY_FAMILY,
-          fontWeight: 800,
-          fontSize: "62px",
-          lineHeight: 1.04,
+          fontFamily: input.headlineFamily,
+          fontSize: "58px",
+          lineHeight: 1.06,
           letterSpacing: "-1px",
         },
         [

@@ -703,12 +703,12 @@ split in two.
   over Telegram's 1024-character ceiling — falls back to the plain-text notice
   that shipped before, which remains self-sufficient. No sentence exists on
   only one branch.
-- **Headline typography is Gennety Display 800** (since 2026-10-07; it was the
-  full Unbounded before), from the font list every card shares
-  (`services/card-fonts.ts`). One file per weight covers ru, uk, en, de and pl,
-  so `CZAS MINĄŁ` cannot drop ĄŁ into Roboto mid-word — satori reports no
-  error for a missing glyph, which is why the old Unbounded subsets got away
-  with it. `card-headline-fonts.test.ts` guards coverage for all cards.
+- **Headline typography is the full Unbounded, not the subsets the other cards
+  load.** Those are the Google Fonts `latin` + `cyrillic` subsets and Polish is
+  in neither, so `CZAS MINĄŁ` silently renders ĄŁ in Roboto mid-word. Satori
+  reports no error for a missing glyph, which is why this went unnoticed — it
+  is still live in the §3.6 time card's Polish dates (`WRZEŚNIA`,
+  `PAŹDZIERNIKA`, `ŚR`), the match card and the referral card.
 
 After a decline (and once the user has seen the partner's verdict, if any),
 the bot asks why. The card carries four one-tap reasons — appearance, vibe,

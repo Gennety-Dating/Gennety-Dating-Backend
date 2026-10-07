@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { DISPLAY_FAMILY } from "./card-fonts.js";
 
 /**
  * The drawn "Gennety" logotype for the rendered cards (2026-10-07).
@@ -69,42 +68,27 @@ export function wordmarkSrc(mark: WordmarkImage): string {
 /** Satori node shape, structurally compatible with every card's own `CardNode`. */
 export interface WordmarkNode {
   type: string;
-  props: { style: Record<string, unknown>; src?: string; children?: string };
+  props: { style: Record<string, unknown>; src: string };
 }
 
 /**
- * The logotype at `width` (height from the asset), or — when the asset could
- * not be read — the word set in Gennety Display 800 at a matching cap height,
- * so a card never loses its brand line.
+ * The logotype at `width` (height from the asset), or the card's own
+ * `fallback` when the asset could not be read, so a card never loses its
+ * brand line. The fallback is the word each card used to TYPE in its own
+ * display face, which is why it is the caller's node and not one made here.
  */
-export function wordmarkNode(
+export function wordmarkNode<T>(
   mark: WordmarkImage | null,
   width: number,
-  ink: string,
+  fallback: T,
   extraStyle: Record<string, unknown> = {},
-  fallbackText = "Gennety",
-): WordmarkNode {
-  if (mark) {
-    return {
-      type: "img",
-      props: {
-        style: { width: `${width}px`, height: `${Math.round(width / WORDMARK_ASPECT)}px`, ...extraStyle },
-        src: wordmarkSrc(mark),
-      },
-    };
-  }
+): WordmarkNode | T {
+  if (!mark) return fallback;
   return {
-    type: "div",
+    type: "img",
     props: {
-      style: {
-        display: "flex",
-        fontFamily: DISPLAY_FAMILY,
-        fontWeight: 800,
-        fontSize: `${Math.round(width / 4.2)}px`,
-        color: ink,
-        ...extraStyle,
-      },
-      children: fallbackText,
+      style: { width: `${width}px`, height: `${Math.round(width / WORDMARK_ASPECT)}px`, ...extraStyle },
+      src: wordmarkSrc(mark),
     },
   };
 }

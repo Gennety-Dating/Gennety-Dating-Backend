@@ -863,19 +863,23 @@ accent, a soft burgundy glow behind the hero photo, and faint film grain on the
 dark card only (skipped on the light one). (The two burgundy corner discs were
 removed.) It carries
 a **duotone**-treated venue photo as the hero (the stock Places/curated
-image is remapped into the burgundy brand palette so it reads as part of the card),
-tilted 10° to the left against an
+image is remapped into the burgundy brand palette so it reads as part of the card;
+920 × 635, tilted 4° to the left), an
 overlapping **polaroid** of the partner tilted 7° to the right, a
-**Gennety Display** (Geologica, sharpness 50 — the apps' display face) headline
+**Gennety Display** 800 (Geologica, sharpness 50, the apps' display face) headline
 **slogan** whose last line is the burgundy accent (`dateCardSlogan`, localized
-since the 2026-10-01 copy audit — "Без переписки. Сразу вживую."; until then a
-fixed English "Error 404: Chat not found. Try real life." in all locales), the
+since the 2026-10-01 copy audit and written without full stops since
+2026-10-07: "Без переписки / Сразу вживую"; until 2026-10-01 it was a fixed
+English "Error 404: Chat not found. Try real life." in all locales), the
 drawn "Gennety" logotype top-left (the iOS `GennetyWordmark` asset, tinted to
 the theme's ink), the brand **butterfly** logo (`butterfly-logo.svg`,
 shared with the match card) tilted top-right, and the venue name + address. The
-slogan sits in a fixed three-line slot that wraps at 664px, so the photo keeps
-one height for every locale and line count (2026-10-07; before that a
-two-line slogan lifted the whole photo block by a line). The card
+slogan is 82px and sits centred in a fixed three-line slot that wraps at
+664px, so the photo keeps one height for every locale and line count. A
+wrapped line never leaves its last word alone ("Straight to / real life").
+Before 2026-10-07 a two-line slogan lifted the whole photo block by a line.
+Only this card uses Gennety Display. The other cards keep Archivo Black /
+Unbounded by the founder's call of 2026-10-07. The card
 deliberately **omits the
 date/time** — the exact slot already lives in the Telegram caption right below,
 so repeating it on the card adds nothing and the freed space is spent on a
@@ -884,8 +888,8 @@ cleaner keepsake. Rendered server-side with `satori` (→ SVG) + `@resvg/resvg-j
 partner-face blur uses AWS Rekognition `DetectFaces` boxes + pixelation.
 Rendered text is emoji-free (the bundled Roboto + Gennety Display fonts carry no
 color-emoji glyphs, so all card accents are vector shapes, not emoji); emoji
-live only in the Telegram caption. Every rendered card shares one font list
-(`services/card-fonts.ts`) and one logotype (`services/brand-wordmark.ts`).
+live only in the Telegram caption. Its fonts come from `services/card-fonts.ts`.
+Every rendered card shares one logotype (`services/brand-wordmark.ts`).
 
 - **Live render progress.** The render (partner-photo download + Places venue
   photo + rasterize) takes several seconds, so each side sees a per-side

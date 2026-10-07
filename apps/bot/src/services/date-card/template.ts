@@ -42,15 +42,21 @@ const BURGUNDY = "#8B253B";
 /**
  * Headline slot (2026-10-07). The slogan is set in Gennety Display 800 and
  * wraps inside `SLOGAN_MAX_W`, which keeps every line of every locale clear of
- * the butterfly top-right ("Straight to real life." and "Direkt im echten
- * Leben." used to run under it). The slot is always THREE lines tall, so the
+ * the butterfly top-right ("Straight to real life" and "Direkt im echten
+ * Leben" used to run under it). The slot is always THREE lines tall, so the
  * hero photo sits at the same height whatever the copy: the card's look was
  * tuned on the three-line "Error 404" slogan, and when the copy audit of
  * 2026-10-01 made the slogan two lines the whole photo block rode up by a
- * line. A fourth line (no current copy needs one) grows the slot rather than
- * clipping text — the bottom block's 46px of slack absorbs half a line.
+ * line. A two-line slogan sits in the MIDDLE of the slot, not at its top.
+ * At the top it read as "the text is too high", with an empty line under it
+ * (founder, 2026-10-07, together with "a little bigger": 78 -> 82px). 82 is
+ * as far as it goes. The first line of a two-line slogan sits level with the
+ * butterfly's lower wing, and "Без листування" (uk, the widest) ends 20px
+ * short of it at 82; at 84 the two touch. A line that wraps (en, de) never
+ * leaves its last word alone (`keepLastWordsTogether`). A fourth line (no
+ * current copy needs one) grows the slot rather than clipping text.
  */
-const SLOGAN_PX = 78;
+const SLOGAN_PX = 82;
 const SLOGAN_LINE_HEIGHT = 1.04;
 const SLOGAN_SLOT_LINES = 3;
 const SLOGAN_MAX_W = 664;
@@ -59,18 +65,29 @@ const SLOGAN_MAX_W = 664;
 const WORDMARK_W = 150;
 
 /**
- * The venue photo (2026-10-07, founder's description): a little narrower than
- * the old full-bleed 1000 × 690 and tilted LEFT by 10deg, against the partner
- * polaroid's +7deg to the right — the two lean apart and balance each other.
- * Its box is exported because the duotone is cut to it upstream
+ * The venue photo (founder's choice of 2026-10-07): the old 1000 × 690 box
+ * ("variant A") scaled down to 92 % and tilted slightly LEFT, against the
+ * partner polaroid's +7deg to the right, so the two lean apart and balance.
+ * At full size the photo ran to 20px from the card's left edge, and that thin
+ * strip of background read as a mistake. Smaller and tilted, the left edge is
+ * a slant 40–85px in, which reads as placed. Its centre stays where the
+ * 1000 × 690 photo's was (x 530, y 769 on the card), so the card keeps its
+ * balance. The box is exported because the duotone is cut to it upstream
  * (`prepareVenuePhoto`), so the two cannot drift apart.
  */
-export const HERO_W = 880;
-export const HERO_H = 620;
-const HERO_LEFT = 10;
-const HERO_TOP = 50;
+export const HERO_W = 920;
+export const HERO_H = 635;
+/** Inside the venue block, which starts at y 415 on the card. */
+const HERO_LEFT = 6;
+const HERO_TOP = 37;
 /** Counter-tilt to the polaroid's +7deg (negative = counter-clockwise). */
-const HERO_TILT_DEG = -10;
+const HERO_TILT_DEG = -4;
+/**
+ * Height of the venue block. The polaroid hangs from its bottom edge. The
+ * slot of the bigger slogan pushed the block 13px down, so the block is 13px
+ * shorter (it was 726) and the polaroid stays where it always sat.
+ */
+const VENUE_BLOCK_H = 713;
 
 /**
  * Where the credit goes on one card. Resolved by `credit-placement.ts`, which
@@ -208,8 +225,12 @@ function logoImg(logo: LogoMark): CardNode {
     "img",
     {
       position: "absolute",
-      top: "68px",
-      right: "40px",
+      // A little lower and further in than the 2026-06 placement (founder,
+      // 2026-10-07): pressed into the corner it read as cut off. Only 8px in,
+      // because the slogan's first line ends beside the lower wing (see
+      // SLOGAN_PX).
+      top: "92px",
+      right: "48px",
       width: `${displayW}px`,
       height: `${displayH}px`,
       transform: "rotate(13deg)",
@@ -235,17 +256,36 @@ function header(wordmark: WordmarkImage | null, p: Palette): CardNode {
   return el("div", { display: "flex", alignItems: "center", marginBottom: "34px" }, [mark]);
 }
 
-/** Gennety Display headline in a fixed three-line slot; the final line is the burgundy accent. */
+/**
+ * Glues a line's last two words with a no-break space, so that a wrap never
+ * leaves one word alone: "Straight to / real life", not "Straight to real /
+ * life". Only for lines of three words or more, since a glued two-word line
+ * could no longer wrap at all and would run past the slot. Satori's
+ * `textWrap: "balance"` was tried first. It makes the lines even, not
+ * meaningful ("Straight / to real life").
+ */
+export function keepLastWordsTogether(line: string): string {
+  const words = line.split(" ");
+  if (words.length < 3) return line;
+  return `${words.slice(0, -1).join(" ")}\u00A0${words[words.length - 1]}`;
+}
+
+/** Gennety Display headline, centred in a fixed three-line slot; the final line is the burgundy accent. */
 function heroSlogan(slogan: string, p: Palette): CardNode {
   const raw = slogan.split("\n");
   const lines = raw.map((line, i) =>
-    el("div", { display: "flex", color: i === raw.length - 1 ? BURGUNDY : p.ink }, line),
+    el(
+      "div",
+      { display: "flex", color: i === raw.length - 1 ? BURGUNDY : p.ink },
+      keepLastWordsTogether(line),
+    ),
   );
   return el(
     "div",
     {
       display: "flex",
       flexDirection: "column",
+      justifyContent: "center",
       width: `${SLOGAN_MAX_W}px`,
       minHeight: `${Math.round(SLOGAN_PX * SLOGAN_LINE_HEIGHT * SLOGAN_SLOT_LINES)}px`,
       fontFamily: DISPLAY_FAMILY,
@@ -289,7 +329,7 @@ function venueSection(input: CardElementInput): CardNode {
       display: "flex",
       position: "relative",
       width: "100%",
-      height: "726px",
+      height: `${VENUE_BLOCK_H}px`,
       marginTop: "8px",
       marginBottom: "8px",
     },
@@ -298,8 +338,8 @@ function venueSection(input: CardElementInput): CardNode {
       el("div", {
         display: "flex",
         position: "absolute",
-        left: "180px",
-        top: "90px",
+        left: "190px",
+        top: "77px",
         width: "680px",
         height: "470px",
         borderRadius: "999px",

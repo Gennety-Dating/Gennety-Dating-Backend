@@ -21,11 +21,12 @@
  * plain text confirmation. The concierge flow must never wedge on a render.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import satori from "satori";
 import type { Language } from "@gennety/shared";
 import { LOCALE_TAGS, RENDER_TZ } from "./datetime-entity.js";
 import { svgToPng } from "./date-card/image.js";
-import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY } from "./card-fonts.js";
 
 /** Wide banner: Telegram renders a ~2.4:1 photo as a compact strip, not a wall. */
 export const TIME_CARD_W = 1000;
@@ -69,15 +70,44 @@ function el(
   return { type, props: { style, ...(children !== undefined ? { children } : {}) } };
 }
 
+type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
+let cachedFonts: SatoriFonts | null = null;
+
 /**
- * Roboto for the label, Gennety Display 800 for the two headline lines
- * (`card-fonts.ts`). One file per weight covers Cyrillic, digits and Polish's
- * latin-ext ("WRZEŚNIA", "PAŹDZIERNIKA", "ŚR"), so no part of a date drops into
- * Roboto mid-word — the trap the Unbounded subsets used to set here. Sizes keep
- * the cap height the banner was designed with at Unbounded 700 (62 / 132px).
+ * Roboto for the label, Unbounded 700 for the two headline lines.
+ *
+ * Two font gotchas are baked into this list:
+ *
+ * 1. Archivo Black (the date-card headline face) is Latin-only, so a Cyrillic
+ *    date would fall back mid-word. Unbounded covers both scripts.
+ * 2. Satori does NOT fall through *within* a family — it takes the first font
+ *    registered under the requested name and resolves missing glyphs from the
+ *    OTHER families, in array order. Registering the two Unbounded subsets
+ *    under one name therefore breaks every mixed string: a Russian date is
+ *    Cyrillic words (cyr subset) plus digits (latin subset only), so half the
+ *    line silently drops to Roboto.
+ *
+ * This used to navigate (2) by registering `unbounded-lat-700` as "Unbounded"
+ * and `unbounded-cyr-700` as its own family ahead of Roboto — correct for
+ * Latin and Cyrillic, but it left a third script out: Polish's Ą Ł Ż Ś Ć Ź Ń Ę
+ * are in Google's `latin-ext` subset, which NEITHER file carries. A Polish date
+ * ("WRZEŚNIA", "PAŹDZIERNIKA", "ŚR") rendered those letters in Roboto mid-word,
+ * and satori reports nothing when it substitutes a glyph, so it failed silently.
+ * Loading the FULL `unbounded-700.woff` under a single name covers all three
+ * scripts and removes the ordering hazard in (2) altogether — the same call,
+ * and the same asset, as `services/expiry-card.ts`.
  */
-const DATE_PX = 66;
-const TIME_PX = 140;
+/** Exported as a test seam: the registration SHAPE is the thing that broke. */
+export function loadFonts(): SatoriFonts {
+  if (cachedFonts) return cachedFonts;
+  const read = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
+  cachedFonts = [
+    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
+    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+  ];
+  return cachedFonts;
+}
 
 /**
  * Both sides always see the SAME figures, so the card renders in the product's
@@ -127,7 +157,7 @@ export function buildTimeCardElement(input: TimeCardInput): CardNode {
       height: `${TIME_CARD_H}px`,
       padding: "0 72px",
       backgroundColor: p.bg,
-      fontFamily: BODY_FAMILY,
+      fontFamily: "Roboto",
     },
     [
       el(
@@ -146,11 +176,10 @@ export function buildTimeCardElement(input: TimeCardInput): CardNode {
         {
           display: "flex",
           marginTop: "26px",
-          fontFamily: DISPLAY_FAMILY,
-          fontWeight: 800,
-          fontSize: `${DATE_PX}px`,
+          fontFamily: "Unbounded",
+          fontWeight: 700,
+          fontSize: "62px",
           lineHeight: 1.1,
-          letterSpacing: "-0.5px",
           color: p.ink,
         },
         formatDate(input.agreedTime, input.language),
@@ -160,11 +189,10 @@ export function buildTimeCardElement(input: TimeCardInput): CardNode {
         {
           display: "flex",
           marginTop: "10px",
-          fontFamily: DISPLAY_FAMILY,
-          fontWeight: 800,
-          fontSize: `${TIME_PX}px`,
+          fontFamily: "Unbounded",
+          fontWeight: 700,
+          fontSize: "132px",
           lineHeight: 1.1,
-          letterSpacing: "-2px",
           color: p.accent,
         },
         formatTime(input.agreedTime, input.language),
@@ -177,7 +205,7 @@ export async function renderTimeCard(input: TimeCardInput): Promise<Buffer | nul
   try {
     const svg = await satori(
       buildTimeCardElement(input) as unknown as Parameters<typeof satori>[0],
-      { width: TIME_CARD_W, height: TIME_CARD_H, fonts: cardFonts() },
+      { width: TIME_CARD_W, height: TIME_CARD_H, fonts: loadFonts() },
     );
     const png = await svgToPng(svg, TIME_CARD_W, palette(input.theme).bg);
     return Buffer.from(png);

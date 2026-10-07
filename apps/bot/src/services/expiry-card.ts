@@ -28,12 +28,13 @@
  * plain text notice that ships today.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
 import { hourglassArt } from "./expiry-card-hourglass.js";
 import { grainPng, svgToPng} from "./date-card/image.js";
-import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY } from "./card-fonts.js";
 import { wordmarkPng, wordmarkNode, type WordmarkImage } from "./brand-wordmark.js";
 
 /** Square poster: dominant enough for an emotional beat, lighter than the 1350 keepsake date card. */
@@ -222,14 +223,43 @@ async function loadLogo(): Promise<ButterflyMark | null> {
   return cachedLogo;
 }
 
+type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
+let cachedFonts: SatoriFonts | null = null;
+
 /**
- * Headlines are Gennety Display 800 (`card-fonts.ts` — one file per weight with
- * full ru/uk/en/de/pl coverage, so "CZAS MINĄŁ" never drops a letter into
- * Roboto mid-word, the failure the old Unbounded subsets had). 98px keeps the
- * cap height the card was designed with at Unbounded 700 / 92px.
+ * Headlines are Unbounded 700, not the date card's Archivo Black: these lines
+ * are localized and Archivo Black is Latin-only, so a Cyrillic headline would
+ * fall back mid-word.
+ *
+ * This uses the FULL Unbounded (`unbounded-700.woff`), not the two subset files
+ * every other card loads. Those are the Google Fonts `latin` + `cyrillic`
+ * subsets, and Polish lives in neither: `latin-ext` carries Ą Ł Ż Ś Ć Ź Ń Ę.
+ * Rendering "CZAS MINĄŁ" against the subsets drops ĄŁ into Roboto *mid-word* —
+ * verified, not theoretical — which is exactly the failure the other card
+ * renderers document and then walk into anyway for `pl`. (German is fine: ÄÖÜ
+ * are Latin-1, inside the `latin` subset.)
+ *
+ * One file also deletes the hazard rather than navigating it: satori does NOT
+ * fall through *within* a family, so the subset setup depends on registration
+ * order — the Latin subset must own the requested family name and the Cyrillic
+ * one must be a separate family listed before Roboto. With full coverage under
+ * a single name there is no fallback to order and no way to get it wrong.
+ *
+ * Costs +144 KB of asset over the 42 KB pair, which is not worth optimizing for
+ * a server-side render that loads it once per process.
  */
-const HEADLINE_PX = 98;
-const WORDMARK_W = 140;
+function loadFonts(): SatoriFonts {
+  if (cachedFonts) return cachedFonts;
+  const read = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
+  cachedFonts = [
+    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
+    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+  ];
+  return cachedFonts;
+}
 
 /* ------------------------------------------------------------------ */
 /* Layout                                                              */
@@ -251,9 +281,12 @@ interface BuildInput extends ExpiryCardInput {
   motif: Buffer | null;
   logo: ButterflyMark | null;
   grain: Buffer | null;
-  /** Drawn logotype tinted to the ink; `null` → the word set in Gennety Display. */
+  /** Drawn logotype tinted to the ink; `null` → the word typed in Archivo Black. */
   wordmark: WordmarkImage | null;
 }
+
+/** Logotype width: its cap height matches the old typed 34px word. */
+const WORDMARK_W = 140;
 
 export function buildExpiryCardElement(input: BuildInput): CardNode {
   const p = palette(input.theme);
@@ -268,7 +301,7 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
       height: `${EXPIRY_CARD_H}px`,
       padding: "72px 76px",
       backgroundColor: p.bg,
-      fontFamily: BODY_FAMILY,
+      fontFamily: "Roboto",
       color: p.ink,
     },
     [
@@ -290,7 +323,17 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
           ]
         : []),
 
-      wordmarkNode(input.wordmark, WORDMARK_W, p.ink),
+      // The drawn logotype (`brand-wordmark.ts`). Its fallback is the word as
+      // it used to be typed — Latin-only, so Archivo Black is safe there.
+      wordmarkNode(
+        input.wordmark,
+        WORDMARK_W,
+        el(
+          "div",
+          { display: "flex", fontFamily: "Archivo Black", fontSize: "34px", color: p.ink },
+          "Gennety",
+        ),
+      ),
       ...(input.logo ? [logoImg(input.logo)] : []),
 
       el("div", { display: "flex", flexGrow: 10, minHeight: "0px" }),
@@ -334,7 +377,7 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
           "div",
           {
             display: "flex",
-            fontFamily: BODY_FAMILY,
+            fontFamily: "Roboto",
             fontSize: "24px",
             fontWeight: 500,
             letterSpacing: "5px",
@@ -351,11 +394,11 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
         {
           display: "flex",
           flexDirection: "column",
-          fontFamily: DISPLAY_FAMILY,
-          fontWeight: 800,
-          fontSize: `${HEADLINE_PX}px`,
-          lineHeight: 1.02,
-          letterSpacing: "-1.5px",
+          fontFamily: "Unbounded",
+          fontWeight: 700,
+          fontSize: "92px",
+          lineHeight: 1.04,
+          letterSpacing: "-1px",
         },
         headlineLines.map((line, i) =>
           el(
@@ -372,7 +415,7 @@ export function buildExpiryCardElement(input: BuildInput): CardNode {
           display: "flex",
           flexDirection: "column",
           marginTop: "34px",
-          fontFamily: BODY_FAMILY,
+          fontFamily: "Roboto",
           fontSize: "31px",
           lineHeight: 1.42,
           color: p.muted,
@@ -416,7 +459,7 @@ export async function renderExpiryCard(input: ExpiryCardInput): Promise<Buffer |
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
       width: EXPIRY_CARD_W,
       height: EXPIRY_CARD_H,
-      fonts: cardFonts(),
+      fonts: loadFonts(),
     });
     // Растеризация уехала в рабочий поток: на главном она блокировала
     // весь процесс (см. `services/render/pool.ts`).

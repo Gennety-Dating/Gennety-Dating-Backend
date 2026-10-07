@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import satori from "satori";
 import type { Language } from "@gennety/shared";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { grainPng, svgToPng } from "../date-card/image.js";
-import { cardFonts } from "../card-fonts.js";
 import { wordmarkPng } from "../brand-wordmark.js";
 import { coordCardCopy, type CoordCardVariant } from "./copy.js";
 import {
@@ -36,6 +37,34 @@ export interface CoordCardInput {
   language: Language;
   /** Recipient's chosen theme, exactly like the date card. */
   theme: CoordCardTheme;
+}
+
+type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
+let cachedFonts: SatoriFonts | null = null;
+
+/**
+ * Archivo Black carries no Cyrillic at all, and satori does NOT fall through
+ * *within* a family — it primary-matches the first font registered under a
+ * name and resolves missing glyphs from the OTHER families in array order. So
+ * the Cyrillic display face is registered under its own family name and picked
+ * per language below (the same fix `referral-card` documents).
+ */
+function loadFonts(): SatoriFonts {
+  if (cachedFonts) return cachedFonts;
+  const read = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
+  cachedFonts = [
+    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
+    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Headline Cyr", data: read("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
+  ];
+  return cachedFonts;
+}
+
+function headlineFamily(language: Language): string {
+  return language === "ru" || language === "uk" ? "Headline Cyr" : "Archivo Black";
 }
 
 /** Full-card film-grain tile, generated once and reused for every render. */
@@ -76,6 +105,7 @@ export async function renderCoordinationCard(input: CoordCardInput): Promise<Buf
       logoCream,
       // The dark film grain would dirty the light card's cream ground.
       grain: input.theme === "light" ? null : grainTile(),
+      headlineFamily: headlineFamily(input.language),
       wordmark,
       theme: input.theme,
     });
@@ -83,7 +113,7 @@ export async function renderCoordinationCard(input: CoordCardInput): Promise<Buf
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
       width: CARD_W,
       height: CARD_H,
-      fonts: cardFonts(),
+      fonts: loadFonts(),
     });
     return await svgToPng(svg, CARD_W);
   } catch (err) {
