@@ -264,6 +264,9 @@ body {
 /* Entrance + idle float live on the wrapper so they never fight the card's
    rotation transform. */
 .ticket-float {
+  /* Carry the stage's perspective through the animated wrapper. Flattening
+     here projects +angle and -angle identically, hiding which edge is nearer. */
+  transform-style: preserve-3d;
   animation:
     ticket-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both,
     ticket-float 7s ease-in-out 0.8s infinite;
