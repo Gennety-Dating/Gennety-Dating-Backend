@@ -50,8 +50,12 @@ built earlier, with the agent, on «Сегодня».
    interest and by the second day it is already fading (Teichmann et al.,
    J. Soc. Pers. Relationships, 2026); giving something to a person you like
    uses the same brain reward system as falling in love (Aron et al., 2005; the
-   2023 fMRI study of couples' compliments). No numbers without a source.
-3. **The flowers hint** — «Её любимые цветы: Пионы, Тюльпаны» from the
+   2023 fMRI study of couples' compliments). No numbers without a source. Since
+   2026-10-09 each idea is one short line («Напиши сегодня — утром после
+   свидания интерес на пике.»), about half the words of the first version. The
+   title is the bare word («Взаимно»): the app draws its own mark beside it, the
+   Telegram DM appends ✨, the push keeps ✨ in its title.
+3. **The flowers hint** — «Любимые цветы: Пионы, Тюльпаны» from the
    partner's `f_flowers` Profiler answer (tapped options in the viewer's
    language, else her own words up to 80 characters). Shown only if the partner
    accepted legal docs version 2026-10-08 or later, or built a wishlist (its
@@ -68,7 +72,7 @@ built earlier, with the agent, on «Сегодня».
    Premium lapses. The sheet is live: it shows the owner's list as it is now.
    From 45 days after the owner's last add or delete (`users.wishlist_changed_at`,
    `WISHLIST_STALE_AFTER_DAYS`) it carries a small line «Список обновлялся 52 дня
-   назад — что-то могло устареть.» (`ageNote`; months from 90 days) — before the
+   назад» (`ageNote`; months from 90 days) — before the
    purchase too, so the viewer knows it before paying. A fresher list has no line.
 5. **Purchases** are `WishlistUnlock` rows, idempotent on the provider's
    payment id. A Stars charge that can no longer be honoured is refunded at

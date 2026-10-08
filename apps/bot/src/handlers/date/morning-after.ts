@@ -82,7 +82,8 @@ function itemLine(item: WishlistItemView): string {
 }
 
 function offerText(offer: MutualOffer, lang: Language): string {
-  const parts = [offer.title, offer.body, offer.timing];
+  // The app draws its own mark beside the title; in Telegram the emoji is it.
+  const parts = [`${offer.title} ✨`, offer.body, offer.timing];
   if (offer.flowersHint) parts.push(`💐 ${offer.flowersHint}`);
   if (offer.wishlistLine && offer.wishlist) {
     const sheet = offer.wishlist;

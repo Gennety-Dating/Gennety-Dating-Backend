@@ -25,6 +25,12 @@ import { WISHLIST_AGE_IN_MONTHS_FROM_DAYS, WISHLIST_STALE_AFTER_DAYS } from "./w
  * "80% of second dates…" and "scientists proved… 90%" claims rewritten to what
  * the studies actually say — decision journal 2026-10-08 has the sources. Do
  * not put numbers back in without a source.
+ *
+ * The mutual card is kept to one line per idea (founder 2026-10-09: «слишком
+ * много текста… лаконичным, но без ухудшения результата»). `mutualTitle`
+ * carries no emoji: the app draws its own mark beside the word, and the
+ * Telegram DM adds ✨ itself (`offerText`); the push keeps it in
+ * `mutualPushTitle`, where an emoji is the only accent there is.
  */
 const en = {
   morningAfterPushTitle: "How did yesterday go?",
@@ -39,17 +45,15 @@ const en = {
 
   mutualPushTitle: "It's mutual ✨",
   mutualPushBody: "You both want to meet again.",
-  mutualTitle: "It's mutual ✨",
+  mutualTitle: "It's mutual",
   mutualBodyF: "{name} had a great time too.",
   mutualBodyM: "{name} had a great time too.",
-  mutualTiming:
-    "The best moment to write is now: research shows a message the morning after sparks the most interest — two days later it's already fading.",
-  mutualGift:
-    "And a small gesture runs on the same chemistry: giving something to a person you like lights up the same reward system in the brain as falling in love.",
-  flowersHintF: "Her favourite flowers: {flowers}",
-  flowersHintM: "His favourite flowers: {flowers}",
-  wishlistOfferF: "{name} added ideas for a perfect second date — favourite places, drinks and things.",
-  wishlistOfferM: "{name} added ideas for a perfect second date — favourite places, drinks and things.",
+  mutualTiming: "Write today — the morning after, interest is at its peak.",
+  mutualGift: "A small gift runs on the same chemistry as falling in love.",
+  flowersHintF: "Favourite flowers: {flowers}",
+  flowersHintM: "Favourite flowers: {flowers}",
+  wishlistOfferF: "{name} saved ideas for a second date: places, drinks, gifts.",
+  wishlistOfferM: "{name} saved ideas for a second date: places, drinks, gifts.",
   wishlistUnlockStars: "Open the cheat sheet — {stars} ⭐",
   wishlistUnlockPremium: "Open the cheat sheet — included in Premium",
   wishlistSheetTitle: "Cheat sheet: {name}",
@@ -77,17 +81,15 @@ const ru: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Взаимно ✨",
   mutualPushBody: "Вы оба хотите увидеться снова.",
-  mutualTitle: "Взаимно ✨",
+  mutualTitle: "Взаимно",
   mutualBodyF: "{name} тоже отлично провела время.",
   mutualBodyM: "{name} тоже отлично провёл время.",
-  mutualTiming:
-    "Лучшее время написать — сейчас: исследования показывают, что сообщение на следующее утро вызывает больше всего интереса, а через два дня он уже угасает.",
-  mutualGift:
-    "А маленький знак внимания работает на той же «химии»: подарок человеку, который нравится, включает ту же систему вознаграждения мозга, что и влюблённость.",
-  flowersHintF: "Её любимые цветы: {flowers}",
-  flowersHintM: "Его любимые цветы: {flowers}",
-  wishlistOfferF: "{name} добавила идеи для идеального второго свидания — любимые места, напитки и вещи.",
-  wishlistOfferM: "{name} добавил идеи для идеального второго свидания — любимые места, напитки и вещи.",
+  mutualTiming: "Напиши сегодня — утром после свидания интерес на пике.",
+  mutualGift: "Маленький подарок — та же «химия», что и влюблённость.",
+  flowersHintF: "Любимые цветы: {flowers}",
+  flowersHintM: "Любимые цветы: {flowers}",
+  wishlistOfferF: "{name} собрала идеи для второго свидания: места, напитки, подарки.",
+  wishlistOfferM: "{name} собрал идеи для второго свидания: места, напитки, подарки.",
   wishlistUnlockStars: "Открыть шпаргалку — {stars} ⭐",
   wishlistUnlockPremium: "Открыть шпаргалку — входит в Premium",
   wishlistSheetTitle: "Шпаргалка: {name}",
@@ -114,17 +116,15 @@ const uk: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Взаємно ✨",
   mutualPushBody: "Ви обоє хочете побачитися знову.",
-  mutualTitle: "Взаємно ✨",
+  mutualTitle: "Взаємно",
   mutualBodyF: "{name} теж чудово провела час.",
   mutualBodyM: "{name} теж чудово провів час.",
-  mutualTiming:
-    "Найкращий час написати — зараз: дослідження показують, що повідомлення наступного ранку викликає найбільше інтересу, а за два дні він уже згасає.",
-  mutualGift:
-    "А маленький знак уваги працює на тій самій «хімії»: подарунок людині, яка подобається, вмикає ту саму систему винагороди мозку, що й закоханість.",
-  flowersHintF: "Її улюблені квіти: {flowers}",
-  flowersHintM: "Його улюблені квіти: {flowers}",
-  wishlistOfferF: "{name} додала ідеї для ідеального другого побачення — улюблені місця, напої та речі.",
-  wishlistOfferM: "{name} додав ідеї для ідеального другого побачення — улюблені місця, напої та речі.",
+  mutualTiming: "Напиши сьогодні — зранку після побачення інтерес на піку.",
+  mutualGift: "Маленький подарунок — та сама «хімія», що й закоханість.",
+  flowersHintF: "Улюблені квіти: {flowers}",
+  flowersHintM: "Улюблені квіти: {flowers}",
+  wishlistOfferF: "{name} зібрала ідеї для другого побачення: місця, напої, подарунки.",
+  wishlistOfferM: "{name} зібрав ідеї для другого побачення: місця, напої, подарунки.",
   wishlistUnlockStars: "Відкрити шпаргалку — {stars} ⭐",
   wishlistUnlockPremium: "Відкрити шпаргалку — входить у Premium",
   wishlistSheetTitle: "Шпаргалка: {name}",
@@ -151,17 +151,15 @@ const de: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Gegenseitig ✨",
   mutualPushBody: "Ihr wollt euch beide wiedersehen.",
-  mutualTitle: "Gegenseitig ✨",
+  mutualTitle: "Gegenseitig",
   mutualBodyF: "{name} hatte auch einen tollen Abend.",
   mutualBodyM: "{name} hatte auch einen tollen Abend.",
-  mutualTiming:
-    "Der beste Moment zu schreiben ist jetzt: Studien zeigen, dass eine Nachricht am Morgen danach das meiste Interesse weckt – nach zwei Tagen lässt es schon nach.",
-  mutualGift:
-    "Und eine kleine Aufmerksamkeit wirkt über dieselbe Chemie: Jemandem, den man mag, etwas zu schenken, aktiviert dasselbe Belohnungssystem im Gehirn wie Verliebtsein.",
-  flowersHintF: "Ihre Lieblingsblumen: {flowers}",
-  flowersHintM: "Seine Lieblingsblumen: {flowers}",
-  wishlistOfferF: "{name} hat Ideen für das perfekte zweite Date hinterlegt – Lieblingsorte, Drinks und Dinge.",
-  wishlistOfferM: "{name} hat Ideen für das perfekte zweite Date hinterlegt – Lieblingsorte, Drinks und Dinge.",
+  mutualTiming: "Schreib heute – am Morgen danach ist das Interesse am größten.",
+  mutualGift: "Ein kleines Geschenk wirkt über dieselbe Chemie wie Verliebtsein.",
+  flowersHintF: "Lieblingsblumen: {flowers}",
+  flowersHintM: "Lieblingsblumen: {flowers}",
+  wishlistOfferF: "{name} hat Ideen fürs zweite Date gesammelt: Orte, Drinks, Geschenke.",
+  wishlistOfferM: "{name} hat Ideen fürs zweite Date gesammelt: Orte, Drinks, Geschenke.",
   wishlistUnlockStars: "Spickzettel öffnen – {stars} ⭐",
   wishlistUnlockPremium: "Spickzettel öffnen – in Premium enthalten",
   wishlistSheetTitle: "Spickzettel: {name}",
@@ -187,17 +185,15 @@ const pl: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Z wzajemnością ✨",
   mutualPushBody: "Oboje chcecie się znów spotkać.",
-  mutualTitle: "Z wzajemnością ✨",
+  mutualTitle: "Z wzajemnością",
   mutualBodyF: "{name} też świetnie się bawiła.",
   mutualBodyM: "{name} też świetnie się bawił.",
-  mutualTiming:
-    "Najlepszy moment, by napisać, jest teraz: badania pokazują, że wiadomość następnego ranka budzi największe zainteresowanie — po dwóch dniach już słabnie.",
-  mutualGift:
-    "A drobny gest działa na tej samej «chemii»: obdarowanie kogoś, kto ci się podoba, uruchamia w mózgu ten sam układ nagrody co zakochanie.",
-  flowersHintF: "Jej ulubione kwiaty: {flowers}",
-  flowersHintM: "Jego ulubione kwiaty: {flowers}",
-  wishlistOfferF: "{name} dodała pomysły na idealną drugą randkę — ulubione miejsca, napoje i rzeczy.",
-  wishlistOfferM: "{name} dodał pomysły na idealną drugą randkę — ulubione miejsca, napoje i rzeczy.",
+  mutualTiming: "Napisz dziś — rano po randce zainteresowanie jest największe.",
+  mutualGift: "Drobny prezent działa na tej samej «chemii» co zakochanie.",
+  flowersHintF: "Ulubione kwiaty: {flowers}",
+  flowersHintM: "Ulubione kwiaty: {flowers}",
+  wishlistOfferF: "{name} zebrała pomysły na drugą randkę: miejsca, napoje, prezenty.",
+  wishlistOfferM: "{name} zebrał pomysły na drugą randkę: miejsca, napoje, prezenty.",
   wishlistUnlockStars: "Otwórz ściągę — {stars} ⭐",
   wishlistUnlockPremium: "Otwórz ściągę — w ramach Premium",
   wishlistSheetTitle: "Ściąga: {name}",
@@ -276,27 +272,27 @@ export function wishlistAgeNote(lang: Language, ageDays: number): string | null 
       const unit = months
         ? slavicPlural(n, "месяц", "месяца", "месяцев")
         : slavicPlural(n, "день", "дня", "дней");
-      return `Список обновлялся ${n} ${unit} назад — что-то могло устареть.`;
+      return `Список обновлялся ${n} ${unit} назад`;
     }
     case "uk": {
       const unit = months
         ? slavicPlural(n, "місяць", "місяці", "місяців")
         : slavicPlural(n, "день", "дні", "днів");
-      return `Список оновлювався ${n} ${unit} тому — дещо могло застаріти.`;
+      return `Список оновлювався ${n} ${unit} тому`;
     }
     case "pl": {
       const unit = months
         ? polishPlural(n, "miesiąc", "miesiące", "miesięcy")
         : n === 1 ? "dzień" : "dni";
-      return `Lista zmieniana ${n} ${unit} temu — coś mogło się zdezaktualizować.`;
+      return `Lista zmieniana ${n} ${unit} temu`;
     }
     case "de": {
       const unit = months ? (n === 1 ? "Monat" : "Monaten") : n === 1 ? "Tag" : "Tagen";
-      return `Zuletzt vor ${n} ${unit} geändert — manches ist vielleicht nicht mehr aktuell.`;
+      return `Zuletzt vor ${n} ${unit} geändert`;
     }
     default: {
       const unit = months ? (n === 1 ? "month" : "months") : n === 1 ? "day" : "days";
-      return `Last updated ${n} ${unit} ago — some ideas may be out of date.`;
+      return `Last updated ${n} ${unit} ago`;
     }
   }
 }

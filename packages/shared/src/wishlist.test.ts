@@ -133,17 +133,17 @@ describe("after-date copy", () => {
   });
 
   it("names the age of a stale list in days, then months", () => {
-    expect(wishlistAgeNote("ru", 45)).toBe("Список обновлялся 45 дней назад — что-то могло устареть.");
-    expect(wishlistAgeNote("ru", 52)).toBe("Список обновлялся 52 дня назад — что-то могло устареть.");
-    expect(wishlistAgeNote("ru", 61)).toBe("Список обновлялся 61 день назад — что-то могло устареть.");
-    expect(wishlistAgeNote("ru", 95)).toBe("Список обновлялся 3 месяца назад — что-то могло устареть.");
-    expect(wishlistAgeNote("ru", 160)).toBe("Список обновлялся 5 месяцев назад — что-то могло устареть.");
-    expect(wishlistAgeNote("uk", 52)).toBe("Список оновлювався 52 дні тому — дещо могло застаріти.");
-    expect(wishlistAgeNote("en", 52)).toBe("Last updated 52 days ago — some ideas may be out of date.");
+    expect(wishlistAgeNote("ru", 45)).toBe("Список обновлялся 45 дней назад");
+    expect(wishlistAgeNote("ru", 52)).toBe("Список обновлялся 52 дня назад");
+    expect(wishlistAgeNote("ru", 61)).toBe("Список обновлялся 61 день назад");
+    expect(wishlistAgeNote("ru", 95)).toBe("Список обновлялся 3 месяца назад");
+    expect(wishlistAgeNote("ru", 160)).toBe("Список обновлялся 5 месяцев назад");
+    expect(wishlistAgeNote("uk", 52)).toBe("Список оновлювався 52 дні тому");
+    expect(wishlistAgeNote("en", 52)).toBe("Last updated 52 days ago");
     expect(wishlistAgeNote("de", 52)).toBe(
-      "Zuletzt vor 52 Tagen geändert — manches ist vielleicht nicht mehr aktuell.",
+      "Zuletzt vor 52 Tagen geändert",
     );
-    expect(wishlistAgeNote("pl", 52)).toBe("Lista zmieniana 52 dni temu — coś mogło się zdezaktualizować.");
-    expect(wishlistAgeNote("pl", 95)).toBe("Lista zmieniana 3 miesiące temu — coś mogło się zdezaktualizować.");
+    expect(wishlistAgeNote("pl", 52)).toBe("Lista zmieniana 52 dni temu");
+    expect(wishlistAgeNote("pl", 95)).toBe("Lista zmieniana 3 miesiące temu");
   });
 });
