@@ -93,12 +93,21 @@ built earlier, with the agent, on «Сегодня».
    — подскажу это твоей паре.» The owner can hide the list — and the flowers
    hint — at any time: «Не показывать мой список» in Profile → «Мой вишлист»
    (`PUT /v1/me/wishlist/visibility`, `users.wishlist_hidden_at`); items stay.
-3. **Three ways in.** A pasted list (`/parse` splits it; links are read by
+3. **Five ways in.** A pasted list (`/parse` splits it; links are read by
    their OpenGraph / JSON-LD tags, plain text goes to web search, the client
    animates each card's search), the catalog of popular ideas (suggested ones
-   first), or a typed search. Every result is a card with a photo and a price
-   range, confirmed by the person before it is saved. Nothing real found keeps
-   the person's own words (`source: text`).
+   first), a typed search, **a voice note** (`/voice`: Whisper, then one
+   structured call lifts the concrete ideas out of free talk — «Шанель Шанс»
+   becomes «Chanel Chance», «только не розы» is dropped; the comma split is the
+   fallback) and **screenshots** from the photo library (`/photos`: up to 6 per
+   send, one vision call names each wanted product as a search query, or as
+   its link when the address is readable). Voice and screenshots end in the
+   same entries as a paste, so the search, the cards and «оставить своими
+   словами» are one path; the audio, the transcript and the images are never
+   stored (founder 2026-10-08, third: «люди хранят скрины желанных вещей»).
+   Every result is a card with a photo and a price range, confirmed by the
+   person before it is saved. Nothing real found keeps the person's own words
+   (`source: text`).
 4. **Search** is the OpenAI Responses API with the `web_search` tool (founder's
    choice, no new provider), up to three candidates, ~20 s budget, cached 30
    days without a user id, 30 look-ups a day per person. Shop pages are fetched

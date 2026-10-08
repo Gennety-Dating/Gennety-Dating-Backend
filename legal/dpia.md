@@ -309,6 +309,13 @@ list. The taste hint is one Profiler answer, shown only after mutual interest
 and only for users who accepted Privacy v4.3 or built a wishlist, never while
 the list is hidden. A block or a report in either direction closes both the
 sheet and the hint.
+Items can also be found from a **voice note** or **screenshots** the owner adds
+(third decision of 2026-10-08). Both are transient — one request, sent to
+OpenAI, never written to storage or logs — and a screenshot that happens to
+show someone else's notification or name contributes nothing to the list: the
+vision prompt names only the wanted products and ignores anything personal,
+and what reaches the list is only what the owner confirms afterwards, from the
+web look-up's product cards.
 **Honest limits:** what the viewer has already read cannot be unseen, a
 screenshot cannot be blocked, and an unlocked sheet stays openable with no end
 date. **Residual: moderate** until action 12 (a report without a block, and a

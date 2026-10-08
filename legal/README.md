@@ -83,6 +83,9 @@ IAP) or with Premium — and **Premium without the Date Ticket cover**
   (Date Wishlist unlock), Refunds renumbered §11.6 (the survival clause in §12
   follows), §13.
 - **ROPA v1.2** adds §2.5d–2.5f and the unlock in §2.8; open items 9–12.
+- **Voice note and screenshots** as ways to fill the wishlist (third decision of
+  2026-10-08; read once by OpenAI, never stored): Privacy header, §4.1, §7, §9,
+  §12.4, §16; ROPA §2.5e; DPIA R12. Folded into v4.3 before publication.
   **DPIA v1.2** adds R12–R14 and actions 12–15.
 - **Re-consent.** `LEGAL_DOCS_VERSION` → `2026-10-08`. Nothing in this release
   relies on accepting the new text as *consent*. The wishlist disclosure rests on

@@ -1656,6 +1656,95 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/me/wishlist/voice:
+    post:
+      tags: [me]
+      operationId: wishlistFromVoice
+      summary: A voice note → transcript + look-up entries (multipart field `file`)
+      description: |
+        Instead of typing («записать голосовое, чтобы долго не печатать»):
+        Whisper, then the concrete ideas are lifted out of the free talk
+        (brand names as a shop writes them, a category hint each). The client
+        looks each entry up (`/lookup`) exactly as after `/parse`. Neither the
+        audio nor the transcript is stored. 422 when nothing could be heard.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: What was heard and the entries in it (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistVoiceResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: Recording too large
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Transcription failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/me/wishlist/photos:
+    post:
+      tags: [me]
+      operationId: wishlistFromScreenshots
+      summary: Up to 6 screenshots → look-up entries (repeated multipart part `images`)
+      description: |
+        Screenshots of wanted things from the photo library. Read in ONE vision
+        call that names each item as a search query (brand + product + variant
+        as printed) or as the product link when its address is readable on the
+        image. The images are never stored. `unreadable` counts images that
+        showed nothing to look up. JPEG / PNG / WebP, ≤ 8 MB each.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [images]
+              properties:
+                images:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "200":
+          description: Entries read off the screenshots (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistScreenshotsResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: An image is too large
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: Image reading unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/wishlist/lookup:
     post:
       tags: [me]
@@ -7606,6 +7695,19 @@ components:
               placeId: { type: string }
               title: { type: string }
 
+    WishlistPasteEntry:
+      type: object
+      description: |
+        One look-up to run. `category` is a hint to pass on to `/lookup`: set
+        on ideas heard in a voice note or read off a screenshot, absent on a
+        pasted line.
+      required: [id, kind, value]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [url, query] }
+        value: { type: string }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+
     WishlistPasteResult:
       type: object
       required: [mode, entries]
@@ -7613,13 +7715,27 @@ components:
         mode: { type: string, enum: [links, text, mixed] }
         entries:
           type: array
-          items:
-            type: object
-            required: [id, kind, value]
-            properties:
-              id: { type: string }
-              kind: { type: string, enum: [url, query] }
-              value: { type: string }
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+
+    WishlistVoiceResult:
+      type: object
+      required: [transcript, mode, entries]
+      properties:
+        transcript: { type: string }
+        mode: { type: string, enum: [links, text, mixed] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+
+    WishlistScreenshotsResult:
+      type: object
+      required: [mode, entries, unreadable]
+      properties:
+        mode: { type: string, enum: [links, text, mixed] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+        unreadable: { type: integer, minimum: 0 }
 
     WishlistSheet:
       type: object

@@ -88,6 +88,14 @@ export const WISHLIST_LOOKUPS_PER_DAY = 30;
 export const WISHLIST_LOOKUP_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Largest image copied into our storage from a shop page. */
 export const WISHLIST_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+/**
+ * Screenshots one «Добавить скриншоты» sends at once (decision journal
+ * 2026-10-08, third: «люди хранят скрины желанных вещей»). Read in ONE vision
+ * call and never stored — only the items the person confirms are.
+ */
+export const WISHLIST_SCREENSHOTS_MAX = 6;
+/** One screenshot as uploaded. The app sends a ≤2048 px JPEG, well under. */
+export const WISHLIST_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
  * The wishlist session takes a Profiler batch slot only after the person has

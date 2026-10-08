@@ -70,7 +70,17 @@ export interface WishlistCandidate {
   catalogKey?: string;
 }
 
-export type WishlistPasteEntry = { id: string; kind: "url" | "query"; value: string };
+/**
+ * One look-up to run. `category` is a hint passed on to `/lookup`: a pasted
+ * line has none, an idea heard in a voice note or read off a screenshot
+ * (`wishlist-extract.ts`) carries the one the model saw.
+ */
+export type WishlistPasteEntry = {
+  id: string;
+  kind: "url" | "query";
+  value: string;
+  category?: WishlistCategory;
+};
 
 export type WishlistLookupError = "rate_limited" | "blocked" | "not_found" | "timeout" | "unavailable";
 

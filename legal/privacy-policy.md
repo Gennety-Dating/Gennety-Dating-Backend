@@ -9,7 +9,8 @@ only when you both say it was great are you both told. **The Date Wishlist**: an
 optional list of things you love — places, drinks, flowers, perfume, gifts —
 that you build with our AI agent and that a person with whom the interest is
 mutual can use as a cheat sheet for a second date — unless you hide it. To find real products, we send what you type to our AI provider's web
-search and read the public product details of shop pages. The new data, its
+search and read the public product details of shop pages; you can also say it
+in a voice note or add screenshots, which are read and not kept. The new data, its
 legal bases, who sees it and for how long are in Sections 4, 7, 9, 12.1, 14, 16
 and 18. Everything else is unchanged from version 4.2 (26 September 2026), which
 added Tempo Sync, the optional Apple Health feature. Earlier versions are
@@ -123,7 +124,7 @@ the Service, and data we derive or generate to power matchmaking.
 | **Explored areas (optional, off by default)** | Only if you switch on map colouring: the **approximate areas** you have been in, stored as grid squares roughly 1.2 km across — never your exact position, and never a coordinate. Recorded only while the map screen is open, and only inside a city we operate in. |
 | **Date preferences ("venue intent")** | What kind of date you want — experience, atmosphere, format — plus any requirements you explicitly confirm, including **dietary requirements** (e.g. vegan, vegetarian, halal, kosher, gluten-free), an **alcohol-free** requirement, and a **step-free access** requirement. See Section 6 — some of these can reveal special-category data. |
 | **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); your **morning-after answer** — the one question we ask the morning after a date ("It was great, I want to see them again" or "Didn't click") and when you answered; free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
-| **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links), whether each item came from our catalog, a search, a link, or your own words, when you last added or removed an item, and whether you have hidden the list from your matches. See Sections 9 and 12.1. |
+| **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links) — or say in a voice note, or show on screenshots you add from your photo library, which are read once and **not kept** — whether each item came from our catalog, a search, a link, or your own words, when you last added or removed an item, and whether you have hidden the list from your matches. See Sections 9 and 12.1. |
 | **Consent records** | Which version of these documents you accepted and when, and your biometric consent (Section 10). |
 | **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, Date Wishlist unlocks, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
 | **Subscription cancellation reason** | If you cancel Gennety Premium in chat and choose to answer, the free-text reason you give. |
@@ -292,7 +293,7 @@ data).
 | Arrange and confirm dates; select and change venues | Availability, departure point, date preferences, agreed time | Contract |
 | Filter venues on dietary / alcohol-free / step-free requirements | The requirement you confirmed | **Explicit consent** (Art. 9(2)(a)) where the requirement is special-category; otherwise contract |
 | Ask each of you privately, the morning after a date, whether you want to see the other again; tell you both only when the interest is mutual; use your answer, like other post-date feedback, in future matching | Your morning-after answer, the match record | Contract; legitimate interests in better matches |
-| Help you build a Date Wishlist — the catalog, personalised suggestions, finding products from what you type or paste, reading shop pages, keeping the product image | What you type or paste, your wishlist items, your profile and follow-up answers, the places of your past dates and the places you saved; the places you visit often **only if** that setting is on | **Contract** (Art. 6(1)(b)) — it is a feature you choose to use |
+| Help you build a Date Wishlist — the catalog, personalised suggestions, finding products from what you type, paste, say in a voice note or show on a screenshot, reading shop pages, keeping the product image | What you type or paste, a voice note or screenshots you add (read once, not kept), your wishlist items, your profile and follow-up answers, the places of your past dates and the places you saved; the places you visit often **only if** that setting is on | **Contract** (Art. 6(1)(b)) — it is a feature you choose to use |
 | Show your Date Wishlist to a person with whom the interest is mutual — part of it free, the rest once they buy the unlock or have Premium — with when you last changed it, once that is 45 days or more ago | Your wishlist items; the date of your last change | **Contract** (Art. 6(1)(b)) — showing the list to a person with whom the interest is mutual is what the Date Wishlist is for. Making one is your choice, the wishlist says who will see it when you build it, and you can hide it at any time |
 | Show a person with whom the interest is mutual one of your follow-up answers as a hint (today: your favourite flowers) | That one answer | Contract; legitimate interests in helping a mutual match plan a second date. Used only if you accepted this version of the Policy or have made a Date Wishlist, and never while your list is hidden; you can object (Section 18) |
 | Process purchases (tickets, bundles, paid venue changes, Date Wishlist unlocks) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
@@ -387,6 +388,15 @@ is processed like any other chat with our concierge. To find a real product:
   pasted, and reads only the product details the page publishes (title, image,
   price). The shop receives a request from our server, not from your device, and
   learns nothing about you;
+- instead of typing you can **record a voice note** or **add screenshots** from
+  your photo library (up to six at a time — people often keep screenshots of
+  things they would love). The voice note is transcribed by OpenAI and our AI
+  picks out the ideas in it; the screenshots are read by OpenAI's image model,
+  which names the products on them. **Neither the recording, its transcript nor
+  the screenshots are kept** — only the items you then choose. A screenshot can
+  show more than the product (a notification, someone's name): our AI is told to
+  ignore anything personal and nothing of it is stored, but cropping it first is
+  still the better habit;
 - the image of the item you choose is **copied to our private storage**, so
   viewing a wishlist — yours, or yours as your match sees it — does not load
   anything from the shop's website (only following a shop link does). The price
@@ -609,7 +619,7 @@ may process data outside Ukraine or your country (see Section 15).
 |---|---|---|
 | **Amazon Web Services (Rekognition Face Liveness)** | Identity / liveness verification. Your device streams the liveness video directly to AWS; it never passes through our servers | Liveness video and the reference selfie it produces |
 | **Amazon Web Services (Rekognition)** | Face comparison, face detection, and content-safety analysis of photos and video frames | Profile photos, verification selfie, transient video frames |
-| **OpenAI** | Psychological analysis, embeddings, conversational agents (including the Date Wishlist agent), web search for Date Wishlist products, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos; for web search, the text you typed to find a product (with at most your city and language) |
+| **OpenAI** | Psychological analysis, embeddings, conversational agents (including the Date Wishlist agent), web search for Date Wishlist products, reading Date Wishlist screenshots, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos; for web search, the text you typed to find a product (with at most your city and language); for the Date Wishlist, a voice note or screenshots you choose to add |
 | **Supabase** | PostgreSQL database hosting and private file storage (verification selfies, mobile profile photos, chat images, Date Wishlist product images) | Account, profile, photos, embeddings, all relational data |
 | **Resend** | Delivering university-email verification codes | Email address, one-time code |
 | **Twilio** | Delivering phone verification codes by SMS to mobile-app users (primary rail) | Phone number, verification status |
@@ -735,6 +745,7 @@ We keep personal data only as long as necessary for the purposes above.
 | Date Wishlist items and their product images | Until you delete them, or your account. Deleting an item removes it from your match's cheat sheet too |
 | Whether your Date Wishlist is hidden, and when you last changed it | While your account exists; erased on account deletion. Hiding the list keeps the items yours to edit or delete |
 | Product look-up cache | **30 days**, then automatically deleted; it does not record who asked. Your day's wishlist suggestions: **24 hours** |
+| Voice notes and screenshots added to find a Date Wishlist item, and the transcript | **Not kept** — read in memory and discarded once the ideas are picked out |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries (including Date Wishlist unlocks) | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
 | Safety records after account deletion (moderation status, strikes, and reports and blocks made against the account) | Kept only if the deleted account had them, linked solely to keyed hashes of its Telegram ID, verified phone number and verified email — never the identifiers themselves — and used only to stop a restricted or blocked person from resetting them by registering again; **24 months** after deletion, then deleted |

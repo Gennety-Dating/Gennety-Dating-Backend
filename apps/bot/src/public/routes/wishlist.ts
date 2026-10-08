@@ -1,7 +1,10 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import multer, { MulterError } from "multer";
 import { prisma } from "@gennety/db";
 import {
   WISHLIST_PASTE_MAX_LEN,
+  WISHLIST_SCREENSHOTS_MAX,
+  WISHLIST_SCREENSHOT_MAX_BYTES,
   isWishlistCategory,
   wishlistCatalogFor,
   type Language,
@@ -9,6 +12,7 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
+import { voiceLimiter, wishlistScreenshotsLimiter } from "../rate-limit.js";
 import {
   addWishlistItems,
   deleteWishlistItem,
@@ -23,6 +27,13 @@ import {
   parseWishlistPaste,
 } from "../../services/wishlist-lookup.js";
 import { wishlistSuggestions } from "../../services/wishlist-suggest.js";
+import {
+  extractWishlistFromScreenshots,
+  extractWishlistFromSpeech,
+  type WishlistScreenshot,
+} from "../../services/wishlist-extract.js";
+import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { sniffImageMime } from "../../utils/image-sniff.js";
 
 /**
  * Date Wishlist for the NATIVE client — the owner's side (decision journal
@@ -32,6 +43,8 @@ import { wishlistSuggestions } from "../../services/wishlist-suggest.js";
  *   GET    /v1/me/wishlist             — shown/hidden, items, catalog, suggestions
  *   PUT    /v1/me/wishlist/visibility  — «Не показывать мой список» and back
  *   POST   /v1/me/wishlist/parse       — a pasted list → entries to look up
+ *   POST   /v1/me/wishlist/voice       — a voice note → transcript + entries
+ *   POST   /v1/me/wishlist/photos      — up to 6 screenshots → entries
  *   POST   /v1/me/wishlist/lookup      — one entry → candidate cards
  *   POST   /v1/me/wishlist/items       — confirmed cards → items
  *   DELETE /v1/me/wishlist/items/:id
@@ -44,6 +57,31 @@ import { wishlistSuggestions } from "../../services/wishlist-suggest.js";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ITEMS_PER_POST = 12;
+
+const voiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: WHISPER_MAX_BYTES, files: 1 },
+});
+
+const screenshotsUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: WISHLIST_SCREENSHOT_MAX_BYTES, files: WISHLIST_SCREENSHOTS_MAX },
+});
+
+/** Multer's refusals as JSON: 413 past the size cap, 400 for the rest. */
+function withUploadErrors(upload: RequestHandler): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    upload(req, res, (err?: unknown) => {
+      if (!err) return next();
+      if (err instanceof MulterError) {
+        const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        res.status(status).json({ error: err.code === "LIMIT_FILE_SIZE" ? "too-large" : "bad-request" });
+        return;
+      }
+      next(err);
+    });
+  };
+}
 
 async function viewerLanguageAndAudience(
   userId: string,
@@ -136,6 +174,77 @@ export function createWishlistRouter(): Router {
     }
     res.json(parseWishlistPaste(text.slice(0, WISHLIST_PASTE_MAX_LEN)));
   });
+
+  /**
+   * A voice note instead of typing (founder 2026-10-08: «записать голосовое,
+   * чтобы долго не печатать»). Whisper, then the ideas are lifted out of the
+   * free talk; the client looks each entry up exactly as after `/parse`. The
+   * transcript comes back so the agent can show what it heard. Neither the
+   * audio nor the transcript is kept.
+   */
+  router.post(
+    "/voice",
+    voiceLimiter,
+    withUploadErrors(voiceUpload.single("file")),
+    async (req: Request, res: Response): Promise<void> => {
+      if (!req.file) {
+        res.status(400).json({ error: "bad-request" });
+        return;
+      }
+      const { language } = await viewerLanguageAndAudience(req.userId!);
+      const transcript = await transcribeVoice(req.file.buffer, {
+        mime: req.file.mimetype,
+        language,
+      });
+      if (!transcript) {
+        res.status(422).json({ error: "unreadable" });
+        return;
+      }
+      const extraction = await extractWishlistFromSpeech(transcript, language);
+      res.json({ transcript, ...extraction });
+    },
+  );
+
+  /**
+   * Screenshots of wanted things (founder 2026-10-08: «люди хранят скрины из
+   * фотогалереи со своими желанными товарами»). Up to
+   * `WISHLIST_SCREENSHOTS_MAX` images in the repeated part `images`, read in
+   * one vision call, never stored. `unreadable` counts the images that showed
+   * nothing to look up (or were not an image at all).
+   */
+  router.post(
+    "/photos",
+    wishlistScreenshotsLimiter,
+    withUploadErrors(screenshotsUpload.array("images", WISHLIST_SCREENSHOTS_MAX)),
+    async (req: Request, res: Response): Promise<void> => {
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (files.length === 0) {
+        res.status(400).json({ error: "bad-request" });
+        return;
+      }
+      const images: WishlistScreenshot[] = [];
+      for (const file of files) {
+        const mime = sniffImageMime(file.buffer);
+        // HEIC sniffs fine but the vision endpoint refuses it; the app sends JPEG.
+        if (mime && mime !== "image/heic") images.push({ buffer: file.buffer, mime });
+      }
+      if (images.length === 0) {
+        res.status(400).json({ error: "bad-image" });
+        return;
+      }
+      const { language } = await viewerLanguageAndAudience(req.userId!);
+      const result = await extractWishlistFromScreenshots(images, language);
+      if (!result.ok) {
+        res.status(503).json({ error: "unavailable" });
+        return;
+      }
+      res.json({
+        mode: result.mode,
+        entries: result.entries,
+        unreadable: result.unreadable + (files.length - images.length),
+      });
+    },
+  );
 
   router.post("/lookup", async (req: Request, res: Response): Promise<void> => {
     const body = (req.body ?? {}) as Record<string, unknown>;
