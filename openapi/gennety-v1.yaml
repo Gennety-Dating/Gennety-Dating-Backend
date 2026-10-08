@@ -1876,9 +1876,9 @@ paths:
                 properties:
                   ok: { type: boolean }
                   offer:
-                    oneOf:
-                      - { $ref: "#/components/schemas/MutualOffer" }
-                      - { type: "null" }
+                    # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+                    # shape silently. The server sends `null`; the client decodes it as absent.
+                    $ref: "#/components/schemas/MutualOffer"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -7514,7 +7514,7 @@ components:
 
     WishlistItem:
       type: object
-      required: [id, category, title, brand, note, imageUrl, productUrl, priceBand, source]
+      required: [id, category, title, brand, note, imageUrl, productUrl, source]
       properties:
         id: { type: string, format: uuid }
         category: { $ref: "#/components/schemas/WishlistCategory" }
@@ -7524,9 +7524,9 @@ components:
         imageUrl: { type: [string, "null"], description: Signed URL of our stored copy (24 h) }
         productUrl: { type: [string, "null"] }
         priceBand:
-          oneOf:
-            - { $ref: "#/components/schemas/WishlistPriceBand" }
-            - { type: "null" }
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistPriceBand"
         source: { type: string, enum: [catalog, search, link, text] }
 
     WishlistItemInput:
@@ -7545,7 +7545,7 @@ components:
 
     WishlistCandidate:
       type: object
-      required: [candidateId, title, brand, category, productUrl, imageUrl, priceBand, description, source]
+      required: [candidateId, title, brand, category, productUrl, imageUrl, description, source]
       properties:
         candidateId: { type: string }
         title: { type: string }
@@ -7554,9 +7554,9 @@ components:
         productUrl: { type: [string, "null"] }
         imageUrl: { type: [string, "null"], description: Remote shop image for the confirmation card }
         priceBand:
-          oneOf:
-            - { $ref: "#/components/schemas/WishlistPriceBand" }
-            - { type: "null" }
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistPriceBand"
         description: { type: [string, "null"] }
         source: { type: string, enum: [search, link, catalog] }
         catalogKey: { type: string }
@@ -7637,7 +7637,7 @@ components:
 
     MutualOffer:
       type: object
-      required: [matchId, mutualAt, partner, title, body, timing, gift, flowersHint, wishlistLine, wishlist]
+      required: [matchId, mutualAt, partner, title, body, timing, gift, flowersHint, wishlistLine]
       properties:
         matchId: { type: string, format: uuid }
         mutualAt: { type: string, format: date-time }
@@ -7655,9 +7655,9 @@ components:
         flowersHint: { type: [string, "null"] }
         wishlistLine: { type: [string, "null"] }
         wishlist:
-          oneOf:
-            - { $ref: "#/components/schemas/WishlistSheet" }
-            - { type: "null" }
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistSheet"
 
     MorningAfterCheck:
       type: object
@@ -7672,27 +7672,27 @@ components:
 
     AfterDateState:
       type: object
-      required: [check, offers]
+      required: [offers]
       properties:
         check:
-          oneOf:
-            - { $ref: "#/components/schemas/MorningAfterCheck" }
-            - { type: "null" }
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/MorningAfterCheck"
         offers:
           type: array
           items: { $ref: "#/components/schemas/MutualOffer" }
 
     MorningAfterAnswerResponse:
       type: object
-      required: [answer, mutual, thanks, offer]
+      required: [answer, mutual, thanks]
       properties:
         answer: { type: string, enum: [great, pass] }
         mutual: { type: boolean }
         thanks: { type: string }
         offer:
-          oneOf:
-            - { $ref: "#/components/schemas/MutualOffer" }
-            - { type: "null" }
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/MutualOffer"
 
     ProfilerBatch:
       type: object
