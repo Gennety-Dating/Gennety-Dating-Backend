@@ -1483,38 +1483,55 @@ model VoicePrompt {
 }
 
 /// A track the person pinned to their profile — up to three, ordered by
-/// `position`, picked from Spotify search or from the one-time Spotify
-/// top-tracks import (decision 2026-09-11).
+/// `position`. Two providers (decision 2026-10-08): Apple Music — the person's
+/// own recent listening, read on the iPhone through MusicKit — and Spotify
+/// catalogue search (decision 2026-09-11). A set may mix them.
 ///
 /// Display-only, by contract rather than by habit: the Spotify Developer
 /// Policy forbids analysing Spotify content "for ... building profiles of
-/// users" and ingesting it into any ML/AI model. So these rows are NEVER read
-/// by the embedding refresh, the matcher or any prompt — and
-/// `services/music/ai-boundary.test.ts` fails when a new reader appears
-/// outside its allowlist.
+/// users" and ingesting it into any ML/AI model, and the same rule is applied
+/// to Apple Music. So these rows are NEVER read by the embedding refresh, the
+/// matcher or any prompt — and `services/music/ai-boundary.test.ts` fails when
+/// a new reader appears outside its allowlist.
 ///
-/// The metadata is a cache of Spotify's, not ours: the Developer Terms allow
-/// only temporary caching and require what is shown to be current, so
-/// `refreshedAt` drives a nightly re-fetch (`refreshStaleMusicTracks`)
-/// and a track Spotify no longer serves is deleted rather than kept stale. The
-/// cover is Spotify's CDN URL, never re-hosted bytes.
+/// The metadata is a cache of the provider's, not ours: Spotify's Developer
+/// Terms allow only temporary caching and require what is shown to be current,
+/// so `refreshedAt` drives a nightly re-fetch (`refreshStaleMusicTracks`) and a
+/// track the provider no longer serves is deleted rather than kept stale. The
+/// cover is the provider's CDN URL, never re-hosted bytes.
 model ProfileMusicTrack {
   id       String @id @default(uuid()) @db.Uuid
   userId   String @map("user_id") @db.Uuid
   /// 0..2 — display order.
   position Int
 
-  spotifyTrackId String  @map("spotify_track_id")
-  title          String
-  /// Artist names joined with ", " in Spotify's order.
-  artists        String
-  albumName      String? @map("album_name")
-  coverUrl       String? @map("cover_url")
-  spotifyUrl     String  @map("spotify_url")
-  /// Null for every app Spotify registered after 2024-11-27 — kept so an
-  /// Extended Quota app would get previews without a migration.
-  previewUrl     String? @map("preview_url")
-  explicit       Boolean @default(false)
+  /// `spotify` | `apple_music` — checked in code (`services/music/track.ts`).
+  provider   String  @default("spotify")
+  /// The provider's own id: Spotify's base-62 track id, or Apple Music's
+  /// numeric catalogue song id.
+  trackId    String  @map("track_id")
+  /// Apple Music storefront the song was read from (`ua`, `us`, …) — catalogue
+  /// availability is per country, so the nightly refresh asks the same one.
+  /// Null for Spotify.
+  storefront String?
+  /// The recording's ISRC when the provider gives one (Apple Music does).
+  isrc       String?
+  title      String
+  /// Artist names joined with ", " in the provider's order.
+  artists    String
+  albumName  String? @map("album_name")
+  coverUrl   String? @map("cover_url")
+  /// The link back to the provider — built or read from its answer, never a
+  /// client's string.
+  trackUrl   String  @map("track_url")
+  previewUrl String? @map("preview_url")
+  explicit   Boolean @default(false)
+
+  /// RETIRED 2026-10-08 — superseded by `trackId` / `trackUrl`; no longer read
+  /// or written. Nullable so new rows need not fill them; dropped by a later
+  /// migration once no running process selects them.
+  spotifyTrackId String? @map("spotify_track_id")
+  spotifyUrl     String? @map("spotify_url")
 
   refreshedAt DateTime @default(now()) @map("refreshed_at")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1522,6 +1539,7 @@ model ProfileMusicTrack {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, position])
+  @@unique([userId, provider, trackId])
   @@unique([userId, spotifyTrackId])
   @@index([refreshedAt])
   @@map("profile_music_tracks")

@@ -133,7 +133,7 @@ describe("completeTopTracksImport", () => {
     expect((topInit?.headers as Record<string, string>).Authorization).toBe("Bearer user-token");
 
     expect(oauth.peekTopTracksImport(USER)).toEqual([
-      expect.objectContaining({ spotifyTrackId: TRACK_ID }),
+      expect.objectContaining({ trackId: TRACK_ID }),
     ]);
     expect(oauth.peekTopTracksImport(OTHER)).toBeNull();
   });

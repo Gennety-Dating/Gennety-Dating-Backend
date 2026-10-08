@@ -64,12 +64,13 @@ afterAll(() => {
 describe("mapSpotifyTrack", () => {
   it("keeps Spotify's facts and builds the link itself", () => {
     expect(mapSpotifyTrack(rawTrack())).toEqual({
-      spotifyTrackId: TRACK_ID,
+      provider: "spotify",
+      trackId: TRACK_ID,
       title: "Never Gonna Give You Up",
       artists: "Rick Astley",
       albumName: "Whenever You Need Somebody",
       coverUrl: "https://i.scdn.co/image/300",
-      spotifyUrl: `https://open.spotify.com/track/${TRACK_ID}`,
+      url: `https://open.spotify.com/track/${TRACK_ID}`,
       previewUrl: null,
       explicit: false,
     });
@@ -133,7 +134,7 @@ describe("searchTracks", () => {
 
     expect(result).toEqual({
       ok: true,
-      value: [expect.objectContaining({ spotifyTrackId: TRACK_ID })],
+      value: [expect.objectContaining({ trackId: TRACK_ID })],
     });
     expect(urlOf(0)).toBe("https://accounts.spotify.com/api/token");
     expect(headersOf(0).Authorization).toBe(

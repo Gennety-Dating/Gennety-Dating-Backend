@@ -118,10 +118,10 @@ describe("GET /top-tracks", () => {
   });
 
   it("returns the caller's candidates", async () => {
-    h.peek.mockReturnValue([{ spotifyTrackId: "4uLU6hMCjMI75M1A2tKUQC" }]);
+    h.peek.mockReturnValue([{ trackId: "4uLU6hMCjMI75M1A2tKUQC" }]);
     const res = await request(buildApp()).get("/v1/integrations/spotify/top-tracks").set(auth());
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ tracks: [{ spotifyTrackId: "4uLU6hMCjMI75M1A2tKUQC" }] });
+    expect(res.body).toEqual({ tracks: [{ trackId: "4uLU6hMCjMI75M1A2tKUQC" }] });
     expect(h.peek).toHaveBeenCalledWith(USER_ID);
   });
 });

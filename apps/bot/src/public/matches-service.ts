@@ -12,7 +12,7 @@ import { resolveVenue } from "../services/curated-venue.js";
 import { proxyChatUnreadCount, proxyChatWindow } from "../services/proxy-chat.js";
 import { createVoicePromptSignedUrl } from "../services/storage.js";
 import { MUSIC_TRACK_SELECT, serializeMusicTrack } from "../services/music/profile-music.js";
-import type { MusicTrack } from "../services/music/spotify.js";
+import type { MusicTrack } from "../services/music/track.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import {
   applyReportAction,

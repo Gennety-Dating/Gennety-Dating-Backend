@@ -3,6 +3,7 @@ import { CITY_CATALOG, SUPPORTED_MARKETS } from "@gennety/shared";
 import { env } from "../../config.js";
 import { ticketProducts } from "../../services/appstore.js";
 import { primeTimeAppleRailLive } from "../../services/prime-time.js";
+import { appleMusicConfigured } from "../../services/music/apple-music.js";
 
 /**
  * GET /v1/app/config — pre-auth bootstrap for the native mobile client.
@@ -68,6 +69,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // and hides "Connect Spotify" unless the top-tracks import is on too.
       profileMusic: env.PROFILE_MUSIC_ENABLED,
       spotifyTopTracks: env.PROFILE_MUSIC_ENABLED && env.SPOTIFY_TOP_TRACKS_ENABLED,
+      // "My Apple Music" — the main way to fill the section (decision
+      // 2026-10-08). The client reads the person's listening through MusicKit
+      // and sends song ids; the server needs its MusicKit key to resolve them.
+      appleMusic: env.PROFILE_MUSIC_ENABLED && appleMusicConfigured(),
       // The Prime Time pass can be bought in the app. False → the locked-slot
       // sheet offers Premium only, exactly as before the pass existed; the
       // report route answers 404 anyway.

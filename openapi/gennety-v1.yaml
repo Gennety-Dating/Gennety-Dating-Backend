@@ -1691,10 +1691,11 @@ paths:
       operationId: getMyMusic
       summary: The caller's pinned tracks, in display order
       description: |
-        Up to three Spotify tracks (decision 2026-09-11). 404 while
-        `PROFILE_MUSIC_ENABLED` is off — which is also how a client learns to
-        hide the section. Display-only: the tracks never feed matching or any
-        AI (Spotify Developer Policy).
+        Up to three tracks, Apple Music and Spotify mixed freely (decisions
+        2026-09-11, 2026-10-08). 404 while `PROFILE_MUSIC_ENABLED` is off —
+        which is also how a client learns to hide the section. Display-only:
+        the tracks never feed matching or any AI (Spotify Developer Policy;
+        the same rule holds for Apple Music).
       responses:
         "200":
           description: OK
@@ -1708,23 +1709,26 @@ paths:
       operationId: setMyMusic
       summary: Replace the pinned tracks
       description: |
-        Spotify track ids only, in display order; `[]` clears the set. The
-        server resolves every id to Spotify's own metadata before saving — a
-        client cannot put a title or a cover of its choosing on a profile —
-        and saves nothing unless every id resolves.
+        References only, in display order; `[]` clears the set. A Spotify
+        track is `{ provider: spotify, trackId }`; an Apple Music song is
+        `{ provider: apple_music, trackId, storefront }` — the catalogue song
+        id the device read through MusicKit and the storefront of the
+        person's account. The server resolves every reference to the
+        provider's own metadata before saving — a client cannot put a title
+        or a cover of its choosing on a profile — and saves nothing unless
+        every reference resolves.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [trackIds]
+              required: [tracks]
               properties:
-                trackIds:
+                tracks:
                   type: array
                   maxItems: 3
-                  uniqueItems: true
-                  items: { type: string, pattern: "^[0-9A-Za-z]{22}$" }
+                  items: { $ref: "#/components/schemas/MusicTrackRef" }
       responses:
         "200":
           description: Saved — the set as it now stands
@@ -1732,26 +1736,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MusicTracksResponse" }
         "400":
-          description: "`invalid_track_ids`, `too_many_tracks` or `duplicate_tracks`"
+          description: "`invalid_tracks`, `too_many_tracks` or `duplicate_tracks`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Feature disabled }
         "422":
-          description: "`track_not_found` — Spotify does not serve one of the ids; nothing was saved"
+          description: "`track_not_found` — the provider does not serve one of the references; nothing was saved"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "502":
-          description: "`upstream_unavailable` — Spotify did not answer; nothing was saved"
+          description: "`upstream_unavailable` — Spotify or Apple did not answer; nothing was saved"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "503":
           description: |
-            `rate_limited` (Spotify's app-wide quota — deliberately not our 429,
-            which would read as "you, slow down") or `not_configured`.
+            `rate_limited` (the provider's app-wide quota — deliberately not
+            our 429, which would read as "you, slow down") or `not_configured`
+            (that provider's keys are not set on this server).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1764,7 +1769,9 @@ paths:
       description: |
         Runs server-side on the app's Client Credentials token — no Spotify
         login. At most 10 results (Spotify's development-mode cap). 404 while
-        `PROFILE_MUSIC_ENABLED` is off.
+        `PROFILE_MUSIC_ENABLED` is off. Every result has `provider: spotify`;
+        Apple Music has no search here — the person's own Apple Music is read
+        on the device through MusicKit (decision 2026-10-08).
       parameters:
         - name: q
           in: query
@@ -6682,6 +6689,13 @@ components:
                 hide "Connect Spotify" and offer search only. Expected to stay
                 false: a development-mode Spotify app admits five allow-listed
                 accounts.
+            appleMusic:
+              type: boolean
+              description: >-
+                "My Apple Music" is available (decision 2026-10-08): the client
+                may read the person's recent listening through MusicKit and
+                save songs with `provider: apple_music`. False → do not offer
+                it; such a save would answer 503 `not_configured`.
             venueChange:
               type: boolean
               description: >-
@@ -8194,32 +8208,56 @@ components:
         error: { type: string, enum: [origin-outside-market] }
         market: { $ref: "#/components/schemas/Market" }
 
+    MusicProvider:
+      type: string
+      enum: [spotify, apple_music]
+
+    MusicTrackRef:
+      type: object
+      description: |
+        Which track to pin. `storefront` (ISO 3166-1 alpha-2, lower case) is
+        required for `apple_music` — catalogue availability is per country —
+        and ignored for `spotify`.
+      required: [provider, trackId]
+      properties:
+        provider: { $ref: "#/components/schemas/MusicProvider" }
+        trackId:
+          type: string
+          description: Spotify's base-62 track id, or Apple Music's numeric catalogue song id
+        storefront: { type: string, pattern: "^[a-z]{2}$" }
+
     MusicTrack:
       type: object
       description: |
-        A Spotify track as Gennety shows it (decision 2026-09-11). Every field
-        is Spotify's own answer for `spotifyTrackId`, re-read at least weekly.
-        Spotify's branding rules apply wherever it is drawn: the full Spotify
-        logo, the cover neither cropped nor overlaid, and a link to
-        `spotifyUrl`.
+        A track as Gennety shows it (decisions 2026-09-11, 2026-10-08). Every
+        field is the provider's own answer for `trackId`, re-read at least
+        weekly. The provider's branding rules apply wherever it is drawn: the
+        Spotify logo or the Apple Music badge, the cover neither cropped nor
+        overlaid, and a link to `url`.
       required:
-        [spotifyTrackId, title, artists, albumName, coverUrl, spotifyUrl, previewUrl, explicit]
+        [provider, trackId, title, artists, albumName, coverUrl, url, previewUrl, explicit]
       properties:
-        spotifyTrackId: { type: string }
+        provider: { $ref: "#/components/schemas/MusicProvider" }
+        trackId: { type: string }
         title: { type: string }
         artists:
           type: string
-          description: Artist names joined with ", " in Spotify's order
+          description: Artist names joined with ", " in the provider's order
         albumName: { type: [string, "null"] }
         coverUrl:
           type: [string, "null"]
-          description: Spotify CDN image, about 300 px — render as is, never cropped
-        spotifyUrl:
+          description: The provider's CDN image, about 300 px — render as is, never cropped
+        url:
           type: string
-          description: "`https://open.spotify.com/track/<id>` — opens the Spotify app when installed"
+          description: >-
+            `https://open.spotify.com/track/<id>` or the song's
+            `https://music.apple.com/…` page — opens the provider's app when
+            installed
         previewUrl:
           type: [string, "null"]
-          description: Null for every app Spotify registered after 2024-11-27 — expect null
+          description: >-
+            Spotify: null for every app registered after 2024-11-27. Apple
+            Music: a 30-second preview when Apple offers one.
         explicit: { type: boolean }
 
     MusicTracksResponse:
@@ -8415,7 +8453,7 @@ components:
         partnerMusicTracks:
           type: array
           description: |
-            The partner's pinned tracks, in their order (decision 2026-09-11).
+            The partner's pinned tracks, in their order (decisions 2026-09-11, 2026-10-08).
             Absent while `PROFILE_MUSIC_ENABLED` is off; `[]` when they pinned
             nothing. A property of the PERSON, so it belongs on the pitch and
             never on a lock-screen surface.

@@ -219,6 +219,9 @@ describe("runtime configuration", () => {
       SPOTIFY_CLIENT_SECRET: "spotify-secret",
       SPOTIFY_TOP_TRACKS_ENABLED: false,
       SPOTIFY_REDIRECT_URI: "",
+      APPLE_MUSIC_KEY_PATH: "/keys/AuthKey_Music.p8",
+      APPLE_MUSIC_KEY_ID: "MKEY",
+      APPLE_MUSIC_TEAM_ID: "TEAM",
       ...overrides,
     };
   }
@@ -248,6 +251,19 @@ describe("runtime configuration", () => {
         "production",
       ),
     ).toEqual([expect.stringContaining("PROFILE_MUSIC_ENABLED")]);
+  });
+
+  it("takes Apple Music's key whole or not at all", () => {
+    expect(
+      runtimeConfigurationErrors(complete({ APPLE_MUSIC_KEY_ID: "" }), "production"),
+    ).toEqual([expect.stringContaining("APPLE_MUSIC_KEY_ID")]);
+    // None at all is fine — Apple Music is then simply not offered.
+    expect(
+      runtimeConfigurationErrors(
+        complete({ APPLE_MUSIC_KEY_PATH: "", APPLE_MUSIC_KEY_ID: "", APPLE_MUSIC_TEAM_ID: "" }),
+        "production",
+      ),
+    ).toEqual([]);
   });
 
   it("accepts a complete configuration", () => {

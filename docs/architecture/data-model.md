@@ -1204,19 +1204,24 @@ profile dirty and refreshes in one place) and read by `handlers/matching/pitch.t
 
 ### `profile_music_tracks`
 
-Up to three Spotify tracks a person pinned to their profile (decision
-2026-09-11): `position` 0..2, `@@unique([userId, position])` +
-`@@unique([userId, spotifyTrackId])`, `onDelete: Cascade`. Columns mirror the
-`MusicTrack` contract — `spotifyTrackId`, `title`, `artists` (joined with ", "),
-`albumName`, `coverUrl` (Spotify's CDN URL; bytes are never copied),
-`spotifyUrl` (built as `open.spotify.com/track/<id>`, not taken from Spotify's
-response), `previewUrl` (null for every app registered after 2024-11-27),
-`explicit`, `refreshedAt`.
+Up to three tracks a person pinned to their profile (decisions 2026-09-11,
+2026-10-08), Apple Music and Spotify mixed: `position` 0..2,
+`@@unique([userId, position])` + `@@unique([userId, provider, trackId])`,
+`onDelete: Cascade`. `provider` is `spotify` | `apple_music` (text, checked in
+code); `trackId` is the provider's id; `storefront` the Apple Music country the
+song was read in (null for Spotify); `isrc` when the provider gives one (Apple
+does). The rest mirrors the `MusicTrack` contract — `title`, `artists` (joined
+with ", "), `albumName`, `coverUrl` (the provider's CDN URL; bytes are never
+copied), `trackUrl` (Spotify's built as `open.spotify.com/track/<id>`, Apple's
+the song's `music.apple.com` page), `previewUrl`, `explicit`, `refreshedAt`.
+`spotifyTrackId` / `spotifyUrl` are RETIRED 2026-10-08 — nullable, neither read
+nor written, kept until a later migration drops them.
 
-**A cache of Spotify's metadata, not our data.** The Developer Terms allow only
-temporary caching and require what is shown to be current, so the nightly
-`refreshStaleMusicTracks` re-reads rows older than a week and deletes a track
-Spotify no longer serves. `refreshedAt` is indexed for that scan.
+**A cache of the provider's metadata, not our data.** Spotify's Developer Terms
+allow only temporary caching and require what is shown to be current, so the
+nightly `refreshStaleMusicTracks` re-reads rows older than a week (Apple songs
+in their own storefront) and deletes a track its provider no longer serves.
+`refreshedAt` is indexed for that scan.
 
 **Display-only, by contract.** The Developer Policy forbids analysing Spotify
 content for "building profiles of users" and ingesting it into any ML/AI model,

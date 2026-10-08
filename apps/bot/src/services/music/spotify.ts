@@ -1,5 +1,6 @@
 import { env } from "../../config.js";
 import { BoundedMap } from "../../utils/bounded-map.js";
+import { isHttpsUrl, type MusicError, type MusicResult, type MusicTrack } from "./track.js";
 
 /**
  * Spotify Web API for music on the profile (decision 2026-09-11).
@@ -39,31 +40,9 @@ const SEEN_TRACK_TTL_MS = 30 * 60 * 1000;
 
 const LOG_PREFIX = "[spotify]";
 
-/** The one shape every music surface speaks — API, table, match card. */
-export interface MusicTrack {
-  spotifyTrackId: string;
-  title: string;
-  /** Artist names joined with ", " in Spotify's order. */
-  artists: string;
-  albumName: string | null;
-  coverUrl: string | null;
-  /** Canonical `https://open.spotify.com/track/<id>` — built, not trusted. */
-  spotifyUrl: string;
-  previewUrl: string | null;
-  explicit: boolean;
-}
-
-export type SpotifyError =
-  /** SPOTIFY_CLIENT_ID / SECRET missing. */
-  | "not_configured"
-  /** Spotify unreachable, timed out, refused our token, or answered 5xx. */
-  | "upstream_unavailable"
-  /** Spotify's 429 — the app-wide quota, not this person's. */
-  | "rate_limited"
-  /** No such track, or Spotify no longer serves it. */
-  | "not_found";
-
-export type SpotifyResult<T> = { ok: true; value: T } | { ok: false; error: SpotifyError };
+/** `not_configured` here means SPOTIFY_CLIENT_ID / SECRET are missing. */
+export type SpotifyError = MusicError;
+export type SpotifyResult<T> = MusicResult<T>;
 
 /** Spotify's base-62 track id. */
 const TRACK_ID_RE = /^[0-9A-Za-z]{22}$/;
@@ -77,14 +56,6 @@ export function spotifyConfigured(): boolean {
 }
 
 // --- Mapping -----------------------------------------------------------------
-
-function isHttpsUrl(value: string): boolean {
-  try {
-    return new URL(value).protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 /** The smallest cover that is still at least the preferred width; failing that, the largest. */
 function pickCover(images: unknown): string | null {
@@ -137,12 +108,14 @@ export function mapSpotifyTrack(raw: unknown): MusicTrack | null {
     images?: unknown;
   };
   return {
-    spotifyTrackId: track.id,
+    provider: "spotify",
+    trackId: track.id,
     title: track.name.trim(),
     artists: artists.join(", "),
     albumName: typeof album.name === "string" && album.name.trim() ? album.name.trim() : null,
     coverUrl: pickCover(album.images),
-    spotifyUrl: `https://open.spotify.com/track/${track.id}`,
+    // Canonical `https://open.spotify.com/track/<id>` — built, not trusted.
+    url: `https://open.spotify.com/track/${track.id}`,
     previewUrl:
       typeof track.preview_url === "string" && isHttpsUrl(track.preview_url)
         ? track.preview_url
@@ -158,7 +131,7 @@ const seenTracks = new BoundedMap<string, { track: MusicTrack; at: number }>(2_0
 
 /** Remember tracks Spotify just described, so a save right after needs no call. */
 export function rememberTracks(tracks: readonly MusicTrack[], now = Date.now()): void {
-  for (const track of tracks) seenTracks.set(track.spotifyTrackId, { track, at: now });
+  for (const track of tracks) seenTracks.set(track.trackId, { track, at: now });
 }
 
 function recentlySeen(id: string, now = Date.now()): MusicTrack | null {

@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { env } from "../../config.js";
 import { BoundedMap } from "../../utils/bounded-map.js";
-import { mapSpotifyTrack, rememberTracks, spotifyConfigured, type MusicTrack } from "./spotify.js";
+import { mapSpotifyTrack, rememberTracks, spotifyConfigured } from "./spotify.js";
+import type { MusicTrack } from "./track.js";
 
 /**
  * The one-time "import my Spotify top tracks" (decision 2026-09-11).

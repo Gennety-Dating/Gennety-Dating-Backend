@@ -11,6 +11,22 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-08 — Music on the profile: Apple Music as the main provider, Spotify search only (migration `20261008120000_profile_music_providers`).**
+Bot + one additive migration. `profile_music_tracks` gains `provider` / `track_id` / `track_url` / `storefront` / `isrc`
+(backfilled from the Spotify columns, which become nullable and are no longer read). `MusicTrack` in the API is
+provider-neutral (`provider`, `trackId`, `url`) and `PUT /v1/me/music` takes `{ tracks: [{ provider, trackId, storefront? }] }`
+— no compatibility shim: the feature has never been on in production. New env (all three or none, boot refuses a partial set):
+`APPLE_MUSIC_KEY_PATH`, `APPLE_MUSIC_KEY_ID`, `APPLE_MUSIC_TEAM_ID` — a MusicKit key from developer.apple.com → Keys → Media
+Services (founder). With them set and `PROFILE_MUSIC_ENABLED=true`, `/v1/app/config` says `features.appleMusic: true`.
+**Order: `db:deploy` BEFORE the bot restart** — the new process selects the new columns in `/v1/matches/current`.
+Demo: the same code; no music flag there. iOS: the client that speaks the new shape lands with this (iOS journal 2026-10-08).
+Decision journal 2026-10-08. Ship only with the founder's go-ahead.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/music src/public/routes/music.test.ts src/config.test.ts`;
+  after deploy `pnpm --filter @gennety/db db:drift-check` → no drift; `curl -s https://dating-api.gennety.com/v1/app/config | jq .features`
+  → `profileMusic` / `appleMusic` as configured; with the key set, one save from the app with an Apple Music song → the row has
+  `provider = 'apple_music'`, `storefront`, `isrc`.
+- **Откат:** revert the commits and restart the bot; the migration may stay (nullable columns and a unique index the old code ignores).
+
 **PENDING 2026-10-07 — Premium: смена места «до двух раз» (Mini App + бот).**
 Text only. The Mini App Premium screen (`apps/webapp/src/premium.ts`, `b3d`/`b3x`)
 and the bot's Premium pitch (`packages/shared/src/i18n.ts`, `premiumPitch`) promised

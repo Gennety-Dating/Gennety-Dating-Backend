@@ -412,6 +412,17 @@ export const env = {
   /// `https://dating-api.gennety.com/v1/integrations/spotify/callback` in
   /// production. See `spotifyRedirectUri` for the two accepted shapes.
   SPOTIFY_REDIRECT_URI: spotifyRedirectUri(process.env.SPOTIFY_REDIRECT_URI),
+  /// Apple Music — the main music provider (decision 2026-10-08). The person's
+  /// own listening is read on the iPhone through MusicKit; these three let the
+  /// server turn the chosen catalogue song ids into Apple's own metadata
+  /// (`services/music/apple-music.ts`). A MusicKit private key (.p8) from
+  /// developer.apple.com → Keys ("Media Services"), its key id, and the team
+  /// id. No flag of its own: all three set → `features.appleMusic` is on while
+  /// PROFILE_MUSIC_ENABLED is; none → Apple Music is simply absent. A partial
+  /// set is refused at boot.
+  APPLE_MUSIC_KEY_PATH: process.env.APPLE_MUSIC_KEY_PATH ?? "",
+  APPLE_MUSIC_KEY_ID: process.env.APPLE_MUSIC_KEY_ID ?? "",
+  APPLE_MUSIC_TEAM_ID: process.env.APPLE_MUSIC_TEAM_ID ?? "",
   /// Nightly re-fetch of pinned tracks' metadata. The Spotify Developer Terms
   /// allow only temporary caching and require shown data to be current, so a
   /// row older than a week is re-read and a track Spotify dropped is deleted.
@@ -1219,6 +1230,9 @@ export interface RuntimeConfiguration {
   SPOTIFY_CLIENT_SECRET: string;
   SPOTIFY_TOP_TRACKS_ENABLED: boolean;
   SPOTIFY_REDIRECT_URI: string;
+  APPLE_MUSIC_KEY_PATH: string;
+  APPLE_MUSIC_KEY_ID: string;
+  APPLE_MUSIC_TEAM_ID: string;
 }
 
 export function runtimeConfigurationErrors(
@@ -1298,6 +1312,19 @@ export function runtimeConfigurationErrors(
   if (apnsSet.length > 0 && apnsSet.length < apns.length) {
     const missing = apns.filter(([, value]) => !value).map(([name]) => name);
     errors.push(`APNs is half-configured — missing ${missing.join(", ")}`);
+  }
+
+  // Apple Music the same way: all three or none. Half a set would leave the
+  // section offering "my Apple Music" while every save answers not_configured.
+  const appleMusic = [
+    ["APPLE_MUSIC_KEY_PATH", config.APPLE_MUSIC_KEY_PATH],
+    ["APPLE_MUSIC_KEY_ID", config.APPLE_MUSIC_KEY_ID],
+    ["APPLE_MUSIC_TEAM_ID", config.APPLE_MUSIC_TEAM_ID],
+  ] as const;
+  const appleMusicSet = appleMusic.filter(([, value]) => Boolean(value));
+  if (appleMusicSet.length > 0 && appleMusicSet.length < appleMusic.length) {
+    const missing = appleMusic.filter(([, value]) => !value).map(([name]) => name);
+    errors.push(`Apple Music is half-configured — missing ${missing.join(", ")}`);
   }
 
   return errors;

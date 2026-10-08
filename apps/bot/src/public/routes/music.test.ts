@@ -21,12 +21,13 @@ const { createProfileMusicRouter, createMusicSearchRouter } = await import("./mu
 const { JWT_ISSUER, JWT_AUDIENCE } = await import("../jwt.js");
 
 const TRACK = {
-  spotifyTrackId: TRACK_ID,
+  provider: "spotify",
+  trackId: TRACK_ID,
   title: "Never Gonna Give You Up",
   artists: "Rick Astley",
   albumName: "Whenever You Need Somebody",
   coverUrl: "https://i.scdn.co/image/300",
-  spotifyUrl: `https://open.spotify.com/track/${TRACK_ID}`,
+  url: `https://open.spotify.com/track/${TRACK_ID}`,
   previewUrl: null,
   explicit: false,
 };
@@ -88,18 +89,19 @@ describe("GET/PUT /v1/me/music", () => {
     expect(h.list).toHaveBeenCalledWith(USER_ID);
   });
 
-  it("hands the ids to the service and returns the set as saved", async () => {
-    const res = await request(buildApp())
-      .put("/v1/me/music")
-      .set(auth())
-      .send({ trackIds: [TRACK_ID] });
+  it("hands the refs to the service and returns the set as saved", async () => {
+    const refs = [
+      { provider: "apple_music", trackId: "1440857781", storefront: "ua" },
+      { provider: "spotify", trackId: TRACK_ID },
+    ];
+    const res = await request(buildApp()).put("/v1/me/music").set(auth()).send({ tracks: refs });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ tracks: [TRACK] });
-    expect(h.set).toHaveBeenCalledWith(USER_ID, [TRACK_ID]);
+    expect(h.set).toHaveBeenCalledWith(USER_ID, refs);
   });
 
   it.each([
-    ["invalid_track_ids", 400],
+    ["invalid_tracks", 400],
     ["too_many_tracks", 400],
     ["duplicate_tracks", 400],
     ["track_not_found", 422],
@@ -111,7 +113,7 @@ describe("GET/PUT /v1/me/music", () => {
     const res = await request(buildApp())
       .put("/v1/me/music")
       .set(auth())
-      .send({ trackIds: [TRACK_ID] });
+      .send({ tracks: [{ provider: "spotify", trackId: TRACK_ID }] });
     expect(res.status).toBe(status);
     expect(res.body).toEqual({ error });
   });
