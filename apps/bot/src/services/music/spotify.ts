@@ -121,6 +121,7 @@ export function mapSpotifyTrack(raw: unknown): MusicTrack | null {
         ? track.preview_url
         : null,
     explicit: track.explicit === true,
+    storefront: null,
   };
 }
 

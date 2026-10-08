@@ -24,12 +24,16 @@ export interface MusicTrack {
   url: string;
   previewUrl: string | null;
   explicit: boolean;
+  /**
+   * Apple Music storefront the song was read from; null for Spotify. Sent back
+   * so a client can re-save the set (removing one track re-sends the rest)
+   * without asking MusicKit again.
+   */
+  storefront: string | null;
 }
 
 /** What the table keeps beyond what is shown. */
 export interface StoredMusicTrack extends MusicTrack {
-  /** Apple Music storefront the song was read from; null for Spotify. */
-  storefront: string | null;
   isrc: string | null;
 }
 

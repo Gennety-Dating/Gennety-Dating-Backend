@@ -73,6 +73,7 @@ describe("mapSpotifyTrack", () => {
       url: `https://open.spotify.com/track/${TRACK_ID}`,
       previewUrl: null,
       explicit: false,
+      storefront: null,
     });
   });
 

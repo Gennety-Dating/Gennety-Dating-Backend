@@ -58,6 +58,7 @@ function track(id: string): MusicTrack {
     url: `https://open.spotify.com/track/${id}`,
     previewUrl: null,
     explicit: false,
+    storefront: null,
   };
 }
 
@@ -115,8 +116,8 @@ describe("setProfileMusic — saving", () => {
   it("stores each provider's own metadata, in the order given", async () => {
     const result = await setProfileMusic(USER, [apple(SONG), spotify(A)]);
 
-    // The answer is what a partner will see — no storefront, no ISRC.
-    const { storefront: _s, isrc: _i, ...shownSong } = song(SONG);
+    // The answer is what a partner will see — no ISRC.
+    const { isrc: _i, ...shownSong } = song(SONG);
     expect(result).toEqual({ ok: true, tracks: [shownSong, track(A)] });
     expect(h.getAppleMusicSong).toHaveBeenCalledWith(SONG, "ua", {});
     expect(h.deleteMany).toHaveBeenCalledWith({ where: { userId: USER } });

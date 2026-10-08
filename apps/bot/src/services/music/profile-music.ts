@@ -36,6 +36,7 @@ export const MUSIC_TRACK_SELECT = {
   trackUrl: true,
   previewUrl: true,
   explicit: true,
+  storefront: true,
 } as const;
 
 type MusicTrackRow = {
@@ -48,6 +49,7 @@ type MusicTrackRow = {
   trackUrl: string;
   previewUrl: string | null;
   explicit: boolean;
+  storefront: string | null;
 };
 
 export function serializeMusicTrack(row: MusicTrackRow): MusicTrack {
@@ -63,6 +65,7 @@ export function serializeMusicTrack(row: MusicTrackRow): MusicTrack {
     url: row.trackUrl,
     previewUrl: row.previewUrl,
     explicit: row.explicit,
+    storefront: row.storefront,
   };
 }
 
@@ -126,7 +129,7 @@ async function resolveTrack(
     return getAppleMusicSong(ref.trackId, ref.storefront, options);
   }
   const found = await getTrack(ref.trackId, options);
-  return found.ok ? { ok: true, value: { ...found.value, storefront: null, isrc: null } } : found;
+  return found.ok ? { ok: true, value: { ...found.value, isrc: null } } : found;
 }
 
 function rowData(track: StoredMusicTrack) {
@@ -146,7 +149,7 @@ function rowData(track: StoredMusicTrack) {
 }
 
 function toShown(track: StoredMusicTrack): MusicTrack {
-  const { storefront: _storefront, isrc: _isrc, ...shown } = track;
+  const { isrc: _isrc, ...shown } = track;
   return shown;
 }
 

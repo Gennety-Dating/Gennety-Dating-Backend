@@ -30,6 +30,7 @@ const TRACK = {
   url: `https://open.spotify.com/track/${TRACK_ID}`,
   previewUrl: null,
   explicit: false,
+  storefront: null,
 };
 
 /** Mirrors the gate in server.ts, so the 404-before-auth contract is tested here. */

@@ -8235,7 +8235,7 @@ components:
         Spotify logo or the Apple Music badge, the cover neither cropped nor
         overlaid, and a link to `url`.
       required:
-        [provider, trackId, title, artists, albumName, coverUrl, url, previewUrl, explicit]
+        [provider, trackId, title, artists, albumName, coverUrl, url, previewUrl, explicit, storefront]
       properties:
         provider: { $ref: "#/components/schemas/MusicProvider" }
         trackId: { type: string }
@@ -8259,6 +8259,11 @@ components:
             Spotify: null for every app registered after 2024-11-27. Apple
             Music: a 30-second preview when Apple offers one.
         explicit: { type: boolean }
+        storefront:
+          type: [string, "null"]
+          description: >-
+            Apple Music: the storefront the song was read in — send it back
+            unchanged when re-saving the set. Null for Spotify.
 
     MusicTracksResponse:
       type: object
