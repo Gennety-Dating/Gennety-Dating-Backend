@@ -77,6 +77,21 @@ function transcriptionFilename(mime: string): string | null {
 }
 
 /**
+ * The container read from the bytes, for a part whose declared type says
+ * nothing — the app's generated OpenAPI client labels every binary multipart
+ * part `application/octet-stream` (the Date Wishlist voice note). Only magic
+ * numbers, never a guess: an MP4/M4A box (`ftyp` at offset 4), an Ogg page
+ * (`OggS`) or a RIFF/WAVE header. Anything else stays unknown.
+ */
+export function sniffAudioMime(buffer: Buffer): string | null {
+  if (buffer.length < 12) return null;
+  if (buffer.toString("latin1", 4, 8) === "ftyp") return "audio/mp4";
+  if (buffer.toString("latin1", 0, 4) === "OggS") return "audio/ogg";
+  if (buffer.toString("latin1", 0, 4) === "RIFF" && buffer.toString("latin1", 8, 12) === "WAVE") return "audio/wav";
+  return null;
+}
+
+/**
  * Transcribe a voice-note buffer via OpenAI file transcription.
  *
  * Returns the transcript, or an empty string if the API key is missing,
@@ -98,7 +113,9 @@ export async function transcribeVoice(
   }
 
   const fetchFn = options.fetchFn ?? fetch;
-  const mime = options.mime ?? "audio/ogg";
+  const declared = options.mime ?? "audio/ogg";
+  // A declared type we cannot name is read from the bytes before giving up.
+  const mime = transcriptionFilename(declared) ? declared : (sniffAudioMime(buffer) ?? declared);
 
   const filename = transcriptionFilename(mime);
   if (!filename) {
