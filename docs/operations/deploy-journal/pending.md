@@ -11,6 +11,23 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-08 — Vibe Check: personal style picks for the iOS Shop (migration `20261008180000_style_picks`).**
+Bot + one purely additive migration (`style_products`, `style_pick_sets`, `style_clicks`); old code never reads them,
+so `db:deploy` may go before or after the restart. Then fill the catalog: `pnpm seed-style:import` (dry run) →
+`pnpm seed-style:import --apply` (36 items, upsert on the slug). New env, both default OFF:
+`STYLE_PICKS_ENABLED` (→ `features.stylePicks`; off → `GET /v1/me/style-picks` answers 204, no model call) and
+`STYLE_PICKS_FREQUENT_PLACES_ENABLED` (keep off — founder rule 2026-10-04). `GET /v1/style/out/{itemId}` is live
+regardless of the flag (redirect only; logs a click only for a signed link).
+**Do NOT switch `STYLE_PICKS_ENABLED` on before the privacy policy discloses product recommendations with affiliate
+links** — v4.2 says appearance tags are used "only" for matching and that there is no advertising profiling (decision
+journal 2026-10-08). Demo: same code, flag off. iOS: the Shop's Vibe Check button reads `features.stylePicks`.
+Ship only with the founder's go-ahead.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/style-picks src/public/routes/style-picks.test.ts src/services/music/ai-boundary.test.ts src/public/app-config.test.ts`;
+  after deploy `pnpm --filter @gennety/db db:drift-check` → no drift; `SELECT count(*) FROM style_products WHERE active` → 35;
+  `curl -s https://dating-api.gennety.com/v1/app/config | jq .features.stylePicks` → false;
+  `curl -sI "https://dating-api.gennety.com/v1/style/out/kiehls-lip-balm-1"` → 302 with `utm_campaign=style_picks`.
+- **Откат:** revert the commits and restart the bot; the tables may stay (nothing old reads them).
+
 **PENDING 2026-10-08 — Music on the profile: Apple Music as the main provider, Spotify search only (migration `20261008120000_profile_music_providers`).**
 Bot + one additive migration. `profile_music_tracks` gains `provider` / `track_id` / `track_url` / `storefront` / `isrc`
 (backfilled from the Spotify columns, which become nullable and are no longer read). `MusicTrack` in the API is

@@ -213,6 +213,7 @@ export type {
 export { DEFAULT_SESSION, SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from "./types.js";
 export * from "./venue-intent.js";
 export * from "./life-rhythm.js";
+export * from "./style-picks.js";
 export {
   normalizeProfileMedia,
   parseProfileMediaItem,
@@ -269,6 +270,9 @@ export {
   generateBumpDeckPrompt,
   generateWingmanHintPrompt,
   generateVenueBlurbPrompt,
+  stylePicksPrompt,
+  stylePicksUserContent,
+  STYLE_PICKS_JSON_SCHEMA,
   parseRejectionFeedbackPrompt,
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
@@ -289,6 +293,9 @@ export type {
   BumpDeckInput,
   WingmanHintInput,
   VenueBlurbInput,
+  StylePicksPromptInput,
+  StylePicksDigest,
+  StylePicksShortlistItem,
   RejectionFeedbackInput,
   PostDateFeedbackInput,
   ReportTriageInput,

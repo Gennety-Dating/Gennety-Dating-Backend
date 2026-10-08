@@ -513,6 +513,145 @@ Return the 1–2 sentences only. No quotes, no labels, no explanation.`;
 }
 
 // ---------------------------------------------------------------------------
+// #4d — stylePicksPrompt (Vibe Check — the Shop's personal style picks)
+// ---------------------------------------------------------------------------
+
+/**
+ * The profile digest the style-picks agent reads. Built deterministically by
+ * `apps/bot/src/services/style-picks/digest.ts` — NO music of any provider, no
+ * attractiveness/Elo, no name, contact, photo or id. `about` and the answers
+ * are the person's own words and are fenced as untrusted data.
+ */
+export interface StylePicksDigest {
+  gender: "man" | "woman" | null;
+  lookingFor: "men" | "women" | "both" | null;
+  ageBand: string | null;
+  /** Photo-derived clothing archetype (polished/sporty/urban/creative), already stored. */
+  archetype: string | null;
+  tempo: "calm" | "balanced" | "energetic" | null;
+  focus: "experience" | "balanced" | "connection" | null;
+  socialRole: string | null;
+  anchors: string[];
+  hobbies: string[];
+  /** Category of places they go (attended dates; frequent places only where allowed), with counts. */
+  places: Array<{ category: string; count: number }>;
+  /** Vibe tags of those places, most frequent first. */
+  placeVibes: string[];
+  about: string | null;
+  answers: Array<{ question: string; answer: string }>;
+}
+
+export interface StylePicksShortlistItem {
+  id: string;
+  category: string;
+  brand: string;
+  name: string;
+  notes: string;
+  tags: string[];
+  priceTier: number;
+}
+
+export interface StylePicksPromptInput {
+  /** The person's app language (en/ru/uk/de/pl) — every user-facing string is in it. */
+  language: string;
+  picksPerCategory: number;
+  reasonMaxChars: number;
+  signalMaxChars: number;
+}
+
+/**
+ * Strict Structured Outputs schema for the one style-picks call. Lengths are
+ * also clamped server-side; the schema only fixes the shape.
+ */
+export const STYLE_PICKS_JSON_SCHEMA: { name: string; schema: Record<string, unknown> } = {
+  name: "style_picks",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["basis", "picks"],
+    properties: {
+      basis: { type: "array", items: { type: "string" } },
+      picks: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "fitScore", "reason", "signals", "personalSignalCited"],
+          properties: {
+            id: { type: "string" },
+            fitScore: { type: "integer" },
+            reason: { type: "string" },
+            signals: { type: "array", items: { type: "string" } },
+            personalSignalCited: { type: "boolean" },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * System prompt for Vibe Check: a dedicated stylist agent choosing products
+ * for ONE person from a shortlist the server already filtered. Static per
+ * language (the person's data rides in the user message), so it stays short
+ * and identical between calls.
+ *
+ * The truth rules are the point: the model may only pick ids it was given,
+ * never writes a badge or an award, never comments on the body or looks, and
+ * every reason names something about this person.
+ */
+export function stylePicksPrompt(input: StylePicksPromptInput): string {
+  return `You are Gennety's personal stylist. From the SHORTLIST, choose products that fit THIS person's style and life, so they would genuinely want to buy them before a date. Reply with JSON only.
+
+${UNTRUSTED_FENCE_RULE}
+
+## Task
+- Pick exactly ${input.picksPerCategory} products per category (scent, accents, grooming) — ids from the SHORTLIST only, each once.
+- fitScore 0-100: how well it fits this person. Be honest; 85+ only for a strong, specific fit.
+- reason: one sentence in **${input.language}**, at most ${input.reasonMaxChars} characters, addressed to the person ("you"), informal. It must point at something concrete about THEM (their look's register, tempo, places they go, a hobby or answer) and tie it to the product.
+- personalSignalCited: true only if the reason really cites such a personal fact; false for a generic reason.
+- signals: 1-3 short chips in **${input.language}** (each at most ${input.signalMaxChars} characters) naming the personal facts used, e.g. "evening bars", "calm tempo".
+- basis: 3-4 short chips in **${input.language}** summarizing what you read about their vibe.
+
+## Never
+- Mention attractiveness, body, weight, skin tone, face or photos; "archetype" is a clothing register, never a judgement.
+- Invent awards, ratings, celebrities, discounts or facts not in the notes.
+- Make medical, skin-treatment or health claims.
+- Quote the person's text verbatim, or use their name.`;
+}
+
+/** The user message: the digest and the shortlist, compact. */
+export function stylePicksUserContent(
+  digest: StylePicksDigest,
+  shortlist: StylePicksShortlistItem[],
+): string {
+  const facts = {
+    gender: digest.gender,
+    lookingFor: digest.lookingFor,
+    ageBand: digest.ageBand,
+    styleArchetype: digest.archetype,
+    tempo: digest.tempo,
+    focus: digest.focus,
+    socialRole: digest.socialRole,
+    anchors: digest.anchors,
+    hobbies: digest.hobbies,
+    places: digest.places,
+    placeVibes: digest.placeVibes,
+  };
+  const answers = digest.answers.map((a) => `${a.question} → ${a.answer}`).join("\n");
+  const items = shortlist
+    .map((p) => `${p.id} | ${p.category} | ${p.brand} — ${p.name} | ${p.notes} | ${p.tags.join(",")} | tier ${p.priceTier}`)
+    .join("\n");
+  return `## PERSON
+${JSON.stringify(facts)}
+${fenceUntrusted("about", digest.about)}
+${fenceUntrusted("their answers", answers || null)}
+
+## SHORTLIST (id | category | product | notes | tags | price tier 1-3)
+${items}`;
+}
+
+// ---------------------------------------------------------------------------
 // #5 — parseRejectionFeedbackPrompt (Phase 3, Decline flow)
 // ---------------------------------------------------------------------------
 

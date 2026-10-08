@@ -1174,6 +1174,103 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/style-picks:
+    get:
+      tags: [me]
+      operationId: getStylePicks
+      summary: Vibe Check — personal style picks for the Shop
+      description: |
+        A personal selection of products (scent, accents, grooming) chosen
+        for the caller by a dedicated style agent (decision 2026-10-08).
+        Up to six cards, two per category; fewer when the agent returned
+        fewer valid picks (never fewer than three).
+
+        The server builds a style digest without any model (no music, no
+        attractiveness score, no photos — only the stored clothing
+        archetype), filters the catalog by gender and style tags, and makes
+        ONE model call. The result is cached for 7 days per language and
+        profile; a profile or catalog change regenerates it. A failed
+        regeneration serves the last set.
+
+        `badges`: `forYou` is computed from the agent's fit score (never
+        written by the model, at most two per set) and comes first; the rest
+        are researched catalog facts (`accolade`, `seenOn`) with a
+        `sourceUrl`, in the caller's language. `kind` is a plain string, not
+        an enum, so a future kind does not break decoding — drop unknown
+        kinds.
+
+        Open `outUrl` in the system browser: it is a signed redirect to the
+        shop and needs no Authorization header.
+
+        **204** — the feature is off (`features.stylePicks` false), the
+        profile is too thin for a personal selection, or a generation failed
+        with nothing cached. Show no result, not an error. The first call
+        for a profile can take several seconds (one model call).
+      responses:
+        "200":
+          description: The selection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StylePicksResponse" }
+        "204": { description: No selection (flag off, thin profile, or failure with nothing cached) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429":
+          description: The caller's daily AI token budget is spent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/style/out/{itemId}:
+    get:
+      tags: [me]
+      operationId: styleOutRedirect
+      summary: Outbound redirect from a Vibe Check card to the shop
+      description: |
+        Reached only through a pick's `outUrl` — clients never build it.
+        Redirects (302) to the shop with
+        `utm_source=gennety&utm_medium=app&utm_campaign=style_picks&utm_content=<category>`
+        plus the item's affiliate parameters; to the Ukrainian shop for a
+        `uk` link when the product has one.
+
+        No Authorization header (the system browser sends none): the link
+        carries an HMAC over user id + item id + expiry (`u`, `e`, `s`), and
+        a valid one records the click. An invalid or expired link still
+        redirects — it just records nothing. Works while the feature flag is
+        off too, so an old card never dead-ends.
+      security: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z0-9-]{1,80}$" }
+        - name: u
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+          description: The user the link was minted for.
+        - name: e
+          in: query
+          required: false
+          schema: { type: string }
+          description: Expiry, epoch milliseconds.
+        - name: s
+          in: query
+          required: false
+          schema: { type: string }
+          description: Signature.
+        - name: l
+          in: query
+          required: false
+          schema: { type: string }
+          description: The reader's language (`uk` picks the Ukrainian shop).
+      responses:
+        "302":
+          description: Redirect to the shop
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/me/verification:
     get:
       tags: [me]
@@ -6717,6 +6814,12 @@ components:
                 Apple Health" row and no "Твой темп" card, and never ask
                 HealthKit for anything; `/v1/me/rhythm` answers 404. Absent on an
                 older server — treat as false.
+            stylePicks:
+              type: boolean
+              description: >-
+                Vibe Check in the Shop. False → show no "Vibe Check" button;
+                `GET /v1/me/style-picks` answers 204 anyway. Absent on an older
+                server — treat as false.
         venueChangeProduct:
           type: [string, "null"]
           description: >-
@@ -7425,6 +7528,84 @@ components:
         version:
           type: string
           description: The chat's current `ProxyChatState.version`.
+
+    StylePicksResponse:
+      type: object
+      description: Served by `GET /v1/me/style-picks` (`services/style-picks/service.ts`).
+      required: [generatedAt, language, basis, picks]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+          description: When the agent produced this set (a cached set keeps its time).
+        language:
+          type: string
+          description: The language `reason`, `signals` and `basis` are written in.
+        basis:
+          type: array
+          description: 3-4 short chips — what the agent read about the caller's vibe.
+          items: { type: string }
+        picks:
+          type: array
+          description: Ordered scent, accents, grooming; best first within a category.
+          items: { $ref: "#/components/schemas/StylePick" }
+
+    StylePick:
+      type: object
+      required: [id, category, brand, name, reason, signals, priceTier, imageUrl, outUrl, sponsored, badges]
+      properties:
+        id:
+          type: string
+          description: Catalog slug.
+        category:
+          type: string
+          description: "`scent`, `accents` or `grooming` (a plain string — drop unknown values)."
+        brand: { type: string }
+        name: { type: string }
+        reason:
+          type: string
+          description: One sentence (≤ 140 characters) on why it fits this person.
+        signals:
+          type: array
+          description: 1-3 chips (≤ 24 characters) naming the personal facts used.
+          items: { type: string }
+        priceTier:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: 1 high street … 3 luxury.
+        imageUrl:
+          type: [string, "null"]
+          format: uri
+        outUrl:
+          type: string
+          format: uri
+          description: Signed redirect to the shop — open in the system browser, no Authorization header.
+        sponsored:
+          type: boolean
+          description: A paid placement; label it.
+        badges:
+          type: array
+          description: "`forYou` first when granted, then catalog badges in the caller's language."
+          items: { $ref: "#/components/schemas/StyleBadge" }
+
+    StyleBadge:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: |
+            `forYou` (computed from the fit score; no text), `accolade` or
+            `seenOn` (researched catalog facts). A plain string, not an enum —
+            drop unknown kinds.
+        text:
+          type: string
+          description: Localized badge text. Absent on `forYou`.
+        sourceUrl:
+          type: string
+          format: uri
+          description: Where the fact comes from. Absent on `forYou`.
 
     ProfileGapsResponse:
       type: object

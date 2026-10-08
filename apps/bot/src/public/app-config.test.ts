@@ -72,6 +72,12 @@ describe("GET /v1/app/config", () => {
     expect(res.body.features.tempoSync).toBe(false);
   });
 
+  // Vibe Check stays hidden until the policy discloses product recommendations.
+  it("reports Vibe Check off by default", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.features.stylePicks).toBe(false);
+  });
+
   it("serves the pass product only once the whole rail is live", async () => {
     const mutable = env as unknown as Record<string, unknown>;
     const saved = { ...mutable };

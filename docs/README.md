@@ -44,6 +44,7 @@ docs/
 │           frequent-places.md (catalog places a person keeps returning to — detection, thresholds, what the match sees)
 │           inbox-and-announcements.md (the iOS bell inbox, admin announcements + fan-out, Live Pulse, chat context)
 │           tempo-sync.md (Apple Health life rhythm: the two tags, V_rhythm, venue Tier 2, post-date place, the fence)
+│           style-picks.md (Vibe Check: the Shop's style picks — digest, prefilter, one agent call, badges, signed outbound links)
 ├── operations/
 │   ├── deployment-runbook.md  ★ CANONICAL deploy/rollback/DB-ops/logs/Caddy procedure.
 │   ├── environments.md        Droplet, paths, PM2, Caddy, env + credential locations, endpoints, dev↔prod isolation.

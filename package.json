@@ -48,6 +48,7 @@
     "activity:backfill:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-activity-days.mjs --apply",
     "seed-venues:pull": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --pull",
     "seed-venues:import": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --import",
+    "seed-style:import": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-style-catalog.mjs",
     "sync-venues:kyiv": "node scripts/sync-kyiv-venue-catalog.mjs",
     "resolve-venues:kyiv": "node scripts/resolve-kyiv-venue-ids.mjs",
     "merge-venues:kyiv": "node scripts/merge-kyiv-venue-additions.mjs",

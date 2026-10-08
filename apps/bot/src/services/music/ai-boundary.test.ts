@@ -38,3 +38,32 @@ describe("pinned tracks stay out of matching and AI", () => {
     );
   });
 });
+
+/**
+ * Vibe Check (decision 2026-10-08) is a prompt built from the whole profile —
+ * exactly the place music would drift into. Its digest, prompt and service
+ * must not name any music source, and the digest must not select the tracks.
+ */
+describe("Vibe Check never reads music", () => {
+  const STYLE_FILES = [
+    ...sourceFiles(join(SRC, "services/style-picks")),
+    resolve(SRC, "../../../packages/shared/src/style-picks.ts"),
+  ];
+  const MUSIC = /profileMusicTrack|musicTracks|services\/music|spotify|apple[\s_-]?music|appleMusic/i;
+
+  it("no Vibe Check source mentions a music source", () => {
+    expect(STYLE_FILES.length).toBeGreaterThan(3);
+    for (const file of STYLE_FILES) {
+      expect(MUSIC.test(readFileSync(file, "utf8")), relative(SRC, file)).toBe(false);
+    }
+  });
+
+  it("the style-picks prompt section carries no music input", () => {
+    const prompts = readFileSync(resolve(SRC, "../../../packages/shared/src/ai/prompts.ts"), "utf8");
+    const start = prompts.indexOf("// #4d — stylePicksPrompt");
+    const end = prompts.indexOf("// #5 — parseRejectionFeedbackPrompt");
+    expect(start).toBeGreaterThan(-1);
+    expect(MUSIC.test(prompts.slice(start, end))).toBe(false);
+  });
+});
+

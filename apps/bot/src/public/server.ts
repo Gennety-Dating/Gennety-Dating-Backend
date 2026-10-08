@@ -53,6 +53,7 @@ import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { ticketsHistoryRouter } from "./routes/tickets-history.js";
 import { profileGapsRouter } from "./routes/profile-gaps.js";
+import { createStyleOutRouter, createStylePicksRouter } from "./routes/style-picks.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createProfileVideoRouter } from "./routes/profile-video.js";
 import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
@@ -616,6 +617,9 @@ app.use("/v1/me/tickets/history", ticketsHistoryRouter);
 // Unfinished profile items for the Today nudge (decision journal 2026-10-01).
 // Same rule; read-only, no flag of its own — each item carries its feature's.
 app.use("/v1/me/profile-gaps", profileGapsRouter);
+// Vibe Check — the Shop's style picks (decision journal 2026-10-08). Same
+// rule; JWT + token budget, 204 while the flag is off.
+app.use("/v1/me/style-picks", createStylePicksRouter());
 // Profile video from the native app (decision journal 2026-09-13). Same rule;
 // 404s before auth while the kill switch is off.
 app.use("/v1/me/video", (req, res, next) => {
@@ -653,6 +657,9 @@ app.use("/v1/dates", dateRadarRouter);
 // The date map: places of confirmed dates, derived from `Match` rows. Replaced
 // the Scratch Map's `/v1/scratch` (city fog, retired 2026-10-02).
 app.use("/v1/date-map", dateMapRouter);
+// Vibe Check's outbound redirect: opened by the system browser, so no JWT —
+// a signed link logs the click, any other link still redirects.
+app.use("/v1/style", createStyleOutRouter());
 // Frequently visited places: its own consent, either rail, and a
 // foreground-only presence call.
 app.use("/v1/frequent-places", frequentPlacesRouter);

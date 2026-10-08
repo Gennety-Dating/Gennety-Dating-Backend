@@ -1621,3 +1621,33 @@ An **empty** `photo_refs` array means "the answer we cached carried no photos",
 which is not the same as "this place has none" — an absent `photos` field is
 indistinguishable from a partial 200 (`fetchPlacePhotoNames`), so an empty
 answer is never persisted and never read as authoritative.
+
+### `style_products`, `style_pick_sets`, `style_clicks` (Vibe Check, 2026-10-08)
+
+The iOS Shop's style picks (`docs/product/domains/style-picks.md`), added by
+migration `20261008180000_style_picks`. All three tables are additive.
+
+- `style_products` is the catalog. Its PK is the slug `id`. It also holds
+  `category` (scent/accents/grooming), `gender` (men/women/unisex),
+  `price_tier` (1-3), `price_eur`, `notes` (English, for the model), and
+  `tags` (from `STYLE_TAGS`). The links are `url` and `url_ua`, plus
+  `image_url`. The rest are `sponsored`, `affiliate_params` (a JSONB string
+  map), `badges` (JSONB: `[{kind: accolade|seenOn, text: {en,ru,uk,de,pl},
+  sourceUrl}]`, the only badges a card may show besides the computed
+  `forYou`) and `active`.
+  - The table is seeded only from `scripts/style-catalog.json` by
+    `pnpm seed-style:import --apply`. A product that leaves the file is
+    deactivated, never deleted.
+  - Indexed on `(active, category)`.
+- `style_pick_sets` holds one row per person, the latest set, which is both
+  the cache and the fallback.
+  - Columns: `user_id` (FK, `ON DELETE CASCADE`), `language`, `profile_hash`
+    (sha256 of the digest plus the shortlist ids), `payload` (the validated
+    picks: `{basis, picks[{id, fitScore, reason, signals, forYou}]}`) and
+    `generated_at`.
+  - A new set deletes the older rows in the same transaction.
+  - Indexed on `(user_id, generated_at)`.
+- `style_clicks` holds one row per signed outbound tap.
+  - Columns: `user_id` (FK, `ON DELETE CASCADE`), `item_id` (no FK, so a
+    retired product keeps its clicks), `category` and `created_at`.
+  - Indexed on `(item_id, created_at)` and `(user_id, created_at)`.

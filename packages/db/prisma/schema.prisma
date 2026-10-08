@@ -429,6 +429,8 @@ model User {
   placeVisits               UserPlaceVisit[]
   hiddenPlaces              UserHiddenPlace[]
   rhythmProfile             UserRhythmProfile?
+  stylePickSets             StylePickSet[]
+  styleClicks               StyleClick[]
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
@@ -3588,4 +3590,79 @@ model ViralityCohort {
   /// Срез «все когорты на одном дне зрелости» — линия K-фактора во времени.
   @@index([maturityDay, cohortDate])
   @@map("virality_cohorts")
+}
+
+/// Vibe Check — the Shop's style picks (decision journal 2026-10-08). The
+/// product catalog the dedicated agent chooses from: seeded from
+/// `scripts/style-catalog.json` by `pnpm seed-style:import` (idempotent upsert
+/// on the slug), never edited by hand in a database. `badges` are the ONLY
+/// accolades a card may show — the model never writes one (the "for you" badge
+/// is computed from its fitScore, not stored here).
+model StyleProduct {
+  /// A stable slug (`le-labo-santal-33`) — the id the model echoes back.
+  id              String   @id
+  /// scent | accents | grooming.
+  category        String
+  brand           String
+  name            String
+  /// men | women | unisex.
+  gender          String
+  /// 1 (high street) … 3 (luxury).
+  priceTier       Int      @map("price_tier")
+  priceEUR        Float    @map("price_eur")
+  /// English one-liner the model reads.
+  notes           String
+  /// Style tags the deterministic prefilter overlaps with the person's digest.
+  tags            String[] @default([])
+  url             String
+  /// The Ukrainian shop, used when the person's language is uk.
+  urlUA           String?  @map("url_ua")
+  imageUrl        String?  @map("image_url")
+  sponsored       Boolean  @default(false)
+  /// Extra query parameters appended to the outbound link (affiliate ids).
+  affiliateParams Json?    @map("affiliate_params")
+  /// [{ kind: "accolade" | "seenOn", text: { en, ru, uk, de, pl }, sourceUrl }].
+  badges          Json     @default("[]")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([active, category])
+  @@map("style_products")
+}
+
+/// One generated Vibe Check per person (the latest), reused while the
+/// language and the profile digest hash are unchanged and it is younger than
+/// `STYLE_PICKS_TTL_DAYS`; served as the fallback when a regeneration fails.
+model StylePickSet {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  language    String
+  /// sha256 of the digest + shortlist the model saw.
+  profileHash String   @map("profile_hash")
+  /// The validated picks, before badges are localized and links signed.
+  payload     Json
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, generatedAt])
+  @@map("style_pick_sets")
+}
+
+/// A tap from a Vibe Check card to the shop (`GET /v1/style/out/{itemId}`).
+/// Written only when the signed link proves who tapped; an unsigned or expired
+/// link still redirects, it just leaves no row.
+model StyleClick {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  itemId    String   @map("item_id")
+  category  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, createdAt])
+  @@index([userId, createdAt])
+  @@map("style_clicks")
 }

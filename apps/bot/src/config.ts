@@ -703,6 +703,20 @@ export const env = {
   /// reports `tempoSync: false` (the iOS row never shows), and nothing reads
   /// stored rows. Flippable with `pm2 restart --update-env`.
   TEMPO_SYNC_ENABLED: process.env.TEMPO_SYNC_ENABLED === "true",
+  /// Vibe Check — the Shop's personal style picks (decision journal
+  /// 2026-10-08). Default OFF, and it should stay off until the privacy policy
+  /// discloses using profile data and photo-derived appearance tags for product
+  /// recommendations with affiliate links — v4.2 says appearance tags are used
+  /// "only" for matching and that there is no ad profiling. Off →
+  /// `/v1/app/config` reports `stylePicks: false`, `GET /v1/me/style-picks`
+  /// answers 204 and nothing calls the model. The outbound redirect
+  /// `/v1/style/out/{itemId}` keeps working either way (an old card's link).
+  STYLE_PICKS_ENABLED: process.env.STYLE_PICKS_ENABLED === "true",
+  /// Vibe Check may also read the person's frequently visited places (place
+  /// categories only, never names or days). Separate and OFF: the founder's
+  /// 2026-10-04 rule keeps `user_place_visits` out of AI inputs until the
+  /// policy discloses them. Attended dates (the date map) are read either way.
+  STYLE_PICKS_FREQUENT_PLACES_ENABLED: process.env.STYLE_PICKS_FREQUENT_PLACES_ENABLED === "true",
   /// Strength of venue Tier 2 inside the 5 % sampling band: a venue's draw
   /// weight is multiplied by `1 ± w` by how well it suits the pair's lead
   /// rhythm. 0 disables Tier 2; clamped to [0, 0.9] so a weight stays positive.

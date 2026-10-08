@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 403 entries
+# Decision index — all 404 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-08 | Vibe Check: отдельный агент подборки стиля для Shop (дайджест без модели → префильтр → один вызов `MODELS.agent`, ~1,5k/600 токенов, кэш 7 дней), бейджи только из каталога + вычисляемое «для тебя» (fitScore ≥ 85 и личный сигнал, ≤ 2), подписанная ссылка наружу (`/v1/style/out`, невалидная — редирект без записи); частые места — под вторым выключенным флагом; политика v4.2 такое использование не раскрывает → `STYLE_PICKS_ENABLED` выключен | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-08 | музыка в профиле: Apple Music главный провайдер (своя музыка через MusicKit на iPhone, сервер резолвит id ключом MusicKit), Spotify — только поиск; контракт провайдер-нейтральный (`provider`/`trackId`/`url`, `PUT {tracks}`), `features.appleMusic` = ключ настроен | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-07 | Premium: смена места «до двух раз за свидание, не позже T-5ч», а не «сколько угодно» — Mini App (`b3d`/`b3x`, как iOS) и питч бота (`premiumPitch`), пять языков; сервер и так держит `VENUE_CHANGE_MAX_PER_DATE = 2` и для Premium; выкат PENDING | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-07 | Premium Mini App: `?preview=purchase` — весь путь покупки без Telegram и счёта Stars (предложение → «Оформить» → церемония → плашка), для отчёта основателю | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

@@ -81,6 +81,9 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // "Connect Apple Health" row and no "Твой темп" card, and never asks
       // HealthKit for anything; `/v1/me/rhythm` 404s either way.
       tempoSync: env.TEMPO_SYNC_ENABLED,
+      // Vibe Check in the Shop (decision 2026-10-08). False → the iOS client
+      // shows no "Vibe Check" button; `/v1/me/style-picks` answers 204 anyway.
+      stylePicks: env.STYLE_PICKS_ENABLED,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides
