@@ -1212,7 +1212,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StylePicksResponse" }
-        "204": { description: No selection (flag off, thin profile, or failure with nothing cached) }
+        "204": { description: "No selection (flag off, thin profile, or failure with nothing cached)" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429":
           description: The caller's daily AI token budget is spent
