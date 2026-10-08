@@ -99,18 +99,22 @@ export const WISHLIST_SESSION_MIN_PROFILER_ANSWERS = 3;
 export const WISHLIST_SESSION_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
- * Consent text version for the "my wishlist is shown to a match after mutual
- * interest" act (`User.wishlistConsentVersion`). Bump with any material change
- * of what is disclosed to whom.
- */
-export const WISHLIST_CONSENT_VERSION = "2026-10-08";
-
-/**
  * The legal-docs version from which the policy discloses that taste answers
  * (favourite flowers) may be shown to a mutual match. A partner who accepted
- * an older version AND never gave the wishlist consent gets no flowers hint.
+ * an older version AND never built a wishlist (whose session says the same)
+ * gets no flowers hint.
  */
 export const LEGAL_DOCS_TASTE_HINTS_FROM = "2026-10-08";
+
+/**
+ * A cheat sheet whose newest change is at least this old carries a small
+ * "this wishlist is N days old" line for the viewer — before the purchase too,
+ * so they know it before paying. The founder (2026-10-08): only once the list
+ * has most likely gone stale, "дней через 30, 40, 50".
+ */
+export const WISHLIST_STALE_AFTER_DAYS = 45;
+/** From this age the line counts months instead of days. */
+export const WISHLIST_AGE_IN_MONTHS_FROM_DAYS = 90;
 
 /** Free share of the cheat sheet: a tenth, at least one item. */
 export const WISHLIST_TEASER_SHARE = 0.1;

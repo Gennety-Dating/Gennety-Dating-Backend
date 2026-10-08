@@ -191,13 +191,13 @@ defeat that. The same applies to a match's Date Wishlist and to any taste hint
 you are shown about them: they are that person's personal information, to be
 used only to plan a date with them, and not to be shared.
 
-**Your Date Wishlist.** The Date Wishlist is optional. Before your first item is
-saved, we ask you, on its own screen, to agree that your wishlist may be shown
-to a person with whom you have mutual interest — about a tenth of it for free,
-and the rest once they buy an unlock or if they have Premium (Section 11.5;
-Privacy Policy, Section 12.1). Nobody else sees it. You can edit or delete any
-item, or the whole list, and withdraw that agreement at any time; your changes
-reach the cheat sheet too. When you put something on your wishlist:
+**Your Date Wishlist.** The Date Wishlist is optional. It exists to be shown:
+when you make one, a person with whom you have mutual interest can see it as a
+cheat sheet for a second date — about a tenth of it for free, and the rest once
+they buy an unlock or if they have Premium (Section 11.5; Privacy Policy,
+Section 12.1). Nobody else sees it. You can delete any item, and hide the whole
+list ("Don't show my list") or show it again, at any time; your changes reach
+the cheat sheet too. When you put something on your wishlist:
 
 - add only things **you** would like, and no one's personal information — no
   names, photos, contact details, social-media handles or addresses, yours or
@@ -384,8 +384,9 @@ charged, are always shown to you **before** you confirm a purchase.
 
 - When you and your match have **mutual interest** (Section 5), you may be
   offered their Date Wishlist as a cheat sheet for a second date — but only if
-  they have made one and agreed to share it. About a tenth of it is visible for
-  free. Opening the rest is a **one-off purchase for that match** (at launch,
+  they have made one and have not hidden it. About a tenth of it is visible for
+  free. If they have not added or removed anything for 45 days or more, you are
+  told when they last did, before you buy: some ideas may be out of date. Opening the rest is a **one-off purchase for that match** (at launch,
   $2.99 through Apple In-App Purchase or 150 Telegram Stars; the price that
   applies to you is always shown before you confirm), or it is included with
   Gennety Premium.
@@ -394,12 +395,12 @@ charged, are always shown to you **before** you confirm a purchase.
   it once per match; it does not open anyone else's list.
 - **You are buying access to a list that its owner controls.** The list is that
   person's personal information. They may add, edit or delete items, or
-  withdraw their agreement to share it, at any time — that is their right, and
+  hide the list, at any time — that is their right, and
   we respect it immediately. When they do, the cheat sheet changes or closes
   for you as well. **The price is not refunded, in whole or in part, because
-  the other person later changes, shortens or withdraws their list**, or
+  the other person later changes, shortens or hides their list**, or
   because a second date does not happen. If the list could not be opened at
-  all when you paid — for example because it was withdrawn at that same
+  all when you paid — for example because it was hidden at that same
   moment — write to **legal@gennety.com**: we refund a Telegram Stars purchase,
   and for an Apple purchase we support your refund request to Apple
   (Section 11.6). Your rights under mandatory consumer law are not affected.

@@ -54,8 +54,9 @@ built earlier, with the agent, on «Сегодня».
 3. **The flowers hint** — «Её любимые цветы: Пионы, Тюльпаны» from the
    partner's `f_flowers` Profiler answer (tapped options in the viewer's
    language, else her own words up to 80 characters). Shown only if the partner
-   accepted legal docs version 2026-10-08 or later, or gave the wishlist
-   consent — an answer given under an older policy stays private. The question
+   accepted legal docs version 2026-10-08 or later, or built a wishlist (its
+   session says the same at the top), and never while the partner hid their
+   list — an answer given under an older policy stays private. The question
    itself stays an ordinary vibe question. Delivery in one tap is deferred (no
    partner integration).
 4. **The cheat sheet.** About a tenth of the partner's wishlist is free
@@ -65,6 +66,10 @@ built earlier, with the agent, on «Сегодня».
    `date_wishlist_unlock` StoreKit consumable ($2.99) in the app — or for free
    with Premium, which writes a `premium` unlock row so the sheet stays open if
    Premium lapses. The sheet is live: it shows the owner's list as it is now.
+   From 45 days after the owner's last add or delete (`users.wishlist_changed_at`,
+   `WISHLIST_STALE_AFTER_DAYS`) it carries a small line «Список обновлялся 52 дня
+   назад — что-то могло устареть.» (`ageNote`; months from 90 days) — before the
+   purchase too, so the viewer knows it before paying. A fresher list has no line.
 5. **Purchases** are `WishlistUnlock` rows, idempotent on the provider's
    payment id. A Stars charge that can no longer be honoured is refunded at
    once; an App Store one is answered `unclaimed` and reported to the founder
@@ -78,11 +83,16 @@ built earlier, with the agent, on «Сегодня».
    one push `wishlist.session` for those who did not open the app). App users
    only. It stands until «Готово» (needs at least one item; never offered
    again) or «Позже» (comes back after three days).
-2. **Consent first.** Before the first item is saved, an explicit consent that
-   the list (and taste answers such as favourite flowers) is shown to a match
-   only after both said "great" the morning after, a tenth free and the rest
-   paid or with Premium, the owner not paid, withdrawable at any time
-   (`User.wishlistConsent*`, version `WISHLIST_CONSENT_VERSION`).
+2. **No consent screen** (founder, 2026-10-08, second decision: a screen of
+   «кто увидит твой список» before the first item reads as a warning and puts
+   people off). Being shown to a mutual date is what the list is for, so the
+   basis is the contract (Art. 6(1)(b), Privacy §12.1, Terms §6), not consent —
+   which could not move into the sign-up tick, where bundled consent is invalid.
+   The notice at the moment of collection is the mascot's first line, framed as
+   the reason to fill the list: «Что тебя порадует? Если свидание будет взаимным
+   — подскажу это твоей паре.» The owner can hide the list — and the flowers
+   hint — at any time: «Не показывать мой список» in Profile → «Мой вишлист»
+   (`PUT /v1/me/wishlist/visibility`, `users.wishlist_hidden_at`); items stay.
 3. **Three ways in.** A pasted list (`/parse` splits it; links are read by
    their OpenGraph / JSON-LD tags, plain text goes to web search, the client
    animates each card's search), the catalog of popular ideas (suggested ones

@@ -158,14 +158,16 @@ model User {
   /// demonstrating WHAT was agreed to; a timestamp alone cannot, once the
   /// documents change. Null for consents recorded before 2026-08-01.
   policyVersion            String?            @map("policy_version")
-  /// Date Wishlist consent (decision 2026-10-08): the explicit "my wishlist
-  /// will be shown to a match after mutual interest" act, captured before the
-  /// first item is saved. Separate from `policyVersion` because the general
-  /// ToS tick is not a specific act for disclosure TO ANOTHER USER; the version
-  /// records which disclosure text was shown. Null = never consented — the
-  /// item routes refuse to save and no match ever sees the list.
-  wishlistConsentAt        DateTime?          @map("wishlist_consent_at")
-  wishlistConsentVersion   String?            @map("wishlist_consent_version")
+  /// «Не показывать мой список» (decision 2026-10-08, second entry): the owner
+  /// hid their Date Wishlist — and the taste hint — from every match. Showing
+  /// the list to a mutual match is what the feature is for (Art. 6(1)(b),
+  /// Privacy §12.1), so there is no consent act; this is the owner's switch to
+  /// stop it. Null = shown.
+  wishlistHiddenAt         DateTime?          @map("wishlist_hidden_at")
+  /// The owner's last add or delete on their Date Wishlist. The viewer's
+  /// "last updated N days ago" line counts from it (`WISHLIST_STALE_AFTER_DAYS`);
+  /// null until the first item.
+  wishlistChangedAt        DateTime?          @map("wishlist_changed_at")
   /// Explicit consent to biometric processing (GDPR Art. 9(2)(a)), captured on
   /// its own screen before a liveness session is ever minted. Separate from
   /// `termsAccepted` on purpose: Art. 9 requires an explicit act for THIS

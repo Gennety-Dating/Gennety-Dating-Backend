@@ -88,6 +88,9 @@ function offerText(offer: MutualOffer, lang: Language): string {
     const sheet = offer.wishlist;
     const lines = sheet.items.map(itemLine);
     if (sheet.lockedLabel) lines.push(`🔒 ${sheet.lockedLabel}`);
+    // The age line goes under the list, before the buy button: the viewer
+    // learns the list is old before paying for it.
+    if (sheet.ageNote) lines.push(`\n${sheet.ageNote}`);
     parts.push(`${offer.wishlistLine}\n\n${afterDateT(lang, "wishlistSheetTitle", { name: offer.partner.firstName ?? "" })}\n${lines.join("\n")}`);
     parts.push(offer.gift);
   }
@@ -166,8 +169,9 @@ export async function sendWishlistSheetDm(
     sheet && sheet.items.length > 0
       ? sheet.items.map(itemLine).join("\n")
       : afterDateT(lang, "wishlistSheetEmpty");
+  const age = sheet?.ageNote ? `\n\n${sheet.ageNote}` : "";
   const flowers = offer.flowersHint ? `\n\n💐 ${offer.flowersHint}` : "";
-  await api.sendMessage(Number(telegramId), `${title}\n\n${body}${flowers}`, {
+  await api.sendMessage(Number(telegramId), `${title}\n\n${body}${age}${flowers}`, {
     link_preview_options: { is_disabled: true },
   });
 }

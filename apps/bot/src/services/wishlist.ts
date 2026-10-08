@@ -1,7 +1,6 @@
 import { prisma } from "@gennety/db";
 import {
   LEGAL_DOCS_TASTE_HINTS_FROM,
-  WISHLIST_CONSENT_VERSION,
   WISHLIST_MAX_ITEMS,
   WISHLIST_NOTE_MAX_LEN,
   WISHLIST_SESSION_MIN_PROFILER_ANSWERS,
@@ -15,6 +14,7 @@ import {
   profilerOptionText,
   profilerQuestionById,
   profilerQuestionInput,
+  wishlistAgeNote,
   wishlistMoreLabel,
   wishlistTeaserIds,
   type Language,
@@ -31,16 +31,22 @@ import { copyWishlistImage } from "./wishlist-lookup.js";
  * Date Wishlist (decision journal 2026-10-08) — everything except the web
  * look-ups (`wishlist-lookup.ts`) and the delivery surfaces (routes, Telegram).
  *
- * The owner side: consent, items, and the «Сегодня» session that takes ONE
+ * The owner side: items, the "don't show my list" switch, and the «Сегодня» session that takes ONE
  * Profiler batch slot (never the first). The viewer side: the offer after
  * mutual interest the morning after (`morning-after.ts`) — the partner's
  * favourite flowers and the cheat sheet, a tenth of it free and the rest for
  * one purchase or with Premium.
  *
  * **Who sees a wishlist.** Only the other side of a match whose
- * `mutualInterestAt` is stamped, and only while the owner's consent stands.
- * Never before mutual interest, never anybody else. A block in either
- * direction closes it.
+ * `mutualInterestAt` is stamped, and only while the owner has not hidden it.
+ * Never before mutual interest, never anybody else. A block or a report in
+ * either direction closes it.
+ *
+ * **No consent step** (decision journal 2026-10-08, second entry). Being shown
+ * to a mutual date is what the list is for, so the basis is the contract
+ * (Art. 6(1)(b), Privacy §12.1 / Terms §6) — not a screen to agree to before
+ * the first item. The session's first line says who sees it and when; the
+ * owner can hide it at any time («Не показывать мой список»).
  */
 
 const IMAGE_URL_TTL_S = 24 * 60 * 60;
@@ -113,7 +119,8 @@ async function loadItems(userId: string): Promise<ItemRow[]> {
 /* ── owner side ─────────────────────────────────────────────────────────── */
 
 export interface OwnWishlist {
-  consent: { given: boolean; version: string; givenVersion: string | null };
+  /** False once the owner hid the list (and the taste hint) from every match. */
+  shown: boolean;
   items: WishlistItemView[];
   maxItems: number;
   /** The «Сегодня» session is open right now (`wishlistOfferedAt` and not done). */
@@ -125,19 +132,14 @@ export async function getOwnWishlist(userId: string): Promise<OwnWishlist | null
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      wishlistConsentAt: true,
-      wishlistConsentVersion: true,
+      wishlistHiddenAt: true,
       profile: { select: { wishlistOfferedAt: true, wishlistDoneAt: true } },
     },
   });
   if (!user) return null;
   const items = await viewItems(await loadItems(userId));
   return {
-    consent: {
-      given: user.wishlistConsentAt != null,
-      version: WISHLIST_CONSENT_VERSION,
-      givenVersion: user.wishlistConsentVersion,
-    },
+    shown: user.wishlistHiddenAt == null,
     items,
     maxItems: WISHLIST_MAX_ITEMS,
     sessionOpen: Boolean(user.profile?.wishlistOfferedAt && !user.profile.wishlistDoneAt),
@@ -145,22 +147,16 @@ export async function getOwnWishlist(userId: string): Promise<OwnWishlist | null
   };
 }
 
-export async function giveWishlistConsent(userId: string, now: Date = new Date()): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { wishlistConsentAt: now, wishlistConsentVersion: WISHLIST_CONSENT_VERSION },
-  });
-}
-
 /**
- * Withdraw: the list is hidden from every match at once (the viewer reads
- * consent on each request). Items are kept so a change of heart costs nothing;
- * deleting them is a separate act, item by item or all at once.
+ * «Не показывать мой список» and back. Hiding takes effect for every match at
+ * once (the viewer reads the switch on each request) and covers the taste hint
+ * too. Items are kept so a change of heart costs nothing; deleting them is a
+ * separate act.
  */
-export async function withdrawWishlistConsent(userId: string): Promise<void> {
+export async function setWishlistShown(userId: string, shown: boolean, now: Date = new Date()): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { wishlistConsentAt: null, wishlistConsentVersion: null },
+    data: { wishlistHiddenAt: shown ? null : now },
   });
 }
 
@@ -176,7 +172,7 @@ export interface WishlistItemInput {
   catalogKey?: unknown;
 }
 
-export type WishlistItemRefusal = "no-consent" | "bad-item" | "too-many";
+export type WishlistItemRefusal = "bad-item" | "too-many";
 
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -224,22 +220,17 @@ export function normaliseWishlistItem(input: WishlistItemInput): {
 }
 
 /**
- * Add confirmed items. Consent first — an item is never stored without it,
- * because storing is what makes it showable. The confirmation card's remote
- * photo is copied into our storage now (a shop's CDN link would rot and would
- * tell the shop who looked); a photo that cannot be copied leaves the item
- * without one rather than failing it.
+ * Add confirmed items. The confirmation card's remote photo is copied into our
+ * storage now (a shop's CDN link would rot and would tell the shop who
+ * looked); a photo that cannot be copied leaves the item without one rather
+ * than failing it. Stamps `wishlistChangedAt` — the viewer's age line counts
+ * from the owner's last change.
  */
 export async function addWishlistItems(
   userId: string,
   inputs: WishlistItemInput[],
+  now: Date = new Date(),
 ): Promise<{ ok: true; items: WishlistItemView[] } | { ok: false; error: WishlistItemRefusal }> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { wishlistConsentAt: true },
-  });
-  if (!user?.wishlistConsentAt) return { ok: false, error: "no-consent" };
-
   const items = inputs.map(normaliseWishlistItem);
   if (items.length === 0 || items.some((item) => item === null)) {
     return { ok: false, error: "bad-item" };
@@ -268,11 +259,13 @@ export async function addWishlistItems(
       position: existing + index,
     })),
   });
+  await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
   return { ok: true, items: await viewItems(await loadItems(userId)) };
 }
 
-export async function deleteWishlistItem(userId: string, itemId: string): Promise<boolean> {
+export async function deleteWishlistItem(userId: string, itemId: string, now: Date = new Date()): Promise<boolean> {
   const { count } = await prisma.wishlistItem.deleteMany({ where: { id: itemId, userId } });
+  if (count > 0) await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
   return count > 0;
 }
 
@@ -382,6 +375,12 @@ export interface WishlistSheet {
   appStoreProductId: string | null;
   /** The viewer has Premium — opening is free. */
   premiumIncluded: boolean;
+  /**
+   * «Список обновлялся 52 дня назад — что-то могло устареть.», localised;
+   * null while the owner's last change is fresher than
+   * `WISHLIST_STALE_AFTER_DAYS`. Sent before the purchase too.
+   */
+  ageNote: string | null;
 }
 
 export interface MutualOffer {
@@ -406,7 +405,8 @@ type Partner = {
   firstName: string | null;
   gender: string | null;
   policyVersion: string | null;
-  wishlistConsentAt: Date | null;
+  wishlistHiddenAt: Date | null;
+  wishlistChangedAt: Date | null;
   profile: { photos: string[] } | null;
 };
 
@@ -450,7 +450,8 @@ async function loadMutualPair(
     firstName: true,
     gender: true,
     policyVersion: true,
-    wishlistConsentAt: true,
+    wishlistHiddenAt: true,
+    wishlistChangedAt: true,
     profile: { select: { photos: true } },
   } as const;
   const match = await prisma.match.findUnique({
@@ -473,15 +474,18 @@ async function loadMutualPair(
 }
 
 /**
- * The partner's favourite flowers as a hint, in the viewer's language. Only
- * when the partner accepted the policy that discloses taste hints, or gave the
- * wishlist consent (whose text names this too) — someone who answered under
- * an older policy never had it explained, so their answer stays private.
+ * The partner's favourite flowers as a hint, in the viewer's language. Never
+ * while the partner hid their list («Не показывать мой список» covers the hint
+ * too). Otherwise only when the partner accepted the policy that discloses
+ * taste hints, or built a wishlist — whose session says the same at its top —
+ * so someone who answered under an older policy and never saw either keeps
+ * their answer private.
  */
 async function flowersHint(partner: Partner, language: Language): Promise<string | null> {
+  if (partner.wishlistHiddenAt) return null;
   const disclosed =
-    partner.wishlistConsentAt != null ||
-    (partner.policyVersion != null && partner.policyVersion >= LEGAL_DOCS_TASTE_HINTS_FROM);
+    (partner.policyVersion != null && partner.policyVersion >= LEGAL_DOCS_TASTE_HINTS_FROM) ||
+    (await prisma.wishlistItem.count({ where: { userId: partner.id } })) > 0;
   if (!disclosed) return null;
   const answer = await prisma.profilerAnswer.findFirst({
     where: { userId: partner.id, questionId: FLOWERS_QUESTION_ID, skipped: false },
@@ -533,7 +537,7 @@ async function buildSheet(
   language: Language,
   now: Date,
 ): Promise<WishlistSheet | null> {
-  if (!env.WISHLIST_FEATURE_ENABLED || !partner.wishlistConsentAt) return null;
+  if (!env.WISHLIST_FEATURE_ENABLED || partner.wishlistHiddenAt) return null;
   const rows = await loadItems(partner.id);
   if (rows.length === 0) return null;
   const { unlocked, premium } = await sheetUnlocked(matchId, viewerId, partner.id, now);
@@ -549,7 +553,14 @@ async function buildSheet(
     priceStars: env.WISHLIST_UNLOCK_STARS,
     appStoreProductId: env.WISHLIST_APPSTORE_ENABLED ? env.WISHLIST_APPSTORE_PRODUCT_ID : null,
     premiumIncluded: premium,
+    ageNote: wishlistAgeNote(language, wishlistAgeDays(partner.wishlistChangedAt, now)),
   };
+}
+
+/** Whole days since the owner last added or deleted an item; 0 when never stamped. */
+export function wishlistAgeDays(changedAt: Date | null, now: Date): number {
+  if (!changedAt) return 0;
+  return Math.max(0, Math.floor((now.getTime() - changedAt.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
 export async function mutualOfferFor(
@@ -603,7 +614,7 @@ export async function wishlistPurchasable(
   if (!env.WISHLIST_FEATURE_ENABLED) return { ok: false, error: "no-sheet" };
   const pair = await loadMutualPair(matchId, viewerId);
   if (!pair.ok) return pair;
-  if (!pair.partner.wishlistConsentAt) return { ok: false, error: "no-sheet" };
+  if (pair.partner.wishlistHiddenAt) return { ok: false, error: "no-sheet" };
   const items = await prisma.wishlistItem.count({ where: { userId: pair.partner.id } });
   if (items === 0) return { ok: false, error: "no-sheet" };
   const row = await prisma.wishlistUnlock.findUnique({

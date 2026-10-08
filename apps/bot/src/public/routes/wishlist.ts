@@ -13,9 +13,8 @@ import {
   addWishlistItems,
   deleteWishlistItem,
   getOwnWishlist,
-  giveWishlistConsent,
   resolveWishlistSession,
-  withdrawWishlistConsent,
+  setWishlistShown,
   type WishlistItemInput,
 } from "../../services/wishlist.js";
 import {
@@ -30,9 +29,8 @@ import { wishlistSuggestions } from "../../services/wishlist-suggest.js";
  * 2026-10-08). The «Сегодня» session draws the agent on top, the cards in the
  * middle and the search field at the bottom; every call it makes is here.
  *
- *   GET    /v1/me/wishlist             — consent, items, catalog, suggestions
- *   POST   /v1/me/wishlist/consent     — the explicit "shown to a match" act
- *   DELETE /v1/me/wishlist/consent     — withdraw (hides the list at once)
+ *   GET    /v1/me/wishlist             — shown/hidden, items, catalog, suggestions
+ *   PUT    /v1/me/wishlist/visibility  — «Не показывать мой список» and back
  *   POST   /v1/me/wishlist/parse       — a pasted list → entries to look up
  *   POST   /v1/me/wishlist/lookup      — one entry → candidate cards
  *   POST   /v1/me/wishlist/items       — confirmed cards → items
@@ -108,7 +106,7 @@ export function createWishlistRouter(): Router {
       ...catalog.filter((item) => !suggested.has(item.key)),
     ];
     res.json({
-      consent: own.consent,
+      shown: own.shown,
       items: own.items,
       maxItems: own.maxItems,
       sessionOpen: own.sessionOpen,
@@ -120,14 +118,14 @@ export function createWishlistRouter(): Router {
     });
   });
 
-  router.post("/consent", async (req: Request, res: Response): Promise<void> => {
-    await giveWishlistConsent(req.userId!);
-    res.json({ ok: true });
-  });
-
-  router.delete("/consent", async (req: Request, res: Response): Promise<void> => {
-    await withdrawWishlistConsent(req.userId!);
-    res.json({ ok: true });
+  router.put("/visibility", async (req: Request, res: Response): Promise<void> => {
+    const shown = req.body?.shown;
+    if (typeof shown !== "boolean") {
+      res.status(400).json({ error: "bad-request" });
+      return;
+    }
+    await setWishlistShown(req.userId!, shown);
+    res.json({ shown });
   });
 
   router.post("/parse", (req: Request, res: Response): void => {
@@ -182,7 +180,7 @@ export function createWishlistRouter(): Router {
       raw.map((entry) => (entry ?? {}) as WishlistItemInput),
     );
     if (!result.ok) {
-      res.status(result.error === "no-consent" ? 403 : result.error === "too-many" ? 409 : 400).json({
+      res.status(result.error === "too-many" ? 409 : 400).json({
         error: result.error,
       });
       return;

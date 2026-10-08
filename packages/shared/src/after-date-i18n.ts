@@ -1,5 +1,6 @@
 import { interpolate } from "./i18n.js";
 import type { Language } from "./types.js";
+import { WISHLIST_AGE_IN_MONTHS_FROM_DAYS, WISHLIST_STALE_AFTER_DAYS } from "./wishlist.js";
 
 /**
  * Copy for «The Morning After», the mutual reveal, the Date Wishlist offer and
@@ -239,6 +240,11 @@ function slavicPlural(n: number, one: string, few: string, many: string): string
   return many;
 }
 
+/** Polish keeps the singular for 1 alone: 21 → "pozycji", not "pozycja". */
+function polishPlural(n: number, one: string, few: string, many: string): string {
+  return n === 1 ? one : slavicPlural(n, many, few, many);
+}
+
 /** "N more items" on the locked part of the cheat sheet (the brief: «Ещё 5 позиций»). */
 export function wishlistMoreLabel(lang: Language, n: number): string {
   switch (lang) {
@@ -247,11 +253,51 @@ export function wishlistMoreLabel(lang: Language, n: number): string {
     case "uk":
       return `Ще ${n} ${slavicPlural(n, "позиція", "позиції", "позицій")}`;
     case "pl":
-      return `Jeszcze ${n} ${n === 1 ? "pozycja" : slavicPlural(n, "pozycja", "pozycje", "pozycji")}`;
+      return `Jeszcze ${n} ${polishPlural(n, "pozycja", "pozycje", "pozycji")}`;
     case "de":
       return `Noch ${n} ${n === 1 ? "Eintrag" : "Einträge"}`;
     default:
       return `${n} more ${n === 1 ? "item" : "items"}`;
+  }
+}
+
+/**
+ * The cheat sheet's small "last updated N days ago" line (founder 2026-10-08):
+ * null while the list is fresher than `WISHLIST_STALE_AFTER_DAYS`, so a recent
+ * list carries no line at all. Months from `WISHLIST_AGE_IN_MONTHS_FROM_DAYS`.
+ */
+export function wishlistAgeNote(lang: Language, ageDays: number): string | null {
+  if (!Number.isFinite(ageDays) || ageDays < WISHLIST_STALE_AFTER_DAYS) return null;
+  const days = Math.floor(ageDays);
+  const months = days >= WISHLIST_AGE_IN_MONTHS_FROM_DAYS ? Math.floor(days / 30) : 0;
+  const n = months || days;
+  switch (lang) {
+    case "ru": {
+      const unit = months
+        ? slavicPlural(n, "месяц", "месяца", "месяцев")
+        : slavicPlural(n, "день", "дня", "дней");
+      return `Список обновлялся ${n} ${unit} назад — что-то могло устареть.`;
+    }
+    case "uk": {
+      const unit = months
+        ? slavicPlural(n, "місяць", "місяці", "місяців")
+        : slavicPlural(n, "день", "дні", "днів");
+      return `Список оновлювався ${n} ${unit} тому — дещо могло застаріти.`;
+    }
+    case "pl": {
+      const unit = months
+        ? polishPlural(n, "miesiąc", "miesiące", "miesięcy")
+        : n === 1 ? "dzień" : "dni";
+      return `Lista zmieniana ${n} ${unit} temu — coś mogło się zdezaktualizować.`;
+    }
+    case "de": {
+      const unit = months ? (n === 1 ? "Monat" : "Monaten") : n === 1 ? "Tag" : "Tagen";
+      return `Zuletzt vor ${n} ${unit} geändert — manches ist vielleicht nicht mehr aktuell.`;
+    }
+    default: {
+      const unit = months ? (n === 1 ? "month" : "months") : n === 1 ? "day" : "days";
+      return `Last updated ${n} ${unit} ago — some ideas may be out of date.`;
+    }
   }
 }
 

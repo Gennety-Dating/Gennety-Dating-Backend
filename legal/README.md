@@ -74,7 +74,7 @@ IAP) or with Premium — and **Premium without the Date Ticket cover**
 
 - **Privacy** §1, §3, §4.1 (morning-after answer, wishlist, consent records,
   unlock purchases), §4.2 (look-up cache), §4.3 (mutual interest), new §5.6,
-  §6, §7 (four rows; wishlist disclosure on Art. 6(1)(a) consent), §8, §9, §11,
+  §6, §7 (four rows; wishlist disclosure on Art. 6(1)(b) contract), §8, §9, §11,
   §12.1 (what the match sees and when; the flowers hint), §12.4 (OpenAI web
   search, Supabase images; shops are not processors), §14, §16, §18.
 - **Terms** §2 (three definitions), §5 (The Morning After), §6 (wishlist rules,
@@ -85,10 +85,16 @@ IAP) or with Premium — and **Premium without the Date Ticket cover**
 - **ROPA v1.2** adds §2.5d–2.5f and the unlock in §2.8; open items 9–12.
   **DPIA v1.2** adds R12–R14 and actions 12–15.
 - **Re-consent.** `LEGAL_DOCS_VERSION` → `2026-10-08`. Nothing in this release
-  relies on accepting the new text as *consent*: the wishlist disclosure has its
-  own consent act (`users.wishlist_consent_*`, `WISHLIST_CONSENT_VERSION`), and
-  the flowers hint is gated on `policyVersion ≥ LEGAL_DOCS_TASTE_HINTS_FROM` or
-  that consent. Existing users are still owed a notice (Art. 13) — ROPA §6 item 9.
+  relies on accepting the new text as *consent*. The wishlist disclosure rests on
+  contract (Art. 6(1)(b)) — the founder's second decision of 2026-10-08 replaced
+  the separate consent screen, which read as a warning; consent could not simply
+  move into the sign-up tick, where it would be invalid as bundled (Art. 7(2),
+  7(4)). The session's first line is the notice at collection, and the owner can
+  hide the list (`users.wishlist_hidden_at`). The flowers hint is gated on
+  `policyVersion ≥ LEGAL_DOCS_TASTE_HINTS_FROM` or on having built a wishlist,
+  never while the list is hidden. The viewer sees the list's age from 45 days
+  after its last change (`users.wishlist_changed_at`). Existing users are still
+  owed a notice (Art. 13) — ROPA §6 item 9.
 - **Website:** body generated with `scripts/legal-md-to-tsx.py`; the header line
   is hand-set to `Last Updated: 8 October 2026 · Version 4.3` (privacy) and
   `Last Updated: 8 October 2026 · Version 3.1` (terms).

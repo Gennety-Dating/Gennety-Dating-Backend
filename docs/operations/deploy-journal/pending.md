@@ -13,7 +13,7 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 **PENDING 2026-10-08 — «The Morning After», Date Wishlist, Premium без покрытия билета (миграция `20261008120000_date_wishlist_morning_after`).**
 Backend + Mini App + legal. Schema: additive columns (`matches.morning_after_*`, `mutual_interest_at`; `profiles.wishlist_*`;
-`users.wishlist_consent_*`, `premium_ticket_cover_until`) and tables `wishlist_items`, `wishlist_unlocks`, `web_lookup_cache`; ONE
+`users.wishlist_hidden_at`/`wishlist_changed_at`, `premium_ticket_cover_until`) and tables `wishlist_items`, `wishlist_unlocks`, `web_lookup_cache`; ONE
 data statement stamps `premium_ticket_cover_until = premium_until` for subscribers paid up at the moment it runs — so the
 migration must run in the same window as the bot restart (the gate reads only the cover column from then on). New routes
 `/v1/me/wishlist*`, `/v1/me/after-date*`; new crons ride the existing schedules (lifecycle tick step 2e, `wishlist-session`

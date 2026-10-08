@@ -11,8 +11,8 @@
 
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN     "premium_ticket_cover_until" TIMESTAMP(3),
-ADD COLUMN     "wishlist_consent_at" TIMESTAMP(3),
-ADD COLUMN     "wishlist_consent_version" TEXT;
+ADD COLUMN     "wishlist_changed_at" TIMESTAMP(3),
+ADD COLUMN     "wishlist_hidden_at" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "profiles" ADD COLUMN     "wishlist_done_at" TIMESTAMP(3),

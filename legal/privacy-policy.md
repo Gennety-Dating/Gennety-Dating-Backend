@@ -7,9 +7,8 @@ After**: the morning after a date, each of you is asked privately whether you
 would like to see the other person again. A "didn't click" is never passed on;
 only when you both say it was great are you both told. **The Date Wishlist**: an
 optional list of things you love — places, drinks, flowers, perfume, gifts —
-that you build with our AI agent and that, only with your separate consent, a
-person with whom the interest is mutual can use as a cheat sheet for a second
-date. To find real products, we send what you type to our AI provider's web
+that you build with our AI agent and that a person with whom the interest is
+mutual can use as a cheat sheet for a second date — unless you hide it. To find real products, we send what you type to our AI provider's web
 search and read the public product details of shop pages. The new data, its
 legal bases, who sees it and for how long are in Sections 4, 7, 9, 12.1, 14, 16
 and 18. Everything else is unchanged from version 4.2 (26 September 2026), which
@@ -48,7 +47,7 @@ below.
 | Do you use AI on my data? | Yes. AI builds your psychological summary, an embedding, an attractiveness/"league" rating, icebreakers, and venue choices (Sections 7 and 8). |
 | Do you use biometrics? | Yes — a liveness selfie and face comparison against your photos, only with your explicit consent. The selfie is deleted after 90 days (Sections 6 and 10). |
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
-| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form. If you both want to see each other again after a date, and only if you agreed to it, that person can also see your Date Wishlist (Section 12.1). |
+| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form. If you both want to see each other again after a date and you have made a Date Wishlist, that person can also see it — unless you have hidden it (Section 12.1). |
 | Does a human see my data? | Yes — the operator of the service, through an internal administration interface and a private operations feed (Section 12.2 and 12.3). |
 | Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure), with one disclosed exception: an internal operational notification (Section 12.2). |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
@@ -124,8 +123,8 @@ the Service, and data we derive or generate to power matchmaking.
 | **Explored areas (optional, off by default)** | Only if you switch on map colouring: the **approximate areas** you have been in, stored as grid squares roughly 1.2 km across — never your exact position, and never a coordinate. Recorded only while the map screen is open, and only inside a city we operate in. |
 | **Date preferences ("venue intent")** | What kind of date you want — experience, atmosphere, format — plus any requirements you explicitly confirm, including **dietary requirements** (e.g. vegan, vegetarian, halal, kosher, gluten-free), an **alcohol-free** requirement, and a **step-free access** requirement. See Section 6 — some of these can reveal special-category data. |
 | **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); your **morning-after answer** — the one question we ask the morning after a date ("It was great, I want to see them again" or "Didn't click") and when you answered; free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
-| **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links), and whether each item came from our catalog, a search, a link, or your own words. See Sections 9 and 12.1. |
-| **Consent records** | Which version of these documents you accepted and when; your biometric consent (Section 10); and, if you make a Date Wishlist, your consent to show it to a match after mutual interest — when you gave it and the version of the wording you agreed to. |
+| **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links), whether each item came from our catalog, a search, a link, or your own words, when you last added or removed an item, and whether you have hidden the list from your matches. See Sections 9 and 12.1. |
+| **Consent records** | Which version of these documents you accepted and when, and your biometric consent (Section 10). |
 | **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, Date Wishlist unlocks, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
 | **Subscription cancellation reason** | If you cancel Gennety Premium in chat and choose to answer, the free-text reason you give. |
 | **Support correspondence** | Anything you send us at our support handle or at legal@gennety.com. |
@@ -294,8 +293,8 @@ data).
 | Filter venues on dietary / alcohol-free / step-free requirements | The requirement you confirmed | **Explicit consent** (Art. 9(2)(a)) where the requirement is special-category; otherwise contract |
 | Ask each of you privately, the morning after a date, whether you want to see the other again; tell you both only when the interest is mutual; use your answer, like other post-date feedback, in future matching | Your morning-after answer, the match record | Contract; legitimate interests in better matches |
 | Help you build a Date Wishlist — the catalog, personalised suggestions, finding products from what you type or paste, reading shop pages, keeping the product image | What you type or paste, your wishlist items, your profile and follow-up answers, the places of your past dates and the places you saved; the places you visit often **only if** that setting is on | **Contract** (Art. 6(1)(b)) — it is a feature you choose to use |
-| Show your Date Wishlist to a person with whom the interest is mutual — part of it free, the rest once they buy the unlock or have Premium | Your wishlist items | **Consent** (Art. 6(1)(a)) — a separate, explicit step before your first item is saved; you can withdraw it at any time |
-| Show a person with whom the interest is mutual one of your follow-up answers as a hint (today: your favourite flowers) | That one answer | Contract; legitimate interests in helping a mutual match plan a second date. Used only if you accepted this version of the Policy or gave the wishlist consent; you can object (Section 18) |
+| Show your Date Wishlist to a person with whom the interest is mutual — part of it free, the rest once they buy the unlock or have Premium — with when you last changed it, once that is 45 days or more ago | Your wishlist items; the date of your last change | **Contract** (Art. 6(1)(b)) — showing the list to a person with whom the interest is mutual is what the Date Wishlist is for. Making one is your choice, the wishlist says who will see it when you build it, and you can hide it at any time |
+| Show a person with whom the interest is mutual one of your follow-up answers as a hint (today: your favourite flowers) | That one answer | Contract; legitimate interests in helping a mutual match plan a second date. Used only if you accepted this version of the Policy or have made a Date Wishlist, and never while your list is hidden; you can object (Section 18) |
 | Process purchases (tickets, bundles, paid venue changes, Date Wishlist unlocks) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
 | Handle cancellations and understand why people leave | Subscription records, the cancellation reason if you give one | Contract; **consent** for the free-text reason |
 | Trust & safety: moderation, reports, strikes, suspensions, investigations | Reports, photos/video safety scans, relay-chat logs, strikes | Legitimate interests in user safety; legal obligation |
@@ -513,10 +512,10 @@ own. If either of you says "Didn't click", neither of you is told what the
 other answered — the "it's mutual" message simply does not come. Only when you
 **both** say "It was great" are you both told that the interest is mutual.
 
-**Your Date Wishlist — only after mutual interest, and only with your
-consent.** If you have made a Date Wishlist and agreed, on its own separate
-screen, to share it, then a person with whom the interest is mutual can see it
-as a cheat sheet for a second date:
+**Your Date Wishlist — only after mutual interest, and only while you let
+it.** If you have made a Date Wishlist, a person with whom the interest is
+mutual can see it as a cheat sheet for a second date. That is what the wishlist
+is for, and it says so at the top while you build it:
 
 - **about a tenth of it for free** (for example one place or one drink;
   nothing, if your list has only one or two items), and **the rest once they
@@ -529,15 +528,20 @@ as a cheat sheet for a second date:
 - it always shows your list **as it is now**: what you edit or delete changes
   or disappears for them too, and what you add later appears. Once they have
   opened it, they can come back to it later;
-- **withdrawing your consent hides the whole list** from every match at once;
-  blocking the person hides it from them; deleting your account deletes it.
+- if you have not added or removed anything for **45 days or more**, they also
+  see when you last did (for example "last updated 52 days ago"), so they know
+  some of it may be out of date — before they decide to open the rest;
+- **"Don't show my list"** (in My wishlist, in your profile) **hides the whole
+  list** — and the taste hint below — from every match at once, until you show
+  it again; blocking or reporting the person hides it from them; deleting your
+  account deletes it.
 
 **A taste hint.** Together with that offer, a person with whom the interest is
 mutual may see one of your answers to our follow-up questions as a hint — today
 only your favourite flowers (for example, "Her favourite flowers: peonies"). It
-is shown only after mutual interest, only if you answered that question, and
-only if you have accepted this version of the Policy or agreed to share your
-Date Wishlist.
+is shown only after mutual interest, only if you answered that question, only
+if you have accepted this version of the Policy or have made a Date Wishlist,
+and never while your list is hidden.
 
 ### 12.2 Internal operations feed
 
@@ -729,7 +733,7 @@ We keep personal data only as long as necessary for the purposes above.
 | Life rhythm (Tempo Sync) | While connected. Replaced on every refresh; **deleted 35 days after the last refresh**, immediately on "Disconnect", and on account deletion |
 | Match records (including morning-after answers and mutual interest), score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Date Wishlist items and their product images | Until you delete them, or your account. Deleting an item removes it from your match's cheat sheet too |
-| Date Wishlist consent | While your account exists, as proof of when you agreed and to which wording. Withdrawing it hides your list from every match; the items stay yours to edit or delete |
+| Whether your Date Wishlist is hidden, and when you last changed it | While your account exists; erased on account deletion. Hiding the list keeps the items yours to edit or delete |
 | Product look-up cache | **30 days**, then automatically deleted; it does not record who asked. Your day's wishlist suggestions: **24 hours** |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries (including Date Wishlist unlocks) | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
@@ -801,9 +805,8 @@ right to:
 - **Data portability** — receive the data you provided in a structured,
   commonly used, machine-readable format;
 - **Withdraw consent** at any time — including biometric verification, the
-  optional visual type step, dietary/accessibility requirements, the research
-  opt-in, and sharing your Date Wishlist with a match — without affecting
-  processing already carried out;
+  optional visual type step, dietary/accessibility requirements and the
+  research opt-in — without affecting processing already carried out;
 - **Not be subject to solely automated decisions** that significantly affect
   you: you may request human intervention, express your view, and contest a
   decision (Section 8);
@@ -824,10 +827,10 @@ that the request comes from you.
   open the bot or the app;
 - **Delete** your account — permanent and irreversible erasure as described in
   Section 16;
-- **Edit or delete your Date Wishlist** — one item or the whole list — and
-  **withdraw your consent to share it**, at any time, from the wishlist itself.
-  Deleted items disappear from your match's cheat sheet too, and withdrawing
-  consent hides the whole list from every match at once.
+- **Edit or delete your Date Wishlist** — item by item — and **hide it**
+  ("Don't show my list"), at any time, from My wishlist in your profile.
+  Deleted items disappear from your match's cheat sheet too, and hiding the
+  list hides it — and the taste hint — from every match at once.
 
 **Withdrawing biometric consent.** There is no self-service button for this yet:
 write to **legal@gennety.com** and we will erase the verification selfie and the

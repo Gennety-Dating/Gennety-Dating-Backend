@@ -1579,7 +1579,7 @@ paths:
       summary: The caller's Date Wishlist, the catalog and suggestions
       description: |
         Decision 2026-10-08. Everything the wishlist session on Today draws:
-        consent state, the confirmed items, the catalog of popular ideas
+        whether the list is shown, the confirmed items, the catalog of popular ideas
         (suggested ones first, `suggested: true`) and the caller's own
         frequent places as quick adds (only when their frequent-places opt-in
         is on). Never shown to anybody else from here — a match sees the list
@@ -1593,29 +1593,37 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /v1/me/wishlist/consent:
-    post:
+  /v1/me/wishlist/visibility:
+    put:
       tags: [me]
-      operationId: giveWishlistConsent
-      summary: Consent to the wishlist being shown to a match after mutual interest
+      operationId: setWishlistVisibility
+      summary: «Не показывать мой список» — hide the list from every match, or show it again
       description: |
-        The explicit act (GDPR Art. 6(1)(a)) recorded with
-        `WISHLIST_CONSENT_VERSION`. Items cannot be saved without it. The
-        screen must say: the list (and taste answers such as favourite
-        flowers) is shown only to a match after BOTH said "great" the morning
-        after; about a tenth is free and the rest is opened by the match's
-        purchase or Premium; the owner is not paid; it can be withdrawn and
-        edited at any time.
+        Decision 2026-10-08 (second entry). Showing the list to a mutual match
+        is what the feature is for (Art. 6(1)(b), Privacy §12.1), so there is
+        no consent act — a list is shown unless its owner hid it here. Hiding
+        takes effect for every match at once and covers the taste hint
+        (favourite flowers) too; the items are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shown]
+              properties:
+                shown: { type: boolean }
       responses:
-        "200": { description: Recorded, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    delete:
-      tags: [me]
-      operationId: withdrawWishlistConsent
-      summary: Withdraw — the list is hidden from every match at once
-      responses:
-        "200": { description: Withdrawn, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+        "200":
+          description: The switch as stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shown]
+                properties:
+                  shown: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -1695,9 +1703,8 @@ paths:
       operationId: addWishlistItems
       summary: Save confirmed cards to the wishlist
       description: |
-        Up to 12 per call, 30 in total. 403 `no-consent` before
-        `/consent`. The card's remote photo is copied into our storage; the
-        returned items carry signed photo URLs.
+        Up to 12 per call, 30 in total. The card's remote photo is copied into
+        our storage; the returned items carry signed photo URLs.
       requestBody:
         required: true
         content:
@@ -1725,7 +1732,6 @@ paths:
                     items: { $ref: "#/components/schemas/WishlistItem" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { description: "`no-consent`" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: "`too-many`" }
 
@@ -7577,15 +7583,11 @@ components:
 
     OwnWishlist:
       type: object
-      required: [consent, items, maxItems, sessionOpen, done, catalog, suggestedPlaces]
+      required: [shown, items, maxItems, sessionOpen, done, catalog, suggestedPlaces]
       properties:
-        consent:
-          type: object
-          required: [given, version, givenVersion]
-          properties:
-            given: { type: boolean }
-            version: { type: string, description: The current consent text version }
-            givenVersion: { type: [string, "null"] }
+        shown:
+          type: boolean
+          description: False once the owner hid the list from every match (`PUT /v1/me/wishlist/visibility`).
         items:
           type: array
           items: { $ref: "#/components/schemas/WishlistItem" }
@@ -7621,7 +7623,7 @@ components:
 
     WishlistSheet:
       type: object
-      required: [total, unlocked, items, lockedCount, lockedLabel, priceStars, appStoreProductId, premiumIncluded]
+      required: [total, unlocked, items, lockedCount, lockedLabel, priceStars, appStoreProductId, premiumIncluded, ageNote]
       properties:
         total: { type: integer }
         unlocked: { type: boolean }
@@ -7634,6 +7636,12 @@ components:
         priceStars: { type: integer }
         appStoreProductId: { type: [string, "null"] }
         premiumIncluded: { type: boolean }
+        ageNote:
+          type: [string, "null"]
+          description: |
+            «Список обновлялся 52 дня назад — что-то могло устареть.», localised;
+            null while the owner's last change is under 45 days old. Sent
+            before the purchase too, so the viewer knows before paying.
 
     MutualOffer:
       type: object
