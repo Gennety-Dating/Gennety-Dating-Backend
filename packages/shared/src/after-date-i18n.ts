@@ -37,7 +37,7 @@ const en = {
 
   mutualPushTitle: "It's mutual ✨",
   mutualPushBody: "You both want to meet again.",
-  mutualTitle: "It's mutual! ✨",
+  mutualTitle: "It's mutual ✨",
   mutualBodyF: "{name} had a great time too.",
   mutualBodyM: "{name} had a great time too.",
   mutualTiming:
@@ -74,7 +74,7 @@ const ru: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Взаимно ✨",
   mutualPushBody: "Вы оба хотите увидеться снова.",
-  mutualTitle: "Взаимный метч! ✨",
+  mutualTitle: "Взаимно ✨",
   mutualBodyF: "{name} тоже отлично провела время.",
   mutualBodyM: "{name} тоже отлично провёл время.",
   mutualTiming:
@@ -110,7 +110,7 @@ const uk: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Взаємно ✨",
   mutualPushBody: "Ви обоє хочете побачитися знову.",
-  mutualTitle: "Взаємний метч! ✨",
+  mutualTitle: "Взаємно ✨",
   mutualBodyF: "{name} теж чудово провела час.",
   mutualBodyM: "{name} теж чудово провів час.",
   mutualTiming:
@@ -146,7 +146,7 @@ const de: Record<AfterDateKey, string> = {
 
   mutualPushTitle: "Gegenseitig ✨",
   mutualPushBody: "Ihr wollt euch beide wiedersehen.",
-  mutualTitle: "Es ist gegenseitig! ✨",
+  mutualTitle: "Gegenseitig ✨",
   mutualBodyF: "{name} hatte auch einen tollen Abend.",
   mutualBodyM: "{name} hatte auch einen tollen Abend.",
   mutualTiming:
@@ -179,9 +179,9 @@ const pl: Record<AfterDateKey, string> = {
   morningAfterThanksPass: "Dzięki za szczerość. Zapisane.",
   morningAfterExpired: "To pytanie jest już zamknięte — i tak dziękuję.",
 
-  mutualPushTitle: "To wzajemne ✨",
+  mutualPushTitle: "Z wzajemnością ✨",
   mutualPushBody: "Oboje chcecie się znów spotkać.",
-  mutualTitle: "To wzajemne! ✨",
+  mutualTitle: "Z wzajemnością ✨",
   mutualBodyF: "{name} też świetnie się bawiła.",
   mutualBodyM: "{name} też świetnie się bawił.",
   mutualTiming:
