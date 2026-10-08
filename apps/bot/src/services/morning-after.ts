@@ -82,14 +82,26 @@ export function isMorningAfterWindow(
   return now.getTime() >= due.getTime() && now.getTime() < closes;
 }
 
-/** Telegram inline keyboard for the check. Callback data: `ma:g:<id>` / `ma:p:<id>`. */
+/**
+ * Telegram inline keyboard for the check. Callback data: `ma:g:<id>` / `ma:p:<id>`.
+ * The 🔥 / 🤷 marks belong to the bot's buttons, not to the copy: the app draws
+ * its own marks next to the same labels.
+ */
 export function morningAfterKeyboard(matchId: string, lang: Language) {
   return {
     inline_keyboard: [
-      [{ text: afterDateT(lang, "morningAfterGreat"), callback_data: `ma:g:${matchId}` }],
-      [{ text: afterDateT(lang, "morningAfterPass"), callback_data: `ma:p:${matchId}` }],
+      [{ text: `🔥 ${afterDateT(lang, "morningAfterGreat")}`, callback_data: `ma:g:${matchId}` }],
+      [{ text: `🤷 ${afterDateT(lang, "morningAfterPass")}`, callback_data: `ma:p:${matchId}` }],
     ],
   };
+}
+
+/** The check's text: the question plus the double-blind promise. */
+export function morningAfterText(lang: Language, partnerName: string): string {
+  return [
+    afterDateT(lang, "morningAfterQuestion", { name: partnerName }),
+    afterDateT(lang, "morningAfterBlind", { name: partnerName }),
+  ].join("\n\n");
 }
 
 const participantSelect = {
@@ -161,7 +173,7 @@ export async function runMorningAfterTick(
           api
             .sendMessage(
               Number(me.telegramId),
-              afterDateT(lang, "morningAfterQuestion", { name: partner.firstName ?? "" }),
+              morningAfterText(lang, partner.firstName ?? ""),
               { reply_markup: morningAfterKeyboard(match.id, lang) },
             )
             .catch((err: unknown) =>
@@ -318,6 +330,9 @@ export async function announceMutual(
 export interface PendingMorningAfter {
   matchId: string;
   partnerFirstName: string | null;
+  /** Storage path of the partner's first photo — the route signs it. */
+  partnerPhotoPath: string | null;
+  venueName: string | null;
   agreedTime: Date;
 }
 
@@ -346,16 +361,19 @@ export async function pendingMorningAfterFor(
     select: {
       id: true,
       agreedTime: true,
+      venueName: true,
       userAId: true,
-      userA: { select: { firstName: true } },
-      userB: { select: { firstName: true } },
+      userA: { select: { firstName: true, profile: { select: { photos: true } } } },
+      userB: { select: { firstName: true, profile: { select: { photos: true } } } },
     },
   });
   if (!match || !match.agreedTime) return null;
-  const isA = match.userAId === userId;
+  const partner = match.userAId === userId ? match.userB : match.userA;
   return {
     matchId: match.id,
-    partnerFirstName: (isA ? match.userB.firstName : match.userA.firstName) ?? null,
+    partnerFirstName: partner.firstName ?? null,
+    partnerPhotoPath: partner.profile?.photos?.[0] ?? null,
+    venueName: match.venueName ?? null,
     agreedTime: match.agreedTime,
   };
 }

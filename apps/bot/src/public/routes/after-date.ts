@@ -14,6 +14,7 @@ import {
 import { mutualOfferFor, type MutualOffer } from "../../services/wishlist.js";
 import { sendMutualOfferDm } from "../../handlers/date/morning-after.js";
 import { getMainBotApi } from "../../services/main-bot-api.js";
+import { createProfilePhotoSignedUrl } from "../../services/storage.js";
 
 /**
  * «The Morning After» and the mutual offer for the NATIVE client (decision
@@ -64,6 +65,12 @@ export function createAfterDateRouter(): Router {
     }
     const language = await languageOf(userId);
     const pending = await pendingMorningAfterFor(userId);
+    // The card on «Сегодня» shows who and where (founder's pick 2026-10-08):
+    // the photo is signed for an hour, like the offer's; a photo that cannot
+    // be signed leaves the card with the initial.
+    const partnerPhotoUrl = pending?.partnerPhotoPath
+      ? await createProfilePhotoSignedUrl(pending.partnerPhotoPath, 60 * 60).catch(() => null)
+      : null;
     const offers: Record<string, unknown>[] = [];
     for (const matchId of await recentMutualMatchIds(userId)) {
       const result = await mutualOfferFor(matchId, userId, language);
@@ -74,8 +81,13 @@ export function createAfterDateRouter(): Router {
         ? {
             matchId: pending.matchId,
             partnerFirstName: pending.partnerFirstName,
+            partnerPhotoUrl,
+            venueName: pending.venueName,
             agreedTime: pending.agreedTime.toISOString(),
             question: afterDateT(language, "morningAfterQuestion", {
+              name: pending.partnerFirstName ?? "",
+            }),
+            blindNote: afterDateT(language, "morningAfterBlind", {
               name: pending.partnerFirstName ?? "",
             }),
             great: afterDateT(language, "morningAfterGreat"),

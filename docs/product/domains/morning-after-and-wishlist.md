@@ -23,8 +23,11 @@ built earlier, with the agent, on «Сегодня».
    (`runMorningAfterTick`), claimed once per match on `morningAfterSentAt`.
 3. **How.** Each side separately, on their own rails. The app gets a push whose
    copy names nobody (the lock screen is public) — «Как всё прошло вчера?» —
-   and the card on «Сегодня» names the partner. Telegram gets a DM with the
-   partner's name and two buttons (`ma:g:<matchId>` / `ma:p:<matchId>`).
+   and the card on «Сегодня» names the partner and shows their photo, the venue
+   and the time (founder's pick 2026-10-08). Both rails carry the double-blind
+   promise («{name} узнает о твоём ответе, только если это взаимно»). Telegram
+   gets a DM with the partner's name and two buttons (`ma:g:<matchId>` /
+   `ma:p:<matchId>`); the 🔥 / 🤷 marks are Telegram's, the app draws its own.
 4. **Two answers only:** 🔥 «Было круто, хочу увидеться снова» (`great`) and
    🤷 «Не сошлись / Мимо» (`pass`). One-shot; the same answer again is
    idempotent, a change of mind is refused.

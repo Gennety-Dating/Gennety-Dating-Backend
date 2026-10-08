@@ -7661,14 +7661,26 @@ components:
 
     MorningAfterCheck:
       type: object
-      required: [matchId, partnerFirstName, agreedTime, question, great, pass]
+      required: [matchId, partnerFirstName, agreedTime, question, blindNote, great, pass]
       properties:
         matchId: { type: string, format: uuid }
         partnerFirstName: { type: [string, "null"] }
+        partnerPhotoUrl:
+          type: [string, "null"]
+          format: uri
+          description: The partner's first photo, signed for an hour; null without a photo.
+        venueName: { type: [string, "null"], description: Where the date was }
         agreedTime: { type: string, format: date-time }
         question: { type: string }
-        great: { type: string, description: Label of the 🔥 button }
-        pass: { type: string, description: Label of the 🤷 button }
+        blindNote:
+          type: string
+          description: The double-blind promise — the partner learns the answer only if it is mutual.
+        great:
+          type: string
+          description: Label of the "great" button, without a mark (Telegram adds 🔥 itself)
+        pass:
+          type: string
+          description: Label of the "pass" button, without a mark (Telegram adds 🤷 itself)
 
     AfterDateState:
       type: object
