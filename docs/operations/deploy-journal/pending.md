@@ -29,7 +29,7 @@ Ship only with the founder's go-ahead.
 **Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-08 — Vibe Check: personal style picks for the iOS Shop (migration `20261008180000_style_picks`).**
 Bot + one purely additive migration (`style_products`, `style_pick_sets`, `style_clicks`); old code never reads them,
 so `db:deploy` may go before or after the restart. Then fill the catalog: `pnpm seed-style:import` (dry run) →
-`pnpm seed-style:import --apply` (36 items, upsert on the slug). New env, both default OFF:
+`pnpm seed-style:import --apply` (62 items since 2026-10-09, upsert on the slug). Since 2026-10-09 the response also carries `priceEur` (iOS shows it on the buy button) and badge kind `popular`. New env, both default OFF:
 `STYLE_PICKS_ENABLED` (→ `features.stylePicks`; off → `GET /v1/me/style-picks` answers 204, no model call) and
 `STYLE_PICKS_FREQUENT_PLACES_ENABLED` (keep off — founder rule 2026-10-04). `GET /v1/style/out/{itemId}` is live
 regardless of the flag (redirect only; logs a click only for a signed link).
