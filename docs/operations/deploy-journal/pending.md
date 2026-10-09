@@ -11,7 +11,7 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING 2026-10-08 — Vibe Check: personal style picks for the iOS Shop (migration `20261008180000_style_picks`).**
+**Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-08 — Vibe Check: personal style picks for the iOS Shop (migration `20261008180000_style_picks`).**
 Bot + one purely additive migration (`style_products`, `style_pick_sets`, `style_clicks`); old code never reads them,
 so `db:deploy` may go before or after the restart. Then fill the catalog: `pnpm seed-style:import` (dry run) →
 `pnpm seed-style:import --apply` (36 items, upsert on the slug). New env, both default OFF:
@@ -28,7 +28,7 @@ Ship only with the founder's go-ahead.
   `curl -sI "https://dating-api.gennety.com/v1/style/out/kiehls-lip-balm-1"` → 302 with `utm_campaign=style_picks`.
 - **Откат:** revert the commits and restart the bot; the tables may stay (nothing old reads them).
 
-**PENDING 2026-10-08 — Music on the profile: Apple Music as the main provider, Spotify search only (migration `20261008120000_profile_music_providers`).**
+**Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-08 — Music on the profile: Apple Music as the main provider, Spotify search only (migration `20261008120000_profile_music_providers`).**
 Bot + one additive migration. `profile_music_tracks` gains `provider` / `track_id` / `track_url` / `storefront` / `isrc`
 (backfilled from the Spotify columns, which become nullable and are no longer read). `MusicTrack` in the API is
 provider-neutral (`provider`, `trackId`, `url`) and `PUT /v1/me/music` takes `{ tracks: [{ provider, trackId, storefront? }] }`
@@ -44,7 +44,7 @@ Decision journal 2026-10-08. Ship only with the founder's go-ahead.
   `provider = 'apple_music'`, `storefront`, `isrc`.
 - **Откат:** revert the commits and restart the bot; the migration may stay (nullable columns and a unique index the old code ignores).
 
-**PENDING 2026-10-07 — Premium: смена места «до двух раз» (Mini App + бот).**
+**Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-07 — Premium: смена места «до двух раз» (Mini App + бот).**
 Text only. The Mini App Premium screen (`apps/webapp/src/premium.ts`, `b3d`/`b3x`)
 and the bot's Premium pitch (`packages/shared/src/i18n.ts`, `premiumPitch`) promised
 free venue changes "as many times as you like"; the server allows two per date and
@@ -60,7 +60,7 @@ The same commit carries `?preview=purchase`
   in the bot, the Premium hub pitch's last bullet says «до двух раз за свидание».
 - **Откат:** revert the commit and redeploy the webapp bundle / restart the bot.
 
-**PENDING 2026-10-07 — Bot PNG cards: date card in Gennety Display, venue photo −3°, «Gennety» in the brand face; wish card without full stops (`bd58c865`, `1908ad59`).**
+**Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-07 — Bot PNG cards: date card in Gennety Display, venue photo −3°, «Gennety» in the brand face; wish card without full stops (`bd58c865`, `1908ad59`).**
 Bot only (production + demo, the same renderers); no schema, env or Mini App change. The date card's slogan
 (800, 82 px, no full stops), venue name (700) and header word «Gennety» (800, 42 px) are set in Gennety Display —
 before, Archivo Black had no Cyrillic and satori silently drew the slogan and venue name in thin Roboto. Venue photo
@@ -74,6 +74,28 @@ comparison page. New files ride the standard bot rsync: `apps/bot/src/assets/fon
   the same with `--slogan="Her pick\nYour move"` for the wish card (no full stops).
 - **Rollback:** the previous bot release directory; nothing stored depends on it.
 - **Demo:** identical — same renderers, mechanics unchanged; deploy both bots together.
+
+**Deployed 2026-10-09 05:32–05:36 UTC — production `f9648948` → `dc1e2ccf` (whole `main`), music on the profile ON.**
+Script `~/gennety-backups/deploy-1009-music.sh check|deploy` (outside the repo; this time the agent ran `deploy` itself
+on the founder's «выкатывай»). Rode along: Music (Apple Music main, Spotify search only), Vibe Check code with
+`STYLE_PICKS_ENABLED` off (catalog seed NOT run — only when the flag goes on, after the privacy policy), Premium
+«до двух раз» (Mini App + bot pitch), bot PNG cards in Gennety Display.
+- **Env added to `/opt/gennety/.env`:** `APPLE_MUSIC_KEY_PATH=/opt/gennety/keys/AuthKey_M7TUQFMKQ4.p8` (600, dir 700),
+  `APPLE_MUSIC_KEY_ID=M7TUQFMKQ4`, `APPLE_MUSIC_TEAM_ID=ADWPKD5WZ7`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
+  (Spotify app «Gennety», Development mode, owner account needs active Premium — a lapse breaks search),
+  `PROFILE_MUSIC_ENABLED=true`. `SPOTIFY_TOP_TRACKS_ENABLED` stays unset (off). No music key in `.env.local` / pm2 env.
+- **Gates:** backup `prod-backup-2026-10-09T05-31-40Z.json` (62 tables, 2,650 rows); prod had all 20 migrations up to
+  `20261007120000`, the two pending were ours; Rematch and Style Picks off; rsync dry run 72 files, 0 deletions.
+- **Result:** live Apple Music catalog search and Spotify token + search from the server with the merged `.env` — 200
+  before the restart; `db:deploy` applied 2 migrations, `db:drift-check` OK (5 foreign `canvas_*` tolerated);
+  `profile_music_tracks` had 0 rows, `provider`/`track_id`/`track_url` NOT NULL, Spotify columns nullable; 3 style
+  tables; pm2 online, restarts 7 → 7; `/v1/app/config` → `profileMusic=true appleMusic=true stylePicks=false`;
+  `/v1/music/search` and `/v1/me/music` 401 without a token; Mini App pages 200; log clean, music refresh cron scheduled.
+- **Rollback:** `/opt/gennety-prev-20261009-053259`, `/var/www/dating-app.prev-20261009-053259`,
+  `/opt/gennety/.env.bak.20261009-053259` (restores env without the music keys); migrations can stay.
+- **Demo:** not deployed.
+- **iOS:** the client speaking the new music shape (`290d0b90`) can go to TestFlight; MusicKit is enabled on App ID
+  `com.gennety.ios` (2026-10-09).
 
 **Deployed 2026-10-07 06:30–06:33 UTC — production `6febc945` (+ Rematch-off files `7543d22c`) → `f9648948` (whole `main`).**
 Script `~/gennety-backups/deploy-1007.sh check|deploy` (outside the repo; started by the founder — the agent's
