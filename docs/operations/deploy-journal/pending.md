@@ -11,6 +11,20 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-09 — Venue photos: audited curation of Google's ten photos per place (no migration).**
+Bot only. `venue.ts` re-applies `VENUE_PHOTO_CURATION` to every Places answer, so the nightly re-validation keeps the
+audited choice. To have it everywhere at once instead of over the ~9-day Kyiv cycle: deploy →
+`pnpm --filter @gennety/bot exec tsx scripts/apply-venue-photo-curation.ts` (dry run) → `… --apply` (rewrites
+`photo_refs` of the curated places only; one Place Details request each) → **restart the bot again** (the in-process
+photo cache `${id}#${slot}@${width}` would otherwise keep yesterday's bytes per slot). iOS: no change; a phone keeps
+showing a cached slot until the app restarts (memory cache keyed by path) or the next UTC day (disk cache keys on the
+daily signed URL). Mini App board and date card pick it up on their next lookup. Demo: same code.
+Ship only with the founder's go-ahead.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/venue-photo-curation.test.ts src/services/venue.test.ts src/services/venue-revalidation.test.ts src/services/venue-change.test.ts`;
+  `pnpm --filter @gennety/bot exec tsx scripts/check-venue-photo-curation.ts` → "below 3 (re-audit): 0";
+  after `--apply`, a curated place's card in the city guide opens on the photo its audit lists first (e.g. «Сенс»: the wide hall, not the crowd at a reading).
+- **Откат:** revert the commits and restart the bot; the next nightly re-validation (or `apply` from the reverted code) restores Google's order.
+
 **Deployed 2026-10-09 (was PENDING; production `dc1e2ccf`, 05:32–05:36 UTC) 2026-10-08 — Vibe Check: personal style picks for the iOS Shop (migration `20261008180000_style_picks`).**
 Bot + one purely additive migration (`style_products`, `style_pick_sets`, `style_clicks`); old code never reads them,
 so `db:deploy` may go before or after the restart. Then fill the catalog: `pnpm seed-style:import` (dry run) →
