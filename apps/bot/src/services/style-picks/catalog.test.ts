@@ -22,18 +22,44 @@ describe("the committed seed catalog", () => {
     expect(byId.get("matsuda-m3023")!.badges[0]).toMatchObject({ kind: "seenOn" });
   });
 
-  it("badges only the five researched items", () => {
+  it("badges only researched items, each with a source", () => {
     const badged = seed
       .filter((e) => (e as StyleCatalogItem).badges.length > 0)
       .map((e) => (e as StyleCatalogItem).id)
       .sort();
     expect(badged).toEqual([
+      "casio-g-shock-ga-2100-1a1",
+      "dior-addict-lip-glow-oil",
+      "essie-ballet-slippers",
       "gisou-honey-infused-hair-oil",
       "jo-malone-wood-sage-sea-salt",
+      "kilian-love-dont-be-shy",
+      "laneige-lip-sleeping-mask-berry",
+      "lexxola-carmen-black",
       "matsuda-m3023",
+      "mfk-baccarat-rouge-540-edp",
       "parfums-de-marly-althair",
+      "ray-ban-meta-wayfarer",
+      "retrosuperfuture-lucia-black",
+      "rhode-peptide-lip-treatment",
+      "sol-de-janeiro-cheirosa-62-mist",
+      "swatch-moonswatch-mission-to-the-moon",
       "the-ordinary-hyaluronic-acid-b5",
+      "uniqlo-round-mini-shoulder-bag",
+      "valentino-born-in-roma-uomo-intense",
+      "vivienne-westwood-mini-bas-relief-pearl-choker",
+      "ysl-myslf-edp",
     ]);
+    for (const entry of seed as StyleCatalogItem[]) expect(entry.badges.length).toBeLessThanOrEqual(2);
+  });
+
+  it("carries the 2026-10-09 additions: four Parfums de Marly and five frames", () => {
+    const ids = new Set(seed.map((e) => (e as { id: string }).id));
+    for (const id of ["parfums-de-marly-delina", "parfums-de-marly-valaya", "parfums-de-marly-layton", "parfums-de-marly-pegasus"]) {
+      expect(ids.has(id)).toBe(true);
+    }
+    const frames = ["lexxola-carmen-black", "ray-ban-meta-wayfarer", "retrosuperfuture-lucia-black", "akila-atlas-optical", "port-tanger-leila-black"];
+    for (const id of frames) expect(ids.has(id)).toBe(true);
   });
 
   it("gives every gender at least four active items per category", () => {
