@@ -75,7 +75,7 @@ describe("getStylePicks", () => {
     expect(res.picks[1]!.badges).toEqual([]);
     expect(res.picks[0]!.outUrl).toMatch(/\/v1\/style\/out\/s1\?u=.*&l=uk$/);
     expect(Object.keys(res.picks[0]!).sort()).toEqual(
-      ["badges", "brand", "category", "id", "imageUrl", "name", "outUrl", "priceTier", "reason", "signals", "sponsored"],
+      ["badges", "brand", "category", "id", "imageUrl", "name", "outUrl", "priceEur", "priceTier", "reason", "signals", "sponsored"],
     );
   });
 

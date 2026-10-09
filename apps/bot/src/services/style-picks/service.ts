@@ -46,6 +46,8 @@ export interface StylePickCard {
   reason: string;
   signals: string[];
   priceTier: number;
+  /** Whole euros at the linked shop when the catalog was last checked. */
+  priceEur: number;
   imageUrl: string | null;
   outUrl: string;
   sponsored: boolean;
@@ -115,6 +117,7 @@ export function renderStylePicks(
       reason: pick.reason,
       signals: pick.signals,
       priceTier: item.priceTier,
+      priceEur: Math.round(item.priceEUR),
       imageUrl: item.imageUrl,
       outUrl: styleOutUrl(userId, item.id, language, now),
       sponsored: item.sponsored,

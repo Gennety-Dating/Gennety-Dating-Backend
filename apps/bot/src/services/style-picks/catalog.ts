@@ -16,7 +16,15 @@ import {
  * sees (decision journal 2026-10-08).
  */
 
-export type BadgeKind = "accolade" | "seenOn";
+/**
+ * `accolade` — a named award or vote; `seenOn` — a celebrity or a film;
+ * `popular` — a sourced bestseller / viral claim (2026-10-09: the founder wants
+ * badges, not prose, to orient the card). All three are researched catalog
+ * facts with a source; the model never writes them.
+ */
+export type BadgeKind = "accolade" | "seenOn" | "popular";
+
+const BADGE_KINDS: readonly BadgeKind[] = ["accolade", "seenOn", "popular"];
 
 export interface CatalogBadge {
   kind: BadgeKind;
@@ -98,8 +106,8 @@ export function catalogItemProblems(raw: unknown): string[] {
     p.push("badges must be an array");
   } else {
     for (const badge of raw.badges) {
-      if (!isRecord(badge) || (badge.kind !== "accolade" && badge.kind !== "seenOn")) {
-        p.push("badge kind must be accolade|seenOn");
+      if (!isRecord(badge) || !(BADGE_KINDS as readonly unknown[]).includes(badge.kind)) {
+        p.push("badge kind must be accolade|seenOn|popular");
         continue;
       }
       if (!isHttpsUrl(badge.sourceUrl)) p.push("badge needs an https sourceUrl");

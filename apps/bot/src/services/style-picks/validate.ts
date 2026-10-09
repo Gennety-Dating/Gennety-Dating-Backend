@@ -112,7 +112,7 @@ export function validateStylePicks(
 
 export type ResponseBadge =
   | { kind: "forYou" }
-  | { kind: "accolade" | "seenOn"; text: string; sourceUrl: string };
+  | { kind: "accolade" | "seenOn" | "popular"; text: string; sourceUrl: string };
 
 /**
  * A card's badges: "for you" first when granted, then the catalog's own

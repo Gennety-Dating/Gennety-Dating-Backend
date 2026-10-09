@@ -7552,7 +7552,7 @@ components:
 
     StylePick:
       type: object
-      required: [id, category, brand, name, reason, signals, priceTier, imageUrl, outUrl, sponsored, badges]
+      required: [id, category, brand, name, reason, signals, priceTier, priceEur, imageUrl, outUrl, sponsored, badges]
       properties:
         id:
           type: string
@@ -7574,6 +7574,10 @@ components:
           minimum: 1
           maximum: 3
           description: 1 high street … 3 luxury.
+        priceEur:
+          type: integer
+          minimum: 1
+          description: Price in whole euros at the linked shop when the catalog was last checked — shown on the buy button.
         imageUrl:
           type: [string, "null"]
           format: uri
@@ -7596,9 +7600,9 @@ components:
         kind:
           type: string
           description: |
-            `forYou` (computed from the fit score; no text), `accolade` or
-            `seenOn` (researched catalog facts). A plain string, not an enum —
-            drop unknown kinds.
+            `forYou` (computed from the fit score; no text), `accolade`,
+            `seenOn` or `popular` (researched catalog facts with a source). A
+            plain string, not an enum — drop unknown kinds.
         text:
           type: string
           description: Localized badge text. Absent on `forYou`.
