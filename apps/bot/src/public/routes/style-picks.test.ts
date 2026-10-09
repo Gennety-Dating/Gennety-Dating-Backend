@@ -81,6 +81,7 @@ const RESPONSE = {
       reason: "Fresh for your daytime walks.",
       signals: ["park walks"],
       priceTier: 2,
+      priceEur: 76,
       imageUrl: null,
       outUrl: "https://api.example/v1/style/out/x",
       sponsored: false,
