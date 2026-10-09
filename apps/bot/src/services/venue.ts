@@ -37,6 +37,7 @@
  */
 
 import type { VenueCategory } from "./vibe-parser.js";
+import { curatedPhotoNames, type PlacePhotoMeta } from "./venue-photo-curation.js";
 
 export interface Venue {
   name: string;
@@ -302,7 +303,7 @@ interface PlaceV1 {
   types?: string[];
   regularOpeningHours?: RegularOpeningHours;
   utcOffsetMinutes?: number;
-  photos?: { name?: string }[];
+  photos?: PlacePhotoMeta[];
   editorialSummary?: { text?: string; languageCode?: string };
 }
 
@@ -481,7 +482,7 @@ function placeToVenue(p: PlaceV1): Venue {
     address: p.formattedAddress ?? "",
     googleMapsUri: p.googleMapsUri ?? null,
     // Cover photo (first in the list is the highest-quality lead image).
-    photoName: p.photos?.[0]?.name ?? null,
+    photoName: curatedPhotoNames(p.id, p.photos)[0] ?? null,
     // Grounding facts for the scheduled-card blurb (see `venue-blurb.ts`).
     editorialSummary: p.editorialSummary?.text ?? null,
     rating: p.rating ?? null,
@@ -575,10 +576,7 @@ export async function fetchPlacePhotoNames(
       return null;
     }
     const p = (await res.json()) as PlaceV1;
-    return (p.photos ?? [])
-      .map((photo) => photo.name)
-      .filter((name): name is string => typeof name === "string" && name.length > 0)
-      .slice(0, limit);
+    return curatedPhotoNames(p.id ?? placeId, p.photos).slice(0, limit);
   } catch (err) {
     console.warn(`[venue] photo lookup for ${placeId} failed:`, err);
     return null;
@@ -774,9 +772,7 @@ export async function fetchPlaceDetails(
     priceLevel: p.priceLevel ?? null,
     primaryType: p.primaryType ?? null,
     editorialSummary: p.editorialSummary?.text ?? null,
-    photoRefs: (p.photos ?? [])
-      .map((photo) => photo.name)
-      .filter((name): name is string => typeof name === "string" && name.length > 0),
+    photoRefs: curatedPhotoNames(p.id ?? placeId, p.photos),
   };
 }
 
@@ -904,9 +900,7 @@ export async function searchVenueCandidates(
       primaryType: p.primaryType ?? null,
       utcOffsetMinutes: p.utcOffsetMinutes ?? null,
       openingHours: p.regularOpeningHours ?? null,
-      photos: (p.photos ?? [])
-        .map((ph) => ph.name)
-        .filter((name): name is string => typeof name === "string" && name.length > 0),
+      photos: curatedPhotoNames(p.id, p.photos),
       editorialSummary: p.editorialSummary?.text ?? null,
     }));
 }
