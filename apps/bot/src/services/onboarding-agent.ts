@@ -1467,7 +1467,7 @@ async function execFinalizeOnboarding(
       ? {
           firstSearchAt: calibration.firstDropAt.toISOString(),
           calibrationNote:
-            "In your closing message add ONE short sentence: the first day you spend getting to know them and who is around in their city, and their first search runs at firstSearchAt (say the day and time in their language). It is when the search starts, not a promised match. No apology, no 'unfortunately', no thanks for patience.",
+            "In your closing message add ONE short sentence: until then you get to know them and who is around in their city, and their first search runs at firstSearchAt (say the day and time in their language). It is when the search starts, not a promised match. Never say 'calibration' or an hour count. No apology, no 'unfortunately', no thanks for patience.",
         }
       : {}),
   });

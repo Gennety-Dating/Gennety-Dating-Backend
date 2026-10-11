@@ -918,7 +918,7 @@ async function execGetMyStanding(telegramId: bigint): Promise<string> {
       "`photosForBonusTicket` is how many more photos would earn a free Date Ticket. " +
       "Speak about waiting time using `daysWaiting` (days). NEVER quote `missedBatches` or phrase it as a number of drops/rounds — it is an internal cycle count whose scale changes with how often we run, so it reads as a verdict while describing very little. " +
       "If they are asking why it has been quiet: a search that finds nobody sends nothing at all — silence means no one cleared the bar, not that anything is broken or that they were skipped. " +
-      "`calibrating` true means a new account in its first-day calibration: it sits out the nearest evening search while you study the profile and the city pool, and `firstSearchAt` is when its first search runs — that is the whole answer to 'why nothing yet?', say it briefly and name that time as when the search starts, not as a promised match. " +
+      "`calibrating` true means a new account in its first-day calibration: it sits out the nearest evening search while you study the profile and the city pool, and `firstSearchAt` is when its first search runs — that is the whole answer to 'why nothing yet?', say it briefly in plain words (never 'calibration' or an hour count) and name that day and time as when the search starts, not as a promised match; it cannot be skipped or bought. " +
       "Hold the position: no apologising, no 'unfortunately', no thanking them for patience — explain how it works, calmly, and move on to what helps. " +
       "Never invent a reason that isn't in this data, and never promise a match by any particular date.",
   });

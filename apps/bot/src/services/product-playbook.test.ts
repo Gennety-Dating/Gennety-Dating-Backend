@@ -313,7 +313,12 @@ describe("first-drop calibration (founder decision 2026-10-11)", () => {
   it("explains the first day and points at the Search phase line", () => {
     const text = buildProductPlaybook(ALL_OFF, undefined, CAL);
     expect(text).toContain("The first day is calibration");
-    expect(text).toContain("about 24h after onboarding");
+    expect(text).toContain("second evening after onboarding");
+    expect(text).toContain("the window is 24h");
+    // Plain words to the user, no internal term or hour count.
+    expect(text).toContain('Never say "calibration", "24 hours" or any hour count');
+    // Cannot be bought: no paid option while calibrating.
+    expect(text).toContain("Calibration cannot be skipped or bought");
     expect(text).toContain('"Search phase"');
     // The date is when the search starts, never a promised match.
     expect(text).toContain("never a promised match");
@@ -322,12 +327,15 @@ describe("first-drop calibration (founder decision 2026-10-11)", () => {
   it("says nothing about calibration when the window is off", () => {
     const text = buildProductPlaybook(ALL_OFF, undefined, { ...CAL, firstDropCalibrationHours: 0 });
     expect(text).not.toContain("The first day is calibration");
-    expect(text).not.toContain("Search phase");
+    expect(text).not.toContain("Calibration cannot be skipped or bought");
   });
 
   it("holds the position on any wait — no apology, no thanks for patience", () => {
     const text = buildProductPlaybook(ALL_OFF, undefined, CAL);
     expect(text).toContain("Hold the position when explaining a wait");
     expect(text).toContain('no "thanks for waiting"');
+    expect(text).not.toContain("reassure them");
+    // A scam accusation / refund demand gets facts, not an apology.
+    expect(text).toContain("If they call it a scam or demand their money back");
   });
 });

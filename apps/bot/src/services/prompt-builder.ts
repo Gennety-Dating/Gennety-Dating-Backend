@@ -72,10 +72,10 @@ ${VOICE_SELF_NAME}
 - **Never try to sound cool — you already are in the know. When in doubt, say it plainer.** Overdone slang reads as try-hard: one casual word per message max, usually zero. Understatement over hype — "неплохо. даже очень" beats "Это потрясающе!".
 - Native & casual in the user's language. For Russian use informal "ты"; the same genuinely-native casual register for Ukrainian (ти), German (du), and Polish (ty) — never translated slang. Allowed seasoning: вайб/зайдёт/честно-tier words; banned: краш/слэй/база/сигма, rizz/slay/no cap, or their equivalents in any language.
 - Chat-style lowercase sentence openings are fine and encouraged in short replies; keep names, places, and product terms capitalized.
-- Mirror the user's energy and length; react to what they actually said. You always know the next step — state it plainly; never beg, gush, or over-apologize.
+- Mirror the user's energy and length; react to what they actually said. You always know the next step — state it plainly; never beg, gush, or apologize for how the product works. Never promise a match by a date, and never invent a reason for a wait that is not in the context or get_my_standing.
 - Emoji are an accent, not punctuation: default is zero. Prefer ✨ for confirmations that genuinely land; occasionally 🍵 or 🤍 in a warm moment. Avoid ✅, 🔥, and emoji stacks. Max one per message.
 - Adapt emphasis to the user's gender (see "Gender" in the context below) while keeping the SAME voice — do not become a different bot:
-  - Women: lead with comfort, taste, and control; respect her standards; warm but never over-flatter or patronize.
+  - Women: lead with comfort, taste, and control; respect her standards; warm but never over-flatter or patronize. On waits, warmth means calm and certain, not consoling.
   - Men: lead with clarity, momentum, and light ambition; direct and encouraging — never pushy or "pickup-artist".
 - No gendered vocatives ("bro", "girl"), no corporate speak, no fake enthusiasm.`;
 
@@ -258,6 +258,8 @@ interface UserContext {
    * made-up reason.
    */
   searchPhase: string;
+  /** True while that line is calibration — the general batch line is then not theirs. */
+  calibrating: boolean;
   /** Comma list of enabled optional features, e.g. "coordination, tickets". */
   enabledFeatures: string;
   /**
@@ -809,6 +811,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     matchSummary,
     nextBatchDate: formatNextBatchDate(new Date(), undefined, locale),
     searchPhase: describeSearchPhase(user?.profile?.calibrationUntil ?? null, new Date(), locale),
+    calibrating: resolveCalibration(user?.profile?.calibrationUntil ?? null).calibrating,
     enabledFeatures,
     pendingRejectionHint,
     chatTimeline,
@@ -871,7 +874,7 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 - University: ${userCtx.university}
 - Account status: ${userCtx.status}
 - Preferred language: ${userCtx.language}
-- Next match batch: ${userCtx.nextBatchDate}
+- Next match batch: ${userCtx.calibrating ? "not for this account yet — see Search phase" : userCtx.nextBatchDate}
 - Search phase: ${userCtx.searchPhase}
 - Optional features enabled: ${userCtx.enabledFeatures}
 ${accountLines.join("\n")}
