@@ -1,7 +1,7 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 408 entries
+# Decision index — all 413 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
