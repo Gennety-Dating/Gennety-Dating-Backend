@@ -1614,17 +1614,6 @@
       ]
     },
     {
-      "placeId": "ChIJu1c5V3LdOkcR9ThcQFao394",
-      "name": "KREDENS CAFE",
-      "category": "cafe",
-      "priority": 2,
-      "vibeTags": [
-        "coffee",
-        "cozy",
-        "casual"
-      ]
-    },
-    {
       "placeId": "ChIJq6rqYu7I1EAR7hF-uGJKWI8",
       "name": "HayLoft 2.0",
       "category": "lounge",
@@ -2731,6 +2720,11 @@
       "name": "Trullo D'oro Cafe",
       "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
       "reason": "Founder decision 2026-10-03: removed from Gennety entirely (Google: CLOSED_TEMPORARILY)."
+    },
+    {
+      "name": "KREDENS CAFE",
+      "placeId": "ChIJu1c5V3LdOkcR9ThcQFao394",
+      "reason": "Lviv (проспект Свободи, 37), not Kyiv: «Kredens Cafe Київ» resolved to the Lviv chain — removed 2026-10-11, like La Coupole (Paris) in September."
     }
   ]
 }

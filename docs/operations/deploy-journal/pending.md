@@ -11,6 +11,13 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-11 — KREDENS CAFE (Lviv) off in production AND demo (data write, no code).**
+Catalog files dropped it (DECISIONS 2026-10-11). In both databases: `UPDATE curated_venues SET active = false WHERE
+place_id = 'ChIJu1c5V3LdOkcR9ThcQFao394'` (5 rows each, one per university; reversible — rollback sets `true`).
+Until the new code is on the droplet its old `approved.json` still holds the rows — a manual `seed-venues:import`
+there would bring them back active.
+- **Проверка:** `select count(*) from curated_venues where place_id = 'ChIJu1c5V3LdOkcR9ThcQFao394' and active` → 0.
+
 **PENDING 2026-10-11 — Rides with the next deploy: Mini App ticket perspective + Vibe Check catalog 62 (no migration).**
 `a550608b` — `.ticket-float` keeps `transform-style: preserve-3d`, so the ticket's near edge tilts toward the viewer
 (CSS only; the Mini App build ships with the deploy). `feat/vibe-check-shop` landed (`ca535938` and the three
