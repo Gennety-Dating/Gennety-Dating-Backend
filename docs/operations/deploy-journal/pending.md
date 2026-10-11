@@ -11,14 +11,16 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING 2026-10-11 — KREDENS CAFE (Lviv) off in production AND demo (data write, no code).**
+**Deployed 2026-10-11 (was PENDING; production `3edf3b15`, 06:45–06:52 UTC) 2026-10-11 — KREDENS CAFE (Lviv) off in production AND demo (data write, no code).**
+- **Итог 2026-10-11:** prod 5 rows → `active=false`, demo 5 rows → `active=false`; active left: 0 / 0 (`deploy-1011-photos.sh`).
 Catalog files dropped it (DECISIONS 2026-10-11). In both databases: `UPDATE curated_venues SET active = false WHERE
 place_id = 'ChIJu1c5V3LdOkcR9ThcQFao394'` (5 rows each, one per university; reversible — rollback sets `true`).
 Until the new code is on the droplet its old `approved.json` still holds the rows — a manual `seed-venues:import`
 there would bring them back active.
 - **Проверка:** `select count(*) from curated_venues where place_id = 'ChIJu1c5V3LdOkcR9ThcQFao394' and active` → 0.
 
-**PENDING 2026-10-11 — Rides with the next deploy: Mini App ticket perspective + Vibe Check catalog 62 (no migration).**
+**Deployed 2026-10-11 (was PENDING; production `3edf3b15`, 06:45–06:52 UTC) 2026-10-11 — Rides with the next deploy: Mini App ticket perspective + Vibe Check catalog 62 (no migration).**
+- **Итог 2026-10-11:** Mini App rebuilt and published (previous bundle `/var/www/dating-app.prev-20261011-064614`); `features.stylePicks=false`, catalog seed not run.
 `a550608b` — `.ticket-float` keeps `transform-style: preserve-3d`, so the ticket's near edge tilts toward the viewer
 (CSS only; the Mini App build ships with the deploy). `feat/vibe-check-shop` landed (`ca535938` and the three
 commits before it): `priceEur` + badge `popular` in `GET /v1/me/style-picks`, `scripts/style-catalog.json` 62 items.
@@ -28,7 +30,8 @@ turned on (privacy policy must disclose the style picks first — see the 2026-1
   Mini App ticket screen: drag the ticket up — the lower edge comes out wider than the upper one.
 - **Откат:** revert the commits; no data to restore.
 
-**PENDING 2026-10-09 — Venue photos: audited curation of Google's ten photos per place (no migration).**
+**Deployed 2026-10-11 (was PENDING; production `3edf3b15`, 06:45–06:52 UTC) 2026-10-09 — Venue photos: audited curation of Google's ten photos per place (no migration).**
+- **Итог 2026-10-11:** apply 329 places / 1662 rows / 0 skipped, second restart healthy; `check-venue-photo-curation` → all found 318, some missing 11, below 3 (re-audit) 0.
 Bot only. `venue.ts` re-applies `VENUE_PHOTO_CURATION` to every Places answer, so the nightly re-validation keeps the
 audited choice. To have it everywhere at once instead of over the ~9-day Kyiv cycle: deploy →
 `pnpm --filter @gennety/bot exec tsx scripts/apply-venue-photo-curation.ts` (dry run) → `… --apply` (rewrites
