@@ -1,15 +1,18 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 230 entries
+# Deploy journal index — 235 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING | 2026-10-08 | Vibe Check (iOS Shop style picks): `GET /v1/me/style-picks` + `/v1/style/out/{itemId}`; 1 additive migration `20261008180000_style_picks`, catalog via `pnpm seed-style:import --apply`; env `STYLE_PICKS_ENABLED` / `STYLE_PICKS_FREQUENT_PLACES_ENABLED` default off — keep off until the privacy policy discloses it | [pending](./pending.md) |
-| PENDING | 2026-10-08 | Music on the profile: Apple Music main provider (MusicKit on device, server resolves ids with a MusicKit key), Spotify search only; provider-neutral contract; 1 additive migration BEFORE restart; env `APPLE_MUSIC_KEY_PATH/KEY_ID/TEAM_ID` | [pending](./pending.md) |
-| PENDING | 2026-10-07 | Bot PNG cards: date card slogan, venue name and «Gennety» in Gennety Display, venue photo −3°; wish card «Her pick / Your move» without full stops; other cards byte-identical, rematch untouched; production + demo bots (`bd58c865`, `1908ad59`) | [pending](./pending.md) |
+| PENDING | 2026-10-11 | Venue photos: curated Google photo order for all 329 places (venue shots first, then 2–4 dishes, up to 8); after deploy `apply-venue-photo-curation.ts` (dry run → `--apply`) + one more bot restart; no migration, no env | [pending](./pending.md) |
+| PENDING | 2026-10-11 | Vibe Check catalog 62 items + `priceEur` + badge `popular` (`feat/vibe-check-shop` landed); needs `pnpm seed-style:import --apply` only when `STYLE_PICKS_ENABLED` turns on; Mini App ticket keeps 3D perspective (`a550608b`) | [pending](./pending.md) |
+| Deployed | 2026-10-09 | Production `dc1e2ccf` (whole main): profile music (Apple Music key on server), Vibe Check code with `STYLE_PICKS_ENABLED` off, bot PNG cards; demo not deployed | [pending](./pending.md) |
+| Deployed | 2026-10-08 | (production `dc1e2ccf` 2026-10-09) Vibe Check (iOS Shop style picks): `GET /v1/me/style-picks` + `/v1/style/out/{itemId}`; 1 additive migration `20261008180000_style_picks`, catalog via `pnpm seed-style:import --apply`; env `STYLE_PICKS_ENABLED` / `STYLE_PICKS_FREQUENT_PLACES_ENABLED` default off — keep off until the privacy policy discloses it | [pending](./pending.md) |
+| Deployed | 2026-10-08 | (production `dc1e2ccf` 2026-10-09) Music on the profile: Apple Music main provider (MusicKit on device, server resolves ids with a MusicKit key), Spotify search only; provider-neutral contract; 1 additive migration BEFORE restart; env `APPLE_MUSIC_KEY_PATH/KEY_ID/TEAM_ID` | [pending](./pending.md) |
+| Deployed | 2026-10-07 | (production `dc1e2ccf` 2026-10-09) Bot PNG cards: date card slogan, venue name and «Gennety» in Gennety Display, venue photo −3°; wish card «Her pick / Your move» without full stops; other cards byte-identical, rematch untouched; production + demo bots (`bd58c865`, `1908ad59`) | [pending](./pending.md) |
 | Deployed | 2026-10-07 | Production `f9648948` (whole main): Profiler quick answers + «На потом» (1 additive migration), calendar NULL fix, name declension, Mini App city picker + «Premium после покупки»; drift OK, 0 restarts; demo not deployed | [pending](./pending.md) |
 | Deployed | 2026-10-05 | (production `f9648948` 2026-10-07) Calendar: NULL grid initialization fixed; current pair recovered, live API 200 with 77 slots, 7,580 tests passed; production pending | [2026-10-05-calendar-null](./2026-10-05-calendar-null.md) |
 | Deployed | 2026-10-05 | Rematch temporarily disabled in production/demo/dev; all sales and new search entries gated, refund recovery continues; 201 tests and typecheck passed | [2026-10-05-rematch](./2026-10-05-rematch.md) |

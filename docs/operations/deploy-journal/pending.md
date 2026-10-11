@@ -11,6 +11,16 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-11 — Rides with the next deploy: Mini App ticket perspective + Vibe Check catalog 62 (no migration).**
+`a550608b` — `.ticket-float` keeps `transform-style: preserve-3d`, so the ticket's near edge tilts toward the viewer
+(CSS only; the Mini App build ships with the deploy). `feat/vibe-check-shop` landed (`ca535938` and the three
+commits before it): `priceEur` + badge `popular` in `GET /v1/me/style-picks`, `scripts/style-catalog.json` 62 items.
+`STYLE_PICKS_ENABLED` stays off, so nothing changes for users; `pnpm seed-style:import --apply` only when the flag is
+turned on (privacy policy must disclose the style picks first — see the 2026-10-08 Vibe Check block). Demo: same code.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/style-picks src/public/routes/style-picks.test.ts`;
+  Mini App ticket screen: drag the ticket up — the lower edge comes out wider than the upper one.
+- **Откат:** revert the commits; no data to restore.
+
 **PENDING 2026-10-09 — Venue photos: audited curation of Google's ten photos per place (no migration).**
 Bot only. `venue.ts` re-applies `VENUE_PHOTO_CURATION` to every Places answer, so the nightly re-validation keeps the
 audited choice. To have it everywhere at once instead of over the ~9-day Kyiv cycle: deploy →
