@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import multer, { MulterError } from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { PROFILE_VIDEO_NATIVE_MAX_FILE_SIZE_BYTES } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { videoUploadLimiter } from "../rate-limit.js";
@@ -22,7 +23,7 @@ const THUMB_MAX_BYTES = 5 * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: PROFILE_VIDEO_NATIVE_MAX_FILE_SIZE_BYTES, files: 2 },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: PROFILE_VIDEO_NATIVE_MAX_FILE_SIZE_BYTES, files: 2 },
 });
 
 function receiveVideo(req: Request, res: Response, next: NextFunction): void {

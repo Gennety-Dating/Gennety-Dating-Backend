@@ -12,6 +12,7 @@ import { otpRequestLimiter, otpVerifyLimiter, refreshLimiter } from "../rate-lim
 import { requireAuth } from "../auth-middleware.js";
 import { signOutDevice } from "../../services/device-tokens.js";
 import { serializeUser } from "./serializers.js";
+import { refuseBannedLogin } from "../login-gate.js";
 
 export const authRouter: Router = Router();
 
@@ -32,9 +33,12 @@ authRouter.post(
       const result = await createAndSendOtp(email, { plusAlias: "existing_verified_only" });
       if (!result.ok) {
         if (result.reason === "plus_alias") {
-          res.status(400).json({ error: "Email addresses with a '+' tag are not accepted" });
+          // Machine codes, not prose (audit C-21): the client keyed its message
+          // off the status alone and told a `+tag` sender their address was
+          // "not a university email". Status codes are unchanged.
+          res.status(400).json({ error: "email_plus_tag_not_allowed" });
         } else {
-          res.status(429).json({ error: "Too many codes requested for this email today" });
+          res.status(429).json({ error: "otp_daily_limit" });
         }
         return;
       }
@@ -68,6 +72,7 @@ authRouter.post(
     }
 
     const user = await findOrCreateMobileUser(email);
+    if (refuseBannedLogin(user, res)) return;
     const accessToken = signAccessToken(user.id);
     const userAgent = req.headers["user-agent"] ?? null;
     const refreshToken = await createRefreshToken(user.id, userAgent);

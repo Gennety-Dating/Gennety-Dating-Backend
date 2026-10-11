@@ -60,9 +60,12 @@ function cardSig(referrerId: string, version?: string): string {
 
 /** Constant-time signature compare that tolerates a wrong-length input. */
 function sigMatches(given: string, expected: string): boolean {
-  return (
-    given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected))
-  );
+  // Byte lengths, not string lengths: `timingSafeEqual` throws on unequal
+  // buffers, and a non-ASCII input of the right character count is longer in
+  // UTF-8 — a 500 instead of a refusal.
+  const givenBytes = Buffer.from(given);
+  const expectedBytes = Buffer.from(expected);
+  return givenBytes.length === expectedBytes.length && timingSafeEqual(givenBytes, expectedBytes);
 }
 
 export function createReferralRouter(): Router {

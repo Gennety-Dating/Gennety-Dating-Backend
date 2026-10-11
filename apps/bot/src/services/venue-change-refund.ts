@@ -47,6 +47,14 @@ export const VENUE_PURCHASE_REFUND_FAILED = "refund_failed";
 export const VENUE_PURCHASE_REFUND_MANUAL = "refund_manual";
 
 /**
+ * Apple refunded or revoked an App Store venue change (Server Notification).
+ * The change stays — the pair may already be on their way to the new place —
+ * so this only records the refund and puts it in front of the founder, like the
+ * Prime Time pass's twin status. Out of the Stars sweep's reach by prefix.
+ */
+export const VENUE_PURCHASE_REFUNDED_APPSTORE = "refunded_appstore";
+
+/**
  * `external_payment_id` prefix that marks the App Store rail.
  *
  * The Stars sweep selects by status, and an App Store row can legitimately sit

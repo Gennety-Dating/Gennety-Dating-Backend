@@ -19,6 +19,7 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
     },
     // Interactive form, run against this same mock.
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
@@ -47,6 +48,12 @@ vi.mock("../../services/status-banner-refresh.js", () => ({
   refreshStatusBanners: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Only the unclaimed-purchase alert is observed; everything else stays real.
+vi.mock("../../services/founder-notify.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/founder-notify.js")>()),
+  notifyFounderAppStoreUnclaimed: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   submitVenueLikes,
@@ -57,6 +64,7 @@ import {
   declineVenuePay,
   handleVenuePayDecline,
   settleVenuePayment,
+  settleVenueChangeFromAppStore,
   sweepExpiredVenueChanges,
   mintExpressChange,
   keepOriginalVenue,
@@ -66,6 +74,7 @@ import {
 import type { CatalogVenue } from "../../services/venue-change.js";
 import { venueAgreementNonce } from "../../services/venue-agreement-nonce.js";
 import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
+import { notifyFounderAppStoreUnclaimed } from "../../services/founder-notify.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
@@ -76,7 +85,13 @@ const mMatch = prisma.match as unknown as {
 };
 const mUpdate = mMatch.update;
 const mPurchase = (prisma as unknown as {
-  venueChangePurchase: { create: MockFn; update: MockFn; updateMany: MockFn; findMany: MockFn };
+  venueChangePurchase: {
+    create: MockFn;
+    update: MockFn;
+    updateMany: MockFn;
+    findMany: MockFn;
+    findUnique: MockFn;
+  };
 }).venueChangePurchase;
 
 /** Prisma unique-constraint violation — a redelivered `successful_payment`. */
@@ -242,6 +257,7 @@ beforeEach(() => {
   mPurchase.update.mockReset();
   mPurchase.updateMany.mockReset();
   mPurchase.findMany.mockReset();
+  mPurchase.findUnique.mockReset();
   // Default: this charge id is new (no redelivery).
   mPurchase.create.mockResolvedValue({
     id: "vp1",
@@ -971,6 +987,102 @@ describe("mintExpressChange", () => {
 // ---------------------------------------------------------------------------
 // Settle (successful_payment)
 // ---------------------------------------------------------------------------
+
+describe("settleVenueChangeFromAppStore", () => {
+  const NOW = new Date();
+  const settle = (now: Date = NOW) =>
+    settleVenueChangeFromAppStore(fakeApi(), "b", "m1", "2000001", 499, false, now);
+
+  it("claims the change and settles the row in ONE transaction", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await expect(settle()).resolves.toEqual({ ok: true });
+
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "vp1", status: "processing" },
+      data: expect.objectContaining({ status: "settled" }),
+    });
+    // No separate unconditional write after the claim any more.
+    expect(mPurchase.update).not.toHaveBeenCalled();
+  });
+
+  it("parks an unclaimable purchase and alerts the founder, not just the log", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(settle()).resolves.toEqual({ ok: false, reason: "not-agreed" });
+
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "vp1", status: "processing" },
+      data: expect.objectContaining({ status: "refund_manual" }),
+    });
+    expect(notifyFounderAppStoreUnclaimed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "venue_change",
+        externalPaymentId: "appstore:2000001",
+        reason: "not-agreed",
+        matchId: "m1",
+      }),
+    );
+    error.mockRestore();
+  });
+
+  describe("a re-reported transaction is answered from its stored row", () => {
+    beforeEach(() => {
+      mMatch.findUnique.mockResolvedValue(agreedMatch());
+      mPurchase.create.mockRejectedValue(uniqueViolation());
+    });
+    const row = (over: Record<string, unknown>) => ({
+      id: "vp1",
+      userId: "b",
+      matchId: "m1",
+      status: "settled",
+      refundError: null,
+      createdAt: NOW,
+      ...over,
+    });
+
+    it("settled → ok", async () => {
+      mPurchase.findUnique.mockResolvedValue(row({}));
+      await expect(settle()).resolves.toEqual({ ok: true });
+    });
+
+    it("refund_manual → the same refusal as the first report, not ok", async () => {
+      mPurchase.findUnique.mockResolvedValue(
+        row({
+          status: "refund_manual",
+          refundError: "unclaimable (not-agreed) — Apple refunds are not server-initiated",
+        }),
+      );
+      await expect(settle()).resolves.toEqual({ ok: false, reason: "not-agreed" });
+    });
+
+    it("fresh processing → retry later", async () => {
+      mPurchase.findUnique.mockResolvedValue(row({ status: "processing" }));
+      await expect(settle()).resolves.toEqual({ ok: false, reason: "processing" });
+      expect(mMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("stale processing → this report finishes the settle", async () => {
+      mPurchase.findUnique.mockResolvedValue(
+        row({ status: "processing", createdAt: new Date(NOW.getTime() - 10 * 60 * 1000) }),
+      );
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await expect(settle()).resolves.toEqual({ ok: true });
+      expect(updateCalls((d) => d.venueChangeStatus === "settled").length).toBe(1);
+      warn.mockRestore();
+    });
+
+    it("another account's transaction → wrong_owner", async () => {
+      mPurchase.findUnique.mockResolvedValue(row({ userId: "a" }));
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      await expect(settle()).resolves.toEqual({ ok: false, reason: "wrong_owner" });
+      error.mockRestore();
+    });
+  });
+});
 
 describe("settleVenuePayment", () => {
   it("copies the agreed venue onto the canonical fields and notifies both", async () => {

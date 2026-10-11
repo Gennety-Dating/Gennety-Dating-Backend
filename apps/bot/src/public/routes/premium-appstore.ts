@@ -6,7 +6,7 @@ import {
   decodeJwsPayload,
   getVerifiedTransaction,
 } from "../../services/appstore.js";
-import { applyAppStorePremium } from "../../services/appstore-premium.js";
+import { reportAppStorePremium } from "../../services/appstore-premium.js";
 
 /**
  * StoreKit 2 Gennety Premium subscription reporting for the native app (JWT
@@ -63,7 +63,7 @@ premiumAppStoreRouter.post(
       return;
     }
 
-    const result = await applyAppStorePremium(req.userId!, lookup.transaction);
+    const result = await reportAppStorePremium(req.userId!, lookup.transaction);
     switch (result.status) {
       case "activated":
         res.json({ ok: true, active: true, premiumUntil: result.premiumUntil });

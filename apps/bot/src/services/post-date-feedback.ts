@@ -246,6 +246,13 @@ export async function submitPostDateFeedback(input: {
   matchId: string;
   language: Language;
   submission: FeedbackSubmission;
+  /**
+   * Answer an identical repeat of the stored form answer as success (C-15):
+   * a client that lost the first response retries, and a 409 there reads as
+   * "not sent" though it was. Only the native route opts in — the Mini App
+   * route follows success with a thank-you DM that must not go twice.
+   */
+  acceptIdenticalReplay?: boolean;
 }): Promise<FeedbackResult> {
   const composed = composeFeedbackText({
     text: input.submission.text,
@@ -261,7 +268,16 @@ export async function submitPostDateFeedback(input: {
     language: input.language,
     mayFollow: (existing) => !isFormFeedbackAnswer(existing),
   });
-  if (!recorded.ok) return { ok: false, error: recorded.reason };
+  if (!recorded.ok) {
+    if (
+      recorded.reason === "already-submitted" &&
+      input.acceptIdenticalReplay &&
+      (await isIdenticalReplay(input.userId, input.matchId, composed, input.submission))
+    ) {
+      return { ok: true };
+    }
+    return { ok: false, error: recorded.reason };
+  }
 
   if (input.submission.venueFit) {
     const match = await prisma.match.findUnique({
@@ -286,6 +302,49 @@ export async function submitPostDateFeedback(input: {
   }
 
   return { ok: true };
+}
+
+/**
+ * Is the caller's stored form answer exactly this submission? The stored blob
+ * leads with the composed text (an earlier story is kept below it, see
+ * `recordPostDateFeedback`), and the venue-fit half must match too — a repeat
+ * that changes either is a second answer and stays refused.
+ */
+async function isIdenticalReplay(
+  userId: string,
+  matchId: string,
+  composed: string,
+  submission: FeedbackSubmission,
+): Promise<boolean> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      userAId: true,
+      userBId: true,
+      feedbackByA: true,
+      feedbackByB: true,
+      venueFitByA: true,
+      venueFitByB: true,
+      venueFitReasonsByA: true,
+      venueFitReasonsByB: true,
+    },
+  });
+  if (!match) return false;
+  const isA = match.userAId === userId;
+  if (!isA && match.userBId !== userId) return false;
+
+  const stored = (isA ? match.feedbackByA : match.feedbackByB) ?? "";
+  const text = composed.trim().slice(0, FEEDBACK_MAX_TEXT_LEN);
+  if (stored !== text && !stored.startsWith(`${text}\n\n`)) return false;
+
+  const storedFit = (isA ? match.venueFitByA : match.venueFitByB) ?? null;
+  if (storedFit !== submission.venueFit) return false;
+  if (submission.venueFit === null) return true;
+  const storedReasons = (isA ? match.venueFitReasonsByA : match.venueFitReasonsByB) ?? [];
+  return (
+    storedReasons.length === submission.venueFitReasons.length &&
+    storedReasons.every((reason, i) => reason === submission.venueFitReasons[i])
+  );
 }
 
 export interface PendingFeedbackView {

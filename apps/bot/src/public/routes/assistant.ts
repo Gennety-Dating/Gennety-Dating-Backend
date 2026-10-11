@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
@@ -14,7 +15,7 @@ import {
   evaluateAgentAccess,
   type AgentAccessDenial,
 } from "../../services/agent-access.js";
-import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 
 export const assistantRouter: Router = Router();
 
@@ -23,7 +24,7 @@ assistantRouter.use(usageGuard);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: WHISPER_MAX_BYTES },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: WHISPER_MAX_BYTES, files: 1 },
 });
 
 interface AssistantReplyDto {
@@ -127,10 +128,17 @@ assistantRouter.post(
       return;
     }
 
-    const transcript = await transcribeVoice(req.file.buffer, {
+    const transcription = await transcribeVoiceResult(req.file.buffer, {
       mime: req.file.mimetype,
       ...(user.language ? { language: user.language } : {}),
     });
+    // An outage is not the recording's fault: 503 keeps the note on the
+    // device for a retry, 422 would discard it (audit C-06).
+    if (!transcription.ok && transcription.reason === "unavailable") {
+      res.status(503).json({ error: "transcription_unavailable" });
+      return;
+    }
+    const transcript = transcription.ok ? transcription.text : "";
     if (!transcript) {
       res.status(422).json({ error: "Could not transcribe audio" });
       return;

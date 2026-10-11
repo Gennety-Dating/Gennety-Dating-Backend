@@ -13,6 +13,7 @@ import { withRedactedSummary } from "./outbound-recorder.js";
 import { buildChatControlsKeyboard, isProxyOpen } from "./coordination.js";
 import { reactToMessage, type EmojiReaction } from "./message-reactions.js";
 import { telegramReachable } from "./telegram-reach.js";
+import { exceedsVisibleLength } from "../utils/text-length.js";
 import {
   NOBODY,
   bumpProxyChat,
@@ -619,7 +620,8 @@ export async function relayProxyMessage(input: {
 
   const body = input.body.trim();
   if (!body) return { ok: false, error: "empty" };
-  if (body.length > PROXY_MAX_MESSAGE_LEN) return { ok: false, error: "too-long" };
+  // Graphemes, as the app counts them (audit C-17) — see `utils/text-length.ts`.
+  if (exceedsVisibleLength(body, PROXY_MAX_MESSAGE_LEN)) return { ok: false, error: "too-long" };
 
   const now = input.now ?? new Date();
   const sendable = await loadSendableMatch(input.matchId, input.senderUserId, now);

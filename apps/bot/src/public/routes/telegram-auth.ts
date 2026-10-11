@@ -5,6 +5,7 @@ import { verifyTelegramIdToken } from "../../services/telegram-login.js";
 import { findOrCreateUserByTelegramLogin } from "../mobile-user.js";
 import { accessTokenTtlSeconds, createRefreshToken, signAccessToken } from "../jwt.js";
 import { serializeUser } from "./serializers.js";
+import { refuseBannedLogin } from "../login-gate.js";
 
 /**
  * POST /v1/auth/telegram — "Continue with Telegram" for the native app.
@@ -78,6 +79,7 @@ telegramAuthRouter.post(
     }
 
     const user = resolved.user;
+    if (refuseBannedLogin(user, res)) return;
     const accessToken = signAccessToken(user.id);
     const refreshToken = await createRefreshToken(user.id, req.headers["user-agent"] ?? null);
 

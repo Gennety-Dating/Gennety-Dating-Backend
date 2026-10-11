@@ -28,7 +28,8 @@ vi.mock("../config.js", () => ({
 }));
 
 const getVerifiedTransaction = vi.fn();
-vi.mock("./appstore.js", () => ({
+vi.mock("./appstore.js", async (importOriginal) => ({
+  boughtByAnotherUser: (await importOriginal<typeof import("./appstore.js")>()).boughtByAnotherUser,
   appStoreConfigured: () => true,
   getVerifiedTransaction: (...a: unknown[]) => getVerifiedTransaction(...a),
 }));

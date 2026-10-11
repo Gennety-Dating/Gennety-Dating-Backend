@@ -342,6 +342,18 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     const answersJson = answers as unknown as Prisma.InputJsonValue[];
     const prefTagsJson = mergedTags as unknown as Prisma.InputJsonValue;
     const completedAt = new Date();
+    // Which submit is the FIRST completion is decided by a compare-and-set on
+    // the stamp, not by the read above (B-25): two concurrent submits both
+    // read it null, and both played the ~10s sequence into one chat. A
+    // profile that does not exist yet is created by this submit alone.
+    let firstCompletion = user.profile == null;
+    if (user.profile != null && user.profile.typeRadarCompletedAt == null) {
+      const claimed = await prisma.profile.updateMany({
+        where: { userId: user.id, typeRadarCompletedAt: null },
+        data: { typeRadarCompletedAt: completedAt },
+      });
+      firstCompletion = claimed.count === 1;
+    }
     await prisma.profile.upsert({
       where: { userId: user.id },
       create: {
@@ -380,8 +392,9 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       const telegramId = auth.caller.telegramId;
       // The thinking sequence decorates the FIRST completion only. A re-submit
       // (retry, replay) still resumes exactly as before, but must not replay a
-      // ~10s animation the user already sat through.
-      const firstCompletion = user.profile?.typeRadarCompletedAt == null;
+      // ~10s animation the user already sat through. (`firstCompletion` is
+      // claimed above, before the save.)
+      //
       // Detached: the response is already sent, so this owns its own errors —
       // an escaping rejection here would be an unhandled promise rejection,
       // which takes the whole bot process down.

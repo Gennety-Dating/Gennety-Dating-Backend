@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { env } from "../../config.js";
 import { BoundedMap } from "../../utils/bounded-map.js";
 import { mapSpotifyTrack, rememberTracks, spotifyConfigured } from "./spotify.js";
-import type { MusicTrack } from "./track.js";
+import { type MusicTrack, type WireMusicTrack, withLegacyMusicFields } from "./track.js";
 
 /**
  * The one-time "import my Spotify top tracks" (decision 2026-09-11).
@@ -192,14 +192,14 @@ export async function completeTopTracksImport(
 }
 
 /** Step 3 — the candidates, for as long as the import is fresh. */
-export function peekTopTracksImport(userId: string, now = Date.now()): MusicTrack[] | null {
+export function peekTopTracksImport(userId: string, now = Date.now()): WireMusicTrack[] | null {
   const entry = imports.get(userId);
   if (!entry) return null;
   if (entry.expiresAt < now) {
     imports.delete(userId);
     return null;
   }
-  return entry.tracks;
+  return entry.tracks.map(withLegacyMusicFields);
 }
 
 /** Called once the person saved: the import has done its job and does not linger. */

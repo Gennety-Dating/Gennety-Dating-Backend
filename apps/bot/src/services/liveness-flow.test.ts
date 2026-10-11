@@ -289,6 +289,42 @@ describe("beginLivenessCheck", () => {
     expect(userUpdate).not.toHaveBeenCalled();
   });
 
+  // C-12: a verified user below the minimum whose reference expired could not
+  // add photos (the expired reference refuses them) nor re-verify (the minimum
+  // refused that) — the minimum gates matching, not identity.
+  it("lets a verified user re-anchor an expired reference below the photo minimum", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      ...READY_FOR_CHECK,
+      profile: { photos: ["u/a.jpg", "u/b.jpg"] },
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: null,
+    });
+
+    expect(await beginLivenessCheck("user-1")).toMatchObject({ ok: true, sessionId: SESSION_ID });
+  });
+
+  it("still asks that user for a photo when there is nothing to compare with", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      ...READY_FOR_CHECK,
+      profile: { photos: [] },
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: null,
+    });
+
+    expect(await beginLivenessCheck("user-1")).toEqual({
+      ok: false,
+      error: "photos_required",
+      language: "en",
+    });
+    expect(createLivenessSession).not.toHaveBeenCalled();
+  });
+
   it("still tells a verified user with an intact reference that they are verified", async () => {
     // No check would run, so there is no photo step to ask for.
     userFindUnique.mockResolvedValueOnce({

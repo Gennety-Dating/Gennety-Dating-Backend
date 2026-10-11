@@ -2,15 +2,21 @@ import { Router, type Request, type Response } from "express";
 import {
   appStoreConfigured,
   decodeJwsPayload,
+  getSubscriptionAutoRenew,
   getVerifiedTransaction,
   isPremiumProduct,
 } from "../../services/appstore.js";
 import { refundAppStoreTransaction } from "../../services/appstore-tickets.js";
+import {
+  isVenueChangeProduct,
+  refundVenueChangeAppStoreTransaction,
+} from "../../services/appstore-venue-change.js";
 import { refundPrimeTimeAppStoreTransaction } from "../../services/appstore-prime-time.js";
 import { isPrimeTimeProduct } from "../../services/prime-time.js";
 import {
   handleAppStorePremiumNotification,
   PREMIUM_RENEW_NOTIFICATIONS,
+  syncAppStorePremiumAutoRenew,
 } from "../../services/appstore-premium.js";
 
 /**
@@ -100,7 +106,36 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
     console.log(
       `[appstore-webhook] premium ${notificationType} tx=${transactionId} -> ${premium.status}`,
     );
+    if (notificationType === "DID_CHANGE_RENEWAL_STATUS") {
+      // The user switched renewal on or off. Which way is re-read from Apple's
+      // renewal info — the notification's own `subtype` is as unverified as
+      // its type — and a lookup that cannot answer asks Apple to retry.
+      const anchor = lookup.transaction.originalTransactionId ?? lookup.transaction.transactionId;
+      const renewal = await getSubscriptionAutoRenew(anchor);
+      if (renewal.status === "unavailable") {
+        res.status(500).json({ error: "Lookup unavailable" });
+        return;
+      }
+      if (renewal.status === "ok") {
+        const synced = await syncAppStorePremiumAutoRenew(lookup.transaction, renewal.autoRenew);
+        console.log(
+          `[appstore-webhook] premium autoRenew=${renewal.autoRenew} tx=${transactionId} -> ${synced.status}`,
+        );
+      }
+    }
     res.json({ ok: true, result: premium.status });
+    return;
+  }
+
+  // A venue change bought in the app: recorded and announced, the change
+  // stays (`appstore-venue-change.ts`). Before this branch it fell through to
+  // the ticket ledger, found nothing and was acknowledged without a trace.
+  if (isVenueChangeProduct(lookup.transaction.productId)) {
+    const venue = await refundVenueChangeAppStoreTransaction(lookup.transaction);
+    console.log(
+      `[appstore-webhook] venue-change ${notificationType} tx=${transactionId} -> ${venue.status}`,
+    );
+    res.json({ ok: true, result: venue.status });
     return;
   }
 

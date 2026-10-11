@@ -16,6 +16,15 @@ describe("signed outbound links", () => {
     expect(styleOutSignatureValid(USER, "matsuda-m3023", exp, "short", NOW)).toBe(false);
   });
 
+  it("refuses a non-ASCII signature of the right character count instead of throwing", () => {
+    // Same UTF-16 length, longer in UTF-8: `timingSafeEqual` used to throw → 500.
+    const exp = styleOutExpiry(NOW);
+    const sig = signStyleOut(USER, "x", exp);
+    const forged = "é".repeat(sig.length);
+    expect(() => styleOutSignatureValid(USER, "x", exp, forged, NOW)).not.toThrow();
+    expect(styleOutSignatureValid(USER, "x", exp, forged, NOW)).toBe(false);
+  });
+
   it("expires", () => {
     const exp = styleOutExpiry(NOW);
     const sig = signStyleOut(USER, "x", exp);

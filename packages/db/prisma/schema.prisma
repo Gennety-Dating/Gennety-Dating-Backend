@@ -481,6 +481,9 @@ model User {
   /// it is a sequential scan every hour, for a column that is null on the
   /// overwhelming majority of rows.
   @@index([premiumUntil])
+  /// App Store Premium finds its owner by the subscription's anchor (webhook,
+  /// the report path's ownership check, the renewal-status sync).
+  @@index([premiumExternalId])
   @@map("users")
 }
 
@@ -2296,6 +2299,16 @@ model Match {
   @@index([coordMethod, proxyClosedAt])
   /// Drives the venue-change TTL/cutoff expiry sweep on the lifecycle tick.
   @@index([venueChangeStatus, venueChangeExpiresAt])
+  /// The proxy-close sweep (services/coordination.ts `closeProxies`, every
+  /// lifecycle tick): `proxyClosedAt IS NULL AND proxyClosesAt <= now`. No
+  /// other index leads with either column, so it was a scan of `matches`.
+  @@index([proxyClosedAt, proxyClosesAt])
+  /// The post-date feedback-prompt sweep (services/date-lifecycle.ts): status
+  /// alone does not narrow it — `completed` only grows — the unprompted stamp does.
+  @@index([feedbackPromptedAt, agreedTime])
+  /// The `scheduled` + `agreedTime` window sweeps (icebreakers, wingman,
+  /// date-day, pre-date safety, proxy open) and `negotiating_venue` time lapse.
+  @@index([status, agreedTime])
   @@map("matches")
 }
 

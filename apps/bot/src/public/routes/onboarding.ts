@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { prisma } from "@gennety/db";
 import {
   LEGAL_DOCS_VERSION,
@@ -20,7 +21,7 @@ import {
 } from "../../services/onboarding-collector.js";
 import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
-import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { parseOnboardingBasicsPatch } from "../onboarding-basics.js";
 import { serializeUser } from "./serializers.js";
 import {
@@ -32,11 +33,13 @@ import {
 export const onboardingRouter: Router = Router();
 
 onboardingRouter.use(requireAuth);
-onboardingRouter.use(usageGuard);
+// `usageGuard` (the daily token budget) sits on each route that can run an
+// agent turn, not on the router: `/consent` writes two flags and never reaches
+// the model, so it must not answer 429 (audit C-05/B-16).
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: WHISPER_MAX_BYTES },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: WHISPER_MAX_BYTES, files: 1 },
 });
 
 async function loadUser(userId: string) {
@@ -103,8 +106,19 @@ const openingInterviews = new Map<string, Promise<void>>();
  * Only the collector opens it: without the flag, a `resume` turn would reach
  * the legacy agent with an empty message. An interview that already has an
  * assistant prompt is never re-opened.
+ *
+ * `beforeBasics` lifts the basics wait for builds from before the screens
+ * (audit C-02): they never call `POST /basics` and draw the chat from the
+ * first question, so for them the chat opens on the basics question itself
+ * ("name and age"), as it did before 2026-09-30, and the collector takes the
+ * answers in chat. A current build is unaffected even if it gets here: it
+ * routes on `basics.complete`, not on the question, and the save that
+ * completes the basics clears the history and re-opens the chat (`/basics`).
  */
-async function openInterviewIfUnstarted(userId: string): Promise<void> {
+async function openInterviewIfUnstarted(
+  userId: string,
+  options: { beforeBasics?: boolean } = {},
+): Promise<void> {
   const inFlight = openingInterviews.get(userId);
   if (inFlight) return inFlight;
   const opening = (async () => {
@@ -132,7 +146,7 @@ async function openInterviewIfUnstarted(userId: string): Promise<void> {
     ) {
       return;
     }
-    if (!(await loadOnboardingBasics(userId)).complete) return;
+    if (!options.beforeBasics && !(await loadOnboardingBasics(userId)).complete) return;
     await runAgentTurn(user.telegramId, { kind: "resume" }, { canPresentTypeRadar: false });
   })();
   openingInterviews.set(userId, opening);
@@ -144,16 +158,31 @@ async function openInterviewIfUnstarted(userId: string): Promise<void> {
 }
 
 /**
+ * A client from before the basics screens (pre-2026-09-30 builds). Builds that
+ * know the screens are not distinguishable from those older ones by anything
+ * they send — except the `X-Gennety-Build` header, which only builds newer
+ * than both send (contract decision 2026-10-11 #3). So a request WITH the
+ * header waits for the basics as designed; one without it gets the chat
+ * opened at once, which an old build needs and a screens-era build tolerates
+ * (see `openInterviewIfUnstarted`). The cost is one opening turn that a
+ * screens-era build's basics save later discards.
+ */
+function isPreBasicsClient(req: Request): boolean {
+  return !req.get("x-gennety-build");
+}
+
+/**
  * GET /v1/onboarding/interview
  * Returns the current step, the most recent assistant prompt and the basics
  * (`basics`). A chat the collector has not started yet is opened first once
  * the basics are complete, so the answer carries its first question
  * (`openInterviewIfUnstarted`); before that, `basics` is what the client routes
- * on.
+ * on. A build that predates the basics screens gets the chat opened at once
+ * (`isPreBasicsClient`, audit C-02).
  */
-onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<void> => {
+onboardingRouter.get("/interview", usageGuard, async (req: Request, res: Response): Promise<void> => {
   try {
-    await openInterviewIfUnstarted(req.userId!);
+    await openInterviewIfUnstarted(req.userId!, { beforeBasics: isPreBasicsClient(req) });
   } catch (error) {
     // The read still answers: the client shows an unopened interview as
     // "not ready yet" with a retry, and the retry opens it.
@@ -189,7 +218,7 @@ onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<
  * all-or-nothing: a rejected value writes nothing and answers 400
  * `{error, field}` with the collector's reason.
  */
-onboardingRouter.post("/basics", async (req: Request, res: Response): Promise<void> => {
+onboardingRouter.post("/basics", usageGuard, async (req: Request, res: Response): Promise<void> => {
   const user = await loadUser(req.userId!);
   if (!ensureInterviewAllowed(user, res)) return;
   if (user.onboardingStep !== "conversational") {
@@ -235,7 +264,7 @@ onboardingRouter.post("/basics", async (req: Request, res: Response): Promise<vo
   res.json(buildInterviewState(ctx));
 });
 
-onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request, res: Response): Promise<void> => {
+onboardingRouter.post("/interview/answer", usageGuard, agentTextLimiter, async (req: Request, res: Response): Promise<void> => {
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text) {
     res.status(400).json({ error: "Missing text" });
@@ -290,6 +319,7 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
  */
 onboardingRouter.post(
   "/interview/voice-prompt",
+  usageGuard,
   agentTextLimiter,
   async (req: Request, res: Response): Promise<void> => {
     if (!env.VOICE_PROMPT_ENABLED) {
@@ -341,6 +371,7 @@ onboardingRouter.post(
  */
 onboardingRouter.post(
   "/photos/continue",
+  usageGuard,
   agentTextLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const user = await loadUser(req.userId!);
@@ -448,6 +479,7 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
 
 onboardingRouter.post(
   "/interview/voice",
+  usageGuard,
   voiceLimiter,
   upload.single("file"),
   async (req: Request, res: Response): Promise<void> => {
@@ -458,10 +490,17 @@ onboardingRouter.post(
 
     const user = await loadUser(req.userId!);
     if (!ensureInterviewAllowed(user, res)) return;
-    const transcript = await transcribeVoice(req.file.buffer, {
+    const transcription = await transcribeVoiceResult(req.file.buffer, {
       mime: req.file.mimetype,
       ...(user.language ? { language: user.language } : {}),
     });
+    // An outage is not the recording's fault: 503 keeps the note on the
+    // device for a retry, 422 would discard it (audit C-06).
+    if (!transcription.ok && transcription.reason === "unavailable") {
+      res.status(503).json({ error: "transcription_unavailable" });
+      return;
+    }
+    const transcript = transcription.ok ? transcription.text : "";
     if (!transcript) {
       res.status(422).json({ error: "Could not transcribe audio" });
       return;

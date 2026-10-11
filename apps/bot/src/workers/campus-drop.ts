@@ -1,4 +1,6 @@
+import type { Api, RawApi } from "grammy";
 import { campusRadarTick } from "../services/campus-radar.js";
+import { dispatchMatches } from "../services/dispatch-queue.js";
 
 /**
  * Hourly sweep for the Bonus Campus Drop (PRODUCT_SPEC §Campus Radar).
@@ -12,7 +14,7 @@ import { campusRadarTick } from "../services/campus-radar.js";
  * is cheap when nothing is happening (two grouped counts) and everything it
  * could do is bounded by the cooldown anyway.
  */
-export async function campusDropTick(): Promise<void> {
+export async function campusDropTick(api: Api<RawApi>): Promise<void> {
   try {
     const result = await campusRadarTick();
     // Silent on the ordinary tick. A campus that earned a drop and was
@@ -21,6 +23,16 @@ export async function campusDropTick(): Promise<void> {
     if (result.dropped.length > 0) {
       console.log(
         `[campus-drop] done: campuses=${result.dropped.length} matches=${result.matchIds.length}`,
+      );
+    }
+    // The drop only CREATES `proposed` rows; nothing sent their pitches (B-15)
+    // until the stranded-proposal sweep found them half an hour later and
+    // resumed them as a dead dispatch. Hand them over now, as the scheduled
+    // batch does with its own.
+    if (result.matchIds.length > 0) {
+      const dispatch = await dispatchMatches(api, result.matchIds);
+      console.log(
+        `[campus-drop] dispatch: sent=${dispatch.dispatched} failed=${dispatch.failed}`,
       );
     }
   } catch (err) {

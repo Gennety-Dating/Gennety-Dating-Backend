@@ -129,15 +129,44 @@ export async function sendPushToUser(
     ...(payload.collapseId ? { collapseId: payload.collapseId } : {}),
   });
   if (tokenIsDead(result)) {
-    await prisma.user
-      .update({ where: { id: userId }, data: { pushToken: null } })
-      .catch(() => undefined);
+    await clearDeadPushToken(userId, user.pushToken);
     return false;
   }
   if (!result.ok) {
     console.warn(`[push] send failed for ${userId}: ${result.status} ${result.reason}`);
   }
   return result.ok;
+}
+
+/**
+ * Forget a token APNs called dead — but only if it is still the one on file
+ * (audit B-12). The send is a network round trip; when the app re-registers a
+ * fresh token meanwhile (reinstall, new device), clearing by `userId` alone
+ * erased the NEW token and the person silently stopped getting pushes until
+ * the app's next registration. The token in the `where` makes it a no-op then.
+ */
+export async function clearDeadPushToken(userId: string, deadToken: string): Promise<void> {
+  try {
+    await prisma.user.updateMany({
+      where: { id: userId, pushToken: deadToken },
+      data: { pushToken: null },
+    });
+  } catch (err) {
+    console.warn(`[push] could not clear a dead token for ${userId}:`, err);
+  }
+}
+
+/**
+ * Same rule for a Live Activity token row: re-registration rewrites the token
+ * on the same (user, type, kind) row, so deleting by id alone would drop the
+ * fresh token the client just sent.
+ */
+export async function clearDeadLiveActivityToken(rowId: string, deadToken: string): Promise<void> {
+  try {
+    await prisma.liveActivityToken.deleteMany({ where: { id: rowId, token: deadToken } });
+  } catch (err) {
+    console.warn(`[push] could not clear a dead live-activity token ${rowId}:`, err);
+  }
 }
 
 /**
@@ -220,7 +249,7 @@ export async function sendLiveActivityUpdateToUser(
     pushType: "liveactivity",
   });
   if (tokenIsDead(result)) {
-    await prisma.liveActivityToken.delete({ where: { id: row.id } }).catch(() => undefined);
+    await clearDeadLiveActivityToken(row.id, row.token);
     return false;
   }
   if (!result.ok) {
@@ -257,7 +286,7 @@ export async function sendLiveActivityStartToUser(
     pushType: "liveactivity",
   });
   if (tokenIsDead(result)) {
-    await prisma.liveActivityToken.delete({ where: { id: row.id } }).catch(() => undefined);
+    await clearDeadLiveActivityToken(row.id, row.token);
     return false;
   }
   if (!result.ok) {

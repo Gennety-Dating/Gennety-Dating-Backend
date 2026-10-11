@@ -3,10 +3,12 @@ import type { AppStoreTransaction } from "./appstore.js";
 
 const userFindFirst = vi.fn();
 const ledgerFindFirst = vi.fn();
+const ledgerFindUnique = vi.fn();
+const userUpdateMany = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
-    user: { findFirst: userFindFirst },
-    subscriptionLedger: { findFirst: ledgerFindFirst },
+    user: { findFirst: userFindFirst, updateMany: userUpdateMany },
+    subscriptionLedger: { findFirst: ledgerFindFirst, findUnique: ledgerFindUnique },
   },
 }));
 vi.mock("../config.js", () => ({
@@ -17,7 +19,12 @@ const revokePremium = vi.fn(async () => {});
 const recordPremiumLapse = vi.fn(async () => {});
 vi.mock("./premium.js", () => ({ activateOrExtendPremium, revokePremium, recordPremiumLapse }));
 
-const { applyAppStorePremium, handleAppStorePremiumNotification } = await import(
+const {
+  applyAppStorePremium,
+  handleAppStorePremiumNotification,
+  reportAppStorePremium,
+  syncAppStorePremiumAutoRenew,
+} = await import(
   "./appstore-premium.js"
 );
 
@@ -186,5 +193,77 @@ describe("handleAppStorePremiumNotification", () => {
     expect(revokePremium).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u1", externalPaymentId: "appstore:tx-1:refund" }),
     );
+  });
+});
+
+describe("reportAppStorePremium (client path ownership)", () => {
+  beforeEach(() => {
+    userFindFirst.mockResolvedValue(null);
+    ledgerFindUnique.mockResolvedValue(null);
+  });
+
+  it("applies a subscription nobody else holds", async () => {
+    const res = await reportAppStorePremium("u1", tx());
+    expect(res.status).toBe("activated");
+    // The anchor lookup excludes the caller, so their own renewals pass.
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { premiumExternalId: "orig-1", NOT: { id: "u1" } },
+      select: { id: true },
+    });
+  });
+
+  it("refuses a subscription already bound to another account", async () => {
+    userFindFirst.mockResolvedValue({ id: "u2" });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(reportAppStorePremium("u1", tx())).resolves.toEqual({
+      status: "invalid",
+      reason: "wrong_owner",
+    });
+    expect(activateOrExtendPremium).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("refuses a refunded charge another account was credited for — no days taken from the caller", async () => {
+    ledgerFindUnique.mockResolvedValue({ userId: "u2" });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await reportAppStorePremium("u1", tx({ revocationDate: Date.now() }));
+    expect(res).toEqual({ status: "invalid", reason: "wrong_owner" });
+    expect(revokePremium).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("refuses an appAccountToken naming another buyer", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await reportAppStorePremium(
+      "11111111-1111-4111-8111-111111111111",
+      tx({ appAccountToken: "22222222-2222-4222-8222-222222222222" }),
+    );
+    expect(res).toEqual({ status: "invalid", reason: "wrong_owner" });
+    expect(userFindFirst).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
+describe("syncAppStorePremiumAutoRenew", () => {
+  it("flips the owner's flag to Apple's verified status", async () => {
+    userUpdateMany.mockResolvedValue({ count: 1 });
+    await expect(syncAppStorePremiumAutoRenew(tx(), false)).resolves.toEqual({
+      status: "updated",
+    });
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { premiumExternalId: "orig-1", premiumAutoRenew: true },
+      data: { premiumAutoRenew: false },
+    });
+  });
+
+  it("tells unchanged from unknown owner", async () => {
+    userUpdateMany.mockResolvedValue({ count: 0 });
+    userFindFirst.mockResolvedValueOnce({ id: "u1" }).mockResolvedValueOnce(null);
+    await expect(syncAppStorePremiumAutoRenew(tx(), true)).resolves.toEqual({
+      status: "unchanged",
+    });
+    await expect(syncAppStorePremiumAutoRenew(tx(), true)).resolves.toEqual({
+      status: "unknown_owner",
+    });
   });
 });

@@ -57,8 +57,12 @@ export function ticketPhotoSignatureValid(
   if (!/^-?\d{1,20}$/.test(telegramId)) return false;
   if (!Number.isFinite(expiresAt) || now > expiresAt) return false;
   const expected = signature(telegramId, matchId, side, expiresAt);
-  if (given.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+  // Byte lengths, not string lengths: a non-ASCII signature with the right
+  // character count is longer in UTF-8, and `timingSafeEqual` throws on
+  // unequal buffers — a 500 instead of a refusal.
+  const givenBytes = Buffer.from(given);
+  const expectedBytes = Buffer.from(expected);
+  return givenBytes.length === expectedBytes.length && timingSafeEqual(givenBytes, expectedBytes);
 }
 
 /** Absolute URL an `<img>` can take as-is. */

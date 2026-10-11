@@ -22,7 +22,9 @@ vi.mock("../config.js", () => ({ env: envMock }));
 
 const getVerifiedTransaction = vi.fn();
 const ticketCountForProduct = vi.fn();
-vi.mock("./appstore.js", () => ({
+vi.mock("./appstore.js", async (importOriginal) => ({
+  boughtByAnotherUser: (await importOriginal<typeof import("./appstore.js")>()).boughtByAnotherUser,
+  appAccountTokenFor: (await importOriginal<typeof import("./appstore.js")>()).appAccountTokenFor,
   getVerifiedTransaction,
   ticketCountForProduct,
 }));
@@ -169,6 +171,37 @@ describe("refundAppStoreTransaction", () => {
     );
 
     expect(result).toMatchObject({ status: "credited" });
+  });
+
+  it("credits a purchase made under the buyer's derived appAccountToken (GET /v1/me)", async () => {
+    const buyer = "33333333-3333-4333-8333-333333333333";
+    const { appAccountTokenFor } = await import("./appstore.js");
+    getVerifiedTransaction.mockResolvedValue({
+      status: "ok",
+      transaction: { ...okTx, appAccountToken: appAccountTokenFor(buyer).toUpperCase() },
+    });
+    grantTickets.mockResolvedValue(3);
+
+    await expect(creditAppStoreTransaction(buyer, "tx-1")).resolves.toMatchObject({
+      status: "credited",
+    });
+  });
+
+  it("refuses another user's derived token", async () => {
+    const { appAccountTokenFor } = await import("./appstore.js");
+    getVerifiedTransaction.mockResolvedValue({
+      status: "ok",
+      transaction: {
+        ...okTx,
+        appAccountToken: appAccountTokenFor("44444444-4444-4444-8444-444444444444"),
+      },
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(
+      creditAppStoreTransaction("33333333-3333-4333-8333-333333333333", "tx-1"),
+    ).resolves.toEqual({ status: "invalid", reason: "wrong_owner" });
+    error.mockRestore();
   });
 
   it("still credits a build that predates the token", async () => {

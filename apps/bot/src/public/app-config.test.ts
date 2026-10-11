@@ -30,6 +30,12 @@ describe("GET /v1/app/config", () => {
     expect(new Date(res.body.serverNow).getTime()).not.toBeNaN();
   });
 
+  // C-23: the build floor the server enforces, null while the gate is off.
+  it("reports the build-number floor as null by default", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.minIosBuild).toBeNull();
+  });
+
   it("advertises the launched markets so the client can gate the city step", async () => {
     const res = await request(buildApp()).get("/v1/app/config");
     expect(res.body.supportedCities).toEqual([
@@ -48,6 +54,7 @@ describe("GET /v1/app/config", () => {
     expect(Object.keys(res.body).sort()).toEqual([
       "cityCatalog",
       "features",
+      "minIosBuild",
       "minSupportedIosVersion",
       "primeTimeProduct",
       "serverNow",

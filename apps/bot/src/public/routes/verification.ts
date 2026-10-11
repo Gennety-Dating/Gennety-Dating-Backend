@@ -7,6 +7,7 @@ import {
   completeLivenessCheck,
 } from "../../services/liveness-flow.js";
 import { getBotApi } from "../server.js";
+import { selfieLimiter } from "../rate-limit.js";
 import { LEGAL_DOCS_VERSION, MIN_PHOTOS, t } from "@gennety/shared";
 
 /**
@@ -62,6 +63,8 @@ verificationRouter.post(
 verificationRouter.get(
   "/native-init",
   initLimiter,
+  // The daily cap on paid AWS sessions (B-10); `initLimiter` only bounds a burst.
+  selfieLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const begun = await beginLivenessCheck(req.userId!);
     if (!begun.ok) {

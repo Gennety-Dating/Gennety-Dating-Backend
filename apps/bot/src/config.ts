@@ -104,6 +104,12 @@ export const env = {
   /// Empty (default) → no forced update. Set e.g. "1.2.0" only when an old
   /// build must be retired (broken contract, security issue).
   IOS_MIN_SUPPORTED_APP_VERSION: process.env.IOS_MIN_SUPPORTED_APP_VERSION ?? "",
+  /// Server-enforced twin of the switch above, by build number (audit C-23).
+  /// The iOS client sends `X-Gennety-Build: <CFBundleVersion>` on every call;
+  /// a value below this floor answers 426 `{ error: "update_required" }` on
+  /// `/v1/*`. 0 (default) → off. A request without the header always passes —
+  /// builds that predate it cannot be told apart.
+  MIN_IOS_BUILD: Math.max(0, Math.floor(Number(process.env.MIN_IOS_BUILD ?? "0")) || 0),
   /// Registration v2: mandatory liveness. On → the verification CTA
   /// carries no Skip button and the legacy soft-skip callbacks refuse with a
   /// "verification is required" notice, so activation happens ONLY through the
@@ -214,6 +220,10 @@ export const env = {
 
   // ── Public `/v1/*` API for the mobile app ─────────────────────
   JWT_SECRET: process.env.JWT_SECRET ?? "",
+  /// Key for the per-user StoreKit `appAccountToken` (`services/appstore.ts`).
+  /// Empty → falls back to JWT_SECRET. Must never change once set: every
+  /// token derived from it is baked into purchases Apple keeps forever.
+  APP_ACCOUNT_TOKEN_SECRET: process.env.APP_ACCOUNT_TOKEN_SECRET ?? "",
   JWT_ACCESS_TTL: process.env.JWT_ACCESS_TTL ?? "15m",
   JWT_REFRESH_TTL: process.env.JWT_REFRESH_TTL ?? "30d",
   PUBLIC_PORT: Number(process.env.PUBLIC_PORT ?? "3101"),

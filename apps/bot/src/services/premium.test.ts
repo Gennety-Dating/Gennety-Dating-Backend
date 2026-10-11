@@ -46,6 +46,7 @@ const {
   hasLiveRecurringPremium,
   shouldDeclineRecurringCheckout,
   addMonths,
+  serializePremiumSummary,
 } = await import("./premium.js");
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -88,6 +89,25 @@ describe("isPremiumHeadActive", () => {
     expect(isPremiumHeadActive({ premiumUntil: new Date("2026-07-01") }, NOW)).toBe(false);
     expect(isPremiumHeadActive({ premiumUntil: null }, NOW)).toBe(false);
     expect(isPremiumHeadActive(null, NOW)).toBe(false);
+  });
+});
+
+describe("serializePremiumSummary (GET /v1/me premium)", () => {
+  it("reports the recurring rail, a grant, or nothing", () => {
+    expect(
+      serializePremiumSummary({ premiumUntil: FUTURE, premiumProvider: "app_store" }, NOW),
+    ).toEqual({ active: true, expiresAt: FUTURE.toISOString(), source: "app_store" });
+    // A referral/promo comp or a package never sets the provider.
+    expect(serializePremiumSummary({ premiumUntil: FUTURE, premiumProvider: null }, NOW)).toEqual({
+      active: true,
+      expiresAt: FUTURE.toISOString(),
+      source: "grant",
+    });
+    expect(serializePremiumSummary({ premiumUntil: null, premiumProvider: null }, NOW)).toEqual({
+      active: false,
+      expiresAt: null,
+      source: "none",
+    });
   });
 });
 

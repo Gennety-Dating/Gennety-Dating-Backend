@@ -76,7 +76,10 @@ export function createNativeTicketGateRouter(api: Api<RawApi>): Router {
     }
     const scope = parseScope(req.body);
     if (!scope) {
-      res.status(400).json({ error: "scope must be 'self', 'both' or 'partner'" });
+      res.status(400).json({
+        error: "scope must be 'self', 'both' or 'partner'",
+        code: "ticket_gate_invalid_scope",
+      });
       return;
     }
     const telegramId = await telegramIdOf(req.userId!);
@@ -95,7 +98,15 @@ export function createNativeTicketGateRouter(api: Api<RawApi>): Router {
             : result.reason === "insufficient-balance"
               ? 409
               : 400;
-      res.status(status).json({ error: result.reason });
+      // The two 400s get their own `code` (C-20) so a client can tell a stale
+      // gate from a scope it may not use; `error` keeps the reason as before.
+      const code =
+        result.reason === "wrong-state"
+          ? "ticket_gate_wrong_state"
+          : result.reason === "scope-not-allowed"
+            ? "ticket_gate_scope_not_allowed"
+            : undefined;
+      res.status(status).json(code ? { error: result.reason, code } : { error: result.reason });
       return;
     }
     res.json(await nativeState(result.state, req.userId!, matchId));

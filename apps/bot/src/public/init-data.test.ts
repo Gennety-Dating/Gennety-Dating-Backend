@@ -185,6 +185,16 @@ describe("validateInitData", () => {
     expect(result).toEqual({ valid: false, reason: "bad-hash" });
   });
 
+  it("rejects a non-ASCII hash of the right character count instead of throwing", () => {
+    // 64 characters, 128 UTF-8 bytes: `timingSafeEqual` used to throw → 500.
+    const params = new URLSearchParams(buildInitData());
+    params.set("hash", "é".repeat(64));
+    expect(validateInitData(params.toString(), BOT_TOKEN)).toEqual({
+      valid: false,
+      reason: "bad-hash",
+    });
+  });
+
   it("uses the injected `now` so freshness checks are deterministic", () => {
     const authDate = 1_700_000_000;
     const initData = buildInitData({ authDate });

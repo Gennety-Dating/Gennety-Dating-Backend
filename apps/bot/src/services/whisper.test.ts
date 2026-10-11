@@ -9,7 +9,7 @@ vi.mock("../config.js", () => ({
   },
 }));
 
-import { transcribeVoice, WHISPER_MAX_BYTES } from "./whisper.js";
+import { transcribeVoice, transcribeVoiceResult, WHISPER_MAX_BYTES } from "./whisper.js";
 
 function okJson(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -141,6 +141,60 @@ describe("transcribeVoice", () => {
   });
 });
 
+/**
+ * Audit C-06: an outage and a bad recording are different answers to the
+ * app — 503 keeps the note for a retry, 422 drops it.
+ */
+describe("transcribeVoiceResult", () => {
+  const buffer = Buffer.from("fake-ogg-bytes");
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("silence is ok with empty text", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okJson({ text: "  " }));
+    expect(await transcribeVoiceResult(buffer, { fetchFn })).toEqual({ ok: true, text: "" });
+  });
+
+  it.each([500, 502, 503, 429, 401, 403, 408])("OpenAI %i is unavailable", async (status) => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("x", { status }));
+    expect(await transcribeVoiceResult(buffer, { fetchFn })).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+  });
+
+  it("a network error or timeout is unavailable", async () => {
+    const fetchFn = vi.fn().mockRejectedValue(new Error("network down"));
+    expect(await transcribeVoiceResult(buffer, { fetchFn })).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+  });
+
+  it.each([400, 413, 415])("OpenAI %i about the file is unusable", async (status) => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("x", { status }));
+    expect(await transcribeVoiceResult(buffer, { fetchFn })).toEqual({
+      ok: false,
+      reason: "unusable",
+    });
+  });
+
+  it("an empty buffer or an unknown container is unusable, without calling OpenAI", async () => {
+    const fetchFn = vi.fn();
+    expect(await transcribeVoiceResult(Buffer.alloc(0), { fetchFn })).toEqual({
+      ok: false,
+      reason: "unusable",
+    });
+    expect(
+      await transcribeVoiceResult(buffer, { fetchFn, mime: "application/octet-stream" }),
+    ).toEqual({ ok: false, reason: "unusable" });
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
 describe("transcribeVoice with no API key", () => {
   it("short-circuits to empty string", async () => {
     vi.resetModules();
@@ -151,6 +205,16 @@ describe("transcribeVoice with no API key", () => {
     const fetchFn = vi.fn();
     expect(await fn(Buffer.from("x"), { fetchFn })).toBe("");
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("is an outage, not a bad recording (audit C-06)", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({
+      env: { OPENAI_API_KEY: "" },
+    }));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { transcribeVoiceResult: fn } = await import("./whisper.js");
+    expect(await fn(Buffer.from("x"))).toEqual({ ok: false, reason: "unavailable" });
   });
 
 });

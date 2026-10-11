@@ -326,6 +326,31 @@ function scopedSelectionError(error: string | null, side: VenueIntentSide): stri
   return !affected || affected.includes(side) ? error : null;
 }
 
+const ORIGIN_ADDRESS_MAX_CHARS = 256;
+// C0/C1 controls, line/paragraph separators, and bidi embeddings/overrides/
+// isolates — none belongs in a street address, and each can reshape the text
+// it is later echoed into (a Telegram card, the partner's screen, a log line).
+const ORIGIN_ADDRESS_UNSAFE = /[\p{Cc}\p{Zl}\p{Zp}‪-‮⁦-⁩]/gu;
+
+/**
+ * The client-supplied departure address, made safe to store and echo (audit
+ * B-20): a string or nothing, unsafe characters replaced by spaces, whitespace
+ * collapsed, capped at 256 characters. The address is display-only — the pin's
+ * coordinates are what selection uses — so a value that cleans to empty is
+ * simply absent. Both entry points (Mini App and native) pass the raw body
+ * through, so this is the one place it can be enforced for both.
+ */
+export function sanitizeOriginAddress(address: unknown): string | null {
+  if (typeof address !== "string") return null;
+  const clean = address
+    .replace(ORIGIN_ADDRESS_UNSAFE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // By code point, so the cap never splits an emoji's surrogate pair.
+  const capped = Array.from(clean).slice(0, ORIGIN_ADDRESS_MAX_CHARS).join("").trim();
+  return capped.length > 0 ? capped : null;
+}
+
 export async function interpretVenueIntent(
   matchId: string,
   userId: string,
@@ -369,7 +394,7 @@ export async function interpretVenueIntent(
     parserVersion: VENUE_INTENT_PARSER_VERSION,
     state: "draft",
     origin: origin && Number.isFinite(origin.lat) && Number.isFinite(origin.lng)
-      ? { lat: origin.lat, lng: origin.lng, address: origin.address?.slice(0, 256) ?? null }
+      ? { lat: origin.lat, lng: origin.lng, address: sanitizeOriginAddress(origin.address) }
       : null,
     interpretedAt: now,
     confirmedAt: null,
@@ -452,13 +477,14 @@ export async function confirmVenueIntent(
   // bypassable by a stale bundle or a hand-rolled request.
   const gate = await assertDepartureOrigin(userId, origin.lat, origin.lng);
   if (!gate.ok) return venueOriginRefusal(gate.market);
+  const address = sanitizeOriginAddress(origin.address);
   const confirmed = normalizeVenueIntent({
     ...draft,
     experiences: input.experiences,
     ambiences: input.ambiences,
     formats: input.formats,
     hardConstraints: applyInitialVenueConstraintPolicy(input.hardConstraints),
-    origin: { lat: origin.lat, lng: origin.lng, address: origin.address?.slice(0, 256) ?? null },
+    origin: { lat: origin.lat, lng: origin.lng, address },
     state: "confirmed",
     confirmedAt: new Date().toISOString(),
     manualConfirmationRequired: false,
@@ -469,12 +495,12 @@ export async function confirmVenueIntent(
     data: own.side === "A"
       ? {
           venueIntentA: asJson(confirmed), vibeTextA: confirmed.rawText,
-          vibeLatA: origin.lat, vibeLngA: origin.lng, vibeAddressA: origin.address,
+          vibeLatA: origin.lat, vibeLngA: origin.lng, vibeAddressA: address,
           parsedCategoryA: legacyCategory,
         }
       : {
           venueIntentB: asJson(confirmed), vibeTextB: confirmed.rawText,
-          vibeLatB: origin.lat, vibeLngB: origin.lng, vibeAddressB: origin.address,
+          vibeLatB: origin.lat, vibeLngB: origin.lng, vibeAddressB: address,
           parsedCategoryB: legacyCategory,
         },
   });

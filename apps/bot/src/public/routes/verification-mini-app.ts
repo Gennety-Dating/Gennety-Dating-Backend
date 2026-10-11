@@ -9,7 +9,7 @@ import { validateInitData } from "../init-data.js";
 // inside the factory): express-rate-limit rejects limiters constructed inside
 // request handlers (ERR_ERL_CREATED_IN_REQUEST_HANDLER), and server.ts
 // lazy-instantiates this router on first request.
-import { verificationInitLimiter } from "../rate-limit.js";
+import { selfieLimiter, verificationInitLimiter } from "../rate-limit.js";
 import {
   beginLivenessCheck,
   completeLivenessCheck,
@@ -55,6 +55,8 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
   router.get(
     "/init",
     verificationInitLimiter,
+    // The daily cap on paid AWS sessions (B-10); the line above bounds a burst.
+    selfieLimiter,
     async (req: Request, res: Response): Promise<void> => {
       const auth = authenticate(req);
       if (!auth.ok) {

@@ -33,8 +33,17 @@ function isPendingAccountActionCallback(data: string | undefined): boolean {
   );
 }
 
+/** Per-request Bot API ceiling; > the 30 s getUpdates long poll. */
+export const BOT_API_TIMEOUT_SECONDS = 60;
+
 export function createBot(token: string): Bot<BotContext> {
-  const bot = new Bot<BotContext>(token);
+  // grammY's default request timeout is 500 s, so one hung Bot API call held
+  // its handler (and the chat's queue) for over eight minutes (audit B-13). The
+  // ceiling must stay above the long-poll window: `bot.start` sends getUpdates
+  // with `timeout: 30` and this client timeout covers that call too.
+  const bot = new Bot<BotContext>(token, {
+    client: { timeoutSeconds: BOT_API_TIMEOUT_SECONDS },
+  });
 
   // Bot API limits — rate throttling and 429 replay. See api-limits.ts.
   //

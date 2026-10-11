@@ -49,8 +49,14 @@ export const ANNOUNCEMENT_PUSH_TYPE = "announcement";
 /** Page size bounds for `GET /v1/inbox`. */
 export const INBOX_PAGE_DEFAULT = 30;
 export const INBOX_PAGE_MAX = 100;
-/** How many ids one `POST /v1/inbox/read` may carry. */
+/** How many ids one `UPDATE` of `POST /v1/inbox/read` carries; longer lists are chunked. */
 export const INBOX_READ_BATCH_MAX = 200;
+/**
+ * How many ids one `POST /v1/inbox/read` may carry. The bell's "mark all read"
+ * sends every unread id it holds, so the cap is a sanity bound on the body,
+ * well above what 90 days of retention can hold for one person — not a page.
+ */
+export const INBOX_READ_REQUEST_MAX = 5000;
 /** Inbox rows are swept after this long by the retention worker. */
 export const INBOX_RETENTION_DAYS = 90;
 

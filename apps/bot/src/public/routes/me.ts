@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer, { MulterError } from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { Prisma, prisma } from "@gennety/db";
 import {
   MIN_PHOTOS,
@@ -78,6 +79,8 @@ import {
 } from "../../services/referral.js";
 import { claimDeferredPromoForUser, grantPromoRewardsForUser } from "../../services/promo.js";
 import { fingerprint, matchAttribution } from "../../services/promo-attribution.js";
+import { appAccountTokenFor } from "../../services/appstore.js";
+import { serializePremiumSummary } from "../../services/premium.js";
 
 export const meRouter: Router = Router();
 
@@ -98,7 +101,16 @@ meRouter.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 
   res.json({
-    user: serializeUser(user),
+    user: {
+      ...serializeUser(user),
+      // Additive and optional for clients (old builds ignore both):
+      // - the UUID the app passes to StoreKit as `appAccountToken`, so each App
+      //   Store report can be checked against who actually bought it;
+      // - Premium as the server holds it, whichever rail granted it — the
+      //   app's own StoreKit view only ever knows the App Store one.
+      appAccountToken: appAccountTokenFor(user.id),
+      premium: serializePremiumSummary(user),
+    },
     profile: user.profile ? serializeProfile(user.profile) : null,
   });
 });
@@ -649,7 +661,7 @@ const PHOTO_SIGNED_URL_TTL_S = 600; // 10 minutes — matches the spec.
 
 const photoUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: PHOTO_MAX_BYTES },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: PHOTO_MAX_BYTES, files: 1 },
 });
 
 function photoUploadWithErrorHandling(

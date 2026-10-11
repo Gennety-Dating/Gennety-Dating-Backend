@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 import {
   APPSTORE_SANDBOX_NOTE,
+  boughtByAnotherUser,
   isPremiumProduct,
   type AppStoreTransaction,
 } from "./appstore.js";
@@ -31,6 +32,11 @@ export type AppStorePremiumResult =
   | { status: "already_processed" }
   | { status: "revoked" }
   | { status: "invalid"; reason: "wrong_bundle" | "not_premium" | "no_expiry" | "unknown_owner" };
+
+/** The client report path can also refuse a subscription bound to someone else. */
+export type AppStorePremiumReportResult =
+  | AppStorePremiumResult
+  | { status: "invalid"; reason: "wrong_owner" };
 
 /**
  * A notification can also report a plain lapse, which the client purchase path
@@ -99,6 +105,51 @@ export async function applyAppStorePremium(
   return result.applied
     ? { status: "activated", premiumUntil: result.premiumUntil?.toISOString() ?? null }
     : { status: "already_processed" };
+}
+
+/**
+ * The client report path (`POST /v1/premium/appstore/transaction`): whose
+ * subscription is this, before anything is applied.
+ *
+ * Nothing used to ask. Any signed-in account that re-sent a subscriber's JWS
+ * got Premium from it — and on a refunded one, had days taken from itself for a
+ * purchase it never made. Two answers say the transaction is someone else's:
+ * the `appAccountToken` Apple echoes back names another buyer, or the
+ * subscription (its stable `originalTransactionId`, or this very charge) is
+ * already bound to another account. The first account to report a subscription
+ * keeps it; the webhook, which finds the owner by that binding, agrees.
+ */
+export async function reportAppStorePremium(
+  userId: string,
+  tx: AppStoreTransaction,
+): Promise<AppStorePremiumReportResult> {
+  if (boughtByAnotherUser(tx, userId)) {
+    console.error(
+      `[appstore-premium] transaction ${tx.transactionId} was bought by ` +
+        `${tx.appAccountToken} but claimed by ${userId}`,
+    );
+    return { status: "invalid", reason: "wrong_owner" };
+  }
+  const [boundOwner, charge] = await Promise.all([
+    prisma.user.findFirst({
+      where: { premiumExternalId: anchorOf(tx), NOT: { id: userId } },
+      select: { id: true },
+    }),
+    prisma.subscriptionLedger.findUnique({
+      where: { externalPaymentId: `appstore:${tx.transactionId}` },
+      select: { userId: true },
+    }),
+  ]);
+  const otherOwner =
+    boundOwner?.id ?? (charge?.userId && charge.userId !== userId ? charge.userId : null);
+  if (otherOwner) {
+    console.error(
+      `[appstore-premium] subscription ${anchorOf(tx)} belongs to ${otherOwner} ` +
+        `but was reported by ${userId}`,
+    );
+    return { status: "invalid", reason: "wrong_owner" };
+  }
+  return applyAppStorePremium(userId, tx);
 }
 
 /**
@@ -174,6 +225,35 @@ export async function handleAppStorePremiumNotification(
     return { status: "lapsed" };
   }
   return applyAppStorePremium(owner.id, tx);
+}
+
+/**
+ * `DID_CHANGE_RENEWAL_STATUS`: mirror Apple's verified `autoRenewStatus` onto
+ * `premiumAutoRenew` for the subscription's owner. Dates are untouched — a
+ * subscriber who turns renewal off keeps what they paid for — but the head
+ * stops claiming it renews, which the cancel flow, the recurring-checkout guard
+ * and the expiry reminders all read. Before this the flag only moved at the
+ * eventual `EXPIRED`, so for the rest of the period the server believed in a
+ * renewal the user had already cancelled.
+ *
+ * Scoped to the owner whose recurring anchor is THIS subscription, so a stale
+ * notification cannot flip a head that has since moved to another one.
+ */
+export async function syncAppStorePremiumAutoRenew(
+  tx: AppStoreTransaction,
+  autoRenew: boolean,
+): Promise<{ status: "updated" | "unchanged" | "unknown_owner" }> {
+  if (!isPremiumProduct(tx.productId)) return { status: "unknown_owner" };
+  const moved = await prisma.user.updateMany({
+    where: { premiumExternalId: anchorOf(tx), premiumAutoRenew: !autoRenew },
+    data: { premiumAutoRenew: autoRenew },
+  });
+  if (moved.count > 0) return { status: "updated" };
+  const owner = await prisma.user.findFirst({
+    where: { premiumExternalId: anchorOf(tx) },
+    select: { id: true },
+  });
+  return { status: owner ? "unchanged" : "unknown_owner" };
 }
 
 /** Notification types that (re)grant/extend the entitlement. */

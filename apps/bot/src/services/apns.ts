@@ -344,6 +344,53 @@ export function buildLiveActivityStartPayload(
   };
 }
 
+/**
+ * One HTTP/2 connection per APNs host, reused across pushes (audit B-14).
+ *
+ * Apple asks providers to keep connections open rather than reconnect per
+ * notification, and a fresh TLS + HTTP/2 handshake per push was the bulk of
+ * each send's latency — an announcement fan-out opened one per recipient. A
+ * session leaves the pool the moment it closes, errors, or receives a GOAWAY,
+ * and the next push dials a new one. `unref` so an idle pooled connection never
+ * holds a shutting-down process open; the idle timeout ends a quiet connection
+ * on our side rather than waiting for Apple to.
+ */
+const APNS_SESSION_IDLE_MS = 10 * 60_000;
+const apnsSessions = new Map<string, http2.ClientHttp2Session>();
+
+type Http2Connect = (host: string) => http2.ClientHttp2Session;
+const defaultConnect: Http2Connect = (host) => http2.connect(host);
+let connectApns: Http2Connect = defaultConnect;
+
+export function getApnsSession(host: string): http2.ClientHttp2Session {
+  const pooled = apnsSessions.get(host);
+  if (pooled && !pooled.closed && !pooled.destroyed) return pooled;
+
+  const session = connectApns(host);
+  apnsSessions.set(host, session);
+  const evict = (): void => {
+    if (apnsSessions.get(host) === session) apnsSessions.delete(host);
+  };
+  session.on("close", evict);
+  session.on("goaway", evict);
+  // Also what keeps a connection-level failure from being an uncaught 'error'
+  // event; the in-flight stream reports its own failure to its caller.
+  session.on("error", (err: unknown) => {
+    evict();
+    console.warn("[apns] session error:", err);
+  });
+  session.setTimeout(APNS_SESSION_IDLE_MS, () => session.close());
+  session.unref();
+  return session;
+}
+
+/** Test seam: dial through `fake` (null → the real `http2.connect`) on an empty pool. */
+export function __setApnsConnectForTests(fake: Http2Connect | null): void {
+  for (const session of apnsSessions.values()) session.destroy();
+  apnsSessions.clear();
+  connectApns = fake ?? defaultConnect;
+}
+
 function http2Post(
   host: string,
   path: string,
@@ -351,16 +398,20 @@ function http2Post(
   body: Record<string, unknown>,
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const session = http2.connect(host);
-    const timer = setTimeout(() => {
-      session.destroy();
-      reject(new Error("APNs request timed out"));
-    }, APNS_TIMEOUT_MS);
-
-    session.on("error", (err) => {
+    const session = getApnsSession(host);
+    let settled = false;
+    const fail = (err: Error): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(err);
-    });
+    };
+    const timer = setTimeout(() => {
+      // A connection that cannot answer within the timeout is not one to keep
+      // reusing: destroying it evicts it from the pool and fails this request.
+      session.destroy();
+      fail(new Error("APNs request timed out"));
+    }, APNS_TIMEOUT_MS);
 
     const req = session.request({
       ":method": "POST",
@@ -379,15 +430,15 @@ function http2Post(
       data += chunk;
     });
     req.on("end", () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      session.close();
       resolve({ status, body: data });
     });
-    req.on("error", (err) => {
-      clearTimeout(timer);
-      session.destroy();
-      reject(err);
-    });
+    req.on("error", (err) => fail(err));
+    // A stream torn down with its session (GOAWAY, reset) may close without
+    // `end` or `error`; never leave the caller waiting on the timer.
+    req.on("close", () => fail(new Error("APNs stream closed before a response")));
     req.end(JSON.stringify(body));
   });
 }

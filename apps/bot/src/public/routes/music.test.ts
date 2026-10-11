@@ -11,7 +11,9 @@ const env = { PROFILE_MUSIC_ENABLED: true, JWT_SECRET, BOT_TOKEN: "123456:test-b
 vi.mock("../../config.js", () => ({ env }));
 
 const h = vi.hoisted(() => ({ list: vi.fn(), set: vi.fn(), search: vi.fn() }));
-vi.mock("../../services/music/profile-music.js", () => ({
+vi.mock("../../services/music/profile-music.js", async (importOriginal) => ({
+  musicSaveInput: (await importOriginal<typeof import("../../services/music/profile-music.js")>())
+    .musicSaveInput,
   listProfileMusic: h.list,
   setProfileMusic: h.set,
 }));
@@ -101,6 +103,15 @@ describe("GET/PUT /v1/me/music", () => {
     expect(h.set).toHaveBeenCalledWith(USER_ID, refs);
   });
 
+  it("still saves the pre-2026-10-08 `{ trackIds }` body as Spotify refs (K-01)", async () => {
+    const res = await request(buildApp())
+      .put("/v1/me/music")
+      .set(auth())
+      .send({ trackIds: [TRACK_ID] });
+    expect(res.status).toBe(200);
+    expect(h.set).toHaveBeenCalledWith(USER_ID, [{ provider: "spotify", trackId: TRACK_ID }]);
+  });
+
   it.each([
     ["invalid_tracks", 400],
     ["too_many_tracks", 400],
@@ -133,7 +144,10 @@ describe("GET /v1/music/search", () => {
   it("returns Spotify's matches", async () => {
     const res = await request(buildApp()).get("/v1/music/search?q=%20rick%20").set(auth());
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ tracks: [TRACK] });
+    // Legacy names ride along for pre-2026-10-08 builds (audit K-01).
+    expect(res.body).toEqual({
+      tracks: [{ ...TRACK, spotifyTrackId: TRACK.trackId, spotifyUrl: TRACK.url }],
+    });
     expect(h.search).toHaveBeenCalledWith("rick");
   });
 

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const userFindUnique = vi.fn();
-const userUpdate = vi.fn();
+const userUpdateMany = vi.fn();
 const laFindUnique = vi.fn();
-const laDelete = vi.fn();
+const laDeleteMany = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    user: { findUnique: userFindUnique, update: userUpdate },
-    liveActivityToken: { findUnique: laFindUnique, delete: laDelete },
+    user: { findUnique: userFindUnique, updateMany: userUpdateMany },
+    liveActivityToken: { findUnique: laFindUnique, deleteMany: laDeleteMany },
   },
 }));
 
@@ -34,9 +34,9 @@ const { sendPushToUser, sendLiveActivityStartToUser, sendLiveActivityUpdateToUse
 
 beforeEach(() => {
   userFindUnique.mockReset();
-  userUpdate.mockReset().mockResolvedValue({});
+  userUpdateMany.mockReset().mockResolvedValue({ count: 1 });
   laFindUnique.mockReset();
-  laDelete.mockReset().mockResolvedValue({});
+  laDeleteMany.mockReset().mockResolvedValue({ count: 1 });
   apnsConfigured.mockReset().mockReturnValue(true);
   sendApnsNotification.mockReset();
   recordTransactionalInboxItem.mockReset().mockResolvedValue("inbox-1");
@@ -165,8 +165,10 @@ describe("sendPushToUser", () => {
     sendApnsNotification.mockResolvedValue({ ok: false, status: 410, reason: "Unregistered" });
 
     await expect(sendPushToUser("u1", { title: "T", body: "B" })).resolves.toBe(false);
-    expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: "u1" },
+    // Only while "stale" is still the token on file (B-12): a token the app
+    // re-registered during the send must survive.
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "u1", pushToken: "stale" },
       data: { pushToken: null },
     });
   });
@@ -176,7 +178,7 @@ describe("sendPushToUser", () => {
     sendApnsNotification.mockResolvedValue({ ok: false, status: 500, reason: "InternalServerError" });
 
     await expect(sendPushToUser("u1", { title: "T", body: "B" })).resolves.toBe(false);
-    expect(userUpdate).not.toHaveBeenCalled();
+    expect(userUpdateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -231,7 +233,8 @@ describe("sendLiveActivityUpdateToUser", () => {
         contentState: {},
       }),
     ).resolves.toBe(false);
-    expect(laDelete).toHaveBeenCalledWith({ where: { id: "row-2" } });
+    // Scoped to the dead token: a re-registration rewrites the same row (B-12).
+    expect(laDeleteMany).toHaveBeenCalledWith({ where: { id: "row-2", token: "gone" } });
   });
 
   it("with a scope, pushes only into the token of THIS match's current card", async () => {

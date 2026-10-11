@@ -2,7 +2,11 @@ import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
-import { getVerifiedTransaction, type AppStoreTransaction } from "./appstore.js";
+import {
+  boughtByAnotherUser,
+  getVerifiedTransaction,
+  type AppStoreTransaction,
+} from "./appstore.js";
 import {
   notifyFounderAppStoreUnclaimed,
   notifyFounderPurchase,
@@ -136,7 +140,7 @@ export async function purchasePrimeTimePass(
   // Verified when present rather than required, as on every other till: the
   // native client does not set `appAccountToken` today, and a purchase without
   // it must not be refused.
-  if (tx.appAccountToken !== null && tx.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+  if (boughtByAnotherUser(tx, userId)) {
     console.error(
       `[prime-time] transaction ${tx.transactionId} was bought by ` +
         `${tx.appAccountToken} but claimed by ${userId}`,

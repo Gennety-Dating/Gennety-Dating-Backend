@@ -183,6 +183,26 @@ export async function getPremiumState(
   };
 }
 
+/**
+ * `premium` on `GET /v1/me` — server truth whichever rail granted it.
+ * `source` is the recurring subscription's rail (`app_store`,
+ * `telegram_stars`, …) when there is one; a period only comps or a package
+ * bought is `grant`; nothing at all is `none`. Packages and comps leave
+ * `premiumProvider` alone (`extendPremiumAdditive`), so a subscriber's source
+ * stays their subscription's.
+ */
+export function serializePremiumSummary(
+  head: { premiumUntil: Date | null; premiumProvider: string | null },
+  now: Date = new Date(),
+): { active: boolean; expiresAt: string | null; source: string } {
+  const active = isPremiumHeadActive(head, now);
+  return {
+    active,
+    expiresAt: head.premiumUntil ? head.premiumUntil.toISOString() : null,
+    source: head.premiumProvider ?? (active ? "grant" : "none"),
+  };
+}
+
 export interface ActivatePremiumInput {
   userId: string;
   provider: PremiumProvider;

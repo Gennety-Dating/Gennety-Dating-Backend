@@ -1,5 +1,6 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
+import { KeyedLock } from "../utils/keyed-lock.js";
 import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
@@ -1608,10 +1609,30 @@ export function typeRadarGatePending(
   return radarBandLive(ageBandFor(user.age));
 }
 
-export async function runAgentTurn(
+/**
+ * One onboarding turn per person at a time (audit B-06). A turn reads the
+ * history and the collector's progress, waits seconds on the model, and
+ * writes both back; a second turn running alongside — a double send, the app
+ * and Telegram together, a read that opens the chat while an answer is in
+ * flight — interleaved with it and one of them lost its write. Turns for the
+ * same person now queue; different people never wait on each other.
+ */
+const onboardingTurns = new KeyedLock();
+
+export function runAgentTurn(
   telegramId: bigint,
   input: string | OnboardingInput,
   deps: AgentDeps = {},
+): Promise<AgentTurnResult> {
+  return onboardingTurns.run(String(telegramId), () =>
+    runAgentTurnUnqueued(telegramId, input, deps),
+  );
+}
+
+async function runAgentTurnUnqueued(
+  telegramId: bigint,
+  input: string | OnboardingInput,
+  deps: AgentDeps,
 ): Promise<AgentTurnResult> {
   const onboardingInput = normalizedOnboardingInput(input);
   const userMessage =

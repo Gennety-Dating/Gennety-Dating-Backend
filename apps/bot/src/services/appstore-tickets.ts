@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import {
+  boughtByAnotherUser,
   getVerifiedTransaction,
   ticketCountForProduct,
   type AppStoreTransaction,
@@ -76,10 +77,7 @@ export async function creditAppStoreTransaction(
   // present is visible in the logs rather than guessed at.
   // Both sides folded here rather than trusting the decoder alone: this type is
   // also built by the webhook path, and a UUID's case carries no meaning.
-  if (
-    tx.appAccountToken !== null &&
-    tx.appAccountToken.toLowerCase() !== userId.toLowerCase()
-  ) {
+  if (boughtByAnotherUser(tx, userId)) {
     console.error(
       `[appstore] transaction ${tx.transactionId} was bought by ` +
         `${tx.appAccountToken} but claimed by ${userId}`,

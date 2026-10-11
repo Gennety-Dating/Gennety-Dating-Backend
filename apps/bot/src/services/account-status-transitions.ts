@@ -1,5 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma, type UserStatus } from "@gennety/db";
+import { MIN_PHOTOS } from "@gennety/shared";
 import {
   claimInFlightMatchCancellations,
   deliverCancelledPartnerEffects,
@@ -34,6 +35,12 @@ export type StatusTransitionResult =
       kind: "forbidden";
       status: UserStatus;
       user: TransitionedAccount;
+      /**
+       * Set when the status allows the transition but the profile does not:
+       * `resume` below `MIN_PHOTOS` (C-13). Absent on a plain wrong-state
+       * refusal, so existing callers keep treating both alike.
+       */
+      reason?: "photos_below_minimum";
     }
   | { kind: "not_found" };
 
@@ -101,6 +108,19 @@ export async function transitionAccountStatus(
   if (!user) return { kind: "not_found" };
   if (user.status !== rule.from) return classifyTransition(user, action);
 
+  // C-13: resuming puts the profile back in the matching pool, and the matcher
+  // has no photo-count filter of its own — the floor is held at every other
+  // door into `active` (photo delete, verification activation), so it is held
+  // here too. The user stays paused until they add photos.
+  if (action === "resume" && (await photoCountOf(db, user.id)) < MIN_PHOTOS) {
+    return {
+      kind: "forbidden",
+      status: user.status,
+      user: asAccount(user),
+      reason: "photos_below_minimum",
+    };
+  }
+
   const changed = await db.user.updateMany({
     where: { id: user.id, status: rule.from },
     data: { status: rule.to },
@@ -144,6 +164,14 @@ export async function transitionAccountStatus(
   });
   if (!current) return { kind: "not_found" };
   return classifyTransition(current, action);
+}
+
+async function photoCountOf(db: TransitionDb, userId: string): Promise<number> {
+  const row = await db.user.findUnique({
+    where: { id: userId },
+    select: { profile: { select: { photos: true } } },
+  });
+  return row?.profile?.photos.length ?? 0;
 }
 
 function classifyFreeze(

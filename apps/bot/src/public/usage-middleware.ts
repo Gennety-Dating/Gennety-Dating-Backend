@@ -4,9 +4,11 @@ import { runWithUsage, userUsageKey } from "../services/usage-context.js";
 import { usageLimiter } from "../services/usage-limiter.js";
 
 /**
- * Token-budget guard for the JWT-authed LLM routers (`/v1/chat`,
- * `/v1/assistant`, `/v1/onboarding`). Mount **after** `requireAuth` so
- * `req.userId` is set.
+ * Token-budget guard for the JWT-authed routes that spend OpenAI tokens
+ * (`/v1/chat` turns, `/v1/assistant`, the `/v1/onboarding` turns). Mount
+ * **after** `requireAuth` so `req.userId` is set, and only on routes that
+ * actually reach the model: a read behind it answers 429 to someone who is
+ * merely looking at what they already have (audit C-05).
  *
  * The existing `express-rate-limit` limiters cap *requests*; this caps *tokens*.
  * A user over the daily OpenAI token budget (or the global hourly breaker) gets
@@ -21,9 +23,7 @@ export function usageGuard(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
-  const key = userUsageKey(userId);
-  const overUserBudget = env.LLM_TOKEN_BUDGET_ENABLED && usageLimiter.isOverDailyBudget(key);
-  if (overUserBudget || usageLimiter.isGlobalBudgetExceeded()) {
+  if (isOverTokenBudget(userId)) {
     res.status(429).json({
       error: "daily_token_budget",
       message: "You've reached today's usage limit — please try again tomorrow.",
@@ -33,5 +33,26 @@ export function usageGuard(req: Request, res: Response, next: NextFunction): voi
 
   // Attribute any OpenAI tokens spent downstream to this user. `next()` runs
   // synchronously inside the context, so async handlers inherit it.
-  runWithUsage(key, () => Promise.resolve(next()));
+  runWithUsage(userUsageKey(userId), () => Promise.resolve(next()));
+}
+
+/** Over the person's daily budget, or the global breaker is open. */
+export function isOverTokenBudget(userId: string): boolean {
+  const overUserBudget =
+    env.LLM_TOKEN_BUDGET_ENABLED && usageLimiter.isOverDailyBudget(userUsageKey(userId));
+  return overUserBudget || usageLimiter.isGlobalBudgetExceeded();
+}
+
+/**
+ * Attribution without the refusal — for a route whose model call is optional
+ * (a cache refresh) and which has something to show without it. The handler
+ * checks `isOverTokenBudget` itself and skips the call instead of answering 429.
+ */
+export function usageAttribution(req: Request, _res: Response, next: NextFunction): void {
+  const userId = req.userId;
+  if (!userId) {
+    next();
+    return;
+  }
+  runWithUsage(userUsageKey(userId), () => Promise.resolve(next()));
 }

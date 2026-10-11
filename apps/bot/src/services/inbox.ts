@@ -5,6 +5,7 @@ import {
   INBOX_PAGE_MAX,
   INBOX_PUSH_TYPES,
   INBOX_READ_BATCH_MAX,
+  INBOX_READ_REQUEST_MAX,
 } from "@gennety/shared";
 import { createAnnouncementAssetSignedUrl } from "./storage.js";
 
@@ -95,6 +96,24 @@ export async function recordTransactionalInboxItem(input: {
 }): Promise<string> {
   const rawMatchId = input.data?.matchId;
   const matchId = typeof rawMatchId === "string" && UUID_RE.test(rawMatchId) ? rawMatchId : null;
+  // A retried send (the pitch dispatcher re-running a match it already
+  // pushed) is the same news, not a second row behind the bell (B-11). Only
+  // an exact repeat about the same match folds into the first row: different
+  // words are different news, and a row with no match has nothing to key on.
+  // App-level, so two truly concurrent sends can still both write.
+  if (matchId) {
+    const existing = await prisma.inboxItem.findFirst({
+      where: {
+        userId: input.userId,
+        type: input.type,
+        matchId,
+        title: input.title,
+        body: input.body,
+      },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+  }
   const row = await prisma.inboxItem.create({
     data: {
       userId: input.userId,
@@ -178,16 +197,22 @@ export type MarkReadResult =
  * 404 per foreign id would tell a prober which ids exist.
  */
 export async function markInboxRead(userId: string, ids: unknown): Promise<MarkReadResult> {
-  if (!Array.isArray(ids) || ids.length === 0 || ids.length > INBOX_READ_BATCH_MAX) {
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > INBOX_READ_REQUEST_MAX) {
     return { ok: false, error: "invalid_ids" };
   }
   if (!ids.every((id): id is string => typeof id === "string" && UUID_RE.test(id))) {
     return { ok: false, error: "invalid_ids" };
   }
-  await prisma.inboxItem.updateMany({
-    where: { userId, id: { in: ids }, readAt: null },
-    data: { readAt: new Date() },
-  });
+  // "Mark all read" on a full bell sends more than one write should carry;
+  // chunk it rather than refuse it, which left the dot lit for good.
+  const unique = [...new Set(ids)];
+  const readAt = new Date();
+  for (let i = 0; i < unique.length; i += INBOX_READ_BATCH_MAX) {
+    await prisma.inboxItem.updateMany({
+      where: { userId, id: { in: unique.slice(i, i + INBOX_READ_BATCH_MAX) }, readAt: null },
+      data: { readAt },
+    });
+  }
   return { ok: true, unreadCount: await inboxUnreadCount(userId) };
 }
 

@@ -20,8 +20,17 @@ const h = vi.hoisted(() => ({
   getStylePicks: vi.fn(),
   findUnique: vi.fn(),
   createClick: vi.fn(),
+  overBudget: vi.fn(() => false),
+  callModel: vi.fn(async () => ({ picks: [] })),
 }));
-vi.mock("../../services/style-picks/service.js", () => ({ getStylePicks: h.getStylePicks }));
+vi.mock("../../services/style-picks/service.js", () => ({
+  getStylePicks: h.getStylePicks,
+  defaultDeps: { callModel: h.callModel },
+}));
+vi.mock("../usage-middleware.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../usage-middleware.js")>()),
+  isOverTokenBudget: h.overBudget,
+}));
 vi.mock("@gennety/db", () => ({
   prisma: {
     styleProduct: { findUnique: h.findUnique },
@@ -95,6 +104,7 @@ beforeEach(() => {
   h.getStylePicks.mockResolvedValue(RESPONSE);
   h.findUnique.mockResolvedValue(PRODUCT);
   h.createClick.mockResolvedValue({});
+  h.overBudget.mockReturnValue(false);
 });
 
 describe("GET /v1/me/style-picks", () => {
@@ -120,7 +130,19 @@ describe("GET /v1/me/style-picks", () => {
     const res = await request(buildApp()).get("/v1/me/style-picks").set(auth());
     expect(res.status).toBe(200);
     expect(res.body).toEqual(RESPONSE);
-    expect(h.getStylePicks).toHaveBeenCalledWith(USER_ID);
+    expect(h.getStylePicks).toHaveBeenCalledWith(USER_ID, { callModel: h.callModel });
+  });
+
+  // Audit C-05: the budget used to be a router-wide 429, though most reads
+  // never reach the model. Over budget the cached set is still served.
+  it("over the token budget serves without a model call instead of a 429", async () => {
+    h.overBudget.mockReturnValue(true);
+    const res = await request(buildApp()).get("/v1/me/style-picks").set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(RESPONSE);
+    const deps = h.getStylePicks.mock.calls.at(-1)?.[1] as { callModel: () => Promise<unknown> };
+    expect(deps.callModel).not.toBe(h.callModel);
+    expect(await deps.callModel()).toBeNull();
   });
 });
 

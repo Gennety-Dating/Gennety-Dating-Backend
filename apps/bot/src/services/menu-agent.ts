@@ -12,6 +12,7 @@
 
 import { prisma, Prisma, type Theme } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
+import { KeyedLock } from "../utils/keyed-lock.js";
 import {
   MAX_BIO_LENGTH,
   MAX_PARTNER_PREFERENCES_LENGTH,
@@ -1891,10 +1892,29 @@ export async function executeAgentTool(
   return { result, receiptKey, action };
 }
 
-export async function runMenuAgentTurn(
+/**
+ * One assistant turn per person at a time (audit B-06): a turn loads the
+ * history, spends seconds in the model and its tools, then saves the history
+ * back, so two concurrent turns (Telegram and `/v1/assistant`, a double send)
+ * each overwrote the other's exchange. Turns for the same person queue;
+ * different people never wait on each other.
+ */
+const menuTurns = new KeyedLock();
+
+export function runMenuAgentTurn(
   telegramId: bigint,
   userMessage: string,
   deps: MenuAgentDeps = {},
+): Promise<MenuAgentResult> {
+  return menuTurns.run(String(telegramId), () =>
+    runMenuAgentTurnUnqueued(telegramId, userMessage, deps),
+  );
+}
+
+async function runMenuAgentTurnUnqueued(
+  telegramId: bigint,
+  userMessage: string,
+  deps: MenuAgentDeps,
 ): Promise<MenuAgentResult> {
   const fetchFn = deps.fetchFn ?? openaiFetch;
 

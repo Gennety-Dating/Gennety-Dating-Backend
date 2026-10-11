@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import multer, { MulterError } from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { ANNOUNCEMENT_MEDIA } from "@gennety/shared";
 import {
   archiveAnnouncement,
@@ -42,7 +43,7 @@ const LOG_PREFIX = "[admin][announcements]";
 
 const mediaUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: ANNOUNCEMENT_MEDIA.videoMaxBytes, files: 1 },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: ANNOUNCEMENT_MEDIA.videoMaxBytes, files: 1 },
 });
 
 function withMulter(req: Request, res: Response, next: NextFunction): void {

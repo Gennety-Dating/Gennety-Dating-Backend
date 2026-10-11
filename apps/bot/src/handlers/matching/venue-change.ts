@@ -71,12 +71,17 @@ import {
 } from "../../services/venue-change-personalization.js";
 import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 import { isUniqueViolation } from "../../services/ticket-wallet.js";
-import { notifyFounderPurchase } from "../../services/founder-notify.js";
+import {
+  notifyFounderAppStoreUnclaimed,
+  notifyFounderPurchase,
+} from "../../services/founder-notify.js";
 import {
   APPSTORE_PAYMENT_PREFIX,
   refundVenueChangePurchase,
+  VENUE_PROCESSING_STALE_MS,
   VENUE_PURCHASE_PROCESSING,
   VENUE_PURCHASE_REFUND_MANUAL,
+  VENUE_PURCHASE_REFUNDED_APPSTORE,
   VENUE_PURCHASE_REFUNDED_RACE,
   VENUE_PURCHASE_SELECT,
   VENUE_PURCHASE_SETTLED,
@@ -1596,11 +1601,14 @@ export async function settleVenueChangeFromAppStore(
   priceCents: number | null,
   /** Apple sandbox (App Review / TestFlight): settled the same, labelled as no revenue. */
   sandbox = false,
-): Promise<{ ok: boolean; reason?: string }> {
+  now: Date = new Date(),
+): Promise<AppStoreVenueSettleResult> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
   const side = sideOfUserId(match, payerUserId);
   if (!side) return { ok: false, reason: "not-participant" };
+
+  const externalPaymentId = `${APPSTORE_PAYMENT_PREFIX}${transactionId}`;
 
   // (1) Durable pre-settle record. Unique payment id ⇒ exactly-once.
   let purchase: VenueChangePurchaseRecord;
@@ -1610,7 +1618,7 @@ export async function settleVenueChangeFromAppStore(
         userId: payerUserId,
         matchId,
         status: VENUE_PURCHASE_PROCESSING,
-        externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${transactionId}`,
+        externalPaymentId,
         // Not a Stars purchase, so there is no Star price to freeze. Zero is
         // the honest reading of "this rail charged no Stars" — what Apple
         // charged is Apple's record and rides the founder notification below
@@ -1622,13 +1630,12 @@ export async function settleVenueChangeFromAppStore(
       select: VENUE_PURCHASE_SELECT,
     });
   } catch (err) {
-    if (isUniqueViolation(err)) {
-      console.info(
-        `[venue-change] duplicate App Store report ignored match=${matchId} tx=${transactionId}`,
-      );
-      return { ok: true };
-    }
-    throw err;
+    if (!isUniqueViolation(err)) throw err;
+    // A re-report — the client re-sends until it gets a final answer. It used
+    // to be answered `ok` whatever the row said, so a purchase parked for a
+    // manual refund read as settled on the second try, and one whose settle
+    // died half-way stayed `processing` forever.
+    return answerAppStoreVenueReport(api, payerUserId, externalPaymentId, priceCents, sandbox, now, true);
   }
 
   // Founder ops feed. After the exactly-once row, so a re-reported purchase
@@ -1640,33 +1647,157 @@ export async function settleVenueChangeFromAppStore(
     ...(priceCents != null ? { amountCents: priceCents } : {}),
     detail: match.venueChangeName ? `новое место: ${match.venueChangeName}` : "смена места",
     matchId,
-    externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${transactionId}`,
+    externalPaymentId,
     sandbox,
   });
 
-  const claimed = await finalizeVenueChangeFree(api, matchId, payerUserId, true);
+  return settleAppStoreVenuePurchase(
+    api,
+    purchase.id,
+    payerUserId,
+    matchId,
+    externalPaymentId,
+    priceCents,
+    sandbox,
+    now,
+  );
+}
+
+/**
+ * `{ ok: false, reason: "processing" }` — a report of this purchase is still in
+ * flight: retry later (503). `"wrong_owner"` — another account reported this
+ * transaction first. Anything else that is not ok is a final refusal.
+ */
+export type AppStoreVenueSettleResult = { ok: true } | { ok: false; reason: string };
+
+/** Rolls a claim back: the purchase row left `processing` under us. */
+class PurchaseLeftProcessing extends Error {}
+
+/** The machine reason back out of a parked row's `refundError`. */
+function unclaimableReasonOf(refundError: string | null): string {
+  return /^unclaimable \(([^)]+)\)/.exec(refundError ?? "")?.[1] ?? "not-agreed";
+}
+
+/**
+ * Answer a re-reported transaction from the row it already has, exactly as the
+ * first report was answered — the pattern of `appstore-prime-time.ts`.
+ * `allowResume` is false when called from inside a settle that lost its own
+ * compare-and-set, so a stale row is never resumed twice in one request.
+ */
+async function answerAppStoreVenueReport(
+  api: Api<RawApi>,
+  payerUserId: string,
+  externalPaymentId: string,
+  priceCents: number | null,
+  sandbox: boolean,
+  now: Date,
+  allowResume: boolean,
+): Promise<AppStoreVenueSettleResult> {
+  const existing = await prisma.venueChangePurchase.findUnique({
+    where: { externalPaymentId },
+    select: { id: true, userId: true, matchId: true, status: true, refundError: true, createdAt: true },
+  });
+  if (!existing) return { ok: false, reason: "processing" };
+
+  // One transaction, one owner: the first account to report it.
+  if (existing.userId !== payerUserId) {
+    console.error(
+      `[venue-change] ${externalPaymentId} belongs to ${existing.userId ?? "a deleted account"} ` +
+        `but was re-reported by ${payerUserId}`,
+    );
+    return { ok: false, reason: "wrong_owner" };
+  }
+
+  switch (existing.status) {
+    case VENUE_PURCHASE_SETTLED:
+    case VENUE_PURCHASE_REFUNDED_APPSTORE:
+      return { ok: true };
+    case VENUE_PURCHASE_REFUND_MANUAL:
+      return { ok: false, reason: unclaimableReasonOf(existing.refundError) };
+    case VENUE_PURCHASE_PROCESSING: {
+      const age = now.getTime() - existing.createdAt.getTime();
+      if (!allowResume || age < VENUE_PROCESSING_STALE_MS) return { ok: false, reason: "processing" };
+      // The first report died between its row and its claim. Nothing else moves
+      // an App Store row out of `processing` (the Stars sweep skips the prefix),
+      // so without this the purchase would answer 503 forever.
+      console.warn(
+        `[venue-change] resuming an abandoned App Store settle purchase=${existing.id} ` +
+          `charge=${externalPaymentId}`,
+      );
+      return settleAppStoreVenuePurchase(
+        api,
+        existing.id,
+        payerUserId,
+        existing.matchId,
+        externalPaymentId,
+        priceCents,
+        sandbox,
+        now,
+      );
+    }
+    default:
+      console.error(
+        `[venue-change] App Store purchase ${existing.id} in unexpected status ${existing.status}`,
+      );
+      return { ok: false, reason: "processing" };
+  }
+}
+
+/** Claim and record — the row is ours and still `processing`. */
+async function settleAppStoreVenuePurchase(
+  api: Api<RawApi>,
+  purchaseId: string,
+  payerUserId: string,
+  matchId: string,
+  externalPaymentId: string,
+  priceCents: number | null,
+  sandbox: boolean,
+  now: Date,
+): Promise<AppStoreVenueSettleResult> {
+  let claimed: { ok: boolean; reason?: string };
+  try {
+    // The claim and the row's move to `settled` commit together.
+    claimed = await finalizeVenueChangeFree(api, matchId, payerUserId, true, purchaseId);
+  } catch (err) {
+    if (!(err instanceof PurchaseLeftProcessing)) throw err;
+    // Someone else resolved this row first (a concurrent resume). Their
+    // answer is the answer.
+    return answerAppStoreVenueReport(api, payerUserId, externalPaymentId, priceCents, sandbox, now, false);
+  }
+
   if (!claimed.ok) {
-    await prisma.venueChangePurchase.update({
-      where: { id: purchase.id },
+    const reason = claimed.reason ?? "not-agreed";
+    const parked = await prisma.venueChangePurchase.updateMany({
+      where: { id: purchaseId, status: VENUE_PURCHASE_PROCESSING },
       data: {
         status: VENUE_PURCHASE_REFUND_MANUAL,
         resolvedAt: new Date(),
-        refundError: `unclaimable (${claimed.reason ?? "unknown"}) — Apple refunds are not server-initiated`,
+        refundError: `unclaimable (${reason}) — Apple refunds are not server-initiated`,
       },
     });
+    if (parked.count === 0) {
+      return answerAppStoreVenueReport(api, payerUserId, externalPaymentId, priceCents, sandbox, now, false);
+    }
     console.error(
       `[venue-change] App Store purchase bought nothing match=${matchId} ` +
-        `tx=${transactionId} reason=${claimed.reason} — needs a manual refund`,
+        `charge=${externalPaymentId} reason=${reason} — needs a manual refund`,
     );
-    return { ok: false, reason: claimed.reason ?? "not-agreed" };
+    // A log line alone reached nobody: money was taken and nothing was given,
+    // and only a person can return it.
+    await notifyFounderAppStoreUnclaimed({
+      userId: payerUserId,
+      kind: "venue_change",
+      externalPaymentId,
+      reason,
+      matchId,
+      amountCents: priceCents,
+      sandbox,
+    });
+    return { ok: false, reason };
   }
 
-  await prisma.venueChangePurchase.update({
-    where: { id: purchase.id },
-    data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
-  });
   console.info(
-    `[venue-change] settled via App Store match=${matchId} payer=${payerUserId} tx=${transactionId}`,
+    `[venue-change] settled via App Store match=${matchId} payer=${payerUserId} charge=${externalPaymentId}`,
   );
   return { ok: true };
 }
@@ -2355,6 +2486,15 @@ async function finalizeVenueChangeFree(
    * only the card: a free settle has no payer to name, a bought one does.
    */
   announceAsPaid = false,
+  /**
+   * The App Store purchase row this claim settles. When given, the claim and
+   * the row's `processing → settled` move commit together or not at all: a
+   * crash between two separate writes used to leave a settled change behind a
+   * row still `processing`, which every re-report then answered as in flight.
+   * Throws {@link PurchaseLeftProcessing} (claim rolled back) when the row was
+   * resolved by someone else first.
+   */
+  appStorePurchaseId?: string,
 ): Promise<{ ok: boolean; reason?: string }> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -2362,39 +2502,54 @@ async function finalizeVenueChangeFree(
   if (!side) return { ok: false, reason: "not-participant" };
   const settler = userOfSide(match, side);
 
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
-    data: {
-      venueChangeStatus: "settled",
-      venueChangeResolvedAt: new Date(),
-      venueChangeExpiresAt: null,
-      venueChangePaidById: settler.id,
-      venueChangePaidAt: new Date(),
-      // A free settle counts exactly like a paid one — this is the path a
-      // Premium pair (and every demo visitor) takes, so it is the one the cap
-      // actually has to bound. Nothing else limits them: no money changes hands.
-      venueChangeCount: { increment: 1 },
-      venueName: match.venueChangeName,
-      venueAddress: match.venueChangeAddress,
-      venueLat: match.venueChangeLat,
-      venueLng: match.venueChangeLng,
-      venueGoogleMapsUri: match.venueChangeMapsUri,
-      // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
-      // left pointing at the originally-assigned venue, so the row ended up
-      // self-contradictory — name/address/coords of the new place, place id of
-      // the old one — and anything keyed on the id (the diversity layer's
-      // "where has this person already been", any Places re-fetch) read the
-      // wrong venue. The originally-assigned one is still recoverable from
-      // `venue_selection_logs.selectedPlaceId`.
-      venuePlaceId: match.venueChangePlaceId,
-      venuePhotoName: match.venueChangePhotoName,
-      // See settleVenuePayment: the cached date-card PNG bakes in the OLD
-      // venue, so it must be invalidated here too.
-      dateCardFileIdA: null,
-      dateCardFileIdB: null,
-    },
-  });
-  if (claim.count === 0) return { ok: false, reason: "not-agreed" };
+  const claimWhere = { id: matchId, status: "scheduled", venueChangeStatus: "agreed" } as const;
+  const claimData = {
+    venueChangeStatus: "settled",
+    venueChangeResolvedAt: new Date(),
+    venueChangeExpiresAt: null,
+    venueChangePaidById: settler.id,
+    venueChangePaidAt: new Date(),
+    // A free settle counts exactly like a paid one — this is the path a
+    // Premium pair (and every demo visitor) takes, so it is the one the cap
+    // actually has to bound. Nothing else limits them: no money changes hands.
+    venueChangeCount: { increment: 1 },
+    venueName: match.venueChangeName,
+    venueAddress: match.venueChangeAddress,
+    venueLat: match.venueChangeLat,
+    venueLng: match.venueChangeLng,
+    venueGoogleMapsUri: match.venueChangeMapsUri,
+    // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
+    // left pointing at the originally-assigned venue, so the row ended up
+    // self-contradictory — name/address/coords of the new place, place id of
+    // the old one — and anything keyed on the id (the diversity layer's
+    // "where has this person already been", any Places re-fetch) read the
+    // wrong venue. The originally-assigned one is still recoverable from
+    // `venue_selection_logs.selectedPlaceId`.
+    venuePlaceId: match.venueChangePlaceId,
+    venuePhotoName: match.venueChangePhotoName,
+    // See settleVenuePayment: the cached date-card PNG bakes in the OLD
+    // venue, so it must be invalidated here too.
+    dateCardFileIdA: null,
+    dateCardFileIdB: null,
+  } satisfies Prisma.MatchUpdateManyMutationInput;
+
+  let claimed: boolean;
+  if (appStorePurchaseId) {
+    claimed = await prisma.$transaction(async (db) => {
+      const claim = await db.match.updateMany({ where: claimWhere, data: claimData });
+      if (claim.count === 0) return false;
+      const settled = await db.venueChangePurchase.updateMany({
+        where: { id: appStorePurchaseId, status: VENUE_PURCHASE_PROCESSING },
+        data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
+      });
+      if (settled.count === 0) throw new PurchaseLeftProcessing();
+      return true;
+    });
+  } else {
+    const claim = await prisma.match.updateMany({ where: claimWhere, data: claimData });
+    claimed = claim.count > 0;
+  }
+  if (!claimed) return { ok: false, reason: "not-agreed" };
 
   console.info(`[venue-change] settled FREE (premium) match=${matchId} settler=${settler.id}`);
   syncLiveActivities(matchId);

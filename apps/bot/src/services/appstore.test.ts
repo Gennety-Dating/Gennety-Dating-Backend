@@ -22,10 +22,12 @@ const envMock = {
 vi.mock("../config.js", () => ({ env: envMock }));
 
 const {
+  appAccountTokenFor,
   appStoreConfigured,
   appStoreHost,
   appStoreProviderJwt,
   decodeJwsPayload,
+  getSubscriptionAutoRenew,
   getVerifiedTransaction,
   resetAppStoreCachesForTest,
   ticketCountForProduct,
@@ -82,6 +84,15 @@ describe("decodeJwsPayload", () => {
     expect(decodeJwsPayload("not-a-jws")).toBeNull();
     expect(decodeJwsPayload("a.b")).toBeNull();
     expect(decodeJwsPayload("a.!!!.c")).toBeNull();
+  });
+});
+
+describe("appAccountTokenFor", () => {
+  it("is a stable lowercase v4 UUID, distinct per user", () => {
+    const a = appAccountTokenFor("11111111-1111-4111-8111-111111111111");
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(appAccountTokenFor("11111111-1111-4111-8111-111111111111")).toBe(a);
+    expect(appAccountTokenFor("22222222-2222-4222-8222-222222222222")).not.toBe(a);
   });
 });
 
@@ -203,6 +214,70 @@ describe("getVerifiedTransaction", () => {
 
     await expect(getVerifiedTransaction("tx-x")).resolves.toEqual({ status: "unavailable" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([401, 403, 429, 400])(
+    "treats Apple %i (our trouble, not the id's) as unavailable, never not_found",
+    async (status) => {
+      // A 422 is the answer the client finishes a PAID transaction on, so a bad
+      // provider token or a rate limit must come back as retry-later.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json({ errorCode: 4290000 + status }, { status })),
+      );
+      await expect(getVerifiedTransaction("tx-paid")).resolves.toEqual({ status: "unavailable" });
+      warn.mockRestore();
+    },
+  );
+
+  it("reads Apple's invalid-id error code on a 400 as not_found", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ errorCode: 4000006 }, { status: 400 })),
+    );
+    await expect(getVerifiedTransaction("garbage")).resolves.toEqual({ status: "not_found" });
+  });
+
+  it("drops the cached provider token after a 401 so the next lookup re-signs", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const first = appStoreProviderJwt(1_000);
+    expect(appStoreProviderJwt(2_000)).toBe(first);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 401 })));
+    await getVerifiedTransaction("tx-1");
+    // Same clock as the cached mint: a cache hit would hand back `first`.
+    expect(appStoreProviderJwt(2_000)).not.toBe(first);
+    warn.mockRestore();
+  });
+
+  it("reads autoRenewStatus from Apple's renewal info for this subscription", async () => {
+    const body = (status: number) => ({
+      data: [
+        {
+          lastTransactions: [
+            { originalTransactionId: "other", signedRenewalInfo: fakeJws({ autoRenewStatus: 1 }) },
+            {
+              originalTransactionId: "orig-1",
+              signedRenewalInfo: fakeJws({ autoRenewStatus: status }),
+            },
+          ],
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body(0))));
+    await expect(getSubscriptionAutoRenew("orig-1")).resolves.toEqual({
+      status: "ok",
+      autoRenew: false,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body(1))));
+    await expect(getSubscriptionAutoRenew("orig-1")).resolves.toEqual({
+      status: "ok",
+      autoRenew: true,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+    await expect(getSubscriptionAutoRenew("orig-1")).resolves.toEqual({ status: "unavailable" });
+    warn.mockRestore();
   });
 
   it("reports not_found only when both stores deny the id", async () => {

@@ -1,6 +1,7 @@
 import type { BotError } from "grammy";
 import type { BotContext } from "./session.js";
 import { notifyFounderHandlerError } from "./services/founder-notify.js";
+import { redactBotToken, summarizeBotError } from "./utils/error-log.js";
 
 /**
  * The one error handler for Telegram update work.
@@ -12,12 +13,14 @@ import { notifyFounderHandlerError } from "./services/founder-notify.js";
  * log line, the same founder alert and the same reply.
  */
 export async function handleBotError(err: BotError<BotContext>): Promise<void> {
-  console.error("Bot error:", err);
+  // Never the BotError itself: its `ctx.api` holds the bot token and its
+  // `ctx.update` the user's message — see utils/error-log.ts (audit B-03).
+  console.error("Bot error:", summarizeBotError(err));
   // Not only the log. One bad update is noise; the same exception firing for
   // everybody after a deploy is an outage, and the two are indistinguishable
   // from inside a `console.error` on a droplet nobody is watching. The
   // notifier folds a storm into one message per quarter hour.
-  const detail = err.error instanceof Error ? err.error.message : String(err.error);
+  const detail = redactBotToken(err.error instanceof Error ? err.error.message : String(err.error));
   void notifyFounderHandlerError(`${err.ctx.update.update_id}: ${detail}`);
   try {
     await err.ctx.reply("Something went wrong. Please try again or type /menu.");

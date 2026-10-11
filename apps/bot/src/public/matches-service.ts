@@ -56,6 +56,7 @@ import { ticketGateFor } from "./ticket-gate-state.js";
 import { recordRejectionFeedback } from "../services/rejection-feedback.js";
 import { partnerFrequentPlaces, type PartnerPlace } from "../services/frequent-places.js";
 import { afterDatePlaceView, type AfterDatePlaceView } from "../services/venue-after-date.js";
+import { venueCoordinatesOf } from "../services/venue-location.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -365,6 +366,7 @@ export async function getCurrentMatchForUser(
       venueAddress: true,
       venueLat: true,
       venueLng: true,
+      venueMidpointLat: true,
       venueGoogleMapsUri: true,
       venueSelectionReason: true,
       venuePlaceId: true,
@@ -519,8 +521,10 @@ export async function getCurrentMatchForUser(
     agreedTime: match.agreedTime?.toISOString() ?? null,
     venueName: match.venueName,
     venueAddress: match.venueAddress,
-    venueLat: match.venueLat,
-    venueLng: match.venueLng,
+    // Only a known venue point, as `/v1/date/state` serves it (C-25): on a
+    // legacy row the columns hold the route midpoint, not the venue.
+    venueLat: venueCoordinatesOf(match)?.lat ?? null,
+    venueLng: venueCoordinatesOf(match)?.lng ?? null,
     venueGoogleMapsUri: match.venueGoogleMapsUri,
     venueSelectionReason: match.venueSelectionReason,
     afterDatePlace: afterDatePlaceView(match.afterDatePlace, match.venuePlaceId),
@@ -1172,6 +1176,14 @@ export async function submitMatchReport(
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002"
     ) {
+      // C-15: the same report sent again (a retry after a lost response) is
+      // the one already filed — answer success without re-running moderation.
+      // A different report on the same match stays a duplicate.
+      const existing = await prisma.report.findUnique({
+        where: { reporterId_matchId: { reporterId: reporterUserId, matchId } },
+        select: { rawText: true, tier: true },
+      });
+      if (existing && existing.rawText === rawText && existing.tier === tier) return "ok";
       return "duplicate";
     }
     // Anything else is a real failure — log + re-throw so the caller turns

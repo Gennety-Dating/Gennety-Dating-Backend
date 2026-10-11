@@ -164,7 +164,14 @@ export async function beginLivenessCheck(
     // Below the minimum counts the same as none: the client's photo step and
     // the collector both ask for MIN_PHOTOS, and a check over fewer is a check
     // the user would have to repeat once they add the rest.
-    if ((user.profile?.photos.length ?? 0) < MIN_PHOTOS) {
+    //
+    // A verified user re-anchoring an expired reference needs only something to
+    // compare with (C-12): the minimum gates matching, not identity, and adding
+    // photos is exactly what their expired reference refuses — demanding the
+    // minimum first was a loop with no way out.
+    const photoCount = user.profile?.photos.length ?? 0;
+    const photoFloor = alreadyVerified ? 1 : MIN_PHOTOS;
+    if (photoCount < photoFloor) {
       return { ok: false, error: "photos_required", language: user.language ?? "en" };
     }
   }

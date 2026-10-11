@@ -196,6 +196,7 @@ type MatchRow = {
   venueAddress: string | null;
   venueLat: number | null;
   venueLng: number | null;
+  venueMidpointLat?: number | null;
   acceptedByA: boolean | null;
   acceptedByB: boolean | null;
   vibeTextA: string | null;
@@ -714,6 +715,13 @@ vi.mock("@gennety/db", async () => {
           db.reports.push(row);
           return row;
         }),
+        findUnique: vi.fn(async ({ where }: any) =>
+          db.reports.find(
+            (r) =>
+              r.reporterId === where.reporterId_matchId.reporterId &&
+              r.matchId === where.reporterId_matchId.matchId,
+          ) ?? null,
+        ),
         // Account deletion's safety capture (A13-H14): counts and stamps the
         // reports filed against the departing account.
         count: vi.fn(async ({ where }: any) =>
@@ -1083,6 +1091,7 @@ vi.mock("../services/menu-agent.js", () => ({
 vi.mock("../services/whisper.js", () => ({
   WHISPER_MAX_BYTES: 25 * 1024 * 1024,
   transcribeVoice: vi.fn(async () => "transcribed"),
+  transcribeVoiceResult: vi.fn(async () => ({ ok: true, text: "transcribed" })),
 }));
 
 vi.mock("../services/vision/validate-face.js", () => ({
@@ -1362,6 +1371,8 @@ describe("POST /v1/auth/otp/request", () => {
       .post("/v1/auth/otp/request")
       .send({ email: "alice+second@stanford.edu" });
     expect(res.status).toBe(400);
+    // C-21: a code of its own, so the client stops calling it "not a university email".
+    expect(res.body.error).toBe("email_plus_tag_not_allowed");
     expect(db.otps).toHaveLength(0);
   });
 
@@ -1517,6 +1528,22 @@ describe("POST /v1/auth/otp/verify", () => {
       "test-jwt-secret-not-for-production",
     ) as { sub: string };
     expect(decoded.sub).toBe(existing.id);
+  });
+
+  // B-05: a fresh code must not undo a ban.
+  it("refuses to mint tokens for a banned account (403 account_banned)", async () => {
+    const email = "banned@stanford.edu";
+    await seedUser({ email, isEmailVerified: true, status: "banned" });
+    await seedOtp(email, "778899");
+    const sessionsBefore = db.sessions.size;
+
+    const res = await request(app)
+      .post("/v1/auth/otp/verify")
+      .send({ email, otp: "778899" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "account_banned" });
+    expect(db.sessions.size).toBe(sessionsBefore);
   });
 
   it("rejects malformed OTPs with 400 (not 401)", async () => {
@@ -3360,6 +3387,27 @@ describe("/v1/onboarding/interview", () => {
     expect(res.body.question).toBe("echo:Alice, 22");
   });
 
+  // Audit C-06: a transcription outage keeps the note on the device (503);
+  // only a recording that holds no speech is 422.
+  it("POST /interview/voice answers 503 on a transcription outage, 422 on silence", async () => {
+    const { transcribeVoiceResult } = await import("../services/whisper.js");
+    const user = await seedUser({ onboardingStep: "conversational" });
+    const send = () =>
+      request(app)
+        .post("/v1/onboarding/interview/voice")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+
+    vi.mocked(transcribeVoiceResult).mockResolvedValueOnce({ ok: false, reason: "unavailable" });
+    const outage = await send();
+    expect(outage.status).toBe(503);
+    expect(outage.body).toEqual({ error: "transcription_unavailable" });
+
+    vi.mocked(transcribeVoiceResult).mockResolvedValueOnce({ ok: true, text: "" });
+    expect((await send()).status).toBe(422);
+    expect(runAgentTurnMock).not.toHaveBeenCalled();
+  });
+
   it("POST /answer carries the bot's reaction when the agent accepted hobbies", async () => {
     const user = await seedUser({ onboardingStep: "conversational" });
     vi.mocked(runAgentTurnMock).mockResolvedValueOnce({
@@ -3476,7 +3524,9 @@ describe("/v1/onboarding/interview", () => {
       const user = await seedFresh();
       const res = await request(app)
         .get("/v1/onboarding/interview")
-        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        // A build new enough to send its number knows the basics screens.
+        .set("X-Gennety-Build", "500");
       expect(res.status).toBe(200);
       expect(runAgentTurnMock).not.toHaveBeenCalled();
       expect(res.body.messages).toEqual([]);
@@ -3484,6 +3534,24 @@ describe("/v1/onboarding/interview", () => {
         ...INCOMPLETE_BASICS,
         limits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
       });
+    });
+
+    // Audit C-02: a pre-2026-09-30 build never calls `/basics` and draws the
+    // chat from the first question — without one it showed a blank interview.
+    it("opens at once for a build that predates the basics screens (no build header)", async () => {
+      vi.mocked(loadOnboardingBasicsMock).mockResolvedValue(INCOMPLETE_BASICS as never);
+      const user = await seedFresh();
+      resumeRecordsOpener(user);
+      const res = await request(app)
+        .get("/v1/onboarding/interview")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`);
+      expect(res.status).toBe(200);
+      expect(runAgentTurnMock).toHaveBeenCalledWith(
+        user.telegramId,
+        { kind: "resume" },
+        { canPresentTypeRadar: false },
+      );
+      expect(res.body.question).toBe(opener);
     });
 
     it("opens once when two reads race", async () => {
@@ -4154,6 +4222,32 @@ describe("/v1/matches/*", () => {
     expect(res.body.match).toHaveProperty("timeZone", null);
   });
 
+  // C-25: the venue pin is the venue, as `/v1/date/state` serves it — a legacy
+  // row's columns hold the route midpoint and are withheld.
+  it("GET /current serves venue coordinates only for a known venue point", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      venueName: "Sens",
+      venueLat: 50.45,
+      venueLng: 30.52,
+      venueMidpointLat: null,
+    });
+
+    const legacy = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(legacy.body.match).toMatchObject({ venueLat: null, venueLng: null });
+
+    db.matches.get(match.id)!.venueMidpointLat = 50.44;
+    const current = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(current.body.match).toMatchObject({ venueLat: 50.45, venueLng: 30.52 });
+  });
+
   // Decision 2026-09-13: a place's thumbnail rides on the partner's block as
   // `partnerFrequentPlaces` builds it — a link when the catalog has a photo, and
   // no key at all when it has none (optional in the contract, never null).
@@ -4790,9 +4884,28 @@ describe("/v1/matches/*", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("date_started");
+    // C-03: the body satisfies the declared StaleActionConflict schema.
+    expect(res.body.error).toBe("stale_action");
+    expect(res.body.currentMatchStatus).toBe("scheduled");
     const row = db.matches.get(match.id);
     expect(row?.status).toBe("scheduled");
     expect(row?.emergencyCancelledBy ?? null).toBeNull();
+  });
+
+  // C-16: an over-long description has its own code, not the bare 400 a
+  // client reads as the out-of-market refusal.
+  it("POST /:id/venue-intent/interpret answers description_too_long over 500 chars", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "negotiating_venue" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/venue-intent/interpret`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ text: "a".repeat(501) });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "description_too_long", maxLength: 500 });
   });
 
   it("POST /:id/report enforces IDOR: non-participant is 403", async () => {
@@ -4808,7 +4921,7 @@ describe("/v1/matches/*", () => {
     expect(db.reports).toHaveLength(0);
   });
 
-  it("POST /:id/report rejects duplicate report from same reporter", async () => {
+  it("POST /:id/report rejects a different second report from same reporter", async () => {
     const alice = await seedUser();
     const bob = await seedUser();
     const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
@@ -4822,8 +4935,24 @@ describe("/v1/matches/*", () => {
     const dup = await request(app)
       .post(`/v1/matches/${match.id}/report`)
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
-      .send({ category: "tier2_ghosting", message: "ghosted" });
+      .send({ category: "tier2_ghosting", message: "ghosted me twice" });
     expect(dup.status).toBe(409);
+  });
+
+  // C-15: a retry after a lost response is the same report, already filed.
+  it("POST /:id/report answers an identical retry as success without a second row", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+    for (let i = 0; i < 2; i++) {
+      const res = await request(app)
+        .post(`/v1/matches/${match.id}/report`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+        .send({ category: "tier2_ghosting", message: "ghosted" });
+      expect(res.status).toBe(204);
+    }
+    expect(db.reports.filter((r) => r.matchId === match.id)).toHaveLength(1);
   });
 
   it("POST /:id/report rejects messages over the persisted limit", async () => {

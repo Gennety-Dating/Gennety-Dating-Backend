@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import jwt from "jsonwebtoken";
 import { env } from "../config.js";
@@ -214,6 +215,45 @@ function toTransaction(
 }
 
 /**
+ * The `appAccountToken` this user's purchases are made under (`GET /v1/me`).
+ *
+ * StoreKit takes a UUID, Apple echoes it back on every transaction, and it is
+ * the only field in a transaction that says who was buying. Deterministic per
+ * user — the first 16 bytes of HMAC-SHA256("appAccountToken:" + userId) shaped
+ * into a version-4 UUID — so it needs no column and never changes: a renewal
+ * years from now carries the token of the original purchase. Keyed rather than
+ * the raw user id so the token Apple holds says nothing about our ids.
+ */
+export function appAccountTokenFor(userId: string): string {
+  // JWT_SECRET is required at boot (config validation), so the empty fallback
+  // only ever applies in tests.
+  const key = env.APP_ACCOUNT_TOKEN_SECRET || env.JWT_SECRET || "";
+  const bytes = createHmac("sha256", key)
+    .update(`appAccountToken:${userId}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122 variant
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Whether a verified transaction names a DIFFERENT buyer than `userId`.
+ *
+ * Verified when present rather than required: builds in the wild do not set the
+ * token, and refusing their purchases would break real money. The raw user id
+ * is accepted as well as the derived token — it is what the server compared
+ * against before the token had a contract, so a transaction minted that way
+ * still belongs to its buyer. Case carries no meaning in a UUID.
+ */
+export function boughtByAnotherUser(tx: AppStoreTransaction, userId: string): boolean {
+  if (tx.appAccountToken === null) return false;
+  const token = tx.appAccountToken.toLowerCase();
+  return token !== appAccountTokenFor(userId) && token !== userId.toLowerCase();
+}
+
+/**
  * Whether a StoreKit product id is the Gennety Premium subscription. Matches the
  * full id or its last dot-segment (mirrors `ticketCountForProduct`), so
  * `com.gennety.ios.premium_monthly` and a bare `premium_monthly` both resolve.
@@ -246,41 +286,162 @@ export async function getVerifiedTransaction(
   return sawUnavailable ? { status: "unavailable" } : { status: "not_found" };
 }
 
-/** One host, one request. `not_found` here means "not in THIS store". */
-async function lookupOnHost(host: string, transactionId: string): Promise<TransactionLookup> {
+/**
+ * Apple's documented "this id is not a transaction here" error codes:
+ * `TransactionIdNotFoundError` (4040010) and `InvalidTransactionIdError`
+ * (4000006). The second is a malformed id — forged or garbage — which no retry
+ * will ever fix.
+ */
+const APPSTORE_TRANSACTION_NOT_FOUND_CODES: ReadonlySet<number> = new Set([4040010, 4000006]);
+
+/** Apple's numeric `errorCode` from an error body, when there is one. */
+async function appStoreErrorCode(res: Response): Promise<number | null> {
   try {
-    const res = await fetch(
-      `${host}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
-      {
-        headers: { Authorization: `Bearer ${appStoreProviderJwt()}` },
-        signal: AbortSignal.timeout(APPSTORE_TIMEOUT_MS),
-      },
-    );
-    if (res.status >= 500) {
-      console.warn(`[appstore] transaction lookup ${transactionId} on ${host}: ${res.status}`);
+    const body = (await res.json()) as { errorCode?: unknown };
+    return typeof body.errorCode === "number" ? body.errorCode : null;
+  } catch {
+    // No JSON body (a proxy's HTML page, an empty 429): the status decides.
+    return null;
+  }
+}
+
+/**
+ * Whether a non-2xx answer is a verdict on the transaction id itself. Any 404
+ * counts — the id is the only variable in the path — but a 400 only with
+ * Apple's own invalid-id code, since a 400 can also be about our request.
+ */
+function isTransactionNotFound(status: number, errorCode: number | null): boolean {
+  if (status === 404) return true;
+  return errorCode !== null && APPSTORE_TRANSACTION_NOT_FOUND_CODES.has(errorCode);
+}
+
+type AppStoreGet =
+  | { status: "ok"; body: Record<string, unknown> }
+  | { status: "not_found" }
+  | { status: "unavailable" };
+
+/** One authenticated GET against one App Store Server API host. */
+async function appStoreGet(host: string, path: string): Promise<AppStoreGet> {
+  try {
+    const res = await fetch(`${host}${path}`, {
+      headers: { Authorization: `Bearer ${appStoreProviderJwt()}` },
+      signal: AbortSignal.timeout(APPSTORE_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      // Only an answer ABOUT THE ID may say `not_found`: the route turns it into
+      // a 422, which is the one reply the client finishes a paid transaction on.
+      // Everything else — our token rejected (401), the key revoked (403),
+      // Apple rate-limiting us (429), a 5xx — is our or Apple's trouble, says
+      // nothing about the purchase, and must come back as retry-later. Mapping
+      // every non-2xx to `not_found` used to burn real purchases whenever the
+      // provider token went bad.
+      const errorCode = await appStoreErrorCode(res);
+      if (isTransactionNotFound(res.status, errorCode)) return { status: "not_found" };
+      if (res.status === 401) {
+        // A token Apple refuses is not one to keep reusing for 50 minutes.
+        cachedJwt = null;
+      }
+      console.warn(
+        `[appstore] ${path} on ${host}: ${res.status}` +
+          (errorCode != null ? ` (errorCode ${errorCode})` : ""),
+      );
       return { status: "unavailable" };
     }
-    if (!res.ok) return { status: "not_found" };
-    const body = (await res.json()) as { signedTransactionInfo?: string };
-    if (!body.signedTransactionInfo) return { status: "not_found" };
-    // The JWS came from Apple over TLS — its payload is trusted here.
-    const payload = decodeJwsPayload(body.signedTransactionInfo);
-    const transaction = payload ? toTransaction(payload, host) : null;
-    if (!transaction) return { status: "not_found" };
-    // Logged once here rather than at each rail, so every sandbox purchase the
-    // production server honours (App Review, TestFlight) leaves a line whichever
-    // product it bought.
-    if (transaction.environment === "Sandbox") {
-      console.info(
-        `[appstore] sandbox transaction ${transactionId} product=${transaction.productId ?? "?"} ` +
-          "— honoured, not revenue",
-      );
-    }
-    return { status: "ok", transaction };
+    const body = (await res.json()) as unknown;
+    return typeof body === "object" && body !== null
+      ? { status: "ok", body: body as Record<string, unknown> }
+      : { status: "not_found" };
   } catch (err) {
-    console.warn(`[appstore] transaction lookup on ${host} failed:`, err);
+    console.warn(`[appstore] ${path} on ${host} failed:`, err);
     return { status: "unavailable" };
   }
+}
+
+/** One host, one request. `not_found` here means "not in THIS store". */
+async function lookupOnHost(host: string, transactionId: string): Promise<TransactionLookup> {
+  const got = await appStoreGet(
+    host,
+    `/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
+  );
+  if (got.status !== "ok") return got;
+  const signed = got.body.signedTransactionInfo;
+  if (typeof signed !== "string" || !signed) return { status: "not_found" };
+  // The JWS came from Apple over TLS — its payload is trusted here.
+  const payload = decodeJwsPayload(signed);
+  const transaction = payload ? toTransaction(payload, host) : null;
+  if (!transaction) return { status: "not_found" };
+  // Logged once here rather than at each rail, so every sandbox purchase the
+  // production server honours (App Review, TestFlight) leaves a line whichever
+  // product it bought.
+  if (transaction.environment === "Sandbox") {
+    console.info(
+      `[appstore] sandbox transaction ${transactionId} product=${transaction.productId ?? "?"} ` +
+        "— honoured, not revenue",
+    );
+  }
+  return { status: "ok", transaction };
+}
+
+export type AutoRenewLookup =
+  | { status: "ok"; autoRenew: boolean }
+  | { status: "not_found" }
+  | { status: "unavailable" };
+
+/**
+ * Whether a subscription will renew, from Apple's own renewal info
+ * (`GET /inApps/v1/subscriptions/{transactionId}` → `signedRenewalInfo`).
+ *
+ * `DID_CHANGE_RENEWAL_STATUS` says the user switched renewal on or off, but its
+ * payload is unverified (see the webhook), so the answer is re-read from Apple
+ * the same way every transaction is. Same two-store walk as
+ * {@link getVerifiedTransaction}.
+ */
+export async function getSubscriptionAutoRenew(
+  originalTransactionId: string,
+): Promise<AutoRenewLookup> {
+  if (!appStoreConfigured()) return { status: "unavailable" };
+  let sawUnavailable = false;
+  for (const host of appStoreHosts()) {
+    const got = await appStoreGet(
+      host,
+      `/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`,
+    );
+    if (got.status === "unavailable") {
+      sawUnavailable = true;
+      continue;
+    }
+    if (got.status === "not_found") continue;
+    const autoRenew = autoRenewFromStatuses(got.body, originalTransactionId);
+    if (autoRenew !== null) return { status: "ok", autoRenew };
+  }
+  return sawUnavailable ? { status: "unavailable" } : { status: "not_found" };
+}
+
+/** `autoRenewStatus` (1 = on) of this subscription's latest renewal info. */
+function autoRenewFromStatuses(
+  body: Record<string, unknown>,
+  originalTransactionId: string,
+): boolean | null {
+  const groups = Array.isArray(body.data) ? body.data : [];
+  for (const group of groups) {
+    const last =
+      typeof group === "object" && group !== null && Array.isArray(group.lastTransactions)
+        ? (group.lastTransactions as unknown[])
+        : [];
+    for (const item of last) {
+      if (typeof item !== "object" || item === null) continue;
+      const entry = item as Record<string, unknown>;
+      if (entry.originalTransactionId !== originalTransactionId) continue;
+      const renewal =
+        typeof entry.signedRenewalInfo === "string"
+          ? decodeJwsPayload(entry.signedRenewalInfo)
+          : null;
+      if (renewal && typeof renewal.autoRenewStatus === "number") {
+        return renewal.autoRenewStatus === 1;
+      }
+    }
+  }
+  return null;
 }
 
 /**

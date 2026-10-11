@@ -32,6 +32,24 @@ export interface MusicTrack {
   storefront: string | null;
 }
 
+/**
+ * A track as it goes over the wire: the provider-neutral shape plus the two
+ * names it had before 2026-10-08. Builds from before the Apple Music switch
+ * decode `spotifyTrackId` and `spotifyUrl` as required fields, so a response
+ * without them fails to decode and the whole music section disappears (audit
+ * K-01). Additive only — new clients read `trackId`/`url` and ignore these.
+ */
+export interface WireMusicTrack extends MusicTrack {
+  /** @deprecated Same value as `trackId`; kept for pre-2026-10-08 builds. */
+  spotifyTrackId: string;
+  /** @deprecated Same value as `url`; kept for pre-2026-10-08 builds. */
+  spotifyUrl: string;
+}
+
+export function withLegacyMusicFields(track: MusicTrack): WireMusicTrack {
+  return { ...track, spotifyTrackId: track.trackId, spotifyUrl: track.url };
+}
+
 /** What the table keeps beyond what is shown. */
 export interface StoredMusicTrack extends MusicTrack {
   isrc: string | null;

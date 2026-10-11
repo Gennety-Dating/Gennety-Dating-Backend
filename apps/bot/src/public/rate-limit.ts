@@ -326,11 +326,23 @@ export const venuePhotoLimiter = make({
   message: { error: "Too many photo requests, try again later." },
 });
 
-/** Selfie submission — 5/day per user (falls back to IP). */
+/**
+ * Face Liveness session mints — 10/day per person (audit B-10).
+ *
+ * The per-minute limiters on the two `init` routes bound a burst, not a bill:
+ * at 10/min a looping client still mints ~14k paid AWS sessions a day. This is
+ * the daily ceiling on top, mounted on both mint routes — the native one after
+ * `requireAuth` (keyed by `req.userId`), the Mini App one keyed by the
+ * validated Telegram user like its neighbour. 10 rather than the 5 it was
+ * declared with: a check that does not clearly pass is retryable by product
+ * rule, and an honest person in bad light retries several times in one sitting.
+ */
 export const selfieLimiter = make({
   windowMs: 86_400_000,
-  limit: 5,
-  keyGenerator: (req): string => `selfie:${req.userId ?? ipKey(req)}`,
+  limit: 10,
+  keyGenerator: (req): string =>
+    req.userId ? `selfie:${req.userId}` : miniAppKey(req, "selfie"),
+  message: { error: "Too many verification attempts today, try again tomorrow." },
 });
 
 /** Account deletion — 5/hour per user (falls back to IP). Irreversible op. */
@@ -450,6 +462,19 @@ export const chatMessageLimiter = make({
   limit: 60,
   keyGenerator: (req): string => `chat-msg:${req.userId ?? ipKey(req)}`,
   message: { error: "Too many chat messages, slow down for a bit." },
+});
+
+/**
+ * Proxy-chat send — 30/min per user (audit B-09). The pre-date chat is a few
+ * lines to find each other; a person typing fast sends a handful a minute.
+ * Anything near this ceiling is a loop or a flood aimed at the partner, whose
+ * Telegram gets one relayed message per send.
+ */
+export const proxyChatSendLimiter = make({
+  windowMs: 60_000,
+  limit: 30,
+  keyGenerator: (req): string => `proxy-send:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many messages, slow down for a bit." },
 });
 
 /**

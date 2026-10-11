@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
+import { MIN_PHOTOS } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { serializeProfile, serializeUser } from "./serializers.js";
 import {
@@ -62,6 +63,11 @@ accountStatusRouter.patch("/status", async (req: Request, res: Response): Promis
 
   if (result.kind === "not_found") {
     res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (result.kind === "forbidden" && result.reason === "photos_below_minimum") {
+    // C-13: the profile stays paused until it clears the photo floor again.
+    res.status(409).json({ error: "photos_below_minimum", minPhotos: MIN_PHOTOS });
     return;
   }
   if (result.kind === "forbidden") {

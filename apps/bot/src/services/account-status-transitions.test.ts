@@ -82,6 +82,8 @@ const BASE_USER = {
   id: "user-1",
   telegramId: 123n,
   status: "active" as UserStatus,
+  // At MIN_PHOTOS, so `resume` clears its photo floor (C-13).
+  profile: { photos: ["u/1.jpg", "u/2.jpg", "u/3.jpg", "u/4.jpg"] },
 };
 
 beforeEach(() => {
@@ -129,6 +131,36 @@ describe("transitionAccountStatus", () => {
       }
     });
   }
+
+  // C-13: the matcher has no photo-count filter, so resume holds the floor.
+  it("refuses to resume a profile below MIN_PHOTOS and leaves it paused", async () => {
+    userFindUnique.mockResolvedValue({
+      ...BASE_USER,
+      status: "paused",
+      profile: { photos: ["u/1.jpg", "u/2.jpg"] },
+    });
+
+    const result = await transitionAccountStatus({ id: BASE_USER.id }, "resume");
+
+    expect(result).toMatchObject({
+      kind: "forbidden",
+      status: "paused",
+      reason: "photos_below_minimum",
+    });
+    expect(userUpdateMany).not.toHaveBeenCalled();
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not apply the photo floor to pause or return_from_freeze", async () => {
+    const short = { photos: ["u/1.jpg"] };
+    userFindUnique.mockResolvedValueOnce({ ...BASE_USER, status: "active", profile: short });
+    expect((await transitionAccountStatus({ id: BASE_USER.id }, "pause")).kind).toBe("changed");
+
+    userFindUnique.mockResolvedValueOnce({ ...BASE_USER, status: "frozen", profile: short });
+    expect(
+      (await transitionAccountStatus({ id: BASE_USER.id }, "return_from_freeze")).kind,
+    ).toBe("changed");
+  });
 
   it("(D10) clears Profile.starvationPausedAt on a successful resume", async () => {
     userFindUnique.mockResolvedValue({ ...BASE_USER, status: "paused" });

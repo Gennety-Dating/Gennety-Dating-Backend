@@ -16,6 +16,7 @@ import {
   phoneOtpVerifyLimiter,
 } from "../rate-limit.js";
 import { serializeUser } from "./serializers.js";
+import { refuseBannedLogin } from "../login-gate.js";
 
 /**
  * Native-app phone rail (Registration v2 general track on iOS/Android).
@@ -61,22 +62,24 @@ phoneAuthRouter.post(
           res.status(400).json({ error: "Invalid phone number" });
           return;
         case "cooldown":
+          // `error` is a machine code on every refusal here (audit C-21) so
+          // the client can tell the three 429s apart; statuses unchanged.
           res.status(429).json({
-            error: "Code already sent, wait before retrying",
+            error: "code_cooldown",
             resendAvailableAt: result.resendAvailableAt.toISOString(),
           });
           return;
         case "daily_cap":
-          res.status(429).json({ error: "Daily code limit reached for this number" });
+          res.status(429).json({ error: "daily_cap" });
           return;
         case "global_cap":
           // Product-wide ceiling (SMS pumping guard). Nothing about this caller
           // is wrong, and nothing they can change fixes it — hence the vague
           // "later" rather than a per-number message.
-          res.status(429).json({ error: "Code requests are paused, try again later" });
+          res.status(429).json({ error: "global_cap" });
           return;
         case "unavailable":
-          res.status(503).json({ error: "Code delivery unavailable, try again later" });
+          res.status(503).json({ error: "delivery_unavailable" });
           return;
       }
     }
@@ -114,6 +117,7 @@ phoneAuthRouter.post(
     }
 
     const user = await findOrCreateMobileUserByPhone(result.phone);
+    if (refuseBannedLogin(user, res)) return;
     const accessToken = signAccessToken(user.id);
     const refreshToken = await createRefreshToken(user.id, req.headers["user-agent"] ?? null);
 

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
+import { proxyChatSendLimiter } from "../rate-limit.js";
 import {
   proxyChatReader,
   readProxyChat,
@@ -7,6 +8,7 @@ import {
   reactToProxyMessage,
   reportProxyChatPresence,
   type ProxyChatRefusal,
+  type ProxyChatResult,
   type ProxyChatView,
 } from "../../services/proxy-chat.js";
 import {
@@ -17,6 +19,22 @@ import {
   type PartnerPresence,
 } from "../../services/proxy-presence.js";
 import { PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
+import { parseClientMessageId, SendDedupe } from "../../utils/send-dedupe.js";
+import { exceedsVisibleLength } from "../../utils/text-length.js";
+
+/**
+ * A retried send with the same `clientMessageId` answers with the first send's
+ * result instead of relaying the line again (contract decision 2026-10-11 #4).
+ * Only a send that went through is remembered: a refusal (window closed, …)
+ * is asked again on retry. Module-level — one process, shared by every router
+ * built here.
+ */
+const proxySends = new SendDedupe<ProxyChatResult>({ keep: (result) => result.ok });
+
+/** Tests only. */
+export function resetProxyChatSends(): void {
+  proxySends.clear();
+}
 
 /**
  * Anonymous pre-date chat for the NATIVE client (JWT) — PRODUCT_SPEC §Phase 4.
@@ -111,13 +129,14 @@ export function createProxyChatRouter(
     res.json(serialize(result.view));
   });
 
-  router.post("/", async (req: Request, res: Response): Promise<void> => {
+  router.post("/", proxyChatSendLimiter, async (req: Request, res: Response): Promise<void> => {
     const matchId = matchIdOf(req);
     if (!matchId) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }
-    const body = (req.body as { body?: unknown } | undefined)?.body;
+    const fields = req.body as { body?: unknown; clientMessageId?: unknown } | undefined;
+    const body = fields?.body;
     if (typeof body !== "string") {
       res.status(400).json({ error: "body-required" });
       return;
@@ -125,11 +144,16 @@ export function createProxyChatRouter(
     // Refused rather than truncated: a message silently cut in half is worse
     // than one the sender is told to shorten, and the ceiling is served to the
     // client as `maxMessageLength` so a well-behaved one never reaches here.
-    if (body.length > PROXY_MAX_MESSAGE_LEN) {
+    // Counted in graphemes, as iOS counts it (audit C-17).
+    if (exceedsVisibleLength(body, PROXY_MAX_MESSAGE_LEN)) {
       res.status(400).json({ error: "too-long" });
       return;
     }
-    const result = await relayProxyMessage({ matchId, senderUserId: req.userId!, body });
+    const result = await proxySends.run(
+      req.userId!,
+      parseClientMessageId(fields?.clientMessageId),
+      () => relayProxyMessage({ matchId, senderUserId: req.userId!, body }),
+    );
     if (!result.ok) {
       answerFailure(res, result.error);
       return;
@@ -177,10 +201,14 @@ export function createProxyChatRouter(
       res.status(404).json({ error: "no-message" });
       return;
     }
-    // `null` is a VALUE here, not a missing field: it means "take the reaction
-    // off". Absent means the client sent a malformed body, and the two must not
-    // collapse into the same branch — one is an un-react, the other a bug.
-    const raw = (req.body as { reaction?: unknown } | undefined)?.reaction;
+    // `null` means "take the reaction off" — and so does an absent field
+    // (audit C-04, contract decision 2026-10-11 #7): the generated iOS client
+    // drops a nil optional from the JSON, so its un-react arrives as `{}`, and
+    // answering that 400 left the reaction stuck on the partner's screen.
+    // `emoji` is accepted as the field's other name for the same reason. A
+    // present value of the wrong type is still a malformed request.
+    const fields = (req.body ?? {}) as { reaction?: unknown; emoji?: unknown };
+    const raw = fields.reaction !== undefined ? fields.reaction : (fields.emoji ?? null);
     if (raw !== null && typeof raw !== "string") {
       res.status(400).json({ error: "bad-reaction" });
       return;

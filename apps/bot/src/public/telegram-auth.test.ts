@@ -120,4 +120,19 @@ describe("POST /v1/auth/telegram", () => {
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ code: "account_conflict" });
   });
+
+  // B-05: the Telegram rail must not undo a ban either.
+  it("403s a banned account without minting a session", async () => {
+    findOrCreateUserByTelegramLogin.mockResolvedValueOnce({
+      kind: "resolved",
+      user: { id: "user-1", status: "banned" },
+    });
+
+    const res = await request(buildApp())
+      .post("/v1/auth/telegram")
+      .send({ idToken: "signed.id.token" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "account_banned" });
+  });
 });

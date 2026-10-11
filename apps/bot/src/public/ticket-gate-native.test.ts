@@ -240,7 +240,28 @@ describe("POST /v1/matches/:id/ticket-gate/use", () => {
       .send({ scope: "everyone" });
 
     expect(res.status).toBe(400);
+    expect(res.body.code).toBe("ticket_gate_invalid_scope");
     expect(useTicketFromBalance).not.toHaveBeenCalled();
+  });
+
+  // C-20: the two 400s from the gate are told apart by `code`.
+  it("gives wrong-state and scope-not-allowed their own codes, status unchanged", async () => {
+    useTicketFromBalance.mockResolvedValue({ ok: false, reason: "wrong-state" });
+    const stale = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket-gate/use`)
+      .send({ scope: "self" });
+    expect(stale.status).toBe(400);
+    expect(stale.body).toEqual({ error: "wrong-state", code: "ticket_gate_wrong_state" });
+
+    useTicketFromBalance.mockResolvedValue({ ok: false, reason: "scope-not-allowed" });
+    const scope = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket-gate/use`)
+      .send({ scope: "both" });
+    expect(scope.status).toBe(400);
+    expect(scope.body).toEqual({
+      error: "scope-not-allowed",
+      code: "ticket_gate_scope_not_allowed",
+    });
   });
 });
 

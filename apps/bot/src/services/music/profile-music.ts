@@ -7,8 +7,9 @@ import {
   type MusicError,
   type MusicProvider,
   type MusicResult,
-  type MusicTrack,
   type StoredMusicTrack,
+  type WireMusicTrack,
+  withLegacyMusicFields,
 } from "./track.js";
 
 /**
@@ -52,8 +53,8 @@ type MusicTrackRow = {
   storefront: string | null;
 };
 
-export function serializeMusicTrack(row: MusicTrackRow): MusicTrack {
-  return {
+export function serializeMusicTrack(row: MusicTrackRow): WireMusicTrack {
+  return withLegacyMusicFields({
     // Only this module writes the column, so anything else is a row from
     // before providers existed — and every one of those is Spotify's.
     provider: isMusicProvider(row.provider) ? row.provider : "spotify",
@@ -66,10 +67,10 @@ export function serializeMusicTrack(row: MusicTrackRow): MusicTrack {
     previewUrl: row.previewUrl,
     explicit: row.explicit,
     storefront: row.storefront,
-  };
+  });
 }
 
-export async function listProfileMusic(userId: string): Promise<MusicTrack[]> {
+export async function listProfileMusic(userId: string): Promise<WireMusicTrack[]> {
   const rows = await prisma.profileMusicTrack.findMany({
     where: { userId },
     orderBy: { position: "asc" },
@@ -120,6 +121,27 @@ export function parseTrackRefs(input: unknown): MusicTrackRef[] | null {
   return refs;
 }
 
+/**
+ * The body of `PUT /v1/me/music` → what `setProfileMusic` takes. Builds from
+ * before 2026-10-08 send `{ trackIds: ["<spotify id>", …] }` (Spotify was the
+ * only provider then); that shape is read as Spotify refs so those builds can
+ * still save. Anything malformed falls through to the normal validation.
+ */
+export function musicSaveInput(body: unknown): unknown {
+  if (typeof body !== "object" || body === null) return undefined;
+  const { tracks, trackIds } = body as { tracks?: unknown; trackIds?: unknown };
+  if (tracks !== undefined || !Array.isArray(trackIds)) return tracks;
+  return trackIds.map((trackId: unknown) =>
+    typeof trackId === "string" ? { provider: "spotify", trackId } : trackId,
+  );
+}
+
+function refKey(ref: { provider: string; trackId: string; storefront?: string | null }): string {
+  return ref.provider === "apple_music"
+    ? `${ref.provider}:${ref.storefront ?? ""}:${ref.trackId}`
+    : `${ref.provider}:${ref.trackId}`;
+}
+
 /** The provider's own word on one ref. */
 async function resolveTrack(
   ref: MusicTrackRef,
@@ -148,9 +170,9 @@ function rowData(track: StoredMusicTrack) {
   };
 }
 
-function toShown(track: StoredMusicTrack): MusicTrack {
+function toShown(track: StoredMusicTrack): WireMusicTrack {
   const { isrc: _isrc, ...shown } = track;
-  return shown;
+  return withLegacyMusicFields(shown);
 }
 
 export type SetProfileMusicError =
@@ -161,7 +183,7 @@ export type SetProfileMusicError =
   | Exclude<MusicError, "not_found">;
 
 export type SetProfileMusicResult =
-  | { ok: true; tracks: MusicTrack[] }
+  | { ok: true; tracks: WireMusicTrack[] }
   | { ok: false; error: SetProfileMusicError };
 
 /**
@@ -184,29 +206,52 @@ export async function setProfileMusic(
   // touched. The client sends ids only, so what a partner reads on this profile
   // is what Spotify or Apple says about those ids — never a title or an image
   // the client chose.
-  const tracks: StoredMusicTrack[] = [];
+  //
+  // A track already pinned is not asked again (audit K-04): removing one of
+  // three re-sends the other two, and those rows already hold the provider's
+  // answer — re-reading them only spends quota and turns a provider outage
+  // into a failed removal. They keep their `refreshedAt`, so the nightly
+  // refresh still re-reads them on its usual schedule.
+  const pinned = new Map<string, { track: StoredMusicTrack; refreshedAt: Date }>();
+  if (refs.length > 0) {
+    const rows = await prisma.profileMusicTrack.findMany({
+      where: { userId },
+      select: { ...MUSIC_TRACK_SELECT, isrc: true, refreshedAt: true },
+    });
+    for (const { isrc, refreshedAt, ...row } of rows) {
+      const { spotifyTrackId: _id, spotifyUrl: _url, ...shown } = serializeMusicTrack(row);
+      pinned.set(refKey(shown), { track: { ...shown, isrc }, refreshedAt });
+    }
+  }
+
+  const now = new Date();
+  const tracks: { track: StoredMusicTrack; refreshedAt: Date }[] = [];
   for (const ref of refs) {
+    const kept = pinned.get(refKey(ref));
+    if (kept) {
+      tracks.push(kept);
+      continue;
+    }
     const found = await resolveTrack(ref);
     if (!found.ok) {
       return { ok: false, error: found.error === "not_found" ? "track_not_found" : found.error };
     }
-    tracks.push(found.value);
+    tracks.push({ track: found.value, refreshedAt: now });
   }
 
-  const now = new Date();
   await prisma.$transaction([
     prisma.profileMusicTrack.deleteMany({ where: { userId } }),
     prisma.profileMusicTrack.createMany({
-      data: tracks.map((track, position) => ({
+      data: tracks.map(({ track, refreshedAt }, position) => ({
         userId,
         position,
         ...rowData(track),
-        refreshedAt: now,
+        refreshedAt,
       })),
     }),
   ]);
   clearTopTracksImport(userId);
-  return { ok: true, tracks: tracks.map(toShown) };
+  return { ok: true, tracks: tracks.map(({ track }) => toShown(track)) };
 }
 
 export interface MusicRefreshResult {

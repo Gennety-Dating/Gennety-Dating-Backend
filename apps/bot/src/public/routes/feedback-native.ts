@@ -67,6 +67,8 @@ export function createNativeFeedbackRouter(): Router {
       matchId,
       language: resolveLanguage(body.language, user?.language ?? null),
       submission: normalised.value,
+      // A retry after a lost response is the same answer, not a second one.
+      acceptIdenticalReplay: true,
     });
     if (!result.ok) {
       answerFailure(res, result.error);

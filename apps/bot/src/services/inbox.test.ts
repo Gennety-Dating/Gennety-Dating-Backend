@@ -53,6 +53,43 @@ describe("recordTransactionalInboxItem", () => {
     expect(inbox.create.mock.calls[0][0].data).toMatchObject({ matchId: null, type: "match.proposed" });
     expect(inbox.create.mock.calls[0][0].data.pushedAt).toBeInstanceOf(Date);
   });
+
+  // B-11: a retried pitch push is the same news, not a second unread row.
+  it("folds an exact repeat about the same match into the first row", async () => {
+    const MATCH = "44444444-4444-4444-8444-444444444444";
+    inbox.findFirst.mockResolvedValue({ id: ID });
+
+    const id = await recordTransactionalInboxItem({
+      userId: USER,
+      type: "match.proposed",
+      title: "T",
+      body: "B",
+      data: { matchId: MATCH },
+    });
+
+    expect(id).toBe(ID);
+    expect(inbox.create).not.toHaveBeenCalled();
+    expect(inbox.findFirst.mock.calls[0][0].where).toEqual({
+      userId: USER,
+      type: "match.proposed",
+      matchId: MATCH,
+      title: "T",
+      body: "B",
+    });
+  });
+
+  it("writes a new row when nothing identical exists", async () => {
+    inbox.findFirst.mockResolvedValue(null);
+    inbox.create.mockResolvedValue({ id: "new" });
+    const id = await recordTransactionalInboxItem({
+      userId: USER,
+      type: "match.proposed",
+      title: "T",
+      body: "B",
+      data: { matchId: "44444444-4444-4444-8444-444444444444" },
+    });
+    expect(id).toBe("new");
+  });
 });
 
 describe("listInbox", () => {
@@ -90,13 +127,31 @@ describe("markInboxRead", () => {
     });
   });
 
-  it.each([[[]], [["nope"]], ["not-an-array"], [Array.from({ length: 201 }, () => ID)]])(
+  it.each([[[]], [["nope"]], ["not-an-array"], [Array.from({ length: 5001 }, () => ID)]])(
     "refuses %j",
     async (ids) => {
       await expect(markInboxRead(USER, ids)).resolves.toEqual({ ok: false, error: "invalid_ids" });
       expect(inbox.updateMany).not.toHaveBeenCalled();
     },
   );
+
+  // "Mark all read" on a full bell used to 400 past 200 ids and leave the dot lit.
+  it("chunks a list longer than one write instead of refusing it", async () => {
+    inbox.updateMany.mockResolvedValue({ count: 200 });
+    const ids = Array.from(
+      { length: 450 },
+      (_, i) => `22222222-2222-4222-8222-${String(i).padStart(12, "0")}`,
+    );
+
+    await expect(markInboxRead(USER, ids)).resolves.toEqual({ ok: true, unreadCount: 0 });
+
+    const chunks = inbox.updateMany.mock.calls.map((call) => call[0].where.id.in as string[]);
+    expect(chunks.map((c) => c.length)).toEqual([200, 200, 50]);
+    expect(chunks.flat()).toEqual(ids);
+    for (const call of inbox.updateMany.mock.calls) {
+      expect(call[0].where).toMatchObject({ userId: USER, readAt: null });
+    }
+  });
 });
 
 describe("getInboxItemDetail", () => {

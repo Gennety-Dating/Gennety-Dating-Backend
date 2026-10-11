@@ -51,11 +51,15 @@ export function createDateBumpRouter(options: DateBumpRouterOptions = {}): Route
   const router = Router();
 
   // Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
-  router.use(requireCanvasAuth);
   // After auth, so the key is the PERSON rather than a shared address —
   // see `canvasLimiter`. The canvas polls while nothing is happening, which
   // the global IP floor cannot tell apart from abuse.
-  router.use(canvasLimiter);
+  //
+  // Scoped to the bump path, not router-wide (audit C-24): this router shares
+  // `/v1/dates` with the Radar's, and a router-wide `use` ran on every radar
+  // ping on its way through — authenticating it twice and charging the
+  // person's canvas budget twice for one request.
+  router.use("/:matchId/bump", requireCanvasAuth, canvasLimiter);
 
   router.post("/:matchId/bump", async (req: Request, res: Response): Promise<void> => {
     const parsed = parseBumpRequest(req, res);

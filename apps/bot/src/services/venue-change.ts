@@ -40,6 +40,7 @@ import {
   type RegularOpeningHours,
 } from "./venue.js";
 import type { VenueCategory } from "./vibe-parser.js";
+import { BoundedMap } from "../utils/bounded-map.js";
 
 // ---------------------------------------------------------------------------
 // Catalog types
@@ -686,7 +687,11 @@ interface PhotoCacheEntry {
  * news" belongs in memory rather than in a table whose whole point is durable
  * facts.
  */
-const photoCache = new Map<string, PhotoCacheEntry>();
+// Bounded (audit B-22): an expired entry is overwritten on its next lookup but
+// never removed, so every place id ever shown on a board stayed for the life of
+// the process. Eviction is a cache miss, i.e. one more lookup.
+const PHOTO_CACHE_MAX_ENTRIES = 2_000;
+const photoCache = new BoundedMap<string, PhotoCacheEntry>(PHOTO_CACHE_MAX_ENTRIES);
 
 /** Test seam — the cache is module state, so a test must be able to reset it. */
 export function __resetVenuePhotoCacheForTests(): void {

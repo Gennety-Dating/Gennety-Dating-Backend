@@ -85,13 +85,17 @@ export function validateInitData(
   }
 
   // `timingSafeEqual` requires equal-length buffers; the length guard rejects a
-  // malformed/truncated hash up front rather than letting Node throw.
+  // malformed/truncated hash up front rather than letting Node throw. Byte
+  // lengths, not string lengths: a non-ASCII hash of the right character count
+  // is longer in UTF-8 and used to throw (a 500 instead of a 401).
   const expected = Buffer.from(hash);
-  const matches = candidateHashes.some(
-    (candidate) =>
-      candidate.length === hash.length &&
-      crypto.timingSafeEqual(Buffer.from(candidate), expected),
-  );
+  const matches = candidateHashes.some((candidate) => {
+    const candidateBytes = Buffer.from(candidate);
+    return (
+      candidateBytes.length === expected.length &&
+      crypto.timingSafeEqual(candidateBytes, expected)
+    );
+  });
   if (!matches) return { valid: false, reason: "bad-hash" };
 
   // Freshness check — guard against initData replay long after the user

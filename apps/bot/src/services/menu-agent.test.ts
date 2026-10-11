@@ -1506,6 +1506,37 @@ describe("menu-agent stored transcript and reply fallback", () => {
   });
 
   /**
+   * Audit B-06. Two turns for one person used to run side by side, each
+   * loading the same history and writing back its own copy — one exchange was
+   * lost. They now queue; another person's turn does not wait.
+   */
+  it("runs one turn per person at a time, and does not hold up anyone else", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const fetchFn = vi.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      inFlight -= 1;
+      return textResponse("ok");
+    });
+    const deps = { fetchFn: fetchFn as unknown as typeof fetch };
+
+    await Promise.all([
+      runMenuAgentTurn(telegramId, "one", deps),
+      runMenuAgentTurn(telegramId, "two", deps),
+    ]);
+    expect(peak).toBe(1);
+
+    peak = 0;
+    await Promise.all([
+      runMenuAgentTurn(telegramId, "mine", deps),
+      runMenuAgentTurn(BigInt(7008), "theirs", deps),
+    ]);
+    expect(peak).toBe(2);
+  });
+
+  /**
    * A13-L9. The column used to be overwritten with the replay window plus this
    * turn, so the onboarding transcript and every agent turn older than 24 h
    * vanished from the admin dialogs viewer on the next message.

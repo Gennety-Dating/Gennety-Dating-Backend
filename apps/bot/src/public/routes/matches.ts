@@ -231,8 +231,14 @@ matchesRouter.post(
   async (req: Request, res: Response): Promise<void> => {
     const id = paramId(req);
     const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    if (!text || text.length > 500) {
+    if (!text) {
       res.status(400).json({ error: "Text must be 1–500 characters" });
+      return;
+    }
+    // Its own code, so a client can say "too long" instead of reading a bare
+    // 400 as the out-of-market refusal (C-16).
+    if (text.length > 500) {
+      res.status(400).json({ error: "description_too_long", maxLength: 500 });
       return;
     }
     const intent = await interpretVenueIntent(id, req.userId!, text, req.body?.origin ?? null);
@@ -395,8 +401,15 @@ matchesRouter.post("/:id/cancel", async (req: Request, res: Response): Promise<v
     // The date's time has come (A13-M20). Its own code, because the client has
     // something different to say than for a cancelled row: the date is still
     // on the record, and whether it happened is asked after it, not here.
+    // The body is the spec's StaleActionConflict (iOS decodes it strictly);
+    // `code` stays as the field that tells this conflict apart.
     if (result.error === "date-started") {
-      res.status(409).json({ error: "Date has already started", code: "date_started" });
+      const current = (await currentMatchStatusForUser(id, req.userId!)) ?? "scheduled";
+      res.status(409).json({
+        ...staleActionBody(current),
+        code: "date_started",
+        message: "Date has already started",
+      });
       return;
     }
     // Already cancelled, or never got as far as a scheduled date. 409 rather

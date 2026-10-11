@@ -28,6 +28,14 @@ info:
     Mini App calls take either rail, so one deck, one chip set and one
     preference vector serve both clients. The only rail-dependent behaviour is
     the Telegram chat continuation after a submit, which runs for `tma` only.
+
+    **Build floor.** The native client sends `X-Gennety-Build: <CFBundleVersion>`
+    (a plain integer) on every request. While the server's `MIN_IOS_BUILD` is
+    above 0, any `/v1/*` request whose header is below it is answered `426`
+    `{ "error": "update_required" }` before routing (see the `UpdateRequired`
+    response); `GET /v1/app/config → minIosBuild` reports the floor. A request
+    without the header, or with a non-integer value, always passes. The 426 is
+    not repeated on every operation below.
   contact:
     name: Gennety Dating
 
@@ -98,6 +106,12 @@ paths:
       tags: [auth]
       operationId: requestEmailOtp
       summary: Send a one-time code to a university email (student track)
+      description: |
+        Refusals carry a machine code in `error` so the client can word them:
+        `400 email_plus_tag_not_allowed` — a `+tag` address no existing
+        account has verified (any other 400 is "not a university address");
+        `429 otp_daily_limit` — this address spent its daily code budget (any
+        other 429 is the request rate limiter).
       security: []
       requestBody:
         required: true
@@ -152,6 +166,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/AccountBanned" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/auth/phone/request:
@@ -165,6 +180,11 @@ paths:
         secondary rail; `channel: "sms"` always forces Twilio. The client
         only reads `deliveredVia` for the status line. 404 while
         `PHONE_AUTH_ENABLED` is off.
+
+        Refusals carry a machine code in `error`: `429 code_cooldown` (with
+        `resendAvailableAt`), `429 daily_cap` (this number's daily budget),
+        `429 global_cap` (product-wide pause), `503 delivery_unavailable`.
+        A 429 without one of these codes is the request rate limiter.
       security: []
       requestBody:
         required: true
@@ -252,6 +272,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/AccountBanned" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "502":
           description: Verification provider unavailable
@@ -328,6 +349,7 @@ paths:
                 properties:
                   error: { type: string }
                   code: { type: string, enum: [account_conflict] }
+        "403": { $ref: "#/components/responses/AccountBanned" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "502":
           description: |
@@ -530,7 +552,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Transition not allowed from the current status
+          description: |
+            Transition not allowed from the current status. Resuming
+            (paused→active) a profile below the photo minimum answers
+            `{ "error": "photos_below_minimum", "minPhotos": 4 }` and the
+            account stays paused — the matcher has no photo-count filter of
+            its own (since 2026-10-11).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1555,7 +1582,10 @@ paths:
         **The form is answered once per side.** A second submission is refused
         with 409 `already-submitted` and the first answer stays: it has already
         been analysed into matching, and re-running that analysis would count
-        its dealbreakers twice. A story the person told the concierge, or a
+        its dealbreakers twice. An IDENTICAL repeat (a retry after a lost
+        response: same answers, same venue verdict) is not a second
+        submission and answers 200 like the first, writing nothing (since
+        2026-10-11). A story the person told the concierge, or a
         Telegram voice note, recorded before the form does NOT close it — the
         chemistry score and the second-date answer come only from here — so the
         form is accepted on top of either and the earlier text is kept.
@@ -1814,6 +1844,10 @@ paths:
         provider's own metadata before saving — a client cannot put a title
         or a cover of its choosing on a profile — and saves nothing unless
         every reference resolves.
+
+        Legacy (audit K-01): builds from before 2026-10-08 send
+        `{ trackIds: ["<spotify id>", …] }`; the server still reads that body
+        as Spotify references. New clients send `tracks`.
       requestBody:
         required: true
         content:
@@ -2594,11 +2628,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Transcription failed
+          description: The recording holds no speech that could be transcribed
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: |
+            `transcription_unavailable` — our transcription is down (no key,
+            OpenAI unreachable, 5xx or quota). The recording itself is fine:
+            keep it and offer a retry (audit C-06, contract decision
+            2026-10-11 #6). Only a recording that yields no speech is 422.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/onboarding/interview/voice-prompt:
     post:
@@ -2753,6 +2796,18 @@ paths:
                     not a UUID is a 400. Omitted (older builds): the turn continues the
                     caller's most recently active chat if its last message is under six
                     hours old, and opens a new one otherwise.
+                clientMessageId:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                  description: |
+                    Optional idempotency key the client mints per message
+                    (contract decision 2026-10-11 #4). A retry with the same id
+                    within 10 minutes gets the first turn's reply back instead
+                    of running — and billing — a second turn; a duplicate sent
+                    while the first is still running waits for it. A turn that
+                    failed is not remembered, so its retry runs anew. Omitted or
+                    malformed: every send is its own turn, as before.
       responses:
         "200":
           description: Assistant reply
@@ -2806,7 +2861,13 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "413":
-          description: Text too long
+          description: |
+            `{ "error": "message_too_long", "maxLength": 4000 }`, or too many
+            images. Length is counted in user-perceived characters (grapheme
+            clusters), as iOS counts a `String` — never stricter than the
+            client (audit C-17/C-18). A 429 here is either the request limiter
+            or `daily_token_budget`; only the two turn routes carry the budget,
+            so history, topics and sessions keep answering (audit C-05).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2890,11 +2951,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Could not transcribe audio
+          description: The recording holds no speech that could be transcribed
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: |
+            `transcription_unavailable` — our transcription is down (no key,
+            OpenAI unreachable, 5xx or quota). The recording itself is fine:
+            keep it and offer a retry (audit C-06, contract decision
+            2026-10-11 #6). Only a recording that yields no speech is 422.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/chat/history:
     get:
@@ -3139,6 +3209,8 @@ paths:
       description: |
         Idempotent. Ids that are not the caller's simply match nothing — no
         per-id error, so the response cannot be used to probe for rows.
+        A long list ("mark all read") is chunked server-side; up to 5000 ids
+        per request (was 200 until 2026-10-11).
       requestBody:
         required: true
         content:
@@ -3150,7 +3222,7 @@ paths:
                 ids:
                   type: array
                   minItems: 1
-                  maxItems: 200
+                  maxItems: 5000
                   items: { type: string, format: uuid }
       responses:
         "200":
@@ -3311,7 +3383,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Transaction rejected (unknown/foreign/not the premium product/no expiry)
+          description: >
+            Transaction rejected — `code` is `unknown_transaction`,
+            `wrong_bundle`, `not_premium`, `no_expiry`, or `wrong_owner` (its
+            `appAccountToken` names another user, or the subscription is already
+            bound to another account). Final: finish the transaction.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3817,6 +3893,20 @@ paths:
                     Trimmed server-side; empty after trimming is a 400. The
                     ceiling mirrors `PROXY_MAX_MESSAGE_LEN` and is served back
                     as `maxMessageLength` so the client never hard-codes it.
+                    Counted in user-perceived characters (grapheme clusters),
+                    as iOS counts — an emoji is one (audit C-17).
+                clientMessageId:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                  description: |
+                    Optional idempotency key the client mints per message
+                    (contract decision 2026-10-11 #4). A retry with the same id
+                    within 10 minutes answers with the first send's state and
+                    relays nothing again; a duplicate sent while the first is in
+                    flight waits for it. A refused send (window closed, …) is
+                    not remembered. Omitted or malformed: every send relays, as
+                    before. Sends are limited to 30 a minute per person (429).
       responses:
         "200":
           description: Relayed; the new state
@@ -3843,6 +3933,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/matches/{id}/chat/presence:
     post:
@@ -3933,8 +4024,11 @@ paths:
         would suggest appending to a list this endpoint does not have.
 
         **`reaction: null` removes it** — pressing the emoji already on a
-        message un-reacts, as it does in every chat app. Null is a value here,
-        not an absent field; an absent field is a malformed body (400).
+        message un-reacts, as it does in every chat app. An absent field means
+        the same (`{}`, and `{ "emoji": null }`): the generated client drops a
+        nil optional from the JSON, so its un-react arrives as `{}` (audit
+        C-04, contract decision 2026-10-11 #7). A present value of the wrong
+        type is still a 400.
 
         **You cannot react to your own message** (403 `own-message`). A
         reaction is something the reader does; self-reacting would show authors
@@ -3989,8 +4083,8 @@ paths:
               schema: { $ref: "#/components/schemas/ProxyChatState" }
         "400":
           description: |
-            `bad-reaction` — the body was malformed, or the emoji is outside
-            the closed set. Malformed rather than forbidden: a client sending
+            `bad-reaction` — the reaction is not a string or null, or the
+            emoji is outside the closed set. Malformed rather than forbidden: a client sending
             🍕 has a bug, not a missing permission.
           content:
             application/json:
@@ -4099,7 +4193,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TicketGateState" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: |
+            Refused. `error` keeps the reason as before; `code` tells the
+            cases apart (since 2026-10-11): `ticket_gate_invalid_scope` (the
+            body's scope is not one of the three), `ticket_gate_wrong_state`
+            (the gate is closed or already settled for this slot),
+            `ticket_gate_scope_not_allowed` (this caller may not cover the
+            partner).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
           description: Not a participant, or scope not allowed for this caller
@@ -4352,7 +4456,11 @@ paths:
                 properties:
                   intent: { $ref: "#/components/schemas/VenueIntentV2" }
         "400":
-          description: Invalid payload, or the departure pin is outside the caller's market
+          description: |
+            Invalid payload, or the departure pin is outside the caller's
+            market. A text over 500 characters is its own body,
+            `{ "error": "description_too_long", "maxLength": 500 }` (since
+            2026-10-11) — not the out-of-market refusal.
           content:
             application/json:
               schema:
@@ -4518,6 +4626,9 @@ paths:
           description: |
             Not a scheduled date — already cancelled, or never got that far.
             409 rather than 404: the match exists and the caller is on it.
+            Once the agreed time has come the same shape carries
+            `code: "date_started"` (plus a human `message`): the date stands
+            and is asked about after it, not cancelled here.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StaleActionConflict" }
@@ -4556,7 +4667,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: Already reported
+          description: |
+            Already reported with a different report. An identical repeat
+            (same category and message — a retry after a lost response)
+            answers 204 like the first and files nothing new (since 2026-10-11).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5467,9 +5581,13 @@ paths:
         "422":
           description: >
             Apple rejected the transaction — unknown, revoked, another
-            account's, or not the venue-change product.
+            account's (`wrong_owner`: its `appAccountToken` names another user,
+            or another account reported it first), or not the venue-change
+            product.
         "503":
-          description: App Store verification is unavailable or unconfigured; retry later.
+          description: >
+            App Store verification is unavailable or unconfigured, or an earlier
+            report of the same purchase is still being settled; retry later.
 
   /v1/prime-time/appstore/transaction:
     post:
@@ -5728,6 +5846,22 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    UpdateRequired:
+      description: |
+        `X-Gennety-Build` is below the server's `MIN_IOS_BUILD`; body is
+        `{ "error": "update_required" }`. The client must block behind an
+        "update the app" screen. Any `/v1/*` operation can answer it.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AccountBanned:
+      description: |
+        The proof was valid but the account is permanently banned; no tokens
+        are minted. Body is `{ "error": "account_banned" }`. Paused or frozen
+        accounts are not refused.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
     RhythmActivity:
@@ -5801,6 +5935,15 @@ components:
         currentMatchStatus:
           type: string
           enum: [proposed, negotiating, negotiating_venue, scheduled, cancelled, completed, expired]
+        code:
+          type: string
+          description: >
+            Optional refinement. `date_started` on `POST /v1/matches/{id}/cancel`
+            once the agreed time has come. A documented string rather than an
+            enum, so a code added later does not break decoding.
+        message:
+          type: string
+          description: Human-readable note for logs; not for display.
 
     RadarState:
       type: object
@@ -6714,6 +6857,13 @@ components:
         minSupportedIosVersion:
           type: [string, "null"]
           description: Semver floor; a lower client build must block behind an update screen
+        minIosBuild:
+          type: [integer, "null"]
+          description: |
+            Build-number floor (`CFBundleVersion`) the server enforces with 426
+            `update_required` on any `/v1/*` request carrying a lower
+            `X-Gennety-Build`. Null while the gate is off. Optional; absent on
+            older servers.
         supportedCities:
           type: array
           description: |
@@ -7049,6 +7199,34 @@ components:
             Date Ticket wallet balance (§3.5b). On the user rather than behind a
             wallet route: the store screen and the gate both need it and the app
             already refetches `/v1/me`. Simply 0 while tickets are off.
+        appAccountToken:
+          type: string
+          format: uuid
+          description: |
+            Only on `GET /v1/me` (optional; absent on older servers and on the
+            auth responses). Lowercase UUID to pass as StoreKit's
+            `Product.PurchaseOption.appAccountToken` on every purchase.
+            Deterministic and stable forever for this user. Every App Store
+            report endpoint refuses (422 `wrong_owner`) a transaction whose
+            token names a different user; a transaction without a token keeps
+            the legacy behaviour.
+        premium:
+          type: object
+          description: |
+            Only on `GET /v1/me` (optional; absent on older servers). Premium as
+            the server holds it, whichever rail granted it.
+          required: [active, expiresAt, source]
+          properties:
+            active: { type: boolean }
+            expiresAt:
+              type: [string, "null"]
+              format: date-time
+            source:
+              type: string
+              description: |
+                The recurring subscription's rail (`app_store`,
+                `telegram_stars`, …) when there is one; `grant` when only a
+                comp or a package covers the period; `none` when never Premium.
 
     CalendarState:
       type: object
@@ -8449,6 +8627,18 @@ components:
           description: >-
             Apple Music: the storefront the song was read in — send it back
             unchanged when re-saving the set. Null for Spotify.
+        spotifyTrackId:
+          type: string
+          deprecated: true
+          description: >-
+            Same value as `trackId` (whatever the provider). Emitted only for
+            builds from before 2026-10-08, which require it; read `trackId`.
+        spotifyUrl:
+          type: string
+          deprecated: true
+          description: >-
+            Same value as `url` (whatever the provider). Emitted only for
+            builds from before 2026-10-08, which require it; read `url`.
 
     MusicTracksResponse:
       type: object
@@ -8528,7 +8718,12 @@ components:
         agreedTime: { type: [string, "null"], format: date-time }
         venueName: { type: [string, "null"] }
         venueAddress: { type: [string, "null"] }
-        venueLat: { type: [number, "null"] }
+        venueLat:
+          type: [number, "null"]
+          description: >
+            The venue's own point, or null when it is not known — a legacy
+            row whose columns hold the route midpoint (same rule as
+            `/v1/date/state` `venue.lat`, since 2026-10-11).
         venueLng: { type: [number, "null"] }
         venueGoogleMapsUri: { type: [string, "null"], format: uri }
         venueSelectionReason: { type: [string, "null"] }

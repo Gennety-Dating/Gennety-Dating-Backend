@@ -86,7 +86,7 @@ vi.mock("../../services/storage.js", () => ({
 
 const transcribeVoice = vi.fn(async () => "что надеть?");
 vi.mock("../../services/whisper.js", () => ({
-  transcribeVoice: () => transcribeVoice(),
+  transcribeVoiceResult: async () => ({ ok: true, text: await transcribeVoice() }),
   WHISPER_MAX_BYTES: 25 * 1024 * 1024,
 }));
 

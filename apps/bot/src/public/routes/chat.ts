@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer, { MulterError } from "multer";
+import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
@@ -28,7 +29,9 @@ import {
 } from "../../services/storage.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { isUuid } from "../../utils/uuid.js";
-import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { parseClientMessageId, SendDedupe } from "../../utils/send-dedupe.js";
+import { exceedsVisibleLength } from "../../utils/text-length.js";
 import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/shared";
 
 /**
@@ -59,19 +62,27 @@ import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/sha
  * is the whole point of a list instead of N separate messages.
  *
  * The two spending routes carry `requireAgentAccess` — the same rule the
- * Telegram router and `/v1/assistant` ask. The read routes deliberately do
- * not: showing someone the conversation they already had costs no tokens and
- * writes nothing, and a history that went blank on suspension would read as
- * data loss rather than as enforcement.
+ * Telegram router and `/v1/assistant` ask — and `usageGuard`, the daily token
+ * budget. The read routes deliberately carry neither: showing someone the
+ * conversation they already had costs no tokens and writes nothing, and a
+ * history that went blank on suspension — or answered 429 once the day's
+ * budget ran out (audit C-05) — would read as data loss rather than as
+ * enforcement. `/upload` only stores a picture, so it has no budget either.
  */
 
 export const chatRouter: Router = Router();
 
 chatRouter.use(requireAuth);
-chatRouter.use(usageGuard);
 
 const CHAT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const CHAT_TEXT_MAX_LENGTH = 4_000;
+/**
+ * Retried sends with the same `clientMessageId` get the first turn's answer
+ * instead of a second turn (contract decision 2026-10-11 #4). Only a finished
+ * turn is remembered; anything thrown is forgotten and the retry runs anew.
+ */
+const chatSends = new SendDedupe<Record<string, unknown>>({ keep: () => true });
+
 /** Сколько снимков несёт один ход — как альбом Telegram. */
 const CHAT_IMAGES_MAX = 10;
 const SIGNED_URL_TTL_S = 300;
@@ -79,12 +90,12 @@ const SIGNED_URL_TTL_S = 300;
 /** Аудио: лимит Whisper, а не картиночные 8 МБ. */
 const voiceUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: WHISPER_MAX_BYTES },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: WHISPER_MAX_BYTES, files: 1 },
 });
 
 const chatUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: CHAT_IMAGE_MAX_BYTES },
+  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: CHAT_IMAGE_MAX_BYTES, files: 1 },
 });
 
 function chatUploadWithErrorHandling(
@@ -139,6 +150,7 @@ chatRouter.post(
 chatRouter.post(
   "/message",
   requireAgentAccess,
+  usageGuard,
   chatMessageLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const rawText = req.body?.text;
@@ -161,8 +173,10 @@ chatRouter.post(
       res.status(400).json({ error: "Provide text or imageUrl" });
       return;
     }
-    if (text.length > CHAT_TEXT_MAX_LENGTH) {
-      res.status(413).json({ error: "Text too long" });
+    // Counted in what the person sees (graphemes), as the app counts it —
+    // never stricter than the client (audit C-17).
+    if (exceedsVisibleLength(text, CHAT_TEXT_MAX_LENGTH)) {
+      res.status(413).json({ error: "message_too_long", maxLength: CHAT_TEXT_MAX_LENGTH });
       return;
     }
     if (imageUrls.length > CHAT_IMAGES_MAX) {
@@ -180,35 +194,38 @@ chatRouter.post(
     const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
     if (sessionId === false) return;
 
-    const turn = await runChatTurn({
-      userId: req.userId!,
-      text,
-      imageUrls,
-      context,
-      sessionId,
+    const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
+    const reply = await chatSends.run(req.userId!, clientMessageId, async () => {
+      const turn = await runChatTurn({
+        userId: req.userId!,
+        text,
+        imageUrls,
+        context,
+        sessionId,
+      });
+      return {
+        message: {
+          id: turn.id,
+          role: turn.role,
+          content: turn.content,
+          imageUrl: turn.imageUrl,
+          createdAt: turn.createdAt.toISOString(),
+        },
+        sessionId: turn.sessionId,
+        // Hybrid-chat contract slot (same shape as the interview's uiHint).
+        // Chat turns are free-form, so no hint is derived yet — the field
+        // exists so the generated client handles both surfaces uniformly.
+        uiHint: null,
+        // Код-владельческие подтверждения записей и native-действие, которое
+        // агент не умеет нарисовать сам. Раньше и то и другое существовало
+        // только на телеграм-поверхности: `/v1/assistant` уже несло их в DTO, а
+        // этот маршрут ронял на пол — приложение узнавало об изменении профиля
+        // исключительно из прозы модели.
+        ...(turn.receipts ? { receipts: turn.receipts } : {}),
+        ...(turn.action ? { action: turn.action } : {}),
+      };
     });
-
-    res.json({
-      message: {
-        id: turn.id,
-        role: turn.role,
-        content: turn.content,
-        imageUrl: turn.imageUrl,
-        createdAt: turn.createdAt.toISOString(),
-      },
-      sessionId: turn.sessionId,
-      // Hybrid-chat contract slot (same shape as the interview's uiHint).
-      // Chat turns are free-form, so no hint is derived yet — the field
-      // exists so the generated client handles both surfaces uniformly.
-      uiHint: null,
-      // Код-владельческие подтверждения записей и native-действие, которое
-      // агент не умеет нарисовать сам. Раньше и то и другое существовало
-      // только на телеграм-поверхности: `/v1/assistant` уже несло их в DTO, а
-      // этот маршрут ронял на пол — приложение узнавало об изменении профиля
-      // исключительно из прозы модели.
-      ...(turn.receipts ? { receipts: turn.receipts } : {}),
-      ...(turn.action ? { action: turn.action } : {}),
-    });
+    res.json(reply);
   },
 );
 
@@ -226,6 +243,7 @@ chatRouter.post(
 chatRouter.post(
   "/voice",
   requireAgentAccess,
+  usageGuard,
   voiceLimiter,
   voiceUpload.single("file"),
   async (req: Request, res: Response): Promise<void> => {
@@ -252,10 +270,17 @@ chatRouter.post(
       select: { language: true },
     });
 
-    const transcript = await transcribeVoice(req.file.buffer, {
+    const transcription = await transcribeVoiceResult(req.file.buffer, {
       mime: req.file.mimetype,
       ...(user?.language ? { language: user.language } : {}),
     });
+    // Our outage is not the recording's fault: 503 tells the app to keep the
+    // note and offer a retry, where 422 would have it discarded (audit C-06).
+    if (!transcription.ok && transcription.reason === "unavailable") {
+      res.status(503).json({ error: "transcription_unavailable" });
+      return;
+    }
+    const transcript = transcription.ok ? transcription.text : "";
     if (!transcript) {
       res.status(422).json({ error: "Could not transcribe audio" });
       return;

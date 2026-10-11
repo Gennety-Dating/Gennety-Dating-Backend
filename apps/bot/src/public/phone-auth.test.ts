@@ -92,6 +92,22 @@ describe("/v1/auth/phone", () => {
       .send({ phone: "+380631234567" });
     expect(res.status).toBe(429);
     expect(res.body.resendAvailableAt).toBe(at.toISOString());
+    expect(res.body.error).toBe("code_cooldown");
+  });
+
+  // C-21: each 429 carries its own machine code; statuses are unchanged.
+  it("tells the daily cap apart from the product-wide ceiling", async () => {
+    requestPhoneCode.mockResolvedValueOnce({ ok: false, reason: "daily_cap" });
+    const daily = await request(buildApp())
+      .post("/v1/auth/phone/request")
+      .send({ phone: "+380631234567" });
+    requestPhoneCode.mockResolvedValueOnce({ ok: false, reason: "global_cap" });
+    const global = await request(buildApp())
+      .post("/v1/auth/phone/request")
+      .send({ phone: "+380631234567" });
+    expect([daily.status, global.status]).toEqual([429, 429]);
+    expect(daily.body.error).toBe("daily_cap");
+    expect(global.body.error).toBe("global_cap");
   });
 
   it("maps the product-wide ceiling to 429", async () => {
@@ -151,6 +167,27 @@ describe("/v1/auth/phone", () => {
       expiresIn: 900,
       user: { id: "user-1" },
     });
+  });
+
+  // B-05: a banned account gets no session from a fresh code.
+  it("refuses to mint tokens for a banned account", async () => {
+    verifyPhoneCode.mockResolvedValue({ ok: true, phone: "+380631234567" });
+    findOrCreateMobileUserByPhone.mockResolvedValue({ id: "user-1", status: "banned" });
+    const res = await request(buildApp())
+      .post("/v1/auth/phone/verify")
+      .send({ phone: "+380631234567", code: "123456" });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "account_banned" });
+  });
+
+  it("still signs a paused account in", async () => {
+    verifyPhoneCode.mockResolvedValue({ ok: true, phone: "+380631234567" });
+    findOrCreateMobileUserByPhone.mockResolvedValue({ id: "user-1", status: "paused" });
+    const res = await request(buildApp())
+      .post("/v1/auth/phone/verify")
+      .send({ phone: "+380631234567", code: "123456" });
+    expect(res.status).toBe(200);
+    expect(res.body.accessToken).toBe("access-token");
   });
 
   it("maps mismatch to 401 and keeps the account untouched", async () => {

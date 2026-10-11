@@ -125,6 +125,18 @@ describe("proposalCountdownTick", () => {
     expect(api.editMessageReplyMarkup).not.toHaveBeenCalled();
   });
 
+  // B-22: the cache used to keep every side it ever rendered, forever.
+  it("forgets the sides that stopped counting down", async () => {
+    const cache = new Map<string, string>([["old-match:A", "stale"], ["old-match:B", "stale"]]);
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeMatch({ acceptedByB: true }),
+    ]);
+
+    await proposalCountdownTick(createApi(), { now: NOW, renderCache: cache });
+
+    expect([...cache.keys()]).toEqual(["match-1:A"]);
+  });
+
   it("nulls out the per-side pitch message id when the message is gone", async () => {
     (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([makeMatch()]);
     const api = createApi();

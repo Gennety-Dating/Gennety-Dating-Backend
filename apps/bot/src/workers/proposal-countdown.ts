@@ -121,6 +121,7 @@ export async function proposalCountdownTick(
   // Build the per-side edit list. Cache hits drop out here so the
   // rate-limiter only paces real network calls.
   const pending: PendingEdit[] = [];
+  const liveKeys = new Set<string>();
   for (const match of matches) {
     const minutesLeft = minutesLeftFromDispatch(match.dispatchedAt!, now);
     // Past TTL — leave it to the expiry job, which overwrites the body
@@ -142,6 +143,7 @@ export async function proposalCountdownTick(
       const lang: Language = (user.language as Language) ?? "en";
       const label = renderCountdownButtonLabel(lang, minutesLeft);
       const cacheKey = `${match.id}:${side}`;
+      liveKeys.add(cacheKey);
       if (cache.get(cacheKey) === label) {
         result.skippedSameText++;
         continue;
@@ -158,6 +160,13 @@ export async function proposalCountdownTick(
         cacheKey,
       });
     }
+  }
+  // Forget every side that no longer counts down (decided, expired, gone).
+  // Nothing else ever removed them, so the cache grew by two entries per
+  // proposal for the life of the process (audit B-22). A side that comes back
+  // into the scan simply re-renders once.
+  for (const key of cache.keys()) {
+    if (!liveKeys.has(key)) cache.delete(key);
   }
 
   let editsThisSecond = 0;

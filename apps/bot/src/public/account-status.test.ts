@@ -100,6 +100,19 @@ describe("PATCH /v1/me/status", () => {
     }
   });
 
+  // C-13: a paused profile below the photo floor stays paused, with a code
+  // the client can act on.
+  it("answers photos_below_minimum when resume is refused for photos", async () => {
+    transitionAccountStatus.mockResolvedValue({
+      kind: "forbidden",
+      status: "paused",
+      reason: "photos_below_minimum",
+    });
+    const res = await request(buildApp()).patch("/v1/me/status").send({ status: "active" });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "photos_below_minimum", minPhotos: 4 });
+  });
+
   it("rejects unknown statuses", async () => {
     const res = await request(buildApp()).patch("/v1/me/status").send({ status: "frozen" });
     expect(res.status).toBe(400);

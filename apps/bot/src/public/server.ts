@@ -1,13 +1,15 @@
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import type { Server } from "node:http";
-import express, { type Request, type Response, type NextFunction } from "express";
+import express, { type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { allowCrossOriginImage } from "./cross-origin-image.js";
 import { stripUndrawnLayers } from "./vector-tile-filter.js";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
+import { requireMinBuild } from "./build-gate.js";
+import { publicErrorHandler } from "./error-handler.js";
 import {
   globalLimiter,
   mapTileLimiter,
@@ -288,6 +290,9 @@ app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
 });
 
 app.use(globalLimiter);
+// Forced update by build number (audit C-23): a native build below
+// `MIN_IOS_BUILD` gets 426 before any router runs. Off at 0; no header passes.
+app.use("/v1", requireMinBuild);
 // Apply the cheap IP limiter before allocating/parsing attacker-controlled JSON.
 app.use(express.json({ limit: "512kb" }));
 
@@ -680,20 +685,9 @@ app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Not found" });
 });
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  // body-parser surfaces PayloadTooLargeError (413) and SyntaxError (400)
-  // with a proper `.status`. Honor 4xx client errors instead of masking them
-  // as 500 — the client needs the right code to distinguish retryable bugs
-  // from its own malformed request.
-  const status = (err as { status?: number; statusCode?: number }).status
-    ?? (err as { statusCode?: number }).statusCode;
-  if (typeof status === "number" && status >= 400 && status < 500) {
-    res.status(status).json({ error: err.message });
-    return;
-  }
-  console.error("[public] unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
-});
+// Last-resort handler: 4xx passthrough, multer and Prisma refusals mapped,
+// everything else 500 — see error-handler.ts.
+app.use(publicErrorHandler);
 
 /**
  * Bind the public API. Returns the listening server (the graceful shutdown

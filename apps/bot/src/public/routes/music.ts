@@ -2,9 +2,10 @@ import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
 import { musicSearchLimiter } from "../rate-limit.js";
 import { searchTracks } from "../../services/music/spotify.js";
-import type { MusicError } from "../../services/music/track.js";
+import { type MusicError, withLegacyMusicFields } from "../../services/music/track.js";
 import {
   listProfileMusic,
+  musicSaveInput,
   setProfileMusic,
   type SetProfileMusicError,
 } from "../../services/music/profile-music.js";
@@ -14,7 +15,8 @@ import {
  *
  *   GET /v1/me/music          — the caller's pinned tracks, in order
  *   PUT /v1/me/music          — replace them with `{ tracks }` (0..3), each
- *                               `{ provider, trackId, storefront? }`
+ *                               `{ provider, trackId, storefront? }`; the
+ *                               pre-2026-10-08 `{ trackIds }` still saves
  *   GET /v1/music/search?q=   — Spotify catalogue search, no Spotify login
  *
  * Apple Music has no search route on purpose (decision 2026-10-08): the
@@ -61,8 +63,7 @@ export function createProfileMusicRouter(): Router {
   });
 
   router.put("/", async (req: Request, res: Response): Promise<void> => {
-    const tracks = (req.body as { tracks?: unknown } | undefined)?.tracks;
-    const result = await setProfileMusic(req.userId as string, tracks);
+    const result = await setProfileMusic(req.userId as string, musicSaveInput(req.body));
     if (!result.ok) {
       res.status(musicErrorStatus(result.error)).json({ error: result.error });
       return;
@@ -90,7 +91,7 @@ export function createMusicSearchRouter(): Router {
       res.status(musicErrorStatus(result.error)).json({ error: result.error });
       return;
     }
-    res.json({ tracks: result.value });
+    res.json({ tracks: result.value.map(withLegacyMusicFields) });
   });
 
   return router;

@@ -77,24 +77,43 @@ function transcriptionFilename(mime: string): string | null {
 }
 
 /**
- * Transcribe a voice-note buffer via OpenAI file transcription.
+ * Why a transcription produced no text. The two need different answers from a
+ * route (audit C-06, contract decision 2026-10-11 #6):
  *
- * Returns the transcript, or an empty string if the API key is missing,
- * the request fails, or no text is returned. Callers treat "" as "failed —
- * ask the user to type instead" and must not feed it to the LLM router.
+ * - `unavailable` — OUR side failed: no key, the network, a timeout, OpenAI
+ *   5xx / 429 / auth. The recording is fine and worth retrying, so routes
+ *   answer 503 `transcription_unavailable` and the app keeps the note.
+ * - `unusable` — the RECORDING is: empty, over the size cap, a container we
+ *   cannot name, or one OpenAI refused as malformed (4xx). Retrying the same
+ *   bytes cannot help; routes answer 422 like an empty transcript.
+ *
+ * Silence that transcribes to nothing is `ok` with `text: ""`.
+ */
+export type TranscriptionFailure = "unavailable" | "unusable";
+
+export type TranscriptionResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: TranscriptionFailure };
+
+/**
+ * Transcribe a voice-note buffer via OpenAI file transcription, telling an
+ * outage apart from a bad recording (see `TranscriptionFailure`).
  *
  * Uses raw fetch + built-in FormData/Blob (Node 20+) to avoid pulling in the
  * OpenAI SDK (see AGENTS.md: no new deps without approval).
  */
-export async function transcribeVoice(
+export async function transcribeVoiceResult(
   buffer: Buffer,
   options: TranscribeOptions = {},
-): Promise<string> {
+): Promise<TranscriptionResult> {
   const apiKey = env.OPENAI_API_KEY;
-  if (!apiKey) return "";
+  if (!apiKey) {
+    console.warn("Voice transcription unavailable: OPENAI_API_KEY is not set");
+    return { ok: false, reason: "unavailable" };
+  }
 
   if (buffer.byteLength === 0 || buffer.byteLength > WHISPER_MAX_BYTES) {
-    return "";
+    return { ok: false, reason: "unusable" };
   }
 
   const fetchFn = options.fetchFn ?? fetch;
@@ -103,7 +122,7 @@ export async function transcribeVoice(
   const filename = transcriptionFilename(mime);
   if (!filename) {
     console.warn("Voice transcription skipped: unsupported audio type", mime);
-    return "";
+    return { ok: false, reason: "unusable" };
   }
 
   const form = new FormData();
@@ -126,13 +145,31 @@ export async function transcribeVoice(
     if (!res.ok) {
       const body = await res.text();
       console.warn(`Voice transcription call failed: ${res.status} ${body}`);
-      return "";
+      // A 4xx about the request itself (400 bad audio, 413, 415) is the
+      // recording's; auth, quota and anything 5xx are ours.
+      const recordingsFault =
+        res.status >= 400 && res.status < 500 && ![401, 403, 408, 429].includes(res.status);
+      return { ok: false, reason: recordingsFault ? "unusable" : "unavailable" };
     }
 
     const json = (await res.json()) as WhisperResponse;
-    return typeof json.text === "string" ? json.text.trim() : "";
+    return { ok: true, text: typeof json.text === "string" ? json.text.trim() : "" };
   } catch (err) {
     console.warn("Voice transcription call error:", err);
-    return "";
+    return { ok: false, reason: "unavailable" };
   }
+}
+
+/**
+ * Transcribe a voice-note buffer — the transcript, or an empty string on any
+ * failure. Callers treat "" as "failed — ask the user to type instead" and
+ * must not feed it to the LLM router. Routes that answer a client should use
+ * `transcribeVoiceResult`, which keeps an outage apart from a bad recording.
+ */
+export async function transcribeVoice(
+  buffer: Buffer,
+  options: TranscribeOptions = {},
+): Promise<string> {
+  const result = await transcribeVoiceResult(buffer, options);
+  return result.ok ? result.text : "";
 }

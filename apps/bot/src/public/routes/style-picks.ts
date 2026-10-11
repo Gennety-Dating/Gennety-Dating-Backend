@@ -2,10 +2,14 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
-import { usageGuard } from "../usage-middleware.js";
+import { isOverTokenBudget, usageAttribution } from "../usage-middleware.js";
 import { toCatalogItem } from "../../services/style-picks/catalog.js";
 import { shopUrl, styleOutSignatureValid } from "../../services/style-picks/out-link.js";
-import { getStylePicks } from "../../services/style-picks/service.js";
+import {
+  defaultDeps,
+  getStylePicks,
+  type StylePicksDeps,
+} from "../../services/style-picks/service.js";
 
 /**
  * Vibe Check (decision journal 2026-10-08).
@@ -13,8 +17,10 @@ import { getStylePicks } from "../../services/style-picks/service.js";
  * `GET /v1/me/style-picks` — the person's personal selection, JWT. 204 when the
  * flag is off, the profile is too thin, or a generation failed with nothing
  * cached: the Shop then simply shows no Vibe Check result, never an error.
- * Runs under `usageGuard`, so the one model call is metered against the person
- * like every other AI route.
+ * The one model call is metered against the person like every other AI route
+ * (`usageAttribution`). Over the daily token budget the route does NOT answer
+ * 429 the way `usageGuard` would (audit C-05): most reads never reach the
+ * model, so it serves the cached set — or 204 — without a fresh generation.
  *
  * `GET /v1/style/out/{itemId}` — the outbound redirect a card opens in the
  * system browser. No JWT (a browser sends none): a signed link logs the click,
@@ -24,13 +30,16 @@ import { getStylePicks } from "../../services/style-picks/service.js";
 export function createStylePicksRouter(): Router {
   const router = Router();
   router.use(requireAuth);
-  router.get("/", usageGuard, async (req: Request, res: Response): Promise<void> => {
+  router.get("/", usageAttribution, async (req: Request, res: Response): Promise<void> => {
     if (!env.STYLE_PICKS_ENABLED) {
       res.status(204).end();
       return;
     }
     try {
-      const result = await getStylePicks(req.userId!);
+      const result = await getStylePicks(
+        req.userId!,
+        isOverTokenBudget(req.userId!) ? CACHE_ONLY_DEPS : defaultDeps,
+      );
       if (!result) {
         res.status(204).end();
         return;
@@ -43,6 +52,12 @@ export function createStylePicksRouter(): Router {
   });
   return router;
 }
+
+/** No model call: the cached set if it still renders, otherwise nothing. */
+const CACHE_ONLY_DEPS: StylePicksDeps = {
+  ...defaultDeps,
+  callModel: async () => null,
+};
 
 const ITEM_ID = /^[a-z0-9-]{1,80}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -46,6 +46,12 @@ describe("ticketPhotoUrl", () => {
     expect(ticketPhotoSignatureValid(v, MATCH, "self", e + 1, sig, NOW)).toBe(false);
   });
 
+  it("refuses a non-ASCII signature of the right character count instead of throwing", () => {
+    const { v, e, sig } = parts(ticketPhotoUrl(5986970093, MATCH, "self", NOW));
+    const forged = "é".repeat(sig.length);
+    expect(ticketPhotoSignatureValid(v, MATCH, "self", e, forged, NOW)).toBe(false);
+  });
+
   it("stops working once expired", () => {
     const { v, e, sig } = parts(ticketPhotoUrl(5986970093, MATCH, "self", NOW));
     expect(ticketPhotoSignatureValid(v, MATCH, "self", e, sig, e + 1)).toBe(false);

@@ -228,6 +228,71 @@ describe("submitPostDateFeedback", () => {
     expect(mMatch.update).not.toHaveBeenCalled();
   });
 
+  // C-15: a retry after a lost response is the same answer — success, no write.
+  describe("identical replay (acceptIdenticalReplay)", () => {
+    const composed = composeFeedbackText({
+      text: submission.text,
+      chemistry: submission.chemistry,
+      wantsSecondDate: submission.wantsSecondDate,
+      language: "en",
+    });
+    const storedRow = {
+      userAId: "uid-A",
+      userBId: "uid-B",
+      feedbackByA: `${composed}\n\nan earlier story`,
+      feedbackByB: null,
+      venueFitByA: "yes",
+      venueFitByB: null,
+      venueFitReasonsByA: [],
+      venueFitReasonsByB: [],
+    };
+
+    beforeEach(() => {
+      mockRecord.mockResolvedValue({ ok: false, reason: "already-submitted" });
+      mMatch.findUnique.mockResolvedValue(storedRow);
+    });
+
+    it("answers ok when the stored answer equals the submission", async () => {
+      const result = await submitPostDateFeedback({
+        userId: "uid-A",
+        matchId: "m-1",
+        language: "en",
+        submission,
+        acceptIdenticalReplay: true,
+      });
+      expect(result).toEqual({ ok: true });
+      expect(mMatch.update).not.toHaveBeenCalled();
+    });
+
+    it("still refuses a repeat that changes the answer", async () => {
+      for (const changed of [
+        { ...submission, chemistry: 3 },
+        { ...submission, venueFit: "no" as const },
+        { ...submission, venueFitReasons: ["too_loud"] },
+      ]) {
+        const result = await submitPostDateFeedback({
+          userId: "uid-A",
+          matchId: "m-1",
+          language: "en",
+          submission: changed,
+          acceptIdenticalReplay: true,
+        });
+        expect(result).toEqual({ ok: false, error: "already-submitted" });
+      }
+      expect(mMatch.update).not.toHaveBeenCalled();
+    });
+
+    it("keeps the 409 for a caller that did not opt in (the Mini App)", async () => {
+      const result = await submitPostDateFeedback({
+        userId: "uid-A",
+        matchId: "m-1",
+        language: "en",
+        submission,
+      });
+      expect(result).toEqual({ ok: false, error: "already-submitted" });
+    });
+  });
+
   it("skips the venue write entirely when nothing was said about the venue", async () => {
     await submitPostDateFeedback({
       userId: "uid-A",

@@ -326,3 +326,104 @@ describe("POST /chat/presence", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("POST /chat — audit 2026-10-11", () => {
+  const send = (body: Record<string, unknown>, userId = A) =>
+    request(makeApp())
+      .post(`/v1/matches/${MATCH}/chat`)
+      .set("Authorization", `Bearer ${tokenFor(userId)}`)
+      .send(body);
+
+  it("B-09: a retried clientMessageId relays the line once and answers the same", async () => {
+    const first = await send({ body: "I'm outside", clientMessageId: "cm-retry-0001" });
+    const again = await send({ body: "I'm outside", clientMessageId: "cm-retry-0001" });
+    expect(first.status).toBe(200);
+    expect(again.status).toBe(200);
+    expect(rows).toHaveLength(1);
+    expect(again.body.messages).toEqual(first.body.messages);
+  });
+
+  it("B-09: a duplicate arriving mid-send waits for the same send", async () => {
+    const [a, b] = await Promise.all([
+      send({ body: "Here", clientMessageId: "cm-inflight-01" }),
+      send({ body: "Here", clientMessageId: "cm-inflight-01" }),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("B-09: without an id (old builds) each send is relayed", async () => {
+    await send({ body: "one" });
+    await send({ body: "one" });
+    expect(rows).toHaveLength(2);
+  });
+
+  it("B-09: a refused send is not remembered — the retry is asked again", async () => {
+    mockEnv.COORDINATION_FEATURE_ENABLED = false;
+    expect((await send({ body: "hi", clientMessageId: "cm-refused-01" })).status).toBe(404);
+    mockEnv.COORDINATION_FEATURE_ENABLED = true;
+    expect((await send({ body: "hi", clientMessageId: "cm-refused-01" })).status).toBe(200);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("C-17: 1000 emoji are 1000 characters, as iOS counts them", async () => {
+    const ok = await send({ body: "❤️".repeat(1_000) });
+    expect(ok.status).toBe(200);
+    const over = await send({ body: "❤️".repeat(1_001) });
+    expect(over.status).toBe(400);
+    expect(over.body.error).toBe("too-long");
+  });
+});
+
+describe("PUT /chat/messages/:id/reaction — audit C-04", () => {
+  const MESSAGE = "66666666-6666-4666-8666-666666666666";
+
+  it.each([[{}], [{ emoji: null }], [{ reaction: null }]])(
+    "%j takes the reaction off",
+    async (body) => {
+      const { prisma } = await import("@gennety/db");
+      vi.mocked(prisma.proxyMessage.findFirst).mockResolvedValueOnce({
+        id: MESSAGE,
+        senderId: B,
+        authorChatMessageId: null,
+      } as never);
+      vi.mocked(prisma.proxyMessage.update).mockClear();
+      const res = await request(makeApp())
+        .put(`/v1/matches/${MATCH}/chat/messages/${MESSAGE}/reaction`)
+        .set("Authorization", `Bearer ${tokenFor(A)}`)
+        .send(body);
+      expect(res.status).toBe(200);
+      expect(prisma.proxyMessage.update).toHaveBeenCalledWith({
+        where: { id: MESSAGE },
+        data: { reaction: null },
+      });
+    },
+  );
+
+  it("a reaction of the wrong type is still 400", async () => {
+    const res = await request(makeApp())
+      .put(`/v1/matches/${MATCH}/chat/messages/${MESSAGE}/reaction`)
+      .set("Authorization", `Bearer ${tokenFor(A)}`)
+      .send({ reaction: 7 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("bad-reaction");
+  });
+});
+
+// Last in the file: the limiter's window is process-wide, keyed by the caller.
+describe("POST /chat — per-user send limit (audit B-09)", () => {
+  it("answers 429 JSON past 30 sends a minute", async () => {
+    const stranger = "77777777-7777-4777-8777-777777777777";
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i += 1) {
+      const res = await request(makeApp())
+        .post(`/v1/matches/${MATCH}/chat`)
+        .set("Authorization", `Bearer ${tokenFor(stranger)}`)
+        .send({ body: `line ${i}` });
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s !== 429)).toBe(true);
+    expect(statuses[30]).toBe(429);
+  });
+});

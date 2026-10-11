@@ -31,11 +31,14 @@ vi.mock("../config.js", () => ({
 
 const userFindUnique = vi.fn();
 const profileUpsert = vi.fn();
+// The first-completion claim (B-25). Wins by default; a test that needs the
+// lost race says so.
+const profileUpdateMany = vi.fn(async () => ({ count: 1 }));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: userFindUnique },
-    profile: { upsert: profileUpsert },
+    profile: { upsert: profileUpsert, updateMany: profileUpdateMany },
   },
 }));
 
@@ -344,6 +347,25 @@ describe("POST /v1/radar/submit — chat continuation", () => {
 
     await submit();
 
+    await vi.waitFor(() => expect(radarHandler.resumeOnboardingAfterRadar).toHaveBeenCalledTimes(1));
+    expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
+  });
+
+  // B-25: two concurrent submits both read the stamp as null; only the one
+  // that wins the compare-and-set plays the sequence.
+  it("resumes without the sequence when a concurrent submit claimed the first completion", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational",
+      profile: { typePrefTags: null, typeRadarCompletedAt: null },
+    });
+    profileUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await submit();
+
+    expect(profileUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "u1", typeRadarCompletedAt: null },
+      data: { typeRadarCompletedAt: expect.any(Date) },
+    });
     await vi.waitFor(() => expect(radarHandler.resumeOnboardingAfterRadar).toHaveBeenCalledTimes(1));
     expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
   });

@@ -992,7 +992,7 @@ function registerSchedules(): void {
   if (env.CAMPUS_DROP_ENABLED && !DEMO_MODE_ENABLED) {
     cron.schedule(
       env.CAMPUS_DROP_CRON_SCHEDULE,
-      guardedTick("campus-drop", () => campusDropTick()),
+      guardedTick("campus-drop", () => campusDropTick(bot.api)),
     );
     console.log(`[cron] Campus drop scheduled: "${env.CAMPUS_DROP_CRON_SCHEDULE}"`);
   } else if (env.CAMPUS_DROP_ENABLED) {

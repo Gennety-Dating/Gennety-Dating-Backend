@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MusicTrack, StoredMusicTrack } from "./track.js";
+import { type MusicTrack, type StoredMusicTrack, withLegacyMusicFields } from "./track.js";
 
 const h = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -78,7 +78,11 @@ function song(id: string, storefront = "ua"): StoredMusicTrack {
   };
 }
 
+/** What leaves the server: the shape plus the pre-2026-10-08 names (K-01). */
+const wire = withLegacyMusicFields;
+
 beforeEach(() => {
+  h.findMany.mockResolvedValue([]);
   h.transaction.mockImplementation(async (operations: Promise<unknown>[]) =>
     Promise.all(operations),
   );
@@ -118,7 +122,7 @@ describe("setProfileMusic — saving", () => {
 
     // The answer is what a partner will see — no ISRC.
     const { isrc: _i, ...shownSong } = song(SONG);
-    expect(result).toEqual({ ok: true, tracks: [shownSong, track(A)] });
+    expect(result).toEqual({ ok: true, tracks: [wire(shownSong), wire(track(A))] });
     expect(h.getAppleMusicSong).toHaveBeenCalledWith(SONG, "ua", {});
     expect(h.deleteMany).toHaveBeenCalledWith({ where: { userId: USER } });
     expect(h.createMany).toHaveBeenCalledWith({
@@ -146,6 +150,37 @@ describe("setProfileMusic — saving", () => {
     });
     // The import has served its purpose — Spotify's personal data does not linger.
     expect(h.clearTopTracksImport).toHaveBeenCalledWith(USER);
+  });
+
+  it("keeps already-pinned tracks as stored instead of asking the provider again (K-04)", async () => {
+    const old = new Date("2026-10-01T00:00:00Z");
+    const stored = (t: StoredMusicTrack) => {
+      const { url, ...rest } = t;
+      return { ...rest, trackUrl: url, refreshedAt: old };
+    };
+    h.findMany.mockResolvedValue([stored(song(SONG)), stored({ ...track(A), isrc: null })]);
+
+    // Removing B from [SONG, A, B] re-sends SONG and A; neither is re-read.
+    const result = await setProfileMusic(USER, [apple(SONG), spotify(A)]);
+    const { isrc: _i, ...shownSong } = song(SONG);
+    expect(result).toEqual({ ok: true, tracks: [wire(shownSong), wire(track(A))] });
+    expect(h.getTrack).not.toHaveBeenCalled();
+    expect(h.getAppleMusicSong).not.toHaveBeenCalled();
+    expect(h.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ position: 0, trackId: SONG, isrc: "USUM71900001", refreshedAt: old }),
+        expect.objectContaining({ position: 1, trackId: A, refreshedAt: old }),
+      ],
+    });
+  });
+
+  it("still resolves a newly added track, and a kept song from another storefront", async () => {
+    h.findMany.mockResolvedValue([
+      { ...song(SONG), trackUrl: song(SONG).url, refreshedAt: new Date() },
+    ]);
+    await setProfileMusic(USER, [apple(SONG, "us"), spotify(B)]);
+    expect(h.getAppleMusicSong).toHaveBeenCalledWith(SONG, "us", {});
+    expect(h.getTrack).toHaveBeenCalledWith(B, {});
   });
 
   it("an empty list clears the set", async () => {
@@ -177,10 +212,18 @@ describe("listProfileMusic", () => {
     h.findMany.mockResolvedValue([
       { ...track(A), trackUrl: track(A).url, url: undefined },
     ]);
-    expect(await listProfileMusic(USER)).toEqual([track(A)]);
+    expect(await listProfileMusic(USER)).toEqual([wire(track(A))]);
     expect(h.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: USER }, orderBy: { position: "asc" } }),
     );
+  });
+
+  it("also emits the pre-2026-10-08 names old builds decode (K-01)", () => {
+    const shown = serializeMusicTrack({ ...song(SONG), trackUrl: song(SONG).url });
+    expect(shown.spotifyTrackId).toBe(SONG);
+    expect(shown.spotifyUrl).toBe(song(SONG).url);
+    expect(shown.trackId).toBe(SONG);
+    expect(shown.url).toBe(song(SONG).url);
   });
 
   it("reads a row from before providers as Spotify's", () => {
