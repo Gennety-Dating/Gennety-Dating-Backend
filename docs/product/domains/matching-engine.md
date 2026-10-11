@@ -127,7 +127,7 @@ the campus drop too), is never counted as missed, gets no famine notice and no "
 `/v1/countdown` exposes `searchPhase` (`calibrating|searching`) and `firstDropAt`; the agent reads the same phase
 ("Search phase" context line, `get_my_standing`). It is a real hold, not a scripted wait, which is why it does not
 breach F2 or the honest-timer rule above: clients get the time of the first search, never a promised match, and
-the iOS Today screen draws no timer to it. Code: `services/first-drop-calibration.ts`.
+the iOS Today countdown capsule and widget count to `firstDropAt` instead of tonight's batch (a real event the account takes part in; a timer to tonight would promise an evening it is not in). Code: `services/first-drop-calibration.ts`.
 
 ### 3.1b Pool exhaustion: honest pause + auto-resume (2026-08-01, code shipped, inert under `weekly`)
 
