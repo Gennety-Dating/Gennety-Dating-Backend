@@ -15,7 +15,8 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 Bot only. `venue.ts` re-applies `VENUE_PHOTO_CURATION` to every Places answer, so the nightly re-validation keeps the
 audited choice. To have it everywhere at once instead of over the ~9-day Kyiv cycle: deploy →
 `pnpm --filter @gennety/bot exec tsx scripts/apply-venue-photo-curation.ts` (dry run) → `… --apply` (rewrites
-`photo_refs` of the curated places only; one Place Details request each) → **restart the bot again** (the in-process
+`photo_refs` of the curated places only — since 2026-10-11 all 329, with 2–4 dishes after the venue shots; one Place
+Details request each) → **restart the bot again** (the in-process
 photo cache `${id}#${slot}@${width}` would otherwise keep yesterday's bytes per slot). iOS: no change; a phone keeps
 showing a cached slot until the app restarts (memory cache keyed by path) or the next UTC day (disk cache keys on the
 daily signed URL). Mini App board and date card pick it up on their next lookup. Demo: same code.
