@@ -15,6 +15,7 @@ import {
   profilerQuestionById,
   profilerQuestionInput,
   wishlistAgeNote,
+  wishlistCatalogItem,
   wishlistMoreLabel,
   wishlistTeaserIds,
   type Language,
@@ -59,6 +60,12 @@ export interface WishlistItemView {
   title: string;
   brand: string | null;
   note: string | null;
+  /**
+   * The app's bundled illustration of a catalog idea (`WishlistCatalogItem.image`),
+   * looked up by the stored `catalog_key` — so a saved idea keeps its photo in the
+   * owner's list and in the partner's sheet, whatever language either side uses.
+   */
+  image: string | null;
   imageUrl: string | null;
   productUrl: string | null;
   priceBand: WishlistPriceBand | null;
@@ -75,6 +82,7 @@ type ItemRow = {
   productUrl: string | null;
   priceBand: string | null;
   source: string;
+  catalogKey: string | null;
 };
 
 const itemSelect = {
@@ -87,6 +95,7 @@ const itemSelect = {
   productUrl: true,
   priceBand: true,
   source: true,
+  catalogKey: true,
 } as const;
 
 /** Rows → views, with ONE signing request for every stored image. */
@@ -101,6 +110,7 @@ async function viewItems(rows: ItemRow[]): Promise<WishlistItemView[]> {
     title: row.title,
     brand: row.brand,
     note: row.note,
+    image: row.catalogKey ? (wishlistCatalogItem(row.catalogKey)?.image ?? null) : null,
     imageUrl: row.imageUrl ? (signed[index] ?? null) : null,
     productUrl: row.productUrl,
     priceBand: isWishlistPriceBand(row.priceBand) ? row.priceBand : null,

@@ -7609,13 +7609,16 @@ components:
 
     WishlistItem:
       type: object
-      required: [id, category, title, brand, note, imageUrl, productUrl, source]
+      required: [id, category, title, brand, note, image, imageUrl, productUrl, source]
       properties:
         id: { type: string, format: uuid }
         category: { $ref: "#/components/schemas/WishlistCategory" }
         title: { type: string }
         brand: { type: [string, "null"] }
         note: { type: [string, "null"], description: "The person's own words about it" }
+        image:
+          type: [string, "null"]
+          description: Bundled illustration of a saved catalog idea (same name as WishlistCatalogItem.image), from its catalog key
         imageUrl: { type: [string, "null"], description: Signed URL of our stored copy (24 h) }
         productUrl: { type: [string, "null"] }
         priceBand:
