@@ -12,12 +12,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "11 Mirrors Restaurant & Bar by FACE the Service",
     show: [
       "11 Mirrors Restaurant & Bar by FACE the Service|4800x3200",
-      "Serhii Martynenko|3600x4800",
       "11 Mirrors Restaurant & Bar by FACE the Service|3936x2624",
       "Alex Zoz|4000x3000",
+      "Pavlo Logai|4000x3000",
+      "Serhii Martynenko|3600x4800",
       "Yuriy Dzhemesyuk|3072x4080",
       "11 Mirrors Restaurant & Bar by FACE the Service|4800x3199",
-      "Pavlo Logai|4000x3000",
     ],
     hide: [
       "11 Mirrors Restaurant & Bar by FACE the Service|2545x3817",
@@ -30,10 +30,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Ivan Voitenko|4032x3024",
       "Ivan Voitenko|3926x2944",
-      "Nazar Kovalsky|3600x4800",
-      "Виктория Закашун|3120x3898",
       "16.coffee|4032x3024",
       "Dima Tkachenko|4032x3024",
+      "Nazar Kovalsky|3600x4800",
+      "Виктория Закашун|3120x3898",
     ],
     hide: [
       "Iryna Lozenko|3024x4032",
@@ -47,15 +47,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Oksana Ksondzyk|4032x3024",
       "ALEXandr Surzhko|4608x3456",
-      "Anastasia Yevtushenko|2864x3819",
       "1900 coffee Saksaganskogo|1500x931",
-      "ZhannaPetrovna Betsel|3072x4096",
+      "Anastasia Yevtushenko|2864x3819",
       "MM|4000x3000",
     ],
     hide: [
       "Pietro Furfaro|3024x4032",
       "Oksana Ksondzyk|4032x3024#2",
       "Oksana Ksondzyk|4032x3024#3",
+      "ZhannaPetrovna Betsel|3072x4096",
       "Марта Різдвяна|3024x4032",
     ],
   },
@@ -65,10 +65,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Svitlana|4032x3024",
       "Алексей СистемаВид|4000x2252",
       "Сергій Горбачов|4624x3472",
+      "olko|4032x3024",
       "Jean Kosse|1331x2000",
       "Liubov Liashko|3600x4800",
       "Снежана Сергиенко|4164x4608",
-      "olko|4032x3024",
     ],
     hide: [
       "Андрій Лавріненко|3024x4032",
@@ -81,11 +81,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Amsterdam - Restaurant and Bar|4800x3200",
       "Amsterdam - Restaurant and Bar|2048x1093",
-      "Татьяна Хода|3024x3928",
       "A K|1600x1200",
-      "Amsterdam - Restaurant and Bar|2667x4000",
+      "Татьяна Хода|3024x3928",
       "Pavel Lupashko (Pahomch1k)|1170x1494",
       "Татьяна Хода|2268x4032",
+      "Amsterdam - Restaurant and Bar|2667x4000",
     ],
     hide: [
       "Jolanta Frąckowiak|3472x4624",
@@ -96,13 +96,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ8RD5zEPO1EARlkMnW0tP4YY": {
     name: "Андріївський узвіз",
     show: [
-      "Igor Gumenyuk|4800x4800",
       "Катерина Ісаєнко|4288x2848",
       "Oleksandra Kotova|4032x3024",
       "Igor Gumenyuk|4032x3024",
       "Ілля Гризодуб|1601x1201",
       "Horbach Sergey|4096x3072",
       "A C|3264x2448",
+      "Igor Gumenyuk|4800x4800",
       "Екатерина Якунина|2944x3926",
     ],
     hide: [
@@ -114,9 +114,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Арбекіна",
     show: [
       "Nina Vorobyova|4032x3024",
-      "Мария Здоровая|3072x4096",
       "Arbequina|960x720",
       "Arbequina|1100x732#2",
+      "Мария Здоровая|3072x4096",
       "Arbequina|2048x1367",
     ],
     hide: [
@@ -130,14 +130,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJhalizqnP1EAReP85e7Ckmn8": {
     name: "Біголі",
     show: [
-      "Bigoli|3071x4607",
       "Bigoli|4800x3233",
       "Bigoli|2500x1667",
       "Игорь Федоров|4032x3024",
+      "Bigoli|3071x4607",
       "Bigoli|1086x1448",
-      "Валентина Диденко|3464x4618",
     ],
     hide: [
+      "Валентина Диденко|3464x4618",
       "K R|3600x4800",
       "Вячеслав|4000x3000",
       "Bigoli|984x1476",
@@ -165,28 +165,28 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Ботанічний сад ім. акад. О. В. Фоміна",
     show: [
       "hashem firaek|4032x3024",
-      "Maryna Khramtsova|3024x4032",
       "Mohammed Alhazmi|4032x3024",
+      "Метро на Виноградар|4000x2250",
+      "Maryna Khramtsova|3024x4032",
       "Анна Тарко (Ann)|3024x4032",
       "N G|3024x4032",
       "M|3024x4032",
-      "Alvydas V.|3024x4032",
-      "Метро на Виноградар|4000x2250",
     ],
     hide: [
       "Наталья|3464x4618",
       "SV SH|2448x3264",
+      "Alvydas V.|3024x4032",
     ],
   },
   "ChIJN9NfIFzO1EARPcsplglyynU": {
     name: "Буланжері",
     show: [
       "Олена Наумчик|4800x3600",
+      "Yuliia Paievska|4032x2268",
       "Helga Kulikova|4284x4284",
       "Veronika K|2268x4032",
       "Нина|3600x4800",
       "Марта Дутчак|3024x4032",
-      "Yuliia Paievska|4032x2268",
       "Діана|4624x3468",
     ],
     hide: [
@@ -198,10 +198,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJFf1HDl3P1EARZH3FZawwBJI": {
     name: "Бути Sofie",
     show: [
+      "Javi Serna|4000x3000",
       "MARIIA MIINA|2252x4000",
       "Nataliia|3024x4032",
       "Бути Sofie|853x1280",
-      "Javi Serna|4000x3000",
       "Zhenya Marenych|3600x4800",
       "Бути Sofie|4800x3200",
     ],
@@ -216,10 +216,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Вершки суспільства",
     show: [
       "Sumy K|4032x3024",
-      "Мандрівник|3024x4032",
       "Sumy K|4032x3024#2",
-      "Vershky restaurant/Вершки|1179x1454",
+      "Мандрівник|3024x4032",
       "Flex Smith|3000x4000",
+      "Vershky restaurant/Вершки|1179x1454",
     ],
     hide: [
       "Sumy K|3492x2618",
@@ -234,10 +234,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Mykhailo Dykun|4000x3000",
       "Ирина Скурыдина|4000x3000",
+      "Татьяна Харченко|3264x2448",
       "Алексей Светличный|2268x4032",
       "Zemfira Lastovetska|1908x4032",
       "Tetiana|960x1280",
-      "Татьяна Харченко|3264x2448",
     ],
     hide: [
       "MarKo|1932x1932",
@@ -249,13 +249,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJiT4uj0XO1EARGZx_Gnd3y2A": {
     name: "Володимирська Гірка",
     show: [
-      "Дмитрий «D'Or» Оробченко|3000x3000",
       "Denys Che|4593x2980",
       "Liudmyla Minenkova|4032x3024",
       "Julia Bair|1600x1201",
-      "Garik|4800x4368",
       "Юрій Іванчук|1070x713",
       "Yegor Bekarevych|4032x3024",
+      "Дмитрий «D'Or» Оробченко|3000x3000",
+      "Garik|4800x4368",
     ],
     hide: [
       "Юлия Кондратцева|3000x4000",
@@ -319,11 +319,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Oleksandr Gubanov|4032x3024",
       "Yevhenii Korsun|4032x3024",
-      "Всеволод Немченко|4000x3000",
       "Sergey UA|2048x1382",
       "Serhii Bakhariev|4032x3016",
       "Nataliia Natalie|4080x3072",
       "Andria UA|4624x2604",
+      "Всеволод Немченко|4000x3000",
     ],
     hide: [
       "State Polytechnic Museum / Державний політехнічний музей|700x444",
@@ -339,13 +339,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Horace Lo|4640x3480",
       "Kristóf Péterffy|3968x2240",
       "Михайло Скоморохов|4608x2592",
-      "Микола Чорний|3024x4032",
-      "Галина Шевцова|3024x4032",
       "Bohdan P|4000x3000",
     ],
     hide: [
       "АЛЕКСАНДР Н.|2304x1728",
       "Katarzyna M|2736x3648",
+      "Галина Шевцова|3024x4032",
+      "Микола Чорний|3024x4032",
     ],
   },
   "ChIJeQKTIoygJ0ERc7mNWDp-9k8": {
@@ -353,9 +353,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "ἀγάπη|4160x3120",
       "Serhiy Halk|1280x961",
-      "Валентина Ольховская|3096x4128",
       "Anuyta Abramenko|4000x3000",
       "Любов Лебедєва|4000x3000",
+      "Валентина Ольховская|3096x4128",
       "Subllort|3120x4160",
     ],
     hide: [
@@ -371,9 +371,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Liudmila Ryndia|4160x3120",
       "Oleksii Filanovskyi|4000x3000",
       "Oleksii Filanovskyi|4000x3000#2",
-      "Hanna|3024x4032",
       "Alex SPARKY|3264x1836#2",
       "Alex SPARKY|3264x1836",
+      "Hanna|3024x4032",
       "Svitlana Statsenko|3072x4096",
     ],
     hide: [
@@ -438,9 +438,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Александр|4000x3000",
       "Oleksandra Kotova|4032x3024",
+      "Ольга Садова|4000x3000",
       "Oleh Havryshchuk|3468x4624",
       "Евгений Деркач|3024x3024",
-      "Ольга Садова|4000x3000",
       "Alex Delsian|4032x3024",
     ],
     hide: [
@@ -453,12 +453,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ-5emGa3P1EARTlmzmAjctiA": {
     name: "ЇСТЕТИКА",
     show: [
+      "ЇСТЕТИКА|2048x1365",
       "Татьяна|2739x3730",
       "Kristina Kalashnikova|3024x4032",
-      "ЇСТЕТИКА|2048x1365",
       "Glen Minto|2948x4077",
-      "ЇСТЕТИКА|2048x1365#2",
       "Катерина Щербанёва|3600x4800",
+      "ЇСТЕТИКА|2048x1365#2",
       "ЇСТЕТИКА|1536x1024",
     ],
     hide: [
@@ -471,9 +471,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Кав'ярня Турка",
     show: [
       "Borys Krimer|4000x3000#2",
-      "Antonina Chernenko|3024x4032",
       "Borys Krimer|4000x3000",
       "Violetta Tokarieva|4608x3456",
+      "Antonina Chernenko|3024x4032",
       "Кав'ярня Турка на Шота Руставелі|3024x4031",
       "Maria Shwarden|3024x4032",
     ],
@@ -487,14 +487,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJIbVz817O1EARUuQYjifHwm0": {
     name: "Кав'ярня Турка на Гончара",
     show: [
-      "Prosto travel|3000x4000",
       "Кофейня Турка на Гончара - Хороший кофе, Уютное кафе для деловых встреч и переговоров|4032x3024",
+      "Prosto travel|3000x4000",
       "Євгенія Миколенко|960x1280",
       "Вячеслав Федорчук|3024x4032",
-      "Diana|960x1280",
       "Кофейня Турка на Гончара - Хороший кофе, Уютное кафе для деловых встреч и переговоров|3840x4800",
     ],
     hide: [
+      "Diana|960x1280",
       "Timakrut'oi|3008x4000",
       "Кофейня Турка на Гончара - Хороший кофе, Уютное кафе для деловых встреч и переговоров|1280x960",
       "Кофейня Турка на Гончара - Хороший кофе, Уютное кафе для деловых встреч и переговоров|810x1080",
@@ -507,8 +507,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Ivanka|3024x4032",
       "Alina Chepino|960x1280",
       "Stanislav Mamonov|3024x4032",
-      "Олександр Гавриленко|3024x4032",
       "IDEALIST COFFEE CO (ЖК CHICAGO)|4800x3200",
+      "Олександр Гавриленко|3024x4032",
     ],
     hide: [
       "Оксана Бубенко|1320x1526",
@@ -521,12 +521,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJVVVlQ0XO1EAR7zf09PBjJSE": {
     name: "Кава на Двох",
     show: [
+      "Тетяна Муравська|4000x3000",
       "Игорь Федоров|3464x4618",
       "Роман|3600x4800",
       "Игорь Федоров|3024x4032",
-      "Тетяна Муравська|4000x3000",
-      "Тетяна Іванець|3000x4000",
       "Кава на Двох|3600x4800",
+      "Тетяна Іванець|3000x4000",
       "Helga Kulikova|3024x4032#2",
     ],
     hide: [
@@ -556,10 +556,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Кафе Fandom",
     show: [
       "Кафе Fandom|1200x849",
-      "Анна Химичук|3024x4032",
       "Кафе Fandom|1000x668",
-      "Andreevich|960x1280",
+      "Анна Химичук|3024x4032",
       "Кафе Fandom|1320x990",
+      "Andreevich|960x1280",
     ],
     hide: [
       "Людмила Коляда|3600x4800",
@@ -572,17 +572,17 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ9V8_bUDO1EARiXjNanApD-w": {
     name: "Каффа",
     show: [
-      "Helga Kulikova|3600x4800",
       "Olena Ruta|3264x2448",
+      "Helga Kulikova|3600x4800",
       "Fila|4284x4284",
       "Irr Glo|3024x4032",
-      "Alexander Sergienko|3472x4624",
-      "Hatalia Bondarenko|3000x4000",
       "Helga Gnateiko|4800x3600",
+      "Alexander Sergienko|3472x4624",
     ],
     hide: [
       "Svitlana|3024x4032",
       "Leo Guide|3510x3510",
+      "Hatalia Bondarenko|3000x4000",
       "Olga Tkachuk|1600x1200",
     ],
   },
@@ -590,10 +590,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Каштан Coffee",
     show: [
       "Kamil Pawłowski|4032x3024",
-      "Ale|1536x2048",
       "SuSi|4032x3024",
-      "Олексій Пирогов|2448x3264",
       "Mariya. D|4032x3024",
+      "Ale|1536x2048",
+      "Олексій Пирогов|2448x3264",
     ],
     hide: [
       "Каштан Coffee|1140x762",
@@ -608,12 +608,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Андрій Раєнок|4032x3024",
       "Maxim Martinov|3456x2304",
-      "Maryna Shevchenko|3024x4032",
       "Prosto travel|4000x3000",
       "Serhii|4608x3456",
       "Sergiy Panchyshyn|4000x3000",
       "Dmytro (Drimik)|3264x1836",
       "Валерий Прокофьев|2001x1501",
+      "Maryna Shevchenko|3024x4032",
     ],
     hide: [
       "Cheng Lee|4032x3024",
@@ -640,12 +640,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJaaFxbN0xxkAR1VtyyD_tnsk": {
     name: "Компот",
     show: [
-      "Pavel Lupashko (Pahomch1k)|1170x1420",
       "Іванна|4032x3024",
       "Компот|1000x666",
       "Pavel Lupashko (Pahomch1k)|1170x643",
-      "Компот|1689x960",
+      "Pavel Lupashko (Pahomch1k)|1170x1420",
       "Вероника Парфилко|3600x4800",
+      "Компот|1689x960",
     ],
     hide: [
       "Yuliana Skorobohatova|3600x4800",
@@ -658,10 +658,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Крем кафе | Аркадія",
     show: [
       "Dmitriy Margolin|4000x3000",
-      "Крем кафе | Аркадія|1172x1561",
       "Dmitriy Margolin|4000x3000#2",
-      "Крем кафе | Аркадія|3200x4800",
+      "Крем кафе | Аркадія|1172x1561",
       "Ирина Нечипорук|3024x4032",
+      "Крем кафе | Аркадія|3200x4800",
     ],
     hide: [
       "Крем кафе | Аркадія|2252x4000",
@@ -676,9 +676,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Кувшин|4800x3600",
       "Кувшин|4800x3148",
+      "Кувшин|4800x2845",
       "Кувшин|2333x3500",
       "Надежда Конощук|3024x4032",
-      "Кувшин|4800x2845",
       "Tanya Baiduzh|3024x4032",
       "Кувшин|3200x4800",
       "Andrey Mika|1440x1440",
@@ -692,9 +692,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Купол",
     show: [
       "Купол|2048x1367",
+      "Oleksii Filanovskyi|4000x3000",
       "Igor Shevchenko|3600x4800",
       "TETIS 1|3600x4800",
-      "Oleksii Filanovskyi|4000x3000",
       "Купол|4800x3204",
     ],
     hide: [
@@ -712,13 +712,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "VelovNet|4000x3000",
       "Таня Дубинина|4000x2250",
       "Наташа Власова|3024x4032",
-      "Inna|3120x4160",
-      "Наташа Власова|3024x4032#2",
     ],
     hide: [
       "Михайло Проценко|4800x2400",
       "Василь Юраш|4000x2250",
       "Max|3472x4624",
+      "Inna|3120x4160",
+      "Наташа Власова|3024x4032#2",
       "Nemmo2000|3000x4000",
     ],
   },
@@ -728,9 +728,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Львівська Майстерня Шоколаду|1854x1236",
       "Maksym Lazuto|4032x3024",
       "Dale Gutwein|4032x2268",
-      "Dariia|3024x4032",
       "Christel Godecharle|4032x3024",
       "pedro martinez|4032x2268",
+      "Dariia|3024x4032",
     ],
     hide: [
       "筠蓁王|1920x1440",
@@ -744,12 +744,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Мансарда|3000x2000#2",
       "Мансарда|3000x2000",
+      "Мансарда|1440x809",
       "Alistar Trautwein|3024x3024",
       "Андрей Стеклов|3000x4000",
       "Елена Приходько|3024x4032",
-      "Мансарда|1440x809",
-      "Мансарда|4800x3200",
       "regir 81|1440x1920",
+      "Мансарда|4800x3200",
     ],
     hide: [
       "Ольга Шевцова|2700x4800",
@@ -761,11 +761,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Dmytro Larin|4000x3000",
       "Mykola Shylo|4160x3120",
+      "Віктор Филипчук|4032x3024",
+      "Robert Cordrey|1280x960",
       "TETIS 1|1536x2048",
       "Charles Galant|2976x3968",
-      "Віктор Филипчук|4032x3024",
       "Viktor Honcharenko|3456x4608",
-      "Robert Cordrey|1280x960",
     ],
     hide: [
       "Paul Hetman|4208x3120",
@@ -780,11 +780,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Виталий Ch|4160x3120",
       "Julia Kovalenko|4640x3472",
       "Мельница|2700x1800",
-      "Chestnootzyv|3024x4032",
       "Сергій Водяник|4618x3464",
       "Мельница|2400x1590",
     ],
     hide: [
+      "Chestnootzyv|3024x4032",
       "Chestnootzyv|3024x4032#2",
       "Tetiana Rzhemovska|4000x3000",
       "Chestnootzyv|3024x4032#3",
@@ -794,10 +794,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Мімоза",
     show: [
       "Flip Mattia|4800x3600",
+      "Mimosa Brooklyn Pizza Kyiv|958x640",
       "Игорь Федоров|2562x3416",
       "Oksana Nadopta|3024x4032",
       "Поліна Явтушенко|3600x4800",
-      "Mimosa Brooklyn Pizza Kyiv|958x640",
       "Анастасія Томашевська|3600x4800",
     ],
     hide: [
@@ -813,15 +813,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Serhii Losik|4800x3200",
       "Rade Spasovski|3240x2430",
       "Serhii Losik|4800x3200#2",
-      "Dmitry Rider|1201x1800",
       "Serhii Losik|4800x3200#3",
+      "Dmitry Rider|1201x1800",
       "Rade Spasovski|3027x2270",
-      "Dmytrii Shevchenko|2080x4624",
     ],
     hide: [
       "Anton Motsniy|1920x2560",
       "Dmitry Rider|640x960",
       "Dmitry Rider|640x960#2",
+      "Dmytrii Shevchenko|2080x4624",
     ],
   },
   "ChIJ3ZIFSKUxxkARuRwehhNDges": {
@@ -829,7 +829,6 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Ella Shchukina|4032x3024",
       "Аня Кузминова|4000x3000",
-      "Rakesh Yadav|3000x3750",
       "Aleksander Førde|4032x3024",
       "Odyssey 5|1000x537",
       "Irwin Keitel|3648x2736",
@@ -839,6 +838,7 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Odyssey 5|2400x1350",
       "Karina|2048x1536",
       "Атаульф Свинособакин|2532x1637",
+      "Rakesh Yadav|3000x3750",
     ],
   },
   "ChIJSahNztqgJ0ERQN6KQ0FtVek": {
@@ -848,9 +848,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Валентина Ольховская|3264x2448",
       "Anton|4032x3016",
       "Михайло Тітаренко|3264x2448",
-      "Olga Fieberg|3456x4608",
       "CaffaDenys|4032x2268#2",
       "CaffaDenys|4032x2268",
+      "Olga Fieberg|3456x4608",
     ],
     hide: [
       "Dmytro Ovchynnikov|4618x3464",
@@ -863,8 +863,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "ri-sheng lee|4032x3024",
       "Kateryna Ustynova|4800x3600",
-      "Музей \"Таємниці підземної Одеси\" екскурсії в катакомби|3120x4160",
       "Євген Чумак|4032x3024",
+      "Музей \"Таємниці підземної Одеси\" екскурсії в катакомби|3120x4160",
       "Leonid Glazychev|4032x2268",
       "Oleg Kazban|4800x3199",
     ],
@@ -880,12 +880,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Олена Мостицька|4032x3024",
       "Denys Mazurenko|4000x3000",
-      "Влад|4800x3127",
       "genkor|4032x2268",
+      "Влад|4800x3127",
       "Massimo|3456x4608",
-      "Oleksandr|3024x4032",
     ],
     hide: [
+      "Oleksandr|3024x4032",
       "Елена Царенко|3000x4000",
       "Olga Dolga|3024x4032",
       "Volodymyr|4000x3000",
@@ -895,16 +895,16 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJYQg8GvnO1EARdNThXjRBl_E": {
     name: "Музей Ханенків",
     show: [
-      "Дмитро ПАЛЕЙ Беттертон|1024x1280",
       "Музей Ханенків|992x720",
+      "Дмитро ПАЛЕЙ Беттертон|1024x1280",
       "Eugene Tyulenev|3105x4140",
       "Inna T|2933x3637",
-      "Super Mario|3024x4032",
       "Виктория Коздрой|3024x4032",
     ],
     hide: [
       "Константин Нежин|723x371",
       "Виктория Коздрой|3024x4032#2",
+      "Super Mario|3024x4032",
       "Виктория Коздрой|3024x4032#3",
       "Yuriy Fil|1984x3968",
     ],
@@ -949,9 +949,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Serhii Demchenko|4649x3099",
       "Леонід Ворона|4800x3200",
       "Микола Чорний|4032x3024",
-      "Роман Лозко|3024x4032",
       "Natalka Ryaba|4608x3456",
       "Андрій|4032x3024",
+      "Роман Лозко|3024x4032",
       "Ivan Olegovich|4032x3024",
     ],
     hide: [
@@ -963,11 +963,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJKa4EAfbO1EARjiawytX9SMA": {
     name: "Національний музей медицини України",
     show: [
-      "Ірина Павленко|3024x4032",
       "Oleksandr Popov|1920x1080",
       "Евгения|4000x3000",
-      "Екатерина Шарафан|3096x4128",
+      "Ірина Павленко|3024x4032",
       "Тамара Конькова|4640x2610",
+      "Екатерина Шарафан|3096x4128",
     ],
     hide: [
       "Анна Березюк|3024x4032",
@@ -982,10 +982,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Dea05design Anna|3264x2417",
       "Visa Nagieva|4032x3024",
-      "Hellen Chemerys|3000x3680",
       "Оксана Михайленко|4000x3000",
       "Viktoriia Kartashova ART|2500x1663#2",
       "Viktoriia Kartashova ART|2500x1663",
+      "Hellen Chemerys|3000x3680",
       "Islem Mezouaghi|3319x4572",
       "Juls Yurchuk|3024x4032",
     ],
@@ -999,10 +999,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Katrin Gladka|4000x2962",
       "jokermaster|4032x3024",
+      "Юлія|3024x4032",
       "Оксана Михайленко|4000x3000",
       "Артём Пономаренко|4656x3492",
       "Konstantine Sidko|4032x3024",
-      "Юлія|3024x4032",
       "Serhio Kravchenko|4618x3464",
     ],
     hide: [
@@ -1015,11 +1015,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Національний художній музей України",
     show: [
       "Lia Martia|4160x3120",
-      "Elena Lutsenko|3024x4032",
       "Oleksandra Kotova|4032x3024",
       "Екатерина|900x601",
-      "Nik Kot|3024x4032",
       "Andrii Romanenko|4032x3024",
+      "Elena Lutsenko|3024x4032",
+      "Nik Kot|3024x4032",
       "Влад|4032x3024",
     ],
     hide: [
@@ -1033,9 +1033,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Murat GÖNEN|4608x3456",
       "Fein Tuning|4080x3060",
+      "Софія Кравчук|4000x3000",
       "Natalia|3600x4800",
       "Трейд Чиф|3024x4032",
-      "Софія Кравчук|4000x3000",
     ],
     hide: [
       "Анатолий Пак|3024x4032",
@@ -1084,15 +1084,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Екатерина Михейцева|4800x3527",
       "Тетяна Гаркуша|4800x3179",
-      "Марина Ши|2268x4032",
       "Данило Лугових|1080x968",
       "Alyona Malakhova|1663x1247",
-      "Влада Галдина|3024x4032",
       "Andrey Bahmat|4160x2340",
+      "Марина Ши|2268x4032",
     ],
     hide: [
       "Екатерина Михейцева|1710x1614",
       "Dakota Fit|3600x4800",
+      "Влада Галдина|3024x4032",
       "дмитрий сир|3120x4160",
     ],
   },
@@ -1102,8 +1102,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Макс Лев|3264x2448",
       "Ievgen Nachornyi|4800x3190",
       "ONFAM/Одеський національний художній музей|2160x1440",
-      "Vitaliy Kachurovskyi|3024x3024",
       "Maiia Bulakh|4000x3000",
+      "Vitaliy Kachurovskyi|3024x3024",
       "Марина Барышникова|1440x2560",
       "karlen zalinyan|4128x3096",
     ],
@@ -1116,18 +1116,18 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ6UCP2tygJ0ERRJmMWID1zMA": {
     name: "Париж",
     show: [
-      "Alena Pidchenko|3024x4032",
-      "Юлия Безрук|3024x4032",
-      "Lise G|3060x4080",
       "Віра Савченко|1600x1204",
       "Париж|4000x2250",
       "Юрій Саньков|4032x3024",
-      "Ivan Bokhan|3072x4096",
+      "Alena Pidchenko|3024x4032",
+      "Юлия Безрук|3024x4032",
+      "Lise G|3060x4080",
     ],
     hide: [
       "Ga Va|4800x3179",
       "Nataliya Bocharova|3000x4000",
       "Lucy Chokha|4032x3024",
+      "Ivan Bokhan|3072x4096",
     ],
   },
   "ChIJE-vDywTM1EARSJW-ZshiXLM": {
@@ -1138,8 +1138,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Vadim Urkaiev|4160x3120",
       "Oleg Snegurovskyi|4000x3000",
       "Ivan Mishchenko|4618x3464",
-      "Prosto travel|3000x4000",
       "Skaz Zenka|4000x3000",
+      "Prosto travel|3000x4000",
     ],
     hide: [
       "Dmytro|4032x3024",
@@ -1171,8 +1171,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Anna Tymoshenko|4608x3456",
       "Микола Українець|4032x2268",
       "Сергей Сидоревич|4800x2707",
-      "Александр Разумов|3000x4000",
       "Sergejs Kalašņikovs|4000x3000",
+      "Александр Разумов|3000x4000",
       "Banquo Banquovsky|4032x3024",
     ],
     hide: [
@@ -1203,12 +1203,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Alyona S|4032x3024",
       "Євгеній Черніков|4032x3024",
-      "Всеволод Немченко|3000x4000",
       "Badaboom|4000x3000",
       "Олександр Стасюк|4032x3024",
       "Marc Lladó de la Cuesta|4032x3024",
       "Натали Хорошая|3600x2160",
       "Александр Цемах|4032x3024",
+      "Всеволод Немченко|3000x4000",
     ],
     hide: [
       "Serg|640x480",
@@ -1223,11 +1223,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Сергей Волков|2592x1936",
       "Богдан Тимошенко|4000x3000",
       "Надія Маковецька|4032x2268",
-      "Сашко Невідомий|2304x4608",
     ],
     hide: [
       "Олег|800x600",
       "Oleksandr Gubanov|4032x3024",
+      "Сашко Невідомий|2304x4608",
       "Сергій Кукуровський|2080x4160",
       "James P. Riviere|4032x3024",
     ],
@@ -1240,8 +1240,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Ніна Терещенко|4608x2592",
       "Валерий Прокофьев|2592x1944#2",
       "Andrew Miroshnychenko|4032x3024",
-      "Роман Величко|4608x3456",
       "Олександр «Morozzz_Z» Куценко|4032x3024",
+      "Роман Величко|4608x3456",
     ],
     hide: [
       "Анастасія Молибога|4032x3024",
@@ -1257,8 +1257,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Lilia Bruslinovska|3888x2592",
       "stas kozyr|2623x2122",
       "Юлия Александровна|4000x3000",
-      "Tatjana Martynova|3024x4032",
       "Одесса и Одесситы|4618x3463",
+      "Tatjana Martynova|3024x4032",
     ],
     hide: [
       "Геній Алікович Буснхалтєр|650x982",
@@ -1271,11 +1271,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Tolok|4618x3464",
       "Наталя Машковська|4656x3492",
-      "Ленчик Ф|2610x4640",
-      "Travel Tips|4608x3456",
       "Игорь Марчук|3264x2448",
+      "Ленчик Ф|2610x4640",
       "Ігор Пупинін|2736x3648",
       "Margarita Everett|1536x2048",
+      "Travel Tips|4608x3456",
     ],
     hide: [
       "Аліна Семенко|3000x4000",
@@ -1305,13 +1305,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Perets|4800x3200",
       "Perets|4800x3200#2",
+      "Галина Шевцова|4000x3000",
+      "Perets|1400x933",
       "Perets|3200x4800#2",
       "Perets|3200x4800#4",
-      "Галина Шевцова|4000x3000",
-      "Perets|3200x4800",
-      "Perets|1400x933",
       "Perets|3200x4800#3",
       "Perets|1052x1315",
+      "Perets|3200x4800",
     ],
     hide: [
       "Vadims Pugačovs|3000x4000",
@@ -1339,16 +1339,16 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Віталій ЛЕВИЦЬКИЙ|4000x3000",
       "Valerii Zhukov|4000x3000",
-      "Hatalia Bondarenko|3024x4032",
       "Hatalia Bondarenko|3000x4000",
       "Hatalia Bondarenko|3000x4000#2",
       "Valerii Zhukov|3000x4000",
-      "Hatalia Bondarenko|3000x4000#3",
     ],
     hide: [
       "Пиріжкова Тітка Клара|2834x1134",
       "Пиріжкова Тітка Клара|3024x4032",
       "Cold Reaper|4624x3472",
+      "Hatalia Bondarenko|3024x4032",
+      "Hatalia Bondarenko|3000x4000#3",
     ],
   },
   "ChIJ__-vsEbO1EARfClE88iwARU": {
@@ -1356,12 +1356,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Margarita Gnitetskaya|4000x2252",
       "Igor Shevchenko|3600x4800",
-      "fored #0000|3024x4032",
       "Maksym|3024x4032",
       "Пиріжкова Тітка Клара|2561x2588",
     ],
     hide: [
       "Пиріжкова Тітка Клара|2834x1134",
+      "fored #0000|3024x4032",
       "Rina Kalo|3024x4032",
       "Тень|3000x4000",
       "Margarita Gnitetskaya|2992x2992",
@@ -1388,17 +1388,17 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJVVWFavPO1EARx7LOCAmle-E": {
     name: "Пиріжкова Тітка Клара",
     show: [
-      "Hatalia Bondarenko|3024x4032",
-      "Hatalia Bondarenko|3024x4032#2",
-      "Andrii Brudnyi|3024x4032",
       "Пиріжкова Тітка Клара|1650x929",
       "Rakesh Patel|1920x1080",
       "Олена Бабенко|4160x3120",
-      "Anastasia Yevtushenko|3024x4032",
+      "Hatalia Bondarenko|3024x4032",
+      "Andrii Brudnyi|3024x4032",
     ],
     hide: [
       "Пиріжкова Тітка Клара|2834x1134",
+      "Anastasia Yevtushenko|3024x4032",
       "Пиріжкова Тітка Клара|3024x4032",
+      "Hatalia Bondarenko|3024x4032#2",
       "Пиріжкова Тітка Клара|3200x4800",
     ],
   },
@@ -1409,10 +1409,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Andrew Kravchenko|1270x714",
       "Andrew Kravchenko|1270x714#2",
       "Oleksiy Morozov|1920x1080",
-      "Picnic Cafe - кафе-кондитерська у серці Києва|4800x3200",
       "Andrew Kravchenko|1270x714#3",
       "Shannar de Kassal|4000x3000",
       "Ravlyk Toto|4000x2250",
+      "Picnic Cafe - кафе-кондитерська у серці Києва|4800x3200",
     ],
     hide: [
       "Тетяна Рудь|3024x4032",
@@ -1423,15 +1423,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Публіцист",
     show: [
       "Надія|4618x3464",
+      "Vlad Fomin|4032x2268",
       "Публіцист|960x1280",
       "Публіцист|854x1280",
-      "Vlad Fomin|4032x2268",
       "Kateryna Balandina|3600x4800#2",
       "Kateryna Balandina|3600x4800",
-      "Публіцист|853x1280",
       "Inna Nesterenko|2700x4800",
     ],
     hide: [
+      "Публіцист|853x1280",
       "Iryna|1350x1800",
       "Lyuba|3600x4800",
     ],
@@ -1441,11 +1441,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Ресторан-кондитерська \"Щастя\"|4800x3200",
       "Oleksii Filanovskyi|4000x3000",
+      "Артем АртБакс|4032x3024",
       "Маргарита Шевернога|3472x3472#3",
       "Маргарита Шевернога|3472x3472#2",
-      "Денис К.С.|3000x4000",
       "Vladyslava Shekula|3024x4032",
-      "Артем АртБакс|4032x3024",
+      "Денис К.С.|3000x4000",
       "Ресторан-кондитерська \"Щастя\"|960x1280",
     ],
     hide: [
@@ -1456,7 +1456,6 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJhbPXWBXO1EARuGXnxhEAB0I": {
     name: "Самосад",
     show: [
-      "Валентина Диденко|3599x4800",
       "Work New|4000x1824",
       "Ruslan Khavriuta|2300x1291",
       "J. K.|4032x3024",
@@ -1465,6 +1464,7 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     ],
     hide: [
       "Яна Гуменная|3016x4032",
+      "Валентина Диденко|3599x4800",
       "Daria Zadiraka|3000x4000",
       "Julia Zhuravliova|3264x2448",
       "Владислав Белозёров|1920x1080",
@@ -1526,11 +1526,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "SIMONA RISTORANTE|4032x3024",
       "Тетяна Кириченко|4800x3600",
-      "Andrii Bratus|3024x4032",
       "Dmitry Miliutin|4000x3000",
-      "SIMONA RISTORANTE|3474x3474",
+      "Andrii Bratus|3024x4032",
       "Polina Chepyk|3600x4800",
       "Наталія Дейнегіна|3024x4032",
+      "SIMONA RISTORANTE|3474x3474",
       "Evelina Stanovenko|960x1280",
     ],
     hide: [
@@ -1544,11 +1544,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Andriy|4800x3191",
       "Natalia Borisova|4032x3024",
       "irko mai|4000x3000",
-      "V|2448x3264",
       "a D|4000x2984",
       "Людмила Чернова|3264x2448",
       "Georgiy Akhaladze|3968x2976",
       "Михаил Яремчук (Mykhailo)|4000x2250",
+      "V|2448x3264",
     ],
     hide: [
       "X0rw1n|4032x3024",
@@ -1560,12 +1560,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Valerii Melnyk|4160x3120",
       "Viktor “VOIN” Andrieiev|4000x3000",
-      "Михайло Ковтун|1401x2090",
       "Метро на Виноградар|4000x2250",
-      "Yurii L|4618x3464",
       "микита родан|4160x3088",
+      "Yurii L|4618x3464",
     ],
     hide: [
+      "Михайло Ковтун|1401x2090",
       "Urban Explorer|4800x2700",
       "Метро на Виноградар|2250x4000",
       "Victoria Bodrova|3000x4000",
@@ -1579,9 +1579,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Andrii Azaiev|4032x3024",
       "Bohdan Myrko|4656x3496",
       "Stan|4618x3464",
-      "Andrii Azaiev|3024x4032",
       "Інна Іскалиева|4000x3000",
       "Андрій Поляновський|4032x3024",
+      "Andrii Azaiev|3024x4032",
     ],
     hide: [
       "Maksym Kozlenko|800x600",
@@ -1593,8 +1593,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Софра • Смак Криму",
     show: [
       "Obibaz|4032x3024",
-      "Булатова Марія|2700x4800",
       "Deth MetalOn|4032x3024",
+      "Булатова Марія|2700x4800",
       "Софра • Смак Криму|4800x3179",
       "Софра • Смак Криму|4800x3179#2",
     ],
@@ -1628,13 +1628,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Тісто, сир і тітка Белла|2500x1667",
       "Nick White|4800x3600",
-      "Hatalia Bondarenko|3000x4000",
       "Anastasiia Ihnatova|960x1280",
       "jing shang|4800x3200",
       "Тісто, сир і тітка Белла|2500x1667#2",
     ],
     hide: [
       "Travel Tips|4032x3024",
+      "Hatalia Bondarenko|3000x4000",
       "Iuliia Lototska|3024x4032",
       "sheremetkina|1200x1600",
       "Dmytro Chaplynskyi|4032x3024",
@@ -1648,10 +1648,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Метро на Виноградар|4000x2250",
       "Юлія Ковальова|3072x4096",
       "Тамара Шевчук|3577x2874",
-      "Оля Козачек|3024x4032",
     ],
     hide: [
       "Dima Palyvonchyk|2250x4000",
+      "Оля Козачек|3024x4032",
       "Marusha|3600x4800",
       "Serhii Lytvynenko|3024x4032",
       "Kate V.|3024x4032",
@@ -1677,12 +1677,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ14VhhrHF1EARZqXP4-dmD-I": {
     name: "Фламбер",
     show: [
+      "Vladimir Bezrukov|1794x1080",
+      "Vladimir Bezrukov|1605x1080",
       "Фламбер|960x1280",
       "Фламбер|960x1280#5",
       "Лилия Озел|3024x4032#2",
-      "Vladimir Bezrukov|1794x1080",
       "Фламбер|960x1280#4",
-      "Vladimir Bezrukov|1605x1080",
     ],
     hide: [
       "Фламбер|960x1280#2",
@@ -1695,9 +1695,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Франик",
     show: [
       "Франик Харків|4800x3600",
+      "Виктория Пластун|1280x986",
       "Olga Zinchenko|2700x4800",
       "Юрій Холод|3600x4800",
-      "Виктория Пластун|1280x986",
       "Валентина Шаповалова|3060x4080",
     ],
     hide: [
@@ -1728,8 +1728,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJFZFlIwDR1EARgXpd6rgQexs": {
     name: "Франик Оболонь",
     show: [
-      "Andrii|3024x4032",
       "Костянтин Євтушенко|4800x3600",
+      "Andrii|3024x4032",
       "Iryna Yurchuk|3600x4800",
       "Melanie Dey|3024x4032",
       "Сирова Олена|3024x4032",
@@ -1763,12 +1763,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Франик Поділ",
     show: [
       "Франик Поділ|3200x4800#2",
-      "Франик Поділ|3200x4800",
       "olena korenchuk|3600x4800",
       "Olesya Zhmak|3600x4800",
       "Ekaterina Glazovaya|3600x4800",
     ],
     hide: [
+      "Франик Поділ|3200x4800",
       "Lesia Syrota|4032x2268",
       "Ольга|3000x4000",
       "Anna Karpiuk|3024x4032",
@@ -1779,12 +1779,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJM3_CCwDP1EARzp7BKXDz2hk": {
     name: "Франик Русанівка",
     show: [
+      "Laura V|4800x3600",
+      "Дмитро Романюк|4800x3600",
       "Франик Русанівка|1920x2560",
       "Yulya Gera|3024x4032",
-      "Laura V|4800x3600",
       "Ivan Koval|3024x4032",
       "Kate|3600x4800",
-      "Дмитро Романюк|4800x3600",
     ],
     hide: [
       "Светлана Данкевич|2770x3694",
@@ -1798,7 +1798,6 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Компанія SanchoBAG|4032x3024",
       "Liliia Handzii|3024x4032",
-      "Photos are copyrighted by their owners|2268x4032",
       "Maksim Kamyshnikov|3072x4080",
       "Nora|2976x3968",
       "Mariia Honcharova|3024x4032",
@@ -1807,6 +1806,7 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "shahar wienrib|4608x2112",
       "Женя Чёрненький|1280x960",
       "Антон Нестеренко|3890x4800",
+      "Photos are copyrighted by their owners|2268x4032",
       "V A|3072x4096",
     ],
   },
@@ -1817,11 +1817,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Borys Krimer|4032x3024",
       "Юрій М|4160x3120",
       "Yuriy Cherkas|4032x3024",
-      "Margaryta Kondratenko|3000x4000",
-      "Анна Пилипенко|3000x4000",
       "Yaroslava Tymoshchuk|3024x4032",
     ],
     hide: [
+      "Анна Пилипенко|3000x4000",
+      "Margaryta Kondratenko|3000x4000",
       "Olexiy Ponomarenko|3264x2448",
       "Yaroslava Tymoshchuk|3024x4032#2",
       "Borys Krimer|3024x4032",
@@ -1882,10 +1882,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Юність",
     show: [
       "Наталочка Бой|4032x3024",
+      "Наталочка Бой|4032x3024#2",
       "Oliver Manifest|3024x4032",
       "Тетяна Кириченко|2830x3774",
       "Иван Артеменко|3600x4800",
-      "Наталочка Бой|4032x3024#2",
       "Meyried|2268x4032",
     ],
     hide: [
@@ -1898,14 +1898,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ3bKJRaLP1EARiU6B6J-5siI": {
     name: "ALTO",
     show: [
-      "Олексій Н.|3464x4618",
-      "ALTO|1537x2305",
       "В'ячеслав Килимар|4000x3000",
+      "Олексій Н.|3464x4618",
       "Lesia Syrota|3600x4800",
       "Anna Krylasova|3024x4032",
       "Александра Завадская|3600x4800",
     ],
     hide: [
+      "ALTO|1537x2305",
       "ALTO|1600x2400",
       "Roni Drive|3000x4000",
       "Олексій Н.|4618x3464",
@@ -1915,12 +1915,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJAZDNL_nO1EAR25Gfhq6vJ4g": {
     name: "Antwerpen",
     show: [
+      "paracels12|4000x2252",
+      "glockenspiiiel|4032x3024",
       "Poseidónas Greek|3024x4032",
       "The Guide|1080x1080",
-      "paracels12|4000x2252",
       "Antwerpen|2268x4032",
       "Antwerpen|3024x4032",
-      "glockenspiiiel|4032x3024",
     ],
     hide: [
       "Antwerpen|1225x927",
@@ -1932,9 +1932,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJJRd2gnvP1EAReCDYDT-s7UA": {
     name: "AVANGARDEN gallery and wine bar",
     show: [
+      "Alex Zoz|4000x3000",
       "Irena Poliakova|3072x4080",
       "Victoria B.|3024x4032",
-      "Alex Zoz|4000x3000",
       "Виктория Руденко|3024x4032",
       "Вікторія Мельник|3024x4032",
       "avangarden gallery. food&wine|4000x2667",
@@ -1953,12 +1953,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Ірина Зас|3600x4800",
       "Maryna|3024x4032",
       "Соня Борщенко|2792x3915",
-      "Unai Antras|3472x4624",
     ],
     hide: [
       "BAO • Modern Chinese Cuisine|793x793",
       "Tanya Kushch|2000x1500",
       "Iurii Melnyk|3024x4032",
+      "Unai Antras|3472x4624",
       "Irr Glo|3600x4800",
       "Саша Саша|3600x4800",
     ],
@@ -1983,12 +1983,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ3QYvrejN1EARl4RyLWs7sl8": {
     name: "Belkin",
     show: [
-      "Андрей Киселев|3024x4032",
-      "Belkin|3201x4800",
       "Belkin|3024x1702",
-      "Viktoria Kozinska|3024x4032",
       "Belkin|2560x1920",
       "Belkin|1280x960",
+      "Андрей Киселев|3024x4032",
+      "Belkin|3201x4800",
+      "Viktoria Kozinska|3024x4032",
       "Belkin|3201x4800#2",
     ],
     hide: [
@@ -2000,14 +2000,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJq6pq3ADP1EARczzWH8kOv5c": {
     name: "Blur Coffee",
     show: [
+      "Svitlana Malinevska|4032x3024",
       "Игорь Федоров|3600x4800",
       "Ellen|3000x4000",
-      "Svitlana Malinevska|4032x3024",
-      "Blur Coffee|3024x4032",
-      "Valerii Reshmedilov (Valera_kiev)|3024x3024",
       "Ivan Demtso|4032x3024",
+      "Valerii Reshmedilov (Valera_kiev)|3024x3024",
     ],
     hide: [
+      "Blur Coffee|3024x4032",
       "Blur Coffee|3024x4032#2",
       "Blur Coffee|1180x664",
       "Oleksandra Filippova|2893x3857",
@@ -2018,11 +2018,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Buffalino",
     show: [
       "Буффаліно Арсенал|4800x3199",
-      "Hanna|3060x4080",
       "Буффаліно Арсенал|1600x900",
+      "Hanna|3060x4080",
       "Hanna|3060x4080#2",
-      "Буффаліно Арсенал|1284x847",
       "TETIS 1|3600x4800",
+      "Буффаліно Арсенал|1284x847",
     ],
     hide: [
       "Vitalii|2514x2799",
@@ -2034,7 +2034,6 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ6_dNT7TP1EARKMHFxW_4vrY": {
     name: "Cafe 128 |2",
     show: [
-      "Anastasia Yevtushenko|3024x4032",
       "Cafe 128 |2|3200x4800",
       "Anastasia Yevtushenko|3024x4032#2",
       "Roman Kirigetov|3024x4032",
@@ -2042,6 +2041,7 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     ],
     hide: [
       "Cafe 128 |2|3200x4800#2",
+      "Anastasia Yevtushenko|3024x4032",
       "Софія|2700x4800",
       "Anastasia Yevtushenko|4800x3600",
       "Наталія Соловйова|960x1280",
@@ -2052,12 +2052,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Café 17",
     show: [
       "Ganna Stovpchenko|4000x3000#2",
+      "Ganna Stovpchenko|4000x3000",
+      "Стефа Біленко Stefa Bilenko|3264x2448",
       "Igor Shevchenko|3600x4800",
       "Depeche Mode|3456x4608",
       "Yana Dekhtiar|3024x4032",
-      "Ganna Stovpchenko|4000x3000",
       "Tanya Proshuta|3000x4000#2",
-      "Стефа Біленко Stefa Bilenko|3264x2448",
       "Tanya Proshuta|3000x4000",
     ],
     hide: [
@@ -2086,8 +2086,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Casa Nori",
     show: [
       "Nastasya|4032x3021",
-      "Casa Nori|2001x3000",
       "Casa Nori|3000x2001",
+      "Casa Nori|2001x3000",
       "Casa Nori|960x1280",
       "Enji Je|3024x4032",
       "Casa Nori|2249x3373",
@@ -2108,8 +2108,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Yana Dekhtiar|3600x4800",
       "Kris Krishnishana|1076x1075",
       "Yana Dekhtiar|3600x4800#2",
-      "Catch Seafood Restaurant|3840x4800",
       "Vitaly Mirkis|4032x2272",
+      "Catch Seafood Restaurant|3840x4800",
     ],
     hide: [
       "наталія Іванова|1284x1639",
@@ -2119,9 +2119,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJR8-R-pShJ0ERADIgCICSxgA": {
     name: "Cats and coffee | Киці та кава | 12+",
     show: [
-      "Наталія|3024x4032",
       "Сергій Мартиненко|4800x2700",
       "Наталя Сметанюк|4624x3468",
+      "Наталія|3024x4032",
       "Pochtaruk Tьomchik|3024x4032",
       "Михайло Горлач (BUSHA)|4032x3024",
     ],
@@ -2137,9 +2137,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Citronelle",
     show: [
       "Marianna G.|4032x3024",
+      "Oleksandr|3388x1908",
       "Liliia Mykhieieva|3599x4800",
       "Oleg FonAnykey|2828x3910",
-      "Oleksandr|3388x1908",
       "Мирослава Вдовцова|2700x4800",
       "Анна|3024x4032",
       "Citronelle|3200x4800",
@@ -2153,12 +2153,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJb45VZ5jP1EARH-EQG5dSDS8": {
     name: "Coffee Records",
     show: [
+      "Simon Peck|4800x3200",
       "Alexander Pokshyvanov|3024x4032",
       "Roman|3024x4032",
       "Роксолана Алієва|3600x4800",
-      "Simon Peck|4800x3200",
-      "Simon Peck|4800x3199",
       "Alex SPARKY|1836x3264",
+      "Simon Peck|4800x3199",
       "Coffee Records|3024x4032",
     ],
     hide: [
@@ -2170,15 +2170,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJhcL2FuUzxkARmImb4az1Tm8": {
     name: "Dacha",
     show: [
-      "Wlad Budn|3000x4000",
-      "Yevhenii Leprechaun|3761x4650",
       "Stas|3840x2160",
       "Kamran Pipekesh|4032x3024",
-      "Дача|1080x1349",
       "Світлана Гаркавенко|4000x3000",
       "Світлана Гаркавенко|4000x3000#2",
       "Ron Reed|4000x3000",
+      "Wlad Budn|3000x4000",
+      "Yevhenii Leprechaun|3761x4650",
       "Дача|3200x4800",
+      "Дача|1080x1349",
     ],
     hide: [
       "Exotic Animals Veterinary Community Степаненко Анна|4624x2136",
@@ -2188,11 +2188,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Drunken Monkey",
     show: [
       "DRUNKEN MONKEY|3861x2574",
-      "Glen Minto|3072x3072",
       "Vlad Bezugliy|4640x3472",
       "Olena Pina|3502x2252",
-      "DRUNKEN MONKEY|3861x2574#2",
+      "Glen Minto|3072x3072",
       "Viktoriia Tren|3024x4032",
+      "DRUNKEN MONKEY|3861x2574#2",
       "Denys Syrota|3472x4624",
     ],
     hide: [
@@ -2205,10 +2205,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "ELECTRON CAFE",
     show: [
       "ELECTRON CAFE|1170x767",
+      "Роман Бирса|4032x3024",
       "Тарас Марищук|3024x4032",
       "ELECTRON CAFE|1170x1760",
       "ELECTRON CAFE|1280x853",
-      "Роман Бирса|4032x3024",
     ],
     hide: [
       "Vlad Fomin|4800x2700",
@@ -2256,14 +2256,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "First Point Espresso Bar",
     show: [
       "First Point Espresso Bar|4800x3199",
-      "Yana Dekhtiar|3024x4032",
       "First Point Espresso Bar|1280x853#2",
-      "Olena Gonchenko|3600x4800",
       "Olga Vechirko|4032x2268",
+      "Yana Dekhtiar|3024x4032",
     ],
     hide: [
       "First Point Espresso Bar|1280x853",
       "Pavlo Kulyk|4032x3024",
+      "Olena Gonchenko|3600x4800",
       "Olena Inshyna|3024x4032",
       "Era Jakobna|4032x3024",
       "Julia Ivanchikova|3024x4032",
@@ -2272,14 +2272,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ-2SifnjP1EARoOX6vivIIW4": {
     name: "Frou Frou",
     show: [
-      "Frou Frou|2333x3500",
       "Oлександр Зём|4624x3472",
+      "Frou Frou|2333x3500",
       "Frou Frou|3201x4800",
       "Frou Frou|3201x4800#3",
       "Marianna Novikova|3024x4032",
-      "Frou Frou|3201x4800#2",
       "Виктория Андреевна|3600x4800",
       "Игорь Федоров|3600x4800",
+      "Frou Frou|3201x4800#2",
     ],
     hide: [
       "Frou Frou|3600x4800",
@@ -2289,9 +2289,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ1z679CbP1EARL1fnvLfR2C8": {
     name: "Georgia",
     show: [
-      "Georgia|2000x2501",
       "Horbach Sergey|4729x2661",
       "Stephbe|4800x3600",
+      "Georgia|2000x2501",
       "Maryna Peresunko|3024x4032",
     ],
     hide: [
@@ -2306,10 +2306,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJuTx6kYXP1EAR3r6cBZ7cYoE": {
     name: "Good Girl",
     show: [
-      "Alla Svyshchuk|3024x4032",
       "Игорь Федоров|2844x2135",
       "Good Girl|1280x854",
-      "Вячеслав|3000x4000",
+      "Alla Svyshchuk|3024x4032",
       "Yuriy Mazepa|1080x1350",
     ],
     hide: [
@@ -2318,16 +2317,17 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Nataliia Dmytrenko|4032x3024",
       "Bogdan Z.|3024x4032",
       "Anonymous Anonymous|3024x4032",
+      "Вячеслав|3000x4000",
     ],
   },
   "ChIJq6rqYu7I1EAR7hF-uGJKWI8": {
     name: "HayLoft 2.0",
     show: [
+      "HayLoft 2.0|4800x3200",
+      "Іра Куценко|1024x683",
       "Юлія Пампура|3600x4800",
       "Ірина Приходько|3024x4032",
-      "HayLoft 2.0|4800x3200",
       "Роман Лозко|3024x4032",
-      "Іра Куценко|1024x683",
       "HayLoft 2.0|1170x1560",
     ],
     hide: [
@@ -2344,8 +2344,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Hey Guys|1200x800#2",
       "Юрій|3024x4032",
       "Mariia Bukhtoiarova|3600x4800",
-      "Vladyslav Kruhlyk|4032x3024",
       "Anastasia Yevtushenko|3024x4032",
+      "Vladyslav Kruhlyk|4032x3024",
     ],
     hide: [
       "Леся Дармограй|3600x4800",
@@ -2357,11 +2357,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJNUr-1GrO1EARxU0cO-Khsnw": {
     name: "Hum:Hum",
     show: [
-      "Tati Dosiak|3024x4032",
       "Vacheslav Dikhtiarenko|4032x3024",
       "Eugene Platonov|4032x3024",
-      "Hum:Hum|1000x666",
       "Hum:Hum|1280x853",
+      "Tati Dosiak|3024x4032",
+      "Hum:Hum|1000x666",
       "Hum:Hum|4416x2944",
     ],
     hide: [
@@ -2374,9 +2374,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJY_r2IgzP1EARZiFx5DQAScU": {
     name: "IDEALIST COFFEE & CO.",
     show: [
+      "IDEALIST COFFEE CO|1125x633",
       "Mykhaylo Kryshtopa|3024x4032",
       "Максим Степанович|3000x4000",
-      "IDEALIST COFFEE CO|1125x633",
       "Джулія Боня|3024x4032",
       "Oksana Tychyna|3600x4800",
     ],
@@ -2428,9 +2428,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Татьяна Рог|3024x4032",
       "Matílda cafe|3024x4032",
       "Valeriia Pavlovska|3024x4032",
+      "Matílda cafe|1284x858",
       "Matílda cafe|3200x4800",
       "Matílda cafe|3024x4032#2",
-      "Matílda cafe|1284x858",
     ],
     hide: [
       "Matílda cafe|1284x858#2",
@@ -2443,8 +2443,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Milk Bar",
     show: [
       "Milk Bar|2732x1538",
-      "Miroslava Puzanova|3600x4800",
       "Олег Решетов|4000x3000",
+      "Miroslava Puzanova|3600x4800",
       "Helga Kulikova|3024x4031",
       "Олена|1600x1600",
     ],
@@ -2461,8 +2461,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Inna Brick Etnarovich Transavio travel agency|4032x3024",
       "Ihor Hutsan|4800x3600",
-      "Anna Polishchuk|3024x4032",
       "Monica Pinza Pasta Bar|1280x853",
+      "Anna Polishchuk|3024x4032",
       "Inna Brick Etnarovich Transavio travel agency|1440x1800",
     ],
     hide: [
@@ -2477,15 +2477,15 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "OCTO tower",
     show: [
       "imperishability|4624x3468",
-      "Игорь Федоров|2886x3848",
+      "Bearded Guy|4032x3024",
+      "olga|4032x2268",
       "Daria Malitskaja|3024x4032",
       "Anastasia Yevtushenko|2860x3814",
-      "Bearded Guy|4032x3024",
       "Vasylyna-Kateryna Borysiuk|3200x4800",
-      "olga|4032x2268",
       "Igor Shevchenko|2268x4032",
     ],
     hide: [
+      "Игорь Федоров|2886x3848",
       "Bohdan K|4032x3024",
       "Sandra Y|3024x4032",
     ],
@@ -2494,8 +2494,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "One Tea Tree",
     show: [
       "One Tea Tree|4800x3200",
-      "Olga Buianovska|3600x4800",
       "One Tea Tree|1280x960",
+      "Olga Buianovska|3600x4800",
       "One Tea Tree|4735x3157",
       "Мар'яна Пирч|4000x3000",
     ],
@@ -2510,14 +2510,14 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJz3uGHMKhJ0ERnQfihlqTZ1I": {
     name: "Pakufuda",
     show: [
+      "Flip Mattia|4032x3024",
       "Наначка|3000x4000",
-      "Юлія Пономаренко|3024x4032",
       "Mariia Hryhorova|3024x4032",
       "Anastasia Yevtushenko|3024x4032",
-      "Flip Mattia|4032x3024",
       "Daria Chursina|3000x4000",
     ],
     hide: [
+      "Юлія Пономаренко|3024x4032",
       "kateryna mushulova|3024x4032",
       "Наначка|2252x4000",
       "Наначка|4000x2252",
@@ -2527,9 +2527,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJM7oDHV7P1EAROolLz6ZFUrQ": {
     name: "Passenger Gastro Bar",
     show: [
+      "Катя Кущенко|1600x1200",
       "Diana Kirichenko|3600x4800",
       "Максим Шестаков|3024x4032",
-      "Катя Кущенко|1600x1200",
       "Маргарита Хвистани|960x1280",
       "Passenger Gastro Bar|3024x4032",
       "Анастасия Вртк|3024x4032",
@@ -2561,11 +2561,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJk1Hmrv_O1EARoViZRK0Fmk8": {
     name: "Petrus-ь",
     show: [
-      "Igor DYMKOM|3072x4080",
       "Petrus-ь|1172x794",
-      "Helena Smart|3072x4096",
       "Petrus-ь|1175x755",
       "Дмитро ПАЛЕЙ Беттертон|1152x718",
+      "Igor DYMKOM|3072x4080",
+      "Helena Smart|3072x4096",
     ],
     hide: [
       "Petrus-ь|1749x1166",
@@ -2579,11 +2579,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Piccolino",
     show: [
       "Piccolino|4535x3023",
-      "Оксана Бубенко|3024x4032#2",
       "Евгений Роменович Сова|4624x3468",
       "Piccolino|4358x2326",
-      "Оксана Бубенко|3024x4032",
+      "Оксана Бубенко|3024x4032#2",
       "Piccolino|4800x3200",
+      "Оксана Бубенко|3024x4032",
     ],
     hide: [
       "Оксана Бубенко|1080x1440",
@@ -2595,10 +2595,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJtWr-bv_O1EAR6wjSSSldFec": {
     name: "PinchukArtCentre",
     show: [
-      "Artem Perebyinis|3024x4032",
       "PinchukArtCentre|1280x958",
       "Bohdan|869x572",
       "Nikolay Semeniuta|4608x3456",
+      "Artem Perebyinis|3024x4032",
       "Marharyta Borovkova|3024x4032",
       "VJkET|4032x3024",
       "Shevchenko|3024x4032",
@@ -2612,8 +2612,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJSbIQ_2bP1EARqgdNu2ybkF8": {
     name: "Pure & Naive",
     show: [
-      "Людмила Коляда|3600x4800",
       "Алексенко Владислав|4032x3024",
+      "Людмила Коляда|3600x4800",
       "Виктория Руденко|2478x2954",
       "Petar|3600x4800",
       "Виктория Руденко|3024x4032",
@@ -2630,24 +2630,24 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "SARTO",
     show: [
       "SARTO|4800x3200",
-      "SARTO|1290x1678",
       "Мир|1800x1350",
       "SARTO|2560x1920",
-      "Sven Rübner|3024x4032",
       "Мир|1800x1350#2",
+      "SARTO|1290x1678",
       "Анна Олефир|960x1280",
       "Анна Чубак|2366x3154",
       "SARTO|3600x4800",
     ],
     hide: [
+      "Sven Rübner|3024x4032",
       "SARTO|4800x3270",
     ],
   },
   "ChIJOaEBw-zO1EARrRgeY1j1DCU": {
     name: "Semifreddo",
     show: [
-      "Semifreddo|853x1280",
       "Oleksii Filanovskyi|4000x3000",
+      "Semifreddo|853x1280",
       "Ukraine Med|3024x4032",
       "Semifreddo|1211x1827",
       "Alevtina Dagnoff|4032x3024",
@@ -2680,18 +2680,18 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA": {
     name: "SHO",
     show: [
+      "Adam Peter|4032x2268",
       "Jane Vodolazskaya|3024x4032",
       "Дмитрий Третьяк|3024x4032",
       "Дмитрий Третьяк|3024x4032#2",
       "Иван Пирожков|3600x4800",
-      "Adam Peter|4032x2268",
-      "Akass Akassich|3472x4624",
     ],
     hide: [
       "Nina Podolska|4032x3024",
       "SHO|3280x1248",
       "polina|1536x2048",
       "SHO|1241x1754",
+      "Akass Akassich|3472x4624",
     ],
   },
   "ChIJFSlcIADP1EAREWCYQYIzySY": {
@@ -2701,9 +2701,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Anastasia Yevtushenko|3600x4800",
       "Eugene Moroz|3024x4032",
       "An S45|3024x4032",
-      "SLOU COFFEE|2268x4032",
     ],
     hide: [
+      "SLOU COFFEE|2268x4032",
       "Margarita Oliynick|3600x4800",
       "Андрей Киселев|3024x4032",
       "Настя Бобровник|3024x4032",
@@ -2714,9 +2714,9 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJK4qdvQ2hJ0ERXZ_hZYwgIkU": {
     name: "Smakota",
     show: [
-      "Сергій Сімаков (CI UA)|3060x4080",
       "Smakota|4800x3600",
       "Ольга Шопік|4032x3024",
+      "Сергій Сімаков (CI UA)|3060x4080",
       "Светлана Доленко|3072x4080",
       "Smakota|3024x4032",
     ],
@@ -2732,17 +2732,17 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "Squat17B",
     show: [
       "Squat 17b|4000x2667",
-      "Jenny Senyk|3600x4800",
-      "Jenny Senyk|3600x4800#2",
       "Наталия Писчаная|4032x3024",
-      "Оксана|3000x4000",
       "Andrii Gavryshchuk|3665x2446",
+      "Jenny Senyk|3600x4800",
       "Squat 17b|3821x2547",
+      "Оксана|3000x4000",
     ],
     hide: [
       "Squat 17b|1366x2048",
       "Squat 17b|4800x3200",
       "Squat 17b|1050x700",
+      "Jenny Senyk|3600x4800#2",
     ],
   },
   "ChIJ87hEd2fP1EAREidDScA3ydY": {
@@ -2766,11 +2766,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     name: "SUPRA Daily Restaurant",
     show: [
       "SUPRA Daily Restaurant|4800x3200",
+      "SUPRA Daily Restaurant|4800x3238",
       "Natali Chernovol|3600x4800",
       "Anastasia Yevtushenko|3024x4032",
       "Tetiana Ямщікова|3024x4032",
       "Виктория Руденко|3024x4032",
-      "SUPRA Daily Restaurant|4800x3238",
       "Anastasiia L.|2700x4800",
       "Елена Вазари|3600x4800",
     ],
@@ -2786,8 +2786,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Ірина Орел|3024x4032",
       "Natali Chernovol|3600x4800",
       "Liza Shpak|3024x4032",
-      "t.c.pizza|3024x4032",
       "Vitalii|1200x1600",
+      "t.c.pizza|3024x4032",
     ],
     hide: [
       "Марина Маринина|2992x2992",
@@ -2799,13 +2799,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJkRUQi4kzxkARy405kJ7LNm8": {
     name: "The Roastery by Odesa",
     show: [
+      "Ruslan Zubets|4032x3024",
+      "The Roastery by Odesa|4800x2701",
       "Anna|3024x4032",
       "Valeriya Kirichenko|3024x4032",
-      "Ruslan Zubets|4032x3024",
       "The Roastery by Odesa|1707x2560",
-      "The Roastery by Odesa|1707x2560#2",
-      "The Roastery by Odesa|4800x2701",
       "Sasha|3024x4032",
+      "The Roastery by Odesa|1707x2560#2",
     ],
     hide: [
       "The Roastery by Odesa|512x431",
@@ -2816,12 +2816,12 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJKVe0Mp4xxkARJm84eFqTqUg": {
     name: "True restaurant",
     show: [
-      "True ресторан|2842x3874",
       "Vlad Novikov|4032x3024",
-      "True ресторан|2700x3558",
       "Roman Ilienko|4000x3000",
-      "True ресторан|2916x4029",
       "Alex|4032x3024",
+      "True ресторан|2842x3874",
+      "True ресторан|2700x3558",
+      "True ресторан|2916x4029",
       "True ресторан|3024x4032",
     ],
     hide: [
@@ -2837,10 +2837,10 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "UnderWu Vinyl Bar|4800x3840",
       "Oleksii Filanovskyi|4000x3000",
       "Tetiana Dymnich|4800x2694",
-      "UnderWu Vinyl Bar|2764x3450",
-      "Ольга Сивченко|3024x4032",
       "UnderWu Vinyl Bar|4800x3840#2",
       "Tetiana Dymnich|4800x2694#2",
+      "UnderWu Vinyl Bar|2764x3450",
+      "Ольга Сивченко|3024x4032",
     ],
     hide: [
       "Alina Shynkaruk|3072x4080",
@@ -2853,13 +2853,13 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Borys Krimer|4032x3024",
       "Александр Кравчук|4608x3456#2",
       "Borys Krimer|4032x3024#2",
-      "Александр Кравчук|2448x3264",
       "Андрей Арнольдович|4032x2268",
       "And See|4624x2604",
       "Александр Кравчук|4608x3456",
     ],
     hide: [
       "alpha|3024x4032",
+      "Александр Кравчук|2448x3264",
       "Александр Кравчук|3264x2448",
       "Andrii Syroid|2865x2865",
     ],
@@ -2884,8 +2884,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
   "ChIJYY42lenP1EARf_d5i0wMDYQ": {
     name: "Very Well Cafe",
     show: [
-      "Олег Волошко|3600x4800",
       "CyberScience|4800x3600",
+      "Олег Волошко|3600x4800",
       "Анастасія Свобода|3024x4032",
       "Very Well Cafe|960x1280",
       "Вікторія Кнель|3000x4000",
@@ -2903,7 +2903,6 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
     show: [
       "Татьяна|3600x4800",
       "Ирина Голоядова|2700x4800",
-      "Your Driver Company Kyiv Ukraine|3024x4032",
       "Татьяна|3024x4032",
     ],
     hide: [
@@ -2911,6 +2910,7 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Vicini Italiani|720x1080",
       "Sehee Park|3024x3024",
       "Sehee Park|3024x3024#2",
+      "Your Driver Company Kyiv Ukraine|3024x4032",
       "Ирина Мартыненко|4032x1960",
       "Tanya Kolos|4608x3456",
     ],
@@ -2921,11 +2921,11 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "VINO e CUCINA|1280x853",
       "VINO e CUCINA|4800x3200",
       "Oleksii Filanovskyi|4000x3000#2",
-      "Yana Dekhtiar|3600x4800",
       "Oleksii Filanovskyi|4000x3000",
       "Oleksii Filanovskyi|4032x3024",
-      "Мария Головчак|3024x4032",
       "александр томиленко|4000x2252",
+      "Yana Dekhtiar|3600x4800",
+      "Мария Головчак|3024x4032",
       "VINO e CUCINA|1902x1282",
     ],
     hide: [
@@ -2956,8 +2956,8 @@ export const VENUE_PHOTO_CURATION: Readonly<Record<string, VenuePhotoCuration>> 
       "Ron Reed|4000x3000",
       "Natalia|3600x4800",
       "Марія Білик|828x1097",
-      "Світлана Юсипенко|3600x4800",
       "Kate Yanek|3024x4032",
+      "Світлана Юсипенко|3600x4800",
     ],
     hide: [
       "Yuliya Zakharchenko|4800x2700",
