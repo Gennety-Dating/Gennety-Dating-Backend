@@ -296,3 +296,38 @@ describe("buildProductPlaybook", () => {
     });
   });
 });
+
+describe("first-drop calibration (founder decision 2026-10-11)", () => {
+  const CAL: PlaybookCadence = {
+    silentDrops: true,
+    decisionWindowHours: null,
+    planningNudgeHours: [3, 6],
+    stallCheckInHours: 12,
+    stallTimeoutHours: 24,
+    rematchMaxPerWindow: 7,
+    rematchWindowDays: 7,
+    rematchCooldownHours: 24,
+    firstDropCalibrationHours: 24,
+  };
+
+  it("explains the first day and points at the Search phase line", () => {
+    const text = buildProductPlaybook(ALL_OFF, undefined, CAL);
+    expect(text).toContain("The first day is calibration");
+    expect(text).toContain("about 24h after onboarding");
+    expect(text).toContain('"Search phase"');
+    // The date is when the search starts, never a promised match.
+    expect(text).toContain("never a promised match");
+  });
+
+  it("says nothing about calibration when the window is off", () => {
+    const text = buildProductPlaybook(ALL_OFF, undefined, { ...CAL, firstDropCalibrationHours: 0 });
+    expect(text).not.toContain("The first day is calibration");
+    expect(text).not.toContain("Search phase");
+  });
+
+  it("holds the position on any wait — no apology, no thanks for patience", () => {
+    const text = buildProductPlaybook(ALL_OFF, undefined, CAL);
+    expect(text).toContain("Hold the position when explaining a wait");
+    expect(text).toContain('no "thanks for waiting"');
+  });
+});

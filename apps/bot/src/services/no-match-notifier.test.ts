@@ -413,7 +413,9 @@ describe("sendNoMatchNotices", () => {
     expect(result.tier1).toBe(0);
 
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/Вторую неделю подряд/i);
+    expect(body).toMatch(/Снова без мэтча/i);
+    // Holds the position — no thanks for waiting (founder, 2026-10-11).
+    expect(body).not.toMatch(/Спасибо|ждёшь/i);
 
     expect(mNoticeCreate).toHaveBeenCalledWith({
       data: { userId: "u1", tier: 2, dropDate: getDropDate(NOW) },

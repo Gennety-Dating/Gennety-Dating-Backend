@@ -1067,6 +1067,13 @@ model Profile {
   /// Last time this profile was included in a `Match` row. Used by the
   /// match-engine tick to avoid re-pairing the same user within a cooldown.
   lastMatchedAt             DateTime?                    @map("last_matched_at")
+  /// First-drop calibration window (founder decision 2026-10-11): a fresh
+  /// account sits out the nearest evening batch while the agent studies the
+  /// profile and the city pool. Set once at onboarding finalize to
+  /// `now + FIRST_DROP_CALIBRATION_HOURS`; the never-matched eligibility scan
+  /// and the famine notice skip the profile until it passes. Null = no window
+  /// (legacy accounts, feature off).
+  calibrationUntil          DateTime?                    @map("calibration_until")
   /// Consecutive weekly batches where this profile was eligible but left
   /// unpaired, plus compensating boosts when the user accepted a proposal
   /// but the peer declined. Reset to 0 on a successful pairing. Read by the

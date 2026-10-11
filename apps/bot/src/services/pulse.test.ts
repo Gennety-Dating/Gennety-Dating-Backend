@@ -4,6 +4,7 @@ const db = {
   user: { findUnique: vi.fn() },
   match: { findFirst: vi.fn() },
   noMatchNotice: { findFirst: vi.fn() },
+  profile: { findUnique: vi.fn() },
   inboxItem: { findMany: vi.fn(), findFirst: vi.fn() },
 };
 vi.mock("@gennety/db", () => ({ prisma: db }));
@@ -23,6 +24,7 @@ beforeEach(() => {
   previousBatch.mockReturnValue(BATCH);
   db.match.findFirst.mockResolvedValue(null);
   db.noMatchNotice.findFirst.mockResolvedValue(null);
+  db.profile.findUnique.mockResolvedValue({ calibrationUntil: null });
   db.inboxItem.findMany.mockResolvedValue([]);
   db.inboxItem.findFirst.mockResolvedValue(null);
 });
@@ -48,6 +50,14 @@ describe("dropBatchRow — F2: only a real, bounded job spins", () => {
     db.noMatchNotice.findFirst.mockResolvedValue(null);
     db.match.findFirst.mockResolvedValue({ id: "m1" });
     expect(await dropBatchRow(USER, minutesAfter(3))).toBeNull();
+  });
+
+  it("stays still for an account held out of this batch by first-drop calibration", async () => {
+    db.profile.findUnique.mockResolvedValue({ calibrationUntil: minutesAfter(60 * 20) });
+    expect(await dropBatchRow(USER, minutesAfter(5))).toBeNull();
+    // The window ended before this batch — it took part, so the row spins.
+    db.profile.findUnique.mockResolvedValue({ calibrationUntil: minutesAfter(-1) });
+    expect(await dropBatchRow(USER, minutesAfter(5))).toMatchObject({ state: "processing" });
   });
 });
 

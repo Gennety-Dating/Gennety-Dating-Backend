@@ -626,11 +626,11 @@ const translations = {
     noMatchThisWeekTier1:
       "*No match this week*\n\nI didn't find anyone who truly fits, and I won't offer just anyone. You'll have priority in the next round ✨",
     noMatchThisWeekTier2:
-      "*No match again*\n\nFor the second week in a row I don't see anyone who truly fits. Thanks for waiting — your priority in the next round is even higher 🤍",
+      "*No match again*\n\nNo one who truly fits yet — and a random person is not what you came for. Your priority in the next round is higher still 🤍",
     noMatchThisWeekTier3:
       "*Still no match*\n\nThere's still no one who truly fits, and I won't offer just anyone. I'm watching your queue — you're among the first in the next round 🤍",
     noMatchDiscountOffer:
-      "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
+      "🎟️ Your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
     poolExhaustedPauseNotice:
       "*Pausing your search*\n\nRight now there's genuinely no one for you — it's not about you. As soon as someone who fits shows up, I'll bring you back into the search myself.",
@@ -1820,11 +1820,11 @@ const translations = {
     noMatchThisWeekTier1:
       "*На этой неделе без мэтча*\n\nНе нашёл того, кто правда подходит, а предлагать кого попало не хочу. В следующем подборе у тебя приоритет ✨",
     noMatchThisWeekTier2:
-      "*Снова без мэтча*\n\nВторую неделю подряд не вижу того, кто правда подходит. Спасибо, что ждёшь — в следующем подборе твой приоритет ещё выше 🤍",
+      "*Снова без мэтча*\n\nПока нет того, кто правда подходит, — а случайный человек тебе не нужен. В следующем подборе твой приоритет ещё выше 🤍",
     noMatchThisWeekTier3:
       "*Пока без мэтча*\n\nПодходящего человека всё ещё нет, а предлагать кого попало я не буду. Слежу за твоей очередью — в следующем подборе ты среди первых 🤍",
     noMatchDiscountOffer:
-      "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
+      "🎟️ Твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
     poolExhaustedPauseNotice:
       "*Ставлю поиск на паузу*\n\nСейчас для тебя правда никого нет — дело не в тебе. Как появится подходящий человек, сам верну тебя в поиск.",
@@ -2904,11 +2904,11 @@ const translations = {
     noMatchThisWeekTier1:
       "*Цього тижня без метчу*\n\nНе знайшов того, хто справді підходить, а пропонувати будь-кого не хочу. У наступному підборі в тебе пріоритет ✨",
     noMatchThisWeekTier2:
-      "*Знову без метчу*\n\nДругий тиждень поспіль не бачу того, хто справді підходить. Дякую, що чекаєш — у наступному підборі твій пріоритет ще вищий 🤍",
+      "*Знову без метчу*\n\nПоки немає того, хто справді підходить, — а випадкова людина тобі не потрібна. У наступному підборі твій пріоритет ще вищий 🤍",
     noMatchThisWeekTier3:
       "*Поки без метчу*\n\nЛюдини, яка підходить, досі немає, а пропонувати будь-кого я не буду. Стежу за твоєю чергою — у наступному підборі ти серед перших 🤍",
     noMatchDiscountOffer:
-      "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
+      "🎟️ Твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
     poolExhaustedPauseNotice:
       "*Ставлю пошук на паузу*\n\nЗараз для тебе справді нікого немає — справа не в тобі. Щойно з'явиться людина, яка підходить, сам поверну тебе в пошук.",
@@ -3977,11 +3977,11 @@ const deTranslations: TranslationTable = {
   noMatchThisWeekTier1:
     "*Diese Woche kein Match*\n\nIch habe niemanden gefunden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. In der nächsten Runde hast du Priorität ✨",
   noMatchThisWeekTier2:
-    "*Wieder kein Match*\n\nDie zweite Woche in Folge sehe ich niemanden, der wirklich passt. Danke fürs Warten — in der nächsten Runde ist deine Priorität noch höher 🤍",
+    "*Wieder kein Match*\n\nNoch niemand, der wirklich passt — und irgendwer ist nicht das, wofür du hier bist. In der nächsten Runde ist deine Priorität noch höher 🤍",
   noMatchThisWeekTier3:
     "*Noch kein Match*\n\nEs gibt immer noch niemanden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. Ich behalte deine Warteschlange im Blick — in der nächsten Runde bist du unter den Ersten 🤍",
   noMatchDiscountOffer:
-    "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
+    "🎟️ Dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
   poolExhaustedPauseNotice:
     "*Ich pausiere deine Suche*\n\nGerade gibt es wirklich niemanden für dich — das liegt nicht an dir. Sobald jemand Passendes auftaucht, hole ich dich selbst zurück in die Suche.",
@@ -5038,11 +5038,11 @@ const plTranslations: TranslationTable = {
   noMatchThisWeekTier1:
     "*W tym tygodniu bez matcha*\n\nNie znalazłem nikogo, kto naprawdę pasuje, a nie chcę proponować byle kogo. Przy następnym doborze masz priorytet ✨",
   noMatchThisWeekTier2:
-    "*Znowu bez matcha*\n\nDrugi tydzień z rzędu nie widzę nikogo, kto naprawdę pasuje. Dzięki, że czekasz — przy następnym doborze twój priorytet jest jeszcze wyższy 🤍",
+    "*Znowu bez matcha*\n\nNadal nikt naprawdę nie pasuje — a przypadkowa osoba to nie to, po co tu jesteś. Przy następnym doborze twój priorytet jest jeszcze wyższy 🤍",
   noMatchThisWeekTier3:
     "*Na razie bez matcha*\n\nNadal nie ma nikogo, kto naprawdę pasuje, a nie będę proponować byle kogo. Pilnuję twojej kolejki — przy następnym doborze jesteś wśród pierwszych 🤍",
   noMatchDiscountOffer:
-    "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
+    "🎟️ Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
   poolExhaustedPauseNotice:
     "*Wstrzymuję wyszukiwanie*\n\nTeraz naprawdę nie ma nikogo dla ciebie — to nie twoja wina. Gdy tylko pojawi się ktoś pasujący, sam przywrócę cię do wyszukiwania.",

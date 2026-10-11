@@ -123,7 +123,7 @@ export async function dropBatchRow(userId: string, now: Date): Promise<PulseRowD
   const deadline = new Date(batchAt.getTime() + PULSE_DROP_WINDOW_MINUTES * MINUTE);
   if (now.getTime() >= deadline.getTime()) return null;
 
-  const [match, notice] = await Promise.all([
+  const [match, notice, profile] = await Promise.all([
     prisma.match.findFirst({
       where: { OR: [{ userAId: userId }, { userBId: userId }], createdAt: { gte: batchAt } },
       select: { id: true },
@@ -132,8 +132,14 @@ export async function dropBatchRow(userId: string, now: Date): Promise<PulseRowD
       where: { userId, sentAt: { gte: batchAt } },
       select: { id: true },
     }),
+    prisma.profile.findUnique({ where: { userId }, select: { calibrationUntil: true } }),
   ]);
   if (match || notice) return null;
+  // Held out of this batch by the first-drop calibration window: nothing of
+  // theirs is being processed, so nothing spins.
+  if (profile?.calibrationUntil && profile.calibrationUntil.getTime() > batchAt.getTime()) {
+    return null;
+  }
   return {
     id: `drop_batch:${batchAt.toISOString()}`,
     kind: "drop_batch",

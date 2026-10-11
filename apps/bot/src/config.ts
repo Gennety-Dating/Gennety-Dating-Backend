@@ -524,6 +524,15 @@ export const env = {
   /// `TICKET_PRICE_CENTS` above. Inert unless `TICKET_FEATURE_ENABLED`.
   FAMINE_DISCOUNT_PCT: Number(process.env.FAMINE_DISCOUNT_PCT ?? "77"),
   FAMINE_DISCOUNT_TTL_DAYS: Number(process.env.FAMINE_DISCOUNT_TTL_DAYS ?? "30"),
+  /// First-drop calibration window (founder decision 2026-10-11): a freshly
+  /// onboarded account is held out of matching for this many hours while the
+  /// agent studies the profile and the city pool. 24h against the daily 18:00
+  /// batch means "skip the nearest evening" — the first introduction lands on
+  /// the second evening after onboarding (~24–47h). 0 disables the window.
+  FIRST_DROP_CALIBRATION_HOURS: Math.max(
+    0,
+    Number(process.env.FIRST_DROP_CALIBRATION_HOURS ?? "24") || 0,
+  ),
   /// Telegram Stars (XTR) — the ONLY payment rail for Date Tickets in the
   /// Telegram product. When true, "My Tickets" shows native in-chat Star
   /// invoice buttons (1/3/6 bundles) that credit the wallet on

@@ -46,6 +46,7 @@ import {
 } from "./onboarding-collector.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
 import { isModerationLockedStatus } from "./user-status.js";
+import { armFirstDropCalibration, loadCalibration } from "./first-drop-calibration.js";
 
 
 // ---------------------------------------------------------------------------
@@ -1442,6 +1443,12 @@ async function execFinalizeOnboarding(
     });
   }
 
+  // First-drop calibration (2026-10-11): the fresh account sits out the
+  // nearest evening batch while the agent studies it. Idempotent.
+  const calibration = finalized?.profile
+    ? await armFirstDropCalibration(finalized.id).then(() => loadCalibration(finalized.id))
+    : null;
+
   // Founder ops feed: when this finalize also activated the user (liveness off),
   // DM the founder the new profile. Idempotent + status-gated inside the
   // notifier, so it safely no-ops when liveness keeps the user in `onboarding`.
@@ -1453,6 +1460,16 @@ async function execFinalizeOnboarding(
       ? "Onboarding data saved. User must complete liveness verification before matching."
       : "Onboarding complete. User is now active.",
     verificationRequired: livenessEnabled,
+    // The one place the first-day wait is explained up front (founder,
+    // 2026-10-11: no daily "nothing yet" notices). Stated as how it works,
+    // not as an apology.
+    ...(calibration?.calibrating && calibration.firstDropAt
+      ? {
+          firstSearchAt: calibration.firstDropAt.toISOString(),
+          calibrationNote:
+            "In your closing message add ONE short sentence: the first day you spend getting to know them and who is around in their city, and their first search runs at firstSearchAt (say the day and time in their language). It is when the search starts, not a promised match. No apology, no 'unfortunately', no thanks for patience.",
+        }
+      : {}),
   });
 }
 

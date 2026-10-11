@@ -26,6 +26,7 @@ import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
 import { loadBlockedPairKeys } from "./user-block.js";
 import { loadRhythmTags } from "./rhythm/store.js";
+import { calibrationOverWhere } from "./first-drop-calibration.js";
 import {
   hasTrackVerifiedContact,
   TRACK_VERIFIED_CONTACT_SQL,
@@ -1936,6 +1937,8 @@ async function loadEligibleUsersForIds(
         homeCityKey: { not: null },
         latitude: { not: null },
         longitude: { not: null },
+        // First-drop calibration: a fresh account sits out the nearest batch.
+        ...calibrationOverWhere(new Date()),
       },
       ...liveMatchWhere,
     },

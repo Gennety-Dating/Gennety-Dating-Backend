@@ -24,6 +24,7 @@ import {
 import { env } from "../config.js";
 import { RENDER_TZ } from "./datetime-entity.js";
 import { formatNextBatchDate } from "./next-batch.js";
+import { resolveCalibration } from "./first-drop-calibration.js";
 import {
   buildProductPlaybook,
   type PlaybookCadence,
@@ -158,6 +159,7 @@ function playbookCadence(): PlaybookCadence {
     rematchMaxPerWindow: rematchLimits().maxPerInterval,
     rematchWindowDays: Math.round(CADENCE.rematchWindowMs / (24 * HOUR_MS)),
     rematchCooldownHours: asHours(rematchLimits().cooldownMs),
+    firstDropCalibrationHours: env.FIRST_DROP_CALIBRATION_HOURS,
   };
 }
 
@@ -250,6 +252,12 @@ interface UserContext {
   language: string;
   matchSummary: string;
   nextBatchDate: string;
+  /**
+   * First-drop calibration line: while a fresh account sits out the nearest
+   * batch the agent must know it, or "why nothing yet?" on day one gets a
+   * made-up reason.
+   */
+  searchPhase: string;
   /** Comma list of enabled optional features, e.g. "coordination, tickets". */
   enabledFeatures: string;
   /**
@@ -350,6 +358,23 @@ function formatClock(date: Date, locale: string): string {
     hour12: false,
     timeZone: RENDER_TZ,
   });
+}
+
+/**
+ * The "Search phase" context line. Calibration names the first search the
+ * account joins — the agent may quote it as when the search starts, never as a
+ * promised match (playbook, waiting stage).
+ */
+export function describeSearchPhase(
+  calibrationUntil: Date | null,
+  now: Date,
+  locale: string,
+): string {
+  const state = resolveCalibration(calibrationUntil, now);
+  if (!state.calibrating || !state.firstDropAt) {
+    return "regular — takes part in every batch";
+  }
+  return `first-day calibration — new account, held out of matching while you study the profile and the city pool; their first search runs ${formatWhen(state.firstDropAt, locale)}`;
 }
 
 /** Full date+time label ("Saturday, May 16, 19:00") in `RENDER_TZ`. */
@@ -681,7 +706,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       ticketBalance: true,
       premiumUntil: true,
       verificationStatus: true,
-      profile: { select: { homeCity: true } },
+      profile: { select: { homeCity: true, calibrationUntil: true } },
       matchesAsA: {
         where: statusFilter,
         orderBy: { createdAt: "desc" },
@@ -783,6 +808,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     language: user?.language ?? "en",
     matchSummary,
     nextBatchDate: formatNextBatchDate(new Date(), undefined, locale),
+    searchPhase: describeSearchPhase(user?.profile?.calibrationUntil ?? null, new Date(), locale),
     enabledFeatures,
     pendingRejectionHint,
     chatTimeline,
@@ -846,6 +872,7 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 - Account status: ${userCtx.status}
 - Preferred language: ${userCtx.language}
 - Next match batch: ${userCtx.nextBatchDate}
+- Search phase: ${userCtx.searchPhase}
 - Optional features enabled: ${userCtx.enabledFeatures}
 ${accountLines.join("\n")}
 

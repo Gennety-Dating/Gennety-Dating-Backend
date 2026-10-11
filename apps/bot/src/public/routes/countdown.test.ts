@@ -37,6 +37,14 @@ vi.mock("../../services/weekly-status.js", () => ({
   }),
 }));
 
+const loadCalibration = vi.fn(async (_id: string, _now: Date) => ({
+  calibrating: false,
+  firstDropAt: null as Date | null,
+}));
+vi.mock("../../services/first-drop-calibration.js", () => ({
+  loadCalibration: (id: string, now: Date) => loadCalibration(id, now),
+}));
+
 const { countdownRouter } = await import("./countdown.js");
 const { JWT_ISSUER, JWT_AUDIENCE } = await import("../jwt.js");
 
@@ -55,6 +63,8 @@ function get() {
 beforeEach(() => {
   countCitySearchers.mockReset();
   countCitySearchers.mockResolvedValue(null);
+  loadCalibration.mockReset();
+  loadCalibration.mockResolvedValue({ calibrating: false, firstDropAt: null });
 });
 
 describe("GET /v1/countdown — счётчик города", () => {
@@ -86,5 +96,27 @@ describe("GET /v1/countdown — счётчик города", () => {
     expect(res.body.priorityBoosted).toBe(false);
     expect(typeof res.body.nextDropAt).toBe("string");
     expect(typeof res.body.serverNow).toBe("string");
+  });
+});
+
+describe("GET /v1/countdown — окно калибровки первой пары", () => {
+  it("свежий аккаунт: фаза calibrating и время первого подбора", async () => {
+    loadCalibration.mockResolvedValue({
+      calibrating: true,
+      firstDropAt: new Date("2026-09-11T15:00:00.000Z"),
+    });
+
+    const res = await get();
+
+    expect(res.body.searchPhase).toBe("calibrating");
+    expect(res.body.firstDropAt).toBe("2026-09-11T15:00:00.000Z");
+    expect(loadCalibration).toHaveBeenCalledWith(USER_ID, expect.any(Date));
+  });
+
+  it("обычный поиск: searching и firstDropAt = null", async () => {
+    const res = await get();
+
+    expect(res.body.searchPhase).toBe("searching");
+    expect(res.body).toHaveProperty("firstDropAt", null);
   });
 });

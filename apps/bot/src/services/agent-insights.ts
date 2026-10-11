@@ -6,6 +6,7 @@ import {
   MIN_PHOTOS,
   PHOTO_BONUS_TICKET_THRESHOLD,
 } from "@gennety/shared";
+import { resolveCalibration } from "./first-drop-calibration.js";
 
 /**
  * Read-only matchmaking insight for the menu agent.
@@ -54,6 +55,14 @@ export interface MatchmakingStanding {
   /** Coarse bucket of same-city active candidates who could match this user. */
   cityPool: "none" | "very_small" | "small" | "healthy" | "unknown";
   lastMatchedAt: Date | null;
+  /**
+   * First-drop calibration (2026-10-11): true while a fresh account sits out
+   * the nearest batch. Without it the agent reads "0 missed, healthy pool,
+   * nothing pending" on day one and has no true answer to "why nothing yet?".
+   */
+  calibrating: boolean;
+  /** While calibrating: the first batch the account joins (when the search starts). */
+  firstSearchAt: Date | null;
 }
 
 /** Buckets rather than a number: the exact pool size is not the user's business. */
@@ -94,6 +103,7 @@ export async function getMatchmakingStanding(
           homeCity: true,
           homeCityKey: true,
           photoBonusTicketAt: true,
+          calibrationUntil: true,
         },
       },
     },
@@ -124,6 +134,7 @@ export async function getMatchmakingStanding(
   }
 
   const missedBatches = profile?.standbyCount ?? profile?.missedWeeks ?? 0;
+  const calibration = resolveCalibration(profile?.calibrationUntil ?? null);
 
   return {
     accountStatus: user.status,
@@ -141,6 +152,8 @@ export async function getMatchmakingStanding(
     datingCity: profile?.homeCity ?? null,
     cityPool,
     lastMatchedAt: profile?.lastMatchedAt ?? null,
+    calibrating: calibration.calibrating,
+    firstSearchAt: calibration.firstDropAt,
   };
 }
 

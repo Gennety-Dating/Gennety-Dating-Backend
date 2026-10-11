@@ -36,6 +36,7 @@ import {
   fetchKnowledgeBase,
   clearKnowledgeCache,
   describeActiveMatch,
+  describeSearchPhase,
   renderChatTimeline,
   TIMELINE_FENCE,
   type ActiveMatchView,
@@ -718,5 +719,20 @@ describe("buildSystemPrompt — chat timeline", () => {
     const prompt = await buildSystemPrompt(BigInt(12345));
     expect(prompt).toContain("Recent chat timeline");
     expect(prompt).toContain("nothing recorded yet");
+  });
+});
+
+describe("describeSearchPhase — first-drop calibration", () => {
+  const now = new Date("2026-10-12T16:00:00Z");
+
+  it("names the first search while the window is open", () => {
+    const line = describeSearchPhase(new Date("2026-10-13T16:00:00Z"), now, "en-US");
+    expect(line).toMatch(/^first-day calibration/);
+    expect(line).toContain("first search runs");
+  });
+
+  it("is regular for legacy accounts and once the window has passed", () => {
+    expect(describeSearchPhase(null, now, "en-US")).toMatch(/^regular/);
+    expect(describeSearchPhase(new Date("2026-10-12T15:00:00Z"), now, "en-US")).toMatch(/^regular/);
   });
 });

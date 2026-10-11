@@ -4777,6 +4777,24 @@ paths:
                       threshold" and "no city chosen" because the client
                       renders them identically. Never rounded or invented —
                       when a number is present it is the real count.
+                  searchPhase:
+                    type: string
+                    enum: [calibrating, searching]
+                    description: >-
+                      First-drop calibration (2026-10-11). `calibrating` while a
+                      freshly onboarded account sits out the nearest evening
+                      batch (FIRST_DROP_CALIBRATION_HOURS, default 24) — the
+                      account is genuinely outside the eligibility scan, so a
+                      "searching" status is honest. `searching` otherwise.
+                      Optional so a client survives an older server; absent
+                      means `searching`.
+                  firstDropAt:
+                    type: [string, "null"]
+                    format: date-time
+                    description: >-
+                      While `calibrating`: the first batch the account joins.
+                      Null otherwise. Not a promise of a match — only of the
+                      first search the account takes part in.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/date/state:

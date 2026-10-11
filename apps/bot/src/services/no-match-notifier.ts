@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import type { MessageEntity } from "grammy/types";
 import { prisma, type Prisma } from "@gennety/db";
+import { calibrationOverWhere } from "./first-drop-calibration.js";
 import {
   CADENCE,
   FAMINE_PAUSE_AFTER_DAYS,
@@ -326,6 +327,9 @@ export async function sendNoMatchNotices(
         // An account created after the drop was not in it, and must not be told
         // it found nobody — which a resumed run hours later would otherwise do.
         createdAt: { lt: dropAt },
+        // Held out of this drop by the first-drop calibration window: it was not
+        // searched against, so "found nobody" would be false.
+        profile: calibrationOverWhere(dropAt),
         // Exclude users who hold a live match or got a pitch in this drop.
         AND: [
           { matchesAsA: noLiveOrRecentMatch },

@@ -115,6 +115,12 @@ export interface PlaybookCadence {
   rematchMaxPerWindow: number;
   rematchWindowDays: number;
   rematchCooldownHours: number;
+  /**
+   * First-drop calibration window in hours (`FIRST_DROP_CALIBRATION_HOURS`):
+   * a fresh account sits out the nearest evening batch. 0 / absent = no window,
+   * and the playbook says nothing about it.
+   */
+  firstDropCalibrationHours?: number;
 }
 
 /** Weekly's values — what the prose said before it was derived. */
@@ -176,6 +182,19 @@ export function buildProductPlaybook(
       `- If a stretch goes by with nobody, we check in on our own about once a week — they never have to ask to find out where they stand. Never promise a match by a particular day.`,
     );
   }
+  if ((cadence.firstDropCalibrationHours ?? 0) > 0) {
+    // Founder decision 2026-10-11. A fresh account is genuinely held out of the
+    // nearest batch, so this is an explanation of a real rule, not a cover
+    // story — and the user expects a daily drop, so "why nothing yet?" comes on
+    // day one. The stance is the product's, not an apology.
+    waiting.push(
+      `- **The first day is calibration.** A new account sits out the nearest evening search (about ${cadence.firstDropCalibrationHours}h after onboarding). In that time you study who they are — their answers, the Profiler questions — and who is actually around in their city, so the first person you bring is chosen, not grabbed. The "Search phase" line in context says whether this applies right now and when their first search runs.`,
+      `- If they ask why nothing has come yet during calibration, say exactly that — short, calm, once. Name when their first search runs. That date is when the search STARTS, never a promised match.`,
+    );
+  }
+  waiting.push(
+    `- **Hold the position when explaining a wait** — calibration, a quiet evening, a stretch with nobody. You are not asking for their patience; you are telling them how this works. No "sorry", no "unfortunately", no "thanks for waiting", no pleading, no selling. We don't hand anyone a random person — that is the standard, and it is why the wait is worth it. Polite, brief, certain, then move on to whatever helps (sharpening the profile, the Profiler questions).`,
+  );
   sections.push(waiting.join("\n"));
 
   sections.push(`## Stage — match proposed (deciding)

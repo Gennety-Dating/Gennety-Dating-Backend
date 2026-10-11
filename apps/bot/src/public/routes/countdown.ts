@@ -3,6 +3,7 @@ import { requireAuth } from "../auth-middleware.js";
 import { getNextBatchDate } from "../../services/next-batch.js";
 import { resolveWeeklyStatusForUser } from "../../services/weekly-status.js";
 import { countCitySearchers } from "../../services/city-searchers.js";
+import { loadCalibration } from "../../services/first-drop-calibration.js";
 
 export const countdownRouter: Router = Router();
 
@@ -20,12 +21,17 @@ countdownRouter.use(requireAuth);
  * этот маршрут и так опрашивает. `null` значит «показывать нечего» — либо
  * город ещё не набрал порог, либо он у пользователя не выбран; отличать эти
  * два случая клиенту незачем, оба рисуются одинаково.
+ *
+ * `searchPhase` / `firstDropAt` — окно калибровки первой пары: свежий аккаунт
+ * пропускает ближайший вечерний подбор, пока агент изучает профиль и город.
+ * Это настоящий простой в отборе, а не декорация, поэтому статус «ищу» честен.
  */
 countdownRouter.get("/", async (req: Request, res: Response): Promise<void> => {
   const now = new Date();
-  const [weekly, searchersInCity] = await Promise.all([
+  const [weekly, searchersInCity, calibration] = await Promise.all([
     resolveWeeklyStatusForUser(req.userId!, now),
     countCitySearchers(req.userId!),
+    loadCalibration(req.userId!, now),
   ]);
   res.json({
     nextDropAt: getNextBatchDate(now).toISOString(),
@@ -35,5 +41,9 @@ countdownRouter.get("/", async (req: Request, res: Response): Promise<void> => {
     priorityBoosted: weekly.priorityBoosted,
     resolvedAt: weekly.resolvedAt,
     searchersInCity,
+    // First-drop calibration (2026-10-11): `calibrating` while a fresh account
+    // sits out the nearest batch; `firstDropAt` is the first batch it joins.
+    searchPhase: calibration.calibrating ? "calibrating" : "searching",
+    firstDropAt: calibration.firstDropAt?.toISOString() ?? null,
   });
 });

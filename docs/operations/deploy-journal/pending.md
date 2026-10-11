@@ -11,6 +11,22 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
+Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
+no row rewritten — apply BEFORE the restart (the new code selects the column in the eligibility scan, the famine
+notice, `/v1/countdown`, `/v1/pulse` and the agent context → P2022 without it). Env: `FIRST_DROP_CALIBRATION_HOURS`
+(default 24; `0` disables, nothing else to set). Only accounts finishing onboarding AFTER the deploy get a window;
+existing ones stay `NULL`. Copy: `noMatchThisWeekTier2` + `noMatchDiscountOffer` rewritten in 5 locales.
+iOS: `searchPhase`/`firstDropAt` are optional in the spec — the app treats absence as `searching`.
+Demo: same code; demo personas are pre-completed, so no window appears there.
+- **Проверка:** `select count(*) from profiles where calibration_until is not null` → grows only with new
+  onboardings; for a fresh account `GET /v1/countdown` → `"searchPhase":"calibrating"` and `firstDropAt` = the
+  second 18:00 Kyiv after onboarding (or the next one if onboarding finished before 18:00 minus 24h);
+  `pnpm --filter @gennety/bot exec vitest run src/services/first-drop-calibration.test.ts`.
+- **Откат:** code revert is safe with the column left in place; `FIRST_DROP_CALIBRATION_HOURS=0` + restart turns the
+  hold off without a revert (already-armed windows still expire on their own within 24h — to release them at once:
+  `update profiles set calibration_until = null where calibration_until > now()`).
+
 **Deployed 2026-10-11 (was PENDING; production `3edf3b15`, 06:45–06:52 UTC) 2026-10-11 — KREDENS CAFE (Lviv) off in production AND demo (data write, no code).**
 - **Итог 2026-10-11:** prod 5 rows → `active=false`, demo 5 rows → `active=false`; active left: 0 / 0 (`deploy-1011-photos.sh`).
 Catalog files dropped it (DECISIONS 2026-10-11). In both databases: `UPDATE curated_venues SET active = false WHERE

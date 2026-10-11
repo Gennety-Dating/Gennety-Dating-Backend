@@ -117,6 +117,18 @@ change, not a migration.
   skipped — a paid re-run cannot find them anyone either. The `NoMatchNotice`
   row is still written, so the drop stays idempotent.
 
+### 3.1a First-drop calibration window (2026-10-11)
+
+A freshly onboarded account sits out the nearest batch: `execFinalizeOnboarding` arms
+`profiles.calibration_until = now + FIRST_DROP_CALIBRATION_HOURS` (default 24, `0` = off) once, for a never-matched
+profile. Against the daily 18:00 batch that is "skip the nearest evening" — the first introduction lands on the
+second evening (~24–47h). While the window is open the profile is outside the never-matched eligibility scan (so
+the campus drop too), is never counted as missed, gets no famine notice and no "drop processing" pulse row.
+`/v1/countdown` exposes `searchPhase` (`calibrating|searching`) and `firstDropAt`; the agent reads the same phase
+("Search phase" context line, `get_my_standing`). It is a real hold, not a scripted wait, which is why it does not
+breach F2 or the honest-timer rule above: clients get the time of the first search, never a promised match, and
+the iOS Today screen draws no timer to it. Code: `services/first-drop-calibration.ts`.
+
 ### 3.1b Pool exhaustion: honest pause + auto-resume (2026-08-01, code shipped, inert under `weekly`)
 
 A famine-tier DM is honest about "no match yet" but says nothing once the
