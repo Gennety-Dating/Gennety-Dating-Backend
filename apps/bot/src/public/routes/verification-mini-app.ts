@@ -275,6 +275,7 @@ function statusForBeginError(
     case "user_not_found":
       return 404;
     case "already_verified":
+    case "under_review":
     case "consent_required":
     case "photos_required":
     case "onboarding_incomplete":

@@ -1439,6 +1439,8 @@ paths:
               not finished registration (onboarding, or the track contact).
               The app only offers verification after onboarding, so this is a
               server-side backstop rather than a screen to design for.
+            - `under_review` — the account waits in `pending_review` for a
+              human. No client offers a check there; server-side backstop.
 
             A client that treats every `409` as "verified" leaves the user
             tapping a button that silently does nothing, which is exactly what
@@ -1452,7 +1454,7 @@ paths:
                   error: { type: string }
                   code:
                     type: string
-                    enum: [already_verified, consent_required, photos_required, onboarding_incomplete]
+                    enum: [already_verified, consent_required, photos_required, onboarding_incomplete, under_review]
                   message:
                     type: string
                     description: |
@@ -7870,7 +7872,9 @@ components:
             `verification_bonus` (legacy, no new rows), `student_bonus`,
             `welcome_gift`, `referral_reward` (both sides of a referral, since
             2026-09-22), `referral_milestone` (legacy, no new rows), `promo`,
-            `bump_bonus`, `store_purchase`, `spend_match`, `refund`.
+            `bump_bonus`, `store_purchase`, `spend_match`, `refund`,
+            `refund_reversed` (Apple reversed an App Store refund; the
+            tickets it clawed back are credited again).
 
             Deliberately a plain string and NOT an `enum`: reasons are added
             server-side whenever a product mechanic grants or spends a ticket,

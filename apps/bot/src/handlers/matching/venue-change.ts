@@ -48,6 +48,7 @@ import type { BotContext } from "../../session.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
 import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
+import { matchTimeZone } from "../../services/match-time-zone.js";
 import {
   evaluateVenueBoardEligibility,
   evaluateVenueChangeRestart,
@@ -2432,7 +2433,8 @@ export async function settleVenuePayment(
   const peer = userOfSide(match, otherSide(side));
 
   // Payer: plain updated card.
-  await sendUpdatedVenueCard(api, payer, "venueSettledCard", { venue: label }, agreedTime, venueName, venueAddress, mapsUri);
+  const timeZone = matchTimeZone(match);
+  await sendUpdatedVenueCard(api, payer, "venueSettledCard", { venue: label }, agreedTime, venueName, venueAddress, mapsUri, timeZone);
 
   // Peer: express → the positive-frame surprise; board → updated card that
   // reveals who covered it (gendered by the payer).
@@ -2453,6 +2455,7 @@ export async function settleVenuePayment(
       venueName,
       venueAddress,
       mapsUri,
+      timeZone,
     );
   }
 
@@ -2560,6 +2563,7 @@ async function finalizeVenueChangeFree(
   const agreedTime = match.agreedTime ?? new Date();
   const peer = userOfSide(match, otherSide(side));
 
+  const timeZone = matchTimeZone(match);
   // Settler: the plain updated card, paid or not — they know what they did.
   await sendUpdatedVenueCard(
     api,
@@ -2570,6 +2574,7 @@ async function finalizeVenueChangeFree(
     venueName,
     venueAddress,
     match.venueChangeMapsUri,
+    timeZone,
   );
 
   // Peer: "he/she covered it" when money changed hands, otherwise the neutral
@@ -2590,6 +2595,7 @@ async function finalizeVenueChangeFree(
     venueName,
     venueAddress,
     match.venueChangeMapsUri,
+    timeZone,
   );
 
   // Same push as the paid settle — and this is the path a Premium pair and
@@ -2614,11 +2620,13 @@ async function sendUpdatedVenueCard(
   name: string,
   address: string,
   mapsUri: string | null,
+  /** The match's date-city zone (`matchTimeZone`, audit C-25). */
+  timeZone: string,
 ): Promise<void> {
   if (!telegramReachable(user)) return;
   const lang = langOf(user.language);
   const base = t(lang, key, vars);
-  const { text, entity } = buildDateTimeEntity(base, agreedTime, lang);
+  const { text, entity } = buildDateTimeEntity(base, agreedTime, lang, timeZone);
   const kb = new InlineKeyboard().url(
     t(lang, "matchScheduledBtnOpenMaps"),
     venueMapsUrl(name, address, mapsUri),

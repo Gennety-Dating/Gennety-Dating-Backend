@@ -17,6 +17,7 @@ const env = {
   // eu-central-1 does not serve Face Liveness. See the region test below.
   AWS_REGION: "eu-central-1",
   FACE_LIVENESS_REGION: "eu-west-1",
+  SUPABASE_SELFIE_BUCKET: "selfies",
 };
 vi.mock("../config.js", () => ({ env }));
 
@@ -47,7 +48,18 @@ vi.mock("./verification-pipeline.js", () => ({
   runFaceMatchVerificationDefault,
   activationBlockerFor: actualPipeline.activationBlockerFor,
   trackFaceMatchRun: actualPipeline.trackFaceMatchRun,
+  VERIFICATION_PUSH_TYPE: "verification.outcome",
 }));
+
+const uploadSelfie = vi.fn();
+const deleteStorageObject = vi.fn().mockResolvedValue(true);
+vi.mock("./storage.js", () => ({ uploadSelfie, deleteStorageObject }));
+
+const notifyFounderVerificationManualReview = vi.fn().mockResolvedValue(undefined);
+vi.mock("./founder-notify.js", () => ({ notifyFounderVerificationManualReview }));
+
+const sendPushToUser = vi.fn().mockResolvedValue(true);
+vi.mock("./push.js", () => ({ sendPushToUser }));
 
 const buildVerificationKeyboard = vi.fn().mockResolvedValue({ inline_keyboard: [] });
 vi.mock("./verification-keyboard.js", () => ({
@@ -206,6 +218,20 @@ describe("beginLivenessCheck", () => {
     expect(createLivenessSession).not.toHaveBeenCalled();
   });
 
+  it("refuses a check while the account waits for manual review", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "pending_review",
+      ...READY_FOR_CHECK,
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: "selfies/user-1.jpg",
+    });
+    const result = await beginLivenessCheck("user-1");
+    expect(result).toEqual({ ok: false, error: "under_review" });
+    expect(createLivenessSession).not.toHaveBeenCalled();
+  });
+
   it("lets a verified user re-run once the 90-day scrub took their reference", async () => {
     // The dead end this closes: every photo surface answers `reference_expired`
     // with "verify again to change your photos", and this was the call that
@@ -306,7 +332,10 @@ describe("beginLivenessCheck", () => {
     expect(await beginLivenessCheck("user-1")).toMatchObject({ ok: true, sessionId: SESSION_ID });
   });
 
-  it("still asks that user for a photo when there is nothing to compare with", async () => {
+  // C-12: at zero photos the upload refuses (`reference_expired`), so asking
+  // for a photo first was the dead end. The check runs; the pass goes to a
+  // human (see `completeLivenessCheck` below).
+  it("lets a verified user with an expired reference and zero photos run the check", async () => {
     userFindUnique.mockResolvedValueOnce({
       id: "user-1",
       language: "en",
@@ -317,12 +346,9 @@ describe("beginLivenessCheck", () => {
       verifiedSelfiePath: null,
     });
 
-    expect(await beginLivenessCheck("user-1")).toEqual({
-      ok: false,
-      error: "photos_required",
-      language: "en",
-    });
-    expect(createLivenessSession).not.toHaveBeenCalled();
+    expect(await beginLivenessCheck("user-1")).toMatchObject({ ok: true, sessionId: SESSION_ID });
+    // Stays verified while the check runs.
+    expect(userUpdate.mock.calls[0]![0].data).not.toHaveProperty("verificationStatus");
   });
 
   it("still tells a verified user with an intact reference that they are verified", async () => {
@@ -451,6 +477,92 @@ describe("recordBiometricConsent", () => {
     await expect(recordBiometricConsent("user-1", "2026-08-01")).resolves.toEqual({
       ok: false,
     });
+  });
+});
+
+describe("completeLivenessCheck — verified, reference scrubbed, zero photos (C-12)", () => {
+  const STUCK = {
+    id: "user-1",
+    telegramId: 555n,
+    platform: "both",
+    language: "en",
+    pendingLivenessSessionId: SESSION_ID,
+    verificationStatus: "verified",
+    verifiedSelfiePath: null,
+    profile: { photos: [] },
+  };
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((r) => setImmediate(r));
+  }
+
+  it("stores the new selfie, parks the account in pending_review and tells founder + user", async () => {
+    userFindUnique.mockResolvedValueOnce({ ...STUCK });
+    uploadSelfie.mockResolvedValueOnce({ path: "user-1/selfie-2026.jpg" });
+    const gate = createOutcomeGate();
+
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg, { outcomeGate: gate });
+    gate.release();
+    await gate.settled;
+    await flush();
+
+    expect(result).toEqual({ ok: true, outcome: "processing" });
+    // Never handed to the pipeline: there is nothing to compare, and the
+    // pipeline must not auto-decide this account.
+    expect(runFaceMatchVerificationDefault).not.toHaveBeenCalled();
+    expect(uploadSelfie).toHaveBeenCalledWith("user-1", REFERENCE, "image/jpeg");
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user-1", verificationStatus: "verified", verifiedSelfiePath: null },
+      data: {
+        verificationStatus: "pending_review",
+        verifiedSelfiePath: "user-1/selfie-2026.jpg",
+        // Cleared so a photo upload during review cannot rerun into `verified`.
+        personaInquiryId: null,
+        faceMatchedAt: null,
+      },
+    });
+    expect(notifyFounderVerificationManualReview).toHaveBeenCalledWith("user-1");
+    expect(api.sendMessage).toHaveBeenCalledWith(555, expect.any(String));
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        data: { type: "verification.outcome", status: "pending_review" },
+      }),
+    );
+  });
+
+  it("leaves the account verified and asks for a retry when the selfie cannot be stored", async () => {
+    userFindUnique.mockResolvedValueOnce({ ...STUCK });
+    uploadSelfie.mockRejectedValueOnce(new Error("storage down"));
+
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+    await flush();
+
+    expect(userUpdateMany).not.toHaveBeenCalled();
+    expect(notifyFounderVerificationManualReview).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(1); // the retry prompt
+  });
+
+  it("does nothing (and drops the orphan selfie) when the account moved on meanwhile", async () => {
+    userFindUnique.mockResolvedValueOnce({ ...STUCK });
+    uploadSelfie.mockResolvedValueOnce({ path: "user-1/selfie-2026.jpg" });
+    userUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+    await flush();
+
+    expect(deleteStorageObject).toHaveBeenCalledWith("selfies", "user-1/selfie-2026.jpg");
+    expect(notifyFounderVerificationManualReview).not.toHaveBeenCalled();
+  });
+
+  it("still uses the pipeline when the verified user has at least one photo", async () => {
+    userFindUnique.mockResolvedValueOnce({ ...STUCK, profile: { photos: ["u/a.jpg"] } });
+
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+
+    expect(runFaceMatchVerificationDefault).toHaveBeenCalled();
+    expect(uploadSelfie).not.toHaveBeenCalled();
   });
 });
 

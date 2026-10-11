@@ -1,12 +1,14 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 415 entries
+# Decision index — all 417 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-11 | отложенное из аудита: верифицированный не остаётся без фото (409 `photo_minimum` min 1), застрявшие — liveness без фото → `pending_review` вручную; `pending_review` не запускает liveness (409 `under_review`); REFUND_REVERSED возвращает Premium/билеты/Prime Time + оповещение; флуд Telegram до очереди; `usageGuard` на маршрутах модели, `PATCH /v1/me` без 429 | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
+| 2026-10-11 | календарь (C-25): сетка, Prime Time и время свидания — в поясе города пары (`matchTimeZone`, A ?? B, иначе Киев), `timeZone` календаря = пояс сетки, а не профиль вызывающего; Киев байт-в-байт прежний | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | аудит надёжности: `appAccountToken`+`premium` в `/v1/me`, владелец покупок App Store, Apple не-404 → 503, `X-Gennety-Build`/426, `clientMessageId`, легаси-поля музыки, Whisper 503, бан при входе 403, возобновление ниже минимума фото 409, индексы; часовой пояс календаря и B-23 отложены | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | KREDENS CAFE — львовская сеть, сопоставленная с «Kredens Cafe Київ»: удалён из файлов каталога Киева (5 копий, манифест → `excludedPlaces`, дополнения), в прод/демо `active = false` | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | фото заведений: ревью 154 мест основатель отменил — подборка у всех 329 мест; после снимков места 2–4 блюда (до 8 фото), 745 добавленных кадров проверены в рамке 16:10, 46 отбракованы; меньше 3 фото только у двух мест | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

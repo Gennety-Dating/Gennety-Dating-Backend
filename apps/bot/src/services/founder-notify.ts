@@ -730,6 +730,87 @@ export async function notifyFounderPurchaseRefunded(notice: {
 }
 
 /**
+ * DM the founder that Apple reversed a refund (`REFUND_REVERSED`) and what we
+ * gave back because of it. The money is ours again, so the goods went back to
+ * the buyer automatically — except where re-applying is unsafe (a venue change
+ * on a date that has moved on), which `restored` says plainly so the founder
+ * can act by hand.
+ */
+export async function notifyFounderRefundReversed(notice: {
+  userId: string | null;
+  kind: PurchaseKind;
+  /** What was restored, or why nothing was ("Premium до 12.11", "ничего — истёк"). */
+  restored: string;
+  externalPaymentId?: string | null;
+  sandbox?: boolean;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = notice.userId
+      ? await prisma.user.findUnique({
+          where: { id: notice.userId },
+          select: FOUNDER_PAYER_SELECT,
+        })
+      : null;
+
+    const lines = [
+      `↪️ Apple отменила возврат — ${purchaseKindLabel(notice.kind)}`,
+      ...(user ? payerLines(user) : ["👤 аккаунт не найден"]),
+      `🔁 ${notice.restored}`,
+    ];
+    if (notice.sandbox === true) {
+      lines.push("🧪 Sandbox App Store — тест, деньги не двигались");
+    }
+    if (notice.externalPaymentId) lines.push(`Charge: ${notice.externalPaymentId}`);
+
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderRefundReversed failed`, {
+      userId: notice.userId,
+      err,
+    });
+  }
+}
+
+/**
+ * DM the founder that a verified account re-ran liveness with ZERO profile
+ * photos (C-12) and now waits in `pending_review` for a human. With no photos
+ * there is nothing linking the new selfie to the face that was verified
+ * before, so the pipeline does not decide — the founder does: compare the new
+ * reference selfie with the account's history, then set `verificationStatus`
+ * back to `verified` (the person can then upload photos, each checked against
+ * the new selfie) or to `rejected`.
+ */
+export async function notifyFounderVerificationManualReview(userId: string): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: FOUNDER_PAYER_SELECT,
+    });
+    if (!user) return;
+
+    const lines = [
+      "🕵️ Верификация — ручная проверка",
+      ...payerLines(user),
+      "Был verified, эталонное селфи стёрто (90 дней), фото в профиле 0.",
+      "Новый ливнесс пройден, селфи сохранено — сравнить с прежним лицом некому.",
+      "Решение: verificationStatus → verified (после этого фото сверяются с новым селфи) или rejected.",
+    ];
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderVerificationManualReview failed`, {
+      userId,
+      err,
+    });
+  }
+}
+
+/**
  * DM the founder that money moved and the goods did NOT — the one payment
  * outcome nobody else reports.
  *

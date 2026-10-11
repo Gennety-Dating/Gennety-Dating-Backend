@@ -38,6 +38,7 @@ vi.mock("./founder-notify.js", () => ({
   notifyFounderPurchase: vi.fn(),
   notifyFounderPurchaseRefunded: vi.fn(),
   notifyFounderAppStoreUnclaimed: vi.fn(),
+  notifyFounderRefundReversed: vi.fn(),
 }));
 
 vi.mock("./main-bot-api.js", () => ({ getMainBotApi: () => null }));
@@ -46,6 +47,7 @@ const { prisma } = await import("@gennety/db");
 const {
   purchasePrimeTimePass,
   refundPrimeTimeAppStoreTransaction,
+  reversePrimeTimeAppStoreRefund,
 } = await import("./appstore-prime-time.js");
 const founder = await import("./founder-notify.js");
 const { appStoreManualRefundNote, appStoreManualRefundReason } = await import(
@@ -439,5 +441,69 @@ describe("refundPrimeTimeAppStoreTransaction — Apple gave the money back (R6)"
       status: "already_recorded",
     });
     expect(founder.notifyFounderPurchaseRefunded).not.toHaveBeenCalled();
+  });
+});
+
+describe("reversePrimeTimeAppStoreRefund — Apple took its refund back", () => {
+  const reinstated = () => appleTx().transaction as never;
+
+  it("moves a settled pass back to settled, once, and tells the founder", async () => {
+    db.primeTimePurchase.findUnique.mockResolvedValue({
+      id: "p1",
+      userId: BUYER,
+      status: "refunded_appstore",
+      refundError: null,
+    });
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    expect(await reversePrimeTimeAppStoreRefund(reinstated())).toEqual({
+      status: "restored",
+      restoredStatus: "settled",
+    });
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "p1", status: "refunded_appstore" },
+      data: { status: "settled" },
+    });
+    expect(founder.notifyFounderRefundReversed).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "prime_time", userId: BUYER }),
+    );
+
+    // Apple redelivers: the CAS finds nothing in refunded_appstore.
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await reversePrimeTimeAppStoreRefund(reinstated())).toEqual({ status: "no_refund" });
+    expect(founder.notifyFounderRefundReversed).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts a pass parked for a hand refund back into refund_manual", async () => {
+    db.primeTimePurchase.findUnique.mockResolvedValue({
+      id: "p1",
+      userId: BUYER,
+      status: "refunded_appstore",
+      refundError: appStoreManualRefundNote("already_unlocked", "appstore:2000000999"),
+    });
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    expect(await reversePrimeTimeAppStoreRefund(reinstated())).toEqual({
+      status: "restored",
+      restoredStatus: "refund_manual",
+    });
+  });
+
+  it("does nothing while Apple still reports it revoked, or when no refund was recorded", async () => {
+    expect(
+      await reversePrimeTimeAppStoreRefund(
+        appleTx({ revocationDate: NOW.getTime() }).transaction as never,
+      ),
+    ).toEqual({ status: "still_revoked" });
+
+    db.primeTimePurchase.findUnique.mockResolvedValueOnce({
+      id: "p1",
+      userId: BUYER,
+      status: "settled",
+      refundError: null,
+    });
+    expect(await reversePrimeTimeAppStoreRefund(reinstated())).toEqual({ status: "no_refund" });
+    expect(db.primeTimePurchase.updateMany).not.toHaveBeenCalled();
+    expect(founder.notifyFounderRefundReversed).not.toHaveBeenCalled();
   });
 });

@@ -569,13 +569,23 @@ export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
  */
 export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
-  await ctx.answerCallbackQuery();
-  discardPhotoBatch(ctx.chat?.id);
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },
-    select: { id: true },
+    select: { id: true, verificationStatus: true },
   });
+  // A verified account never goes to zero photos (C-12): nothing would tie it
+  // to the face that was verified, and after the 90-day reference scrub there
+  // would be no way back. Same answer as `DELETE /v1/me/photos` (`min: 1`).
+  if (user?.verificationStatus === "verified") {
+    await ctx.answerCallbackQuery({
+      text: t(lang, "photoManagerKeepOne"),
+      show_alert: true,
+    });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  discardPhotoBatch(ctx.chat?.id);
   if (!user) return;
 
   // Snapshot first: `removeProfilePhotoByRef` returns the canonical post-delete
@@ -673,6 +683,21 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
       show_alert: true,
     });
     return;
+  }
+  // The redo lifts the minimum, never the last photo of a VERIFIED account
+  // (C-12) — `verify:photos` is reachable after a pass too (`photos_needed`).
+  if (ctx.session.verifyPhotoRedo && ctx.session.pendingPhotos.length <= 1) {
+    const owner = await prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { verificationStatus: true },
+    });
+    if (owner?.verificationStatus === "verified") {
+      await ctx.answerCallbackQuery({
+        text: t(lang, "photoManagerKeepOne"),
+        show_alert: true,
+      });
+      return;
+    }
   }
   await ctx.answerCallbackQuery({ text: t(lang, "photoManagerDeleted") });
 

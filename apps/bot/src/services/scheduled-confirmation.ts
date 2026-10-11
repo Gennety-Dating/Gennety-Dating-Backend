@@ -34,6 +34,7 @@ import { type Venue } from "./venue.js";
 import { type VenueCategory } from "./vibe-parser.js";
 import { generateVenueBlurb } from "./venue-blurb.js";
 import { buildDateTimeEntity } from "./datetime-entity.js";
+import { matchTimeZone } from "./match-time-zone.js";
 import {
   renderDateCard,
   prepareVenuePhoto,
@@ -217,7 +218,9 @@ export async function deliverScheduledConfirmation(
           gender: true,
           age: true,
           firstName: true,
-          profile: { select: { photos: true, homeCity: true } },
+          profile: {
+            select: { photos: true, homeCity: true, homeCityKey: true, homeCountryCode: true },
+          },
         },
       },
       userB: {
@@ -230,7 +233,9 @@ export async function deliverScheduledConfirmation(
           gender: true,
           age: true,
           firstName: true,
-          profile: { select: { photos: true, homeCity: true } },
+          profile: {
+            select: { photos: true, homeCity: true, homeCityKey: true, homeCountryCode: true },
+          },
         },
       },
     },
@@ -270,8 +275,10 @@ export async function deliverScheduledConfirmation(
   }
   const baseA = t(langA, "matchScheduled", { venue: venueBlockA });
   const baseB = t(langB, "matchScheduled", { venue: venueBlockB });
-  const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime, langA);
-  const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime, langB);
+  // Both sides read the same figures, on the date city's clock (audit C-25).
+  const timeZone = matchTimeZone(match);
+  const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime, langA, timeZone);
+  const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime, langB, timeZone);
   const mapsKeyboardA = buildScheduledMapsKeyboard(venue, langA);
   const mapsKeyboardB = buildScheduledMapsKeyboard(venue, langB);
 

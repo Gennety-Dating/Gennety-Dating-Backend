@@ -53,6 +53,7 @@ import { telegramReachable } from "../../services/telegram-reach.js";
 import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { renderTimeCard, type TimeCardTheme } from "../../services/time-card.js";
+import { matchTimeZone, MATCH_CITY_PROFILE_SELECT } from "../../services/match-time-zone.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
@@ -121,7 +122,7 @@ export function buildLocationMapKeyboard(
  * adding a step to the flow.
  *
  * The caption is deliberately a single short line ("your time is locked ✨"):
- * the card itself already renders the canonical `Europe/Kyiv` date + time, and
+ * the card itself already renders the date + time on the date city's clock, and
  * the FINAL scheduled confirmation (§3.7) carries the tappable `date_time`
  * add-to-calendar phrase. Repeating that affordance here made the same date
  * arrive twice with the same "tap to add it to your calendar" explanation, so
@@ -138,6 +139,7 @@ async function sendTimeLockedCard(
   agreedTime: Date,
   lang: Language,
   theme: Theme,
+  timeZone: string,
 ): Promise<void> {
   const chatId = toTelegramChatId(telegramId);
   const caption = t(lang, "venueTimeLockedCaption");
@@ -147,6 +149,7 @@ async function sendTimeLockedCard(
     language: lang,
     theme: (theme ?? "dark") as TimeCardTheme,
     label: t(lang, "venueTimeCardLabel"),
+    timeZone,
   });
 
   if (png) {
@@ -160,7 +163,7 @@ async function sendTimeLockedCard(
     }
   }
 
-  const { text, entity } = buildDateTimeEntity(caption, agreedTime, lang);
+  const { text, entity } = buildDateTimeEntity(caption, agreedTime, lang, timeZone);
 
   try {
     await api.sendMessage(chatId, text, { entities: [entity] });
@@ -235,14 +238,20 @@ export async function startVenueNegotiation(
     where: { id: matchId },
     select: {
       id: true,
-      userA: { select: { telegramId: true, platform: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, platform: true, language: true, theme: true } },
+      userA: {
+        select: { telegramId: true, platform: true, language: true, theme: true, ...MATCH_CITY_PROFILE_SELECT },
+      },
+      userB: {
+        select: { telegramId: true, platform: true, language: true, theme: true, ...MATCH_CITY_PROFILE_SELECT },
+      },
     },
   });
   if (!match) return false;
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
+  // Both sides read the agreed time on the date city's clock (audit C-25).
+  const timeZone = matchTimeZone(match);
 
   // M-17: mobile-only users use the `/v1/matches/:id/vibe-location` route
   // instead of the Telegram concierge prompt — skip them here.
@@ -255,7 +264,7 @@ export async function startVenueNegotiation(
     lang: Language,
     theme: Theme,
   ): Promise<void> => {
-    await sendTimeLockedCard(api, telegramId, agreedTime, lang, theme);
+    await sendTimeLockedCard(api, telegramId, agreedTime, lang, theme, timeZone);
     await api.sendMessage(toTelegramChatId(telegramId), t(lang, "venueConciergeIntro"), {
       parse_mode: "Markdown",
       reply_markup: buildLocationMapKeyboard(matchId, lang, theme),

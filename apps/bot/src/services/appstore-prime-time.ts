@@ -11,8 +11,10 @@ import {
   notifyFounderAppStoreUnclaimed,
   notifyFounderPurchase,
   notifyFounderPurchaseRefunded,
+  notifyFounderRefundReversed,
 } from "./founder-notify.js";
 import { isPrimeTimeProduct, primeTimeUnlockReason } from "./prime-time.js";
+import { matchTimeZone, MATCH_CITY_PROFILE_SELECT } from "./match-time-zone.js";
 import {
   appStoreManualRefundNote,
   appStoreManualRefundReason,
@@ -90,6 +92,8 @@ const PARTICIPANT_SELECT = {
   premiumUntil: true,
   firstName: true,
   language: true,
+  // The grandfather check reads held marks on the date city's clock (C-25).
+  ...MATCH_CITY_PROFILE_SELECT,
 } satisfies Prisma.UserSelect;
 
 const MATCH_SELECT = {
@@ -273,7 +277,9 @@ async function settle(
         if (match.status !== "negotiating") return "match_closed";
         // Premium on either side, the partner's pass, a grandfathered mark —
         // every reason the band is open already means this pass bought nothing.
-        if (primeTimeUnlockReason(match, now) !== null) return "already_unlocked";
+        if (primeTimeUnlockReason({ ...match, timeZone: matchTimeZone(match) }, now) !== null) {
+          return "already_unlocked";
+        }
 
         const claim = await db.match.updateMany({
           where: { id: matchId, status: "negotiating", primeTimeUnlockedAt: null },
@@ -417,4 +423,50 @@ export async function refundPrimeTimeAppStoreTransaction(
     externalPaymentId,
   });
   return { status: "recorded" };
+}
+
+export type PrimeTimeAppStoreReversalResult =
+  | { status: "still_revoked" }
+  | { status: "no_refund" }
+  | { status: "restored"; restoredStatus: string };
+
+/**
+ * `REFUND_REVERSED` for a Prime Time pass. The refund took nothing back — the
+ * band stayed open — it only moved the row to `refunded_appstore`, so the
+ * reversal moves it back to what it was: `refund_manual` when the pass had been
+ * parked for a hand refund (its `refundError` still carries that note, which the
+ * refund write never touches — the founder owes that refund again), `settled`
+ * otherwise. A compare-and-set on `refunded_appstore`, so Apple's retries
+ * restore — and announce — once.
+ */
+export async function reversePrimeTimeAppStoreRefund(
+  tx: AppStoreTransaction,
+): Promise<PrimeTimeAppStoreReversalResult> {
+  if (tx.revocationDate !== null) return { status: "still_revoked" };
+  const externalPaymentId = `${APPSTORE_PAYMENT_PREFIX}${tx.transactionId}`;
+
+  const row = await prisma.primeTimePurchase.findUnique({
+    where: { externalPaymentId },
+    select: { id: true, userId: true, status: true, refundError: true },
+  });
+  if (!row || row.status !== PRIME_PURCHASE_REFUNDED_APPSTORE) return { status: "no_refund" };
+
+  const manual = appStoreManualRefundReason(row.refundError) !== null;
+  const restoredStatus = manual ? PRIME_PURCHASE_REFUND_MANUAL : PRIME_PURCHASE_SETTLED;
+  const moved = await prisma.primeTimePurchase.updateMany({
+    where: { id: row.id, status: PRIME_PURCHASE_REFUNDED_APPSTORE },
+    data: { status: restoredStatus },
+  });
+  if (moved.count === 0) return { status: "no_refund" };
+
+  void notifyFounderRefundReversed({
+    userId: row.userId,
+    kind: "prime_time",
+    restored: manual
+      ? "покупка снова «ручной возврат» — деньги у нас, вернуть их нужно вручную"
+      : "покупка снова оплачена (settled); вечерняя полоса и так оставалась открытой",
+    externalPaymentId,
+    sandbox: tx.environment === "Sandbox",
+  });
+  return { status: "restored", restoredStatus };
 }

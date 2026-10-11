@@ -16,6 +16,12 @@ import { usageLimiter } from "../services/usage-limiter.js";
  * attributes the spend to this user. The Telegram bot has the equivalent guard
  * in `bot-rate-limit.ts`, keyed `user:`/`tg:` so the two surfaces never collide.
  */
+/** The 429 body every token-budget refusal answers with, middleware or inline. */
+export const TOKEN_BUDGET_REFUSAL = {
+  error: "daily_token_budget",
+  message: "You've reached today's usage limit — please try again tomorrow.",
+} as const;
+
 export function usageGuard(req: Request, res: Response, next: NextFunction): void {
   const userId = req.userId;
   if (!userId) {
@@ -24,10 +30,7 @@ export function usageGuard(req: Request, res: Response, next: NextFunction): voi
   }
 
   if (isOverTokenBudget(userId)) {
-    res.status(429).json({
-      error: "daily_token_budget",
-      message: "You've reached today's usage limit — please try again tomorrow.",
-    });
+    res.status(429).json(TOKEN_BUDGET_REFUSAL);
     return;
   }
 

@@ -43,18 +43,22 @@ export function primeTimeSlots(
 /**
  * Is this instant one of the locked times?
  *
- * Resolved against the pair's Kyiv wall clock, NOT UTC. The droplet runs in
- * UTC, so reading `date.getUTCHours()` here would classify 19:30 Kyiv as 16:30
- * or 17:30 depending on the season and lock the wrong three rows twice a year.
+ * Resolved against the pair's wall clock — `timeZone`, the zone the grid was
+ * written in (the match's date city, `services/match-time-zone.ts`; Kyiv by
+ * default) — NOT UTC. The droplet runs in UTC, so reading `date.getUTCHours()`
+ * here would classify 19:30 Kyiv as 16:30 or 17:30 depending on the season and
+ * lock the wrong three rows twice a year. And a Berlin grid read on the Kyiv
+ * clock would lock 17:30–18:30 instead of 18:30–19:30.
  * `generateProposalSlots` documents the same trap from the writing side.
  */
 export function isPrimeTimeSlot(
   date: Date,
+  timeZone: string = CALENDAR_TIME_ZONE,
   count: number = env.PRIME_TIME_SLOT_COUNT,
 ): boolean {
   const band = primeTimeSlots(count);
   if (band.length === 0) return false;
-  const { hour, minute } = zonedParts(date, CALENDAR_TIME_ZONE);
+  const { hour, minute } = zonedParts(date, timeZone);
   return band.some((s) => s.hour === hour && s.minute === minute);
 }
 
@@ -71,6 +75,11 @@ export interface PrimeTimeMatch {
   availableTimesB: Date[];
   userA: PrimeTimeParticipant;
   userB: PrimeTimeParticipant;
+  /**
+   * The zone the match's grid is written in (`matchTimeZone`). Read only by the
+   * grandfather check; absent means the default zone, which is every Kyiv pair.
+   */
+  timeZone?: string;
 }
 
 export type PrimeTimeUnlockReason =
@@ -124,7 +133,7 @@ export function primeTimeUnlockReason(
   // a pair has already marked, and there is no honest message for that. Reading
   // the marks instead of migrating anything makes it self-healing.
   const held = [...match.availableTimesA, ...match.availableTimesB];
-  if (held.some((d) => isPrimeTimeSlot(d))) return "grandfathered";
+  if (held.some((d) => isPrimeTimeSlot(d, match.timeZone))) return "grandfathered";
 
   return null;
 }
@@ -187,6 +196,11 @@ export function shouldPersistUnlock(reason: PrimeTimeUnlockReason): boolean {
 }
 
 /** The locked slots of a grid, as ISO strings — what the clients draw a lock on. */
-export function lockedSlotsOf(proposedTimes: Date[]): string[] {
-  return proposedTimes.filter((d) => isPrimeTimeSlot(d)).map((d) => d.toISOString());
+export function lockedSlotsOf(
+  proposedTimes: Date[],
+  timeZone: string = CALENDAR_TIME_ZONE,
+): string[] {
+  return proposedTimes
+    .filter((d) => isPrimeTimeSlot(d, timeZone))
+    .map((d) => d.toISOString());
 }

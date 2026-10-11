@@ -116,6 +116,31 @@ describe("the locked band", () => {
     expect(grid).toHaveLength(84);
     expect(lockedSlotsOf(grid)).toHaveLength(18);
   });
+
+  // Audit C-25: a Berlin grid is classified on the Berlin clock.
+  it("classifies a Berlin grid by BERLIN wall clock when given its zone", () => {
+    const berlin = (h: number, m: number) => wallToUtc(2026, 7, 15, h, m, "Europe/Berlin");
+    expect(isPrimeTimeSlot(berlin(19, 30), "Europe/Berlin")).toBe(true);
+    expect(isPrimeTimeSlot(berlin(18, 30), "Europe/Berlin")).toBe(true);
+    expect(isPrimeTimeSlot(berlin(17, 30), "Europe/Berlin")).toBe(false);
+    // The same instants on the Kyiv clock are an hour later — the bug.
+    expect(isPrimeTimeSlot(berlin(17, 30))).toBe(true);
+    expect(isPrimeTimeSlot(berlin(19, 30))).toBe(false);
+
+    const grid: Date[] = [];
+    for (const s of CALENDAR_TIME_SLOTS) grid.push(berlin(s.hour, s.minute));
+    expect(lockedSlotsOf(grid, "Europe/Berlin")).toEqual(
+      [berlin(18, 30), berlin(19, 0), berlin(19, 30)].map((d) => d.toISOString()),
+    );
+  });
+
+  it("grandfathers a Berlin pair by its own clock", () => {
+    const berlin1730 = wallToUtc(2026, 7, 15, 17, 30, "Europe/Berlin");
+    // 17:30 Berlin is NOT a prime mark for a Berlin pair → still locked.
+    expect(
+      primeTimeUnlockReason(match({ availableTimesA: [berlin1730], timeZone: "Europe/Berlin" })),
+    ).toBeNull();
+  });
 });
 
 describe("who is open", () => {

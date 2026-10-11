@@ -712,14 +712,19 @@ async function loadPurchases(
 
 async function loadAppStoreRefundIds(creditIds: string[]): Promise<Set<string>> {
   if (creditIds.length === 0) return new Set();
-  const refunds = await prisma.ticketLedger.findMany({
-    where: { externalPaymentId: { in: creditIds.map((id) => `${id}:refund`) } },
+  // A refund Apple later reversed (`:refund_reversed`) gave the tickets back,
+  // so that credit is settled again.
+  const markers = await prisma.ticketLedger.findMany({
+    where: {
+      externalPaymentId: {
+        in: creditIds.flatMap((id) => [`${id}:refund`, `${id}:refund_reversed`]),
+      },
+    },
     select: { externalPaymentId: true },
   });
+  const keys = new Set(markers.map((row) => row.externalPaymentId));
   return new Set(
-    refunds
-      .map((row) => row.externalPaymentId?.replace(/:refund$/, ""))
-      .filter((id): id is string => id != null),
+    creditIds.filter((id) => keys.has(`${id}:refund`) && !keys.has(`${id}:refund_reversed`)),
   );
 }
 

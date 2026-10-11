@@ -134,9 +134,11 @@ const S = (d: Date) => Math.floor(d.getTime() / 1000);
 const MATCH_ID = "22222222-2222-4222-8222-222222222222";
 
 /**
- * A = ru, Kyiv; B = en, Warsaw — so every per-recipient choice (language, wall
- * clock) is visible in the assertions. Names are placeholders: a card string
- * binds to the partner attribute, never to one person.
+ * A = ru, B = en — so every per-recipient choice (language) is visible in the
+ * assertions. The pair's date city is WARSAW, while A's own `Profile.timeZone`
+ * still says Kyiv: the card's clock is the match's date-city zone, the one the
+ * grid was written in (audit C-25), never a side's profile zone. Names are
+ * placeholders: a card string binds to the partner attribute, never to one person.
  */
 function match(over: Record<string, unknown> = {}) {
   return {
@@ -151,14 +153,14 @@ function match(over: Record<string, unknown> = {}) {
       language: "ru",
       firstName: "[Имя партнёра]",
       gender: "female",
-      profile: { timeZone: "Europe/Kyiv" },
+      profile: { timeZone: "Europe/Kyiv", homeCityKey: "pl:warsaw", homeCountryCode: "PL" },
     },
     userB: {
       id: "b",
       language: "en",
       firstName: "[Partner Name]",
       gender: "male",
-      profile: { timeZone: "Europe/Warsaw" },
+      profile: { timeZone: "Europe/Warsaw", homeCityKey: "pl:warsaw", homeCountryCode: "PL" },
     },
     ...over,
   };
@@ -208,7 +210,8 @@ describe("phase derivation", () => {
       mySlots: [S(SLOT_A)],
       partnerSlots: [],
       agreedTime: null,
-      timeZone: "Europe/Kyiv",
+      // The date city's zone, although A's own profile says Kyiv (C-25).
+      timeZone: "Europe/Warsaw",
     });
     expect(shown(d.B.desired)).toEqual({
       phase: "partner",
@@ -419,8 +422,9 @@ describe("payload builders", () => {
 
     const locked = desired(match({ status: "scheduled", agreedTime: SLOT_A })).A.desired;
     if (locked.kind !== "none" || !locked.finalContent) throw new Error("expected final content");
-    expect(timeAgreementAlert("ru", locked.finalContent, NOW).body).toBe("Время назначено: 18:30");
-    expect(timeAgreementAlert("en", locked.finalContent, NOW).body).toBe("Time set: 18:30");
+    // On the pair's (Warsaw) clock — 18:30 Kyiv is 17:30 there.
+    expect(timeAgreementAlert("ru", locked.finalContent, NOW).body).toBe("Время назначено: 17:30");
+    expect(timeAgreementAlert("en", locked.finalContent, NOW).body).toBe("Time set: 17:30");
   });
 
   it("a nameless partner still gets a `partner` body", () => {
@@ -537,7 +541,7 @@ describe("decideTimeAgreementActivity", () => {
 describe("syncTimeAgreementActivities", () => {
   const oneSided = () => match({ availableTimesA: [SLOT_A] });
 
-  it("push-starts both sides with their own phase, language and clock, and records it", async () => {
+  it("push-starts both sides with their own phase and language on the date city's clock, and records it", async () => {
     matchFindUnique.mockResolvedValue(oneSided());
 
     await syncTimeAgreementActivities(MATCH_ID, NOW);
@@ -546,7 +550,7 @@ describe("syncTimeAgreementActivities", () => {
     const byUser = Object.fromEntries(sendLiveActivityStartToUser.mock.calls.map((c) => [c[0], c]));
     expect(byUser.a![1]).toBe("time_agreement");
     expect(byUser.a![2].contentState.phase).toBe("waiting");
-    expect(byUser.a![2].contentState.timeZone).toBe("Europe/Kyiv");
+    expect(byUser.a![2].contentState.timeZone).toBe("Europe/Warsaw");
     expect(byUser.a![2].alert).toEqual({
       title: "Выбираем время",
       body: "Ждём, когда [Partner Name] ответит",
@@ -654,7 +658,7 @@ describe("syncTimeAgreementActivities", () => {
     }
     // A was waiting on B and did not act — she is the one told.
     const toA = ends.find((c) => c[0] === "a")!;
-    expect(toA[2].alert).toEqual({ title: "Выбираем время", body: "Время назначено: 18:30" });
+    expect(toA[2].alert).toEqual({ title: "Выбираем время", body: "Время назначено: 17:30" });
     expect(ends.find((c) => c[0] === "b")![2].alert).toBeUndefined();
     expect(table).toHaveLength(0);
   });

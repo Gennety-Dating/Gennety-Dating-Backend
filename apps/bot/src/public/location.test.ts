@@ -798,6 +798,30 @@ describe("POST /v1/location/select", () => {
   });
 });
 
+// B-16: the Mini App's free-text venue interpretation runs a model call, so it
+// answers to the token budget / global breaker like the JWT routes do.
+describe("POST /v1/location/venue-intent/interpret — token budget", () => {
+  it("answers 429 daily_token_budget while the breaker is open, before any model call", async () => {
+    const { usageLimiter } = await import("../services/usage-limiter.js");
+    const venueIntent = await import("../services/venue-intent-v2.js");
+    const interpret = vi.spyOn(venueIntent, "interpretVenueIntent");
+    const breaker = vi.spyOn(usageLimiter, "isGlobalBudgetExceeded").mockReturnValue(true);
+    try {
+      const res = await request(buildApp())
+        .post("/v1/location/venue-intent/interpret")
+        .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+        .send({ matchId: VALID_UUID, text: "cozy wine bar" });
+
+      expect(res.status).toBe(429);
+      expect(res.body.error).toBe("daily_token_budget");
+      expect(interpret).not.toHaveBeenCalled();
+    } finally {
+      breaker.mockRestore();
+      interpret.mockRestore();
+    }
+  });
+});
+
 describe("marketBoundingBox", () => {
   // Places wants a rectangle; a market is a circle. The box must therefore
   // CONTAIN the circle — under-including would hide real addresses inside the

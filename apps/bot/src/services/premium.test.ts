@@ -37,6 +37,7 @@ const {
   activatePremiumPackage,
   grantComplimentaryPremiumMonths,
   revokePremium,
+  restorePremiumAfterRefundReversal,
   getPremiumCancelContext,
   recordInChatCancellation,
   attachCancellationReason,
@@ -247,6 +248,107 @@ describe("revokePremium", () => {
         refunded: { start: null, end: FUTURE },
       }),
     ).resolves.toBeUndefined();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("restorePremiumAfterRefundReversal (REFUND_REVERSED)", () => {
+  const KEYS = {
+    refundExternalPaymentId: "appstore:tx-2:refund",
+    reversalExternalPaymentId: "appstore:tx-2:refund_reversed",
+    provider: "app_store" as const,
+  };
+
+  it("gives a pure subscriber their original expiry back", async () => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 20 * DAY);
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1" });
+    ledgerCreate.mockResolvedValueOnce({});
+    userUpdate.mockResolvedValueOnce({});
+
+    const result = await restorePremiumAfterRefundReversal({
+      userId: "u1",
+      ...KEYS,
+      period: { start: new Date(now.getTime() - 10 * DAY), end },
+      now,
+    });
+
+    expect(result).toEqual({ status: "restored", premiumUntil: end });
+    expect(userUpdate.mock.calls[0][0].data).toEqual({ premiumUntil: end });
+    expect(ledgerCreate.mock.calls[0][0].data).toMatchObject({
+      event: "refund_reversed",
+      externalPaymentId: "appstore:tx-2:refund_reversed",
+    });
+  });
+
+  it("stacks the restored period on months held from elsewhere", async () => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 20 * DAY);
+    const stacked = new Date(now.getTime() + 180 * DAY); // left after the refund
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: stacked });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1" });
+    ledgerCreate.mockResolvedValueOnce({});
+    userUpdate.mockResolvedValueOnce({});
+
+    const result = await restorePremiumAfterRefundReversal({
+      userId: "u1",
+      ...KEYS,
+      period: { start: new Date(now.getTime() - 10 * DAY), end },
+      now,
+    });
+
+    expect(result).toEqual({
+      status: "restored",
+      premiumUntil: new Date(stacked.getTime() + 20 * DAY),
+    });
+  });
+
+  it("restores nothing for a period that has already ended, but records the reversal", async () => {
+    const now = new Date();
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1" });
+    ledgerCreate.mockResolvedValueOnce({});
+
+    const result = await restorePremiumAfterRefundReversal({
+      userId: "u1",
+      ...KEYS,
+      period: { start: new Date(now.getTime() - 40 * DAY), end: new Date(now.getTime() - DAY) },
+      now,
+    });
+
+    expect(result).toEqual({ status: "expired" });
+    expect(ledgerCreate).toHaveBeenCalledTimes(1);
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("is exactly-once: a redelivered reversal adds nothing", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: FUTURE });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1" });
+    ledgerCreate.mockRejectedValueOnce({ code: "P2002" });
+
+    const result = await restorePremiumAfterRefundReversal({
+      userId: "u1",
+      ...KEYS,
+      period: { start: null, end: new Date(Date.now() + 20 * DAY) },
+    });
+
+    expect(result).toEqual({ status: "already_restored" });
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("restores nothing when this user's refund was never applied", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "someone-else" });
+
+    const result = await restorePremiumAfterRefundReversal({
+      userId: "u1",
+      ...KEYS,
+      period: { start: null, end: new Date(Date.now() + 20 * DAY) },
+    });
+
+    expect(result).toEqual({ status: "no_refund" });
+    expect(ledgerCreate).not.toHaveBeenCalled();
     expect(userUpdate).not.toHaveBeenCalled();
   });
 });
@@ -528,6 +630,41 @@ describe("recurring grants keep the time the subscription did not buy", () => {
       recurringAnchor: "orig-1",
     });
 
+    expect(res.premiumUntil).toEqual(new Date(periodEnd.getTime() + 30 * DAY));
+  });
+
+  it("treats a period whose refund Apple reversed as live again", async () => {
+    const now = Date.now();
+    const reinstated = new Date(now + 10 * DAY);
+    ledgerFindMany
+      .mockResolvedValueOnce([
+        { externalPaymentId: "appstore:tx-3", periodEnd: reinstated },
+        { externalPaymentId: "appstore:tx-2", periodEnd: new Date(now + DAY) },
+      ])
+      .mockResolvedValueOnce([
+        { externalPaymentId: "appstore:tx-3:refund" },
+        { externalPaymentId: "appstore:tx-3:refund_reversed" },
+      ]);
+    userFindUnique.mockResolvedValueOnce({
+      premiumSince: NOW,
+      premiumUntil: new Date(reinstated.getTime() + 30 * DAY), // restored period + 30 comp days
+      premiumExternalId: "orig-1",
+    });
+    ledgerCreate.mockResolvedValueOnce({});
+    userUpdate.mockImplementationOnce(async (arg: { data: { premiumUntil: Date } }) => ({
+      premiumUntil: arg.data.premiumUntil,
+    }));
+    const periodEnd = new Date(reinstated.getTime() + 30 * DAY);
+
+    const res = await activateOrExtendPremium({
+      userId: "u1",
+      provider: "app_store",
+      periodEnd,
+      externalPaymentId: "appstore:tx-4",
+      recurringAnchor: "orig-1",
+    });
+
+    // Continues the reinstated period: only the 30 comp days ride on top.
     expect(res.premiumUntil).toEqual(new Date(periodEnd.getTime() + 30 * DAY));
   });
 });

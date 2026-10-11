@@ -19,10 +19,12 @@ import { DEFAULT_TIME_ZONE, type Language } from "@gennety/shared";
  */
 
 /**
- * Canonical render timezone for every user-facing absolute date/time string.
+ * Default render timezone for user-facing absolute date/time strings.
  * Exported so the time card (`services/time-card.ts`) renders the same figures
  * as this entity's fallback text — the entity itself resolves to the user's
- * own timezone when tapped.
+ * own timezone when tapped. A match's agreed time is rendered in the match's
+ * date-city zone instead (`matchTimeZone`, audit C-25) when the caller passes
+ * it; for every Kyiv pair that zone IS this value.
  */
 export const RENDER_TZ = DEFAULT_TIME_ZONE;
 const CALENDAR_AFFORDANCE = "📅 ";
@@ -44,7 +46,7 @@ function utf16Length(s: string): number {
   return s.length;
 }
 
-function renderDate(when: Date, language: Language): string {
+function renderDate(when: Date, language: Language, timeZone: string): string {
   const fmt = new Intl.DateTimeFormat(LOCALE_TAGS[language], {
     weekday: "short",
     day: "numeric",
@@ -52,7 +54,7 @@ function renderDate(when: Date, language: Language): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: RENDER_TZ,
+    timeZone,
   });
   return fmt.format(when);
 }
@@ -66,9 +68,11 @@ export function buildDateTimeEntity(
   baseText: string,
   when: Date,
   language: Language,
+  /** The match's date-city zone (`matchTimeZone`); default `RENDER_TZ`. */
+  timeZone: string = RENDER_TZ,
 ): DateTimeEntityResult {
   const separator = "\n\n";
-  const placeholder = `${CALENDAR_AFFORDANCE}${renderDate(when, language)}`;
+  const placeholder = `${CALENDAR_AFFORDANCE}${renderDate(when, language, timeZone)}`;
   const prefix = `${baseText}${separator}`;
   const offset = utf16Length(prefix);
   const length = utf16Length(placeholder);

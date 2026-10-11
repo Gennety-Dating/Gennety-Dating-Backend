@@ -110,29 +110,29 @@ export function loadFonts(): SatoriFonts {
 }
 
 /**
- * Both sides always see the SAME figures, so the card renders in the product's
- * canonical `Europe/Kyiv` (identical to the scheduled confirmation and the
- * `date_time` entity). The entity in the caption is what resolves to each
- * user's own timezone when tapped.
+ * Both sides always see the SAME figures, so the card renders in the match's
+ * date-city zone (`matchTimeZone` — `Europe/Kyiv` for every Kyiv pair;
+ * identical to the scheduled confirmation and the `date_time` entity). The
+ * entity in the caption is what resolves to each user's own timezone when tapped.
  */
-function formatDate(when: Date, language: Language): string {
+function formatDate(when: Date, language: Language, timeZone: string): string {
   const locale = LOCALE_TAGS[language];
   return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "numeric",
     month: "long",
-    timeZone: RENDER_TZ,
+    timeZone,
   })
     .format(when)
     .toLocaleUpperCase(locale);
 }
 
-function formatTime(when: Date, language: Language): string {
+function formatTime(when: Date, language: Language, timeZone: string): string {
   return new Intl.DateTimeFormat(LOCALE_TAGS[language], {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: RENDER_TZ,
+    timeZone,
   }).format(when);
 }
 
@@ -143,6 +143,8 @@ export interface TimeCardInput {
   theme: TimeCardTheme;
   /** Small uppercase label above the date (localized by the caller). */
   label: string;
+  /** The match's date-city zone (`matchTimeZone`, audit C-25); default `RENDER_TZ`. */
+  timeZone?: string;
 }
 
 export function buildTimeCardElement(input: TimeCardInput): CardNode {
@@ -182,7 +184,7 @@ export function buildTimeCardElement(input: TimeCardInput): CardNode {
           lineHeight: 1.1,
           color: p.ink,
         },
-        formatDate(input.agreedTime, input.language),
+        formatDate(input.agreedTime, input.language, input.timeZone ?? RENDER_TZ),
       ),
       el(
         "div",
@@ -195,7 +197,7 @@ export function buildTimeCardElement(input: TimeCardInput): CardNode {
           lineHeight: 1.1,
           color: p.accent,
         },
-        formatTime(input.agreedTime, input.language),
+        formatTime(input.agreedTime, input.language, input.timeZone ?? RENDER_TZ),
       ),
     ],
   );

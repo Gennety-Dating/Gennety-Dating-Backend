@@ -24,6 +24,11 @@ import {
   shouldPersistUnlock,
 } from "../../services/prime-time.js";
 import { apnsConfigured } from "../../services/apns.js";
+import {
+  loadMatchTimeZone,
+  matchTimeZone,
+  MATCH_CITY_PROFILE_SELECT,
+} from "../../services/match-time-zone.js";
 
 /**
  * Calendar-only scheduler.
@@ -68,10 +73,10 @@ export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }
 export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.length;
 
 /**
- * The calendar grid is rendered in the users' LOCAL time — Europe/Kyiv, the
- * product's single scheduling timezone (all current cities are Ukrainian; this
- * mirrors the hardcoded quiet-hours / cron timezone). Deliberately NOT the
- * server's own timezone: the droplet runs in UTC, so a bare `setHours(13)`
+ * The DEFAULT clock of the calendar grid — the zone used when a match's date
+ * city is unknown. A match's grid is written in its date city's zone
+ * (`services/match-time-zone.ts`, audit C-25), which for every Kyiv pair IS
+ * this value. Deliberately NOT the server's own timezone: the droplet runs in UTC, so a bare `setHours(13)`
  * would write 13:00 UTC (≈16:00 Kyiv) and the "13:00" the user picked would
  * drift. We resolve each Kyiv wall-clock slot to its exact UTC instant instead.
  */
@@ -104,9 +109,9 @@ export function isSlotSelectable(slot: Date, now: Date = new Date()): boolean {
 }
 
 /**
- * Generate the calendar grid: `dayCount` consecutive days (in Europe/Kyiv) with
- * fourteen exact time options per day (every 30 min from 13:00 through 19:30
- * Kyiv local). No weekday filter — past UX feedback was that skipping Sun/Mon
+ * Generate the calendar grid: `dayCount` consecutive days (in `timeZone`, the
+ * match's date-city zone — Europe/Kyiv by default) with fourteen exact time
+ * options per day (every 30 min from 13:00 through 19:30 local). No weekday filter — past UX feedback was that skipping Sun/Mon
  * pruned dates users actually preferred (e.g. Sunday brunches, Monday
  * holidays). 6 days is "next week's worth of options"; the Mini App groups the
  * exact DateTime allowlist into date → time steps.
@@ -123,11 +128,12 @@ export function isSlotSelectable(slot: Date, now: Date = new Date()): boolean {
 export function generateProposalSlots(
   now: Date = new Date(),
   dayCount: number = CALENDAR_DAY_COUNT,
+  timeZone: string = CALENDAR_TIME_ZONE,
 ): Date[] {
-  // Anchor date arithmetic at noon UTC of each Kyiv calendar day so stepping
+  // Anchor date arithmetic at noon UTC of each local calendar day so stepping
   // forward never lands on a DST day boundary; `wallToUtc` then resolves each
-  // slot's exact instant for that Kyiv date (DST-correct per day).
-  const today = zonedParts(now, CALENDAR_TIME_ZONE);
+  // slot's exact instant for that local date (DST-correct per day).
+  const today = zonedParts(now, timeZone);
   const anchor = Date.UTC(today.year, today.month - 1, today.day, 12, 0, 0);
   const dayOfGrid = (offset: number): Date[] => {
     const d = new Date(anchor);
@@ -139,7 +145,7 @@ export function generateProposalSlots(
         d.getUTCDate(),
         slot.hour,
         slot.minute,
-        CALENDAR_TIME_ZONE,
+        timeZone,
       ),
     );
   };
@@ -235,7 +241,13 @@ export async function startScheduling(
   // the same fact (the gate ran ⇒ the tracked card is stale), and two fields
   // could only ever disagree with each other.
   const resend = opts?.afterTicketGate === true;
-  const slots = generateProposalSlots();
+  // Written on the date city's wall clock (audit C-25): "19:00" must be 19:00
+  // where the pair actually meets, not 19:00 in Kyiv.
+  const slots = generateProposalSlots(
+    new Date(),
+    CALENDAR_DAY_COUNT,
+    await loadMatchTimeZone(matchId),
+  );
   // PostgreSQL arrays without a default can be NULL; Prisma reads those as []
   // but `isEmpty: true` does not match them. Normalize only unopened grids so
   // the existing CAS still owns initialization and never resets live picks.
@@ -571,6 +583,7 @@ export async function processCalendarSlotsUpdate(
           theme: true,
           platform: true,
           premiumUntil: true,
+          ...MATCH_CITY_PROFILE_SELECT,
         },
       },
       userB: {
@@ -580,12 +593,15 @@ export async function processCalendarSlotsUpdate(
           theme: true,
           platform: true,
           premiumUntil: true,
+          ...MATCH_CITY_PROFILE_SELECT,
         },
       },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
-  const allowed = new Set(match.proposedTimes.map((d) => d.getTime()));
+  // The band is read on the clock the grid was written in (audit C-25).
+  const timeZone = matchTimeZone(match);
+  const allowed =new Set(match.proposedTimes.map((d) => d.getTime()));
   for (const p of picks) {
     if (!allowed.has(p.getTime())) return { ok: false, reason: "invalid-slot" };
   }
@@ -612,8 +628,8 @@ export async function processCalendarSlotsUpdate(
    * and the `overlapCandidates` confirm path re-POSTs through here too, so it
    * inherits the rule rather than needing its own copy.
    */
-  const wantsPrime = picks.some((d) => isPrimeTimeSlot(d));
-  const primeReason = primeTimeUnlockReason(match);
+  const wantsPrime = picks.some((d) => isPrimeTimeSlot(d, timeZone));
+  const primeReason = primeTimeUnlockReason({ ...match, timeZone });
   if (wantsPrime && primeReason === null) {
     return { ok: false, reason: "prime-time-locked" };
   }
@@ -882,8 +898,12 @@ export async function getCalendarState(
       availableTimesB: true,
       agreedTime: true,
       primeTimeUnlockedAt: true,
-      userA: { select: { telegramId: true, platform: true, premiumUntil: true } },
-      userB: { select: { telegramId: true, platform: true, premiumUntil: true } },
+      userA: {
+        select: { telegramId: true, platform: true, premiumUntil: true, ...MATCH_CITY_PROFILE_SELECT },
+      },
+      userB: {
+        select: { telegramId: true, platform: true, premiumUntil: true, ...MATCH_CITY_PROFILE_SELECT },
+      },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -920,6 +940,9 @@ export async function getCalendarState(
   // прятать его значило бы врать о состоянии; клетка просто не рисуется,
   // потому что сетку задаёт `proposedTimes`.
   const selectable = match.proposedTimes.filter((d) => isSlotSelectable(d));
+  // The zone the grid was written in — the date city's (audit C-25) — so a
+  // client labelling slots with `timeZone` reads the figures the grid means.
+  const timeZone = matchTimeZone(match);
   return {
     ok: true,
     proposedTimes: selectable.map((d) => d.toISOString()),
@@ -927,10 +950,10 @@ export async function getCalendarState(
     peerSlots: peer.map((d) => d.toISOString()),
     agreedTime: match.agreedTime?.toISOString() ?? null,
     isFirstMover: peer.length === 0,
-    timeZone: CALENDAR_TIME_ZONE,
+    timeZone,
     primeTime: {
-      locked: live && primeTimeUnlockReason(match) === null,
-      slots: live ? lockedSlotsOf(selectable) : [],
+      locked: live && primeTimeUnlockReason({ ...match, timeZone }) === null,
+      slots: live ? lockedSlotsOf(selectable, timeZone) : [],
       stars: env.PRIME_TIME_STARS,
     },
   };

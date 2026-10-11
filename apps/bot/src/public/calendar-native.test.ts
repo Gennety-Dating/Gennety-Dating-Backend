@@ -80,15 +80,23 @@ const okState = {
   peerSlots: [SLOT_B],
   agreedTime: null,
   isFirstMover: false,
+  timeZone: "Europe/Kyiv",
 };
+
+const kyivSide = { profile: { homeCityKey: "ua:kyiv", homeCountryCode: "UA" } };
+const berlinSide = { profile: { homeCityKey: "de:berlin", homeCountryCode: "DE" } };
 
 beforeEach(() => {
   getCalendarState.mockReset();
   processCalendarSlotsUpdate.mockReset();
   userFindUnique.mockReset();
   matchFindUnique.mockReset();
-  userFindUnique.mockResolvedValue({ telegramId: -7n, profile: { timeZone: "Europe/Kyiv" } });
-  matchFindUnique.mockResolvedValue({ proposedTimes: [new Date(SLOT_A), new Date(SLOT_B)] });
+  userFindUnique.mockResolvedValue({ telegramId: -7n });
+  matchFindUnique.mockResolvedValue({
+    proposedTimes: [new Date(SLOT_A), new Date(SLOT_B)],
+    userA: kyivSide,
+    userB: kyivSide,
+  });
 });
 
 describe("GET /v1/matches/:id/calendar", () => {
@@ -110,13 +118,19 @@ describe("GET /v1/matches/:id/calendar", () => {
     expect(getCalendarState).toHaveBeenCalledWith(-7n, VALID_UUID);
   });
 
-  it("falls back to a null timezone when the profile has no city yet", async () => {
-    userFindUnique.mockResolvedValue({ telegramId: -7n, profile: null });
-    getCalendarState.mockResolvedValue(okState);
+  // Audit C-25: the zone is the one the grid was GENERATED in (the match's
+  // date city), never the caller's own profile zone — shipped iOS builds label
+  // every slot with this field.
+  it("returns the zone the grid was generated in, not the caller's", async () => {
+    getCalendarState.mockResolvedValue({ ...okState, timeZone: "Europe/Berlin" });
 
     const res = await request(buildApp()).get(`/v1/matches/${VALID_UUID}/calendar`);
 
-    expect(res.body.timeZone).toBeNull();
+    expect(res.body.timeZone).toBe("Europe/Berlin");
+    // The caller lookup no longer reads a zone at all.
+    expect(userFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { telegramId: true } }),
+    );
   });
 
   // A closed calendar is not a missing match — the client must not go hunting
@@ -163,6 +177,30 @@ describe("POST /v1/matches/:id/calendar", () => {
     // scheduler does not echo it, so the client never has to re-fetch.
     expect(res.body.proposedTimes).toEqual([SLOT_A, SLOT_B]);
     expect(res.body.overlapCandidates).toEqual([SLOT_B]);
+    expect(res.body.timeZone).toBe("Europe/Kyiv");
+  });
+
+  it("answers a Berlin pair's submission with Europe/Berlin (audit C-25)", async () => {
+    matchFindUnique.mockResolvedValue({
+      proposedTimes: [new Date(SLOT_A), new Date(SLOT_B)],
+      userA: berlinSide,
+      userB: berlinSide,
+    });
+    processCalendarSlotsUpdate.mockResolvedValue({
+      ok: true,
+      mySlots: [SLOT_A],
+      peerSlots: [],
+      agreedTime: null,
+      overlapCandidates: [],
+      bothPicked: false,
+    });
+
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/calendar`)
+      .send({ slots: [SLOT_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.timeZone).toBe("Europe/Berlin");
   });
 
   it("carries the lock through when exactly one slot is shared", async () => {

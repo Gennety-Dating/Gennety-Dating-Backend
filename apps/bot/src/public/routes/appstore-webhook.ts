@@ -5,17 +5,26 @@ import {
   getSubscriptionAutoRenew,
   getVerifiedTransaction,
   isPremiumProduct,
+  type AppStoreTransaction,
 } from "../../services/appstore.js";
-import { refundAppStoreTransaction } from "../../services/appstore-tickets.js";
+import {
+  refundAppStoreTransaction,
+  reverseAppStoreTicketRefund,
+} from "../../services/appstore-tickets.js";
 import {
   isVenueChangeProduct,
   refundVenueChangeAppStoreTransaction,
+  reverseVenueChangeAppStoreRefund,
 } from "../../services/appstore-venue-change.js";
-import { refundPrimeTimeAppStoreTransaction } from "../../services/appstore-prime-time.js";
+import {
+  refundPrimeTimeAppStoreTransaction,
+  reversePrimeTimeAppStoreRefund,
+} from "../../services/appstore-prime-time.js";
 import { isPrimeTimeProduct } from "../../services/prime-time.js";
 import {
   handleAppStorePremiumNotification,
   PREMIUM_RENEW_NOTIFICATIONS,
+  reverseAppStorePremiumRefund,
   syncAppStorePremiumAutoRenew,
 } from "../../services/appstore-premium.js";
 
@@ -35,6 +44,13 @@ import {
 export const appStoreWebhookRouter: Router = Router();
 
 const REFUND_NOTIFICATION_TYPES = new Set(["REFUND", "REVOKE", "CONSUMPTION_REQUEST"]);
+/**
+ * Apple took a refund back (the customer disputed it and lost, or Apple
+ * reversed its own decision). Like every type here it is untrusted: each
+ * reversal handler acts only when Apple's re-fetched transaction no longer
+ * carries a `revocationDate` AND our own refund marker exists for it.
+ */
+const REFUND_REVERSED = "REFUND_REVERSED";
 // §Premium subscription lifecycle notifications we consume (renew + end).
 const PREMIUM_NOTIFICATION_TYPES = new Set([
   ...PREMIUM_RENEW_NOTIFICATIONS,
@@ -82,7 +98,8 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
   const isPremium =
     isPremiumProduct(untrustedProductId) && PREMIUM_NOTIFICATION_TYPES.has(notificationType);
 
-  if (!isPremium && !REFUND_NOTIFICATION_TYPES.has(notificationType)) {
+  const isRefundReversal = notificationType === REFUND_REVERSED;
+  if (!isPremium && !isRefundReversal && !REFUND_NOTIFICATION_TYPES.has(notificationType)) {
     res.json({ ok: true, ignored: notificationType });
     return;
   }
@@ -98,6 +115,13 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
   }
   if (lookup.status === "not_found") {
     res.json({ ok: true, ignored: "unknown_transaction" });
+    return;
+  }
+
+  if (isRefundReversal) {
+    const result = await reverseRefund(lookup.transaction);
+    console.log(`[appstore-webhook] ${notificationType} tx=${transactionId} -> ${result}`);
+    res.json({ ok: true, result });
     return;
   }
 
@@ -159,3 +183,22 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
   );
   res.json({ ok: true, result: result.status });
 });
+
+/**
+ * `REFUND_REVERSED`: give back what the matching refund took, routed on Apple's
+ * own product id. Each handler is idempotent (Apple retries) and announces to
+ * the founder itself; an unmatched transaction answers a status and the route
+ * still acks 200, so Apple never retries it forever.
+ */
+async function reverseRefund(transaction: AppStoreTransaction): Promise<string> {
+  if (isPremiumProduct(transaction.productId)) {
+    return (await reverseAppStorePremiumRefund(transaction)).result.status;
+  }
+  if (isVenueChangeProduct(transaction.productId)) {
+    return (await reverseVenueChangeAppStoreRefund(transaction)).status;
+  }
+  if (isPrimeTimeProduct(transaction.productId)) {
+    return (await reversePrimeTimeAppStoreRefund(transaction)).status;
+  }
+  return (await reverseAppStoreTicketRefund(transaction)).status;
+}

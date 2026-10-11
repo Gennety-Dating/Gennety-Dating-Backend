@@ -98,6 +98,9 @@ verificationRouter.get(
             minPhotos: MIN_PHOTOS,
           });
           return;
+        case "under_review":
+          res.status(409).json({ error: "Verification under review", code: "under_review" });
+          return;
         case "onboarding_incomplete":
           res.status(409).json({
             error: "Finish registration before verifying",

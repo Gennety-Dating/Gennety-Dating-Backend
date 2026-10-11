@@ -1323,4 +1323,207 @@ describe("scheduler: Prime Time band", () => {
       expect(open.primeTime.slots).toEqual([PRIME.toISOString()]);
     }
   });
+
+  // Audit C-25: a Berlin grid's band is 18:30–19:30 BERLIN. Read on the Kyiv
+  // clock it would lock Berlin 17:30 (= 18:30 Kyiv) and free Berlin 19:00/19:30.
+  it("reads the band on a Berlin pair's own clock", async () => {
+    const berlin = (hour: number, minute: number) =>
+      wallToUtc(2026, 7, 1, hour, minute, "Europe/Berlin");
+    const berlinProfile = { profile: { homeCityKey: "de:berlin", homeCountryCode: "DE" } };
+    mMatch.findUnique.mockResolvedValue({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [berlin(17, 30), berlin(19, 30)],
+      availableTimesA: [],
+      availableTimesB: [],
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      primeTimeUnlockedAt: null,
+      userA: { telegramId: 1001n, language: "en", platform: "telegram", premiumUntil: null, ...berlinProfile },
+      userB: { telegramId: 1002n, language: "en", platform: "telegram", premiumUntil: null, ...berlinProfile },
+    });
+    mUser.findUnique.mockResolvedValue({ id: "uid-A", language: "en" });
+
+    const state = await getCalendarState(1001n, "match-1");
+    expect(state.ok).toBe(true);
+    if (state.ok) {
+      expect(state.timeZone).toBe("Europe/Berlin");
+      expect(state.primeTime.slots).toEqual([berlin(19, 30).toISOString()]);
+    }
+
+    // 17:30 Berlin is an ordinary slot for this pair — accepted, not 402.
+    const ordinary = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      berlin(17, 30).toISOString(),
+    ]);
+    expect(ordinary.ok).toBe(true);
+
+    const prime = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      berlin(19, 30).toISOString(),
+    ]);
+    expect(prime.ok).toBe(false);
+    if (!prime.ok) expect(prime.reason).toBe("prime-time-locked");
+  });
+});
+
+/**
+ * Audit C-25: the grid is generated in the DATE CITY's zone, not Kyiv for
+ * everyone. A Berlin pair's "19:00" is 19:00 in Berlin, and `timeZone` on the
+ * state read is the zone the grid was written in.
+ */
+describe("scheduler: date-city time zone (C-25)", () => {
+  const hmIn = (zone: string) => (d: Date): [number, number] => {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: zone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+        .formatToParts(d)
+        .map((x) => [x.type, x.value]),
+    );
+    return [p.hour === "24" ? 0 : Number(p.hour), Number(p.minute)];
+  };
+  const expectWallClockGrid = (slots: Date[], zone: string) => {
+    for (let day = 0; day < slots.length / CALENDAR_TIME_SLOTS.length; day++) {
+      const daySlots = slots.slice(
+        day * CALENDAR_TIME_SLOTS.length,
+        (day + 1) * CALENDAR_TIME_SLOTS.length,
+      );
+      expect(daySlots.map(hmIn(zone))).toEqual(
+        CALENDAR_TIME_SLOTS.map((s) => [s.hour, s.minute]),
+      );
+    }
+  };
+  const kyivPair = {
+    userA: { telegramId: 1001n, language: "en", profile: { homeCityKey: "ua:kyiv", homeCountryCode: "UA" } },
+    userB: { telegramId: 1002n, language: "en", profile: { homeCityKey: "ua:kyiv", homeCountryCode: "UA" } },
+  };
+  const berlinPair = {
+    userA: { telegramId: 1001n, language: "en", profile: { homeCityKey: "de:berlin", homeCountryCode: "DE" } },
+    userB: { telegramId: 1002n, language: "en", profile: { homeCityKey: "de:berlin", homeCountryCode: "DE" } },
+  };
+
+  beforeEach(() => {
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    mUser.findUnique.mockReset();
+  });
+
+  it("Kyiv output is byte-for-byte what the single-zone generator produced", () => {
+    const now = new Date("2026-04-09T12:00:00Z");
+    const before = generateProposalSlots(now).map((d) => d.toISOString());
+    const kyiv = generateProposalSlots(now, CALENDAR_DAY_COUNT, "Europe/Kyiv").map((d) =>
+      d.toISOString(),
+    );
+    expect(CALENDAR_TIME_ZONE).toBe("Europe/Kyiv");
+    expect(kyiv).toEqual(before);
+    // Pinned instants: Kyiv is UTC+3 in April, and 15:00 Kyiv has no slot
+    // left outside the five-hour lead, so the grid starts tomorrow.
+    expect(kyiv[0]).toBe("2026-04-10T10:00:00.000Z");
+    expect(kyiv.at(-1)).toBe("2026-04-15T16:30:00.000Z");
+    expect(kyiv).toHaveLength(CALENDAR_SLOT_COUNT);
+  });
+
+  it("a Berlin grid is made of Berlin wall-clock instants", () => {
+    const now = new Date("2026-04-09T12:00:00Z"); // 14:00 Berlin
+    const slots = generateProposalSlots(now, CALENDAR_DAY_COUNT, "Europe/Berlin");
+    expect(slots).toHaveLength(CALENDAR_SLOT_COUNT);
+    expectWallClockGrid(slots, "Europe/Berlin");
+    // 19:30 Berlin (17:30Z) is still beyond the five-hour lead, so today opens
+    // the window — 13:00 Berlin = 11:00Z, an hour later than Kyiv's 13:00.
+    expect(slots[0]!.toISOString()).toBe("2026-04-09T11:00:00.000Z");
+    expect(slots.find((d) => d.toISOString() === "2026-04-10T17:00:00.000Z")).toBeDefined(); // 19:00 Berlin
+  });
+
+  it("stays correct per day across the Berlin spring-forward boundary", () => {
+    // 2026-03-29 02:00 CET → 03:00 CEST. Now = 06:00 Berlin on the 28th.
+    const slots = generateProposalSlots(
+      new Date("2026-03-28T05:00:00Z"),
+      CALENDAR_DAY_COUNT,
+      "Europe/Berlin",
+    );
+    expectWallClockGrid(slots, "Europe/Berlin");
+    const firstOf = (day: number) => slots[day * CALENDAR_TIME_SLOTS.length]!.toISOString();
+    expect(firstOf(0)).toBe("2026-03-28T12:00:00.000Z"); // 13:00 CET (UTC+1)
+    expect(firstOf(1)).toBe("2026-03-29T11:00:00.000Z"); // 13:00 CEST (UTC+2)
+    expect(firstOf(2)).toBe("2026-03-30T11:00:00.000Z");
+  });
+
+  it("stays correct per day across the Berlin fall-back boundary", () => {
+    // 2026-10-25 03:00 CEST → 02:00 CET. Now = 06:00 Berlin on the 24th.
+    const slots = generateProposalSlots(
+      new Date("2026-10-24T04:00:00Z"),
+      CALENDAR_DAY_COUNT,
+      "Europe/Berlin",
+    );
+    expectWallClockGrid(slots, "Europe/Berlin");
+    const lastOf = (day: number) =>
+      slots[(day + 1) * CALENDAR_TIME_SLOTS.length - 1]!.toISOString();
+    expect(lastOf(0)).toBe("2026-10-24T17:30:00.000Z"); // 19:30 CEST (UTC+2)
+    expect(lastOf(1)).toBe("2026-10-25T18:30:00.000Z"); // 19:30 CET (UTC+1)
+  });
+
+  it("startScheduling writes a Berlin pair's grid on Berlin time", async () => {
+    vi.setSystemTime(new Date("2026-04-09T12:00:00Z"));
+    mMatch.findUnique.mockResolvedValue({
+      status: "negotiating",
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      ...berlinPair,
+    });
+    await startScheduling(createApi(), "match-1");
+    const written = (mMatch.updateMany.mock.calls[0]![0] as { data: { proposedTimes: Date[] } })
+      .data.proposedTimes;
+    expect(written).toHaveLength(CALENDAR_SLOT_COUNT);
+    expectWallClockGrid(written, "Europe/Berlin");
+  });
+
+  it("startScheduling keeps a Kyiv pair's grid identical to the old generator", async () => {
+    vi.setSystemTime(new Date("2026-04-09T12:00:00Z"));
+    mMatch.findUnique.mockResolvedValue({
+      status: "negotiating",
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      ...kyivPair,
+    });
+    await startScheduling(createApi(), "match-1");
+    const written = (mMatch.updateMany.mock.calls[0]![0] as { data: { proposedTimes: Date[] } })
+      .data.proposedTimes;
+    expect(written.map((d) => d.toISOString())).toEqual(
+      generateProposalSlots(new Date("2026-04-09T12:00:00Z")).map((d) => d.toISOString()),
+    );
+  });
+
+  it("the state read reports the zone the grid was generated in", async () => {
+    const slot = new Date("2026-05-01T17:00:00.000Z");
+    const row = {
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+      agreedTime: null,
+      primeTimeUnlockedAt: null,
+    };
+    mMatch.findUnique.mockResolvedValueOnce({ ...row, ...berlinPair });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    const berlin = await getCalendarState(1001n, "match-1");
+    expect(berlin.ok && berlin.timeZone).toBe("Europe/Berlin");
+
+    mMatch.findUnique.mockResolvedValueOnce({ ...row, ...kyivPair });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    const kyiv = await getCalendarState(1001n, "match-1");
+    expect(kyiv.ok && kyiv.timeZone).toBe("Europe/Kyiv");
+
+    // Unknown city (legacy row, no profiles) → today's default.
+    mMatch.findUnique.mockResolvedValueOnce(row);
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    const unknown = await getCalendarState(1001n, "match-1");
+    expect(unknown.ok && unknown.timeZone).toBe("Europe/Kyiv");
+  });
 });

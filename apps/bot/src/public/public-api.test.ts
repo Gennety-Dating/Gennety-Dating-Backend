@@ -1886,6 +1886,29 @@ describe("PATCH /v1/me", () => {
     );
   });
 
+  // B-16: over the token budget the edit still saves (an old client must not
+  // get a 429 for a hobby) — only the immediate embedding refresh is skipped;
+  // the row is already dirty, so the worker recomputes it.
+  it("saves an embedding-field edit over budget but defers the refresh", async () => {
+    const { usageLimiter } = await import("../services/usage-limiter.js");
+    const breaker = vi.spyOn(usageLimiter, "isGlobalBudgetExceeded").mockReturnValue(true);
+    try {
+      const user = await seedUser();
+      seedProfile(user.id);
+      const res = await request(app)
+        .patch("/v1/me")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send({ major: "Maths", profile: { hobbies: ["chess"] } });
+
+      expect(res.status).toBe(200);
+      expect(userById(user.id)?.profile?.hobbies).toEqual(["chess"]);
+      expect(userById(user.id)?.major).toBe("Maths");
+      expect(embeddingRefreshMocks.refreshUserEmbedding).not.toHaveBeenCalled();
+    } finally {
+      breaker.mockRestore();
+    }
+  });
+
   it("rejects an over-long partnerPreferences without changing the saved profile", async () => {
     const user = await seedUser();
     seedProfile(user.id, { partnerPreferences: "kind" });
@@ -2979,6 +3002,30 @@ describe("POST /v1/me/photos/remove", () => {
       "d.jpg",
       "e.jpg",
     ]);
+  });
+
+  // C-12: at zero photos a verified account has nothing tying it to the face
+  // that was verified, and after the 90-day scrub no way back. Whatever the
+  // status — paused users had no floor at all.
+  it("409 photo_minimum min:1 when a verified paused user would drop to zero", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg"], "paused" as UserRow["status"]);
+    userById(user.id)!.verificationStatus = "verified" as UserRow["verificationStatus"];
+    const res = await remove(user.id, { paths: ["a.jpg", "b.jpg"] });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: "Minimum photos required",
+      code: "photo_minimum",
+      min: 1,
+    });
+    expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg"]);
+  });
+
+  it("lets a verified paused user go down to one photo", async () => {
+    const user = await seedRemovable(["a.jpg", "b.jpg"], "paused" as UserRow["status"]);
+    userById(user.id)!.verificationStatus = "verified" as UserRow["verificationStatus"];
+    const res = await remove(user.id, { paths: ["b.jpg"] });
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg"]);
   });
 
   it("lets an onboarding user remove every photo", async () => {
@@ -4907,6 +4954,31 @@ describe("/v1/matches/*", () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "description_too_long", maxLength: 500 });
   });
+
+  // B-16: both text-to-model routes answer to the token budget and the global
+  // breaker, with the same 429 every other guarded route gives.
+  it.each(["decision-intent", "venue-intent/interpret"])(
+    "POST /:id/%s answers 429 daily_token_budget while the breaker is open",
+    async (path) => {
+      const { usageLimiter } = await import("../services/usage-limiter.js");
+      const breaker = vi.spyOn(usageLimiter, "isGlobalBudgetExceeded").mockReturnValue(true);
+      try {
+        const alice = await seedUser();
+        const bob = await seedUser();
+        const match = await seedMatch(alice.id, bob.id, { status: "negotiating_venue" });
+
+        const res = await request(app)
+          .post(`/v1/matches/${match.id}/${path}`)
+          .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+          .send({ text: "yes" });
+
+        expect(res.status).toBe(429);
+        expect(res.body.error).toBe("daily_token_budget");
+      } finally {
+        breaker.mockRestore();
+      }
+    },
+  );
 
   it("POST /:id/report enforces IDOR: non-participant is 403", async () => {
     const alice = await seedUser();

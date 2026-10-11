@@ -48,7 +48,11 @@ export type TicketReason =
   | "bump_bonus"
   | "store_purchase"
   | "spend_match"
-  | "refund";
+  | "refund"
+  // Apple reversed an App Store refund (`REFUND_REVERSED`): the tickets that
+  // refund clawed back, credited again. Exactly-once via
+  // `appstore:<transactionId>:refund_reversed` (`appstore-tickets.ts`).
+  | "refund_reversed";
 
 export async function getBalance(userId: string): Promise<number> {
   const user = await prisma.user.findUnique({

@@ -20,7 +20,15 @@ const {
   getSubscriptionAutoRenew,
   syncAppStorePremiumAutoRenew,
   handleAppStorePremiumNotification,
+  reverseAppStoreTicketRefund,
+  reversePrimeTimeAppStoreRefund,
+  reverseVenueChangeAppStoreRefund,
+  reverseAppStorePremiumRefund,
 } = vi.hoisted(() => ({
+  reverseAppStoreTicketRefund: vi.fn(),
+  reversePrimeTimeAppStoreRefund: vi.fn(),
+  reverseVenueChangeAppStoreRefund: vi.fn(),
+  reverseAppStorePremiumRefund: vi.fn(),
   getVerifiedTransaction: vi.fn(),
   refundAppStoreTransaction: vi.fn(),
   refundPrimeTimeAppStoreTransaction: vi.fn(),
@@ -44,19 +52,23 @@ vi.mock("../services/appstore-venue-change.js", () => ({
   isVenueChangeProduct: (id: string | null) => id?.split(".").pop() === "venue_change",
   refundVenueChangeAppStoreTransaction: (...a: unknown[]) =>
     refundVenueChangeAppStoreTransaction(...a),
+  reverseVenueChangeAppStoreRefund: (...a: unknown[]) => reverseVenueChangeAppStoreRefund(...a),
 }));
 
 vi.mock("../services/appstore-tickets.js", () => ({
   refundAppStoreTransaction: (...a: unknown[]) => refundAppStoreTransaction(...a),
+  reverseAppStoreTicketRefund: (...a: unknown[]) => reverseAppStoreTicketRefund(...a),
 }));
 
 vi.mock("../services/appstore-prime-time.js", () => ({
   refundPrimeTimeAppStoreTransaction: (...a: unknown[]) => refundPrimeTimeAppStoreTransaction(...a),
+  reversePrimeTimeAppStoreRefund: (...a: unknown[]) => reversePrimeTimeAppStoreRefund(...a),
 }));
 
 vi.mock("../services/appstore-premium.js", () => ({
   handleAppStorePremiumNotification: (...a: unknown[]) => handleAppStorePremiumNotification(...a),
   syncAppStorePremiumAutoRenew: (...a: unknown[]) => syncAppStorePremiumAutoRenew(...a),
+  reverseAppStorePremiumRefund: (...a: unknown[]) => reverseAppStorePremiumRefund(...a),
   PREMIUM_RENEW_NOTIFICATIONS: ["DID_RENEW"],
 }));
 
@@ -151,6 +163,52 @@ describe("POST /v1/webhooks/appstore — refunds", () => {
       .send(notification("REFUND", "ticket_3"));
     expect(res.status).toBe(500);
     expect(refundAppStoreTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /v1/webhooks/appstore — REFUND_REVERSED", () => {
+  async function send(productId: string) {
+    const transaction = { transactionId: "2000000999", productId, revocationDate: null };
+    getVerifiedTransaction.mockResolvedValue({ status: "ok", transaction });
+    const res = await request(buildApp())
+      .post("/v1/webhooks/appstore")
+      .send(notification("REFUND_REVERSED", productId));
+    return { res, transaction };
+  }
+
+  it("re-credits tickets through the reversal, never through the refund path", async () => {
+    reverseAppStoreTicketRefund.mockResolvedValue({ status: "restored", restored: 3, balance: 3 });
+    const { res, transaction } = await send("ticket_3");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, result: "restored" });
+    expect(reverseAppStoreTicketRefund).toHaveBeenCalledWith(transaction);
+    expect(refundAppStoreTransaction).not.toHaveBeenCalled();
+  });
+
+  it("routes Premium, Prime Time and venue change to their own reversal", async () => {
+    reverseAppStorePremiumRefund.mockResolvedValue({
+      userId: "u1",
+      result: { status: "already_restored" },
+    });
+    reversePrimeTimeAppStoreRefund.mockResolvedValue({ status: "no_refund" });
+    reverseVenueChangeAppStoreRefund.mockResolvedValue({ status: "announced" });
+
+    expect((await send("com.gennety.ios.premium_monthly")).res.body.result).toBe(
+      "already_restored",
+    );
+    expect(handleAppStorePremiumNotification).not.toHaveBeenCalled();
+    expect((await send("com.gennety.ios.prime_time_pass")).res.body.result).toBe("no_refund");
+    expect((await send("com.gennety.ios.venue_change")).res.body.result).toBe("announced");
+    expect(reverseAppStoreTicketRefund).not.toHaveBeenCalled();
+  });
+
+  it("acks an unknown transaction so Apple stops retrying", async () => {
+    getVerifiedTransaction.mockResolvedValue({ status: "not_found" });
+    const res = await request(buildApp())
+      .post("/v1/webhooks/appstore")
+      .send(notification("REFUND_REVERSED", "ticket_3"));
+    expect(res.status).toBe(200);
+    expect(reverseAppStoreTicketRefund).not.toHaveBeenCalled();
   });
 });
 

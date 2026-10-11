@@ -17,11 +17,19 @@ vi.mock("../config.js", () => ({
 const activateOrExtendPremium = vi.fn();
 const revokePremium = vi.fn(async () => {});
 const recordPremiumLapse = vi.fn(async () => {});
-vi.mock("./premium.js", () => ({ activateOrExtendPremium, revokePremium, recordPremiumLapse }));
+const restorePremiumAfterRefundReversal = vi.fn();
+vi.mock("./premium.js", () => ({
+  activateOrExtendPremium,
+  revokePremium,
+  recordPremiumLapse,
+  restorePremiumAfterRefundReversal,
+}));
+vi.mock("./founder-notify.js", () => ({ notifyFounderRefundReversed: vi.fn() }));
 
 const {
   applyAppStorePremium,
   handleAppStorePremiumNotification,
+  reverseAppStorePremiumRefund,
   reportAppStorePremium,
   syncAppStorePremiumAutoRenew,
 } = await import(
@@ -265,5 +273,46 @@ describe("syncAppStorePremiumAutoRenew", () => {
     await expect(syncAppStorePremiumAutoRenew(tx(), true)).resolves.toEqual({
       status: "unknown_owner",
     });
+  });
+});
+
+describe("reverseAppStorePremiumRefund (REFUND_REVERSED)", () => {
+  it("restores for the anchor's owner with the charge's own keys and period", async () => {
+    userFindFirst.mockResolvedValueOnce({ id: "u1" });
+    restorePremiumAfterRefundReversal.mockResolvedValueOnce({
+      status: "restored",
+      premiumUntil: new Date(EXPIRES),
+    });
+
+    const out = await reverseAppStorePremiumRefund(tx());
+
+    expect(out).toEqual({
+      userId: "u1",
+      result: { status: "restored", premiumUntil: new Date(EXPIRES) },
+    });
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { premiumExternalId: "orig-1" },
+      select: { id: true },
+    });
+    expect(restorePremiumAfterRefundReversal).toHaveBeenCalledWith({
+      userId: "u1",
+      refundExternalPaymentId: "appstore:tx-1:refund",
+      reversalExternalPaymentId: "appstore:tx-1:refund_reversed",
+      provider: "app_store",
+      period: { start: new Date(PURCHASED), end: new Date(EXPIRES) },
+    });
+  });
+
+  it("restores nothing while Apple still reports the charge revoked", async () => {
+    const out = await reverseAppStorePremiumRefund(tx({ revocationDate: Date.now() }));
+    expect(out.result).toEqual({ status: "still_revoked" });
+    expect(restorePremiumAfterRefundReversal).not.toHaveBeenCalled();
+  });
+
+  it("answers unknown_owner for a subscription bound to nobody", async () => {
+    userFindFirst.mockResolvedValueOnce(null);
+    const out = await reverseAppStorePremiumRefund(tx());
+    expect(out.result).toEqual({ status: "unknown_owner" });
+    expect(restorePremiumAfterRefundReversal).not.toHaveBeenCalled();
   });
 });

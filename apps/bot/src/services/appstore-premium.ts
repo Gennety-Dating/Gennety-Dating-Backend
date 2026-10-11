@@ -6,10 +6,13 @@ import {
   type AppStoreTransaction,
 } from "./appstore.js";
 import { env } from "../config.js";
+import { notifyFounderRefundReversed } from "./founder-notify.js";
 import {
   activateOrExtendPremium,
   recordPremiumLapse,
+  restorePremiumAfterRefundReversal,
   revokePremium,
+  type PremiumRefundReversalResult,
   type RefundedPremiumPeriod,
 } from "./premium.js";
 
@@ -262,3 +265,49 @@ export const PREMIUM_RENEW_NOTIFICATIONS = new Set([
   "DID_RENEW",
   "OFFER_REDEEMED",
 ]);
+
+export type AppStorePremiumReversalResult =
+  | PremiumRefundReversalResult
+  | { status: "still_revoked" }
+  | { status: "unknown_owner" };
+
+/**
+ * `REFUND_REVERSED` for a Premium charge: Apple took its refund back, so we give
+ * back what the refund took (`restorePremiumAfterRefundReversal`). The verdict
+ * rides Apple's re-fetched transaction, never the notification type: a
+ * transaction Apple still reports revoked restores nothing. The owner is found
+ * the same way every other subscription notification finds it — by the stable
+ * `originalTransactionId` anchor — and the refund row must belong to them.
+ */
+export async function reverseAppStorePremiumRefund(
+  tx: AppStoreTransaction,
+): Promise<{ userId: string | null; result: AppStorePremiumReversalResult }> {
+  if (tx.revocationDate !== null) return { userId: null, result: { status: "still_revoked" } };
+  const owner = await prisma.user.findFirst({
+    where: { premiumExternalId: anchorOf(tx) },
+    select: { id: true },
+  });
+  if (!owner) return { userId: null, result: { status: "unknown_owner" } };
+  const result = await restorePremiumAfterRefundReversal({
+    userId: owner.id,
+    refundExternalPaymentId: `appstore:${tx.transactionId}:refund`,
+    reversalExternalPaymentId: `appstore:${tx.transactionId}:refund_reversed`,
+    provider: "app_store",
+    period: refundedPeriodOf(tx),
+  });
+  // Announced once: only the run that wrote the reversal marker gets here
+  // with `restored` / `expired`.
+  if (result.status === "restored" || result.status === "expired") {
+    void notifyFounderRefundReversed({
+      userId: owner.id,
+      kind: "premium",
+      restored:
+        result.status === "restored"
+          ? `Premium восстановлен до ${result.premiumUntil.toISOString().slice(0, 10)}`
+          : "ничего — оплаченный период уже закончился",
+      externalPaymentId: `appstore:${tx.transactionId}`,
+      sandbox: tx.environment === "Sandbox",
+    });
+  }
+  return { userId: owner.id, result };
+}

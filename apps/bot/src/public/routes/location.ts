@@ -5,6 +5,8 @@ import type { Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { locationSearchLimiter } from "../rate-limit.js";
+import { isOverTokenBudget, TOKEN_BUDGET_REFUSAL } from "../usage-middleware.js";
+import { runWithUsage, userUsageKey } from "../../services/usage-context.js";
 import {
   tryFinalize,
   sendVenuePostSaveAck,
@@ -137,7 +139,16 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "invalid-request" });
       return;
     }
-    const intent = await interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null);
+    // The Mini App authenticates by initData, so `usageGuard` (which reads
+    // `req.userId`) cannot sit in front of this route — the same budget check
+    // and spend attribution run here, after the user is known (audit B-16).
+    if (isOverTokenBudget(actor.id)) {
+      res.status(429).json(TOKEN_BUDGET_REFUSAL);
+      return;
+    }
+    const intent = await runWithUsage(userUsageKey(actor.id), () =>
+      interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null),
+    );
     // A pin outside the user's launched market is refused with its own reason,
     // never as `wrong-state` — the Mini App turns it into the on-screen block
     // card naming the city (PRODUCT_SPEC §3.7).

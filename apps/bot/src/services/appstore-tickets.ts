@@ -15,6 +15,7 @@ import {
 import {
   notifyFounderPurchase,
   notifyFounderPurchaseRefunded,
+  notifyFounderRefundReversed,
   notifyFounderSubsystemHealth,
 } from "./founder-notify.js";
 
@@ -210,6 +211,82 @@ export async function refundAppStoreTransaction(
     return { status: "refunded", balance: clawback.balance };
   } catch (err) {
     if (isUniqueViolation(err)) return { status: "already_refunded" };
+    throw err;
+  }
+}
+
+export type AppStoreRefundReversalResult =
+  | { status: "restored"; restored: number; balance: number }
+  /** The refund took nothing (every ticket was already spent) — nothing to give back. */
+  | { status: "nothing_taken" }
+  | { status: "no_refund" }
+  | { status: "already_restored" }
+  | { status: "still_revoked" };
+
+/**
+ * `REFUND_REVERSED` for a ticket bundle: Apple took the refund back, so the
+ * tickets the refund clawed back go back into the wallet. Exactly what the
+ * `appstore:<tx>:refund` row took (its `-delta`), not the bundle size — tickets
+ * spent before the refund were never taken, so there is nothing of theirs to
+ * return. Exactly-once through the unique `appstore:<tx>:refund_reversed`
+ * ledger row: Apple's retries hit P2002 and credit nothing.
+ *
+ * The verdict is Apple's re-fetched transaction (`revocationDate` cleared),
+ * never the notification type.
+ */
+export async function reverseAppStoreTicketRefund(
+  tx: AppStoreTransaction,
+): Promise<AppStoreRefundReversalResult> {
+  if (tx.revocationDate !== null) return { status: "still_revoked" };
+  const credit = `appstore:${tx.transactionId}`;
+
+  const refund = await prisma.ticketLedger.findUnique({
+    where: { externalPaymentId: `${credit}:refund` },
+    select: { userId: true, delta: true },
+  });
+  if (!refund) return { status: "no_refund" };
+  const taken = Math.max(0, -refund.delta);
+  const sandbox = tx.environment === "Sandbox";
+
+  // Account deleted since: the wallet went with it. Announced, nothing written.
+  if (!refund.userId) {
+    void notifyFounderRefundReversed({
+      userId: null,
+      kind: "tickets",
+      restored: "ничего — аккаунт покупателя удалён",
+      externalPaymentId: credit,
+      sandbox,
+    });
+    return { status: "no_refund" };
+  }
+  if (taken === 0) {
+    void notifyFounderRefundReversed({
+      userId: refund.userId,
+      kind: "tickets",
+      restored: "ничего — возврат не забрал ни одного билета (уже потрачены)",
+      externalPaymentId: credit,
+      sandbox,
+    });
+    return { status: "nothing_taken" };
+  }
+
+  try {
+    const balance = await grantTickets({
+      userId: refund.userId,
+      count: taken,
+      reason: "refund_reversed",
+      externalPaymentId: `${credit}:refund_reversed`,
+    });
+    void notifyFounderRefundReversed({
+      userId: refund.userId,
+      kind: "tickets",
+      restored: `${taken} билет(ов) вернули на счёт · баланс ${balance}`,
+      externalPaymentId: credit,
+      sandbox,
+    });
+    return { status: "restored", restored: taken, balance };
+  } catch (err) {
+    if (isUniqueViolation(err)) return { status: "already_restored" };
     throw err;
   }
 }

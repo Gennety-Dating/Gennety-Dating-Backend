@@ -12,6 +12,7 @@ import {
 import { isSlotSelectable } from "../handlers/matching/scheduler.js";
 import { resolveZone, zonedParts } from "./profiler-schedule.js";
 import { LOCALE_TAGS } from "./datetime-entity.js";
+import { matchTimeZone } from "./match-time-zone.js";
 import {
   apnsConfigured,
   type LiveActivityStartInput,
@@ -83,7 +84,7 @@ export interface TimeAgreementContentState {
   partnerSlots: number[];
   /** Set only on the `match` end. */
   agreedTime: number | null;
-  /** The recipient's own zone — the clock the app draws these instants on. */
+  /** The match's date-city zone — the clock the app draws these instants on. */
   timeZone: string | null;
 }
 
@@ -210,7 +211,11 @@ export interface TimeAgreementActivityUser {
   language: string | null;
   firstName: string | null;
   gender: string | null;
-  profile: { timeZone: string | null } | null;
+  profile: {
+    timeZone: string | null;
+    homeCityKey?: string | null;
+    homeCountryCode?: string | null;
+  } | null;
 }
 
 export interface TimeAgreementActivityMatch {
@@ -229,7 +234,7 @@ const USER_SELECT = {
   language: true,
   firstName: true,
   gender: true,
-  profile: { select: { timeZone: true } },
+  profile: { select: { timeZone: true, homeCityKey: true, homeCountryCode: true } },
 } as const;
 
 export function loadTimeAgreementActivityMatch(
@@ -268,7 +273,9 @@ export function timeAgreementSideState(
   return {
     userId: me.id,
     language: me.language,
-    timeZone: me.profile?.timeZone ?? null,
+    // The match's date-city zone — the clock the grid is written in and the
+    // calendar GET returns (audit C-25) — not this side's own profile zone.
+    timeZone: matchTimeZone(match),
     partnerFirstName: peer.firstName,
     partnerGender: peer.gender,
     status: match.status,
@@ -401,9 +408,9 @@ function languageOf(raw: string | null): Language {
 }
 
 /**
- * "ср, 18:30" — a slot on the RECIPIENT's wall clock, in their language.
+ * "ср, 18:30" — a slot on the date city's wall clock, in the recipient's language.
  *
- * The zone is the recipient's own (`profile.timeZone`, the same value the
+ * The zone is the match's date-city zone (`matchTimeZone`, the same value the
  * calendar GET returns), falling back to the market's. The weekday is dropped
  * when the slot is today: "сегодня в 18:30" is what the phrase already means to
  * someone reading it at 13:00, and a weekday there reads as a different day.

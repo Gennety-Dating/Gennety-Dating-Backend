@@ -40,9 +40,8 @@ vi.mock("./ticket-wallet.js", () => ({
     typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002",
 }));
 
-const { creditAppStoreTransaction, refundAppStoreTransaction } = await import(
-  "./appstore-tickets.js"
-);
+const { creditAppStoreTransaction, refundAppStoreTransaction, reverseAppStoreTicketRefund } =
+  await import("./appstore-tickets.js");
 
 const okTx: AppStoreTransaction = {
   transactionId: "tx-1",
@@ -268,5 +267,57 @@ describe("refundAppStoreTransaction", () => {
     await expect(refundAppStoreTransaction(okTx)).resolves.toEqual({
       status: "not_revoked",
     });
+  });
+});
+
+describe("reverseAppStoreTicketRefund (REFUND_REVERSED)", () => {
+  it("re-credits exactly what the refund clawed back, keyed for exactly-once", async () => {
+    // The refund row: 2 of a 3-bundle were still in the wallet (1 was spent).
+    ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: -2 });
+    grantTickets.mockResolvedValue(7);
+
+    await expect(reverseAppStoreTicketRefund(okTx)).resolves.toEqual({
+      status: "restored",
+      restored: 2,
+      balance: 7,
+    });
+    expect(ledgerFindUnique).toHaveBeenCalledWith({
+      where: { externalPaymentId: "appstore:tx-1:refund" },
+      select: { userId: true, delta: true },
+    });
+    expect(grantTickets).toHaveBeenCalledWith({
+      userId: "u1",
+      count: 2,
+      reason: "refund_reversed",
+      externalPaymentId: "appstore:tx-1:refund_reversed",
+    });
+  });
+
+  it("a redelivered reversal credits nothing a second time", async () => {
+    ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: -3 });
+    grantTickets.mockRejectedValue({ code: "P2002" });
+
+    await expect(reverseAppStoreTicketRefund(okTx)).resolves.toEqual({
+      status: "already_restored",
+    });
+  });
+
+  it("restores nothing while Apple still reports the transaction revoked", async () => {
+    await expect(
+      reverseAppStoreTicketRefund({ ...okTx, revocationDate: 123 }),
+    ).resolves.toEqual({ status: "still_revoked" });
+    expect(ledgerFindUnique).not.toHaveBeenCalled();
+    expect(grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("restores nothing when no refund was ever applied, or the refund took nothing", async () => {
+    ledgerFindUnique.mockResolvedValueOnce(null);
+    await expect(reverseAppStoreTicketRefund(okTx)).resolves.toEqual({ status: "no_refund" });
+
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1", delta: 0 });
+    await expect(reverseAppStoreTicketRefund(okTx)).resolves.toEqual({
+      status: "nothing_taken",
+    });
+    expect(grantTickets).not.toHaveBeenCalled();
   });
 });

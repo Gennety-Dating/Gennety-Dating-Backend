@@ -63,7 +63,13 @@ export type SubscriptionEvent =
   | "renewed"
   | "cancelled"
   | "expired"
-  | "refunded";
+  | "refunded"
+  /**
+   * Apple reversed a refund (`REFUND_REVERSED`): the marker that the period a
+   * `refunded` row took back was given back. Never revenue — the original
+   * `started`/`renewed` row already is.
+   */
+  | "refund_reversed";
 
 /** Minimal shape needed to decide active-ness without a DB round-trip. */
 export interface PremiumHead {
@@ -298,18 +304,27 @@ async function previousRecurringPeriodEnd(
       select: { externalPaymentId: true, periodEnd: true },
     });
     const keys = rows.flatMap((row) =>
-      row.externalPaymentId ? [`${row.externalPaymentId}:refund`] : [],
+      row.externalPaymentId
+        ? [`${row.externalPaymentId}:refund`, `${row.externalPaymentId}:refund_reversed`]
+        : [],
     );
     // A refunded period stopped covering anything the moment it was refunded
     // (`revokePremium` took its unused days back), so it is not a period the
-    // next charge continues.
-    const refunded = keys.length
+    // next charge continues — unless Apple reversed that refund, which gave the
+    // period back (`restorePremiumAfterRefundReversal`).
+    const markers = keys.length
       ? await tx.subscriptionLedger.findMany({
           where: { externalPaymentId: { in: keys } },
           select: { externalPaymentId: true },
         })
       : [];
-    const refundedKeys = new Set(refunded.map((row) => row.externalPaymentId));
+    const markerKeys = new Set(markers.map((row) => row.externalPaymentId));
+    const refundedKeys = new Set(
+      [...markerKeys].filter(
+        (key): key is string =>
+          key != null && key.endsWith(":refund") && !markerKeys.has(`${key}_reversed`),
+      ),
+    );
     const live = rows.find(
       (row) => !row.externalPaymentId || !refundedKeys.has(`${row.externalPaymentId}:refund`),
     );
@@ -793,6 +808,76 @@ export async function revokePremium(input: {
     });
   } catch (err) {
     if (isUniqueViolation(err)) return;
+    throw err;
+  }
+}
+
+export type PremiumRefundReversalResult =
+  | { status: "restored"; premiumUntil: Date }
+  /** The refunded period is already over — nothing left to give back. */
+  | { status: "expired" }
+  /** No refund of this charge was ever applied to this user. */
+  | { status: "no_refund" }
+  /** A redelivered reversal — the marker row already exists. */
+  | { status: "already_restored" };
+
+/**
+ * Apple reversed a refund (`REFUND_REVERSED`): give back what `revokePremium`
+ * took for that charge — the period's coverage from now to its original
+ * `expiresDate`, stacked on whatever the head holds (months from a package, a
+ * referral or a promo were never taken, so they stay where they are). A period
+ * that has already ended restores nothing.
+ *
+ * Only for a charge whose refund we actually applied to THIS user (the
+ * `refundExternalPaymentId` row is the proof), and exactly once: the
+ * `refund_reversed` marker row is unique, so Apple's retries add nothing.
+ * Renewal stays as the refund left it (`premiumAutoRenew` off) —
+ * `DID_CHANGE_RENEWAL_STATUS` re-reads it from Apple.
+ */
+export async function restorePremiumAfterRefundReversal(input: {
+  userId: string;
+  refundExternalPaymentId: string;
+  reversalExternalPaymentId: string;
+  provider: PremiumProvider;
+  period: RefundedPremiumPeriod;
+  now?: Date;
+}): Promise<PremiumRefundReversalResult> {
+  const { userId, refundExternalPaymentId, reversalExternalPaymentId, provider, period } = input;
+  const now = input.now ?? new Date();
+  try {
+    return await prisma.$transaction(async (tx): Promise<PremiumRefundReversalResult> => {
+      const head = await lockPremiumHead(tx, userId);
+      if (!head) return { status: "no_refund" };
+      const refund = await tx.subscriptionLedger.findUnique({
+        where: { externalPaymentId: refundExternalPaymentId },
+        select: { userId: true },
+      });
+      if (!refund || refund.userId !== userId) return { status: "no_refund" };
+
+      await tx.subscriptionLedger.create({
+        data: {
+          userId,
+          provider,
+          event: "refund_reversed",
+          externalPaymentId: reversalExternalPaymentId,
+          periodStart: period.start,
+          periodEnd: period.end,
+        },
+      });
+      if (!period.end || period.end.getTime() <= now.getTime()) return { status: "expired" };
+
+      const remainingFrom = Math.max(now.getTime(), period.start?.getTime() ?? now.getTime());
+      const remaining = Math.max(0, period.end.getTime() - remainingFrom);
+      const base = Math.max(head.premiumUntil?.getTime() ?? now.getTime(), now.getTime());
+      const premiumUntil = new Date(Math.max(base + remaining, period.end.getTime()));
+      await tx.user.update({
+        where: { id: userId },
+        data: { premiumUntil, ...(head.premiumSince ? {} : { premiumSince: now }) },
+      });
+      return { status: "restored", premiumUntil };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return { status: "already_restored" };
     throw err;
   }
 }

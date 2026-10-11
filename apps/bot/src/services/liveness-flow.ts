@@ -13,11 +13,20 @@ import {
   activationBlockerFor,
   runFaceMatchVerificationDefault,
   trackFaceMatchRun,
+  VERIFICATION_PUSH_TYPE,
 } from "./verification-pipeline.js";
+import { deleteStorageObject, uploadSelfie } from "./storage.js";
+import { notifyFounderVerificationManualReview } from "./founder-notify.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
+import { sendPushToUser } from "./push.js";
 import { DEMO_MODE_ENABLED } from "../demo/config.js";
 import { releaseDemoLivenessSession, runDemoVerification } from "../demo/verification.js";
 import { buildVerificationKeyboard, VERIFY_PHOTOS_CALLBACK } from "./verification-keyboard.js";
-import { livenessRetryMessage } from "./verification-messages.js";
+import {
+  livenessRetryMessage,
+  terminalVerificationMessage,
+  terminalVerificationPush,
+} from "./verification-messages.js";
 
 /**
  * The identity-verification flow, shared by both client surfaces.
@@ -54,6 +63,12 @@ export type BeginLivenessResult =
     }
   | { ok: false; error: "user_not_found" } // 404
   | { ok: false; error: "already_verified" } // 409
+  /**
+   * 409 — the account waits in `pending_review` for a human. Neither client
+   * offers a check there; a direct caller re-running one would take the
+   * first-check path and could verify itself against photos nobody reviewed.
+   */
+  | { ok: false; error: "under_review" }
   /** 409 — no explicit Art. 9 biometric consent on file yet. */
   | { ok: false; error: "consent_required" }
   /**
@@ -130,6 +145,7 @@ export async function beginLivenessCheck(
     },
   });
   if (!user) return { ok: false, error: "user_not_found" };
+  if (user.verificationStatus === "pending_review") return { ok: false, error: "under_review" };
 
   // Re-running liveness on an already-verified user would burn a check and a
   // session for no decision; the client renders a "you're verified" screen.
@@ -165,12 +181,13 @@ export async function beginLivenessCheck(
     // the collector both ask for MIN_PHOTOS, and a check over fewer is a check
     // the user would have to repeat once they add the rest.
     //
-    // A verified user re-anchoring an expired reference needs only something to
-    // compare with (C-12): the minimum gates matching, not identity, and adding
-    // photos is exactly what their expired reference refuses — demanding the
-    // minimum first was a loop with no way out.
+    // A verified user re-anchoring an expired reference has no floor at all
+    // (C-12): the minimum gates matching, not identity, and adding photos is
+    // exactly what their expired reference refuses — demanding any first was a
+    // loop with no way out. With photos the pipeline compares as usual; with
+    // none, `completeLivenessCheck` hands the pass to a human (manual review).
     const photoCount = user.profile?.photos.length ?? 0;
-    const photoFloor = alreadyVerified ? 1 : MIN_PHOTOS;
+    const photoFloor = alreadyVerified ? 0 : MIN_PHOTOS;
     if (photoCount < photoFloor) {
       return { ok: false, error: "photos_required", language: user.language ?? "en" };
     }
@@ -302,8 +319,12 @@ export async function completeLivenessCheck(
     select: {
       id: true,
       telegramId: true,
+      platform: true,
       language: true,
       pendingLivenessSessionId: true,
+      verificationStatus: true,
+      verifiedSelfiePath: true,
+      profile: { select: { photos: true } },
     },
   });
   if (!user) return { ok: false, error: "user_not_found" };
@@ -377,6 +398,22 @@ export async function completeLivenessCheck(
     return { ok: true, outcome: "retry" };
   }
 
+  // Passed, but there is nothing to compare it with AND nothing tying the
+  // account to its earlier face (C-12): verified, reference scrubbed, zero
+  // photos. The pipeline would only park it as retryable — the old dead end.
+  // A human decides instead (founder decision 2026-10-11).
+  if (needsManualReanchorReview(user)) {
+    void trackFaceMatchRun(
+      user.id,
+      parkForManualReview(user, result.referenceImage, api, options.outcomeGate),
+    )
+      .catch((err) => {
+        console.error(`${LOG_PREFIX} manual-review park threw`, { userId, err });
+      })
+      .finally(() => options.outcomeGate?.finish());
+    return { ok: true, outcome: "processing" };
+  }
+
   // Passed. The reference image only exists in memory right now — the pipeline
   // persists it to the selfies bucket as its first step, and every later
   // re-check reads that stored copy.
@@ -394,6 +431,113 @@ export async function completeLivenessCheck(
     .finally(() => options.outcomeGate?.finish());
 
   return { ok: true, outcome: "processing" };
+}
+
+/**
+ * The C-12 escape: a VERIFIED account whose reference selfie the 90-day scrub
+ * deleted and which has no profile photos left. A passing check proves a live
+ * person, but nothing links that person to the face verified before — so the
+ * pass is never auto-accepted.
+ */
+export function needsManualReanchorReview(user: {
+  verificationStatus: string;
+  verifiedSelfiePath: string | null;
+  profile: { photos: string[] } | null;
+}): boolean {
+  return (
+    user.verificationStatus === "verified" &&
+    !user.verifiedSelfiePath &&
+    (user.profile?.photos.length ?? 0) === 0
+  );
+}
+
+/**
+ * Store the new reference selfie and move the account to the existing
+ * manual-review state (`pending_review`), then tell the founder and the user.
+ *
+ * `personaInquiryId` is cleared on purpose: `triggerVerificationRerun` answers
+ * `no_inquiry` without one, so a photo uploaded while the review is open can
+ * never re-score the account into `verified` on its own — only the founder
+ * can. Once the founder sets `verified`, uploads are gated against the new
+ * `verifiedSelfiePath` like any verified account's.
+ *
+ * The write is a compare-and-set on the stuck state, so a duplicate `/event`
+ * or a concurrent run cannot demote an account that has moved on.
+ */
+async function parkForManualReview(
+  user: {
+    id: string;
+    telegramId: bigint;
+    platform: string | null;
+    language: Language | null;
+  },
+  referenceImage: Buffer,
+  api: Api<RawApi>,
+  outcomeGate: OutcomeGate | undefined,
+): Promise<void> {
+  let selfiePath: string;
+  try {
+    selfiePath = (await uploadSelfie(user.id, referenceImage, "image/jpeg")).path;
+  } catch (err) {
+    // Without a stored selfie the founder has nothing to review and an
+    // approval would land on `reference_expired` again. Leave the account
+    // exactly as it was (still verified) and let them run the check again.
+    console.error(`${LOG_PREFIX} manual-review selfie upload failed`, { userId: user.id, err });
+    await sendRetryPrompt(api, user.id, user.telegramId, user.language ?? "en", "no_reference");
+    return;
+  }
+
+  const parked = await prisma.user.updateMany({
+    where: { id: user.id, verificationStatus: "verified", verifiedSelfiePath: null },
+    data: {
+      verificationStatus: "pending_review",
+      verifiedSelfiePath: selfiePath,
+      personaInquiryId: null,
+      faceMatchedAt: null,
+    },
+  });
+  if (parked.count === 0) {
+    console.warn(`${LOG_PREFIX} manual-review park skipped — account moved on`, {
+      userId: user.id,
+    });
+    const removed = await deleteStorageObject(env.SUPABASE_SELFIE_BUCKET, selfiePath).catch(
+      () => false,
+    );
+    if (!removed) {
+      console.warn(`${LOG_PREFIX} unused manual-review selfie not removed`, {
+        userId: user.id,
+        selfiePath,
+      });
+    }
+    return;
+  }
+  console.warn(`${LOG_PREFIX} verified account with no photos → pending_review (manual)`, {
+    userId: user.id,
+  });
+
+  void notifyFounderVerificationManualReview(user.id).catch((err: unknown) => {
+    console.warn(`${LOG_PREFIX} founder manual-review notice failed`, { userId: user.id, err });
+  });
+
+  const language = user.language ?? "en";
+  if (telegramReachable(user)) {
+    await outcomeGate?.hold();
+    await api
+      .sendMessage(Number(user.telegramId), terminalVerificationMessage(language, "pending_review"))
+      .catch((err: unknown) => {
+        console.warn(`${LOG_PREFIX} manual-review DM failed`, { userId: user.id, err });
+      });
+  }
+  if (pushReachable(user)) {
+    const push = terminalVerificationPush(language, "pending_review");
+    await sendPushToUser(user.id, {
+      title: push.title,
+      body: push.body,
+      data: { type: VERIFICATION_PUSH_TYPE, status: "pending_review" },
+    }).catch((err: unknown) => {
+      console.warn(`${LOG_PREFIX} manual-review push failed`, { userId: user.id, err });
+    });
+  }
 }
 
 /**

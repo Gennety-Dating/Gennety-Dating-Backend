@@ -6,6 +6,7 @@ import { isUuid } from "../../utils/uuid.js";
 import { getBotApi } from "../server.js";
 import { blockMatchPartner, normalizeBlockReason } from "../../services/user-block.js";
 import { agentTextLimiter } from "../rate-limit.js";
+import { usageGuard } from "../usage-middleware.js";
 import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
 import { partnerPhotoUrls, resolvePartnerMedia } from "../partner-photos.js";
 import { serializePartnerProfileVideo } from "../../services/native-profile-video.js";
@@ -167,6 +168,7 @@ matchesRouter.get("/current", async (req: Request, res: Response): Promise<void>
  */
 matchesRouter.post(
   "/:id/decision-intent",
+  usageGuard,
   agentTextLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const id = paramId(req);
@@ -227,6 +229,7 @@ matchesRouter.get("/:id/venue-intent", async (req: Request, res: Response): Prom
 
 matchesRouter.post(
   "/:id/venue-intent/interpret",
+  usageGuard,
   agentTextLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const id = paramId(req);

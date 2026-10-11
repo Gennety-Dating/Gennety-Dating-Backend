@@ -71,6 +71,8 @@ import {
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { serializeOwnProfileVideo } from "../../services/native-profile-video.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+import { isOverTokenBudget } from "../usage-middleware.js";
+import { runWithUsage, userUsageKey } from "../../services/usage-context.js";
 import { registerPushToken } from "../../services/device-tokens.js";
 import {
   buildReferralStateView,
@@ -410,8 +412,20 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
     await prisma.$transaction(ops);
   }
 
-  if (profileChangedEmbeddingInput) {
-    await refreshUserEmbedding(req.userId!, { timeoutMs: 30_000 }).catch((err) => {
+  // The immediate refresh is an embedding call, so it answers to the token
+  // budget and the global breaker like every other model call (audit B-16) —
+  // but softly, the way `usageAttribution` routes do: over budget the edit
+  // still saves (it is plain profile data, and an old client must not get a
+  // 429 for changing a hobby) and only the refresh is skipped; the row is
+  // already `embeddingDirty`, so the periodic worker recomputes it later.
+  if (profileChangedEmbeddingInput && isOverTokenBudget(req.userId!)) {
+    console.warn(
+      `[PATCH /v1/me] over token budget — embedding refresh deferred to the worker userId=${req.userId!}`,
+    );
+  } else if (profileChangedEmbeddingInput) {
+    await runWithUsage(userUsageKey(req.userId!), () =>
+      refreshUserEmbedding(req.userId!, { timeoutMs: 30_000 }),
+    ).catch((err) => {
       // The profile edit is already durable and remains marked dirty. Keep the
       // public response shape stable; the periodic worker will retry.
       console.warn(
@@ -1012,7 +1026,8 @@ function photoValidationApiMessage(reason: string): string {
  */
 type PhotoRemoval =
   | { kind: "not_found" }
-  | { kind: "minimum" }
+  /** `min` is the floor that refused — MIN_PHOTOS (active) or 1 (verified). */
+  | { kind: "minimum"; min: number }
   /** Nothing to remove (every requested path already gone) — no write. */
   | { kind: "unchanged"; nextPhotos: string[] }
   | { kind: "removed"; removedPaths: string[]; nextPhotos: string[] };
@@ -1032,6 +1047,12 @@ type PhotoRemoval =
  * grid, and during onboarding the minimum is held where it belongs — by the
  * photo step and the liveness gate (`beginLivenessCheck` → `photos_required`),
  * not by refusing a delete the user can see no reason for.
+ *
+ * One more floor, whatever the status (C-12): a `verified` user keeps at least
+ * one photo. At zero there is nothing tying the account to the face that was
+ * verified, and once the 90-day scrub has taken the reference selfie every way
+ * back (upload → `reference_expired`, liveness → `photos_required`) was shut —
+ * a dead end. Same 409 shape, `min: 1`, so old clients already render it.
  */
 async function removeProfilePhotos(
   userId: string,
@@ -1043,6 +1064,7 @@ async function removeProfilePhotos(
       where: { id: userId },
       select: {
         status: true,
+        verificationStatus: true,
         profile: {
           select: {
             photos: true,
@@ -1062,7 +1084,10 @@ async function removeProfilePhotos(
 
     const nextPhotos = photos.filter((_, i) => !drop.has(i));
     if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
-      return { kind: "minimum" };
+      return { kind: "minimum", min: MIN_PHOTOS };
+    }
+    if (nextPhotos.length === 0 && user.verificationStatus === "verified") {
+      return { kind: "minimum", min: 1 };
     }
 
     // Photo indices address `photos[]`, and `profileMedia` is NOT aligned with
@@ -1134,7 +1159,7 @@ async function respondToPhotoRemoval(
   if (removal.kind === "minimum") {
     res
       .status(409)
-      .json({ error: "Minimum photos required", code: "photo_minimum", min: MIN_PHOTOS });
+      .json({ error: "Minimum photos required", code: "photo_minimum", min: removal.min });
     return;
   }
   if (removal.kind === "removed") {
@@ -1159,7 +1184,8 @@ async function respondToPhotoRemoval(
 /**
  * DELETE /v1/me/photos/:index — remove a photo by its position in the
  * `profile.photos` array. Active users can't drop below MIN_PHOTOS (409
- * `photo_minimum`); everyone else can, down to none (paused users are off the
+ * `photo_minimum`), verified users can't drop to zero (409, `min: 1`);
+ * everyone else can, down to none (paused users are off the
  * match grid; in onboarding the photo step and the liveness gate hold the
  * minimum).
  *

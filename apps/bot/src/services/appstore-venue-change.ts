@@ -8,7 +8,7 @@ import {
   getVerifiedTransaction,
   type AppStoreTransaction,
 } from "./appstore.js";
-import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
+import { notifyFounderPurchaseRefunded, notifyFounderRefundReversed } from "./founder-notify.js";
 import {
   APPSTORE_PAYMENT_PREFIX,
   VENUE_PURCHASE_REFUND_MANUAL,
@@ -162,4 +162,40 @@ export async function refundVenueChangeAppStoreTransaction(
     externalPaymentId,
   });
   return { status: "recorded" };
+}
+
+export type VenueChangeAppStoreReversalResult =
+  | { status: "still_revoked" }
+  | { status: "no_refund" }
+  | { status: "announced" };
+
+/**
+ * `REFUND_REVERSED` for a venue change: announced to the founder, nothing
+ * re-applied. The change itself was never taken back by the refund, and the
+ * date it moved has likely moved on since — re-running a venue change is a
+ * product decision a webhook must not make. The row stays `refunded_appstore`
+ * (no write), so a redelivered notification announces again; Apple only
+ * redelivers on a non-2xx, so that is rare.
+ */
+export async function reverseVenueChangeAppStoreRefund(
+  tx: AppStoreTransaction,
+): Promise<VenueChangeAppStoreReversalResult> {
+  if (tx.revocationDate !== null) return { status: "still_revoked" };
+  const externalPaymentId = `${APPSTORE_PAYMENT_PREFIX}${tx.transactionId}`;
+  const row = await prisma.venueChangePurchase.findUnique({
+    where: { externalPaymentId },
+    select: { userId: true, status: true },
+  });
+  if (!row || row.status !== VENUE_PURCHASE_REFUNDED_APPSTORE) return { status: "no_refund" };
+
+  void notifyFounderRefundReversed({
+    userId: row.userId,
+    kind: "venue_change",
+    restored:
+      "ничего не переприменено — смена места не отменялась возвратом; " +
+      "статус покупки остаётся refunded_appstore, решить вручную",
+    externalPaymentId,
+    sandbox: tx.environment === "Sandbox",
+  });
+  return { status: "announced" };
 }

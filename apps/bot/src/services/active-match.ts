@@ -4,6 +4,7 @@ import {
   ACTIVE_MATCH_STATUSES,
   pickCurrentMatch,
 } from "./active-match-priority.js";
+import { matchTimeZone } from "./match-time-zone.js";
 
 /**
  * The four in-flight match statuses. A user has at most one row in any of
@@ -49,6 +50,11 @@ export interface ActiveMatchResult {
     ticketStatus: string | null;
     dateCardFileIdA: string | null;
     dateCardFileIdB: string | null;
+    /**
+     * The date city's zone (`matchTimeZone`, audit C-25) — the clock the
+     * agreed time is printed on. Optional: absent reads as the default zone.
+     */
+    timeZone?: string;
   };
   /** Which side of the match the caller is. */
   side: MatchSide;
@@ -83,7 +89,7 @@ export async function findActiveMatchForTelegramId(
     telegramId: true,
     language: true,
     theme: true,
-    profile: { select: { photos: true } },
+    profile: { select: { photos: true, homeCityKey: true, homeCountryCode: true } },
   } satisfies Prisma.UserSelect;
 
   const matches = await prisma.match.findMany({
@@ -176,6 +182,7 @@ export async function findActiveMatchForTelegramId(
       ticketStatus: match.ticketStatus,
       dateCardFileIdA: match.dateCardFileIdA,
       dateCardFileIdB: match.dateCardFileIdB,
+      timeZone: matchTimeZone(match),
     },
     side,
     partner: toParticipant(rawPartner),

@@ -9,6 +9,10 @@ import {
   type CalendarStateResult,
   isSlotSelectable,
 } from "../../handlers/matching/scheduler.js";
+import {
+  matchTimeZone,
+  MATCH_CITY_PROFILE_SELECT,
+} from "../../services/match-time-zone.js";
 
 /**
  * Slot calendar for the NATIVE client (JWT auth) — PRODUCT_SPEC §3.6.
@@ -59,7 +63,7 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
       answerFailure(res, result.reason);
       return;
     }
-    res.json(nativeState(result, caller.timeZone));
+    res.json(nativeState(result));
   });
 
   /**
@@ -109,13 +113,14 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
     // reason to recompute it, and the client already holds it from the GET it
     // polls. Re-reading state here purely to restate an unchanged field would
     // buy a query per tap.
+    const grid = await gridOf(matchId);
     res.json({
-      proposedTimes: await proposedTimesFor(matchId),
+      proposedTimes: grid.proposedTimes,
       mySlots: result.mySlots,
       peerSlots: result.peerSlots,
       agreedTime: result.agreedTime,
       overlapCandidates: result.overlapCandidates,
-      timeZone: caller.timeZone,
+      timeZone: grid.timeZone,
       serverNow: new Date().toISOString(),
     });
   });
@@ -129,41 +134,53 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
  * lookup is exact and the whole tested scheduling path is reused rather than
  * forked.
  *
- * `timeZone` rides along because the grid is a set of instants and the client
- * has to choose a wall clock to draw them on. The device's own zone is the
- * wrong choice: the date happens in the pair's city, so someone travelling
- * would be shown a grid in a timezone the date will not take place in, and
- * would agree to a time neither of them meant. Telegram already made this call
- * for the locked-time card, which renders in the canonical city zone.
+ * `timeZone` is NOT the caller's: see `gridOf` / `getCalendarState`.
  */
-async function callerOf(
-  userId: string,
-): Promise<{ telegramId: bigint; timeZone: string | null } | null> {
+async function callerOf(userId: string): Promise<{ telegramId: bigint } | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { telegramId: true, profile: { select: { timeZone: true } } },
+    select: { telegramId: true },
   });
   if (!user) return null;
-  return { telegramId: user.telegramId, timeZone: user.profile?.timeZone ?? null };
+  return { telegramId: user.telegramId };
 }
 
-/** `processCalendarSlotsUpdate` does not echo the grid; it never changes. */
-async function proposedTimesFor(matchId: string): Promise<string[]> {
+/**
+ * `processCalendarSlotsUpdate` does not echo the grid; it never changes.
+ *
+ * `timeZone` rides along because the grid is a set of instants and the client
+ * has to choose a wall clock to draw them on. It is the zone the grid was
+ * WRITTEN in — the match's date city (audit C-25) — not the caller's profile
+ * zone and not the device's: the date happens in the pair's city, so someone
+ * travelling would otherwise be shown a grid in a timezone the date will not
+ * take place in, and a client labelling a Berlin grid on Kyiv time would show
+ * "20:00" for a slot written as 19:00. Shipped builds already label with this
+ * field, so correcting its value is what corrects them.
+ */
+async function gridOf(
+  matchId: string,
+): Promise<{ proposedTimes: string[]; timeZone: string }> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
-    select: { proposedTimes: true },
+    select: {
+      proposedTimes: true,
+      userA: { select: MATCH_CITY_PROFILE_SELECT },
+      userB: { select: MATCH_CITY_PROFILE_SELECT },
+    },
   });
   // Та же фильтрация, что и в `getCalendarState`: слот внутри пятичасового
   // запаса сервер всё равно отклонит (409 `stale_action`), и рисовать его
   // клиенту незачем.
-  return (match?.proposedTimes ?? [])
-    .filter((d) => isSlotSelectable(d))
-    .map((d) => d.toISOString());
+  return {
+    proposedTimes: (match?.proposedTimes ?? [])
+      .filter((d) => isSlotSelectable(d))
+      .map((d) => d.toISOString()),
+    timeZone: matchTimeZone(match ?? { userA: null, userB: null }),
+  };
 }
 
 function nativeState(
   result: Extract<CalendarStateResult, { ok: true }>,
-  timeZone: string | null,
 ): Record<string, unknown> {
   return {
     proposedTimes: result.proposedTimes,
@@ -179,7 +196,8 @@ function nativeState(
      * field keeps its current behaviour and merely discovers the refusal.
      */
     primeTime: result.primeTime,
-    timeZone,
+    // The zone the grid was generated in (audit C-25), not the caller's.
+    timeZone: result.timeZone,
     serverNow: new Date().toISOString(),
   };
 }

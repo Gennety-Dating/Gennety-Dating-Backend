@@ -6,7 +6,7 @@ import { installBotBlockedObserver, clearBotBlocked } from "./services/bot-block
 import { handleBotError } from "./bot-error.js";
 import { installStaleCallbackAnswers } from "./services/callback-answers.js";
 import { sequentializeByChat } from "./chat-queue.js";
-import { botRateLimit } from "./bot-rate-limit.js";
+import { botFloodGate, botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./handlers/payments.js";
 import { router } from "./handlers/router.js";
@@ -76,6 +76,15 @@ export function createBot(token: string): Bot<BotContext> {
     await next();
   });
 
+  // Anti-spam, layer 1 — the flood gate runs BEFORE the chat queue (audit
+  // B-23). The queue below detaches each update and acks it to the polling
+  // loop at once (A13-H9, by design), so a meter inside the queued task only
+  // ran as fast as the queue drained, and a flooding chat grew its queue
+  // without bound. Dropped here, a flood is never enqueued. It reads only
+  // `ctx.from`/`ctx.message`; its notice language comes from Telegram's
+  // `language_code`, not the session. See bot-rate-limit.ts.
+  bot.use(botFloodGate);
+
   // Middleware chain. Everything below runs on the update's chat queue, which
   // no longer holds the polling loop (A13-H9) — so a detached update's error
   // is handed to the same handler `bot.catch` uses instead of vanishing.
@@ -139,9 +148,10 @@ export function createBot(token: string): Bot<BotContext> {
     await next();
   });
 
-  // Anti-spam guard — meters text/voice per user (flood + daily token budget)
-  // before any handler runs. Needs `ctx.session.language`; never throttles
-  // inline-button callbacks. See bot-rate-limit.ts.
+  // Anti-spam, layers 2/3 — daily token budget + global breaker, before any
+  // handler runs (the flood gate already ran ahead of the queue). Needs
+  // `ctx.session.language`; never throttles inline-button callbacks. See
+  // bot-rate-limit.ts.
   bot.use(botRateLimit);
 
   // Chat timeline — inbound half. Records what the user did (typed, tapped,

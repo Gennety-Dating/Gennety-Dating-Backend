@@ -381,6 +381,7 @@ const translations = {
     photoManagerAddBtn: "➕ Add photo",
     photoManagerDoneBtn: "Done",
     photoManagerMinReached: "You need at least {min} photos. Add a new one first.",
+    photoManagerKeepOne: "Your verified profile keeps at least one photo. Add a new one first.",
     // Shimmer beats held while a whole upload burst is validated (one status
     // for the burst, not one reply per frame). Two scripts, same as the
     // onboarding pair below: the plural one, and a singular one for a burst
@@ -1605,6 +1606,7 @@ const translations = {
     photoManagerAddBtn: "➕ Добавить",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Нужно минимум {min} фото. Сначала добавь новое.",
+    photoManagerKeepOne: "В подтверждённом профиле остаётся хотя бы одно фото. Сначала добавь новое.",
     photoUploadStep1: "Загружаю фотографии…",
     photoUploadStep2: "Проверяю кадры…",
     photoUploadStep3: "Ещё пара секунд…",
@@ -2688,6 +2690,7 @@ const translations = {
     photoManagerAddBtn: "➕ Додати",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Потрібно щонайменше {min} фото. Спершу додай нове.",
+    photoManagerKeepOne: "У підтвердженому профілі лишається хоча б одне фото. Спершу додай нове.",
     photoUploadStep1: "Завантажую фотографії…",
     photoUploadStep2: "Перевіряю кадри…",
     photoUploadStep3: "Ще пара секунд…",
@@ -3771,6 +3774,7 @@ const deTranslations: TranslationTable = {
   photoManagerAddBtn: "➕ Hinzufügen",
   photoManagerDoneBtn: "Fertig",
   photoManagerMinReached: "Du brauchst mindestens {min} Fotos. Füge zuerst ein neues hinzu.",
+  photoManagerKeepOne: "Dein verifiziertes Profil behält mindestens ein Foto. Füge zuerst ein neues hinzu.",
   photoUploadStep1: "Lade deine Fotos hoch…",
   photoUploadStep2: "Prüfe die Aufnahmen…",
   photoUploadStep3: "Gleich fertig…",
@@ -4826,6 +4830,7 @@ const plTranslations: TranslationTable = {
   photoManagerAddBtn: "➕ Dodaj",
   photoManagerDoneBtn: "Gotowe",
   photoManagerMinReached: "Potrzebujesz co najmniej {min} zdjęć. Najpierw dodaj nowe.",
+  photoManagerKeepOne: "W zweryfikowanym profilu zostaje co najmniej jedno zdjęcie. Najpierw dodaj nowe.",
   photoUploadStep1: "Wgrywam Twoje zdjęcia…",
   photoUploadStep2: "Sprawdzam kadry…",
   photoUploadStep3: "Jeszcze chwila…",

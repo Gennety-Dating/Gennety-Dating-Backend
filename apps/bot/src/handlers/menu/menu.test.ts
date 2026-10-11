@@ -2041,6 +2041,59 @@ describe("Menu — verification photo redo", () => {
     expect(ctx.session.pendingPhotoUniqueIds).toEqual([]);
   });
 
+  // C-12: a verified account never goes to zero photos, even through the redo.
+  it("clear-all is refused for a verified user and removes nothing", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      verificationStatus: "verified",
+    });
+    photoConsensusMocks.removeProfilePhotoByRef.mockClear();
+    const ctx = createMockCtx({
+      session: { menuState: "edit_photos", verifyPhotoRedo: true, pendingPhotos: ["p0", "p1"] },
+      callbackData: "verify:photos:clear",
+    });
+
+    await handleVerifyPhotosClear(ctx);
+
+    expect(photoConsensusMocks.removeProfilePhotoByRef).not.toHaveBeenCalled();
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "photoManagerKeepOne"),
+      show_alert: true,
+    });
+    expect(ctx.session.pendingPhotos).toEqual(["p0", "p1"]);
+  });
+
+  it("a verified redo user cannot delete their last photo", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      verificationStatus: "verified",
+    });
+    photoConsensusMocks.removeProfilePhotoByRef.mockClear();
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: ["p0"],
+        pendingProfileMedia: [{ type: "photo", photo: "p0" }],
+        pendingPhotoScores: [0.9],
+        pendingPhotoHashes: ["h0"],
+        pendingPhotoUniqueIds: ["u0"],
+        photoCards: [{ msgId: 100, ref: "p0" }],
+      },
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 100,
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    expect(photoConsensusMocks.removeProfilePhotoByRef).not.toHaveBeenCalled();
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "photoManagerKeepOne"),
+      show_alert: true,
+    });
+    expect(ctx.session.pendingPhotos).toEqual(["p0"]);
+  });
+
   it("refuses to finish below MIN_PHOTOS instead of silently doing nothing", async () => {
     const ctx = createMockCtx({
       session: {

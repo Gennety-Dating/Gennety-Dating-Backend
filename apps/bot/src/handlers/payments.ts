@@ -35,6 +35,7 @@ import {
   primeTimeFeatureLive,
   primeTimeUnlockReason,
 } from "../services/prime-time.js";
+import { matchTimeZone, MATCH_CITY_PROFILE_SELECT } from "../services/match-time-zone.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { rematchSearchSteps } from "../services/analysis-status.js";
 import {
@@ -167,13 +168,18 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
             primeTimeUnlockedAt: true,
             availableTimesA: true,
             availableTimesB: true,
-            userA: { select: { telegramId: true, platform: true, premiumUntil: true } },
-            userB: { select: { telegramId: true, platform: true, premiumUntil: true } },
+            userA: {
+              select: { telegramId: true, platform: true, premiumUntil: true, ...MATCH_CITY_PROFILE_SELECT },
+            },
+            userB: {
+              select: { telegramId: true, platform: true, premiumUntil: true, ...MATCH_CITY_PROFILE_SELECT },
+            },
           },
         })
         .catch(() => null);
       ok =
-        match?.status === "negotiating" && primeTimeUnlockReason(match) === null;
+        match?.status === "negotiating" &&
+        primeTimeUnlockReason({ ...match, timeZone: matchTimeZone(match) }) === null;
     }
   } else if (venue != null) {
     // Venue change — payload `venue:<matchId>:<mode>:<agreementNonce>`. Invoice

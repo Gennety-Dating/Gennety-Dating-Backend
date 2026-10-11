@@ -103,7 +103,7 @@ function buildScheduledCaption(lang: Language, active: ActiveMatchResult): Capti
   const { match, partner } = active;
   const header = t(lang, "dateHubHeaderScheduled", { name: partner.firstName ?? "" });
   const base = `${header}\n\n📍 ${match.venueName}\n${match.venueAddress ?? ""}`.trimEnd();
-  return buildDateTimeEntity(base, match.agreedTime!, lang);
+  return buildDateTimeEntity(base, match.agreedTime!, lang, match.timeZone);
 }
 
 /**
