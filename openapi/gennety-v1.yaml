@@ -5585,7 +5585,14 @@ paths:
             Apple rejected the transaction — unknown, revoked, another
             account's (`wrong_owner`: its `appAccountToken` names another user,
             or another account reported it first), or not the venue-change
-            product.
+            product. `code`: `unknown_transaction`, `wrong_bundle`,
+            `unknown_product`, `revoked`, `wrong_owner`. `unknown_product`
+            means this server does not know the product id (a configuration
+            mismatch, not the buyer's fault) — keep the transaction unfinished;
+            every other code is final, so finish it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppStoreRefusal" }
         "503":
           description: >
             App Store verification is unavailable or unconfigured, or an earlier
@@ -7054,36 +7061,35 @@ components:
         never runs a sensitive flow itself — it hands over the same control the
         menu would have shown, so the guarded handler, its confirmation copy and
         its nonces stay the single implementation.
-      oneOf:
-        - type: object
-          required: [kind]
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: >-
+            Open set — a client renders nothing for a kind it does not know (a
+            closed enum here would make one new kind fail the whole reply).
+            Kinds today: `premium_cancel_confirm` (Telegram Stars subscription
+            cancel), `premium_cancel_appstore` (Apple's manage-subscriptions),
+            `entry_point` (carries `entry`).
+        entry:
+          type: object
+          description: Present when `kind` is `entry_point`.
+          required: [label]
           properties:
-            kind: { type: string, enum: [premium_cancel_confirm] }
-        - type: object
-          required: [kind]
-          properties:
-            kind: { type: string, enum: [premium_cancel_appstore] }
-        - type: object
-          required: [kind, entry]
-          properties:
-            kind: { type: string, enum: [entry_point] }
-            entry:
-              type: object
-              required: [label]
-              properties:
-                label:
-                  type: string
-                  description: Already localised server-side; never model-authored
-                callbackData:
-                  type: string
-                  description: An EXISTING product callback; the agent cannot invent one
-                url:
-                  type: string
-                  description: >-
-                    Mini App address, for boards that have no callback at all
-                    (venue change). Exactly one of `callbackData` and `url` is
-                    present, and the server builds both — the model names a
-                    screen, never an address.
+            label:
+              type: string
+              description: Already localised server-side; never model-authored
+            callbackData:
+              type: string
+              description: An EXISTING product callback; the agent cannot invent one
+            url:
+              type: string
+              description: >-
+                Mini App address, for boards that have no callback at all
+                (venue change). Exactly one of `callbackData` and `url` is
+                present, and the server builds both — the model names a
+                screen, never an address.
 
     Language:
       type: string
