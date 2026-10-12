@@ -40,26 +40,25 @@ export interface TicketStrings {
   coverPartnerTitle: string;
   coverPartnerSub: string;
   /**
-   * Why this user's own slot is already settled when they never paid for it
-   * (§3.5b — Premium covers a subscriber's own ticket). Without it a covered
-   * woman opens the card, reads "waiting on them", and is given no account at
-   * all of why hers is done.
+   * Why this user's own slot is already settled when they never paid for it.
+   * Only the grandfathered Premium ticket cover does that since 2026-10-08
+   * (§3.5b — subscribers paid up before Premium stopped covering tickets keep
+   * it until that paid period ends), so this line is drawn only from
+   * `myPremiumActive`, which the server computes from that cover. Without it a
+   * covered woman opens the card, reads "waiting on them", and is given no
+   * account at all of why hers is done.
    */
   premiumCovered: string;
   /**
-   * Shown to a covered MALE on the cover screen. Premium closes his slot and
-   * deliberately not hers, so the one thing he could still misread — that
-   * covering her is included too — is stated where he is about to decide.
+   * Shown to a covered MALE on the cover screen (grandfathered cover only, as
+   * above). The cover closes his slot and deliberately not hers, so the one
+   * thing he could still misread — that covering her is included too — is
+   * stated where he is about to decide.
+   *
+   * The pay-step counterfactual that used to follow ("Your ticket is free with
+   * Premium") was deleted on 2026-10-08 with the benefit it advertised.
    */
   premiumCoverNotIncluded: string;
-  /**
-   * The counterfactual at the pay step: this date would have cost nothing on a
-   * subscription. Says "YOUR ticket", never a bare "free" — Premium covers the
-   * subscriber's own slot and deliberately not their date's, so the venue
-   * board's own wording ("Free with Gennety Premium", where the whole fee does
-   * vanish) would over-promise here.
-   */
-  premiumWouldCover: string;
   justWait: string;
   /**
    * The way back from the waiting screen after he declined the cover offer.
@@ -140,7 +139,6 @@ const en: TicketStrings = {
   coverPartnerSub: "Get a ticket for {name} too?",
   premiumCovered: "Premium covers your ticket ✨",
   premiumCoverNotIncluded: "Premium covers only you. {name}'s ticket is separate.",
-  premiumWouldCover: "Your ticket is free with Premium",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
   balanceLabel: "Balance",
@@ -184,7 +182,6 @@ const ru: TicketStrings = {
   coverPartnerSub: "Возьмёшь билет и для {name}?",
   premiumCovered: "Твой билет покрыт Premium ✨",
   premiumCoverNotIncluded: "Premium — только за тебя. Билет для {name} — отдельно.",
-  premiumWouldCover: "С Premium твой билет бесплатный",
   justWait: "Пусть возьмёт свой",
   coverReconsider: "Всё-таки оплатить за пару",
   balanceLabel: "Баланс",
@@ -231,7 +228,6 @@ const uk: TicketStrings = {
   coverPartnerSub: "Візьмеш квиток і для {name}?",
   premiumCovered: "Твій квиток покритий Premium ✨",
   premiumCoverNotIncluded: "Premium — лише за тебе. Квиток для {name} — окремо.",
-  premiumWouldCover: "З Premium твій квиток безкоштовний",
   justWait: "Нехай візьме свій",
   coverReconsider: "Все-таки сплатити за пару",
   balanceLabel: "Баланс",
@@ -275,7 +271,6 @@ const de: TicketStrings = {
   coverPartnerSub: "Holst du auch ein Ticket für {name}?",
   premiumCovered: "Premium deckt dein Ticket ✨",
   premiumCoverNotIncluded: "Premium gilt nur für dich. Das Ticket für {name} kommt extra.",
-  premiumWouldCover: "Mit Premium ist dein Ticket frei",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
   balanceLabel: "Guthaben",
@@ -319,7 +314,6 @@ const pl: TicketStrings = {
   coverPartnerSub: "Weźmiesz bilet też dla {name}?",
   premiumCovered: "Premium pokrywa twój bilet ✨",
   premiumCoverNotIncluded: "Premium — tylko za ciebie. Bilet dla {name} — osobno.",
-  premiumWouldCover: "Z Premium twój bilet jest darmowy",
   justWait: "Niech weźmie swój",
   coverReconsider: "Jednak zapłać za swoją randkę",
   balanceLabel: "Saldo",

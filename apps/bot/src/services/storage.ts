@@ -464,6 +464,68 @@ export async function createChatImageSignedUrls(
   return createSignedUrls(env.SUPABASE_CHAT_BUCKET, paths, expiresInSeconds);
 }
 
+/** Formats a wishlist photo may be stored as — `fetchPublicImage` admits no others. */
+const WISHLIST_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/**
+ * Store a wishlist product photo copied from a shop page (Date Wishlist).
+ *
+ * Lives in the CHAT bucket — private, already erased by prefix on account
+ * deletion (`removeUserStorage` lists `{userId}/`) — under
+ * `{userId}/w{timestamp}-{random}.{ext}`. The `w` keeps the key out of
+ * `storageKeyWrittenAt`'s `{timestamp}.{ext}` shape, so nothing that dates
+ * chat or selfie objects by key ever mistakes a wishlist photo for one; the
+ * random tail is because several candidates are confirmed at once and two
+ * copies landing in the same millisecond would otherwise upsert over each
+ * other. Throws when Storage is not configured or the upload fails.
+ */
+export async function uploadWishlistImage(
+  userId: string,
+  buffer: Buffer,
+  mime: string | null,
+): Promise<UploadResult> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase Storage not configured");
+  }
+  const safeMime = normalizeImageMime(mime);
+  if (!WISHLIST_IMAGE_MIME.has(safeMime)) {
+    throw new Error(`Unsupported wishlist image type: ${safeMime}`);
+  }
+  const ext = safeMime === "image/png" ? "png" : safeMime === "image/webp" ? "webp" : "jpg";
+  const path = `${userId}/w${Date.now()}-${randomBytes(3).toString("hex")}.${ext}`;
+  if (!isSafeStorageObjectPath(path)) throw new Error("Unsafe wishlist image path");
+
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_CHAT_BUCKET}/${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": safeMime,
+      "x-upsert": "true",
+    },
+    body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Supabase upload failed: ${res.status} ${body}`);
+  }
+  return { path };
+}
+
+/**
+ * Signed URLs for a page of wishlist photos in one Storage request. Index for
+ * index with `paths`; `null` where a path is unsafe or the object is gone.
+ * The default TTL covers a cheat sheet left open for an hour.
+ */
+export async function createWishlistImageSignedUrls(
+  paths: readonly string[],
+  expiresInSeconds: number = 3600,
+): Promise<Array<string | null>> {
+  return createSignedUrls(env.SUPABASE_CHAT_BUCKET, paths, expiresInSeconds);
+}
+
 /**
  * Upload a native-client voice prompt.
  *

@@ -214,6 +214,7 @@ describe("runtime configuration", () => {
       APPSTORE_KEY_ID: "AKEY",
       APPSTORE_ISSUER_ID: "issuer",
       PRIME_TIME_APPSTORE_ENABLED: false,
+      WISHLIST_APPSTORE_ENABLED: false,
       PROFILE_MUSIC_ENABLED: true,
       SPOTIFY_CLIENT_ID: "spotify-id",
       SPOTIFY_CLIENT_SECRET: "spotify-secret",

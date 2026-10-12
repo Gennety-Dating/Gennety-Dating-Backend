@@ -1,4 +1,10 @@
 import { Composer } from "grammy";
+import {
+  MORNING_AFTER_CALLBACK,
+  WISHLIST_OPEN_CALLBACK,
+  handleMorningAfterCallback,
+  handleWishlistOpenCallback,
+} from "./morning-after.js";
 import type { BotContext } from "../../session.js";
 import {
   handleEmergencyStart,
@@ -69,6 +75,17 @@ dateRouter.use(async (ctx, next) => {
   }
   if (data?.startsWith("emerg:abort:")) {
     await handleEmergencyAbort(ctx);
+    return;
+  }
+
+  // «The Morning After» (2026-10-08): the two buttons at 11:00 the day after,
+  // and opening an already-paid / Premium cheat sheet.
+  if (data && MORNING_AFTER_CALLBACK.test(data)) {
+    await handleMorningAfterCallback(ctx);
+    return;
+  }
+  if (data && WISHLIST_OPEN_CALLBACK.test(data)) {
+    await handleWishlistOpenCallback(ctx);
     return;
   }
 

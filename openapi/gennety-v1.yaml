@@ -1602,7 +1602,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [matchId, chemistry, wantsSecondDate]
+              required: [matchId, chemistry]
               properties:
                 matchId: { type: string, format: uuid }
                 chemistry:
@@ -1616,6 +1616,10 @@ paths:
                 wantsSecondDate:
                   type: string
                   enum: [yes, maybe, no]
+                  description: |
+                    Required unless the pending view said `askSecondDate:
+                    false` — then omit it and the morning answer is used. Omitted
+                    with no morning answer → 400 `bad-second-date`.
                 text:
                   type: string
                   maxLength: 1000
@@ -1696,6 +1700,415 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/wishlist:
+    get:
+      tags: [me]
+      operationId: getWishlist
+      summary: The caller's Date Wishlist, the catalog and suggestions
+      description: |
+        Decision 2026-10-08. Everything the wishlist session on Today draws:
+        whether the list is shown, the confirmed items, the catalog of popular ideas
+        (suggested ones first, `suggested: true`) and the caller's own
+        frequent places as quick adds (only when their frequent-places opt-in
+        is on). Never shown to anybody else from here — a match sees the list
+        only through `/v1/me/after-date/{matchId}` after mutual interest.
+      responses:
+        "200":
+          description: The wishlist
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnWishlist" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/me/wishlist/visibility:
+    put:
+      tags: [me]
+      operationId: setWishlistVisibility
+      summary: «Не показывать мой список» — hide the list from every match, or show it again
+      description: |
+        Decision 2026-10-08 (second entry). Showing the list to a mutual match
+        is what the feature is for (Art. 6(1)(b), Privacy §12.1), so there is
+        no consent act — a list is shown unless its owner hid it here. Hiding
+        takes effect for every match at once and covers the taste hint
+        (favourite flowers) too; the items are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shown]
+              properties:
+                shown: { type: boolean }
+      responses:
+        "200":
+          description: The switch as stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shown]
+                properties:
+                  shown: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/me/wishlist/parse:
+    post:
+      tags: [me]
+      operationId: parseWishlistPaste
+      summary: Split a pasted list into look-up entries
+      description: |
+        A ready list pasted as text («Духи Chloé, Chanel, Louboutin») or links.
+        No network: the client then looks up each entry (`/lookup`) in
+        parallel and animates the search per card. `mode` lets the agent say
+        "Просматриваю ссылки…" for links.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+      responses:
+        "200":
+          description: Entries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistPasteResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/me/wishlist/voice:
+    post:
+      tags: [me]
+      operationId: wishlistFromVoice
+      summary: A voice note → transcript + look-up entries (multipart field `file`)
+      description: |
+        Instead of typing («записать голосовое, чтобы долго не печатать»):
+        Whisper, then the concrete ideas are lifted out of the free talk
+        (brand names as a shop writes them, a category hint each). The client
+        looks each entry up (`/lookup`) exactly as after `/parse`. Neither the
+        audio nor the transcript is stored. 422 when nothing could be heard.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: What was heard and the entries in it (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistVoiceResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: Recording too large
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Transcription failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/me/wishlist/photos:
+    post:
+      tags: [me]
+      operationId: wishlistFromScreenshots
+      summary: Up to 6 screenshots → look-up entries (repeated multipart part `images`)
+      description: |
+        Screenshots of wanted things from the photo library. Read in ONE vision
+        call that names each item as a search query (brand + product + variant
+        as printed) or as the product link when its address is readable on the
+        image. The images are never stored. `unreadable` counts images that
+        showed nothing to look up. JPEG / PNG / WebP, ≤ 8 MB each.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [images]
+              properties:
+                images:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "200":
+          description: Entries read off the screenshots (possibly none)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistScreenshotsResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: An image is too large
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: Image reading unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/wishlist/lookup:
+    post:
+      tags: [me]
+      operationId: lookupWishlistEntry
+      summary: Find real products for one entry (web search or a link)
+      description: |
+        `query`: the agent searches the web (OpenAI web search) for up to 3
+        real products; `url`: the page is read by its OpenGraph / JSON-LD
+        tags. Answers in up to ~20 s. Nothing found is an ordinary answer:
+        `candidates: []` with `reason` — offer to keep it in the person's own
+        words (`source: text`). 429 past the daily look-up budget.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, value]
+              properties:
+                kind: { type: string, enum: [query, url] }
+                value: { type: string, maxLength: 500 }
+                category: { $ref: "#/components/schemas/WishlistCategory" }
+      responses:
+        "200":
+          description: Candidates for confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidates]
+                properties:
+                  candidates:
+                    type: array
+                    items: { $ref: "#/components/schemas/WishlistCandidate" }
+                  reason: { type: string, enum: [not_found, timeout, blocked] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: Daily look-up budget spent }
+        "503": { description: Search unavailable }
+
+  /v1/me/wishlist/items:
+    post:
+      tags: [me]
+      operationId: addWishlistItems
+      summary: Save confirmed cards to the wishlist
+      description: |
+        Up to 12 per call, 30 in total. The card's remote photo is copied into
+        our storage; the returned items carry signed photo URLs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 12
+                  items: { $ref: "#/components/schemas/WishlistItemInput" }
+      responses:
+        "200":
+          description: The whole list after the add
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/WishlistItem" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`too-many`" }
+
+  /v1/me/wishlist/items/{itemId}:
+    delete:
+      tags: [me]
+      operationId: deleteWishlistItem
+      summary: Remove one item
+      parameters:
+        - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Removed, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/me/wishlist/session:
+    post:
+      tags: [me]
+      operationId: resolveWishlistSession
+      summary: Close the wishlist session on Today («Готово» / «Позже»)
+      description: |
+        `done` needs at least one item (409 `empty`) and the session is never
+        offered again; `later` releases the slot and lets it come back in a
+        later Profiler window after ~3 days (409 `not-open` when no session
+        is open).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [done, later] }
+      responses:
+        "200": { description: Closed, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`empty` or `not-open`" }
+
+  /v1/me/after-date:
+    get:
+      tags: [me]
+      operationId: getAfterDate
+      summary: «The Morning After» check owed now, and live mutual offers
+      description: |
+        Decision 2026-10-08. `check` — the two-button question the morning
+        after a date (sent at 11:00 local with push `date.morning_after`),
+        until answered or 48 h after the date. `offers` — mutual matches of
+        the last 7 days (push `date.mutual`): the partner's favourite flowers
+        and the Date Wishlist cheat sheet. Empty while `features.morningAfter`
+        is off. Double-blind: nothing here ever reveals the partner's answer
+        unless both said "great".
+      responses:
+        "200":
+          description: State
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AfterDateState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/after-date/answer:
+    post:
+      tags: [me]
+      operationId: answerMorningAfter
+      summary: Answer the morning check (🔥 great / 🤷 pass)
+      description: |
+        One-shot; the same answer again is idempotent, a different one is
+        409. When this answer makes it mutual, `mutual: true` and `offer`
+        come back at once and both sides are told on their own rails.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId, answer]
+              properties:
+                matchId: { type: string, format: uuid }
+                answer: { type: string, enum: [great, pass] }
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MorningAfterAnswerResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`already-answered`" }
+
+  /v1/me/after-date/{matchId}:
+    get:
+      tags: [me]
+      operationId: getMutualOffer
+      summary: One mutual offer — flowers hint and the Date Wishlist cheat sheet
+      description: |
+        404 unless the pair is mutual and the caller is on it (or a block /
+        report stands between them). The sheet shows the free teaser (about a
+        tenth, preferring a place / drink / flowers) until opened; opened
+        sheets stay open. Premium opens it for free.
+      parameters:
+        - { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The offer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [offer]
+                properties:
+                  offer: { $ref: "#/components/schemas/MutualOffer" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/me/after-date/{matchId}/wishlist/appstore:
+    post:
+      tags: [me]
+      operationId: reportWishlistAppStoreTransaction
+      summary: Report the StoreKit purchase that opens the cheat sheet
+      description: |
+        Buy `wishlistProduct` from `GET /v1/app/config`, then post the signed
+        transaction. Finish the StoreKit transaction after a 200 or 409
+        (`unclaimed` — Apple took the money but the sheet could no longer be
+        opened; the founder was told with the transaction id). 404 while the
+        rail is off.
+      parameters:
+        - { name: matchId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jws]
+              properties:
+                jws: { type: string, maxLength: 20000 }
+      responses:
+        "200":
+          description: Opened
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  offer:
+                    # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+                    # shape silently. The server sends `null`; the client decodes it as absent.
+                    $ref: "#/components/schemas/MutualOffer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`unclaimed`" }
+        "422": { description: Transaction rejected }
+        "503": { description: App Store unavailable or not configured }
 
   /v1/me/profiler:
     get:
@@ -6997,6 +7410,18 @@ components:
                 Vibe Check in the Shop. False → show no "Vibe Check" button;
                 `GET /v1/me/style-picks` answers 204 anyway. Absent on an older
                 server — treat as false.
+            morningAfter:
+              type: boolean
+              description: >-
+                «The Morning After» (2026-10-08): the two-button check the day
+                after a date and the mutual offer. False → `/v1/me/after-date`
+                answers empty. Absent on an older server — treat as false.
+            wishlist:
+              type: boolean
+              description: >-
+                Date Wishlist (2026-10-08): the wishlist session on Today and the
+                cheat sheet in the mutual offer. False → `/v1/me/wishlist*`
+                answers 404 `feature-disabled`. Absent → false.
         venueChangeProduct:
           type: [string, "null"]
           description: >-
@@ -7011,6 +7436,12 @@ components:
             served for the same reason as `venueChangeProduct`. Matches the full
             App Store id or its last dot-segment. Null whenever
             `features.primeTimePass` is false.
+        wishlistProduct:
+          type: [string, "null"]
+          description: >-
+            The StoreKit consumable ($2.99 tier) that opens one Date Wishlist
+            cheat sheet. Null while the App Store rail for it is off — then the
+            sheet can be opened only with Premium (or in Telegram for Stars).
         ticketProducts:
           type: array
           description: |
@@ -7452,6 +7883,13 @@ components:
       required: [matchId, partnerFirstName, venueName, agreedTime, submitted, maxTextLength, serverNow]
       properties:
         matchId: { type: string, format: uuid }
+        askSecondDate:
+          type: boolean
+          description: |
+            False when the caller already answered «The Morning After» on this
+            date (decision 2026-10-08): hide the "second date?" control and
+            omit `wantsSecondDate` — the server derives it (great → yes,
+            pass → no). Absent on an older server — treat as true.
         partnerFirstName: { type: [string, "null"] }
         venueName: { type: [string, "null"] }
         agreedTime: { type: string, format: date-time }
@@ -7481,6 +7919,241 @@ components:
           format: date-time
           description: Server clock, for the same skew correction the countdowns use.
 
+    WishlistCategory:
+      type: string
+      enum: [place, drink, flowers, perfume, beauty, fashion, jewelry, gift, experience]
+
+    WishlistPriceBand:
+      type: string
+      description: A range, never an exact price.
+      enum: ["€", "€€", "€€€", "€€€€"]
+
+    WishlistItem:
+      type: object
+      required: [id, category, title, brand, note, image, imageUrl, productUrl, source]
+      properties:
+        id: { type: string, format: uuid }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        note: { type: [string, "null"], description: "The person's own words about it" }
+        image:
+          type: [string, "null"]
+          description: Bundled illustration of a saved catalog idea (same name as WishlistCatalogItem.image), from its catalog key
+        imageUrl: { type: [string, "null"], description: Signed URL of our stored copy (24 h) }
+        productUrl: { type: [string, "null"] }
+        priceBand:
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistPriceBand"
+        source: { type: string, enum: [catalog, search, link, text] }
+
+    WishlistItemInput:
+      type: object
+      required: [category, title, source]
+      properties:
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        title: { type: string, maxLength: 120 }
+        brand: { type: string, maxLength: 60 }
+        note: { type: string, maxLength: 200 }
+        imageUrl: { type: string, description: The candidate's remote https image; copied server-side }
+        productUrl: { type: string }
+        priceBand: { $ref: "#/components/schemas/WishlistPriceBand" }
+        source: { type: string, enum: [catalog, search, link, text] }
+        catalogKey: { type: string }
+
+    WishlistCandidate:
+      type: object
+      required: [candidateId, title, brand, category, productUrl, imageUrl, description, source]
+      properties:
+        candidateId: { type: string }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        productUrl: { type: [string, "null"] }
+        imageUrl: { type: [string, "null"], description: Remote shop image for the confirmation card }
+        priceBand:
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistPriceBand"
+        description: { type: [string, "null"] }
+        source: { type: string, enum: [search, link, catalog] }
+        catalogKey: { type: string }
+
+    WishlistCatalogItem:
+      type: object
+      required: [key, category, title, brand, priceBand, image, imageUrl, productUrl, suggested]
+      properties:
+        key: { type: string }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        priceBand: { $ref: "#/components/schemas/WishlistPriceBand" }
+        image: { type: [string, "null"], description: Bundled asset key for generic ideas }
+        imageUrl: { type: [string, "null"], description: "Resolved product photo for brand items, when known" }
+        productUrl: { type: [string, "null"] }
+        suggested: { type: boolean, description: Picked for this person by the recommendation pass }
+
+    OwnWishlist:
+      type: object
+      required: [shown, items, maxItems, sessionOpen, done, catalog, suggestedPlaces]
+      properties:
+        shown:
+          type: boolean
+          description: False once the owner hid the list from every match (`PUT /v1/me/wishlist/visibility`).
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistItem" }
+        maxItems: { type: integer }
+        sessionOpen: { type: boolean }
+        done: { type: boolean }
+        catalog:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistCatalogItem" }
+        suggestedPlaces:
+          type: array
+          items:
+            type: object
+            required: [placeId, title]
+            properties:
+              placeId: { type: string }
+              title: { type: string }
+
+    WishlistPasteEntry:
+      type: object
+      description: |
+        One look-up to run. `category` is a hint to pass on to `/lookup`: set
+        on ideas heard in a voice note or read off a screenshot, absent on a
+        pasted line.
+      required: [id, kind, value]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [url, query] }
+        value: { type: string }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+
+    WishlistPasteResult:
+      type: object
+      required: [mode, entries]
+      properties:
+        mode: { type: string, enum: [links, text, mixed] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+
+    WishlistVoiceResult:
+      type: object
+      required: [transcript, mode, entries]
+      properties:
+        transcript: { type: string }
+        mode: { type: string, enum: [links, text, mixed] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+
+    WishlistScreenshotsResult:
+      type: object
+      required: [mode, entries, unreadable]
+      properties:
+        mode: { type: string, enum: [links, text, mixed] }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistPasteEntry" }
+        unreadable: { type: integer, minimum: 0 }
+
+    WishlistSheet:
+      type: object
+      required: [total, unlocked, items, lockedCount, lockedLabel, priceStars, appStoreProductId, premiumIncluded, ageNote]
+      properties:
+        total: { type: integer }
+        unlocked: { type: boolean }
+        items:
+          type: array
+          description: Every item when unlocked; otherwise only the free teaser.
+          items: { $ref: "#/components/schemas/WishlistItem" }
+        lockedCount: { type: integer }
+        lockedLabel: { type: [string, "null"], description: "«Ещё 5 позиций», localised" }
+        priceStars: { type: integer }
+        appStoreProductId: { type: [string, "null"] }
+        premiumIncluded: { type: boolean }
+        ageNote:
+          type: [string, "null"]
+          description: |
+            «Список обновлялся 52 дня назад — что-то могло устареть.», localised;
+            null while the owner's last change is under 45 days old. Sent
+            before the purchase too, so the viewer knows before paying.
+
+    MutualOffer:
+      type: object
+      required: [matchId, mutualAt, partner, title, body, timing, gift, flowersHint, wishlistLine]
+      properties:
+        matchId: { type: string, format: uuid }
+        mutualAt: { type: string, format: date-time }
+        partner:
+          type: object
+          required: [firstName, gender, photoUrl]
+          properties:
+            firstName: { type: [string, "null"] }
+            gender: { type: [string, "null"] }
+            photoUrl: { type: [string, "null"] }
+        title: { type: string }
+        body: { type: string }
+        timing: { type: string, description: Research-backed timing line (next-morning message) }
+        gift: { type: string, description: Research-backed gesture line }
+        flowersHint: { type: [string, "null"] }
+        wishlistLine: { type: [string, "null"] }
+        wishlist:
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/WishlistSheet"
+
+    MorningAfterCheck:
+      type: object
+      required: [matchId, partnerFirstName, agreedTime, question, blindNote, great, pass]
+      properties:
+        matchId: { type: string, format: uuid }
+        partnerFirstName: { type: [string, "null"] }
+        partnerPhotoUrl:
+          type: [string, "null"]
+          format: uri
+          description: The partner's first photo, signed for an hour; null without a photo.
+        venueName: { type: [string, "null"], description: Where the date was }
+        agreedTime: { type: string, format: date-time }
+        question: { type: string }
+        blindNote:
+          type: string
+          description: The double-blind promise — the partner learns the answer only if it is mutual.
+        great:
+          type: string
+          description: Label of the "great" button, without a mark (Telegram adds 🔥 itself)
+        pass:
+          type: string
+          description: Label of the "pass" button, without a mark (Telegram adds 🤷 itself)
+
+    AfterDateState:
+      type: object
+      required: [offers]
+      properties:
+        check:
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/MorningAfterCheck"
+        offers:
+          type: array
+          items: { $ref: "#/components/schemas/MutualOffer" }
+
+    MorningAfterAnswerResponse:
+      type: object
+      required: [answer, mutual, thanks]
+      properties:
+        answer: { type: string, enum: [great, pass] }
+        mutual: { type: boolean }
+        thanks: { type: string }
+        offer:
+          # Optional rather than `oneOf: [$ref, null]`: swift-openapi-generator drops that
+          # shape silently. The server sends `null`; the client decodes it as absent.
+          $ref: "#/components/schemas/MutualOffer"
+
     ProfilerBatch:
       type: object
       description: The current Profiler question for the native app. Absent `question` = nothing pending right now.
@@ -7500,6 +8173,18 @@ components:
             `done` and the live batch is untouched (decision 2026-10-07).
           items:
             $ref: '#/components/schemas/ProfilerQuestion'
+        wishlist:
+          type: object
+          required: [open]
+          description: |
+            Date Wishlist (decision 2026-10-08): this Profiler slot belongs to
+            the agent that builds the caller's wishlist, not to a batch. Open
+            the wishlist session on Today (agent on top, cards in the middle,
+            search field at the bottom — `GET /v1/me/wishlist`) instead of a
+            question. It stays until closed with `POST /v1/me/wishlist/session`.
+            Never present together with `question`. Absent = no session.
+          properties:
+            open: { type: boolean, enum: [true] }
 
     ProfilerQuestion:
       type: object
@@ -7948,16 +8633,25 @@ components:
         myPremiumActive:
           type: boolean
           description: |
-            An active Gennety Premium subscription covers this caller's OWN
-            slot, so it costs them nothing — the server has already settled it.
-            Render the "covered by Premium" plate from this.
+            Premium covers this caller's OWN slot, so it costs them nothing —
+            the server has already settled it. Render the "covered by Premium"
+            plate from this.
 
-            It states the subscription, not the slot: nothing on the row records
-            HOW a slot was settled. That is what keeps it honest when a
-            subscription lapses after the fact — the flag goes false, the slot
-            stays settled (a paid slot is never revoked), and the plate simply
-            stops being drawn. Covering the PARTNER is never free; that is still
-            one ticket's price, and `canCoverPartner` governs it.
+            Despite the name, this is NOT "has an active subscription" any more.
+            Since 2026-10-08 Premium does not cover Date Tickets; the only cover
+            left is the grandfathered one — subscribers who were paid up at that
+            moment keep it until the end of the period they had already paid
+            for (`User.premiumTicketCoverUntil`, never moved by a renewal). The
+            server computes this field from that cover, so a subscriber who
+            bought or renewed after the change reads `false`. The name is kept
+            for wire compatibility.
+
+            It states the cover, not the slot: nothing on the row records HOW a
+            slot was settled. That is what keeps it honest when the cover ends
+            after the fact — the flag goes false, the slot stays settled (a paid
+            slot is never revoked), and the plate simply stops being drawn.
+            Covering the PARTNER is never free; that is still one ticket's
+            price, and `canCoverPartner` governs it.
         canCoverPartner:
           type: boolean
           description: |

@@ -37,7 +37,9 @@ export type PurchaseKind =
   /** §3.7b paid venue change. */
   | "venue_change"
   /** Prime Time — one-off pass opening the calendar's evening band for a pair. */
-  | "prime_time";
+  | "prime_time"
+  /** Date Wishlist cheat sheet — one viewer, one mutual match (2026-10-08). */
+  | "wishlist";
 
 /**
  * Where the row came from. Kept alongside `kind` because a reader chasing a
@@ -137,6 +139,8 @@ export function purchaseKindLabel(kind: PurchaseKind): string {
       return "Venue change";
     case "prime_time":
       return "Prime Time";
+    case "wishlist":
+      return "Date Wishlist";
   }
 }
 

@@ -220,9 +220,10 @@ export function App(): ReactElement {
           </p>
         </header>
 
-        {/* What tickets are FOR once dates stop costing them (§3.5b). Not
-            "you have Premium" — the subscriber knows that; the thing they
-            cannot know is that the store still has a job. Shown before the
+        {/* What tickets are FOR while the grandfathered Premium cover still
+            pays for their own dates (§3.5b; only a period paid before
+            2026-10-08 does). Not "you have Premium" — the subscriber knows
+            that; the thing they cannot know is that the store still has a job. Shown before the
             bundles so it frames them, and never on the post-purchase screen,
             where the receipt is the message. */}
         {premiumActive && !bought && <p className="store-premium-note">{s.premiumNote}</p>}

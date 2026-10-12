@@ -26,7 +26,7 @@ import {
   discountedCents,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
-import { isPremiumHeadActive } from "../../services/premium.js";
+import { isPremiumTicketCoverActive } from "../../services/premium.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
@@ -81,10 +81,17 @@ interface TicketUser {
   ticketDiscountPct: number;
   ticketDiscountExpiresAt: Date | null;
   ticketDiscountConsumedAt: Date | null;
-  /** Gennety Premium head (§3.8). An active subscription settles this user's
-   *  OWN ticket slot for free — see `settlePremiumSlots`. Read straight off the
-   *  loaded row so no surface needs a second query to decide. */
+  /** Gennety Premium head (§3.8). On its own it settles nothing here since
+   *  2026-10-08 — it only bounds the grandfathered cover below (a refunded
+   *  period must not keep paying for dates). */
   premiumUntil: Date | null;
+  /** The grandfathered ticket cover (decision 2026-10-08): set only for
+   *  subscribers who were paid up when Premium stopped covering tickets, to the
+   *  end of that already-paid period, and never moved by a renewal. While it is
+   *  in the future it settles this user's OWN slot for free — see
+   *  `settlePremiumSlots`. Read straight off the loaded row so no surface needs
+   *  a second query to decide. */
+  premiumTicketCoverUntil: Date | null;
   /** Ordered static profile photos (Telegram file_id / Supabase path). Used to
    *  surface the first photo as an avatar in the ticket Mini App. */
   profile: { photos: string[] } | null;
@@ -126,8 +133,8 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
-  userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
+  userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, premiumTicketCoverUntil: true, profile: { select: { photos: true } } } },
+  userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, premiumTicketCoverUntil: true, profile: { select: { photos: true } } } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -191,34 +198,27 @@ export interface TicketStateView {
   /** Relative proxy path to the partner's first profile photo (null if none). */
   partnerPhotoUrl: string | null;
   /**
-   * The actor holds an active Gennety Premium subscription RIGHT NOW (§3.8) —
-   * i.e. their own slot is covered by it and costs nothing.
+   * Premium covers the actor's OWN ticket RIGHT NOW — i.e. their own slot is
+   * covered by it and costs nothing. The name is kept for wire compatibility;
+   * since 2026-10-08 it no longer means "has an active subscription": Premium
+   * stopped covering tickets, and only the grandfathered cover
+   * (`premiumTicketCoverUntil`, the end of a period paid before the change)
+   * makes it true. A subscriber who bought or renewed after that reads `false`.
    *
-   * Deliberately a statement about the subscription rather than about the slot,
+   * Deliberately a statement about the cover rather than about the slot,
    * because nothing on the row records HOW a slot was settled and no column was
    * added for it. That makes it honest by construction in the one case that
-   * matters: a subscription which lapsed after the slot was claimed reads
-   * `false` here, the slot stays settled (§3.5b — a paid slot is never revoked),
-   * and the client simply renders no "covered by Premium" plate rather than a
-   * claim the product can no longer stand behind.
+   * matters: a cover which ended after the slot was claimed reads `false` here,
+   * the slot stays settled (§3.5b — a paid slot is never revoked), and the
+   * client simply renders no "covered by Premium" plate rather than a claim the
+   * product can no longer stand behind.
+   *
+   * The pay-step counterfactual that used to sit beside it
+   * (`premiumWouldCoverMe`, "your ticket is free with Premium") was removed on
+   * 2026-10-08 with the benefit it advertised; an older Mini App bundle reads
+   * the missing field as `false` and draws nothing.
    */
   myPremiumActive: boolean;
-  /**
-   * The actor is about to give something up for their OWN slot and a
-   * subscription would have covered it — i.e. the in-flow counterfactual is
-   * true for them right now (§3.5b / §3.8).
-   *
-   * Gated on `PREMIUM_FEATURE_ENABLED`, unlike `myPremiumActive` above, and the
-   * split is the point: that field reports an entitlement someone already paid
-   * for, which the flag may not revoke, while this one opens a NEW purchase
-   * surface, which is exactly what the flag exists to close.
-   *
-   * It says nothing about the PARTNER's slot, because Premium does not cover
-   * that (§3.5b). The client must therefore never render it on the cover
-   * screen: there the money buys her ticket, and "free with Premium" would be
-   * a straightforwardly false claim about the very button under it.
-   */
-  premiumWouldCoverMe: boolean;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -263,8 +263,7 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     // states that an entitlement a user already paid for stays valid whatever
     // the flag says, and the flag gates new purchase surfaces instead. Gating
     // here would strip a benefit from someone still inside a paid period.
-    myPremiumActive: isPremiumHeadActive(me),
-    premiumWouldCoverMe: env.PREMIUM_FEATURE_ENABLED && !isPremiumHeadActive(me),
+    myPremiumActive: isPremiumTicketCoverActive(me),
   };
 }
 
@@ -284,17 +283,17 @@ export async function getTicketState(
   const side = sideForTelegramId(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
 
-  // Self-healing for a subscription bought AFTER the gate opened — the case the
-  // counterfactual upsell on this very screen is designed to produce.
+  // Self-healing for a grandfathered cover that the offer did not settle — a
+  // subscription bought mid-gate just before the 2026-10-08 change and not
+  // polled since, or an offer whose own settle lost a race. Since that date a
+  // NEW subscription covers no ticket, so this never fires for one; it only
+  // finishes what the grandfathered cover already promised.
   //
-  // Doing it here rather than hooking premium activation is deliberate: Premium
-  // is granted through FOUR rails (Telegram Stars, App Store, and the referral
-  // and promo comp grants via `grantComplimentaryPremiumMonths`), and a hook on
-  // each is four places to forget. This screen is polled, so a settle lands
-  // within seconds whichever rail was used. The guard reads the row already in
-  // hand, so an ordinary poll costs no extra query, and the claim itself is the
-  // same CAS as everywhere else — a read racing `sendTicketOffer`, or two polls
-  // racing each other, claim zero slots rather than double-settling.
+  // Doing it on the polled read rather than at each place a gate is armed
+  // keeps it to one place. The guard reads the row already in hand, so an
+  // ordinary poll costs no extra query, and the claim itself is the same CAS as
+  // everywhere else — a read racing `sendTicketOffer`, or two polls racing each
+  // other, claim zero slots rather than double-settling.
   if (api && premiumCanSettle(match, side)) {
     const fresh = await settlePremiumOnRead(api, matchId);
     if (fresh) return { ok: true, state: buildTicketStateView(fresh, side) };
@@ -303,14 +302,18 @@ export async function getTicketState(
   return { ok: true, state: buildTicketStateView(match, side) };
 }
 
-/** Cheap pre-check on an already-loaded row: could a premium settle do anything? */
+/**
+ * Cheap pre-check on an already-loaded row: could a premium settle do anything?
+ * Only the grandfathered cover counts — an active subscription alone settles
+ * nothing since 2026-10-08.
+ */
 function premiumCanSettle(match: TicketMatch, side: Side): boolean {
   if (match.status !== "negotiating") return false;
   if (!OPEN_GATE_STATUSES.includes(match.ticketStatus as (typeof OPEN_GATE_STATUSES)[number])) {
     return false;
   }
   if ((side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null) return false;
-  return isPremiumHeadActive(selfUser(match, side));
+  return isPremiumTicketCoverActive(selfUser(match, side));
 }
 
 /**
@@ -321,7 +324,7 @@ function premiumCanSettle(match: TicketMatch, side: Side): boolean {
  * two callers need opposite ordering: `sendTicketOffer` must put the mutual
  * reveal on screen BEFORE the Calendar, while a read has no such card to wait
  * for — the ticket card went out long ago. Without it, a pair whose second slot
- * is closed by a late subscription would sit fully paid in `partial` until the
+ * is closed by a late settle would sit fully paid in `partial` until the
  * hourly expiry sweep refunded them out of a date they had already secured.
  */
 async function settlePremiumOnRead(
@@ -447,22 +450,28 @@ function buildTicketKeyboard(
   return { inline_keyboard: kb.inline_keyboard };
 }
 
-/** `TicketLedger.reason` for a slot covered by an active subscription. */
+/** `TicketLedger.reason` for a slot covered by the (grandfathered) Premium ticket cover. */
 const PREMIUM_GATE_REASON = "premium_gate";
 
 /**
- * Settle the ticket slot of every side holding an active Gennety Premium
- * subscription (PRODUCT_SPEC §3.5b / §3.8 — "unlimited dates"). Returns the
- * sides this call actually claimed, so the caller can tell a fresh settle from
- * an idempotent re-run.
+ * Settle the ticket slot of every side whose grandfathered Premium ticket cover
+ * is still running (PRODUCT_SPEC §3.5b / §3.8). Returns the sides this call
+ * actually claimed, so the caller can tell a fresh settle from an idempotent
+ * re-run.
+ *
+ * Premium itself stopped covering tickets on 2026-10-08 ("за билет на свидание
+ * платят всегда"). What is left is the cover of subscribers who were paid up
+ * at that moment, until the end of the period they had already paid for —
+ * `premiumTicketCoverUntil`, which no renewal moves. An active subscription
+ * without it settles nothing here (`isPremiumTicketCoverActive`).
  *
  * Three properties are load-bearing:
  *
- * 1. **It spends nothing.** Premium does NOT go through `useTicketFromBalance`:
- *    if a subscription silently drained the wallet, a subscriber would be
- *    paying for the very thing the subscription promises, which is the exact
- *    opposite of unlimited. Bought tickets are left alone — under the founder's
- *    decision they remain the way a man covers his date's slot.
+ * 1. **It spends nothing.** The cover does NOT go through
+ *    `useTicketFromBalance`: if it silently drained the wallet, a grandfathered
+ *    subscriber would be paying for the very thing their paid period promised.
+ *    Bought tickets are left alone — they remain the way a man covers his
+ *    date's slot.
  *
  * 2. **It is not `settleTicket`.** That function DMs `ticketGateWaiting` to the
  *    payer and `ticketPeerTookTheirs` ("{name} just grabbed their ticket —
@@ -494,7 +503,7 @@ export async function settlePremiumSlots(matchId: string): Promise<Side[]> {
 
   for (const side of ["A", "B"] as const) {
     const user = side === "A" ? match.userA : match.userB;
-    if (!isPremiumHeadActive(user, now)) continue;
+    if (!isPremiumTicketCoverActive(user, now)) continue;
     const paidField = side === "A" ? "ticketPaidA" : "ticketPaidB";
     if ((side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null) continue;
 
@@ -513,9 +522,9 @@ export async function settlePremiumSlots(matchId: string): Promise<Side[]> {
     // Zero-delta audit row, mirroring the Stars gate's own `gate_payment`
     // record. Without it the admin purchase view cannot tell "Premium covered
     // this date" from "the gate lapsed and the Calendar opened for free" — and
-    // that is precisely the number that says whether the subscription is paying
-    // for the dates it hands out. Best-effort: an audit write must never cost
-    // someone the date their subscription just paid for.
+    // that is precisely the number that says what the grandfathered cover still
+    // costs. Best-effort: an audit write must never cost someone the date their
+    // paid period just covered.
     await prisma.ticketLedger
       .create({
         data: {
@@ -581,15 +590,16 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
   let match = await loadTicketMatch(matchId);
   if (!match) return;
 
-  // Gennety Premium covers a subscriber's own slot (§3.5b / §3.8). Settled
-  // BEFORE anything is sent, so each side's card opens on the screen that is
-  // actually true for them — a covered woman on "waiting", a covered man on
+  // A grandfathered Premium ticket cover settles that side's own slot (§3.5b /
+  // §3.8 — Premium alone covers no ticket since 2026-10-08). Settled BEFORE
+  // anything is sent, so each side's card opens on the screen that is actually
+  // true for them — a covered woman on "waiting", a covered man on
   // "cover-partner", which is the one screen where he still has a choice.
   //
-  // Guarded on the row already in hand so a pair with no subscription pays for
-  // no extra query at all: the overwhelmingly common path stays exactly the two
+  // Guarded on the row already in hand so a pair with no cover pays for no
+  // extra query at all: the overwhelmingly common path stays exactly the two
   // statements it was before this feature existed.
-  if (isPremiumHeadActive(match.userA) || isPremiumHeadActive(match.userB)) {
+  if (isPremiumTicketCoverActive(match.userA) || isPremiumTicketCoverActive(match.userB)) {
     const claimed = await settlePremiumSlots(matchId);
     if (claimed.length > 0) {
       const fresh = await loadTicketMatch(matchId);
@@ -598,7 +608,7 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
     }
   }
 
-  // Both sides subscribe → the gate is already closed and nobody is being asked
+  // Both sides covered → the gate is already closed and nobody is being asked
   // for anything. The card still goes out, because it is the message that
   // carries the mutual reveal — but as a pure moment, with no keyboard: a
   // payment button pointing at a settled gate is the dead affordance §2.1

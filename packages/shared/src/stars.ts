@@ -276,3 +276,24 @@ export function parseRematchInvoicePayload(
   if (version !== "v1") return null;
   return { version };
 }
+
+/**
+ * Date Wishlist cheat sheet (decision journal 2026-10-08) Star payment
+ * payload: `wish:<matchId>`. One sheet per viewer per match — the payer is the
+ * viewer (`from.id`), so the payload needs only the match. Participant and
+ * mutual-interest checks stay the trust boundary in pre-checkout and settle.
+ */
+export const WISH_INVOICE_PREFIX = "wish:";
+
+export function buildWishInvoicePayload(matchId: string): string {
+  return `${WISH_INVOICE_PREFIX}${matchId}`;
+}
+
+export function parseWishInvoicePayload(
+  payload: string | null | undefined,
+): { matchId: string } | null {
+  if (!payload || !payload.startsWith(WISH_INVOICE_PREFIX)) return null;
+  const matchId = payload.slice(WISH_INVOICE_PREFIX.length);
+  if (!GATE_PAYLOAD_UUID.test(matchId)) return null;
+  return { matchId };
+}

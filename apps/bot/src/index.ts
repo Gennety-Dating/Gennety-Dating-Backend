@@ -49,6 +49,7 @@ import {
 } from "./services/next-batch.js";
 import { reEngagementTick } from "./workers/re-engagement.js";
 import { profilerTick } from "./workers/profiler.js";
+import { wishlistSessionTick } from "./workers/wishlist-session.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
 import { proposalCountdownTick } from "./workers/proposal-countdown.js";
 import { peerWaitShimmerTick } from "./workers/peer-wait-shimmer.js";
@@ -818,6 +819,20 @@ function registerSchedules(): void {
     ),
   );
   console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
+
+  // Date Wishlist session push (2026-10-08): on the Profiler's cadence, a due
+  // batch slot may go to the wishlist agent instead — one push says so. Inert
+  // unless WISHLIST_FEATURE_ENABLED.
+  cron.schedule(
+    PROFILER_CRON_SCHEDULE,
+    guardedTick("wishlist-session", () =>
+      wishlistSessionTick().then((r) => {
+        if (r.opened > 0 || r.warmed > 0) {
+          console.log(`[wishlist-session] opened=${r.opened} warmed=${r.warmed} swept=${r.swept}`);
+        }
+      }),
+    ),
+  );
 
   // Music on the profile: re-read pinned tracks' metadata nightly. The
   // Spotify Terms allow only temporary caching and require what is shown to

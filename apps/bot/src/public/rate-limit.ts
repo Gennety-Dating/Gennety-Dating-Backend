@@ -174,6 +174,17 @@ export const voiceLimiter = make({
   keyGenerator: (req): string => `voice:${req.userId ?? ipKey(req)}`,
 });
 
+/**
+ * Date Wishlist screenshots — 20 sends/hour per user. Each send is one vision
+ * call over up to six images; the look-ups that follow have their own daily
+ * budget (`WISHLIST_LOOKUPS_PER_DAY`).
+ */
+export const wishlistScreenshotsLimiter = make({
+  windowMs: 3_600_000,
+  limit: 20,
+  keyGenerator: (req): string => `wishlist-shots:${req.userId ?? ipKey(req)}`,
+});
+
 /** Text turns that invoke an LLM — 60/hour per authenticated user. */
 export const agentTextLimiter = make({
   windowMs: 3_600_000,

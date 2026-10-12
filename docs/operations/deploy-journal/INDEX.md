@@ -1,7 +1,7 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 238 entries
+# Deploy journal index — 237 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
@@ -11,6 +11,7 @@
 | Deployed | 2026-10-11 | (production `3edf3b15` 2026-10-11) Vibe Check catalog 62 items + `priceEur` + badge `popular` (`feat/vibe-check-shop` landed); needs `pnpm seed-style:import --apply` only when `STYLE_PICKS_ENABLED` turns on; Mini App ticket keeps 3D perspective (`a550608b`) | [pending](./pending.md) |
 | Deployed | 2026-10-11 | Production `3edf3b15` (06:45–06:52 UTC, `deploy-1011-photos.sh`, no migration, no env): venue photos applied to 329 places (1662 rows) + second restart, Mini App ticket perspective, Vibe catalog 62 (flag off); KREDENS CAFE `active=false` in prod and demo DB (5 + 5 rows); demo code not deployed | [pending](./pending.md) |
 | Deployed | 2026-10-09 | Production `dc1e2ccf` (whole main): profile music (Apple Music key on server), Vibe Check code with `STYLE_PICKS_ENABLED` off, bot PNG cards; demo not deployed | [pending](./pending.md) |
+| PENDING | 2026-10-08 | «The Morning After» + Date Wishlist + Premium без покрытия билета: миграция `20261012120000_date_wishlist_morning_after` (additive + stamp `premium_ticket_cover_until`), флаги OFF; ждёт сайта v4.3/v3.1, уведомления подписчиков и слова основателя | [pending](./pending.md) |
 | Deployed | 2026-10-08 | (production `dc1e2ccf` 2026-10-09) Vibe Check (iOS Shop style picks): `GET /v1/me/style-picks` + `/v1/style/out/{itemId}`; 1 additive migration `20261008180000_style_picks`, catalog via `pnpm seed-style:import --apply`; env `STYLE_PICKS_ENABLED` / `STYLE_PICKS_FREQUENT_PLACES_ENABLED` default off — keep off until the privacy policy discloses it | [pending](./pending.md) |
 | Deployed | 2026-10-08 | (production `dc1e2ccf` 2026-10-09) Music on the profile: Apple Music main provider (MusicKit on device, server resolves ids with a MusicKit key), Spotify search only; provider-neutral contract; 1 additive migration BEFORE restart; env `APPLE_MUSIC_KEY_PATH/KEY_ID/TEAM_ID` | [pending](./pending.md) |
 | Deployed | 2026-10-07 | (production `dc1e2ccf` 2026-10-09) Bot PNG cards: date card slogan, venue name and «Gennety» in Gennety Display, venue photo −3°; wish card «Her pick / Your move» without full stops; other cards byte-identical, rematch untouched; production + demo bots (`bd58c865`, `1908ad59`) | [pending](./pending.md) |

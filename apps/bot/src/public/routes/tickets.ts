@@ -12,7 +12,7 @@ import {
   consumeActiveDiscount,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
-import { isPremiumActive } from "../../services/premium.js";
+import { isPremiumTicketCoverActive } from "../../services/premium.js";
 
 /**
  * Ticket store / wallet Mini App endpoints (pre-purchase bundles, not tied to a
@@ -57,13 +57,14 @@ export function createTicketStoreRouter(): Router {
       // Drives the "invite a friend instead" referral cross-promo link, shown
       // client-side only when the wallet is actually empty.
       referralEnabled: env.REFERRAL_FEATURE_ENABLED,
-      // Gennety Premium covers the subscriber's OWN date slots (§3.5b), so the
-      // store stops being the way they get onto a date and becomes the way they
-      // cover their partner's ticket. The plate says that; the bundles stay on
-      // sale, because with covering still priced this is the only place to buy
-      // the ticket it takes — and the welcome gift, referral rewards and famine
-      // discount all keep landing in the same wallet.
-      premiumActive: await isPremiumActive(user.id),
+      // Whether Premium covers the holder's OWN date slots (§3.5b). The name
+      // is kept for wire compatibility, but since 2026-10-08 an active
+      // subscription alone no longer does: only the grandfathered cover
+      // (`premiumTicketCoverUntil`, the end of a period paid before the change)
+      // makes this true. For that holder the store stops being the way they get
+      // onto a date and becomes the way they cover their partner's ticket — the
+      // plate says so; the bundles stay on sale either way.
+      premiumActive: isPremiumTicketCoverActive(user),
     });
   });
 
@@ -203,15 +204,31 @@ async function effectiveBundlePrice(
   return discount ? discountedCents(bundle.priceCents, discount.pct) : bundle.priceCents;
 }
 
-async function resolveUser(
-  telegramId: number,
-): Promise<{ id: string; ticketBalance: number; language: string | null } | null> {
+async function resolveUser(telegramId: number): Promise<{
+  id: string;
+  ticketBalance: number;
+  language: string | null;
+  premiumUntil: Date | null;
+  premiumTicketCoverUntil: Date | null;
+} | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(telegramId) },
-    select: { id: true, ticketBalance: true, language: true },
+    select: {
+      id: true,
+      ticketBalance: true,
+      language: true,
+      premiumUntil: true,
+      premiumTicketCoverUntil: true,
+    },
   });
   if (!user) return null;
-  return { id: user.id, ticketBalance: user.ticketBalance, language: user.language };
+  return {
+    id: user.id,
+    ticketBalance: user.ticketBalance,
+    language: user.language,
+    premiumUntil: user.premiumUntil ?? null,
+    premiumTicketCoverUntil: user.premiumTicketCoverUntil ?? null,
+  };
 }
 
 type AuthOk = { ok: true; user: { id: number } };

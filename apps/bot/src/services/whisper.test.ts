@@ -131,6 +131,17 @@ describe("transcribeVoice", () => {
       expect(await filenameFor("audio/webm")).toBe("voice.webm");
     });
 
+    it("reads the container from the bytes when the declared type is octet-stream", async () => {
+      const m4a = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypM4A isom")]);
+      const ogg = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(12)]);
+      for (const [bytes, name] of [[m4a, "voice.m4a"], [ogg, "voice.ogg"]] as const) {
+        const fetchFn = vi.fn().mockResolvedValue(okJson({ text: "ok" }));
+        await transcribeVoice(bytes, { fetchFn, mime: "application/octet-stream" });
+        const file = (fetchFn.mock.calls[0][1].body as FormData).get("file");
+        expect(file instanceof File ? file.name : null).toBe(name);
+      }
+    });
+
     it("refuses to guess an extension for an unknown type, without calling out", async () => {
       const fetchFn = vi.fn().mockResolvedValue(okJson({ text: "ok" }));
       expect(

@@ -22,6 +22,10 @@ import {
 } from "../../services/appstore-prime-time.js";
 import { isPrimeTimeProduct } from "../../services/prime-time.js";
 import {
+  isWishlistProduct,
+  refundWishlistAppStoreTransaction,
+} from "../../services/appstore-wishlist.js";
+import {
   handleAppStorePremiumNotification,
   PREMIUM_RENEW_NOTIFICATIONS,
   reverseAppStorePremiumRefund,
@@ -168,6 +172,16 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
   // (R6, `appstore-prime-time.ts`). Routed on Apple's own product id, not the
   // untrusted one above. Before this branch such a refund fell through to the
   // ticket ledger, found nothing and was acknowledged without a trace.
+  // A Date Wishlist sheet: the refund closes that viewer's sheet (2026-10-08).
+  if (isWishlistProduct(lookup.transaction.productId)) {
+    const wishlist = await refundWishlistAppStoreTransaction(lookup.transaction);
+    console.log(
+      `[appstore-webhook] wishlist ${notificationType} tx=${transactionId} -> ${wishlist.status}`,
+    );
+    res.json({ ok: true, result: wishlist.status });
+    return;
+  }
+
   if (isPrimeTimeProduct(lookup.transaction.productId)) {
     const prime = await refundPrimeTimeAppStoreTransaction(lookup.transaction);
     console.log(

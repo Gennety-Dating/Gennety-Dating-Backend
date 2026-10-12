@@ -1,7 +1,8 @@
 # Gennety — Data Protection Impact Assessment (GDPR Article 35)
 
-**Version 1.1 — 26 September 2026** (adds R11, Tempo Sync; v1.0 — 1 August
-2026). Internal document. Living: revisit on any
+**Version 1.2 — 8 October 2026** (adds R12–R14, The Morning After and the Date
+Wishlist; v1.1 — 26 September 2026, R11, Tempo Sync; v1.0 — 1 August 2026).
+Internal document. Living: revisit on any
 material change to matching, verification, or the data model, and before any
 significant growth in user numbers.
 
@@ -24,7 +25,7 @@ times over:
 | Special-category data | Biometric identification; dietary/accessibility requirements; sexual orientation by inference |
 | Data processed on a large scale | *Not currently met* — see §7. Every other criterion stands regardless. |
 | Innovative use of technology | LLM-derived personality profiling; vector similarity matching; vision-model attractiveness scoring |
-| Matching or combining datasets | Profile answers + photos + behavioural signals + location combined into one matching decision |
+| Matching or combining datasets | Profile answers + photos + behavioural signals + location combined into one matching decision; profile + Profiler answers + date map + saved (and, opted-in, frequently visited) places combined into Date Wishlist suggestions |
 | Vulnerable data subjects | Dating creates asymmetries of vulnerability; users disclose intimate preferences and meet strangers in person |
 
 Three or more criteria is the threshold. We meet at least seven.
@@ -109,6 +110,16 @@ Proportionality is easier to demonstrate by what was removed:
   without an Apple Watch is only a bedtime schedule the person typed; workout
   types can reveal rehabilitation. Not read at all.
 - **Background Health delivery.** Refresh happens only when the app is opened.
+- **Exact prices, addresses and delivery.** A wishlist price is stored only as
+  a band (€–€€€€). No delivery address is collected: flower or gift delivery is
+  not offered.
+- **The user's identity in a web look-up.** OpenAI's web search receives the
+  typed text and at most city and language; shops receive a request from our
+  server, never the user's IP or any identifier. The look-up cache holds no
+  user id.
+- **A copy of someone's wishlist in another person's account.** The cheat sheet
+  is read live from the owner's list; nothing is copied to the viewer, so the
+  owner's edits, deletions and withdrawal are always effective.
 
 ---
 
@@ -268,6 +279,79 @@ per-user admin read. For venues the calmer side leads, which protects rather
 than excludes. **Residual: low.** *Re-assess* before raising the weight above
 0.05, using `/admin/analytics/rhythm-outcomes`.
 
+### R12 — A wishlist shown to someone the owner later regrets *(medium · medium)*
+
+The Date Wishlist is the first place where text a user writes about themselves
+reaches another user outside the match card. Favourite places say where someone
+spends time; an item or a note can carry more than intended (health, beliefs,
+sex life); and the person who sees it may stop being someone the owner wants to
+share with — after a second date that went badly, or a block.
+
+*Mitigations.* Disclosure rests on **contract** (Art. 6(1)(b)): being shown
+to a mutual match is what the list is for, and the owner builds it knowing
+that — the session's first line says who will see it and when, and Privacy
+§12.1 / Terms §6 say the rest. (Until the founder's second decision of
+2026-10-08 it rested on a separate consent screen before the first item; that
+screen read as a warning and put people off, and consent could not move into
+the sign-up tick, where it would be invalid as bundled — Art. 7(2), 7(4).)
+The owner can **hide** the list at any time (`users.wishlist_hidden_at`,
+«Не показывать мой список» in Profile → My wishlist), which also hides the
+taste hint. It reaches only a person with **double-blind mutual interest**
+(R14), never anyone before it and never any other user. Only about a tenth is
+visible before an unlock. The sheet is read **live**: editing, deleting,
+hiding the list or deleting the account takes effect for the viewer at once.
+From 45 days after the owner's last change the viewer is told how old the
+list is, so a stale item is not read as a current wish. Categories are a fixed whitelist of nine, titles and
+notes are capped (120 / 200 characters), a list holds at most 30 items, and
+places are public venues, not addresses. Privacy §6 and Terms §6 tell people to
+leave special-category matters, contact details and other people's data off the
+list. The taste hint is one Profiler answer, shown only after mutual interest
+and only for users who accepted Privacy v4.3 or built a wishlist, never while
+the list is hidden. A block or a report in either direction closes both the
+sheet and the hint.
+Items can also be found from a **voice note** or **screenshots** the owner adds
+(third decision of 2026-10-08). Both are transient — one request, sent to
+OpenAI, never written to storage or logs — and a screenshot that happens to
+show someone else's notification or name contributes nothing to the list: the
+vision prompt names only the wanted products and ignores anything personal,
+and what reaches the list is only what the owner confirms afterwards, from the
+web look-up's product cards.
+**Honest limits:** what the viewer has already read cannot be unseen, a
+screenshot cannot be blocked, and an unlocked sheet stays openable with no end
+date. **Residual: moderate** until action 12 (a report without a block, and a
+safety cancellation) is confirmed in the code; **low-moderate** after it.
+
+### R13 — Paying to see more of another person *(medium · low)*
+
+The unlock is a purchase by one user that opens more of another user's personal
+data, with the money going to Gennety. Undisclosed, that would be unfair
+(Art. 5(1)(a)); disclosed, it can still create gift expectations or a
+transactional reading of a date, which Terms §8 forbids.
+
+*Mitigations.* The owner is told, in Privacy §12.1 and Terms §6 / §11.5 —
+accepted at sign-up, and announced to existing users by the one-time notice
+(action 15) — that the match may pay to see the rest and that the owner is
+neither paid nor charged. The wishlist session itself names only who sees the
+list and when, not the price: that is the layered notice the founder chose
+over a consent screen (2026-10-08); if users read the paid part as a surprise,
+add a "how it works" link to the session line. Prices on the list are bands, not figures. Terms §6 states that a
+wishlist is an idea, not a request, and forbids using it to ask for money or
+gifts in exchange for a date. No money moves between users, and nothing is
+bought from or delivered by Gennety. **Residual: low**, to be re-checked
+after launch against support messages about the paid part.
+
+### R14 — Learning that the other person said no *(medium · low)*
+
+The morning-after answer is about another person, and a "Didn't click"
+reaching them would be a small rejection the product promised to avoid.
+
+*Mitigations.* The same blind rule as the accept/decline decision (AGENTS rule
+1): a `pass` is never sent, worded or hinted to the partner; only `great` +
+`great` produces a message, and to both at once. The answer feeds matching like
+the post-date feedback it resembles, and is never shown to anyone. **Honest
+limit:** a person who said "great" and hears nothing can infer — no design
+removes inference from silence. **Residual: low.**
+
 ---
 
 ## 5. Consultation
@@ -278,7 +362,9 @@ that triggers it. The three moderate residuals that come closest — appearance
 scoring (R3), operator access (R7), and the founder-feed deletion exception
 (R9) — are respectively inherent-and-disclosed, a governance gap with a known
 fix, and a knowingly accepted tradeoff that is disclosed to users, removable on
-request, and scheduled for re-assessment at growth.
+request, and scheduled for re-assessment at growth. The Date Wishlist
+disclosure (R12) is moderate only until its block/report action (§7 item 12)
+is confirmed, and leaves the owner a one-tap switch to hide the list.
 
 Data subjects have not been formally consulted (Art. 35(9)). At the current
 scale this would not be meaningful; the Privacy Policy is written to be readable
@@ -310,6 +396,10 @@ at any meaningful scale, not for the current handful of accounts.
 | 9 | Disparate-impact analysis of matching outcomes | At scale | R4 |
 | 10 | Re-run this DPIA on any material change to matching or verification | Ongoing | — |
 | 11 | Re-assess R11 from `/admin/analytics/rhythm-outcomes` before raising `RHYTHM_MATCH_WEIGHT` above 0.05 | Before any raise | R11 |
+| 12 | Hide the cheat sheet and the taste hint when either side reports the other, or the match is cancelled for safety (a block already does) | **Before `WISHLIST_FEATURE_ENABLED`** | R12; RoPA §6 item 10 |
+| 13 | The wishlist session's first line names who sees the list and when (a mutual match, only after both said "great"); Profile → My wishlist offers «Не показывать мой список», which hides the list and the taste hint. Replaces the consent screen (2026-10-08, second decision) — iOS `date-wishlist` | **Before `WISHLIST_FEATURE_ENABLED`** | R12, R13 |
+| 14 | Wishlist images live under the account's `{userId}/` prefix in the private chat bucket, so the fail-closed deletion sweep erases them — verify on merge | Verify on merge | R9, R12 |
+| 15 | One-time in-product notice of Privacy v4.3 / Terms v3.1 to existing users (no re-acceptance flow exists) | Before the flags go on | RoPA §6 item 9 |
 
 ---
 

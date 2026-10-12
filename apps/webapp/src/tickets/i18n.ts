@@ -17,10 +17,13 @@ export interface StoreStrings {
   title: string;
   sub: string;
   /**
-   * Why a Premium subscriber would still buy a ticket (§3.5b). Deliberately not
+   * Why someone whose own dates Premium still covers would buy a ticket
+   * (§3.5b). Since 2026-10-08 that is only the grandfathered cover — a period
+   * paid before Premium stopped covering tickets — so the line says "this
+   * Premium period" and never promises the cover beyond it. Deliberately not
    * "you have Premium" — that they know. What they cannot know is that the
-   * store still has a purpose: their own dates are covered, and a ticket is
-   * what it takes to cover their date's.
+   * store still has a purpose: their own dates are covered for now, and a
+   * ticket is what it takes to cover their date's.
    */
   premiumNote: string;
   perTicket: string;
@@ -41,7 +44,7 @@ export interface StoreStrings {
 const en: StoreStrings = {
   title: "Get Date Tickets",
   sub: "One ticket — one date.",
-  premiumNote: "With Premium your dates are paid for. Tickets are for treating your match.",
+  premiumNote: "Your current Premium period still covers your own dates. Tickets are for treating your match.",
   perTicket: "{amount} / ticket",
   bestValue: "Best value",
   save: "Save {pct}%",
@@ -58,7 +61,7 @@ const en: StoreStrings = {
 const ru: StoreStrings = {
   title: "Билеты на свидания",
   sub: "Один билет — одно свидание.",
-  premiumNote: "С Premium твои свидания оплачены. Билеты — чтобы угостить пару.",
+  premiumNote: "В этом периоде Premium твои свидания ещё оплачены. Билеты — чтобы угостить пару.",
   perTicket: "{amount} / билет",
   bestValue: "Выгоднее всего",
   save: "Скидка {pct}%",
@@ -75,7 +78,7 @@ const ru: StoreStrings = {
 const uk: StoreStrings = {
   title: "Квитки на побачення",
   sub: "Один квиток — одне побачення.",
-  premiumNote: "З Premium твої побачення оплачено. Квитки — щоб пригостити пару.",
+  premiumNote: "У цьому періоді Premium твої побачення ще оплачено. Квитки — щоб пригостити пару.",
   perTicket: "{amount} / квиток",
   bestValue: "Найвигідніше",
   save: "Знижка {pct}%",
@@ -92,7 +95,7 @@ const uk: StoreStrings = {
 const de: StoreStrings = {
   title: "Date-Tickets holen",
   sub: "Ein Ticket — ein Date.",
-  premiumNote: "Mit Premium sind deine Dates bezahlt. Tickets sind dafür, dein Match einzuladen.",
+  premiumNote: "In deinem laufenden Premium-Zeitraum sind deine Dates noch bezahlt. Tickets sind dafür, dein Match einzuladen.",
   perTicket: "{amount} / Ticket",
   bestValue: "Bester Preis",
   save: "{pct}% sparen",
@@ -109,7 +112,7 @@ const de: StoreStrings = {
 const pl: StoreStrings = {
   title: "Zdobądź bilety na randki",
   sub: "Jeden bilet — jedna randka.",
-  premiumNote: "Z Premium twoje randki są opłacone. Bilety — żeby zaprosić swoją parę.",
+  premiumNote: "W tym okresie Premium twoje randki są jeszcze opłacone. Bilety — żeby zaprosić swoją parę.",
   perTicket: "{amount} / bilet",
   bestValue: "Najlepsza cena",
   save: "Oszczędź {pct}%",
