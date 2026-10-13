@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { DB_POOL_BUSY_RETRY_AFTER_SECONDS } from "@gennety/shared";
 import { multerErrorResponse } from "../utils/upload-limits.js";
 
 /**
@@ -49,6 +50,15 @@ export function publicErrorHandler(
   }
   if (prismaCode === "P2023") {
     res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  // P2024: no pool connection freed up within `pool_timeout` — the process is
+  // saturated (typically a cron burst), not broken. A 503 with Retry-After
+  // tells the app to retry shortly instead of showing a hard failure.
+  if (prismaCode === "P2024") {
+    console.warn("[public] DB pool exhausted — answering 503:", err.message);
+    res.setHeader("Retry-After", String(DB_POOL_BUSY_RETRY_AFTER_SECONDS));
+    res.status(503).json({ error: "Service busy, retry shortly" });
     return;
   }
   console.error("[public] unhandled error:", err);

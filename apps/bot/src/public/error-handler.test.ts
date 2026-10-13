@@ -72,6 +72,14 @@ describe("publicErrorHandler", () => {
     expect(malformed.status).toBe(400);
   });
 
+  it("answers 503 with Retry-After when the DB pool is exhausted (P2024)", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const res = await request(throwingApp(prismaError("P2024"))).get("/x");
+    expect(res.status).toBe(503);
+    expect(res.headers["retry-after"]).toBe("2");
+    spy.mockRestore();
+  });
+
   it("still answers 500 for anything else", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const res = await request(throwingApp(prismaError("P2002"))).get("/x");
