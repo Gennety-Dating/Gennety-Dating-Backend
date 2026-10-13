@@ -199,7 +199,12 @@ export async function runDateLifecycleTick(
   // step below so a pending venue change never lets ice-breakers fire on a
   // venue that's mid-change. Cheap no-op query when the feature is off
   // (no `proposed` rows ever exist).
-  const venueChangesExpired = await sweepExpiredVenueChanges(api, now);
+  // Never lets the rest of the tick fail, like the card sweeps below: a
+  // persistent fault here used to skip completion and feedback for every date.
+  const venueChangesExpired = await sweepExpiredVenueChanges(api, now).catch((err: unknown) => {
+    console.warn("[date-lifecycle] venue change expiry sweep failed:", err);
+    return 0;
+  });
   if (venueChangesExpired > 0) {
     console.log(`[date-lifecycle] expired ${venueChangesExpired} stalled venue change(s)`);
   }
@@ -245,206 +250,214 @@ export async function runDateLifecycleTick(
   });
 
   for (const match of upcomingDates) {
-    // H2: claim the idempotency marker atomically BEFORE doing any awaited
-    // side-effect. A row can only be claimed once (the `icebreakersSentAt:
-    // null` guard collapses concurrent claimers to a single winner), so even
-    // if two ticks overlap — or a future multi-process deploy runs the
-    // lifecycle on more than one node — the ice-breaker / emergency DMs are
-    // sent exactly once. The generated content (`iceBreakersA/B`) is persisted
-    // in a follow-up update once it's ready. Ice-breaker generation always
-    // produces output (graceful static fallback), so claiming up front never
-    // strands a match the way it would for the retry-capable wingman loop.
-    //
-    // The claim also asserts `status: "scheduled"` (A13-L20). The row was read a
-    // moment earlier, and an emergency cancel or a freeze landing in between
-    // must not still earn the ice-breakers — nor, worse, an emergency button
-    // for a date that is already off.
-    const claimed = await prisma.match.updateMany({
-      where: { id: match.id, status: "scheduled", icebreakersSentAt: null },
-      data: { icebreakersSentAt: now },
-    });
-    if (claimed.count === 0) continue;
+    try {
+      // H2: claim the idempotency marker atomically BEFORE doing any awaited
+      // side-effect. A row can only be claimed once (the `icebreakersSentAt:
+      // null` guard collapses concurrent claimers to a single winner), so even
+      // if two ticks overlap — or a future multi-process deploy runs the
+      // lifecycle on more than one node — the ice-breaker / emergency DMs are
+      // sent exactly once. The generated content (`iceBreakersA/B`) is persisted
+      // in a follow-up update once it's ready. Ice-breaker generation always
+      // produces output (graceful static fallback), so claiming up front never
+      // strands a match the way it would for the retry-capable wingman loop.
+      //
+      // The claim also asserts `status: "scheduled"` (A13-L20). The row was read a
+      // moment earlier, and an emergency cancel or a freeze landing in between
+      // must not still earn the ice-breakers — nor, worse, an emergency button
+      // for a date that is already off.
+      const claimed = await prisma.match.updateMany({
+        where: { id: match.id, status: "scheduled", icebreakersSentAt: null },
+        data: { icebreakersSentAt: now },
+      });
+      if (claimed.count === 0) continue;
 
-    const langA = (match.userA.language ?? "en") as Language;
-    const langB = (match.userB.language ?? "en") as Language;
+      const langA = (match.userA.language ?? "en") as Language;
+      const langB = (match.userB.language ?? "en") as Language;
 
-    // Fetch profile summaries + Profiler answers for personalised content.
-    // Profiler answers are the PRIMARY source (PRODUCT_SPEC §Phase 1b); the
-    // psychological summary is the fallback the prompts use when they're empty.
-    const [profileA, profileB, answersA, answersB] = await Promise.all([
-      prisma.profile.findUnique({
-        where: { userId: match.userA.id },
-        select: { psychologicalSummary: true },
-      }),
-      prisma.profile.findUnique({
-        where: { userId: match.userB.id },
-        select: { psychologicalSummary: true },
-      }),
-      prisma.profilerAnswer.findMany({
-        where: { userId: match.userA.id },
-        select: { questionId: true, answerText: true },
-      }),
-      prisma.profilerAnswer.findMany({
-        where: { userId: match.userB.id },
-        select: { questionId: true, answerText: true },
-      }),
-    ]);
+      // Fetch profile summaries + Profiler answers for personalised content.
+      // Profiler answers are the PRIMARY source (PRODUCT_SPEC §Phase 1b); the
+      // psychological summary is the fallback the prompts use when they're empty.
+      const [profileA, profileB, answersA, answersB] = await Promise.all([
+        prisma.profile.findUnique({
+          where: { userId: match.userA.id },
+          select: { psychologicalSummary: true },
+        }),
+        prisma.profile.findUnique({
+          where: { userId: match.userB.id },
+          select: { psychologicalSummary: true },
+        }),
+        prisma.profilerAnswer.findMany({
+          where: { userId: match.userA.id },
+          select: { questionId: true, answerText: true },
+        }),
+        prisma.profilerAnswer.findMany({
+          where: { userId: match.userB.id },
+          select: { questionId: true, answerText: true },
+        }),
+      ]);
 
-    const nameA = match.userA.firstName ?? "User";
-    const nameB = match.userB.firstName ?? "User";
-    const summaryA = profileA?.psychologicalSummary ?? null;
-    const summaryB = profileB?.psychologicalSummary ?? null;
+      const nameA = match.userA.firstName ?? "User";
+      const nameB = match.userB.firstName ?? "User";
+      const summaryA = profileA?.psychologicalSummary ?? null;
+      const summaryB = profileB?.psychologicalSummary ?? null;
 
-    const scoredA = scoreProfilerAnswers(answersA, { matchId: match.id });
-    const scoredB = scoreProfilerAnswers(answersB, { matchId: match.id });
-    // The block describing the PARTNER, rendered in the reader's language.
-    const partnerBlockForA = formatProfilerAnswersBlock(scoredB, langA);
-    const partnerBlockForB = formatProfilerAnswersBlock(scoredA, langB);
+      const scoredA = scoreProfilerAnswers(answersA, { matchId: match.id });
+      const scoredB = scoreProfilerAnswers(answersB, { matchId: match.id });
+      // The block describing the PARTNER, rendered in the reader's language.
+      const partnerBlockForA = formatProfilerAnswersBlock(scoredB, langA);
+      const partnerBlockForB = formatProfilerAnswersBlock(scoredA, langB);
 
-    // Generate ice-breakers via LLM (graceful static fallback when unavailable).
-    const [topicsForA, topicsForB] = await Promise.all([
-      generatePersonalisedIceBreakers(nameA, nameB, summaryA, summaryB, partnerBlockForA, langA),
-      generatePersonalisedIceBreakers(nameB, nameA, summaryB, summaryA, partnerBlockForB, langB),
-    ]);
+      // Generate ice-breakers via LLM (graceful static fallback when unavailable).
+      const [topicsForA, topicsForB] = await Promise.all([
+        generatePersonalisedIceBreakers(nameA, nameB, summaryA, summaryB, partnerBlockForA, langA),
+        generatePersonalisedIceBreakers(nameB, nameA, summaryB, summaryA, partnerBlockForB, langB),
+      ]);
 
-    // Live ice-breaker stream per side: a "thinking" lead beat, then each
-    // starter revealed one at a time, then the full set of starters as the
-    // persisted send. The final chunk is byte-for-byte the old single-shot
-    // text — only the delivery now animates.
-    const draftsA = buildIcebreakerDrafts(
-      t(langA, "icebreakerStreamStart"),
-      t(langA, "icebreakerIntro"),
-      topicsForA,
-    );
-    const draftsB = buildIcebreakerDrafts(
-      t(langB, "icebreakerStreamStart"),
-      t(langB, "icebreakerIntro"),
-      topicsForB,
-    );
+      // Live ice-breaker stream per side: a "thinking" lead beat, then each
+      // starter revealed one at a time, then the full set of starters as the
+      // persisted send. The final chunk is byte-for-byte the old single-shot
+      // text — only the delivery now animates.
+      const draftsA = buildIcebreakerDrafts(
+        t(langA, "icebreakerStreamStart"),
+        t(langA, "icebreakerIntro"),
+        topicsForA,
+      );
+      const draftsB = buildIcebreakerDrafts(
+        t(langB, "icebreakerStreamStart"),
+        t(langB, "icebreakerIntro"),
+        topicsForB,
+      );
 
-    // Emergency cancellation button. Native `danger` (red) carries the "this
-    // cancels the date" weight now that the label has no 🚨 glyph — consistent
-    // with the My Date hub's cancel button.
-    const emergKbA = new InlineKeyboard()
-      .text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`)
-      .danger();
-    const emergKbB = new InlineKeyboard()
-      .text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`)
-      .danger();
+      // Emergency cancellation button. Native `danger` (red) carries the "this
+      // cancels the date" weight now that the label has no 🚨 glyph — consistent
+      // with the My Date hub's cancel button.
+      const emergKbA = new InlineKeyboard()
+        .text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`)
+        .danger();
+      const emergKbB = new InlineKeyboard()
+        .text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`)
+        .danger();
 
-    // Per-side delivery: stream the ice-breakers, THEN drop the emergency-window
-    // message so its cancel button lands right after the starters stream in.
-    // Mobile-first synthetic users (telegramId <= 0n) get the Expo push path
-    // elsewhere; sending to a negative chat id throws "chat not found" and used
-    // to abort the whole for-loop, leaving icebreakersSentAt null and causing
-    // duplicate sends. Each leg is independently caught so one blocked user
-    // never strands the other (the marker is already claimed up front, H2).
-    //
-    // The gate is `telegramReachable`, not `telegramId > 0n` (A13-H3): a
-    // Telegram Login account is app-only with a REAL positive id, so the id test
-    // streamed into a chat that does not exist, Telegram refused with a 403, and
-    // the refusal stamped the person bot-blocked — out of every future drop.
-    // Such a person already has their T-5h beat on the app rail: the date-day
-    // Live Activity starts below at this same gate with its own alert, and the
-    // starters themselves ride `/v1/matches/current` (`iceBreakers`). A second
-    // alert push here would announce the same moment twice.
-    const deliver = async (
-      user: { telegramId: bigint; platform: string | null },
-      drafts: string[],
-      emergencyText: string,
-      emergKb: InlineKeyboard,
-      viewerUserId: string,
-      lang: Language,
-    ): Promise<void> => {
-      if (!telegramReachable(user)) return;
-      const tgId = user.telegramId;
-      const chatId = Number(tgId);
-      try {
-        await stream(api, chatId, drafts, {
-          rich: true,
-          thinkingIndex: 0,
-          thinkingEmojiId: AI_EMOJI.think,
-        });
-      } catch (err) {
+      // Per-side delivery: stream the ice-breakers, THEN drop the emergency-window
+      // message so its cancel button lands right after the starters stream in.
+      // Mobile-first synthetic users (telegramId <= 0n) get the Expo push path
+      // elsewhere; sending to a negative chat id throws "chat not found" and used
+      // to abort the whole for-loop, leaving icebreakersSentAt null and causing
+      // duplicate sends. Each leg is independently caught so one blocked user
+      // never strands the other (the marker is already claimed up front, H2).
+      //
+      // The gate is `telegramReachable`, not `telegramId > 0n` (A13-H3): a
+      // Telegram Login account is app-only with a REAL positive id, so the id test
+      // streamed into a chat that does not exist, Telegram refused with a 403, and
+      // the refusal stamped the person bot-blocked — out of every future drop.
+      // Such a person already has their T-5h beat on the app rail: the date-day
+      // Live Activity starts below at this same gate with its own alert, and the
+      // starters themselves ride `/v1/matches/current` (`iceBreakers`). A second
+      // alert push here would announce the same moment twice.
+      const deliver = async (
+        user: { telegramId: bigint; platform: string | null },
+        drafts: string[],
+        emergencyText: string,
+        emergKb: InlineKeyboard,
+        viewerUserId: string,
+        lang: Language,
+      ): Promise<void> => {
+        if (!telegramReachable(user)) return;
+        const tgId = user.telegramId;
+        const chatId = Number(tgId);
+        try {
+          await stream(api, chatId, drafts, {
+            rich: true,
+            thinkingIndex: 0,
+            thinkingEmojiId: AI_EMOJI.think,
+          });
+        } catch (err) {
+          console.warn(
+            `[date-lifecycle] icebreaker stream failed for ${tgId}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+        // The meme reveal card (§Phase 4), between the starters and the emergency
+        // card. This is the one moment in the product where someone is actively
+        // thinking about what to say to this specific person, which is the only
+        // moment the card is worth anything.
+        //
+        // Deliberately a separate message rather than a button on the last
+        // starter: the ice-breakers are one uninterrupted gift, and a card can
+        // also simply not be sent, which is what happens for the majority of
+        // matches — a partner who typed their humour answer has no meme to show,
+        // and `sendMemeCard` returns false without a word.
+        //
+        // Never allowed to throw: this is a nicety sitting in the middle of a
+        // claimed, once-only lifecycle beat, and the emergency card below is a
+        // safety surface that must land regardless.
+        await sendMemeCard(api, chatId, viewerUserId, match.id, lang).catch(
+          (err: unknown) => {
+            console.warn(
+              `[date-lifecycle] meme card failed for ${tgId}:`,
+              err instanceof Error ? err.message : err,
+            );
+          },
+        );
+        await api
+          .sendMessage(chatId, emergencyText, { reply_markup: emergKb, parse_mode: "Markdown" })
+          .catch((err: unknown) => {
+            console.warn(
+              `[date-lifecycle] emergency send failed for ${tgId}:`,
+              err instanceof Error ? err.message : err,
+            );
+          });
+      };
+
+      await Promise.all([
+        deliver(
+          match.userA,
+          draftsA,
+          t(langA, "emergencyUnlocked"),
+          emergKbA,
+          match.userA.id,
+          langA,
+        ),
+        deliver(
+          match.userB,
+          draftsB,
+          t(langB, "emergencyUnlocked"),
+          emergKbB,
+          match.userB.id,
+          langB,
+        ),
+      ]);
+
+      // The native card starts at the same gate as the ice-breakers — push-to-
+      // start, because the point of a T-5h Live Activity is precisely the user
+      // who has not opened the app. A no-op for anyone without a start token.
+      await startDateDayActivities(match.id, now).catch((err: unknown) => {
         console.warn(
-          `[date-lifecycle] icebreaker stream failed for ${tgId}:`,
+          `[date-lifecycle] date-day activity start failed for ${match.id}:`,
           err instanceof Error ? err.message : err,
         );
-      }
-      // The meme reveal card (§Phase 4), between the starters and the emergency
-      // card. This is the one moment in the product where someone is actively
-      // thinking about what to say to this specific person, which is the only
-      // moment the card is worth anything.
-      //
-      // Deliberately a separate message rather than a button on the last
-      // starter: the ice-breakers are one uninterrupted gift, and a card can
-      // also simply not be sent, which is what happens for the majority of
-      // matches — a partner who typed their humour answer has no meme to show,
-      // and `sendMemeCard` returns false without a word.
-      //
-      // Never allowed to throw: this is a nicety sitting in the middle of a
-      // claimed, once-only lifecycle beat, and the emergency card below is a
-      // safety surface that must land regardless.
-      await sendMemeCard(api, chatId, viewerUserId, match.id, lang).catch(
-        (err: unknown) => {
-          console.warn(
-            `[date-lifecycle] meme card failed for ${tgId}:`,
-            err instanceof Error ? err.message : err,
-          );
+      });
+
+      // `icebreakersSentAt` was already stamped by the atomic claim above
+      // (H2); persist only the generated content here. We'd rather miss one
+      // send than duplicate-spam every 2 minutes (C-3 in the prior audit).
+      await prisma.match.update({
+        where: { id: match.id },
+        data: {
+          iceBreakersA: topicsForA,
+          iceBreakersB: topicsForB,
         },
-      );
-      await api
-        .sendMessage(chatId, emergencyText, { reply_markup: emergKb, parse_mode: "Markdown" })
-        .catch((err: unknown) => {
-          console.warn(
-            `[date-lifecycle] emergency send failed for ${tgId}:`,
-            err instanceof Error ? err.message : err,
-          );
-        });
-    };
+      });
 
-    await Promise.all([
-      deliver(
-        match.userA,
-        draftsA,
-        t(langA, "emergencyUnlocked"),
-        emergKbA,
-        match.userA.id,
-        langA,
-      ),
-      deliver(
-        match.userB,
-        draftsB,
-        t(langB, "emergencyUnlocked"),
-        emergKbB,
-        match.userB.id,
-        langB,
-      ),
-    ]);
-
-    // The native card starts at the same gate as the ice-breakers — push-to-
-    // start, because the point of a T-5h Live Activity is precisely the user
-    // who has not opened the app. A no-op for anyone without a start token.
-    await startDateDayActivities(match.id, now).catch((err: unknown) => {
-      console.warn(
-        `[date-lifecycle] date-day activity start failed for ${match.id}:`,
-        err instanceof Error ? err.message : err,
-      );
-    });
-
-    // `icebreakersSentAt` was already stamped by the atomic claim above
-    // (H2); persist only the generated content here. We'd rather miss one
-    // send than duplicate-spam every 2 minutes (C-3 in the prior audit).
-    await prisma.match.update({
-      where: { id: match.id },
-      data: {
-        iceBreakersA: topicsForA,
-        iceBreakersB: topicsForB,
-      },
-    });
-
-    result.icebreakers++;
-    result.emergencies++;
+      result.icebreakers++;
+      result.emergencies++;
+    } catch (err) {
+      // One row must not abort the tick: everything below this loop — the
+      // T+24h feedback prompt and the `scheduled → completed` flip among it —
+      // would be skipped for every date. A row deleted mid-loop with an
+      // account (the cascade) is the ordinary way to get here.
+      console.warn(`[date-lifecycle] ice-breakers failed for ${match.id}:`, err);
+    }
   }
 
   // 2b. Wingman hints — reveal window opens at T-1.5h.
@@ -477,87 +490,92 @@ export async function runDateLifecycleTick(
   });
 
   for (const match of wingmanTargets) {
-    // Backfill if either side is missing; idempotent inside the service.
-    let hintA = match.wingmanHintA;
-    let hintB = match.wingmanHintB;
-    if (!hintA || !hintB) {
-      const generated = await generateAndSaveWingmanHints(match.id);
-      if (generated) {
-        hintA = generated.a;
-        hintB = generated.b;
+    try {
+      // Backfill if either side is missing; idempotent inside the service.
+      let hintA = match.wingmanHintA;
+      let hintB = match.wingmanHintB;
+      if (!hintA || !hintB) {
+        const generated = await generateAndSaveWingmanHints(match.id);
+        if (generated) {
+          hintA = generated.a;
+          hintB = generated.b;
+        }
       }
+      if (!hintA || !hintB) continue; // nothing to deliver yet; retry next tick
+
+      const wingmanClaim = await prisma.match.updateMany({
+        where: { id: match.id, status: "scheduled", wingmanSentAt: null },
+        data: { wingmanSentAt: now },
+      });
+      if (wingmanClaim.count === 0) continue;
+
+      const langA = (match.userA.language ?? "en") as Language;
+      const langB = (match.userB.language ?? "en") as Language;
+
+      const deliveries: Array<Promise<unknown>> = [];
+
+      // Telegram DM — telegram + "both" platform users (telegramId > 0).
+      if (
+        (match.userA.platform === "telegram" || match.userA.platform === "both") &&
+        match.userA.telegramId > 0n
+      ) {
+        deliveries.push(
+          api
+            .sendMessage(
+              Number(match.userA.telegramId),
+              `${t(langA, "wingmanHintIntro")}${hintA}`,
+            )
+            .catch((err) => console.warn("[wingman] telegram A failed:", err)),
+        );
+      }
+      if (
+        (match.userB.platform === "telegram" || match.userB.platform === "both") &&
+        match.userB.telegramId > 0n
+      ) {
+        deliveries.push(
+          api
+            .sendMessage(
+              Number(match.userB.telegramId),
+              `${t(langB, "wingmanHintIntro")}${hintB}`,
+            )
+            .catch((err) => console.warn("[wingman] telegram B failed:", err)),
+        );
+      }
+
+      // Expo push — mobile + "both" platform users.
+      if (match.userA.platform === "mobile" || match.userA.platform === "both") {
+        deliveries.push(
+          sendPushToUser(match.userA.id, {
+            title: "Secret Insight",
+            body: hintA,
+            data: { type: "match.wingman", matchId: match.id },
+          }).catch((err) => console.warn("[wingman] push A failed:", err)),
+        );
+      }
+      if (match.userB.platform === "mobile" || match.userB.platform === "both") {
+        deliveries.push(
+          sendPushToUser(match.userB.id, {
+            title: "Secret Insight",
+            body: hintB,
+            data: { type: "match.wingman", matchId: match.id },
+          }).catch((err) => console.warn("[wingman] push B failed:", err)),
+        );
+      }
+
+      await Promise.all(deliveries);
+
+      await advanceDateDayActivities(match.id, "wingman").catch((err: unknown) => {
+        console.warn(
+          `[date-lifecycle] date-day activity wingman stage failed for ${match.id}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
+
+      result.wingmen++;
+    } catch (err) {
+      // Same reason as the ice-breaker loop: one row must not abort the tick.
+      console.warn(`[date-lifecycle] wingman failed for ${match.id}:`, err);
     }
-    if (!hintA || !hintB) continue; // nothing to deliver yet; retry next tick
-
-    const wingmanClaim = await prisma.match.updateMany({
-      where: { id: match.id, status: "scheduled", wingmanSentAt: null },
-      data: { wingmanSentAt: now },
-    });
-    if (wingmanClaim.count === 0) continue;
-
-    const langA = (match.userA.language ?? "en") as Language;
-    const langB = (match.userB.language ?? "en") as Language;
-
-    const deliveries: Array<Promise<unknown>> = [];
-
-    // Telegram DM — telegram + "both" platform users (telegramId > 0).
-    if (
-      (match.userA.platform === "telegram" || match.userA.platform === "both") &&
-      match.userA.telegramId > 0n
-    ) {
-      deliveries.push(
-        api
-          .sendMessage(
-            Number(match.userA.telegramId),
-            `${t(langA, "wingmanHintIntro")}${hintA}`,
-          )
-          .catch((err) => console.warn("[wingman] telegram A failed:", err)),
-      );
-    }
-    if (
-      (match.userB.platform === "telegram" || match.userB.platform === "both") &&
-      match.userB.telegramId > 0n
-    ) {
-      deliveries.push(
-        api
-          .sendMessage(
-            Number(match.userB.telegramId),
-            `${t(langB, "wingmanHintIntro")}${hintB}`,
-          )
-          .catch((err) => console.warn("[wingman] telegram B failed:", err)),
-      );
-    }
-
-    // Expo push — mobile + "both" platform users.
-    if (match.userA.platform === "mobile" || match.userA.platform === "both") {
-      deliveries.push(
-        sendPushToUser(match.userA.id, {
-          title: "Secret Insight",
-          body: hintA,
-          data: { type: "match.wingman", matchId: match.id },
-        }).catch((err) => console.warn("[wingman] push A failed:", err)),
-      );
-    }
-    if (match.userB.platform === "mobile" || match.userB.platform === "both") {
-      deliveries.push(
-        sendPushToUser(match.userB.id, {
-          title: "Secret Insight",
-          body: hintB,
-          data: { type: "match.wingman", matchId: match.id },
-        }).catch((err) => console.warn("[wingman] push B failed:", err)),
-      );
-    }
-
-    await Promise.all(deliveries);
-
-    await advanceDateDayActivities(match.id, "wingman").catch((err: unknown) => {
-      console.warn(
-        `[date-lifecycle] date-day activity wingman stage failed for ${match.id}:`,
-        err instanceof Error ? err.message : err,
-      );
-    });
-
-    result.wingmen++;
   }
 
   // 2c. The three later beats of the date-day card: spotter at T-30m, vibe

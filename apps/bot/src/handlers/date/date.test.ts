@@ -984,6 +984,43 @@ describe("date-lifecycle tick", () => {
     );
   });
 
+  it("one failing ice-breaker row does not skip the T+24h step for every date", async () => {
+    // Regression: the per-row work was not isolated, so a throw on one upcoming
+    // date (a profile read failing, a row cascaded away by an account deletion
+    // mid-loop) aborted the whole tick — and with it the `scheduled →
+    // completed` flip and the attendance question for every past date.
+    const agreedTime = new Date("2026-04-08T19:00:00Z");
+    const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
+    stubLifecycleQueries({
+      upcoming: [
+        {
+          id: "match-broken",
+          agreedTime: new Date(now.getTime() + 60 * 60 * 1000),
+          userA: { id: "ua-x", telegramId: 3001n, platform: "telegram", language: "en", firstName: "A" },
+          userB: { id: "ub-x", telegramId: 3002n, platform: "telegram", language: "en", firstName: "B" },
+        },
+      ],
+      feedback: [
+        {
+          id: "match-2",
+          agreedTime,
+          userA: { id: "ua-2", telegramId: 2001n, language: "en", theme: "light" },
+          userB: { id: "ub-2", telegramId: 2002n, language: "uk", theme: "dark" },
+        },
+      ],
+    });
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    (prisma.profile.findUnique as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("connection reset"),
+    );
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const result = await runDateLifecycleTick(api, now);
+
+    expect(result.icebreakers).toBe(0);
+    expect(result.feedbacks).toBe(1);
+  });
+
   it("does NOT re-prompt feedback once feedbackPromptedAt is set (C-1)", async () => {
     // Regression: previously the cron used null `feedbackByA/B` as the dedup
     // signal, which kept matching every 2 minutes until both users replied.
