@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { capPoolPerCity, computePairwiseDistances, type BatchUser } from "./match-engine.js";
+import {
+  capPoolPerCity,
+  computePairwiseDistances,
+  parseEmbeddingLiteral,
+  type BatchUser,
+} from "./match-engine.js";
 
 /**
  * The pair matrix is quadratic and it lives in the heap of the process that
@@ -104,5 +109,36 @@ describe("computePairwiseDistances", () => {
 
   it("does nothing at all for a pool of one", async () => {
     expect((await computePairwiseDistances([user({ id: "solo" })])).size).toBe(0);
+  });
+});
+
+describe("computePairwiseDistances — in-process cosine", () => {
+  const woman = (id: string, emb: string) =>
+    user({ id, gender: "female", preference: "men", embeddingLiteral: emb });
+
+  it("returns pgvector's `<=>` (1 − cos) for every compatible same-city pair", async () => {
+    const distances = await computePairwiseDistances([
+      user({ id: "11111111-1111-4111-8111-111111111111", embeddingLiteral: "[1,0]" }),
+      woman("22222222-2222-4222-8222-222222222222", "[1,0]"),
+      woman("33333333-3333-4333-8333-333333333333", "[0,1]"),
+      woman("44444444-4444-4444-8444-444444444444", "[-1,0]"),
+    ]);
+    const m = "11111111-1111-4111-8111-111111111111";
+    expect(distances.get(`${m}:22222222-2222-4222-8222-222222222222`)).toBeCloseTo(0, 6);
+    expect(distances.get(`${m}:33333333-3333-4333-8333-333333333333`)).toBeCloseTo(1, 6);
+    expect(distances.get(`${m}:44444444-4444-4444-8444-444444444444`)).toBeCloseTo(2, 6);
+    // Two women who both want men are not a pair.
+    expect(distances.size).toBe(3);
+  });
+
+  it("skips a pair whose vector is malformed or zero instead of scoring NaN", async () => {
+    const distances = await computePairwiseDistances([
+      user({ id: "11111111-1111-4111-8111-111111111111", embeddingLiteral: "[0,0]" }),
+      woman("22222222-2222-4222-8222-222222222222", "[1,0]"),
+    ]);
+    expect(distances.size).toBe(0);
+    expect(parseEmbeddingLiteral("[1,x]")).toBeNull();
+    expect(parseEmbeddingLiteral("1,2")).toBeNull();
+    expect(parseEmbeddingLiteral("[3,4]")?.norm).toBeCloseTo(5, 6);
   });
 });
