@@ -402,8 +402,11 @@ charged, are always shown to you **before** you confirm a purchase.
   Subscriptions, or by simply telling our bot you want to cancel, which gives
   you a confirmation button. On iOS: through iOS Settings → your name →
   Subscriptions — **Apple, not Gennety, controls App Store subscriptions and we
-  cannot cancel them for you.** Deleting your Gennety account or the app does
-  **not** cancel a subscription; cancel it first.
+  cannot cancel them for you.** Deleting the app never cancels a subscription.
+  Deleting your Gennety account cancels a Telegram Stars subscription
+  automatically (and any renewal charged after deletion is refunded in Stars),
+  but does **not** cancel an App Store subscription; cancel that one in iOS
+  Settings first.
 - **Cancellation stops the next renewal.** Your Premium access continues to the
   end of the period you already paid for; there is **no partial refund of the
   current period**.
@@ -545,9 +548,9 @@ survive.
   You do not need to write to us. If a refund connected to your account is
   still being processed, we ask you to retry once it has gone through, so the
   money has somewhere to go.
-- **Deleting the app is not deleting the account**, and **deleting the account
-  does not cancel a running subscription** billed by Apple or Telegram —
-  cancel it first (Section 11.4). Unused Virtual Items are lost on deletion
+- **Deleting the app is not deleting the account.** Deleting the account
+  cancels a Telegram Stars subscription for you, but **not one billed by
+  Apple** — cancel that in iOS Settings first (Section 11.4). Unused Virtual Items are lost on deletion
   (Section 11.7).
 
 ---

@@ -423,7 +423,7 @@ at any meaningful scale, not for the current handful of accounts.
 | 15 | One-time in-product notice of Privacy v4.3 / Terms v3.1 to existing users (no re-acceptance flow exists) | Before the flags go on | RoPA §6 item 9 |
 | 16 | One-time in-app notice of frequently visited places, with the switch on the same screen (`legal/ios-permission-strings.md` §3 item 3) | **High — the feature is live** | R15; RoPA §6 item 13 |
 | 17 | Founder decision: keep `frequent_places_opt_in` default true, or turn it off for accounts that never saw item 16; and whether to gate the match's block to a confirmed date | High | R15 |
-| 18 | Cancel a Telegram Stars Premium subscription inside `deleteUserAccount` | High (consumer harm, not data) | RoPA §6 item 14 |
+| 18 | Cancel a Telegram Stars Premium subscription inside `deleteUserAccount` | **Done 2026-10-13** | RoPA §6 item 14 |
 
 ---
 

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getMainBotApi: vi.fn(),
   notifyFounder: vi.fn(),
   notifyFounderStuckRefunds: vi.fn(),
+  notifyFounderSubscriptionLive: vi.fn(),
   unpinKnownStatusBanner: vi.fn(),
   findRefundsInFlight: vi.fn(),
   writeSafetyTombstones: vi.fn(),
@@ -89,6 +90,7 @@ vi.mock("./main-bot-api.js", () => ({
 vi.mock("./founder-notify.js", () => ({
   notifyFounderAccountClosed: mocks.notifyFounder,
   notifyFounderDeletionStuckRefunds: mocks.notifyFounderStuckRefunds,
+  notifyFounderDeletionSubscriptionLive: mocks.notifyFounderSubscriptionLive,
   FOUNDER_ACCOUNT_CLOSED_SELECT: {
     firstName: true,
     age: true,
@@ -168,6 +170,7 @@ beforeEach(() => {
   mocks.downloadProfileImage.mockResolvedValue(Buffer.from("img"));
   mocks.notifyFounder.mockResolvedValue(undefined);
   mocks.notifyFounderStuckRefunds.mockResolvedValue(undefined);
+  mocks.notifyFounderSubscriptionLive.mockResolvedValue(undefined);
   mocks.unpinKnownStatusBanner.mockResolvedValue(undefined);
   mocks.findRefundsInFlight.mockResolvedValue({ blocking: [], stale: [] });
   mocks.writeSafetyTombstones.mockResolvedValue({
@@ -456,6 +459,83 @@ describe("deleteUserAccount", () => {
     expect(mocks.unpinKnownStatusBanner.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.userDelete.mock.invocationCallOrder[0]!,
     );
+  });
+
+  // ── A Stars Premium subscription must not outlive the account ───────────
+
+  function withStarsSubscription(overrides: Record<string, unknown> = {}) {
+    mocks.userFindUnique.mockResolvedValue({
+      id: USER_ID,
+      telegramId: 42n,
+      statusMessageId: null,
+      selfiePath: null,
+      verifiedSelfiePath: null,
+      premiumProvider: "telegram_stars",
+      premiumExternalId: "charge-anchor",
+      premiumAutoRenew: true,
+      profile: { photos: [], profileMedia: [], pendingPhotoCandidates: [] },
+      ...overrides,
+    });
+  }
+
+  it("cancels a renewing Stars subscription after the account is deleted", async () => {
+    withStarsSubscription();
+    const editUserStarSubscription = vi.fn().mockResolvedValue(true);
+
+    await deleteUserAccount(USER_ID, { editUserStarSubscription } as any);
+
+    expect(editUserStarSubscription).toHaveBeenCalledWith(42, "charge-anchor", true);
+    expect(editUserStarSubscription.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.userDelete.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.notifyFounderSubscriptionLive).not.toHaveBeenCalled();
+  });
+
+  it("uses the main bot API when the caller has none (DELETE /v1/me)", async () => {
+    withStarsSubscription();
+    const editUserStarSubscription = vi.fn().mockResolvedValue(true);
+    mocks.getMainBotApi.mockReturnValue({ editUserStarSubscription });
+
+    await deleteUserAccount(USER_ID, null);
+
+    expect(editUserStarSubscription).toHaveBeenCalledWith(42, "charge-anchor", true);
+  });
+
+  it("still deletes, and tells the founder, when the cancel fails", async () => {
+    withStarsSubscription();
+    const editUserStarSubscription = vi.fn().mockRejectedValue(new Error("Telegram down"));
+
+    const result = await deleteUserAccount(USER_ID, { editUserStarSubscription } as any);
+
+    expect(result.deleted).toBe(true);
+    expect(mocks.notifyFounderSubscriptionLive).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_ID, telegramId: 42n, chargeId: "charge-anchor" }),
+    );
+  });
+
+  it("leaves a cancelled, App Store, or anchorless Premium alone", async () => {
+    const editUserStarSubscription = vi.fn().mockResolvedValue(true);
+    for (const overrides of [
+      { premiumAutoRenew: false },
+      { premiumProvider: "app_store" },
+      { premiumExternalId: null },
+    ]) {
+      withStarsSubscription(overrides);
+      await deleteUserAccount(USER_ID, { editUserStarSubscription } as any);
+    }
+    expect(editUserStarSubscription).not.toHaveBeenCalled();
+    expect(mocks.notifyFounderSubscriptionLive).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel the subscription when the deletion is deferred", async () => {
+    withStarsSubscription();
+    mocks.findRefundsInFlight.mockResolvedValueOnce({ blocking: [YOUNG_REFUND], stale: [] });
+    const editUserStarSubscription = vi.fn().mockResolvedValue(true);
+
+    await expect(
+      deleteUserAccount(USER_ID, { editUserStarSubscription } as any),
+    ).rejects.toBeInstanceOf(AccountDeletionDeferredError);
+    expect(editUserStarSubscription).not.toHaveBeenCalled();
   });
 
   it("returns a not-found result without touching related systems", async () => {

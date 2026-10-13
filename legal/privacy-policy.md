@@ -957,10 +957,11 @@ that the request comes from you.
   the iPhone app, in Settings → Delete account; in Telegram, in ⚙️ Settings →
   🗑 Delete Account. You confirm once and the erasure runs at once. Two things
   to know: **removing the app from your phone does not delete your account**,
-  and **deleting your account does not cancel a running Premium
-  subscription** — Apple or Telegram bills it, not us. Cancel it first: in iOS
-  Settings → your name → Subscriptions, or in Telegram → Settings → My Stars →
-  Subscriptions (or just tell our bot you want to cancel). If a refund
+  and **a Premium subscription bought through the App Store is not cancelled by
+  deleting your account** — Apple bills it, not us, so cancel it in iOS
+  Settings → your name → Subscriptions. A Premium subscription paid in Telegram
+  Stars is cancelled for you when you delete your account; if a renewal is
+  still charged after that, we refund it in Stars. If a refund
   connected to your account is still being processed, the app tells you so and
   asks you to retry once it has gone through;
 - **Switch off frequently visited places**, or hide any single place, in the

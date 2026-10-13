@@ -989,6 +989,36 @@ export async function notifyFounderDeletionStuckRefunds(input: {
 }
 
 /**
+ * An account was deleted while its Telegram Stars Premium subscription was set
+ * to renew, and the cancel call failed. Telegram will keep charging a person we
+ * no longer know; the renewal handler refunds such a charge when it arrives,
+ * but only cancelling stops the next one. The founder gets the charge id that
+ * `editUserStarSubscription` needs.
+ */
+export async function notifyFounderDeletionSubscriptionLive(input: {
+  userId: string;
+  telegramId: bigint;
+  chargeId: string;
+  error: string;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const lines = [
+    `⭐ Аккаунт удалён, а подписку Premium в Stars отменить не удалось — Telegram продолжит списывать.`,
+    `User: ${input.userId}`,
+    `Telegram ID: ${input.telegramId.toString()}`,
+    `Charge id: ${input.chargeId}`,
+    `Ошибка: ${input.error.slice(0, 300)}`,
+    "Отменить вручную: editUserStarSubscription(telegramId, chargeId, true).",
+  ];
+  try {
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} deletion subscription notify failed`, { userId: input.userId, err });
+  }
+}
+
+/**
  * Restoring a returning person's safety history failed after their identity
  * was already attached (A13-H14).
  *

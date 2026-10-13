@@ -83,7 +83,7 @@ product change. Every addition describes something already in the code.
   images, Telegram sign-in, Apple Music, Spotify); §14 (`appAccountToken`,
   Prime Time Pass, Premium packages); §16 (seven new rows); §18 (deletion paths
   in the app and the bot; deleting the app ≠ deleting the account; deleting the
-  account does not cancel a subscription).
+  account cancels a Stars subscription, not an App Store one).
 - **Terms** — version line; §2 (AI Export removed; venue change, Prime Time
   Pass, App); §5 (AI Export removed); §8 (zero tolerance, report and block, the
   24-hour aim — App Store 1.2); §9 and §11.3 (**two** venue changes per date,
@@ -105,9 +105,12 @@ product change. Every addition describes something already in the code.
 1. Frequently visited places has been live since 2026-09-22, on by default and
    undisclosed. v4.4 discloses it; existing users still need a one-time notice
    (ROPA item 13, DPIA R15 / actions 16–17).
-2. Deleting an account does not cancel a Telegram Stars Premium subscription;
-   a renewal after deletion is answered `user-not-found` and not refunded (ROPA
-   item 14, DPIA action 18). The documents tell users to cancel first.
+2. Fixed 2026-10-13: deleting an account now cancels a Telegram Stars Premium
+   subscription (`deleteUserAccount` → `editUserStarSubscription`, founder alert
+   if it fails), and a renewal that still arrives for a deleted account is
+   cancelled and refunded (`refundOrphanPremiumRenewal` in
+   `handlers/payments.ts`). App Store subscriptions remain Apple's to cancel
+   (ROPA item 14, DPIA action 18 — closed).
 3. `referral_identities` has no retention sweep (ROPA item 15) — referral is off.
 4. The iOS app offers "Continue with Telegram" but no Sign in with Apple. App
    Store Guideline 4.8 requires an equivalent privacy-preserving login option
