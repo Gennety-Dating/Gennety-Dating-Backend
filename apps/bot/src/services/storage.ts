@@ -309,6 +309,35 @@ export async function createProfilePhotoSignedUrl(
 }
 
 /**
+ * The caller's own profile photos signed in ONE Storage request (the photo
+ * editor's answers), index for index: the same URL-or-null per path that
+ * `createProfilePhotoSignedUrl` gives, same bucket, same TTL — the batch route
+ * answers the same relative `signedURL` and `null` for a missing object, and
+ * the same traversal guard refuses a key before it is sent.
+ *
+ * Unlike `createChatImageSignedUrls`, a batch call that fails as a whole falls
+ * back to signing one by one EXACTLY as the single helper does — errors
+ * included. These answers never swallowed a Storage failure, and still don't.
+ */
+export async function createProfilePhotoSignedUrls(
+  paths: readonly string[],
+  expiresInSeconds: number,
+): Promise<Array<string | null>> {
+  if (paths.length === 0) return [];
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return paths.map(() => null);
+  const bucket = env.SUPABASE_PHOTO_BUCKET;
+  const safe = [...new Set(paths)].filter((path) => isSafeStorageObjectPath(path));
+  const signed =
+    safe.length === 0
+      ? new Map<string, string | null>()
+      : safe.length <= SIGN_BATCH_MAX
+        ? await signBatch(bucket, safe, expiresInSeconds)
+        : null;
+  if (signed) return paths.map((path) => signed.get(path) ?? null);
+  return Promise.all(paths.map((path) => createSignedUrl(bucket, path, expiresInSeconds)));
+}
+
+/**
  * A 50 MB video over a 20 s budget needs 2.5 MB/s sustained, which a slow
  * Supabase region round-trip does not always give. Photos keep the short one.
  */

@@ -32,7 +32,7 @@ import {
 } from "../rate-limit.js";
 import { validateSingleFaceFromBuffer } from "../../services/vision/validate-face.js";
 import {
-  createProfilePhotoSignedUrl,
+  createProfilePhotoSignedUrls,
   deleteStorageObject,
   uploadProfilePhoto,
 } from "../../services/storage.js";
@@ -726,15 +726,14 @@ function photoUploadWithErrorHandling(
  * Mobile clients never see raw storage paths — render requires a
  * short-lived signed URL. This helper maps paths 1:1 to URLs; if
  * Supabase isn't configured (local dev) the URL slot is an empty
- * string so the array shape is stable.
+ * string so the array shape is stable. One Storage request for the whole
+ * set rather than one per photo (`createProfilePhotoSignedUrls`).
  */
 async function buildPhotosResponse(
   paths: string[],
 ): Promise<{ photos: string[]; signedUrls: string[] }> {
-  const signedUrls = await Promise.all(
-    paths.map(async (p) => (await createProfilePhotoSignedUrl(p, PHOTO_SIGNED_URL_TTL_S)) ?? ""),
-  );
-  return { photos: paths, signedUrls };
+  const signed = await createProfilePhotoSignedUrls(paths, PHOTO_SIGNED_URL_TTL_S);
+  return { photos: paths, signedUrls: signed.map((url) => url ?? "") };
 }
 
 function serializePhotoConsensus(

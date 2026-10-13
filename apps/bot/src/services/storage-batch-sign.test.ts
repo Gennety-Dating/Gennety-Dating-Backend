@@ -15,10 +15,12 @@ vi.mock("../config.js", () => ({
     SUPABASE_URL: "https://supabase.test",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
     SUPABASE_CHAT_BUCKET: "chat",
+    SUPABASE_PHOTO_BUCKET: "photos",
   },
 }));
 
-const { createChatImageSignedUrls } = await import("./storage.js");
+const { createChatImageSignedUrls, createProfilePhotoSignedUrl, createProfilePhotoSignedUrls } =
+  await import("./storage.js");
 
 const A = "11111111-1111-4111-8111-111111111111/1750000000001.jpg";
 const B = "11111111-1111-4111-8111-111111111111/1750000000002.png";
@@ -142,5 +144,76 @@ describe("createChatImageSignedUrls", () => {
       `https://supabase.test/storage/v1/object/sign/chat/${A}?token=sa`,
       null,
     ]);
+  });
+});
+
+/**
+ * `createProfilePhotoSignedUrls` — the photo editor's answers (perf
+ * 2026-10-13): one request instead of one per photo, the same URL-or-null per
+ * path the single helper gives, and — unlike the chat page — a Storage failure
+ * that the single helper would raise is still raised.
+ */
+describe("createProfilePhotoSignedUrls", () => {
+  it("signs every photo in ONE request with the given TTL, index for index", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json([
+        { error: null, path: A, signedURL: `/object/sign/photos/${A}?token=ta` },
+        { error: "Either the object does not exist or you do not have access to it", path: B, signedURL: null },
+      ]),
+    );
+
+    const urls = await createProfilePhotoSignedUrls([A, TRAVERSAL, B], 600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toBe("https://supabase.test/storage/v1/object/sign/photos");
+    expect(JSON.parse(String(init.body))).toEqual({ expiresIn: 600, paths: [A, B] });
+    expect(urls).toEqual([`https://supabase.test/storage/v1/object/sign/photos/${A}?token=ta`, null, null]);
+  });
+
+  it("answers what the single helper answers for each path", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ signedURL: `/object/sign/photos/${A}?token=ta` }))
+      .mockResolvedValueOnce(json({}, 400));
+    const single = [
+      await createProfilePhotoSignedUrl(A, 600),
+      await createProfilePhotoSignedUrl(B, 600),
+      await createProfilePhotoSignedUrl(TRAVERSAL, 600),
+    ];
+    fetchMock.mockResolvedValueOnce(
+      json([
+        { error: null, path: A, signedURL: `/object/sign/photos/${A}?token=ta` },
+        { error: "Either the object does not exist or you do not have access to it", path: B, signedURL: null },
+      ]),
+    );
+    expect(await createProfilePhotoSignedUrls([A, B, TRAVERSAL], 600)).toEqual(single);
+  });
+
+  it("makes no request for no photos, or only refused keys", async () => {
+    expect(await createProfilePhotoSignedUrls([], 600)).toEqual([]);
+    expect(await createProfilePhotoSignedUrls([TRAVERSAL], 600)).toEqual([null]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the single route when the batch call fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ statusCode: "500", error: "internal" }, 500))
+      .mockResolvedValueOnce(json({ signedURL: `/object/sign/photos/${A}?token=sa` }))
+      .mockResolvedValueOnce(json({}, 400));
+
+    expect(await createProfilePhotoSignedUrls([A, B], 600)).toEqual([
+      `https://supabase.test/storage/v1/object/sign/photos/${A}?token=sa`,
+      null,
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("still raises a failure the single route raises", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockResolvedValueOnce(json({ signedURL: `/object/sign/photos/${B}?token=sb` }));
+
+    await expect(createProfilePhotoSignedUrls([A, B], 600)).rejects.toThrow("socket hang up");
   });
 });

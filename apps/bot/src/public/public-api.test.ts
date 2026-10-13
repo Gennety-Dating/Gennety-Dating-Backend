@@ -1153,6 +1153,9 @@ vi.mock("../services/storage.js", () => ({
   createProfilePhotoSignedUrl: vi.fn(
     async (path: string) => `https://signed.test/photo/${path}`,
   ),
+  createProfilePhotoSignedUrls: vi.fn(async (paths: string[]) =>
+    paths.map((path) => `https://signed.test/photo/${path}`),
+  ),
   createVoicePromptSignedUrl: vi.fn(
     async (path: string) => `https://signed.test/voice/${path}`,
   ),
