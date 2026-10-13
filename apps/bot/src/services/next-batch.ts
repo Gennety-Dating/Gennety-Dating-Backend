@@ -82,18 +82,36 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
 };
 
+/**
+ * One formatter per zone, built on first use. A `DateTimeFormat` is immutable
+ * and `formatToParts` is pure, so a kept one answers exactly what a fresh one
+ * would — and building one is the expensive part (ICU data lookup), done two to
+ * four times per batch-date computation, which `/v1/countdown`, `/v1/date/state`
+ * and the pulse each run on every poll. Only `CRON_TIMEZONE` ever reaches it.
+ */
+const zonedPartsFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function zonedPartsFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = zonedPartsFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      weekday: "short",
+    });
+    zonedPartsFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 function getZonedParts(date: Date, timeZone: string): ZonedParts {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    weekday: "short",
-  }).formatToParts(date);
+  const parts = zonedPartsFormatter(timeZone).formatToParts(date);
 
   const map: Record<string, string> = {};
   for (const p of parts) map[p.type] = p.value;
