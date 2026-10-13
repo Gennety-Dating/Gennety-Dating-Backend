@@ -46,6 +46,7 @@ import { DEMO_MODE_ENABLED, PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import type { BotContext } from "../../session.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
+import { lockMatchRow } from "../../services/match-row-lock.js";
 import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { matchTimeZone } from "../../services/match-time-zone.js";
@@ -1101,7 +1102,10 @@ export async function submitVenueLikes(
     data: {
       ...resetOnRestart(access.restart),
       [likesColumn]: snapshots as unknown as Prisma.InputJsonValue[],
-      venueChangeStatus: snapshots.length > 0 ? "liking" : match.venueChangeStatus,
+      // Clearing my own marks leaves the session status alone. It used to write
+      // back the status from the snapshot, so a partner who opened the session
+      // in the meantime (null → liking) had it closed under their fresh likes.
+      ...(snapshots.length > 0 ? { venueChangeStatus: "liking" } : {}),
     },
   });
   if (written.count === 0) return { ok: false, reason: "wrong-state" };
@@ -1195,12 +1199,38 @@ async function refreshBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Sid
 
   const stampCol = likerSide === "A" ? "venueChangePingSentToBAt" : "venueChangePingSentToAAt";
   const msgCol = likerSide === "A" ? "venueChangePingMsgIdB" : "venueChangePingMsgIdA";
-  await prisma.match
-    .update({
-      where: { id: match.id },
-      data: { [stampCol]: new Date(), [msgCol]: sent.message_id },
+  await recordBoardMessage(api, chatId, match.id, msgCol, prevId, sent.message_id, {
+    [stampCol]: new Date(),
+  });
+}
+
+type BoardMessageColumn = "venueChangePingMsgIdA" | "venueChangePingMsgIdB";
+
+/**
+ * Take over the partner's ONE board-message slot — only from the message this
+ * request replaced. Two submissions racing (a double tap, two surfaces) each
+ * deleted the same old invite and each posted a new one; the last write won the
+ * slot and the other message was orphaned in the chat for good. Now the loser
+ * sees the slot already moved on and withdraws its own message.
+ */
+async function recordBoardMessage(
+  api: Api<RawApi>,
+  chatId: number,
+  matchId: string,
+  msgCol: BoardMessageColumn,
+  prevId: number | null,
+  sentId: number,
+  extra: Prisma.MatchUpdateManyMutationInput = {},
+): Promise<void> {
+  const taken = await prisma.match
+    .updateMany({
+      where: { id: matchId, [msgCol]: prevId },
+      data: { ...extra, [msgCol]: sentId },
     })
-    .catch(() => undefined);
+    .catch(() => null);
+  if (taken?.count === 0) {
+    await api.deleteMessage(chatId, sentId).catch(() => undefined);
+  }
 }
 
 /** Delete both sides' board-invite messages and forget their ids. */
@@ -1213,13 +1243,15 @@ async function retireBoardPings(api: Api<RawApi>, match: VcMatch): Promise<void>
     if (msgId == null || !telegramReachable({ telegramId, platform })) continue;
     await api.deleteMessage(toTelegramChatId(telegramId), msgId).catch(() => undefined);
   }
-  if (match.venueChangePingMsgIdA == null && match.venueChangePingMsgIdB == null) return;
-  await prisma.match
-    .update({
-      where: { id: match.id },
-      data: { venueChangePingMsgIdA: null, venueChangePingMsgIdB: null },
-    })
-    .catch(() => undefined);
+  // Forget only the ids we just deleted: a fresh invite posted meanwhile keeps
+  // its slot instead of being orphaned behind a null.
+  for (const col of ["venueChangePingMsgIdA", "venueChangePingMsgIdB"] as const) {
+    const readId = match[col];
+    if (readId == null) continue;
+    await prisma.match
+      .updateMany({ where: { id: match.id, [col]: readId }, data: { [col]: null } })
+      .catch(() => undefined);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1858,50 +1890,76 @@ export async function keepOriginalVenue(
   });
   if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
 
-  const wasAgreed = match.venueChangeStatus === "agreed";
-  const wasExpress = match.venueChangeExpressAt != null;
-  const peerHasLikes = likesOfSide(match, otherSide(side)).length > 0;
-  const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
+  // Decided and written under the row lock, from a read taken inside it. The
+  // outcome depends on the PARTNER's marks (keep the session open for them, or
+  // retire it), and a status-only compare-and-set cannot see those: a heart
+  // the partner placed between our snapshot and our write left the session
+  // `liking`, so the CAS matched and we retired it — and their fresh likes were
+  // left sitting on a closed board, ready to turn the next stray tap into an
+  // instant, paid agreement.
+  const decided = await prisma.$transaction(async (tx) => {
+    await lockMatchRow(tx, matchId);
+    const fresh = await tx.match.findUnique({ where: { id: matchId }, select: VC_SELECT });
+    // Eligibility was judged on the snapshot's session state; anything that
+    // moved it since is a stale tap.
+    if (
+      !fresh ||
+      fresh.status !== "scheduled" ||
+      fresh.venueChangeStatus !== match.venueChangeStatus
+    ) {
+      return null;
+    }
 
-  // The session stays open while the PARTNER still has marks on the board;
-  // once neither of us has any, it closes back to a pristine "no session".
-  const nextStatus = peerHasLikes ? "liking" : null;
+    const wasAgreed = fresh.venueChangeStatus === "agreed";
+    const wasExpress = fresh.venueChangeExpressAt != null;
+    const peerHasLikes = likesOfSide(fresh, otherSide(side)).length > 0;
+    const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
 
-  const data: Prisma.MatchUpdateInput = {
-    [likesColumn]: [] as unknown as Prisma.InputJsonValue[],
-    venueChangeStatus: nextStatus,
-    venueChangeName: null,
-    venueChangeAddress: null,
-    venueChangeLat: null,
-    venueChangeLng: null,
-    venueChangeMapsUri: null,
-    venueChangePlaceId: null,
-    venueChangePhotoName: null,
-    venueChangeExpiresAt: null,
-    venueChangeExpressAt: null,
-  };
-  if (nextStatus === null) {
-    // Nobody is marking anything anymore — retire the whole session, so a later
-    // change starts clean (including who initiates and who gets the ping).
-    data.venueChangeProposerId = null;
-    data.venueChangeProposedAt = null;
-    data.venueChangePingSentToAAt = null;
-    data.venueChangePingSentToBAt = null;
-    data.venueChangePingMsgIdA = null;
-    data.venueChangePingMsgIdB = null;
-    data.venueChangeOfferPaySentAt = null;
-    data.venueChangePayDeclinedAt = null;
-  }
+    // The session stays open while the PARTNER still has marks on the board;
+    // once neither of us has any, it closes back to a pristine "no session".
+    const nextStatus = peerHasLikes ? "liking" : null;
 
-  const claim = await prisma.match.updateMany({
-    where: {
-      id: matchId,
-      status: "scheduled",
-      venueChangeStatus: match.venueChangeStatus,
-    },
-    data: data as Prisma.MatchUpdateManyMutationInput,
+    const data: Prisma.MatchUpdateInput = {
+      [likesColumn]: [] as unknown as Prisma.InputJsonValue[],
+      venueChangeStatus: nextStatus,
+      venueChangeName: null,
+      venueChangeAddress: null,
+      venueChangeLat: null,
+      venueChangeLng: null,
+      venueChangeMapsUri: null,
+      venueChangePlaceId: null,
+      venueChangePhotoName: null,
+      venueChangeExpiresAt: null,
+      venueChangeExpressAt: null,
+    };
+    if (nextStatus === null) {
+      // Nobody is marking anything anymore — retire the whole session, so a later
+      // change starts clean (including who initiates and who gets the ping).
+      data.venueChangeProposerId = null;
+      data.venueChangeProposedAt = null;
+      data.venueChangePingSentToAAt = null;
+      data.venueChangePingSentToBAt = null;
+      data.venueChangePingMsgIdA = null;
+      data.venueChangePingMsgIdB = null;
+      data.venueChangeOfferPaySentAt = null;
+      data.venueChangePayDeclinedAt = null;
+    }
+
+    const claim = await tx.match.updateMany({
+      where: {
+        id: matchId,
+        status: "scheduled",
+        venueChangeStatus: fresh.venueChangeStatus,
+      },
+      data: data as Prisma.MatchUpdateManyMutationInput,
+    });
+    if (claim.count === 0) return null;
+    return { fresh, wasAgreed, wasExpress, peerHasLikes, nextStatus };
   });
-  if (claim.count === 0) return { ok: false, reason: "wrong-state" };
+  if (!decided) return { ok: false, reason: "wrong-state" };
+  const { wasAgreed, wasExpress, peerHasLikes, nextStatus } = decided;
+  // Everything below speaks from the locked read, not the request's snapshot.
+  const current = decided.fresh;
 
   console.info(
     `[venue-change] keep-original match=${matchId} by=${me.id} wasAgreed=${wasAgreed} ` +
@@ -1909,7 +1967,7 @@ export async function keepOriginalVenue(
   );
   syncLiveActivities(matchId);
 
-  const peer = userOfSide(match, otherSide(side));
+  const peer = userOfSide(current, otherSide(side));
   let toldPartner = false;
 
   if (wasAgreed && !wasExpress) {
@@ -1920,7 +1978,7 @@ export async function keepOriginalVenue(
       await api
         .sendMessage(
           toTelegramChatId(peer.telegramId),
-          t(langOf(peer.language), "venueKeepOriginalDm", { venue: match.venueName ?? "" }),
+          t(langOf(peer.language), "venueKeepOriginalDm", { venue: current.venueName ?? "" }),
         )
         .catch(() => undefined);
     }
@@ -1930,7 +1988,7 @@ export async function keepOriginalVenue(
     // dismiss them, voice the preference: replace their single live board
     // message with an "I'd like to keep {venue}" note (they can still suggest
     // more — the board is not closed).
-    await refreshKeepNotice(api, match, side).catch((err) => {
+    await refreshKeepNotice(api, current, side).catch((err) => {
       console.warn("[venue-change] keep notice failed:", err);
     });
     toldPartner = true;
@@ -1938,7 +1996,7 @@ export async function keepOriginalVenue(
 
   // A fully-retired session leaves stale board-invite messages behind — bin them.
   if (nextStatus === null) {
-    await retireBoardPings(api, match).catch(() => undefined);
+    await retireBoardPings(api, current).catch(() => undefined);
   }
   return { ok: true, toldPartner };
 }
@@ -1974,9 +2032,7 @@ async function refreshKeepNotice(api: Api<RawApi>, match: VcMatch, keeperSide: S
   if (!sent) return;
 
   const msgCol = recipientSide === "A" ? "venueChangePingMsgIdA" : "venueChangePingMsgIdB";
-  await prisma.match
-    .update({ where: { id: match.id }, data: { [msgCol]: sent.message_id } })
-    .catch(() => undefined);
+  await recordBoardMessage(api, chatId, match.id, msgCol, prevId, sent.message_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -2505,7 +2561,17 @@ async function finalizeVenueChangeFree(
   if (!side) return { ok: false, reason: "not-participant" };
   const settler = userOfSide(match, side);
 
-  const claimWhere = { id: matchId, status: "scheduled", venueChangeStatus: "agreed" } as const;
+  // The agreement columns ride in the guard, as in the Stars settle: the venue
+  // copied below is the one read above, so it may only land while that is still
+  // the agreement. Without them a change re-agreed in the moment between (the
+  // first one declined or lapsed, a new one reached) was settled with the OLD
+  // agreement's venue — the row then said "settled" over a place nobody chose.
+  const claimWhere = {
+    id: matchId,
+    status: "scheduled",
+    venueChangeStatus: "agreed",
+    ...venueAgreementWhere(match),
+  } satisfies Prisma.MatchWhereInput;
   const claimData = {
     venueChangeStatus: "settled",
     venueChangeResolvedAt: new Date(),
@@ -2683,10 +2749,14 @@ export async function sweepExpiredVenueChanges(
       const hasLikes =
         parseLikes(match.venueLikesA).length > 0 || parseLikes(match.venueLikesB).length > 0;
       const claim = await prisma.match.updateMany({
+        // Pinned to the agreement scanned above (its deadline included): the loop
+        // below sends DMs, so a row is claimed seconds after the scan, and a
+        // NEW agreement reached in that gap is not this sweep's to undo.
         where: {
           id: match.id,
           status: "scheduled",
           venueChangeStatus: "agreed",
+          ...venueAgreementWhere(match),
           venueChangeExpressAt: { not: null },
         },
         data: {
@@ -2713,10 +2783,14 @@ export async function sweepExpiredVenueChanges(
       // Re-asserted here as well: the match can be cancelled between the scan
       // above and this write, and that is exactly the window the notification
       // would fall into.
+      //
+      // And pinned to the agreement that was due, as above — lapsing a fresh
+      // one would close the board for the date over a deadline it never had.
       where: {
         id: match.id,
         status: "scheduled",
         venueChangeStatus: "agreed",
+        ...venueAgreementWhere(match),
         venueChangeExpressAt: null,
       },
       data: {

@@ -26,13 +26,15 @@ vi.mock("../config.js", () => ({
 
 const matchFindUnique = vi.fn();
 const matchUpdate = vi.fn();
+const AGREED = new Date("2026-05-01T19:00:00.000Z");
 const userFindUnique = vi.fn();
 const profileFindUnique = vi.fn();
 const placeCacheFindUnique = vi.fn();
 const placeCacheUpsert = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: matchFindUnique, update: matchUpdate },
+    // The pin is written with a round-guarded `updateMany`.
+    match: { findUnique: matchFindUnique, updateMany: matchUpdate },
     user: { findUnique: userFindUnique },
     // Read by the departure-point gate (`services/venue-origin.ts`).
     profile: { findUnique: profileFindUnique },
@@ -642,6 +644,7 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-other", platform: "telegram" });
     const initData = signInitData(BOT_TOKEN);
@@ -658,9 +661,10 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
-    matchUpdate.mockResolvedValueOnce({});
+    matchUpdate.mockResolvedValueOnce({ count: 1 });
     const initData = signInitData(BOT_TOKEN);
 
     const res = await request(buildApp())
@@ -678,7 +682,13 @@ describe("POST /v1/location/select", () => {
       where: { id: string };
       data: Record<string, unknown>;
     };
-    expect(updateArg.where.id).toBe(VALID_UUID);
+    // Guarded on the round the request read (status + agreed time), so a stage
+    // that moved on in the meantime does not get this pin planted on it.
+    expect(updateArg.where).toEqual({
+      id: VALID_UUID,
+      status: "negotiating_venue",
+      agreedTime: AGREED,
+    });
     expect(updateArg.data).toEqual({
       vibeLatA: 50.45,
       vibeLngA: 30.52,
@@ -707,9 +717,10 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-B", platform: "telegram" });
-    matchUpdate.mockResolvedValueOnce({});
+    matchUpdate.mockResolvedValueOnce({ count: 1 });
     const initData = signInitData(BOT_TOKEN);
 
     const res = await request(buildApp())
@@ -734,9 +745,10 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
-    matchUpdate.mockResolvedValueOnce({});
+    matchUpdate.mockResolvedValueOnce({ count: 1 });
     const initData = signInitData(BOT_TOKEN);
     const huge = "x".repeat(2000);
 
@@ -759,6 +771,7 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
     const initData = signInitData(BOT_TOKEN);
@@ -783,9 +796,10 @@ describe("POST /v1/location/select", () => {
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating_venue",
+      agreedTime: AGREED,
     });
     userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
-    matchUpdate.mockResolvedValueOnce({});
+    matchUpdate.mockResolvedValueOnce({ count: 1 });
     const initData = signInitData(BOT_TOKEN);
 
     const res = await request(buildApp())
@@ -875,5 +889,30 @@ describe("marketBoundingBox", () => {
     expect(box.low.latitude).toBeGreaterThanOrEqual(-90);
     expect(box.high.longitude).toBeLessThanOrEqual(180);
     expect(box.low.longitude).toBeGreaterThanOrEqual(-180);
+  });
+
+  it("refuses the pin when the venue round moved on while the origin was checked", async () => {
+    matchFindUnique.mockResolvedValueOnce({
+      id: VALID_UUID,
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating_venue",
+      agreedTime: AGREED,
+    });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
+    // Sent back to the calendar / scheduled / cancelled between read and write.
+    matchUpdate.mockResolvedValueOnce({ count: 0 });
+    const initData = signInitData(BOT_TOKEN);
+
+    const res = await request(buildApp())
+      .post("/v1/location/select")
+      .set("Authorization", `tma ${initData}`)
+      .send({ matchId: VALID_UUID, lat: 50.45, lng: 30.52 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("wrong-state");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(tryFinalize).not.toHaveBeenCalled();
+    expect(sendVenuePostSaveAck).not.toHaveBeenCalled();
   });
 });

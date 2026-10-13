@@ -11,6 +11,23 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Simultaneous actions on one match: row locks + compare-and-set (code only).**
+No migration, no env, no flag, no new route. What changes at runtime: the calendar save, the 48h stall cancel and the
+venue board's "keep the original" now run as one `SELECT … FOR UPDATE` transaction on the match row
+(`services/match-row-lock.ts`); venue finalization reruns once after a run that a second confirm joined; the venue-change
+settle and expiry claims are pinned to the agreement fingerprint; the gate-expiry claim requires both slots empty; the
+ticket offer arms only an untouched gate; wallet-spend refunds share one key per spend (`spend-refund:<ledger id>`);
+the venue-change Stars refund claims the purchase row (`processing → refund_failed`) before calling Telegram.
+iOS: no contract change — a save that loses to the partner's simultaneous lock now answers 200 with `agreedTime`
+instead of 409 `stale_action`; a Mini App pin on a round that moved on answers 400 `wrong-state`.
+Demo: same code; a puppet calendar save racing the visitor's now counts as acted instead of `calendar:wrong-state`.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/handlers/matching/scheduler.test.ts src/services/match-stall.test.ts`;
+  with the test DB up, `pnpm test:integration` (includes `concurrency.integration.test.ts`). After restart:
+  `pm2 logs gennety-bot --lines 300 --nostream | grep -E "left processing before its refund|run failed, rerunning|lock timeout"`
+  should be empty or rare; `select count(*) from venue_change_purchases where status='refund_failed' and refund_error='refund in flight' and resolved_at < now() - interval '10 minutes'` → 0 (a non-zero row is a refund whose process died mid-call; the hourly sweep retries it).
+- **Откат:** previous release directory + restart. Nothing persisted needs undoing: new ledger keys are plain
+  `external_payment_id` strings, and `refund_failed` rows are exactly what the old sweep already retries.
+
 **PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
 Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
 no row rewritten — apply BEFORE the restart (the new code selects the column in the eligibility scan, the famine

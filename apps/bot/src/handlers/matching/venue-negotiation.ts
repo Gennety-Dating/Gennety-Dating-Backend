@@ -28,7 +28,7 @@ import type {
   InlineKeyboardMarkup,
   ReplyKeyboardMarkup,
 } from "grammy/types";
-import { prisma, type Theme } from "@gennety/db";
+import { prisma, type Prisma, type Theme } from "@gennety/db";
 import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { parseVibe, mergeParsed } from "../../services/vibe-parser.js";
@@ -173,33 +173,26 @@ async function sendTimeLockedCard(
 }
 
 /**
- * Enter `negotiating_venue`: writes the agreed time, sets the status, and
- * DMs both users the locked-time card followed by the location-first
- * concierge prompt (`venueConciergeIntro`) + the Mini App map button. The
- * vibe is asked separately once the departure point is saved (see
- * `sendVenuePostSaveAck`), so this opening message is scoped to a single,
- * unambiguous ask: "mark where you'll set off from".
+ * The `negotiating → negotiating_venue` claim, on whichever client the caller
+ * holds — `prisma`, or the calendar's row-locked transaction (so the
+ * intersection that chose the time and the claim that locks it see the same
+ * row). Only the first caller wins; the loser updates 0 rows. Same
+ * updateMany-with-count guard used in decision.ts / match-expiry.ts — a
+ * non-atomic findUnique-then-update would double-DM both users and clobber
+ * `agreedTime` / `calendarMessageId*`.
  *
- * Called from the scheduler the moment a time overlap is found.
+ * Подстраховка, а не основная проверка: время в прошлое отсекает
+ * `processCalendarSlotsUpdate` (единственный вызывающий). Guard стоит
+ * здесь потому, что запись `agreedTime` необратима по последствиям — все
+ * пред-свиданческие рельсы фильтруют `agreedTime > now` и на прошедшем
+ * времени молча не срабатывают, а матч через сутки сам уходит в
+ * `completed` с опросом о свидании, которого не было.
  */
-export async function startVenueNegotiation(
-  api: Api<RawApi>,
+export async function claimVenueNegotiation(
+  db: Pick<Prisma.TransactionClient, "match">,
   matchId: string,
   agreedTime: Date,
 ): Promise<boolean> {
-  // Atomic claim: only the first caller flips `negotiating → negotiating_venue`.
-  // Two concurrent calendar picks can each independently compute the same single
-  // overlap (`processCalendarSlotsUpdate`) and both call this in the same tick;
-  // the loser updates 0 rows and bails, so the concierge prompts are sent
-  // exactly once. Same updateMany-with-count guard used in decision.ts /
-  // match-expiry.ts — a non-atomic findUnique-then-update would double-DM both
-  // users and clobber `agreedTime` / `calendarMessageId*`.
-  // Подстраховка, а не основная проверка: время в прошлое отсекает
-  // `processCalendarSlotsUpdate` (единственный вызывающий). Guard стоит
-  // здесь потому, что запись `agreedTime` необратима по последствиям — все
-  // пред-свиданческие рельсы фильтруют `agreedTime > now` и на прошедшем
-  // времени молча не срабатывают, а матч через сутки сам уходит в
-  // `completed` с опросом о свидании, которого не было.
   if (agreedTime.getTime() <= Date.now()) {
     console.error(
       "[venue-negotiation] refusing to lock a past agreedTime",
@@ -209,7 +202,7 @@ export async function startVenueNegotiation(
     return false;
   }
 
-  const claim = await prisma.match.updateMany({
+  const claim = await db.match.updateMany({
     where: { id: matchId, status: "negotiating" },
     data: {
       status: "negotiating_venue",
@@ -219,12 +212,43 @@ export async function startVenueNegotiation(
       calendarMessageIdB: null,
     },
   });
-  if (claim.count === 0) return false;
+  return claim.count > 0;
+}
 
+/**
+ * Enter `negotiating_venue`: writes the agreed time, sets the status, and
+ * DMs both users the locked-time card followed by the location-first
+ * concierge prompt (`venueConciergeIntro`) + the Mini App map button. The
+ * vibe is asked separately once the departure point is saved (see
+ * `sendVenuePostSaveAck`), so this opening message is scoped to a single,
+ * unambiguous ask: "mark where you'll set off from".
+ */
+export async function startVenueNegotiation(
+  api: Api<RawApi>,
+  matchId: string,
+  agreedTime: Date,
+): Promise<boolean> {
+  // Atomic claim: only the first caller flips `negotiating → negotiating_venue`,
+  // so the concierge prompts are sent exactly once.
+  if (!(await claimVenueNegotiation(prisma, matchId, agreedTime))) return false;
+  await announceVenueNegotiation(api, matchId, agreedTime);
+  return true;
+}
+
+/**
+ * Everything that follows a WON claim: the lock-screen cards, the locked-time
+ * card and the concierge prompt. Never call it without having won
+ * {@link claimVenueNegotiation} — it is the claim that makes these run once.
+ */
+export async function announceVenueNegotiation(
+  api: Api<RawApi>,
+  matchId: string,
+  agreedTime: Date,
+): Promise<void> {
   // The time step is over: end both sides' `time_agreement` lock-screen cards on
   // the locked time (decision 2026-09-23). Here rather than only in
-  // `processCalendarSlotsUpdate` because THIS is the moment the row moves, and
-  // the claim above guarantees it happens exactly once. Fire-and-forget, lazily
+  // `processCalendarSlotsUpdate` because THIS follows the moment the row moves,
+  // and the won claim guarantees it happens exactly once. Fire-and-forget, lazily
   // imported, skipped where APNs is not configured.
   if (apnsConfigured()) {
     void import("../../services/time-agreement-activity.js")
@@ -246,7 +270,7 @@ export async function startVenueNegotiation(
       },
     },
   });
-  if (!match) return false;
+  if (!match) return;
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
@@ -279,7 +303,6 @@ export async function startVenueNegotiation(
     sends.push(sendSide(match.userB.telegramId, langB, match.userB.theme));
   }
   await Promise.all(sends);
-  return true;
 }
 
 /**
@@ -438,6 +461,25 @@ export async function resolveVenueRoutingState(
 }
 
 /**
+ * Write one side's venue answer only while the row is still in the round the
+ * message was read in. The handlers await an origin check (and, for text, an
+ * LLM parse) between resolving the match and writing; a stage that is meanwhile
+ * scheduled, cancelled or sent back to the calendar (which clears every vibe
+ * column) must not get this side's answer planted on it for the next round.
+ */
+async function writeVenueAnswer(
+  matchId: string,
+  agreedTime: Date | null,
+  data: Prisma.MatchUpdateManyMutationInput,
+): Promise<boolean> {
+  const written = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating_venue", agreedTime },
+    data,
+  });
+  return written.count > 0;
+}
+
+/**
  * Handler for `message:location` during `negotiating_venue`. Writes the
  * pin to the appropriate side of the match and triggers finalisation if
  * that completes the data set.
@@ -448,7 +490,7 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
 
   const resolved = await resolveMatchSide(ctx);
   if (!resolved) return;
-  const { matchId, side, userId } = resolved;
+  const { matchId, side, userId, agreedTime } = resolved;
 
   const lang = ctx.session.language;
 
@@ -489,7 +531,7 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
     side === "A"
       ? { vibeLatA: loc.latitude, vibeLngA: loc.longitude }
       : { vibeLatB: loc.latitude, vibeLngB: loc.longitude };
-  await prisma.match.update({ where: { id: matchId }, data });
+  if (!(await writeVenueAnswer(matchId, agreedTime, data))) return;
 
   await sendVenuePostSaveAck(
     ctx.api,
@@ -517,7 +559,7 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
 
   const resolved = await resolveMatchSide(ctx);
   if (!resolved) return;
-  const { matchId, side } = resolved;
+  const { matchId, side, agreedTime } = resolved;
 
   const lang = ctx.session.language;
   // Venue Intent V2 (live): the departure origin, the free-text vibe, AND the
@@ -577,7 +619,7 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
           vibeTextB: text,
           parsedCategoryB: parsed.category,
         };
-  await prisma.match.update({ where: { id: matchId }, data });
+  if (!(await writeVenueAnswer(matchId, agreedTime, data))) return;
 
   // Shadow traffic exercises the real multilingual parser/ranker while the
   // legacy result remains authoritative. This stored confirmation is isolated
@@ -863,7 +905,13 @@ async function notifyLegacyVenueSearchFailed(
  */
 async function resolveMatchSide(
   ctx: BotContext,
-): Promise<{ matchId: string; side: "A" | "B"; userId: string } | null> {
+): Promise<{
+  matchId: string;
+  side: "A" | "B";
+  userId: string;
+  /** The round this message belongs to — every write below is guarded on it. */
+  agreedTime: Date | null;
+} | null> {
   const fromId = ctx.from?.id;
   if (!fromId) return null;
 
@@ -882,7 +930,7 @@ async function resolveMatchSide(
       OR: [{ userAId: user.id }, { userBId: user.id }],
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, userAId: true },
+    select: { id: true, userAId: true, agreedTime: true },
   });
   if (!match) return null;
 
@@ -890,5 +938,6 @@ async function resolveMatchSide(
     matchId: match.id,
     side: match.userAId === user.id ? "A" : "B",
     userId: user.id,
+    agreedTime: match.agreedTime,
   };
 }

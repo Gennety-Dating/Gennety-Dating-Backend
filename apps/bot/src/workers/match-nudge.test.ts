@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma = {
+    // The stall cancellation judges and claims inside one row-locked
+    // transaction; the mock hands the callback the same client.
+    $transaction: vi.fn(),
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
     match: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -9,8 +13,10 @@ vi.mock("@gennety/db", () => ({
       updateMany: vi.fn(),
     },
     profile: { update: vi.fn() },
-  },
-}));
+  };
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+  return { prisma };
+});
 
 // The stall chain's cancellation settles Elo/priority — stub both so the worker
 // tests stay about scheduling and dispatch. Their own behaviour is covered in

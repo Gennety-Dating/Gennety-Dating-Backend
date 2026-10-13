@@ -4,7 +4,8 @@ import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
 import { DATE_ALERT_HOURS, DEFAULT_TIME_ZONE, t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
-import { startVenueNegotiation } from "./venue-negotiation.js";
+import { announceVenueNegotiation, claimVenueNegotiation } from "./venue-negotiation.js";
+import { lockMatchRow } from "../../services/match-row-lock.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
 import { zonedParts, wallToUtc } from "../../services/profiler-schedule.js";
 import {
@@ -442,6 +443,9 @@ async function replaceCalendarMessage(
     text,
     options,
     forceResend: resend,
+    // Every Calendar card belongs to the time step; one that lands after the
+    // partner's save locked the time is withdrawn instead of recorded.
+    onlyWhileStatus: "negotiating",
   });
 }
 
@@ -651,9 +655,6 @@ export async function processCalendarSlotsUpdate(
     new Map(picks.map((d) => [d.getTime(), d])).values(),
   ).sort((a, b) => a.getTime() - b.getTime());
 
-  const actorPrev = isA ? match.availableTimesA : match.availableTimesB;
-  const wasMineEmpty = actorPrev.length === 0;
-
   /**
    * Turn a LIVE entitlement into a permanent property of the match (§13.2).
    *
@@ -670,40 +671,118 @@ export async function processCalendarSlotsUpdate(
   const stampUnlock =
     wantsPrime && match.primeTimeUnlockedAt === null && shouldPersistUnlock(primeReason);
 
-  const saved = await prisma.match.updateMany({
-    where: { id: match.id, status: "negotiating" },
-    data: {
-      ...(isA
-        ? { availableTimesA: dedupedSorted }
-        : { availableTimesB: dedupedSorted }),
-      ...(stampUnlock ? { primeTimeUnlockedAt: new Date() } : {}),
-    },
-  });
-  if (saved.count === 0) return { ok: false, reason: "wrong-state" };
+  /**
+   * Save this side, read the partner, intersect, and lock — as ONE serialised
+   * step on the match row (`lockMatchRow`).
+   *
+   * Done as separate statements this had three races, each reachable by two
+   * people saving in the same second (or one person on two surfaces):
+   *   - the intersection mixed this request's payload with a peer array read
+   *     a moment earlier, so a time the partner had just WITHDRAWN could still
+   *     be locked;
+   *   - the request that lost the `negotiating → negotiating_venue` claim to
+   *     its partner's simultaneous save answered `wrong-state`, and the Mini App
+   *     showed an error over a date that had in fact just been agreed;
+   *   - two savers with several shared slots could each confirm a different
+   *     one and leave the pair with no overlap at all.
+   * Under the row lock the second saver simply sees the first one's result.
+   * Every Telegram/APNs side effect runs after the commit.
+   */
+  const sameInstant = (d: Date) => (x: Date) => x.getTime() === d.getTime();
+  const commit = await prisma.$transaction(async (tx) => {
+    await lockMatchRow(tx, match.id);
+    const row = await tx.match.findUnique({
+      where: { id: match.id },
+      select: {
+        status: true,
+        agreedTime: true,
+        availableTimesA: true,
+        availableTimesB: true,
+        calendarMessageIdA: true,
+        calendarMessageIdB: true,
+      },
+    });
+    if (!row) return { kind: "wrong-state" as const };
+    const peerArr = isA ? row.availableTimesB : row.availableTimesA;
+    if (row.status !== "negotiating") {
+      // The partner's save (or this same save, retried) locked a time this
+      // request also asked for: that is this request's own outcome, not a
+      // conflict. Anything else — cancelled, expired, a time we did not pick —
+      // is a genuinely stale action.
+      if (
+        row.status === "negotiating_venue" &&
+        row.agreedTime !== null &&
+        dedupedSorted.some(sameInstant(row.agreedTime))
+      ) {
+        return { kind: "already-agreed" as const, agreed: row.agreedTime, peerArr };
+      }
+      return { kind: "wrong-state" as const };
+    }
 
-  // Re-read the peer side after our write. The initial row may be stale if
-  // both users saved concurrently; using it can miss a real overlap and
-  // leave the match stuck until somebody saves again.
-  const current = await prisma.match.findUnique({
-    where: { id: match.id },
-    select: {
-      status: true,
-      availableTimesA: true,
-      availableTimesB: true,
-    },
+    await tx.match.update({
+      where: { id: match.id },
+      data: {
+        ...(isA
+          ? { availableTimesA: dedupedSorted }
+          : { availableTimesB: dedupedSorted }),
+        ...(stampUnlock ? { primeTimeUnlockedAt: new Date() } : {}),
+      },
+    });
+
+    // Both arrays as they stand under the lock: ours as just written, the
+    // partner's as last committed. Nobody can change either until we commit.
+    const intersection = dedupedSorted
+      .filter((d) => peerArr.some(sameInstant(d)))
+      .sort((x, y) => x.getTime() - y.getTime());
+
+    if (intersection.length === 1) {
+      const agreed = intersection[0]!;
+      // Same transaction as the intersection: the time is locked against the
+      // exact arrays that produced it, or not at all.
+      if (!(await claimVenueNegotiation(tx, match.id, agreed))) {
+        return { kind: "wrong-state" as const };
+      }
+      return {
+        kind: "locked" as const,
+        agreed,
+        peerArr,
+        calendarMessageIdA: row.calendarMessageIdA,
+        calendarMessageIdB: row.calendarMessageIdB,
+      };
+    }
+    return {
+      kind: "saved" as const,
+      peerArr,
+      // This side as it stood before our write — the "first submission" and
+      // "did my set change" checks below must not read a stale snapshot either.
+      actorPrev: isA ? row.availableTimesA : row.availableTimesB,
+      intersection,
+      calendarMessageIdA: row.calendarMessageIdA,
+      calendarMessageIdB: row.calendarMessageIdB,
+    };
   });
-  if (!current || current.status !== "negotiating") {
-    // This side's marks WERE written before the row moved on, so the cards may
-    // now be stale (most often: the match was cancelled between the two reads).
+
+  if (commit.kind === "wrong-state") {
+    // This side's marks may or may not have been written before the row moved
+    // on; either way the cards may now be stale (most often: the match was
+    // cancelled between the snapshot and the lock).
     syncTimeAgreementCards(matchId);
     return { ok: false, reason: "wrong-state" };
   }
 
-  const peerArr = isA ? current.availableTimesB : current.availableTimesA;
-  const peerSet = new Set(peerArr.map((d) => d.getTime()));
-  const intersection = dedupedSorted
-    .filter((d) => peerSet.has(d.getTime()))
-    .sort((a, b) => a.getTime() - b.getTime());
+  const peerArr = commit.peerArr;
+
+  if (commit.kind === "already-agreed") {
+    // Nothing to announce — the save that won the claim already did.
+    return {
+      ok: true,
+      mySlots: dedupedSorted.map((d) => d.toISOString()),
+      peerSlots: peerArr.map((d) => d.toISOString()),
+      agreedTime: commit.agreed.toISOString(),
+      overlapCandidates: [],
+      bothPicked: true,
+    };
+  }
 
   const peerLang = ((isA ? match.userB.language : match.userA.language) ?? "en") as Language;
   const peerTelegramId = isA ? match.userB.telegramId : match.userA.telegramId;
@@ -711,24 +790,23 @@ export async function processCalendarSlotsUpdate(
   const actorTelegramId = telegramId;
   const actorPlatform = isA ? match.userA.platform : match.userB.platform;
 
-  if (intersection.length === 1) {
-    const agreed = intersection[0]!;
-    const started = await startVenueNegotiation(api, match.id, agreed);
-    if (started === false) return { ok: false, reason: "wrong-state" };
+  if (commit.kind === "locked") {
+    const agreed = commit.agreed;
+    await announceVenueNegotiation(api, match.id, agreed);
     await deleteCalendarMessages(api, [
       {
         telegramId: match.userA.telegramId,
         platform: match.userA.platform,
-        messageId: match.calendarMessageIdA,
+        messageId: commit.calendarMessageIdA,
       },
       {
         telegramId: match.userB.telegramId,
         platform: match.userB.platform,
-        messageId: match.calendarMessageIdB,
+        messageId: commit.calendarMessageIdB,
       },
     ]);
-    // After `startVenueNegotiation`, so both cards end on the locked time
-    // rather than on a phase the row has already left.
+    // After the claim, so both cards end on the locked time rather than on a
+    // phase the row has already left.
     syncTimeAgreementCards(matchId);
     return {
       ok: true,
@@ -739,6 +817,12 @@ export async function processCalendarSlotsUpdate(
       bothPicked: true,
     };
   }
+
+  const intersection = commit.intersection;
+  const actorPrev = commit.actorPrev;
+  const wasMineEmpty = actorPrev.length === 0;
+  // Card ids read under the lock — fresher than the snapshot at the top.
+  const peerCalendarMessageId = isA ? commit.calendarMessageIdB : commit.calendarMessageIdA;
 
   if (intersection.length > 1) {
     // Multiple shared slots — let the actor pick the final one via the
@@ -775,7 +859,7 @@ export async function processCalendarSlotsUpdate(
           isA ? "B" : "A",
           peerTelegramId,
           peerPlatform,
-          isA ? match.calendarMessageIdB : match.calendarMessageIdA,
+          peerCalendarMessageId,
           t(peerLang, "matchSchedulePeerProposed"),
           peerLang,
           isA ? match.userB.theme : match.userA.theme,
@@ -813,7 +897,7 @@ export async function processCalendarSlotsUpdate(
           isA ? "B" : "A",
           peerTelegramId,
           peerPlatform,
-          isA ? match.calendarMessageIdB : match.calendarMessageIdA,
+          peerCalendarMessageId,
           t(peerLang, "matchSchedulePeerSuggestedAlternative"),
           peerLang,
           isA ? match.userB.theme : match.userA.theme,

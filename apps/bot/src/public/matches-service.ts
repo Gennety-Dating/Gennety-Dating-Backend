@@ -946,8 +946,14 @@ export async function submitVibeLocation(
       ? { ...base, status: "negotiating_venue" as const, venuePromptAskedAt: new Date() }
       : base;
 
+  // Guarded on the exact phase and time read above, not on "any planning
+  // status": `parseVibe` is an LLM call, and a venue stage that lapses back to
+  // the calendar in the meantime (`returnLapsedVenueStageToCalendar`) nulls
+  // `agreedTime` and every vibe column. Writing anyway re-planted this side's
+  // pin on the calendar-phase row, so the next venue round started with one
+  // side already "done" for a date that no longer exists.
   const saved = await prisma.match.updateMany({
-    where: { id: matchId, status: { in: ["negotiating", "negotiating_venue"] } },
+    where: { id: matchId, status: match.status, agreedTime: match.agreedTime },
     data,
   });
   if (saved.count === 0) return null;

@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import { CADENCE, t, type Language } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
@@ -8,6 +8,7 @@ import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
 import { sendPushToUser } from "./push.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import { telegramReachable } from "./telegram-reach.js";
+import { lockMatchRow } from "./match-row-lock.js";
 
 /**
  * Stall handling for the two open-ended planning phases (PRODUCT_SPEC §3.5c).
@@ -422,11 +423,12 @@ function partnerName(user: StallParticipant, lang: Language): string {
  * or loses cleanly, and only the winner applies side effects.
  */
 async function claimCancellation(
+  db: Pick<Prisma.TransactionClient, "match">,
   matchId: string,
   phase: StallPhase,
   cancelledBy: string | null,
 ): Promise<boolean> {
-  const claim = await prisma.match.updateMany({
+  const claim = await db.match.updateMany({
     where: { id: matchId, status: STALL_PHASE_STATUS[phase] },
     data: { status: "cancelled", ...(cancelledBy ? { emergencyCancelledBy: cancelledBy } : {}) },
   });
@@ -441,31 +443,22 @@ export interface StallCancelResult {
   waitingUserIds: string[];
 }
 
+type StallMatch = Prisma.MatchGetPayload<{ select: typeof STALL_MATCH_SELECT }>;
+
 /**
- * The 48h outcome: cancel, then settle up.
- *
- * Ghosts take the silent-ignore treatment (forgive-once, then the decline-grade
- * Elo hit) — the same mechanic the pitch stage already uses, so ghosting is
- * priced identically wherever it happens. Anyone who had done their part gets
- * next-batch priority and an honest explanation of what happened. When BOTH
- * sides went quiet nobody is owed compensation, and both simply hear that the
- * match lapsed.
+ * The 48h verdict on one fresh, locked read: which phase, who ghosted, and
+ * whether the match ends at all (`null` = it does not, yet).
  */
-export async function cancelStalledMatch(
-  api: Api<RawApi>,
-  matchId: string,
-  now: Date = new Date(),
-): Promise<StallCancelResult> {
-  const empty: StallCancelResult = { cancelled: false, ghostUserIds: [], waitingUserIds: [] };
-
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: STALL_MATCH_SELECT,
-  });
-  if (!match) return empty;
-
+function judgeStall(
+  match: StallMatch,
+  now: Date,
+): {
+  phase: StallPhase;
+  sides: Array<{ side: MatchSide; user: StallParticipant; owes: boolean; ghosted: boolean }>;
+  venueUnresolved: boolean;
+} | null {
   const phase = stallPhaseOf(match);
-  if (!phase) return empty;
+  if (!phase) return null;
 
   // "Owes something" and "ran out of time" are NOT the same thing, and only the
   // second one is ghosting. A side that tapped 🟢 an hour ago still owes its
@@ -499,14 +492,54 @@ export async function cancelStalledMatch(
   // pair, so neither is told the other went quiet.
   const venueUnresolved = pastCeiling && venueSelectionStranded(match, now);
   const unreachableOwes = sides.some((s) => s.owes && !stallReachableFor(s.user));
-  if (unreachableOwes && !pastCeiling) return empty;
-  // The deadline is re-derived here, from a row read AFTER the caller decided.
-  // That closes the race where someone taps 🟢 in the window between the
-  // worker's scan and this call: their deadline moves, nothing has expired any
-  // more, and the cancellation is abandoned instead of overriding their answer.
-  if (!sides.some((s) => s.ghosted) && !pastCeiling) return empty;
+  if (unreachableOwes && !pastCeiling) return null;
+  // The deadline is re-derived here, from a row read AFTER the caller decided
+  // and held locked until the claim. Someone who taps 🟢 after the worker's
+  // scan has their deadline moved, nothing has expired any more, and the
+  // cancellation is abandoned instead of overriding their answer.
+  if (!sides.some((s) => s.ghosted) && !pastCeiling) return null;
 
-  if (!(await claimCancellation(matchId, phase, null))) return empty;
+  return { phase, sides, venueUnresolved };
+}
+
+/**
+ * The 48h outcome: cancel, then settle up.
+ *
+ * Ghosts take the silent-ignore treatment (forgive-once, then the decline-grade
+ * Elo hit) — the same mechanic the pitch stage already uses, so ghosting is
+ * priced identically wherever it happens. Anyone who had done their part gets
+ * next-batch priority and an honest explanation of what happened. When BOTH
+ * sides went quiet nobody is owed compensation, and both simply hear that the
+ * match lapsed.
+ */
+export async function cancelStalledMatch(
+  api: Api<RawApi>,
+  matchId: string,
+  now: Date = new Date(),
+): Promise<StallCancelResult> {
+  const empty: StallCancelResult = { cancelled: false, ghostUserIds: [], waitingUserIds: [] };
+
+  // Read, judge and claim under one row lock. With a separate read and a
+  // status-only CAS, an answer landing between the two (a 🟢 tap, a calendar
+  // save, a vibe) kept the status unchanged, so the claim still matched and the
+  // person who had JUST answered was cancelled and penalised as a ghost. Under
+  // the lock that answer either committed before our read — and moved their
+  // deadline — or waits, and then finds the match already cancelled.
+  const decided = await prisma.$transaction(async (tx) => {
+    await lockMatchRow(tx, matchId);
+    const match = await tx.match.findUnique({
+      where: { id: matchId },
+      select: STALL_MATCH_SELECT,
+    });
+    if (!match) return null;
+    const verdict = judgeStall(match, now);
+    if (!verdict) return null;
+    if (!(await claimCancellation(tx, matchId, verdict.phase, null))) return null;
+    return { match, ...verdict };
+  });
+  if (!decided) return empty;
+  const { match, phase, sides, venueUnresolved } = decided;
+
 
   // A question that was never delivered cannot be ignored, so a side we could
   // not reach is never a ghost — even when the ceiling is what ended the match.
@@ -642,7 +675,7 @@ export async function cancelPlanningByUser(
   const isB = match.userBId === actorUserId;
   if (!isA && !isB) return { cancelled: false, ackText: null };
 
-  if (!(await claimCancellation(matchId, phase, actorUserId))) {
+  if (!(await claimCancellation(prisma, matchId, phase, actorUserId))) {
     return { cancelled: false, ackText: null };
   }
 

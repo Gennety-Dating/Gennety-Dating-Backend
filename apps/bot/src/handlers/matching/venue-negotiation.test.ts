@@ -276,11 +276,14 @@ describe("handleVenueVibe — location-first ordering", () => {
     } as any;
   }
 
+  const ROUND = new Date("2026-05-01T19:00:00.000Z");
+
   function wireSide(side: "A" | "B") {
     mUser.findUnique.mockResolvedValue({ id: "u1" });
     mMatch.findFirst.mockResolvedValue({
       id: "m1",
       userAId: side === "A" ? "u1" : "uX",
+      agreedTime: ROUND,
     });
   }
 
@@ -335,8 +338,14 @@ describe("handleVenueVibe — location-first ordering", () => {
     await handleVenueVibe(ctx);
 
     expect(mParseVibe).toHaveBeenCalledWith("quiet cafe");
-    expect(mMatch.update).toHaveBeenCalledTimes(1);
-    expect(mMatch.update.mock.calls[0]![0].data).toMatchObject({
+    // Written only while the round the message was read in is still live.
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toEqual({
+      id: "m1",
+      status: "negotiating_venue",
+      agreedTime: ROUND,
+    });
+    expect(mMatch.updateMany.mock.calls[0]![0].data).toMatchObject({
       vibeTextA: "quiet cafe",
       parsedCategoryA: "cafe",
     });

@@ -17,7 +17,12 @@ import {
   notifyFounderPurchase,
   notifyFounderPurchaseRefunded,
 } from "../../services/founder-notify.js";
-import { spendTickets, grantTickets, isUniqueViolation } from "../../services/ticket-wallet.js";
+import {
+  spendTickets,
+  grantTickets,
+  isUniqueViolation,
+  spendRefundKey,
+} from "../../services/ticket-wallet.js";
 import { netWalletSpend } from "../../services/ticket-refund.js";
 import { isAlreadyRefundedError } from "../../services/stars-refund-error.js";
 import {
@@ -578,8 +583,20 @@ export async function settlePremiumSlots(matchId: string): Promise<Side[]> {
  */
 export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promise<void> {
   const expiresAt = ticketGateDeadline();
-  await prisma.match.update({
-    where: { id: matchId },
+  // Arms only a gate nobody has touched yet. The accept that calls this commits
+  // first and then awaits banners and Elo, and in that gap a client polling
+  // `/v1` can already pay (`partial`/`completed`) — an unconditional write reset
+  // such a gate to `pending` with a fresh deadline — or the match can be
+  // cancelled (freeze, block), and the pay buttons below went out for a date
+  // that no longer exists.
+  await prisma.match.updateMany({
+    where: {
+      id: matchId,
+      status: "negotiating",
+      ticketStatus: "pending",
+      ticketPaidA: null,
+      ticketPaidB: null,
+    },
     data: {
       ticketStatus: "pending",
       ticketPriceCents: env.TICKET_PRICE_CENTS,
@@ -589,6 +606,9 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   let match = await loadTicketMatch(matchId);
   if (!match) return;
+  // A gate already paid into still gets its cards (they re-derive the live
+  // state when opened); a match that is no longer planning gets none.
+  if (match.status !== "negotiating") return;
 
   // A grandfathered Premium ticket cover settles that side's own slot (§3.5b /
   // §3.8 — Premium alone covers no ticket since 2026-10-08). Settled BEFORE
@@ -1401,7 +1421,7 @@ export async function useTicketFromBalance(
     if (lost > 0) {
       // Never let the compensation's own failure replace the original error:
       // that error is what tells ops what actually broke.
-      await grantTickets({ userId: me.id, count: lost, reason: "refund", matchId }).catch(
+      await refundSpend(me.id, matchId, spend.ledgerId, lost).catch(
         (refundError: unknown) => {
           console.error(
             `[tickets] settle threw and the compensating refund failed too — ` +
@@ -1420,9 +1440,36 @@ export async function useTicketFromBalance(
   // refunds the extra one, so a wallet ticket is never silently burned.
   const refundCount = Math.max(0, count - claimedCount);
   if (refundCount > 0) {
-    await grantTickets({ userId: me.id, count: refundCount, reason: "refund", matchId });
+    await refundSpend(me.id, matchId, spend.ledgerId, refundCount);
   }
   return result;
+}
+
+/**
+ * Give back `count` tickets of one wallet spend, at most once per spend.
+ *
+ * Keyed on the spend ({@link spendRefundKey}) because the gate-expiry sweep's
+ * orphaned-spend recovery may have refunded this very spend already — it runs
+ * the moment the gate lapses, which is exactly when a spend's slot claim loses.
+ * A duplicate key means it did, and is not an error.
+ */
+async function refundSpend(
+  userId: string,
+  matchId: string,
+  spendLedgerId: string | undefined,
+  count: number,
+): Promise<void> {
+  try {
+    await grantTickets({
+      userId,
+      count,
+      reason: "refund",
+      matchId,
+      ...(spendLedgerId ? { externalPaymentId: spendRefundKey(spendLedgerId) } : {}),
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
 }
 
 /**
@@ -1661,33 +1708,48 @@ async function refundOrphanedSpends(match: TicketMatch): Promise<void> {
     const payer = selfUser(match, side);
     const spends = await prisma.ticketLedger.findMany({
       where: { userId: payer.id, matchId: match.id, reason: "spend_match", delta: { lt: 0 } },
-      select: { delta: true },
+      select: { id: true, delta: true },
+      orderBy: { createdAt: "asc" },
     });
     if (spends.length === 0) continue;
 
     const spent = spends.reduce((total, row) => total + Math.abs(row.delta), 0);
     const refunds = await prisma.ticketLedger.findMany({
       where: { userId: payer.id, matchId: match.id, reason: "refund", delta: { gt: 0 } },
-      select: { delta: true },
+      select: { delta: true, externalPaymentId: true },
     });
     const returned = refunds.reduce((total, row) => total + row.delta, 0);
-    const owed = spent - returned;
+    let owed = spent - returned;
     if (owed <= 0) continue;
 
     console.warn(
       `[ticket-gate] orphaned spend on match=${match.id} user=${payer.id}: ` +
         `spent ${spent}, returned ${returned} — refunding ${owed}`,
     );
-    try {
-      await grantTickets({
-        userId: payer.id,
-        count: owed,
-        reason: "refund",
-        matchId: match.id,
-        externalPaymentId: `orphan-spend-refund:${match.id}:${payer.id}`,
-      });
-    } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+    // Per spend, under that spend's own key — the same key the spending request
+    // uses when ITS claim loses (`refundSpend`). This sweep runs at the gate's
+    // deadline, which is exactly when a live request's claim loses, so the two
+    // used to refund the same spend twice. Whichever comes second now finds
+    // the key taken. The ledger total above still caps what is owed, so a
+    // spend refunded before per-spend keys existed is not paid back again.
+    const keyed = new Set(refunds.map((row) => row.externalPaymentId));
+    for (const spend of spends) {
+      if (owed <= 0) break;
+      const key = spendRefundKey(spend.id);
+      if (keyed.has(key)) continue;
+      const count = Math.min(owed, Math.abs(spend.delta));
+      try {
+        await grantTickets({
+          userId: payer.id,
+          count,
+          reason: "refund",
+          matchId: match.id,
+          externalPaymentId: key,
+        });
+        owed -= count;
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
     }
   }
 }
@@ -1796,8 +1858,21 @@ export async function refundAndFallbackToScheduling(
 
   const paidSide: Side | null = match.ticketPaidA !== null ? "A" : match.ticketPaidB !== null ? "B" : null;
   if (!paidSide) {
+    // Both slots re-asserted empty in the claim, as the paid-side branch below
+    // asserts its unpaid one. The row was read before this write, and a payment
+    // that commits in between (its claim leaves `ticketStatus` as it was) used
+    // to be overwritten with `expired`: the payer kept no refund — `expired` is
+    // skipped by every later refund plan on the premise that nobody paid — and
+    // the partner got the Calendar for free. Losing here leaves the row to the
+    // next tick, which reads the payment and takes the refund branch.
     const expired = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      where: {
+        id: matchId,
+        status: "negotiating",
+        ticketStatus: { in: ["pending", "partial"] },
+        ticketPaidA: null,
+        ticketPaidB: null,
+      },
       data: { ticketStatus: "expired", ticketExpiresAt: null },
     });
     if (expired.count === 0) return;
