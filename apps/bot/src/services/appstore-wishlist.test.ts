@@ -104,7 +104,7 @@ describe("wishlist refunds", () => {
   it("closes the sheet once Apple has revoked the transaction", async () => {
     markWishlistUnlockRefunded.mockResolvedValue(true);
     await expect(
-      refundWishlistAppStoreTransaction({ ...okTx, revocationDate: new Date() }),
+      refundWishlistAppStoreTransaction({ ...okTx, revocationDate: Date.now() }),
     ).resolves.toEqual({ status: "refunded" });
     expect(markWishlistUnlockRefunded).toHaveBeenCalledWith("appstore:tx-9");
   });
@@ -117,7 +117,7 @@ describe("wishlist refunds", () => {
 
   it("leaves the sheet closed while the transaction is still revoked", async () => {
     await expect(
-      reverseWishlistAppStoreRefund({ ...okTx, revocationDate: new Date() }),
+      reverseWishlistAppStoreRefund({ ...okTx, revocationDate: Date.now() }),
     ).resolves.toEqual({ status: "still_revoked" });
     expect(reopenWishlistUnlock).not.toHaveBeenCalled();
   });
