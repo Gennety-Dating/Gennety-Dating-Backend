@@ -5,6 +5,7 @@ import {
   settleStrandedTicketRefund,
   retryPendingStarsGateRefunds,
 } from "../handlers/matching/ticket-gate.js";
+import { recoverStrandedHandoffs } from "../services/stranded-handoff.js";
 
 /**
  * Date Ticket expiry sweep.
@@ -68,6 +69,16 @@ export async function ticketExpiryTick(api: Api<RawApi>): Promise<{ swept: numbe
     } catch (err) {
       console.error(`[ticket-expiry] failed to settle stranded refund ${id}:`, err);
     }
+  }
+
+  // Handoffs interrupted half-way — a mutual accept still `proposed`, or a
+  // `negotiating` row with neither a calendar grid nor a live gate. This sweep
+  // is where the second kind falls through, so it is checked here too.
+  try {
+    const recovered = await recoverStrandedHandoffs(api, now);
+    swept += recovered.mutualAccepts + recovered.calendarsOpened;
+  } catch (err) {
+    console.error("[ticket-expiry] stranded-handoff recovery failed:", err);
   }
 
   return { swept };

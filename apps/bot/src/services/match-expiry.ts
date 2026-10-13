@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { UNREACHABLE_SILENT_SIDE_GRACE_MS } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { createMatchEvent } from "./match-events.js";
@@ -12,7 +13,9 @@ import { refreshStatusBanners } from "./status-banner-refresh.js";
  * Marks `proposed` matches as `expired` once their deadline
  * (`services/proposal-deadline.ts` — a flat 24h TTL under the weekly cadence
  * profile, anchored to the next batch under daily) passes without both sides
- * accepting, and classifies each side for the notification layer:
+ * accepting — or earlier, once no answer can still arrive because every
+ * undecided side is unreachable on every rail (`proposalUnanswerable`) — and
+ * classifies each side for the notification layer:
  *
  *   - "silent": user never responded (`accepted{A|B} == null`).
  *   - "responder": user nailed an Accept or Decline within the window.
@@ -100,20 +103,51 @@ interface CandidateMatch {
   pitchMessageIdA: number | null;
   pitchMessageIdB: number | null;
   dispatchedAt: Date | null;
-  userA: {
-    telegramId: bigint;
-    platform: string | null;
-    language: string | null;
-    theme: string | null;
-    syntheticAt: Date | null;
-  };
-  userB: {
-    telegramId: bigint;
-    platform: string | null;
-    language: string | null;
-    theme: string | null;
-    syntheticAt: Date | null;
-  };
+  userA: CandidateUser;
+  userB: CandidateUser;
+}
+
+interface CandidateUser {
+  telegramId: bigint;
+  platform: string | null;
+  language: string | null;
+  theme: string | null;
+  syntheticAt: Date | null;
+  botBlockedAt: Date | null;
+}
+
+/**
+ * Whether nobody can be waiting on this side any more: their Telegram chat is
+ * shut (a 403 stamped `botBlockedAt`) for longer than the grace window, and
+ * there is no app to answer from. `telegram` only — a `both` account can still
+ * decide in the app, and a `mobile` one never had a bot chat to block.
+ */
+function unreachableEverywhere(user: CandidateUser, now: Date): boolean {
+  return (
+    user.platform === "telegram" &&
+    user.botBlockedAt !== null &&
+    now.getTime() - user.botBlockedAt.getTime() >= UNREACHABLE_SILENT_SIDE_GRACE_MS
+  );
+}
+
+/**
+ * A proposal no answer can still arrive for (founder decision 2026-10-13):
+ * every side that has not decided is unreachable everywhere. Without this the
+ * side that DID answer — usually with a yes — sat out the whole reply window
+ * for a person who had blocked the bot, often before the pitch even reached
+ * them (the dispatch 403 is what stamps the block). Expiring early changes
+ * when, not what: the classification, penalty and notices are the ones the
+ * deadline would have produced.
+ */
+export function proposalUnanswerable(
+  match: Pick<CandidateMatch, "acceptedByA" | "acceptedByB" | "userA" | "userB">,
+  now: Date,
+): boolean {
+  const silent = [
+    ...(match.acceptedByA === null ? [match.userA] : []),
+    ...(match.acceptedByB === null ? [match.userB] : []),
+  ];
+  return silent.length > 0 && silent.every((user) => unreachableEverywhere(user, now));
 }
 
 /**
@@ -165,10 +199,24 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
       pitchMessageIdB: true,
       dispatchedAt: true,
       userA: {
-        select: { telegramId: true, platform: true, language: true, theme: true, syntheticAt: true },
+        select: {
+          telegramId: true,
+          platform: true,
+          language: true,
+          theme: true,
+          syntheticAt: true,
+          botBlockedAt: true,
+        },
       },
       userB: {
-        select: { telegramId: true, platform: true, language: true, theme: true, syntheticAt: true },
+        select: {
+          telegramId: true,
+          platform: true,
+          language: true,
+          theme: true,
+          syntheticAt: true,
+          botBlockedAt: true,
+        },
       },
     },
   });
@@ -176,7 +224,8 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
   const matches: MatchExpiry[] = [];
 
   for (const candidate of candidates) {
-    if (deadlineFor(candidate.dispatchedAt!).getTime() > now.getTime()) continue;
+    const due = deadlineFor(candidate.dispatchedAt!).getTime() <= now.getTime();
+    if (!due && !proposalUnanswerable(candidate, now)) continue;
     // Atomic flip — if a concurrent decision-handler already moved the
     // row to `cancelled` / `negotiating`, this updates 0 rows and we
     // skip the match entirely.

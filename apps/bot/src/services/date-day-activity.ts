@@ -412,3 +412,30 @@ export async function endDateDayActivities(matchId: string): Promise<void> {
     ),
   );
 }
+
+/**
+ * Take the card down for a date that was CANCELLED — by an emergency cancel,
+ * a block, a freeze, moderation, or the other side deleting their account.
+ *
+ * `endDateDayActivities` above cannot serve these: it reloads the match to
+ * find its two people, and the lifecycle sweep that calls it only looks at
+ * `scheduled` rows. A cancelled date is neither, and a deleted account takes
+ * the row with it — so the surviving partner kept a countdown to a date that
+ * no longer exists on their lock screen until iOS's own 12-hour cap.
+ *
+ * Takes the user ids from the caller instead, and is scoped to `matchId` so a
+ * card already driving some other match is never touched. A user whose account
+ * is gone has no token row left, which makes their half a no-op.
+ */
+export async function endCancelledDateDayActivities(
+  matchId: string,
+  userIds: readonly string[],
+): Promise<void> {
+  await Promise.all(
+    [...new Set(userIds)].map((userId) =>
+      sendLiveActivityUpdateToUser(userId, "date_day", { event: "end" }, { matchId }).catch(
+        () => false,
+      ),
+    ),
+  );
+}

@@ -55,7 +55,7 @@ export {
  * counts while its end is still ahead — an elapsed suspension is not a
  * restriction any more, and restoring it would suspend someone for nothing.
  */
-const STATUS_RANK: Partial<Record<UserStatus, number>> = {
+export const STATUS_RANK: Partial<Record<UserStatus, number>> = {
   suspended: 1,
   pending_investigation: 2,
   banned: 3,
@@ -253,6 +253,17 @@ export async function restoreSafetyHistory(
     // Serialise concurrent restores for one account (two identities attached
     // at once); the second re-reads and finds the tombstones already applied.
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+    // And with a report filed against one of these former accounts after its
+    // deletion (`fileFormerPartnerReport` locks the same rows): its report and
+    // strike are then either read and relinked below, or filed after this
+    // commits — onto this account, because the rows will name it.
+    await tx.$queryRaw`
+      SELECT id FROM safety_tombstones
+       WHERE identity_hash = ANY(${hashes}::text[])
+         AND former_user_id <> ${userId}::uuid
+         AND (restored_to_user_id IS NULL OR restored_to_user_id <> ${userId}::uuid)
+       FOR UPDATE
+    `;
 
     const tombstones = await tx.safetyTombstone.findMany({
       where: applicable,
@@ -356,7 +367,7 @@ export async function restoreSafetyHistory(
   return result;
 }
 
-function strictestTombstone(
+export function strictestTombstone(
   tombstones: ReadonlyArray<{ status: UserStatus | null; suspendedUntil: Date | null }>,
   now: Date,
 ): { status: UserStatus; rank: number; suspendedUntil: Date | null } | null {

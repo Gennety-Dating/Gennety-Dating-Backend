@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import {
+  FORMER_MATCH_REPORT_WINDOW_DAYS,
   FREQUENT_PLACE_WINDOW_DAYS,
   INBOX_RETENTION_DAYS,
   SAFETY_TOMBSTONE_RETENTION_MONTHS,
@@ -157,6 +158,8 @@ export interface RetentionSweepResult {
   safetyTombstones: number;
   orphanReports: number;
   orphanBlocks: number;
+  /** Survivors' traces of a deleted partner's match, past the report window. */
+  formerMatches: number;
 }
 
 /**
@@ -398,6 +401,24 @@ export async function retentionTick(
     `,
   );
 
+  // A survivor's way to report a partner who deleted their account lasts
+  // `FORMER_MATCH_REPORT_WINDOW_DAYS` (decision 2026-10-13). A report already
+  // filed through it lives on in `reports`; the trace itself is only the door.
+  const formerMatchCutoff = new Date(
+    now.getTime() - FORMER_MATCH_REPORT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const formerMatches = await deleteOldest(
+    "former_matches",
+    (take) =>
+      prisma.formerMatch.findMany({
+        where: { createdAt: { lt: formerMatchCutoff } },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.formerMatch.deleteMany({ where: { id: { in: ids } } }),
+  );
+
   const total =
     emailOtps +
     phoneOtps +
@@ -411,7 +432,8 @@ export async function retentionTick(
     orphanBotSessions +
     safetyTombstones +
     orphanReports +
-    orphanBlocks;
+    orphanBlocks +
+    formerMatches;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
@@ -419,7 +441,8 @@ export async function retentionTick(
         `clientEvents=${clientEvents} ` +
         `placeVisits=${placeVisits} rhythmProfiles=${rhythmProfiles} inboxItems=${inboxItems} ` +
         `orphanBotSessions=${orphanBotSessions} ` +
-        `safetyTombstones=${safetyTombstones} orphanReports=${orphanReports} orphanBlocks=${orphanBlocks}`,
+        `safetyTombstones=${safetyTombstones} orphanReports=${orphanReports} orphanBlocks=${orphanBlocks} ` +
+        `formerMatches=${formerMatches}`,
     );
   }
   return {
@@ -436,6 +459,7 @@ export async function retentionTick(
     safetyTombstones,
     orphanReports,
     orphanBlocks,
+    formerMatches,
   };
 }
 

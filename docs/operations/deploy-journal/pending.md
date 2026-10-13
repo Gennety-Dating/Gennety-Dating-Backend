@@ -11,6 +11,39 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Dead ends, founder calls: block after the start, unreachable proposal, report a deleted partner (MIGRATION `20261013120000_former_matches`, additive).**
+Branch `claude/dating-edge-cases-ihp2ur`, on top of the dead-end audit block below — ship together. A block after
+`agreedTime` records the block and force-closes the proxy chat (no cancellation, no refunds, nothing to the blocked
+side); the expiry sweep closes a proposal early when every silent side is Telegram-only with the bot blocked for
+2h+; account deletion keeps `former_matches` traces so the survivor can report the deleted partner (onto the
+tombstone, or onto the account they came back as). New table only; old code never reads it. **Migration before the
+code restart** — the new deletion path writes the table. Demo: unchanged (the demo writes no tombstones, so no
+traces). iOS: no contract change — `POST /v1/matches/:id/report` on a deleted partner's match now answers 204/409
+instead of 403; `POST /v1/matches/:id/block` answers `dateCancelled: false` after the start.
+**Legal:** `former_matches` (30 days) is a new retention line — the privacy policy text was not changed; founder's call.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/former-match.test.ts
+  src/services/user-block.test.ts src/services/match-expiry.test.ts src/handlers/matching/report.test.ts`;
+  `pnpm --filter @gennety/db exec prisma migrate status` shows `20261013120000_former_matches` applied; after a test
+  deletion of an account with a recent match, `select count(*) from former_matches` grows by that match.
+- **Откат:** `git revert` of the three commits; the table can stay (nothing reads it after a revert) or be dropped
+  with `DROP TABLE former_matches`. Reports filed through it stay as ordinary orphan reports and follow the
+  tombstone sweep.
+
+**PENDING 2026-10-13 — Dead-end audit fixes (code only, no migration, no env).**
+Branch `claude/dating-edge-cases-ihp2ur`. Stall check-in at the venue step is asked again (claim accepts a stale stamp);
+cancellations end the iOS date-day card and refresh the Telegram banner; after a partner's deletion the survivor's proxy
+line / emergency reason / feedback get an answer (new i18n key `feedbackMatchGone`); Mini App calendar and venue board
+stop polling on 404; hourly `recoverStrandedHandoffs` (in the ticket-expiry tick) finishes a mutual accept stuck in
+`proposed` and opens the calendar for `negotiating` rows with no grid and no live gate; the Prime Time sweep refunds
+`settled` passes on dead matches; the date-lifecycle tick isolates rows; `sendTicketOffer` only for `negotiating`.
+Demo: unchanged. iOS: no contract change.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/stranded-handoff.test.ts
+  src/workers/match-nudge.test.ts src/services/cancel-in-flight-matches.test.ts src/services/prime-time-purchase.test.ts
+  src/handlers/date/date.test.ts`; after restart watch `pm2 logs` for `[stranded-handoff]` lines on the first
+  ticket-expiry tick — each names a match that was genuinely stuck (expected: few or none).
+- **Откат:** `git revert` of the branch commits; nothing to undo in data (recovery writes the same CAS the
+  original paths write).
+
 **PENDING 2026-10-13 — Money audit fixes (code only, no migration, no env).**
 Merged into `main` from `claude/amazing-cannon-y8a21a`. Wallet spend refunds keyed per spend row; cancellation refunds credited
 inside the cancelling transaction (a failed credit now rolls the cancel back — emergency cancel surfaces it as an

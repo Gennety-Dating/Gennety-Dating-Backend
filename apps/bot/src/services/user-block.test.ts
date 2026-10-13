@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: vi.fn() },
+    match: { findUnique: vi.fn(), updateMany: vi.fn() },
     userBlock: {
       upsert: vi.fn(),
       deleteMany: vi.fn(),
@@ -18,11 +18,21 @@ vi.mock("./cancel-in-flight-matches.js", () => ({
   deliverCancelledPartnerEffects: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./date-day-activity.js", () => ({
+  endCancelledDateDayActivities: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./proxy-presence.js", () => ({
+  bumpProxyChat: vi.fn(),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   claimMatchCancellation,
   deliverCancelledPartnerEffects,
 } from "./cancel-in-flight-matches.js";
+import { endCancelledDateDayActivities } from "./date-day-activity.js";
+import { bumpProxyChat } from "./proxy-presence.js";
 import {
   blockMatchPartner,
   normalizeBlockReason,
@@ -34,7 +44,7 @@ import {
 } from "./user-block.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findUnique: MockFn };
+const mMatch = prisma.match as unknown as { findUnique: MockFn; updateMany: MockFn };
 const mBlock = prisma.userBlock as unknown as {
   upsert: MockFn;
   deleteMany: MockFn;
@@ -60,6 +70,7 @@ beforeEach(() => {
   runTransaction();
   mBlock.upsert.mockResolvedValue({ id: "block-1" });
   mClaim.mockResolvedValue(null);
+  mMatch.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe("blockMatchPartner", () => {
@@ -72,6 +83,7 @@ describe("blockMatchPartner", () => {
       outcome: "ok",
       blockedUserId: PARTNER,
       dateCancelled: false,
+      chatClosed: false,
     });
     expect(mBlock.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -94,6 +106,7 @@ describe("blockMatchPartner", () => {
     mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
     const cancelled = {
       matchId: MATCH,
+      actorUserId: BLOCKER,
       partnerUserId: PARTNER,
       partnerTelegramId: 42n,
       partnerLanguage: "en",
@@ -107,7 +120,10 @@ describe("blockMatchPartner", () => {
     expect(result).toMatchObject({ dateCancelled: true });
     // The safety-critical half: the cancellation claim runs inside the same
     // transaction as the block row.
-    expect(mClaim).toHaveBeenCalledWith(MATCH, BLOCKER, prisma, { strict: true });
+    expect(mClaim).toHaveBeenCalledWith(MATCH, BLOCKER, prisma, {
+      strict: true,
+      notStartedAt: expect.any(Date),
+    });
     // Refunds and the partner notice are post-commit compensation.
     expect(mDeliver).toHaveBeenCalledWith([cancelled], null);
   });
@@ -118,6 +134,46 @@ describe("blockMatchPartner", () => {
     await blockMatchPartner(MATCH, BLOCKER, null);
 
     expect(mDeliver).not.toHaveBeenCalled();
+  });
+
+  it("once the date has begun, closes the chat instead of cancelling (decision 2026-10-13)", async () => {
+    mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
+    // The claim's start cut-off refused the row; the chat close finds it.
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    const now = new Date("2026-10-13T21:00:00Z");
+
+    const result = await blockMatchPartner(MATCH, BLOCKER, null, null, now);
+
+    expect(result).toMatchObject({ dateCancelled: false, chatClosed: true });
+    expect(mClaim).toHaveBeenCalledWith(MATCH, BLOCKER, prisma, { strict: true, notStartedAt: now });
+    // Same transaction, scoped to a date that is under way and still open.
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: MATCH, status: "scheduled", agreedTime: { lte: now }, proxyClosedAt: null },
+      data: { proxyClosedAt: now },
+    });
+    // No refund, no notice to the blocked side; only the blocker's card ends.
+    expect(mDeliver).not.toHaveBeenCalled();
+    expect(bumpProxyChat).toHaveBeenCalledWith(MATCH);
+    expect(endCancelledDateDayActivities).toHaveBeenCalledWith(MATCH, [BLOCKER]);
+  });
+
+  it("closes nothing when a cancellable date was cancelled", async () => {
+    mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
+    mClaim.mockResolvedValue({
+      matchId: MATCH,
+      actorUserId: BLOCKER,
+      partnerUserId: PARTNER,
+      partnerTelegramId: 42n,
+      partnerLanguage: "en",
+      partnerPlatform: "mobile",
+      ticketRefunds: [],
+    });
+
+    const result = await blockMatchPartner(MATCH, BLOCKER, null);
+
+    expect(result).toMatchObject({ dateCancelled: true, chatClosed: false });
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(bumpProxyChat).not.toHaveBeenCalled();
   });
 
   it("refuses a match the caller is not on, without cancelling anything", async () => {

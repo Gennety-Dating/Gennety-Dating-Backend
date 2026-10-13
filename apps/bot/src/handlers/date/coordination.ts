@@ -45,13 +45,19 @@ async function callerUserId(ctx: BotContext): Promise<string | null> {
  * enough that it never tells a blocked person they were blocked.
  */
 async function refuseProxyChat(ctx: BotContext, refusal: ProxyChatRefusal): Promise<void> {
-  if (ctx.session.matchFlow === "coordination_chat") {
+  const wasInChat = ctx.session.matchFlow === "coordination_chat";
+  if (wasInChat) {
     ctx.session.matchFlow = "idle";
     ctx.session.activeMatchId = null;
   }
-  // A stranger's tap, or a match that no longer exists, is answered with
-  // nothing — as it always was.
-  if (refusal === "not-found" || refusal === "forbidden") return;
+  // A stranger's tap is answered with nothing — as it always was. So is a
+  // stale button for a match that no longer exists. But someone already IN
+  // the chat whose match vanished (the partner deleted their account, which
+  // cascades the row) has just typed a message the router took — "I'm here",
+  // at the venue — and silence would read as if it had been delivered. They
+  // get the same neutral line a frozen partner's chat gives.
+  if (refusal === "forbidden") return;
+  if (refusal === "not-found" && !wasInChat) return;
   const key = refusal === "closed" ? "coordProxyClosed" : "coordProxyUnavailable";
   await ctx.reply(t(ctx.session.language, key));
 }

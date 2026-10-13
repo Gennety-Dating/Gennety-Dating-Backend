@@ -4,6 +4,8 @@ import {
   claimMatchCancellation,
   deliverCancelledPartnerEffects,
 } from "./cancel-in-flight-matches.js";
+import { endCancelledDateDayActivities } from "./date-day-activity.js";
+import { bumpProxyChat } from "./proxy-presence.js";
 
 /**
  * Blocking one user from another (App Store guideline 1.2).
@@ -24,6 +26,17 @@ import {
  *  3. **It closes the proxy chat** — for free, because that window is gated on
  *     `status === "scheduled"` and the cancellation above moves it off.
  *
+ * **Once the date has begun (`agreedTime` passed) the block does not cancel
+ * (founder decision 2026-10-13).** A `scheduled` row stays `scheduled` until
+ * the T+24h feedback prompt completes it, so a block filed during or after the
+ * evening used to cancel a date that had happened: both tickets and the Prime
+ * Time pass went back, the did-you-meet question was skipped, and the blocked
+ * person was told "your date was cancelled" hours after it — a notice that
+ * itself gave the block away. From the start on, the block records the row and
+ * force-closes the proxy chat (`proxyClosedAt`, the stamp the window already
+ * obeys), and nothing else: no refund, no notice, the date's ordinary ending
+ * left to run. The same cut-off the emergency rail has had since A13-M20.
+ *
  * What it does NOT do is accuse anyone. Blocking runs no moderation, files no
  * report, touches no Elo, and never reaches the blocked side. That separation
  * is the point: a person who is frightened of their date must be able to make
@@ -39,7 +52,7 @@ import {
  */
 
 export type BlockPartnerOutcome =
-  | { outcome: "ok"; blockedUserId: string; dateCancelled: boolean }
+  | { outcome: "ok"; blockedUserId: string; dateCancelled: boolean; chatClosed: boolean }
   | { outcome: "forbidden" };
 
 /**
@@ -97,6 +110,7 @@ export async function blockMatchPartner(
   blockerUserId: string,
   api: Api<RawApi> | null,
   reason: string | null = null,
+  now: Date = new Date(),
 ): Promise<BlockPartnerOutcome> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -117,7 +131,7 @@ export async function blockMatchPartner(
 
   // Row and cancellation in one transaction: a block that recorded but left the
   // date standing is the failure mode worth designing against.
-  const cancelled = await prisma.$transaction(async (tx) => {
+  const { cancelled, chatClosed } = await prisma.$transaction(async (tx) => {
     await tx.userBlock.upsert({
       // Re-blocking is a no-op, not a second row and not an error — the client
       // may retry a request whose response it never saw.
@@ -128,7 +142,23 @@ export async function blockMatchPartner(
       // said the first time.
       update: reason === null ? {} : { reason },
     });
-    return claimMatchCancellation(matchId, blockerUserId, tx, { strict: true });
+    const claimed = await claimMatchCancellation(matchId, blockerUserId, tx, {
+      strict: true,
+      notStartedAt: now,
+    });
+    if (claimed) return { cancelled: claimed, chatClosed: false };
+    // Not cancellable: either never in flight, or a date already under way.
+    // Only the latter has a chat the block still has to shut.
+    const closed = await tx.match.updateMany({
+      where: {
+        id: matchId,
+        status: "scheduled",
+        agreedTime: { lte: now },
+        proxyClosedAt: null,
+      },
+      data: { proxyClosedAt: now },
+    });
+    return { cancelled: null, chatClosed: closed.count > 0 };
   });
 
   if (cancelled) {
@@ -136,8 +166,16 @@ export async function blockMatchPartner(
     // and neither is worth un-blocking somebody over.
     await deliverCancelledPartnerEffects([cancelled], api);
   }
+  if (chatClosed) {
+    // A held read on either side wakes and sees the closed window now, not on
+    // its next poll. The blocker's own lock-screen card goes too — the
+    // blocked side's is left to its ordinary end, which is what keeps the
+    // block invisible to them.
+    bumpProxyChat(matchId);
+    await endCancelledDateDayActivities(matchId, [blockerUserId]).catch(() => undefined);
+  }
 
-  return { outcome: "ok", blockedUserId, dateCancelled: cancelled !== null };
+  return { outcome: "ok", blockedUserId, dateCancelled: cancelled !== null, chatClosed };
 }
 
 /**

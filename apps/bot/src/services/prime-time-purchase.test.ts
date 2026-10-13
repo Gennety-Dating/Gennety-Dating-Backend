@@ -4,6 +4,8 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: vi.fn(), updateMany: vi.fn() },
     primeTimePurchase: { create: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
+    // The sweep's dead-match tier (a join no typed query expresses).
+    $queryRaw: vi.fn(),
     // Interactive form, run against this same mock.
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
       callback((await import("@gennety/db")).prisma),
@@ -40,6 +42,7 @@ type MockFn = ReturnType<typeof vi.fn>;
 const db = prisma as unknown as {
   match: { findUnique: MockFn; updateMany: MockFn };
   primeTimePurchase: { create: MockFn; updateMany: MockFn; findMany: MockFn };
+  $queryRaw: MockFn;
   $transaction: MockFn;
 };
 
@@ -77,9 +80,11 @@ beforeEach(() => {
     db.primeTimePurchase.create,
     db.primeTimePurchase.updateMany,
     db.primeTimePurchase.findMany,
+    db.$queryRaw,
   ]) {
     fn.mockReset();
   }
+  db.$queryRaw.mockResolvedValue([]);
   db.primeTimePurchase.updateMany.mockResolvedValue({ count: 1 });
   db.primeTimePurchase.create.mockResolvedValue({
     id: "p1",
@@ -369,6 +374,25 @@ describe("refundPrimeTimePurchase on a processing row", () => {
 });
 
 describe("sweepPrimeTimeRefunds", () => {
+  // The dead-match refund runs once after a cancellation commits and swallows
+  // its errors; a pass left `settled` on a cancelled (or deleted) date was read
+  // by neither tier and never came back.
+  it("refunds a pass still settled on a date that died", async () => {
+    const api = fakeApi();
+    db.$queryRaw.mockResolvedValueOnce([{ match_id: "m1" }]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([purchaseRow()]));
+
+    const res = await sweepPrimeTimeRefunds(api);
+
+    expect(api.refundStarPayment).toHaveBeenCalledWith(100, "charge-1");
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "refunded_match_died" }),
+      }),
+    );
+    expect(res).toMatchObject({ refunded: 1 });
+  });
+
   it("retries refund_failed and returns an abandoned processing row as stale", async () => {
     const api = fakeApi();
     db.primeTimePurchase.findMany.mockImplementation(serveByStatus([

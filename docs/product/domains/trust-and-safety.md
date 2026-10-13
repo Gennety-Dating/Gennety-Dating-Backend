@@ -88,6 +88,14 @@ the client is never handed a bare user id. Three effects, in order:
 3. **The proxy chat closes** as a consequence, not as a separate rule: that
    window is gated on `status = "scheduled"`.
 
+**Once the date has begun, the block does not cancel it (founder decision
+2026-10-13).** From `agreedTime` on — the same cut-off the emergency rail has
+had since A13-M20 — a block records the row and force-closes the proxy chat
+(`proxyClosedAt`), and nothing else: no ticket or Prime Time refund, no notice
+to the blocked side, no skipped did-you-meet question. The blocker's own
+date-day card ends; the blocked side's ends on its ordinary schedule, so the
+block stays invisible to them. Before the start, step 2 applies unchanged.
+
 **The blocked side is never told.** No DM, no push, no visible state change
 beyond the ordinary "your date was cancelled". That is what makes the button
 safe to press.
@@ -144,3 +152,10 @@ of the person who reported or blocked them. Now:
   no longer turns a restored lock into `active`.
 - **24 months** after deletion the tombstones, and the reports and blocks that
   only they could relink, are deleted (privacy policy §16).
+- **The partner can still report the one who left** (2026-10-13). For 30 days
+  after the deletion, the Report button on a recent match with that person
+  (Telegram card, app, menu agent) files against the deleted account: the
+  report and its consequence — a strike, a suspension, a ban, a freeze — are
+  kept on the tombstone and land on the person if they come back. If they
+  already came back, it goes to the new account like any report. One report per
+  match. Only where the deletion left a tombstone (never in the demo).

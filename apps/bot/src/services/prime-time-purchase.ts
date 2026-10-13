@@ -478,7 +478,8 @@ export async function refundPrimeTimeForDeadMatch(
   // Two of the call sites (the stall sweep, the shared cancellation rail) have
   // no handler context, so the process-wide handle is the same idiom
   // `emergency-cancel.ts` already uses. Before the bot has booted there is
-  // nobody to refund through — leave the row for the hourly sweep.
+  // nobody to refund through — leave the row for the hourly sweep, which
+  // re-runs this function for any `settled` pass on a dead match.
   if (!api) return 0;
   const rows = await prisma.primeTimePurchase.findMany({
     where: {
@@ -537,6 +538,8 @@ export async function refundPrimeTimeForDeadMatch(
  */
 const SWEEP_STALE_BUDGET = 40;
 const SWEEP_RETRY_BUDGET = 10;
+/** Matches per tick whose settled pass outlived the date (see the sweep). */
+const SWEEP_DEAD_MATCH_BUDGET = 20;
 
 export interface PrimeTimeRefundSweepResult {
   scanned: number;
@@ -552,7 +555,8 @@ export interface PrimeTimeRefundSweepResult {
 }
 
 /**
- * Hourly sweep: retry `refund_failed` and refund abandoned `processing` rows.
+ * Hourly sweep: retry `refund_failed`, refund abandoned `processing` rows, and
+ * refund `settled` passes whose date died without its one-shot refund landing.
  * Registered only when the feature is live, mirroring the venue-change sweep.
  */
 export async function sweepPrimeTimeRefunds(
@@ -648,6 +652,39 @@ export async function sweepPrimeTimeRefunds(
     await api
       .sendMessage(Number(row.user.telegramId), t(lang, "primeTimeRefunded"))
       .catch(() => {});
+  }
+
+  // Passes still `settled` on a date that died. The dead-match refund runs
+  // once, after the cancellation commits, and swallows its errors — a crash
+  // between the two, a throw before the Stars call, or a bot handle not yet
+  // booted left the row `settled`, which neither tier above reads, and a
+  // cancelled match (or one deleted with an account) is never revisited by
+  // anything else. Re-running the same function here is safe: a second Stars
+  // refund of one charge comes back "already refunded" and counts as success.
+  // Payers the Stars rail cannot reach are filtered in SQL so they cannot sit
+  // at the head of this page forever.
+  const deadMatches = await prisma.$queryRaw<{ match_id: string }[]>`
+    SELECT DISTINCT p.match_id
+    FROM prime_time_purchases p
+    JOIN users u ON u.id = p.user_id
+    LEFT JOIN matches m ON m.id = p.match_id
+    WHERE p.status = ${PRIME_PURCHASE_SETTLED}
+      AND p.created_at < ${staleBefore}
+      AND (m.id IS NULL OR m.status IN ('cancelled', 'expired'))
+      AND (
+        p.external_payment_id LIKE ${`${APPSTORE_PAYMENT_PREFIX}%`}
+        OR (u.telegram_id > 0 AND u.platform IN ('telegram', 'both'))
+      )
+    LIMIT ${SWEEP_DEAD_MATCH_BUDGET}
+  `;
+  for (const { match_id: matchId } of deadMatches) {
+    result.scanned++;
+    try {
+      result.refunded += await refundPrimeTimeForDeadMatch(matchId, api);
+    } catch (err) {
+      result.stillFailing++;
+      console.error(`[prime-time-refund] dead-match refund failed for match=${matchId}:`, err);
+    }
   }
 
   if (result.scanned > 0) {

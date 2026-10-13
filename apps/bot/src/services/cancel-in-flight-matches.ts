@@ -2,8 +2,10 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
+import { endCancelledDateDayActivities } from "./date-day-activity.js";
 import { sendPushToUser } from "./push.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
+import { refreshStatusBanners } from "./status-banner-refresh.js";
 import {
   applyTicketRefundsInTx,
   planMatchTicketRefunds,
@@ -33,6 +35,11 @@ export const IN_FLIGHT_MATCH_STATUSES = [
 
 export interface CancelledPartner {
   matchId: string;
+  /**
+   * The participant the cancellation was made on behalf of (the one leaving,
+   * moderated, or blocking). Their account may already be gone by delivery.
+   */
+  actorUserId: string;
   partnerUserId: string;
   partnerTelegramId: bigint;
   partnerLanguage: Language;
@@ -57,6 +64,26 @@ interface CancelOptions {
    * the row, so no ticket is credited to them — their partner still is.
    */
   refundSkipUserIds?: readonly string[];
+  /**
+   * Leave a `scheduled` date alone once its `agreedTime` is at or before this
+   * instant: the evening has begun, and cancelling it now would refund both
+   * tickets for a date that is happening or happened. Rides the claiming write,
+   * so a request read a second before the start cannot land after it — the
+   * same cut-off the emergency rail enforces (A13-M20). Unset = no cut-off.
+   */
+  notStartedAt?: Date;
+}
+
+/** `options.notStartedAt` as a row filter. Null-safe: a date with no time is not "started". */
+function notStartedFilter(options: CancelOptions) {
+  if (!options.notStartedAt) return {};
+  return {
+    OR: [
+      { status: { not: "scheduled" as const } },
+      { agreedTime: null },
+      { agreedTime: { gt: options.notStartedAt } },
+    ],
+  };
 }
 
 // `ticketLedger` — потому что план возвратов теперь сверяется с реестром:
@@ -108,6 +135,7 @@ async function claimOneMatch(
       where: {
         id: match.id,
         status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
+        ...notStartedFilter(options),
       },
       data: { status: "cancelled" },
     });
@@ -144,6 +172,7 @@ async function claimOneMatch(
   const partner = isA ? match.userB : match.userA;
   return {
     matchId: match.id,
+    actorUserId: userId,
     partnerUserId,
     partnerTelegramId: partner.telegramId,
     partnerLanguage: (partner.language ?? "en") as Language,
@@ -194,7 +223,7 @@ export async function claimMatchCancellation(
     where: {
       id: matchId,
       status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
-      OR: [{ userAId: userId }, { userBId: userId }],
+      AND: [{ OR: [{ userAId: userId }, { userBId: userId }] }, notStartedFilter(options)],
     },
     select: CLAIMABLE_MATCH_SELECT,
   });
@@ -208,6 +237,20 @@ export async function deliverCancelledPartnerEffects(
   api: Api<RawApi> | null,
 ): Promise<void> {
   for (const item of cancelled) {
+    // Surfaces that were counting down to this date, for both sides. The
+    // pinned banner would otherwise name a moment that no longer exists until
+    // the next status tick, and the iOS lock-screen card until iOS's 12-hour
+    // cap — the sweep that ends it only looks at `scheduled` rows, and after an
+    // account deletion the row is gone altogether. Same pair of calls the
+    // emergency-cancel rail makes.
+    const participants = [item.partnerUserId, item.actorUserId];
+    await endCancelledDateDayActivities(item.matchId, participants).catch((err: unknown) => {
+      console.warn("[cancel-in-flight] date-day card end failed:", err);
+    });
+    if (api) {
+      await refreshStatusBanners(api, participants).catch(() => {});
+    }
+
     await applyEmergencyCancellationPeerBoost(item.partnerUserId).catch((err: unknown) => {
       console.warn("[cancel-in-flight] partner compensation failed:", err);
     });

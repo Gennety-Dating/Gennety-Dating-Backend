@@ -245,12 +245,16 @@ export async function handleFeedbackVoiceText(ctx: BotContext): Promise<void> {
     language: lang,
   });
 
-  await ctx.reply(
-    t(
-      lang,
-      !recorded.ok && recorded.reason === "already-submitted"
-        ? "feedbackAlreadySubmitted"
-        : "feedbackThanks",
-    ),
-  );
+  // "Thanks" only for text that was actually kept. A date whose row is gone
+  // (the partner deleted their account — matches cascade with it) or no longer
+  // `completed` saved nothing, and thanking the person would tell them a
+  // complaint about that date had been received when it was thrown away.
+  const key = recorded.ok
+    ? "feedbackThanks"
+    : recorded.reason === "already-submitted"
+      ? "feedbackAlreadySubmitted"
+      : recorded.reason === "match-not-found" || recorded.reason === "wrong-state"
+        ? "feedbackMatchGone"
+        : "feedbackThanks";
+  await ctx.reply(t(lang, key));
 }

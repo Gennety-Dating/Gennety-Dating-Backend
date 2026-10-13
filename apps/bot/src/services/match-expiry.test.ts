@@ -325,3 +325,59 @@ describe("expireStaleMatches", () => {
     expect(a.penalised).toBe(false);
   });
 });
+
+describe("expireStaleMatches — nobody left to answer (decision 2026-10-13)", () => {
+  const NOW = new Date("2026-10-13T12:00:00Z");
+  const HOUR = 60 * 60 * 1000;
+  // Dispatched an hour ago: the reply deadline is nowhere near.
+  const fresh = new Date(NOW.getTime() - HOUR);
+  const blockedLongAgo = { telegramId: 200n, language: "en", platform: "telegram", botBlockedAt: new Date(NOW.getTime() - 3 * HOUR) };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatchUpdateMany.mockResolvedValue({ count: 1 });
+    mGetMainBotApi.mockReturnValue(null);
+    mProfileUpdate.mockResolvedValue({ silentIgnoreCount: 1 });
+  });
+
+  it("expires early when the only undecided side blocked the bot and has no app", async () => {
+    mMatchFindMany.mockResolvedValueOnce([
+      { ...buildCandidate({ acceptedByA: true, dispatchedAt: fresh }), userB: blockedLongAgo },
+    ]);
+
+    const result = await expireStaleMatches(NOW);
+
+    expect(result.expired).toBe(1);
+    // Same classification the deadline would have produced.
+    expect(result.matches[0]!.sides.find((s) => s.side === "A")).toMatchObject({ role: "responder", accepted: true });
+    expect(result.matches[0]!.sides.find((s) => s.side === "B")).toMatchObject({ role: "silent", peerAccepted: true });
+  });
+
+  it("keeps waiting while the block is younger than the grace window", async () => {
+    mMatchFindMany.mockResolvedValueOnce([
+      {
+        ...buildCandidate({ acceptedByA: true, dispatchedAt: fresh }),
+        userB: { ...blockedLongAgo, botBlockedAt: new Date(NOW.getTime() - 30 * 60 * 1000) },
+      },
+    ]);
+
+    expect((await expireStaleMatches(NOW)).expired).toBe(0);
+    expect(mMatchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps waiting for a blocked side that can still answer in the app", async () => {
+    mMatchFindMany.mockResolvedValueOnce([
+      { ...buildCandidate({ acceptedByA: true, dispatchedAt: fresh }), userB: { ...blockedLongAgo, platform: "both" } },
+    ]);
+
+    expect((await expireStaleMatches(NOW)).expired).toBe(0);
+  });
+
+  it("keeps waiting while a reachable side has not answered either", async () => {
+    mMatchFindMany.mockResolvedValueOnce([
+      { ...buildCandidate({ dispatchedAt: fresh }), userA: { ...sideA, platform: "telegram", botBlockedAt: null }, userB: blockedLongAgo },
+    ]);
+
+    expect((await expireStaleMatches(NOW)).expired).toBe(0);
+  });
+});

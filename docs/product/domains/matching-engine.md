@@ -650,6 +650,15 @@ committed.
   missed a real date") on top of the standard rating warning. If the
   partner declined or also ghosted, the message stays neutral — preserving
   the blind rule even at expiry. Match flips to `expired`.
+- **Early expiry when nobody can answer (founder decision 2026-10-13)** — the
+  sweep does not wait out the reply window when every undecided side is
+  unreachable on every rail: a Telegram-only account whose `botBlockedAt` is
+  older than `UNREACHABLE_SILENT_SIDE_GRACE_MS` (2h). The dispatch 403 is what
+  usually stamps it, so the partner who answered no longer sits a full window
+  for someone who never received the pitch. Only *when* changes: the
+  classification, penalty and expiry card are the ones the deadline would have
+  produced. A `both` account (app still there) and a block younger than the
+  grace window keep the ordinary deadline.
 - **Forgive-once on silence** — first `silentIgnoreCount` increment is a
   warning only; from the second onwards Elo decrements as if the user had
   declined, and a `EXPIRED_SILENT` `MatchEvent` is logged.

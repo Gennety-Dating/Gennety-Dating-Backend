@@ -18,6 +18,11 @@ import {
   claimMatchFlow,
   releaseMatchFlowClaim,
 } from "../../services/match-flow-claim.js";
+import {
+  fileFormerPartnerReport,
+  findFormerMatch,
+  type FormerPartnerReportResult,
+} from "../../services/former-match.js";
 
 /**
  * Post-match Report flow (PRODUCT_SPEC extension — Reporting & Moderation).
@@ -31,6 +36,11 @@ import {
  * category, then can optionally clarify with text or a voice note. Free-form
  * LLM triage still exists as an escalation tool, but the category acts as the
  * primary structured signal and a minimum severity floor.
+ *
+ * A partner who deleted their account can still be reported from the same
+ * buttons (decision 2026-10-13): the match row is gone with them, so the flow
+ * falls back to the survivor's `former_matches` trace and the report is filed
+ * by `fileFormerPartnerReport` against what the deletion kept.
  */
 
 const MAX_REPORT_LEN = 1000;
@@ -145,7 +155,11 @@ interface ResolvedReportTriage {
 
 interface ReportContext {
   reporterId: string;
-  reportedUserId: string;
+  /**
+   * Null when the partner deleted their account: the match row is gone and the
+   * report is filed against their former account (`fileFormerPartnerReport`).
+   */
+  reportedUserId: string | null;
   matchId: string;
 }
 
@@ -158,31 +172,12 @@ export async function handleReportOpen(ctx: BotContext): Promise<void> {
 
   await ctx.answerCallbackQuery();
 
-  const user = await prisma.user.findUnique({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    select: { id: true },
-  });
-  if (!user) return;
-
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: { id: true, userAId: true, userBId: true },
-  });
-  if (!match) return;
-
-  const isParticipant =
-    user.id === match.userAId || user.id === match.userBId;
-  if (!isParticipant) return;
-
-  // Block duplicate reports early — the DB has a unique constraint as well.
-  const existing = await prisma.report.findUnique({
-    where: {
-      reporterId_matchId: { reporterId: user.id, matchId: match.id },
-    },
-    select: { id: true },
-  });
+  // Block duplicate reports early — the DB has a unique constraint as well,
+  // and a former match its `reported_at` claim.
+  const reportContext = await loadReportContext(ctx, matchId);
+  if (!reportContext) return;
   const lang = ctx.session.language;
-  if (existing) {
+  if (reportContext === "duplicate") {
     await ctx.reply(t(lang, "reportDuplicate"));
     return;
   }
@@ -427,6 +422,38 @@ async function submitStructuredReport(
   });
   const tier: ReportTier = triage.tier;
   const reasonSummary = triage.reason_summary;
+  const thanksKey =
+    triage.manualReviewRequired || tier === 3
+      ? "reportThanksT3"
+      : tier === 2
+        ? "reportThanksT2"
+        : "reportThanksT1";
+
+  if (reportContext.reportedUserId === null) {
+    let filed: FormerPartnerReportResult;
+    try {
+      filed = await fileFormerPartnerReport({
+        matchId: reportContext.matchId,
+        reporterId: reportContext.reporterId,
+        tier: triage.manualReviewRequired ? 3 : tier,
+        rawText,
+        reasonSummary,
+        enforce: !triage.manualReviewRequired,
+        adminReviewed: !triage.manualReviewRequired && tier !== 3,
+        language: lang,
+        api: ctx.api,
+      });
+    } catch (err) {
+      console.warn("Failed to persist report on a former match:", err);
+      await ctx.reply(t(lang, "reportFailed"));
+      return;
+    }
+    if (filed === "filed") await ctx.reply(t(lang, thanksKey));
+    else await ctx.reply(t(lang, filed === "duplicate" ? "reportDuplicate" : "reportFailed"));
+    return;
+  }
+  const reportedUserId = reportContext.reportedUserId;
+
   let outcome:
     | Awaited<ReturnType<typeof applyReportAction>>
     | { kind: "tier1" }
@@ -438,7 +465,7 @@ async function submitStructuredReport(
       await prisma.report.create({
         data: {
           reporterId: reportContext.reporterId,
-          reportedId: reportContext.reportedUserId,
+          reportedId: reportedUserId,
           matchId: reportContext.matchId,
           rawText,
           tier: 3,
@@ -450,7 +477,7 @@ async function submitStructuredReport(
       await prisma.report.create({
         data: {
           reporterId: reportContext.reporterId,
-          reportedId: reportContext.reportedUserId,
+          reportedId: reportedUserId,
           matchId: reportContext.matchId,
           rawText,
           tier,
@@ -461,7 +488,7 @@ async function submitStructuredReport(
       await applyReportAction({
         tier,
         reporterUserId: reportContext.reporterId,
-        reportedUserId: reportContext.reportedUserId,
+        reportedUserId,
         reasonSummary,
         language: lang,
       });
@@ -471,7 +498,7 @@ async function submitStructuredReport(
         await tx.report.create({
           data: {
             reporterId: reportContext.reporterId,
-            reportedId: reportContext.reportedUserId,
+            reportedId: reportedUserId,
             matchId: reportContext.matchId,
             rawText,
             tier,
@@ -482,13 +509,13 @@ async function submitStructuredReport(
         const actionOutcome = await applyReportAction({
           tier,
           reporterUserId: reportContext.reporterId,
-          reportedUserId: reportContext.reportedUserId,
+          reportedUserId,
           reasonSummary,
           language: lang,
         }, tx);
         const cancellations = moderationOutcomeRequiresCancellation(actionOutcome)
           ? await claimInFlightMatchCancellations(
-              reportContext.reportedUserId,
+              reportedUserId,
               tx,
               { strict: true },
             )
@@ -507,15 +534,9 @@ async function submitStructuredReport(
 
   await deliverCancelledPartnerEffects(cancelledPartners, ctx.api);
   if (!triage.manualReviewRequired && outcome) {
-    await notifyReportedUser(ctx.api, reportContext.reportedUserId, outcome);
+    await notifyReportedUser(ctx.api, reportedUserId, outcome);
   }
 
-  const thanksKey =
-    triage.manualReviewRequired || tier === 3
-      ? "reportThanksT3"
-      : tier === 2
-        ? "reportThanksT2"
-        : "reportThanksT1";
   await ctx.reply(t(lang, thanksKey));
 }
 
@@ -613,7 +634,13 @@ async function loadReportContext(
     where: { id: matchId },
     select: { id: true, userAId: true, userBId: true },
   });
-  if (!match) return null;
+  if (!match) {
+    // The partner may have deleted their account, taking the match with them.
+    const former = await findFormerMatch(matchId, user.id);
+    if (!former) return null;
+    if (former.reportedAt) return "duplicate";
+    return { reporterId: user.id, reportedUserId: null, matchId };
+  }
 
   const isParticipant = user.id === match.userAId || user.id === match.userBId;
   if (!isParticipant) return null;

@@ -42,6 +42,7 @@ import {
   shouldOfferVenueChange,
 } from "../handlers/matching/venue-change.js";
 import { pendingFeedbackFor } from "./post-date-feedback.js";
+import { latestReportableFormerMatch } from "./former-match.js";
 import { emergencyCancelOpen } from "./emergency-cancel.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
@@ -1482,6 +1483,10 @@ async function execProposeCancelDate(
  * Берётся последний матч в любой живой или завершённой стадии: неприятное чаще
  * всплывает ПОСЛЕ свидания, и отказать «потому что матч уже completed» значило
  * бы закрыть дверь ровно в тот момент, когда она нужнее всего.
+ *
+ * Если живого матча нет, берётся след матча с удалившимся партнёром
+ * (`former_matches`, решение 2026-10-13): удаление аккаунта не должно
+ * закрывать ту же дверь.
  */
 /**
  * Записать рассказ о прошедшем свидании.
@@ -1673,7 +1678,11 @@ async function execProposeReportPartner(
     orderBy: { createdAt: "desc" },
     select: { id: true },
   });
-  if (!match) {
+  // No live match left may mean the partner deleted their account — the match
+  // went with them, and the survivor's trace is what the button reports
+  // (decision 2026-10-13).
+  const matchId = match?.id ?? (await latestReportableFormerMatch(user.id))?.matchId ?? null;
+  if (!matchId) {
     return {
       toolResult: JSON.stringify({
         success: false,
@@ -1693,7 +1702,7 @@ async function execProposeReportPartner(
     }),
     action: {
       kind: "entry_point",
-      entry: { label: t(lang, "reportBtn"), callbackData: `report:open:${match.id}` },
+      entry: { label: t(lang, "reportBtn"), callbackData: `report:open:${matchId}` },
     },
   };
 }

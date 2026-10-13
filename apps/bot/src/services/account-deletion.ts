@@ -13,6 +13,7 @@ import {
 import { getMainBotApi } from "./main-bot-api.js";
 import { findRefundsInFlight, type RefundInFlightRow } from "./refund-in-flight.js";
 import { writeSafetyTombstones } from "./safety-tombstone.js";
+import { recordFormerMatches } from "./former-match.js";
 import {
   deleteStorageObject,
   downloadProfileImage,
@@ -72,7 +73,8 @@ export interface DeleteUserAccountResult {
  *    closed so a retry remains possible while the DB references still exist;
  * 3. in one DB transaction: claim live-match cancellation, re-check refunds,
  *    write the safety tombstones and stamp the reports/blocks filed against the
- *    account (`writeSafetyTombstones`), remove founder report snapshots, and
+ *    account (`writeSafetyTombstones`), keep the survivors' traces of recent
+ *    matches (`recordFormerMatches`), remove founder report snapshots, and
  *    delete the User row. Payment ledgers, purchases, and reports keep their
  *    rows with a null owner (`onDelete: SetNull`); everything else cascades —
  *    the app chats included (`chat_sessions` and their `messages`, 2026-09-30);
@@ -215,7 +217,12 @@ export async function deleteUserAccount(
     // Moderation status, strikes, and the reports/blocks filed AGAINST this
     // account survive as keyed hashes, relinked if the same person returns —
     // before the row goes, so the stamps and the deletion commit together.
-    await writeSafetyTombstones(tx, user.id);
+    const safety = await writeSafetyTombstones(tx, user.id);
+    // The person on the other side of a recent match keeps a way to report
+    // this account after it is gone — only where a tombstone exists for the
+    // report to attach to (decision 2026-10-13). Before the row goes, since
+    // the matches go with it.
+    if (safety.tombstones > 0) await recordFormerMatches(tx, user.id);
     const deletedReports =
       reportIds.length > 0
         ? await tx.founderReport.deleteMany({ where: { id: { in: reportIds } } })

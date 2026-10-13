@@ -841,6 +841,16 @@ describe("matchNudgeTick — stall phase scoping (audit regression)", () => {
     const result = await matchNudgeTick(api, { now: DAY_TIME });
 
     expect(result.stallCheckIns).toBe(1);
+    // The claim itself must accept the stale stamp — a bare `IS NULL` guard
+    // matches no row in production (the mock above returns count 1 regardless).
+    const claimCall = (prisma.match.updateMany as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([args]) => (args as { data?: Record<string, unknown> }).data?.stallCheckInSentAtA,
+    );
+    expect(claimCall?.[0]).toMatchObject({
+      where: {
+        OR: [{ stallCheckInSentAtA: null }, { stallCheckInSentAtA: { lte: venueOpened } }],
+      },
+    });
   });
 
   it("does not re-ask when the stamp belongs to the phase in progress", async () => {

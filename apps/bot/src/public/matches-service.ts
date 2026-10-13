@@ -45,6 +45,7 @@ import {
   outcomeRevealKey,
 } from "../services/match-decision-shared.js";
 import { getBotApi } from "./server.js";
+import { fileFormerPartnerReport, findFormerMatch } from "../services/former-match.js";
 import { offerRematchAfterCancellation } from "../handlers/matching/rematch.js";
 import { deadlineFor } from "../services/proposal-deadline.js";
 import { preDateBriefingVisibility } from "@gennety/shared";
@@ -1072,6 +1073,57 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
   ]);
 }
 
+/**
+ * `submitMatchReport` for a partner who deleted their account. Same answers:
+ * `"forbidden"` when there is no trace for this reporter and match (as for an
+ * unknown match), `"duplicate"` once it was reported — except the same report
+ * sent again after a lost response, which answers `"ok"` as C-15 does for a
+ * live match.
+ */
+async function submitFormerPartnerReport(
+  matchId: string,
+  reporterUserId: string,
+  payload: MobileReportPayload,
+): Promise<"ok" | "duplicate" | "forbidden"> {
+  const reporter = await prisma.user.findUnique({
+    where: { id: reporterUserId },
+    select: { language: true },
+  });
+  const language: Language = (reporter?.language ?? "en") as Language;
+  const tier = REPORT_TIER[payload.category];
+  const rawText = payload.message.slice(0, 1000);
+
+  const result = await fileFormerPartnerReport({
+    matchId,
+    reporterId: reporterUserId,
+    tier,
+    rawText,
+    reasonSummary: rawText.slice(0, 240),
+    enforce: true,
+    adminReviewed: tier !== 3,
+    language,
+    api: getBotApi(),
+  });
+  if (result === "filed") return "ok";
+  if (result === "not_found") return "forbidden";
+
+  const trace = await findFormerMatch(matchId, reporterUserId);
+  if (trace?.reportedAt) {
+    const retry = await prisma.report.findFirst({
+      where: {
+        reporterId: reporterUserId,
+        matchId: null,
+        rawText,
+        tier,
+        createdAt: { gte: new Date(trace.reportedAt.getTime() - 60_000) },
+      },
+      select: { id: true },
+    });
+    if (retry) return "ok";
+  }
+  return "duplicate";
+}
+
 /** Mobile safety-brief ack. Flips the per-side boolean once; idempotent. */
 export async function acknowledgeSafetyBrief(
   matchId: string,
@@ -1095,6 +1147,10 @@ export async function acknowledgeSafetyBrief(
  *
  * Returns `"duplicate"` when the reporter already filed on this match,
  * so the HTTP layer can surface a 409.
+ *
+ * A match whose partner deleted their account no longer exists; the report
+ * then goes through the survivor's `former_matches` trace instead
+ * (`submitFormerPartnerReport`, decision 2026-10-13).
  */
 export async function submitMatchReport(
   matchId: string,
@@ -1105,7 +1161,7 @@ export async function submitMatchReport(
     where: { id: matchId },
     select: { userAId: true, userBId: true },
   });
-  if (!match) return "forbidden";
+  if (!match) return submitFormerPartnerReport(matchId, reporterUserId, payload);
 
   const reportedUserId =
     match.userAId === reporterUserId

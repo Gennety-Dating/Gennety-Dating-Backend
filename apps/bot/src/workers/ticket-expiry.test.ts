@@ -17,6 +17,11 @@ vi.mock("../handlers/matching/ticket-gate.js", () => ({
   settleStrandedTicketRefund: (...a: unknown[]) => settleStrandedTicketRefund(...a),
 }));
 
+const recoverStrandedHandoffs = vi.fn();
+vi.mock("../services/stranded-handoff.js", () => ({
+  recoverStrandedHandoffs: (...a: unknown[]) => recoverStrandedHandoffs(...a),
+}));
+
 import { prisma } from "@gennety/db";
 import { ticketExpiryTick } from "./ticket-expiry.js";
 
@@ -34,6 +39,8 @@ beforeEach(() => {
   retryPendingStarsGateRefunds.mockResolvedValue(0);
   settleStrandedTicketRefund.mockReset();
   settleStrandedTicketRefund.mockResolvedValue(false);
+  recoverStrandedHandoffs.mockReset();
+  recoverStrandedHandoffs.mockResolvedValue({ mutualAccepts: 0, calendarsOpened: 0 });
 });
 
 describe("ticketExpiryTick", () => {
@@ -100,5 +107,13 @@ describe("ticketExpiryTick", () => {
 
     expect(res.swept).toBe(1); // only the successful one counts
     expect(refundAndFallbackToScheduling).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs the stranded-handoff recovery and survives its failure", async () => {
+    recoverStrandedHandoffs.mockResolvedValueOnce({ mutualAccepts: 1, calendarsOpened: 2 });
+    expect((await ticketExpiryTick(fakeApi)).swept).toBe(3);
+
+    recoverStrandedHandoffs.mockRejectedValueOnce(new Error("db down"));
+    await expect(ticketExpiryTick(fakeApi)).resolves.toEqual({ swept: 0 });
   });
 });

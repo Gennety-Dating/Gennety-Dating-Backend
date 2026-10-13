@@ -726,6 +726,15 @@ export const ACCOUNT_DELETION_REFUND_DEFER_DAYS = 7;
 export const SAFETY_TOMBSTONE_RETENTION_MONTHS = 24;
 
 /**
+ * How long the person who stayed can still report a partner who deleted their
+ * account (decision 2026-10-13). Account deletion records the deleted account's
+ * matches touched within this many days (`former_matches`); the retention sweep
+ * removes each row this long after it was written. Past it, a Report button on
+ * that match leads nowhere again, as it did before.
+ */
+export const FORMER_MATCH_REPORT_WINDOW_DAYS = 30;
+
+/**
  * Admin "linked accounts" (decision 2026-10-13): accounts that look like the
  * same person — a shared profile photo, or a deleted account with the same
  * proven identity. Shown to the operator only; nothing in the product reads
@@ -781,3 +790,23 @@ export const STRANDED_PROPOSAL_SWEEP_BATCH = 100;
  * the window in which a restarted process re-arms a notice it may have lost.
  */
 export const NO_MATCH_NOTICE_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a match may sit in a half-finished stage handoff before the
+ * stranded-handoff sweep (`apps/bot/src/services/stranded-handoff.ts`) finishes
+ * it: a `proposed` row both sides accepted, or a `negotiating` row with no
+ * calendar grid and no open ticket gate. Both are normally left within the same
+ * request; this window only has to be comfortably longer than one request, so a
+ * handoff still in progress is never run twice.
+ */
+export const STRANDED_HANDOFF_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * How long a proposal's silent side must have been unreachable on every rail —
+ * the bot blocked (`User.botBlockedAt`) and no app to push to — before the
+ * expiry sweep stops waiting for their answer and closes the proposal early
+ * (founder decision 2026-10-13). Long enough that someone who blocks and
+ * unblocks the bot in a moment of irritation still gets to answer; far shorter
+ * than the full reply window the other side would otherwise sit through.
+ */
+export const UNREACHABLE_SILENT_SIDE_GRACE_MS = 2 * 60 * 60 * 1000;
