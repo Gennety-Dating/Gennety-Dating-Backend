@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { normalizeChatCompletion } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 import { runWithUsage } from "./usage-context.js";
 import { usageLimiter } from "./usage-limiter.js";
@@ -181,6 +182,48 @@ describe("openaiFetch model capabilities", () => {
       .toEqual({ model: "gpt-5.6-terra", max_completion_tokens: 16, reasoning_effort: "none" });
     expect(await send({ model: "gpt-5.6-terra", temperature: 0, max_completion_tokens: 1000 }))
       .toEqual({ model: "gpt-5.6-terra", max_completion_tokens: 1000 });
+  });
+
+  it("forwards an already-normalized or untouched body as the caller's own string", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const photo = `data:image/jpeg;base64,${"A".repeat(200_000)}`;
+    for (const body of [
+      // What `openai.ts` and the vision scorer send: normalized before stringify.
+      normalizeChatCompletion({ model: "gpt-6-luna", max_completion_tokens: 1024, temperature: 0.3, messages: [] }),
+      normalizeChatCompletion({ model: "gpt-6.1-sol", temperature: 0, max_completion_tokens: 4096, messages: [] }),
+      normalizeChatCompletion({
+        model: "gpt-6-luna",
+        messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: photo } }] }],
+      }),
+      { model: "gpt-4.1-mini", temperature: 0, max_completion_tokens: 16 },
+    ]) {
+      const raw = JSON.stringify(body);
+      await openaiFetch("https://api.openai.com/v1/chat/completions", { method: "POST", body: raw });
+      expect(fetchMock.mock.lastCall?.[1]?.body).toBe(raw);
+    }
+  });
+
+  it("sends exactly the text the parse-normalize-stringify pass produced", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const bodies: Array<Record<string, unknown>> = [
+      { model: "gpt-6-luna", temperature: 0.3, max_completion_tokens: 16 },
+      { model: "gpt-6-luna", reasoning_effort: "none", temperature: 0.7, tools: [{ type: "function" }] },
+      { model: "gpt-6-luna", reasoning_effort: "low", temperature: 1, top_p: 0.5 },
+      { model: "gpt-6.1-sol", reasoning_effort: "none", temperature: 0, logprobs: true },
+      { model: "gpt-6.1-sol", reasoning_effort: "low", messages: [{ role: "user", content: "é ✓  " }] },
+      { model: "gpt-5.6-terra", temperature: 0, max_completion_tokens: 1000, n: 1.5e-7 },
+      { model: "gpt-5.6-luna", max_completion_tokens: 16 },
+      { model: "gpt-4.1-mini", temperature: 0 },
+      { messages: [] },
+    ];
+    for (const body of bodies) {
+      const raw = JSON.stringify(body);
+      await openaiFetch("https://api.openai.com/v1/chat/completions", { method: "POST", body: raw });
+      const previous = JSON.stringify(normalizeChatCompletion(JSON.parse(raw) as Record<string, unknown>));
+      expect(fetchMock.mock.lastCall?.[1]?.body).toBe(previous);
+    }
   });
 
   it("leaves malformed JSON and multipart data intact", async () => {

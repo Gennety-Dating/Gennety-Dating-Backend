@@ -30,7 +30,17 @@ interface UsagePayload {
 
 const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
 
-/** Normalize only chat requests, never embeddings, moderation or audio. */
+/**
+ * Normalize only chat requests, never embeddings, moderation or audio.
+ *
+ * A body the rules leave as it is goes out as the caller's own string. That is
+ * every caller that already normalized its object before `JSON.stringify` —
+ * the shared `openai.ts` helpers and the vision scorer with its multi-MB base64
+ * photos among them — and every model the rules do not cover. Re-serializing
+ * such a body only reproduced the same JSON text (`JSON.stringify` of what
+ * `JSON.parse` read back from `JSON.stringify` output is that output), at the
+ * cost of a second full serialization on the main thread.
+ */
 function normalizeChatCompletionBody(
   input: Parameters<typeof fetch>[0],
   init: RequestInit | undefined,
@@ -44,7 +54,30 @@ function normalizeChatCompletionBody(
     return init;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return init;
-  return { ...init, body: JSON.stringify(normalizeChatCompletion(parsed as Record<string, unknown>)) };
+  const body = parsed as Record<string, unknown>;
+  const normalized = normalizeChatCompletion(body);
+  if (sameTopLevelEntries(body, normalized)) return init;
+  return { ...init, body: JSON.stringify(normalized) };
+}
+
+/**
+ * Same own keys in the same order with identical values. `normalizeChatCompletion`
+ * only ever sets or deletes top-level fields of a shallow copy, so this is
+ * exactly "it changed nothing" — and then both serialize to the same text.
+ */
+function sameTopLevelEntries(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): boolean {
+  if (before === after) return true;
+  const keys = Object.keys(before);
+  const afterKeys = Object.keys(after);
+  if (keys.length !== afterKeys.length) return false;
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]!;
+    if (afterKeys[i] !== key || after[key] !== before[key]) return false;
+  }
+  return true;
 }
 
 function extractTotalTokens(body: unknown): number {
