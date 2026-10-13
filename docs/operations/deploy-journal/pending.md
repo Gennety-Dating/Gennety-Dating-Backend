@@ -12,18 +12,31 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 # Gennety Dating Deploy
 
 **PENDING 2026-10-13 — Money audit fixes (code only, no migration, no env).**
-Branch `claude/amazing-cannon-y8a21a`. Wallet spend refunds keyed per spend row; cancellation refunds credited
+Merged into `main` from `claude/amazing-cannon-y8a21a`. Wallet spend refunds keyed per spend row; cancellation refunds credited
 inside the cancelling transaction (a failed credit now rolls the cancel back — emergency cancel surfaces it as an
 error, the stall worker logs and retries next tick); Premium-settled slots not refunded; refund sweeps
 (ticket-expiry, venue-change, Prime Time) now registered regardless of sales flags; venue/Prime Time refunds claim
 the row before Stars move; wishlist purchase/refund fixes; App Store Premium refund subtracts only credited days;
 `/v1/me/referral/claim` new accounts only (409 `not-eligible`). Demo: unchanged (no-charge rail).
 iOS: `referral/claim` may now answer 409 `reason: "not-eligible"` for a finished account (was 200).
+Same block, follow-up (decision 2026-10-13, second entry): every account deletion now leaves a bare tombstone
+(keyed hashes only), and a returning identity gets no welcome/student/photo/video/promo gift; admin gains
+`GET /admin/users/linked-groups` + `linkedAccounts` on the user card; App Store sandbox ticket purchases are capped at
+3 per account (422 `sandbox_limit`, final) and their rows carry no `amountCents`. iOS: treat `sandbox_limit` like
+every other final 422 (finish the transaction) — no build change needed if it already does.
+**Legal — before or with this deploy:** privacy policy v4.3 (unpublished, already gating the Wishlist block) now
+also discloses the deleted-account hashes (§7 purposes, §16 retention, deletion paragraph); regenerate the website
+TSX (`scripts/legal-md-to-tsx.py`) from the current `legal/privacy-policy.md` before publishing v4.3.
 - **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/ticket-refund.test.ts
   src/handlers/matching/ticket-gate.test.ts src/services/appstore-wishlist.test.ts`; after restart
   `pm2 logs` shows `[cron] Ticket expiry / Venue-change refund / Prime Time refund ... scheduled` even with the
   features off.
+  Follow-up: `pnpm --filter @gennety/bot exec vitest run src/services/former-account.test.ts
+  src/services/linked-accounts.test.ts src/services/appstore-tickets.test.ts`; after a test deletion
+  `select count(*) from safety_tombstones where status is null and strikes = 0` grows by the account's identities;
+  `curl -H "Authorization: Bearer $ADMIN_API_KEY" https://api-admin.gennety.com/admin/users/linked-groups` → 200.
 - **Откат:** `git revert` of the branch commits; no data to undo (ledger keys are the same `refund:match:…`).
+  Bare tombstones written meanwhile are harmless after a revert (they restore nothing) and age out in 24 months.
 
 **PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
 Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
