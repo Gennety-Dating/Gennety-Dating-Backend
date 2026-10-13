@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 427 entries
+# Decision index — all 428 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-13 | возвраты после отмены: часовой крон `dead-match-refund` досвипывает потерянные возвраты билетов и Prime Time (те же ключи, exactly-once), основателю — строка о каждом; при удалении аккаунта билет партнёра — в транзакции удаления; пропуск со стёртым матчем — основателю на решение, не автоматом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-13 | одновременные действия над матчем: календарь, отмена по 48 ч и «оставить исходное» — под `FOR UPDATE` строки матча; подбор места перезапускается после присоединившегося запроса; CAS смены места — по отпечатку соглашения, истечение билета — по пустым слотам; один ключ возврата на списание; возврат Stars после захвата строки; не сделано: повторный отчёт App Store о старой покупке (нужен nonce в контракте iOS), durable-возвраты после отмены | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | окно калибровки первой пары: свежий аккаунт пропускает ближайший вечерний подбор (`calibration_until`, `FIRST_DROP_CALIBRATION_HOURS=24`), не «пропущен» и без уведомления голода; `/v1/countdown` `searchPhase`/`firstDropAt`; агент знает фазу; тон «держим позицию» — тир 2 и скидка голода без «спасибо, что ждёшь» | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | отложенное из аудита: верифицированный не остаётся без фото (409 `photo_minimum` min 1), застрявшие — liveness без фото → `pending_review` вручную; `pending_review` не запускает liveness (409 `under_review`); REFUND_REVERSED возвращает Premium/билеты/Prime Time + оповещение; флуд Telegram до очереди; `usageGuard` на маршрутах модели, `PATCH /v1/me` без 429 | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

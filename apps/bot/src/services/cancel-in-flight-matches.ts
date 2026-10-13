@@ -9,6 +9,7 @@ import {
   planMatchTicketRefunds,
   ticketRefundNoticeKey,
   type TicketRefundCredit,
+  type TicketRefundOutcome,
 } from "./ticket-refund.js";
 
 /**
@@ -45,6 +46,27 @@ export interface CancelledPartner {
    * BOTH participants, not just the partner.
    */
   ticketRefunds: TicketRefundCredit[];
+  /**
+   * Credits the caller already committed inside its own transaction
+   * (`applyTicketRefundsInTx` — account deletion). The post-commit pass below
+   * then finds their keys taken and credits nothing, so without these the
+   * partner's notice would lose its "your ticket is back" line.
+   */
+  appliedTicketRefunds?: TicketRefundOutcome[];
+}
+
+/** Add what the caller's transaction already credited to the post-commit outcomes. */
+function withAppliedRefunds(
+  applied: readonly TicketRefundOutcome[],
+  later: readonly TicketRefundOutcome[],
+): TicketRefundOutcome[] {
+  const merged = new Map<string, TicketRefundOutcome>();
+  for (const outcome of [...applied, ...later]) {
+    const existing = merged.get(outcome.userId);
+    if (existing) existing.refunded += outcome.refunded;
+    else merged.set(outcome.userId, { ...outcome });
+  }
+  return [...merged.values()];
 }
 
 interface CancelOptions {
@@ -201,10 +223,11 @@ export async function deliverCancelledPartnerEffects(
     // for it — no fault-finding (PRODUCT_SPEC §3.5b). Post-commit by design: on
     // hard delete the leaver's row is already gone and is skipped, while the
     // partner is still refunded.
-    const refunds = await applyTicketRefunds(item.ticketRefunds).catch((err: unknown) => {
+    const later = await applyTicketRefunds(item.ticketRefunds).catch((err: unknown) => {
       console.warn("[cancel-in-flight] ticket refund failed:", err);
       return [];
     });
+    const refunds = withAppliedRefunds(item.appliedTicketRefunds ?? [], later);
     // The pass follows the ticket (§9.1): the date did not happen, so the Stars
     // spent on the evening band go back to whoever spent them. A band opened by
     // a subscription has no purchase row and is therefore a no-op.

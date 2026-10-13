@@ -11,6 +11,21 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Dead-match refund recovery: hourly sweep + partner refund inside account deletion (code only).**
+No migration, no env required (optional `DEAD_MATCH_REFUND_CRON_SCHEDULE`, default `30 * * * *`), no flag, no route.
+New cron `dead-match-refund` re-runs the idempotent ticket / Prime Time refunds of matches cancelled 15 min…7 days
+ago that a dead process never paid; account deletion credits the partner's ticket inside its transaction; a Prime Time
+pass whose match was erased with an account goes to the founder bot for a decision (not refunded automatically).
+iOS: no contract change. Demo: same code, founder feed off there.
+- **Expect on first run:** possibly a few founder messages «🧾 Нужно решение: оплаченный вечерний пропуск…» for
+  historical passes whose match was erased by an account deletion (each reported once, an hour after first seen).
+  Any «🔁 Восстановлен потерянный возврат» means a refund really was lost before the deploy.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/account-deletion.test.ts src/services/cancel-in-flight-matches.test.ts`;
+  with the test DB up, `pnpm test:integration` (includes `dead-match-refund-sweep.integration.test.ts`). After restart:
+  `pm2 logs gennety-bot --lines 300 --nostream | grep -E "Dead-match refund recovery scheduled|dead-match-refund"`.
+- **Откат:** previous release directory + restart. Persisted: ordinary `refund` ledger rows (real credits, keep them)
+  and `refund_error` markers on `settled` passes, which nothing else reads.
+
 **PENDING 2026-10-13 — Simultaneous actions on one match: row locks + compare-and-set (code only).**
 No migration, no env, no flag, no new route. What changes at runtime: the calendar save, the 48h stall cancel and the
 venue board's "keep the original" now run as one `SELECT … FOR UPDATE` transaction on the match row

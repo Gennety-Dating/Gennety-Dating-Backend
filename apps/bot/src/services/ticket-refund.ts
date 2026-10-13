@@ -1,4 +1,4 @@
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 
@@ -237,6 +237,16 @@ export async function planMatchTicketRefunds(
 }
 
 /**
+ * The exactly-once key of one slot's cancellation refund. Shared by the live
+ * rail below, the in-transaction variant and the hourly recovery sweep
+ * (`dead-match-refund-sweep.ts`), so whichever of them gets there first is the
+ * only one that credits.
+ */
+export function matchRefundKey(matchId: string, userId: string, slot: TicketSlot): string {
+  return `refund:match:${matchId}:${userId}:${slot}`;
+}
+
+/**
  * Execute a plan: one wallet ticket per paid slot, exactly once.
  *
  * Idempotency is the synthetic unique `TicketLedger.externalPaymentId`
@@ -272,7 +282,7 @@ export async function applyTicketRefunds(
           count: 1,
           reason: "refund",
           matchId: credit.matchId,
-          externalPaymentId: `refund:match:${credit.matchId}:${credit.userId}:${slot}`,
+          externalPaymentId: matchRefundKey(credit.matchId, credit.userId, slot),
         });
         refunded += 1;
       } catch (err) {
@@ -300,6 +310,60 @@ export async function applyTicketRefunds(
     });
   }
 
+  return outcomes;
+}
+
+/**
+ * Execute a plan inside the caller's transaction, so the credit commits with
+ * the cancellation or not at all.
+ *
+ * For the one path where "after commit" can lose the refund for good: account
+ * deletion. Its transaction cancels the match AND erases it (the row cascades
+ * with the leaver), so if the process dies between that commit and
+ * `applyTicketRefunds`, nothing is left to re-derive the plan from — the
+ * surviving partner's ticket would be gone without a trace.
+ *
+ * `createMany({ skipDuplicates })` is `INSERT … ON CONFLICT DO NOTHING`: a key
+ * that already exists is skipped instead of raising, because a unique violation
+ * inside a Postgres transaction aborts the whole transaction — here, the
+ * account deletion. The balance moves by exactly the rows inserted.
+ */
+export async function applyTicketRefundsInTx(
+  tx: Prisma.TransactionClient,
+  credits: readonly TicketRefundCredit[],
+): Promise<TicketRefundOutcome[]> {
+  const outcomes: TicketRefundOutcome[] = [];
+  for (const credit of credits) {
+    let refunded = 0;
+    for (const slot of credit.slots) {
+      const inserted = await tx.ticketLedger.createMany({
+        data: [
+          {
+            userId: credit.userId,
+            delta: 1,
+            reason: "refund",
+            matchId: credit.matchId,
+            externalPaymentId: matchRefundKey(credit.matchId, credit.userId, slot),
+          },
+        ],
+        skipDuplicates: true,
+      });
+      refunded += inserted.count;
+    }
+    if (refunded > 0) {
+      await tx.user.update({
+        where: { id: credit.userId },
+        data: { ticketBalance: { increment: refunded } },
+      });
+    }
+    outcomes.push({
+      userId: credit.userId,
+      refunded,
+      telegramId: credit.telegramId,
+      language: credit.language,
+      platform: credit.platform,
+    });
+  }
   return outcomes;
 }
 

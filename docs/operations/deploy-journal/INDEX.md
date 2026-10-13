@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-13 | Dead-match refund recovery: hourly `dead-match-refund` sweep re-runs lost post-cancel refunds, partner ticket refund inside account deletion, orphaned Prime Time pass to the founder bot; code only | [pending](./pending.md) |
 | PENDING | 2026-10-13 | Simultaneous actions on one match: row-locked calendar save / stall cancel / keep-original, venue finalization rerun, agreement-pinned venue-change claims, gate-expiry and ticket-offer guards, per-spend refund key, refund claimed before Stars move; code only (no migration, no env) | [pending](./pending.md) |
 | Deployed | 2026-10-11 | (production `3edf3b15` 2026-10-11) Venue photos: curated Google photo order for all 329 places (venue shots first, then 2–4 dishes, up to 8); after deploy `apply-venue-photo-curation.ts` (dry run → `--apply`) + one more bot restart; no migration, no env | [pending](./pending.md) |
 | Deployed | 2026-10-11 | (production `3edf3b15` 2026-10-11) Vibe Check catalog 62 items + `priceEur` + badge `popular` (`feat/vibe-check-shop` landed); needs `pnpm seed-style:import --apply` only when `STYLE_PICKS_ENABLED` turns on; Mini App ticket keeps 3D perspective (`a550608b`) | [pending](./pending.md) |

@@ -64,6 +64,7 @@ import { campusDropTick } from "./workers/campus-drop.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
+import { sweepDeadMatchRefunds } from "./services/dead-match-refund-sweep.js";
 import { sweepHeldReferralRewards } from "./services/referral.js";
 import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
@@ -388,6 +389,16 @@ const PRIME_TIME_REFUND_CRON_SCHEDULE =
   process.env.PRIME_TIME_REFUND_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
+ * Dead-match refund recovery (decision 2026-10-13). Hourly, at half past so it
+ * does not share a minute with the purchase sweeps above: re-runs the
+ * idempotent ticket / Prime Time refunds of recently cancelled matches, which
+ * a process that died right after the cancellation never paid. Always
+ * registered — the refunds it recovers outlive every feature flag.
+ */
+const DEAD_MATCH_REFUND_CRON_SCHEDULE =
+  process.env.DEAD_MATCH_REFUND_CRON_SCHEDULE ?? "30 * * * *";
+
+/**
  * Referral held-reward release (§Referral). Hourly: pays ladder rungs the daily
  * velocity cap held back once the referrer is under the cap again — the cap
  * window is 24h, so an hourly pass releases a reward within an hour of it
@@ -624,6 +635,7 @@ function validateSchedules(): void {
       REMATCH_REFUND_CRON_SCHEDULE,
       VENUE_CHANGE_REFUND_CRON_SCHEDULE,
       PRIME_TIME_REFUND_CRON_SCHEDULE,
+      DEAD_MATCH_REFUND_CRON_SCHEDULE,
       REFERRAL_RELEASE_CRON_SCHEDULE,
       PROFILER_CRON_SCHEDULE,
       MUSIC_TRACK_REFRESH_CRON_SCHEDULE: env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE,
@@ -958,6 +970,17 @@ function registerSchedules(): void {
       `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
     );
   }
+
+  // Refunds a cancellation owed but never paid (the process died between the
+  // cancel commit and the refund). Not behind any flag: a ticket or a pass
+  // already paid for must come back whatever is switched on today.
+  cron.schedule(
+    DEAD_MATCH_REFUND_CRON_SCHEDULE,
+    guardedTick("dead-match-refund", () =>
+      sweepDeadMatchRefunds(bot.api).then(() => undefined),
+    ),
+  );
+  console.log(`[cron] Dead-match refund recovery scheduled: "${DEAD_MATCH_REFUND_CRON_SCHEDULE}"`);
 
   // Referral rewards held back by the velocity cap: without this pass they
   // were released only by another friend verifying, which for a referrer

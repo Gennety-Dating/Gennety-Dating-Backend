@@ -718,6 +718,17 @@ export const AGENT_STORED_HISTORY_MAX_MESSAGES = 200;
 export const ACCOUNT_DELETION_REFUND_DEFER_DAYS = 7;
 
 /**
+ * Dead-match refund recovery (decision 2026-10-13). Every rail that cancels a
+ * paid match refunds after its commit, so a process that dies in between used
+ * to lose the refund silently. An hourly sweep re-runs the same idempotent
+ * refunds for matches cancelled at least `GRACE` ago (the live rail has
+ * finished by then) and at most `LOOKBACK_DAYS` ago (bounds the scan; an hourly
+ * sweep that has been down for a week is an ops incident of its own).
+ */
+export const DEAD_MATCH_REFUND_GRACE_MS = 15 * 60 * 1000;
+export const DEAD_MATCH_REFUND_LOOKBACK_DAYS = 7;
+
+/**
  * How long a deleted account's safety tombstones (keyed hashes of its Telegram
  * id / phone / email, with its moderation status, strikes, and the link to
  * reports and blocks filed against it) are kept (A13-H14). Stated in the

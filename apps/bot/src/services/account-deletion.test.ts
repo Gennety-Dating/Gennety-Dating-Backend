@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   unpinKnownStatusBanner: vi.fn(),
   findRefundsInFlight: vi.fn(),
   writeSafetyTombstones: vi.fn(),
+  applyTicketRefundsInTx: vi.fn(),
   listStorageObjects: vi.fn(),
   storageBucketState: vi.fn(),
   /** Any payment-table write inside the deletion transaction. There must be none. */
@@ -79,6 +80,9 @@ vi.mock("./storage.js", () => ({
 }));
 vi.mock("./refund-in-flight.js", () => ({
   findRefundsInFlight: mocks.findRefundsInFlight,
+}));
+vi.mock("./ticket-refund.js", () => ({
+  applyTicketRefundsInTx: mocks.applyTicketRefundsInTx,
 }));
 vi.mock("./safety-tombstone.js", () => ({
   writeSafetyTombstones: mocks.writeSafetyTombstones,
@@ -161,7 +165,8 @@ beforeEach(() => {
   mocks.reportDeleteMany.mockResolvedValue({ count: 1 });
   mocks.botSessionDeleteMany.mockResolvedValue({ count: 1 });
   mocks.userDelete.mockResolvedValue({});
-  mocks.claimMatches.mockResolvedValue([{ matchId: "m1" }]);
+  mocks.claimMatches.mockResolvedValue([{ matchId: "m1", ticketRefunds: [] }]);
+  mocks.applyTicketRefundsInTx.mockResolvedValue([]);
   mocks.deliverEffects.mockResolvedValue(undefined);
   mocks.deleteStorageObject.mockResolvedValue(true);
   mocks.getMainBotApi.mockReturnValue({ token: "main-bot" });
@@ -203,7 +208,10 @@ describe("deleteUserAccount", () => {
     expect(mocks.claimMatches).toHaveBeenCalledWith(USER_ID, expect.anything(), {
       strict: true,
     });
-    expect(mocks.deliverEffects).toHaveBeenCalledWith([{ matchId: "m1" }], null);
+    expect(mocks.deliverEffects).toHaveBeenCalledWith(
+      [expect.objectContaining({ matchId: "m1" })],
+      null,
+    );
     expect(mocks.deleteStorageObject.mock.calls).toEqual(
       expect.arrayContaining([
         ["selfies", `${USER_ID}/legacy-selfie.jpg`],
@@ -232,6 +240,32 @@ describe("deleteUserAccount", () => {
       deletedFounderReports: 1,
       deletedStorageObjects: 5,
     });
+  });
+
+  it("credits the partner's ticket inside the deletion transaction, not after it", async () => {
+    // The match row cascades away with this account, so a refund left for after
+    // the commit has nothing to be re-derived from if the process dies first.
+    const partnerCredit = { matchId: "m1", userId: "partner", slots: ["B"] };
+    const leaverCredit = { matchId: "m1", userId: USER_ID, slots: ["A"] };
+    const applied = [{ userId: "partner", refunded: 1 }];
+    mocks.claimMatches.mockResolvedValue([
+      { matchId: "m1", ticketRefunds: [leaverCredit, partnerCredit] },
+    ]);
+    mocks.applyTicketRefundsInTx.mockImplementation(async () => {
+      // Still inside the transaction: the account is not gone yet.
+      expect(mocks.userDelete).not.toHaveBeenCalled();
+      return applied;
+    });
+
+    await deleteUserAccount(USER_ID, null);
+
+    // Only the partner: the leaver's wallet goes with the row.
+    expect(mocks.applyTicketRefundsInTx).toHaveBeenCalledWith(expect.anything(), [partnerCredit]);
+    // The partner's notice still says the ticket is back.
+    expect(mocks.deliverEffects).toHaveBeenCalledWith(
+      [expect.objectContaining({ matchId: "m1", appliedTicketRefunds: applied })],
+      null,
+    );
   });
 
   // ── A13-H14: payment records survive, safety history is captured ─────────

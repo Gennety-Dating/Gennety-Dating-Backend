@@ -38,6 +38,7 @@ import { sendPushToUser } from "./push.js";
 import {
   cancelInFlightMatchesForUser,
   claimMatchCancellation,
+  deliverCancelledPartnerEffects,
   IN_FLIGHT_MATCH_STATUSES,
 } from "./cancel-in-flight-matches.js";
 
@@ -442,6 +443,44 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
  * the narrowing: blocking somebody from a date that already happened must not
  * take down the live date the blocker has with a different person.
  */
+describe("deliverCancelledPartnerEffects — refunds the caller already committed", () => {
+  it("still tells the partner their ticket is back when account deletion credited it in its transaction", async () => {
+    // Account deletion credits the partner inside its own transaction; the
+    // post-commit pass then finds the key taken and credits nothing.
+    mUser.findUnique.mockResolvedValue({ id: PARTNER });
+    mTx.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }));
+    const sendMessage = vi.fn().mockResolvedValue({});
+    const credit = {
+      matchId: "m1",
+      userId: PARTNER,
+      slots: ["B" as const],
+      telegramId: 200n,
+      language: "en" as const,
+      platform: "telegram",
+    };
+
+    await deliverCancelledPartnerEffects(
+      [
+        {
+          matchId: "m1",
+          partnerUserId: PARTNER,
+          partnerTelegramId: 200n,
+          partnerLanguage: "en",
+          partnerPlatform: "telegram",
+          ticketRefunds: [credit],
+          appliedTicketRefunds: [
+            { userId: PARTNER, refunded: 1, telegramId: 200n, language: "en", platform: "telegram" },
+          ],
+        },
+      ],
+      { sendMessage } as unknown as Parameters<typeof deliverCancelledPartnerEffects>[1],
+    );
+
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0]?.[1]).toContain("wallet");
+  });
+});
+
 describe("claimMatchCancellation", () => {
   const OTHER_MATCH = "m2";
 

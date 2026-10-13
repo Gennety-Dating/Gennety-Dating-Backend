@@ -11,6 +11,7 @@ import {
   notifyFounderDeletionStuckRefunds,
 } from "./founder-notify.js";
 import { getMainBotApi } from "./main-bot-api.js";
+import { applyTicketRefundsInTx } from "./ticket-refund.js";
 import { findRefundsInFlight, type RefundInFlightRow } from "./refund-in-flight.js";
 import { writeSafetyTombstones } from "./safety-tombstone.js";
 import {
@@ -207,6 +208,18 @@ export async function deleteUserAccount(
       throw new AccountDeletionDeferredError("refund_in_progress", refundsNow.blocking);
     }
     staleRefunds = refundsNow.stale;
+    // The partner's ticket refund commits WITH the deletion. Everywhere else
+    // the post-commit refund is recoverable — the cancelled match row stays,
+    // and the hourly dead-match sweep re-derives what is owed from it. Here
+    // the match row cascades away with this account, so a process that died
+    // after commit would leave nothing to re-derive the refund from. The
+    // leaver's own credits are skipped: their wallet goes with the row.
+    for (const item of cancelled) {
+      item.appliedTicketRefunds = await applyTicketRefundsInTx(
+        tx,
+        item.ticketRefunds.filter((credit) => credit.userId !== user.id),
+      );
+    }
     // Moderation status, strikes, and the reports/blocks filed AGAINST this
     // account survive as keyed hashes, relinked if the same person returns —
     // before the row goes, so the stamps and the deletion commit together.
