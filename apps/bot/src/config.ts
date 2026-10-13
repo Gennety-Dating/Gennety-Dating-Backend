@@ -1,7 +1,8 @@
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { ticketBundleFor } from "@gennety/shared";
+import { DB_CONNECTION_LIMIT, ticketBundleFor } from "@gennety/shared";
+import { withConnectionLimit } from "./utils/db-pool-url.js";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
 
@@ -12,6 +13,16 @@ if (existsSync(localEnv)) {
   config({ path: localEnv });
 }
 config({ path: resolve(workspaceRoot, ".env") });
+
+// Size the Prisma pool before `@gennety/db` builds its client (this module is
+// imported first for exactly that reason). Prisma's default is `cpus × 2 + 1` —
+// three connections on the droplet for the bot, both APIs and every cron. An
+// explicit `connection_limit` in the env URL still wins.
+const pooledDatabaseUrl = withConnectionLimit(
+  process.env.DATABASE_URL,
+  DB_CONNECTION_LIMIT,
+);
+if (pooledDatabaseUrl) process.env.DATABASE_URL = pooledDatabaseUrl;
 
 function required(name: string): string {
   const value = process.env[name];

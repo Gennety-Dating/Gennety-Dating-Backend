@@ -504,6 +504,11 @@ model User {
   /// App Store Premium finds its owner by the subscription's anchor (webhook,
   /// the report path's ownership check, the renewal-status sync).
   @@index([premiumExternalId])
+  /// The status-timer's stale-banner pass (every minute): accounts that left
+  /// `active` but still have a banner pinned — `status IN (…non-active)` and
+  /// `statusMessageId IS NOT NULL`. `[status, id]` alone still reads every
+  /// onboarding row to find the few with a pointer.
+  @@index([status, statusMessageId])
   @@map("users")
 }
 
@@ -2444,6 +2449,14 @@ model Match {
   /// The `scheduled` + `agreedTime` window sweeps (icebreakers, wingman,
   /// date-day, pre-date safety, proxy open) and `negotiating_venue` time lapse.
   @@index([status, agreedTime])
+  /// The peer-wait shimmer (every 20 s) reaches rows that still carry a
+  /// fallback line through `peerWaitMessageIdA/B IS NOT NULL`, inside an `OR`
+  /// with the waiting statuses. One unindexed arm turns the whole `OR` into a
+  /// scan of `matches`; with these every arm has an index and Postgres ORs the
+  /// bitmaps. Plain (not partial) indexes: Prisma cannot declare a partial one,
+  /// and `db:drift-check` would read a hand-made index as drift.
+  @@index([peerWaitMessageIdA])
+  @@index([peerWaitMessageIdB])
   @@map("matches")
 }
 

@@ -757,6 +757,17 @@ export const HTTP_KEEP_ALIVE_TIMEOUT_MS = 125_000;
 export const DB_POOL_BUSY_RETRY_AFTER_SECONDS = 2;
 
 /**
+ * Prisma pool size for the bot process, applied when `DATABASE_URL` carries no
+ * `connection_limit` of its own (an explicit one in the URL always wins — that
+ * is the rollback, no redeploy). Without it Prisma sizes the pool at
+ * `cpus × 2 + 1`, which is 3 on the 1-vCPU droplet: three connections shared by
+ * the bot, both HTTP APIs and every cron, so a couple of busy jobs queued iOS
+ * requests for up to `pool_timeout`. Must stay below the Supabase pooler's
+ * Pool Size with room for `db:deploy` and manual sessions.
+ */
+export const DB_CONNECTION_LIMIT = 10;
+
+/**
  * A `proposed` match still carrying `dispatchedAt = null` this long after it was
  * created is treated as stranded by a dead dispatch (a crash or deploy mid-run)
  * and resumed (A13-H7). Half an hour clears every live path that creates a row

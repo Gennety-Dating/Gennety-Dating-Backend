@@ -84,6 +84,7 @@ import {
   waitForGuardedTicksIdle,
 } from "./utils/guarded-tick.js";
 import { assertValidCronSchedules } from "./utils/cron-schedules.js";
+import { connectionLimitOf } from "./utils/db-pool-url.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -1324,6 +1325,12 @@ async function main(): Promise<void> {
   // (functional index on canonical pair ordering for the lifetime-ban
   // anti-join in `buildCandidateSql`). Before the schedules, as it always was:
   // the drop query is the thing that needs it.
+  // The pool size actually in force — `DB_CONNECTION_LIMIT` unless the env URL
+  // names its own — so a deploy can be checked from the log, not inferred.
+  console.log(
+    `[startup] db pool connection_limit=${connectionLimitOf(env.DATABASE_URL) ?? "prisma default"}`,
+  );
+
   try {
     await ensureMatchPairIndex();
   } catch (err) {

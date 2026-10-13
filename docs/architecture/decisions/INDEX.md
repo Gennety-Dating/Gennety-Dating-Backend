@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 427 entries
+# Decision index — all 428 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-13 | пул Prisma 10 соединений через код (`DB_CONNECTION_LIMIT`, явный `connection_limit` в env главнее) и обычные (не частичные — drift-check) индексы `matches(peer_wait_message_id_a/b)`, `users(status, status_message_id)`; stale-проход status-timer — `status IN (…)` + `orderBy` по индексу | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-13 | аудит фоновых задач: `guardedTick` оповещает о зависшем прогоне (30 мин), пул рендера не вешает карточки после смерти потока (таймаут 3 мин, респаун ×3), утечки (фото-пачка, версии прокси-чата, демо-карты), founder-бот 60 с, keep-alive 125 с, P2024→503, часовые свипы сдвинуты с :00, iOS venue-intent/decision не ждут уведомлений, косинус дропа в процессе, async encode; `connection_limit` и частичные индексы — на решение основателя | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | окно калибровки первой пары: свежий аккаунт пропускает ближайший вечерний подбор (`calibration_until`, `FIRST_DROP_CALIBRATION_HOURS=24`), не «пропущен» и без уведомления голода; `/v1/countdown` `searchPhase`/`firstDropAt`; агент знает фазу; тон «держим позицию» — тир 2 и скидка голода без «спасибо, что ждёшь» | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-10-11 | отложенное из аудита: верифицированный не остаётся без фото (409 `photo_minimum` min 1), застрявшие — liveness без фото → `pending_review` вручную; `pending_review` не запускает liveness (409 `under_review`); REFUND_REVERSED возвращает Premium/билеты/Prime Time + оповещение; флуд Telegram до очереди; `usageGuard` на маршрутах модели, `PATCH /v1/me` без 429 | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

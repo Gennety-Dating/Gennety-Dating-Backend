@@ -11,8 +11,25 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING 2026-10-13 — Background-job hardening: hangs, leaks, API latency (code only, no migration, no env).**
-Branch `claude/server-background-tasks-optimization-v4mykb`. No schema change, no new env var, no new dependency.
+**PENDING 2026-10-13 — DB pool 10 + background-scan indexes (MIGRATION, additive).**
+Same branch as the block below, ship together. Migration `20261013120000_background_scan_indexes`: three plain btree
+indexes (`users(status, status_message_id)`, `matches(peer_wait_message_id_a)`, `matches(peer_wait_message_id_b)`), no row
+touched; order against the restart does not matter (the old code runs the same queries, slower). Pool: the bot now opens
+up to `DB_CONNECTION_LIMIT = 10` connections instead of Prisma's 3 on the droplet, unless `DATABASE_URL` names its own
+`connection_limit`. No env var to set. Demo: same code — the demo process gets 10 too.
+- **Before deploying:** Supabase → Database → Settings → Connection pooling → Pool Size must be ≥ 15 for the prod
+  project AND the demo project (10 for the bot + headroom for `db:deploy`, `psql`, scripts). If smaller, put
+  `connection_limit=<Pool Size − 5>` into that deployment's `DATABASE_URL` first.
+- **Apply:** `pnpm --filter @gennety/db db:deploy` (with `DATABASE_URL` exported — see the runbook), then `pnpm db:drift-check` → exit 0, then restart.
+- **Проверка:** `pm2 logs gennety-bot --lines 200 | grep "db pool"` → `connection_limit=10`;
+  `select indexname from pg_indexes where indexname in ('users_status_status_message_id_idx','matches_peer_wait_message_id_a_idx','matches_peer_wait_message_id_b_idx')` → 3 rows;
+  no P2024 / `Too many connections` / `max clients reached` in the log.
+- **Откат:** pool — add `connection_limit=3` to `DATABASE_URL` in `.env` + `pm2 restart gennety-bot --update-env` (no
+  redeploy); indexes — harmless to keep; code revert works with them in place (`DROP INDEX` only if ever needed, and then
+  the migration row must be resolved too).
+
+**PENDING 2026-10-13 — Background-job hardening: hangs, leaks, API latency (code only).**
+Branch `claude/server-background-tasks-optimization-v4mykb`. No new env var, no new dependency; the migration and pool are the block above.
 Behaviour visible to ops: a founder alert «завис» when a cron run stays in flight >30 min; hourly sweeps now fire at
 :07/:13/:17/:23/:37/:43/:47 and stranded/no-match retries at :04/:08 past each quarter (env overrides still win);
 iOS gets 503 + `Retry-After` instead of 500 on DB pool exhaustion (503 is already in the `/v1` contract).

@@ -62,9 +62,10 @@ function mockUsers(rows: Array<Record<string, unknown>>) {
       let matching = rows;
       if (status === "active") {
         matching = rows.filter((row) => row.status === "active");
-      } else if (typeof status === "object" && status !== null && "not" in status) {
+      } else if (typeof status === "object" && status !== null && "in" in status) {
+        const statuses = (status as { in: unknown[] }).in;
         matching = rows.filter(
-          (row) => row.status !== "active" && row.statusMessageId !== null,
+          (row) => statuses.includes(row.status) && row.statusMessageId !== null,
         );
       }
       return args?.take === undefined ? matching : matching.slice(0, args.take);
@@ -140,6 +141,19 @@ beforeEach(() => {
 });
 
 describe("statusTimerTick", () => {
+  it("asks for stale banners by every non-active status, never `not: active`", async () => {
+    mockUsers([]);
+    await statusTimerTick(makeApi(), { now: NOW });
+    const staleQuery = mockPrisma.user.findMany.mock.calls
+      .map(([args]) => args as { where: { status: unknown }; orderBy?: unknown })
+      .find(({ where }) => typeof where.status === "object");
+    expect(staleQuery?.where.status).toEqual({
+      in: ["onboarding", "paused", "frozen", "suspended", "pending_investigation", "banned"],
+    });
+    // Index order is what makes Postgres take `[status, statusMessageId]`.
+    expect(staleQuery?.orderBy).toEqual([{ status: "asc" }, { statusMessageId: "asc" }]);
+  });
+
   it("self-heals an active user with a null DB pointer", async () => {
     mockUsers([active({ statusMessageId: null })]);
     const api = makeApi();
