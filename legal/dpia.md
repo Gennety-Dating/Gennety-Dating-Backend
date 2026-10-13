@@ -1,6 +1,7 @@
 # Gennety — Data Protection Impact Assessment (GDPR Article 35)
 
-**Version 1.2 — 8 October 2026** (adds R12–R14, The Morning After and the Date
+**Version 1.3 — 13 October 2026** (adds R15, frequently visited places, and
+actions 16–18; v1.2 — 8 October 2026, adds R12–R14, The Morning After and the Date
 Wishlist; v1.1 — 26 September 2026, R11, Tempo Sync; v1.0 — 1 August 2026).
 Internal document. Living: revisit on any
 material change to matching, verification, or the data model, and before any
@@ -352,6 +353,26 @@ the post-date feedback it resembles, and is never shown to anyone. **Honest
 limit:** a person who said "great" and hears nothing can infer — no design
 removes inference from silence. **Residual: low.**
 
+### R15 — Where you go, shown to a stranger *(high · medium)*
+
+Frequently visited places turns movement into a short list of real venues and
+shows it to the person's current match — someone they have not met yet. A café
+visited five times in six months is a place a match could go to wait for them.
+It ran from 2026-09-22 on by default and undisclosed until Privacy v4.4.
+
+*Mitigations.* Catalog venues only (cafés, restaurants, lounges, museums —
+public, busy places); parks excluded as a proxy for home; a fix that cannot be
+placed unambiguously counts for nothing; a visit needs a 15-minute stay; only
+the place and the calendar day are stored, never a time, a duration or a
+coordinate; the match never sees counts or days; 180-day sweep; foreground
+only, no background entitlement; never sent to an LLM; one switch stops
+collection and removes the block from the match at once, and any single place
+can be hidden. **Honest limit:** the block is shown for the whole of the current
+match with no stage gate, and the default is on, so a person who never opened
+the explanation can be shown without having chosen it. **Residual: medium** —
+until the one-time notice (§7 item 16) ships, and lower again if the block is
+gated to a confirmed date or the default is turned off (item 17).
+
 ---
 
 ## 5. Consultation
@@ -400,6 +421,9 @@ at any meaningful scale, not for the current handful of accounts.
 | 13 | The wishlist session's first line names who sees the list and when (a mutual match, only after both said "great"); Profile → My wishlist offers «Не показывать мой список», which hides the list and the taste hint. Replaces the consent screen (2026-10-08, second decision) — iOS `date-wishlist` | **Before `WISHLIST_FEATURE_ENABLED`** | R12, R13 |
 | 14 | Wishlist images live under the account's `{userId}/` prefix in the private chat bucket, so the fail-closed deletion sweep erases them — verify on merge | Verify on merge | R9, R12 |
 | 15 | One-time in-product notice of Privacy v4.3 / Terms v3.1 to existing users (no re-acceptance flow exists) | Before the flags go on | RoPA §6 item 9 |
+| 16 | One-time in-app notice of frequently visited places, with the switch on the same screen (`legal/ios-permission-strings.md` §3 item 3) | **High — the feature is live** | R15; RoPA §6 item 13 |
+| 17 | Founder decision: keep `frequent_places_opt_in` default true, or turn it off for accounts that never saw item 16; and whether to gate the match's block to a confirmed date | High | R15 |
+| 18 | Cancel a Telegram Stars Premium subscription inside `deleteUserAccount` | **Done 2026-10-13** | RoPA §6 item 14 |
 
 ---
 

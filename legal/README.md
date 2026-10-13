@@ -4,8 +4,8 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 
 | File | Publish to | Live version to publish |
 |---|---|---|
-| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.3 — "Last Updated: 8 October 2026" |
-| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.1 — "Last Updated: 8 October 2026" |
+| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.4 — "Last Updated: 13 October 2026" |
+| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.2 — "Last Updated: 13 October 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
 
 Two further documents in this directory are **internal** and are never
@@ -14,6 +14,7 @@ published — they are produced to a supervisory authority on request:
 | File | What it is |
 |---|---|
 | [ropa.md](ropa.md) | Record of Processing Activities (Art. 30) — the inventory: every purpose, its legal basis, data categories, recipients, transfers and retention |
+| [ios-permission-strings.md](ios-permission-strings.md) | Source text for the iOS app's `Info.plist` purpose strings (en/ru/uk/de/pl), the pre-permission screens, and the App Store Connect App Privacy answers. Copied into the Gennety-iOS repo; change it here first |
 | [dpia.md](dpia.md) | Data Protection Impact Assessment (Art. 35) — necessity and proportionality, ten assessed risks with residuals, and the action list |
 
 Both are derived from the code rather than from memory: **update them in the
@@ -23,7 +24,7 @@ processor**, exactly like the published documents above.
 **The Terms and the Privacy Policy share one version stamp**, because the
 consent screen accepts them with a single checkbox. That stamp lives in code as
 `LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
-`"2026-10-08"`) and is written to `User.policyVersion` at the moment of the
+`"2026-10-13"`) and is written to `User.policyVersion` at the moment of the
 click, so we can demonstrate WHICH text any given user agreed to (GDPR Art.
 7(1)). **Bump the constant in the same commit as any material edit to either
 document.**
@@ -61,6 +62,66 @@ legal review.** Have a qualified lawyer review them before publishing —
 especially the biometric-data (GDPR Art. 9), dietary/accessibility special-
 category (Art. 9), automated-decision (Art. 22), payment/refund/subscription,
 and Apple App Store sections.
+
+## What changed in v4.4 / Terms v3.2 (2026-10-13)
+
+An audit of both documents against the code (App Store review and GDPR), not a
+product change. Every addition describes something already in the code.
+
+- **Privacy** — version line; §1 (permissions row, the match row, self-service
+  deletion); §4.1 (city stored as the city centre; frequently visited places;
+  explored areas marked retired; music; voice answer; Prime Time and the
+  Premium packages in payments); §4.2 (what a push can show on the lock screen;
+  the Date Bump; the promo clipboard read; first-party product events — no
+  third-party analytics, no tracking); **new §4.4, every iOS permission and why**;
+  §7 (Date Radar / Bump on contract; frequently visited places on legitimate
+  interests with an opt-out — not consent, because it is on by default; music
+  and voice answer); §11 rewritten (city, logistics with what Google and
+  Open-Meteo receive, Date Radar, Date Bump, frequently visited places with its
+  controls, map colouring retired, ride hand-offs); §12.1 (songs, voice answer,
+  up to three places); §12.4 (AWS and Supabase regions, AWS keeps no audit
+  images, Telegram sign-in, Apple Music, Spotify); §14 (`appAccountToken`,
+  Prime Time Pass, Premium packages); §16 (seven new rows); §18 (deletion paths
+  in the app and the bot; deleting the app ≠ deleting the account; deleting the
+  account cancels a Stars subscription, not an App Store one).
+- **Terms** — version line; §2 (AI Export removed; venue change, Prime Time
+  Pass, App); §5 (AI Export removed); §8 (zero tolerance, report and block, the
+  24-hour aim — App Store 1.2); §9 and §11.3 (**two** venue changes per date,
+  not one — the code's `VENUE_CHANGE_MAX_PER_DATE`; included in Premium); §11.4
+  rewritten (monthly subscription vs three-/six-month Stars packages; the
+  App Store 3.1.2 subscription disclosures; cancel before deleting); new §11.6
+  Prime Time Pass; Refunds → §11.7 (survival clause in §12 follows); §13
+  (in-app deletion paths); §18 rewritten as the full Apple minimum EULA terms.
+- **ROPA v1.3** — §2.5g–2.5i, §2.8; open items 12 (partly closed), 13–15.
+  **DPIA v1.3** — R15, actions 16–18.
+- **New file** `ios-permission-strings.md`.
+- **Re-consent.** `LEGAL_DOCS_VERSION` → `2026-10-13`. `LEGAL_DOCS_TASTE_HINTS_FROM`
+  stays `2026-10-08` (a `>=` comparison, so new acceptances still qualify).
+- **Website:** body via `scripts/legal-md-to-tsx.py`; header line hand-set to
+  `Last Updated: 13 October 2026 · Version 4.4` and `… · Version 3.2`.
+
+**Found by the audit and left for a decision (not fixed in this commit):**
+
+1. Frequently visited places has been live since 2026-09-22, on by default and
+   undisclosed. v4.4 discloses it; existing users still need a one-time notice
+   (ROPA item 13, DPIA R15 / actions 16–17).
+2. Fixed 2026-10-13: deleting an account now cancels a Telegram Stars Premium
+   subscription (`deleteUserAccount` → `editUserStarSubscription`, founder alert
+   if it fails), and a renewal that still arrives for a deleted account is
+   cancelled and refunded (`refundOrphanPremiumRenewal` in
+   `handlers/payments.ts`). App Store subscriptions remain Apple's to cancel
+   (ROPA item 14, DPIA action 18 — closed).
+3. `referral_identities` has no retention sweep (ROPA item 15) — referral is off.
+4. The iOS app offers "Continue with Telegram" but no Sign in with Apple. App
+   Store Guideline 4.8 requires an equivalent privacy-preserving login option
+   when a third-party login is offered; phone/email OTP may or may not be
+   accepted as that — expect the question in review.
+5. Verify the iOS label of the deletion entry ("Settings → Delete account" is
+   what both documents now say) and the Telegram path to Stars subscriptions.
+6. The note below under 2026-08-01 says deletion "no longer sends your profile,
+   phone, email and photos to the internal operations feed". The code
+   (`services/founder-notify.ts`) still sends the full card, phone and photos
+   after deletion; Privacy §12.2 describes the code, and is the one that is right.
 
 ## What changed in v4.3 / Terms v3.1 (2026-10-08)
 

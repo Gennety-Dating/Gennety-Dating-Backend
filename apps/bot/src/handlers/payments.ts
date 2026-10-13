@@ -40,6 +40,7 @@ import {
 import { matchTimeZone, MATCH_CITY_PROFILE_SELECT } from "../services/match-time-zone.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { rematchSearchSteps } from "../services/analysis-status.js";
+import { isAlreadyRefundedError } from "../services/stars-refund-error.js";
 import {
   VENUE_AGREEMENT_NONCE_SELECT,
   venueAgreementNonce,
@@ -545,7 +546,7 @@ async function handlePremiumSuccessfulPayment(
     where: { telegramId },
     select: { id: true, language: true },
   });
-  if (!user) return { ok: false, reason: "user-not-found" };
+  if (!user) return await refundOrphanPremiumRenewal(ctx, payment);
 
   // Prefer Telegram's authoritative expiry; fall back to now + 30d defensively
   // (a subscription payment should always carry it).
@@ -586,6 +587,39 @@ async function handlePremiumSuccessfulPayment(
     }
   }
   return { ok: true };
+}
+
+/**
+ * A recurring Premium charge for a Telegram id with no account — the person
+ * deleted it while the subscription was still renewing (`deleteUserAccount`
+ * cancels it, but a failed cancel or a renewal already in flight lands here).
+ * There is no one to grant the period to, so stop the subscription and hand the
+ * Stars back. Only a refund that went through counts as compensated; anything
+ * else falls through to the founder alert with the charge id.
+ */
+async function refundOrphanPremiumRenewal(
+  ctx: BotContext,
+  payment: { telegram_payment_charge_id: string },
+): Promise<Settlement> {
+  const telegramId = ctx.from!.id;
+  await ctx.api
+    .editUserStarSubscription(telegramId, payment.telegram_payment_charge_id, true)
+    .catch((err: unknown) => {
+      console.error("[stars] orphan premium renewal: cancel failed", err);
+    });
+  try {
+    await ctx.api.refundStarPayment(telegramId, payment.telegram_payment_charge_id);
+  } catch (err) {
+    if (!isAlreadyRefundedError(err)) {
+      console.error("[stars] orphan premium renewal: refund failed", err);
+      return { ok: false, reason: "premium:user-not-found" };
+    }
+  }
+  console.info(
+    `[stars] orphan premium renewal refunded user=${telegramId} ` +
+      `charge=${payment.telegram_payment_charge_id}`,
+  );
+  return { ok: false, reason: "premium:user-not-found", compensated: true };
 }
 
 /**

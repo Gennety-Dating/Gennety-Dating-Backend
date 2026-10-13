@@ -9,6 +9,7 @@ import {
   FOUNDER_ACCOUNT_CLOSED_SELECT,
   notifyFounderAccountClosed,
   notifyFounderDeletionStuckRefunds,
+  notifyFounderDeletionSubscriptionLive,
 } from "./founder-notify.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { findRefundsInFlight, type RefundInFlightRow } from "./refund-in-flight.js";
@@ -85,7 +86,14 @@ export interface DeleteUserAccountResult {
  *    tradeoff it commits us to, and `legal/privacy-policy.md` §12.2, which
  *    discloses it). Refunds older than the defer window that the account still
  *    had are reported to the founder with their ids — nothing can settle them
- *    automatically once the owner is gone.
+ *    automatically once the owner is gone;
+ * 5. stop a live Telegram Stars Premium renewal (`editUserStarSubscription`).
+ *    Telegram keeps charging a subscription until someone cancels it, and once
+ *    the row is gone nothing here can grant the period or cancel it for the
+ *    person — so a deleted account must not leave one running. Done after the
+ *    commit so a deferred or failed deletion never costs a renewal the person
+ *    still wants; a cancel that cannot be made goes to the founder with the
+ *    charge id. App Store renewals are Apple's to cancel, never ours.
  */
 export async function deleteUserAccount(
   userId: string,
@@ -101,6 +109,9 @@ export async function deleteUserAccount(
         statusMessageId: true,
         selfiePath: true,
         verifiedSelfiePath: true,
+        premiumProvider: true,
+        premiumExternalId: true,
+        premiumAutoRenew: true,
         profile: {
           select: {
             ...FOUNDER_ACCOUNT_CLOSED_SELECT.profile.select,
@@ -252,6 +263,8 @@ export async function deleteUserAccount(
     });
   }
 
+  await cancelStarsSubscriptionOnDeletion(user, api);
+
   // Full profile + phone + photos, using the snapshot and photo bytes
   // captured before the row/storage objects were erased above.
   void notifyFounderAccountClosed("deleted", user, founderPhotoBuffers).catch(
@@ -264,6 +277,50 @@ export async function deleteUserAccount(
     deletedFounderReports,
     deletedStorageObjects: cleanup.reduce((sum, result) => sum + result.deleted, 0),
   };
+}
+
+/**
+ * Best-effort, never throws: the account is already gone, so a failure here can
+ * only be reported, not retried by the person. Only the recurring head is
+ * cancelled — a 3/6-month package never renews and has no anchor of its own.
+ */
+async function cancelStarsSubscriptionOnDeletion(
+  user: {
+    id: string;
+    telegramId: bigint;
+    premiumProvider: string | null;
+    premiumExternalId: string | null;
+    premiumAutoRenew: boolean;
+  },
+  api: Api<RawApi> | null,
+): Promise<void> {
+  if (user.premiumProvider !== "telegram_stars") return;
+  if (!user.premiumAutoRenew || !user.premiumExternalId) return;
+
+  const botApi = api ?? getMainBotApi();
+  let error = "bot API unavailable";
+  if (botApi) {
+    try {
+      await botApi.editUserStarSubscription(
+        Number(user.telegramId),
+        user.premiumExternalId,
+        true,
+      );
+      return;
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      console.error("[account-deletion] editUserStarSubscription failed", {
+        userId: user.id,
+        err,
+      });
+    }
+  }
+  await notifyFounderDeletionSubscriptionLive({
+    userId: user.id,
+    telegramId: user.telegramId,
+    chargeId: user.premiumExternalId,
+    error,
+  }).catch(() => {});
 }
 
 async function downloadFounderPhotoBuffers(

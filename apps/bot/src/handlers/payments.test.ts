@@ -562,6 +562,56 @@ describe("premium subscription (sub:premium)", () => {
     await handleSuccessfulPayment(ctx);
     expect(reply).not.toHaveBeenCalled();
   });
+
+  // A renewal for an account that was deleted while the subscription still ran:
+  // nobody to grant the period to, so stop the subscription and return the Stars.
+  function orphanRenewal(refund: ReturnType<typeof vi.fn>) {
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 750,
+      telegram_payment_charge_id: "charge_orphan",
+    });
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_recurring = true;
+    const editUserStarSubscription = vi.fn().mockResolvedValue(true);
+    (ctx as unknown as { api: unknown }).api = { editUserStarSubscription, refundStarPayment: refund };
+    return { ctx, reply, editUserStarSubscription };
+  }
+
+  it("cancels and refunds a renewal whose account was deleted, without an alert", async () => {
+    const refund = vi.fn().mockResolvedValue(true);
+    const { ctx, reply, editUserStarSubscription } = orphanRenewal(refund);
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(activatePremium).not.toHaveBeenCalled();
+    expect(editUserStarSubscription).toHaveBeenCalledWith(111, "charge_orphan", true);
+    expect(refund).toHaveBeenCalledWith(111, "charge_orphan");
+    expect(stuck).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it("treats an already-refunded orphan renewal as compensated", async () => {
+    const refund = vi.fn().mockRejectedValue(new Error("Bad Request: CHARGE_ALREADY_REFUNDED"));
+    const { ctx } = orphanRenewal(refund);
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(stuck).not.toHaveBeenCalled();
+  });
+
+  it("escalates an orphan renewal it could not refund", async () => {
+    const refund = vi.fn().mockRejectedValue(new Error("Telegram down"));
+    const { ctx } = orphanRenewal(refund);
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(stuck).toHaveBeenCalledTimes(1);
+    expect(stuck.mock.calls[0]![0]).toMatchObject({
+      reason: "premium:user-not-found",
+      externalPaymentId: "charge_orphan",
+    });
+  });
 });
 
 
