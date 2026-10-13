@@ -21,6 +21,7 @@ import {
   sideOwesAction,
   stallCeilingApplies,
   stallCeilingAt,
+  stallAnchorAt,
   stallCheckInAskedAt,
   stallCheckInDueAt,
   stallDeadlineAt,
@@ -1021,11 +1022,21 @@ async function handleStallChain(
         const due = stallCheckInDueAt(match, side);
         if (!due || due > now) continue;
 
+        // The claim must agree with the phase scoping above: a stamp from the
+        // previous phase is "not asked yet", so it may be overwritten. A plain
+        // `IS NULL` guard matched 0 rows for exactly that side — the question
+        // never went out while `cancelStalledMatch` still counted the 48h and
+        // penalised them as a ghost at a step they were never asked about.
+        const anchor = stallAnchorAt(match);
+        const column = side === "A" ? "stallCheckInSentAtA" : "stallCheckInSentAtB";
         const claim = await prisma.match.updateMany({
           where: {
             id: match.id,
             status: match.status,
-            ...(side === "A" ? { stallCheckInSentAtA: null } : { stallCheckInSentAtB: null }),
+            OR: [
+              { [column]: null },
+              ...(anchor ? [{ [column]: { lte: anchor } }] : []),
+            ],
           },
           data: side === "A" ? { stallCheckInSentAtA: now } : { stallCheckInSentAtB: now },
         });
