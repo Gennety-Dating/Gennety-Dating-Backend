@@ -25,6 +25,8 @@ import {
   selectNextProfilerQuestion,
   shouldCaptureProfilerAnswer,
   skipTransition,
+  wallToUtc,
+  zonedParts,
   type ProfilerAnswerRow,
   type ProfilerContextSignals,
 } from "./profiler-schedule.js";
@@ -43,6 +45,90 @@ function kyivHour(d: Date): number {
       .find((p) => p.type === "hour")!.value,
   ) % 24;
 }
+
+/**
+ * `zonedParts` / `wallToUtc` reuse one formatter per zone. A cached formatter
+ * must answer exactly what a formatter built on the call did, across DST edges
+ * and unusual zones, and a zone the runtime rejects must keep throwing.
+ */
+describe("zonedParts / wallToUtc with cached formatters", () => {
+  function freshParts(date: Date, timeZone: string) {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+        .formatToParts(date)
+        .map((p) => [p.type, p.value]),
+    );
+    const hourRaw = parts.hour ?? "0";
+    return {
+      year: Number(parts.year),
+      month: Number(parts.month),
+      day: Number(parts.day),
+      hour: hourRaw === "24" ? 0 : Number(hourRaw),
+      minute: Number(parts.minute),
+    };
+  }
+
+  function freshWallToUtc(y: number, m: number, d: number, h: number, min: number, timeZone: string) {
+    const utcGuess = Date.UTC(y, m - 1, d, h, min);
+    const tzName =
+      new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "shortOffset" })
+        .formatToParts(new Date(utcGuess))
+        .find((p) => p.type === "timeZoneName")?.value ?? "";
+    const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(tzName);
+    const offset = match
+      ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? "0"))
+      : 0;
+    return new Date(utcGuess - offset * 60 * 1000);
+  }
+
+  const ZONES = [KYIV, "Europe/Berlin", "UTC", "Asia/Kolkata", "America/St_Johns", "Pacific/Chatham"];
+
+  it("formats every instant the way a fresh formatter does", () => {
+    // Hourly across the 2026 spring-forward and autumn-back nights, twice over
+    // so the second pass is served from the cache.
+    const start = Date.UTC(2026, 2, 28, 0, 0);
+    const autumn = Date.UTC(2026, 9, 24, 0, 0);
+    for (let pass = 0; pass < 2; pass++) {
+      for (const zone of ZONES) {
+        for (const base of [start, autumn]) {
+          for (let h = 0; h < 48; h++) {
+            const date = new Date(base + h * 3_600_000 + 17 * 60_000);
+            expect(zonedParts(date, zone)).toEqual(freshParts(date, zone));
+          }
+        }
+      }
+    }
+  });
+
+  it("converts wall clocks the way a fresh formatter does", () => {
+    for (let pass = 0; pass < 2; pass++) {
+      for (const zone of ZONES) {
+        for (const [m, d] of [[3, 29], [10, 25], [7, 1]] as const) {
+          for (let h = 0; h < 24; h++) {
+            expect(wallToUtc(2026, m, d, h, 30, zone).getTime()).toBe(
+              freshWallToUtc(2026, m, d, h, 30, zone).getTime(),
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps throwing for a zone the runtime rejects", () => {
+    for (let i = 0; i < 2; i++) {
+      expect(() => zonedParts(new Date(), "Mars/Olympus_Mons")).toThrow(RangeError);
+      expect(() => wallToUtc(2026, 1, 1, 0, 0, "Mars/Olympus_Mons")).toThrow(RangeError);
+    }
+  });
+});
 
 describe("resolveZone", () => {
   it("falls back to Europe/Kyiv for null/blank", () => {

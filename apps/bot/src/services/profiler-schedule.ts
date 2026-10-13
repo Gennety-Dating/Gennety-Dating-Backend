@@ -45,19 +45,49 @@ export interface ZonedParts {
   minute: number;
 }
 
+/**
+ * Formatters by time zone. Building an `Intl.DateTimeFormat` resolves locale
+ * data and the zone on every call, and these two run for every slot of the
+ * calendar grid and every quiet-hours check; a formatter is immutable, so a
+ * cached one formats exactly what a fresh one would. A zone the runtime
+ * rejects throws from the constructor as before and is never stored. Bounded,
+ * oldest first out, because the zone strings come from stored profiles.
+ */
+const FORMATTER_CACHE_LIMIT = 256;
+const zonedPartsFormats = new Map<string, Intl.DateTimeFormat>();
+const offsetFormats = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormat(
+  cache: Map<string, Intl.DateTimeFormat>,
+  timeZone: string,
+  build: () => Intl.DateTimeFormat,
+): Intl.DateTimeFormat {
+  const known = cache.get(timeZone);
+  if (known) return known;
+  const fmt = build();
+  if (cache.size >= FORMATTER_CACHE_LIMIT) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  cache.set(timeZone, fmt);
+  return fmt;
+}
+
 // zonedParts / wallToUtc are generic timezone primitives (no Profiler state);
 // they're exported for reuse by the Calendar grid (`generateProposalSlots`),
 // which also needs wall-clock-in-Kyiv → UTC conversion.
 export function zonedParts(date: Date, timeZone: string): ZonedParts {
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  const fmt = cachedFormat(zonedPartsFormats, timeZone, () =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }),
+  );
   const parts = Object.fromEntries(
     fmt.formatToParts(date).map((p) => [p.type, p.value]),
   );
@@ -73,7 +103,9 @@ export function zonedParts(date: Date, timeZone: string): ZonedParts {
 
 function zoneOffsetMinutes(date: Date, timeZone: string): number {
   const tzName =
-    new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "shortOffset" })
+    cachedFormat(offsetFormats, timeZone, () =>
+      new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "shortOffset" }),
+    )
       .formatToParts(date)
       .find((p) => p.type === "timeZoneName")?.value ?? "";
   const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(tzName);
