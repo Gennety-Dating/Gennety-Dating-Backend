@@ -237,7 +237,17 @@ export async function spendTickets(args: {
   count: number;
   reason: Extract<TicketReason, "spend_match">;
   matchId?: string;
-}): Promise<{ ok: boolean; balance: number }> {
+}): Promise<{
+  ok: boolean;
+  balance: number;
+  /**
+   * The `spend_match` ledger row this call wrote. A compensating refund for
+   * this spend keys its `externalPaymentId` on it (`spend-refund:<id>`), so the
+   * caller's own lost-race refund and the expiry sweep's orphan refund cannot
+   * both return the same ticket.
+   */
+  ledgerId?: string;
+}> {
   const { userId, count, reason, matchId } = args;
   if (count <= 0) return { ok: true, balance: await getBalance(userId) };
 
@@ -253,14 +263,15 @@ export async function spendTickets(args: {
       });
       return { ok: false, balance: user?.ticketBalance ?? 0 };
     }
-    await tx.ticketLedger.create({
+    const row = await tx.ticketLedger.create({
       data: { userId, delta: -count, reason, matchId: matchId ?? null },
+      select: { id: true },
     });
     const user = await tx.user.findUnique({
       where: { id: userId },
       select: { ticketBalance: true },
     });
-    return { ok: true, balance: user?.ticketBalance ?? 0 };
+    return { ok: true, balance: user?.ticketBalance ?? 0, ledgerId: row.id };
   });
 }
 

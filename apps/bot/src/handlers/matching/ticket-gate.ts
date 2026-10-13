@@ -1381,6 +1381,12 @@ export async function useTicketFromBalance(
   const heldBefore = slotsHeldBy(match, side);
   const spend = await spendTickets({ userId: me.id, count, reason: "spend_match", matchId });
   if (!spend.ok) return { ok: false, reason: "insufficient-balance" };
+  // Every ticket handed back for THIS spend carries one key. The expiry sweep's
+  // orphan refund (`refundOrphanedSpends`) writes the same key, so when the
+  // sweep lands between this spend and its losing claim — the gate expires
+  // while the request is in flight — only one of the two refunds is credited.
+  const returnSpent = (lost: number) =>
+    refundWalletSpend({ userId: me.id, count: lost, matchId, spendLedgerId: spend.ledgerId });
 
   let settled: Awaited<ReturnType<typeof settleTicket>>;
   try {
@@ -1401,7 +1407,7 @@ export async function useTicketFromBalance(
     if (lost > 0) {
       // Never let the compensation's own failure replace the original error:
       // that error is what tells ops what actually broke.
-      await grantTickets({ userId: me.id, count: lost, reason: "refund", matchId }).catch(
+      await returnSpent(lost).catch(
         (refundError: unknown) => {
           console.error(
             `[tickets] settle threw and the compensating refund failed too — ` +
@@ -1420,9 +1426,40 @@ export async function useTicketFromBalance(
   // refunds the extra one, so a wallet ticket is never silently burned.
   const refundCount = Math.max(0, count - claimedCount);
   if (refundCount > 0) {
-    await grantTickets({ userId: me.id, count: refundCount, reason: "refund", matchId });
+    await returnSpent(refundCount);
   }
   return result;
+}
+
+/** The `externalPaymentId` of the refund that hands back one wallet spend. */
+function spendRefundKey(spendLedgerId: string): string {
+  return `spend-refund:${spendLedgerId}`;
+}
+
+/**
+ * Return `count` tickets of one wallet spend, exactly once per spend row. A
+ * duplicate key means the other rail already returned it — a no-op, not an
+ * error. A spend without a row id (never in production) keeps the old
+ * unkeyed credit rather than withholding the ticket.
+ */
+async function refundWalletSpend(args: {
+  userId: string;
+  count: number;
+  matchId: string;
+  spendLedgerId: string | undefined;
+}): Promise<void> {
+  const { userId, count, matchId, spendLedgerId } = args;
+  try {
+    await grantTickets({
+      userId,
+      count,
+      reason: "refund",
+      matchId,
+      ...(spendLedgerId ? { externalPaymentId: spendRefundKey(spendLedgerId) } : {}),
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
 }
 
 /**
@@ -1661,33 +1698,42 @@ async function refundOrphanedSpends(match: TicketMatch): Promise<void> {
     const payer = selfUser(match, side);
     const spends = await prisma.ticketLedger.findMany({
       where: { userId: payer.id, matchId: match.id, reason: "spend_match", delta: { lt: 0 } },
-      select: { delta: true },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, delta: true },
     });
     if (spends.length === 0) continue;
 
     const spent = spends.reduce((total, row) => total + Math.abs(row.delta), 0);
     const refunds = await prisma.ticketLedger.findMany({
       where: { userId: payer.id, matchId: match.id, reason: "refund", delta: { gt: 0 } },
-      select: { delta: true },
+      select: { delta: true, externalPaymentId: true },
     });
     const returned = refunds.reduce((total, row) => total + row.delta, 0);
-    const owed = spent - returned;
+    let owed = spent - returned;
     if (owed <= 0) continue;
 
     console.warn(
       `[ticket-gate] orphaned spend on match=${match.id} user=${payer.id}: ` +
         `spent ${spent}, returned ${returned} — refunding ${owed}`,
     );
-    try {
-      await grantTickets({
+    // Keyed per spend row, with the SAME key the spending request uses for its
+    // own lost-race refund. This sweep can land while that request is still in
+    // flight — spend committed, claim not yet attempted — and the claim then
+    // fails against the expired gate and refunds too. One shared
+    // `match+user` key here could not see that refund coming; the row key does,
+    // whichever of the two writes first.
+    const keyed = new Set(refunds.map((row) => row.externalPaymentId));
+    for (const row of spends) {
+      if (owed <= 0) break;
+      if (keyed.has(spendRefundKey(row.id))) continue;
+      const count = Math.min(owed, Math.abs(row.delta));
+      await refundWalletSpend({
         userId: payer.id,
-        count: owed,
-        reason: "refund",
+        count,
         matchId: match.id,
-        externalPaymentId: `orphan-spend-refund:${match.id}:${payer.id}`,
+        spendLedgerId: row.id,
       });
-    } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+      owed -= count;
     }
   }
 }
@@ -1796,8 +1842,20 @@ export async function refundAndFallbackToScheduling(
 
   const paidSide: Side | null = match.ticketPaidA !== null ? "A" : match.ticketPaidB !== null ? "B" : null;
   if (!paidSide) {
+    // Both slots must STILL be empty. `paidSide` came from a read taken before
+    // this write, and a payment can claim a slot in between: without the guard
+    // the gate went `expired` (free Calendar) over a slot someone had just paid
+    // for — and a Stars charge in `gate_settled` on an `expired` gate is never
+    // refunded by anything. Losing this CAS leaves the row to the next sweep,
+    // which sees the paid slot and refunds it properly.
     const expired = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      where: {
+        id: matchId,
+        status: "negotiating",
+        ticketStatus: { in: ["pending", "partial"] },
+        ticketPaidA: null,
+        ticketPaidB: null,
+      },
       data: { ticketStatus: "expired", ticketExpiresAt: null },
     });
     if (expired.count === 0) return;

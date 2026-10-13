@@ -986,7 +986,7 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
       matchRow({ ticketStatus: "pending" }),
     );
     mLedger.findMany
-      .mockResolvedValueOnce([{ delta: -1 }]) // A spent one
+      .mockResolvedValueOnce([{ id: "spend-1", delta: -1 }]) // A spent one
       .mockResolvedValueOnce([]) // and it was never returned
       .mockResolvedValueOnce([]) // B spent nothing
       .mockResolvedValueOnce([]);
@@ -999,7 +999,8 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
       count: 1,
       reason: "refund",
       matchId: "match-1",
-      externalPaymentId: "orphan-spend-refund:match-1:uid-A",
+      // The same key the spending request's own lost-race refund uses.
+      externalPaymentId: "spend-refund:spend-1",
     });
     // The Calendar still opens — the pair keeps their date, they just keep the
     // ticket too.
@@ -1009,8 +1010,8 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
   it("does not double-refund a spend that was already returned", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow({ ticketStatus: "pending" }));
     mLedger.findMany
-      .mockResolvedValueOnce([{ delta: -1 }])
-      .mockResolvedValueOnce([{ delta: 1 }]) // already given back
+      .mockResolvedValueOnce([{ id: "spend-1", delta: -1 }])
+      .mockResolvedValueOnce([{ delta: 1, externalPaymentId: null }]) // already given back
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
     const api = createApi();
@@ -1453,5 +1454,73 @@ describe("myPremiumActive reports the ticket cover, not the subscription", () =>
     expect(claim).toBeDefined();
     expect(res.ok && res.state.iPaid).toBe(true);
     expect(res.ok && res.state.myPremiumActive).toBe(true);
+  });
+});
+
+describe("wallet spend vs. the expiry sweep — one refund per spend", () => {
+  const mSpend = spendTickets as unknown as MockFn;
+  const mGrant = grantTickets as unknown as MockFn;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mLedger.findMany.mockReset();
+    mLedger.findMany.mockResolvedValue([]);
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mStartScheduling.mockResolvedValue(undefined);
+    mGrant.mockResolvedValue(undefined);
+  });
+
+  it("keys the lost-race refund on the spend row, the key the orphan sweep also writes", async () => {
+    // The sweep expired the gate after the spend committed and already handed
+    // the ticket back under `spend-refund:<row>`. This request's claim then
+    // fails against the expired gate; its refund must collide, not credit again.
+    mSpend.mockResolvedValue({ ok: true, balance: 0, ledgerId: "spend-9" });
+    mMatch.findUnique.mockResolvedValue(matchRow({ ticketStatus: "expired" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mGrant.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }));
+    const api = createApi();
+
+    const result = await useTicketFromBalance(api, 1001n, "match-1", "self");
+
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(mGrant).toHaveBeenCalledTimes(1);
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "uid-A",
+        count: 1,
+        reason: "refund",
+        externalPaymentId: "spend-refund:spend-9",
+      }),
+    );
+  });
+
+  it("skips a spend the spending request already returned under its own key", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ ticketStatus: "pending" }));
+    mLedger.findMany
+      .mockResolvedValueOnce([{ id: "spend-9", delta: -1 }])
+      .mockResolvedValueOnce([{ delta: 1, externalPaymentId: "spend-refund:spend-9" }]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mGrant).not.toHaveBeenCalled();
+  });
+
+  it("expires an unpaid gate only while both slots are still empty", async () => {
+    // A payment that claimed a slot after the sweep's read must not be buried
+    // under `expired` — nothing refunds a Stars charge on an expired gate.
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ ticketStatus: "partial" }));
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toMatchObject({
+      ticketPaidA: null,
+      ticketPaidB: null,
+    });
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(mStartScheduling).not.toHaveBeenCalled();
   });
 });
