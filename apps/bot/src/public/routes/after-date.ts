@@ -71,11 +71,15 @@ export function createAfterDateRouter(): Router {
     const partnerPhotoUrl = pending?.partnerPhotoPath
       ? await createProfilePhotoSignedUrl(pending.partnerPhotoPath, 60 * 60).catch(() => null)
       : null;
-    const offers: Record<string, unknown>[] = [];
-    for (const matchId of await recentMutualMatchIds(userId)) {
-      const result = await mutualOfferFor(matchId, userId, language);
-      if (result.ok) offers.push(serializeOffer(result.offer));
-    }
+    // At most three offers, each its own reads and photo signs and none
+    // depending on another — built together rather than one after the other;
+    // `Promise.all` keeps them in the newest-first order the ids come in.
+    const results = await Promise.all(
+      (await recentMutualMatchIds(userId)).map((matchId) =>
+        mutualOfferFor(matchId, userId, language),
+      ),
+    );
+    const offers = results.flatMap((result) => (result.ok ? [serializeOffer(result.offer)] : []));
     res.json({
       check: pending
         ? {
