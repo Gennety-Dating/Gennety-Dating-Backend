@@ -781,3 +781,13 @@ export const STRANDED_PROPOSAL_SWEEP_BATCH = 100;
  * the window in which a restarted process re-arms a notice it may have lost.
  */
 export const NO_MATCH_NOTICE_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a match may sit in a half-finished stage handoff before the
+ * stranded-handoff sweep (`apps/bot/src/services/stranded-handoff.ts`) finishes
+ * it: a `proposed` row both sides accepted, or a `negotiating` row with no
+ * calendar grid and no open ticket gate. Both are normally left within the same
+ * request; this window only has to be comfortably longer than one request, so a
+ * handoff still in progress is never run twice.
+ */
+export const STRANDED_HANDOFF_GRACE_MS = 10 * 60 * 1000;

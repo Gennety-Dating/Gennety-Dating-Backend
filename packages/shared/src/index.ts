@@ -12,6 +12,7 @@ export {
   LINKED_ACCOUNTS_MAX,
   LINKED_ACCOUNT_GROUPS_MAX,
   APPSTORE_SANDBOX_TICKET_PURCHASES_MAX,
+  STRANDED_HANDOFF_GRACE_MS,
 } from "./constants.js";
 export { CADENCE, CADENCES, resolveCadence, dropOutpacesNotices } from "./cadence.js";
 export {
