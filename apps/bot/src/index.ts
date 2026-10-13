@@ -539,40 +539,65 @@ async function expiryJob(): Promise<void> {
   }
 }
 
-async function dateLifecycleTick(): Promise<void> {
+/** Log a lifecycle-cadence job's failure under its own label, then rethrow it. */
+async function logged<T>(label: string, job: () => Promise<T>): Promise<T> {
   try {
-    const [lifecycle, safety, coordination, venueRetries, venueLapsed] = await Promise.all([
-      runDateLifecycleTick(bot.api),
-      runPreDateSafetyTick(bot.api),
-      runCoordinationTick(bot.api),
-      retryDueVenueSelections(),
-      // A13-H5: a pair still choosing a venue when their date runs out of
-      // runway goes back to the calendar. Here rather than on a cron of its
-      // own because this tick already owns "things that happen before a date".
-      sweepLapsedVenueNegotiations(bot.api),
-    ]);
-    if (
-      lifecycle.icebreakers > 0 ||
-      lifecycle.emergencies > 0 ||
-      lifecycle.feedbacks > 0 ||
-      safety.sent > 0
-    ) {
-      console.log(
-        `[date-lifecycle] icebreakers=${lifecycle.icebreakers} emergencies=${lifecycle.emergencies} feedbacks=${lifecycle.feedbacks} safety=${safety.sent}`,
-      );
-    }
-    if (coordination.opened > 0 || coordination.closed > 0) {
-      console.log(
-        `[coordination] proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
-      );
-    }
-    if (venueRetries > 0) console.log(`[venue-intent-v2] retried=${venueRetries}`);
-    if (venueLapsed > 0) console.log(`[venue-time-lapse] returned-to-calendar=${venueLapsed}`);
+    return await job();
   } catch (err) {
-    console.error("date lifecycle tick failed:", err);
+    console.error(`${label} tick failed:`, err);
     // Rethrown so `guardedTick` can count it (A13-M24).
     throw err;
   }
+}
+
+/**
+ * The jobs that share the date-lifecycle cadence. They always ran concurrently
+ * — one `Promise.all` per tick — but behind ONE single-flight guard, so a slow
+ * run of any of them (a T-5h burst of ice-breakers, two LLM calls per match)
+ * skipped the next ticks of all of them: the T-1.5h safety brief and the T-1h
+ * proxy-chat opening waited for the ice-breakers to finish. Each now has its
+ * own guard on the same interval. Nothing orders them against each other —
+ * nothing did before: each claims its own rows (its own `*SentAt` / status
+ * filter) and none reads in-memory state another one writes. The order that
+ * matters (venue-change expiry before the ice-breakers, the ice-breaker claim
+ * before the date-day beats) lives inside `runDateLifecycleTick` and is kept.
+ */
+async function dateLifecycleTick(): Promise<void> {
+  const lifecycle = await logged("date lifecycle", () => runDateLifecycleTick(bot.api));
+  if (lifecycle.icebreakers > 0 || lifecycle.emergencies > 0 || lifecycle.feedbacks > 0) {
+    console.log(
+      `[date-lifecycle] icebreakers=${lifecycle.icebreakers} emergencies=${lifecycle.emergencies} feedbacks=${lifecycle.feedbacks}`,
+    );
+  }
+}
+
+async function preDateSafetyTick(): Promise<void> {
+  const safety = await logged("pre-date safety", () => runPreDateSafetyTick(bot.api));
+  if (safety.sent > 0) console.log(`[date-lifecycle] safety=${safety.sent}`);
+}
+
+async function coordinationTick(): Promise<void> {
+  const coordination = await logged("coordination", () => runCoordinationTick(bot.api));
+  if (coordination.opened > 0 || coordination.closed > 0) {
+    console.log(
+      `[coordination] proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
+    );
+  }
+}
+
+async function venueSelectionRetryTick(): Promise<void> {
+  const venueRetries = await logged("venue selection retry", () => retryDueVenueSelections());
+  if (venueRetries > 0) console.log(`[venue-intent-v2] retried=${venueRetries}`);
+}
+
+/**
+ * A13-H5: a pair still choosing a venue when their date runs out of runway goes
+ * back to the calendar. On the lifecycle cadence because it is one of the
+ * "things that happen before a date".
+ */
+async function venueTimeLapseTick(): Promise<void> {
+  const venueLapsed = await logged("venue time-lapse", () => sweepLapsedVenueNegotiations(bot.api));
+  if (venueLapsed > 0) console.log(`[venue-time-lapse] returned-to-calendar=${venueLapsed}`);
 }
 
 /**
@@ -788,11 +813,18 @@ function registerSchedules(): void {
   );
   console.log(`[cron] Proposal countdown scheduled: "${PROPOSAL_COUNTDOWN_CRON_SCHEDULE}"`);
 
-  // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
+  // Date lifecycle (icebreakers, emergencies, feedback) and the jobs on its
+  // cadence — kept on setInterval, one guard each (see `dateLifecycleTick`).
   if (DATE_LIFECYCLE_TICK_MS > 0) {
-    intervals.push(
-      setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS),
-    );
+    for (const [name, job] of [
+      ["date-lifecycle", dateLifecycleTick],
+      ["pre-date-safety", preDateSafetyTick],
+      ["proxy-coordination", coordinationTick],
+      ["venue-selection-retry", venueSelectionRetryTick],
+      ["venue-time-lapse", venueTimeLapseTick],
+    ] as const) {
+      intervals.push(setInterval(guardedTick(name, job), DATE_LIFECYCLE_TICK_MS));
+    }
   }
 
   // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so
