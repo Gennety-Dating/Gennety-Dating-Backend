@@ -2,7 +2,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
 import { sendPushToUser } from "./push.js";
-import { refundMatchTickets, type TicketRefundOutcome } from "./ticket-refund.js";
+import { refundMatchTicketsInTx, type TicketRefundOutcome } from "./ticket-refund.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import { refreshStatusBanners } from "./status-banner-refresh.js";
@@ -106,20 +106,30 @@ export async function cancelScheduledDate(input: {
     return { ok: false, error: "date-started" };
   }
 
-  const claimed = await prisma.match.updateMany({
-    where: {
-      id: match.id,
-      status: "scheduled",
-      emergencyCancelledBy: null,
-      agreedTime: { gt: now },
-    },
-    data: {
-      status: "cancelled",
-      emergencyCancelledBy: input.actorUserId,
-      emergencyReason: reason,
-    },
+  // The date isn't happening, so every paid ticket goes back to its payer —
+  // including the canceller's (PRODUCT_SPEC §3.5b): the penalty for flaking is
+  // already Elo, and taking the money on top would make an honest cancellation
+  // more expensive than a silent no-show. Credited in the SAME transaction as
+  // the cancel: once the row reads `cancelled` no rail ever looks at it again,
+  // so a refund attempted after the commit and lost was lost for good.
+  const refunds = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.match.updateMany({
+      where: {
+        id: match.id,
+        status: "scheduled",
+        emergencyCancelledBy: null,
+        agreedTime: { gt: now },
+      },
+      data: {
+        status: "cancelled",
+        emergencyCancelledBy: input.actorUserId,
+        emergencyReason: reason,
+      },
+    });
+    if (claimed.count === 0) return null;
+    return refundMatchTicketsInTx(tx, match.id);
   });
-  if (claimed.count === 0) return { ok: false, error: "wrong-state" };
+  if (refunds === null) return { ok: false, error: "wrong-state" };
 
   // The pinned banner was counting down to THIS date (§2.1 mode "date") for
   // both sides — one of whom may be on the OTHER surface from whoever just
@@ -136,14 +146,6 @@ export async function cancelScheduledDate(input: {
     console.warn("[emergency] peer boost failed:", err instanceof Error ? err.message : err);
   });
 
-  // The date isn't happening, so every paid ticket goes back to its payer —
-  // including the canceller's (PRODUCT_SPEC §3.5b): the penalty for flaking is
-  // already Elo, and taking the money on top would make an honest cancellation
-  // more expensive than a silent no-show.
-  const refunds = await refundMatchTickets(match.id).catch((err: unknown) => {
-    console.warn("[emergency] ticket refund failed:", err instanceof Error ? err.message : err);
-    return [] as TicketRefundOutcome[];
-  });
 
 
   // The pass follows the ticket (§9.1): the date did not happen, so the Stars

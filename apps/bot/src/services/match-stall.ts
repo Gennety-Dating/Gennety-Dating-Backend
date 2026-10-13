@@ -4,7 +4,11 @@ import { prisma } from "@gennety/db";
 import { CADENCE, t, type Language } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
-import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
+import {
+  refundMatchTicketsInTx,
+  ticketRefundNoticeKey,
+  type TicketRefundOutcome,
+} from "./ticket-refund.js";
 import { sendPushToUser } from "./push.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import { telegramReachable } from "./telegram-reach.js";
@@ -425,12 +429,27 @@ async function claimCancellation(
   matchId: string,
   phase: StallPhase,
   cancelledBy: string | null,
-): Promise<boolean> {
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: STALL_PHASE_STATUS[phase] },
-    data: { status: "cancelled", ...(cancelledBy ? { emergencyCancelledBy: cancelledBy } : {}) },
-  });
-  return claim.count > 0;
+): Promise<TicketRefundOutcome[] | null> {
+  // The date isn't happening, so every paid ticket goes back to its payer, in
+  // the same commit as the cancel (PRODUCT_SPEC §3.5b). A refund attempted after
+  // the commit had nothing behind it: a `cancelled` row is never revisited, so
+  // one restart in between lost the ticket for good. Returns null when another
+  // rail won the claim — or when the refund failed, which rolls the cancel back
+  // with it: the row stays live, so the next stall tick (or the user's next
+  // tap) retries the whole thing instead of one throw ending the worker's loop.
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const claim = await tx.match.updateMany({
+        where: { id: matchId, status: STALL_PHASE_STATUS[phase] },
+        data: { status: "cancelled", ...(cancelledBy ? { emergencyCancelledBy: cancelledBy } : {}) },
+      });
+      if (claim.count === 0) return null;
+      return refundMatchTicketsInTx(tx, matchId);
+    });
+  } catch (err) {
+    console.error(`[match-stall] cancel of ${matchId} rolled back — ticket refund failed:`, err);
+    return null;
+  }
 }
 
 export interface StallCancelResult {
@@ -506,7 +525,8 @@ export async function cancelStalledMatch(
   // more, and the cancellation is abandoned instead of overriding their answer.
   if (!sides.some((s) => s.ghosted) && !pastCeiling) return empty;
 
-  if (!(await claimCancellation(matchId, phase, null))) return empty;
+  const refunds = await claimCancellation(matchId, phase, null);
+  if (!refunds) return empty;
 
   // A question that was never delivered cannot be ignored, so a side we could
   // not reach is never a ghost — even when the ceiling is what ended the match.
@@ -537,15 +557,11 @@ export async function cancelStalledMatch(
     await boostAcceptedSidePriority(side.user.id);
   }
 
-  // The date isn't happening, so every paid ticket goes back to its payer — the
+  // Every paid ticket already went back to its payer inside the claim — the
   // ghost included (PRODUCT_SPEC §3.5b). Ghosting is already priced in Elo
   // above; charging a ticket on top would make silence cost money that an
   // honest "plans changed" does not, which is the opposite of what this whole
   // stall chain is built to encourage.
-  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
-    console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
-    return [];
-  });
 
   // The pass follows the ticket (§9.1): the date did not happen, so the Stars
   // spent on the evening band go back to whoever spent them. A band opened by a
@@ -642,9 +658,8 @@ export async function cancelPlanningByUser(
   const isB = match.userBId === actorUserId;
   if (!isA && !isB) return { cancelled: false, ackText: null };
 
-  if (!(await claimCancellation(matchId, phase, actorUserId))) {
-    return { cancelled: false, ackText: null };
-  }
+  const refunds = await claimCancellation(matchId, phase, actorUserId);
+  if (!refunds) return { cancelled: false, ackText: null };
 
   const actor = isA ? match.userA : match.userB;
   const other = isA ? match.userB : match.userA;
@@ -652,13 +667,9 @@ export async function cancelPlanningByUser(
 
   await boostAcceptedSidePriority(other.id);
 
-  // Same rule as the timeout above: no date, so every paid ticket goes home.
-  // The actor is refunded too — this is the honest exit the flow wants used, and
-  // it must not be the expensive one (PRODUCT_SPEC §3.5b).
-  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
-    console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
-    return [];
-  });
+  // Same rule as the timeout above: no date, so every paid ticket went home in
+  // the claim. The actor is refunded too — this is the honest exit the flow
+  // wants used, and it must not be the expensive one (PRODUCT_SPEC §3.5b).
 
   // The pass follows the ticket (§9.1): the date did not happen, so the Stars
   // spent on the evening band go back to whoever spent them. A band opened by a

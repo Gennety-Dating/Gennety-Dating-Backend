@@ -200,8 +200,11 @@ describe("deleteUserAccount", () => {
   it("erases storage before atomically cancelling matches and deleting the account", async () => {
     const result = await deleteUserAccount(USER_ID, null);
 
+    // The partner's ticket is credited inside this transaction; the leaver's
+    // own wallet is deleted with the row, so nothing is credited to it.
     expect(mocks.claimMatches).toHaveBeenCalledWith(USER_ID, expect.anything(), {
       strict: true,
+      refundSkipUserIds: [USER_ID],
     });
     expect(mocks.deliverEffects).toHaveBeenCalledWith([{ matchId: "m1" }], null);
     expect(mocks.deleteStorageObject.mock.calls).toEqual(

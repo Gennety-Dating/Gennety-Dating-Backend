@@ -272,7 +272,7 @@ export async function applyTicketRefunds(
           count: 1,
           reason: "refund",
           matchId: credit.matchId,
-          externalPaymentId: `refund:match:${credit.matchId}:${credit.userId}:${slot}`,
+          externalPaymentId: slotRefundKey(credit.matchId, credit.userId, slot),
         });
         refunded += 1;
       } catch (err) {
@@ -303,19 +303,104 @@ export async function applyTicketRefunds(
   return outcomes;
 }
 
+type RefundWriteDb = Pick<typeof prisma, "ticketLedger" | "user">;
+
+/** The exactly-once key of one slot's cancellation refund. */
+function slotRefundKey(matchId: string, userId: string, slot: TicketSlot): string {
+  return `refund:match:${matchId}:${userId}:${slot}`;
+}
+
 /**
- * Plan + apply in one call — the one-liner for any path that kills a match in
- * its own transaction and still has the row afterwards (emergency
- * cancellation, and the scheduling-stall auto-cancel being built in parallel).
+ * Execute a plan through the CANCELLING transaction, so the ticket goes back in
+ * the same commit that kills the match.
  *
- * Paths that delete or cancel the match inside a transaction whose commit also
- * removes it should instead `planMatchTicketRefunds(id, tx)` during the
- * transaction and `applyTicketRefunds(plan)` after it commits.
+ * The post-commit `applyTicketRefunds` left a window with nothing behind it: the
+ * match was already `cancelled` (so neither the expiry rail nor any other sweep
+ * would ever look at it again) when the credit was attempted, best-effort, its
+ * failure swallowed. A restart, a deploy or one DB error in that window, and the
+ * payer's ticket was simply gone — on account deletion with not even the match
+ * row left to reconstruct it from.
+ *
+ * Written as an `INSERT … ON CONFLICT DO NOTHING` (`createMany` +
+ * `skipDuplicates`) rather than `grantTicketsInTx`: inside a Postgres
+ * transaction a unique violation aborts the whole transaction, cancellation
+ * included, while here an existing key simply means "already refunded". The
+ * wallet is incremented only when the ledger row was actually inserted, so the
+ * balance and the ledger stay in step.
+ *
+ * `skipUserIds` — accounts whose row is about to be deleted in this same
+ * transaction: their wallet goes with them, exactly as the post-commit rail
+ * skipped a payer that no longer existed.
  */
-export async function refundMatchTickets(matchId: string): Promise<TicketRefundOutcome[]> {
-  const plan = await planMatchTicketRefunds(matchId);
+export async function applyTicketRefundsInTx(
+  tx: RefundWriteDb,
+  credits: readonly TicketRefundCredit[],
+  options: { skipUserIds?: readonly string[] } = {},
+): Promise<TicketRefundOutcome[]> {
+  const outcomes: TicketRefundOutcome[] = [];
+  for (const credit of credits) {
+    if (options.skipUserIds?.includes(credit.userId)) continue;
+    // A payer whose account is already gone has no wallet to credit; their
+    // partner is still refunded.
+    const payer = await tx.user.findUnique({ where: { id: credit.userId }, select: { id: true } });
+    if (!payer) continue;
+    let refunded = 0;
+    for (const slot of credit.slots) {
+      const inserted = await tx.ticketLedger.createMany({
+        data: [
+          {
+            userId: credit.userId,
+            delta: 1,
+            reason: "refund",
+            matchId: credit.matchId,
+            externalPaymentId: slotRefundKey(credit.matchId, credit.userId, slot),
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (inserted.count === 0) continue;
+      await tx.user.update({
+        where: { id: credit.userId },
+        data: { ticketBalance: { increment: 1 } },
+        select: { id: true },
+      });
+      refunded += 1;
+    }
+    if (refunded > 0) {
+      console.log(
+        `[ticket-refund] returned ${refunded} ticket(s) to ${credit.userId} ` +
+          `for match ${credit.matchId}`,
+      );
+    }
+    outcomes.push({
+      userId: credit.userId,
+      refunded,
+      telegramId: credit.telegramId,
+      language: credit.language,
+      platform: credit.platform,
+    });
+  }
+  return outcomes;
+}
+
+/**
+ * Plan + apply through the caller's transaction — the one-liner for a path
+ * that cancels the match in that same transaction (emergency cancellation,
+ * the scheduling-stall cancel). Call it AFTER the cancelling write: that write
+ * holds the row lock, so the expiry rail cannot decide to refund the same slot.
+ */
+export async function refundMatchTicketsInTx(
+  tx: RefundWriteDb & RefundDb,
+  matchId: string,
+): Promise<TicketRefundOutcome[]> {
+  const plan = await planMatchTicketRefunds(matchId, tx);
   if (plan.length === 0) return [];
-  return applyTicketRefunds(plan);
+  return applyTicketRefundsInTx(tx, plan);
+}
+
+/** Plan + apply in one transaction of its own. */
+export async function refundMatchTickets(matchId: string): Promise<TicketRefundOutcome[]> {
+  return prisma.$transaction((tx) => refundMatchTicketsInTx(tx, matchId));
 }
 
 /** The localized "your ticket is back" line, or null when nothing was refunded. */

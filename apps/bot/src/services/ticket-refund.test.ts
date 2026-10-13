@@ -88,6 +88,27 @@ const prismaMock = {
         db.ledger.push(data);
         return data;
       }),
+    // `INSERT … ON CONFLICT DO NOTHING` — the in-transaction refund writer.
+    createMany: async ({
+      data,
+      skipDuplicates,
+    }: {
+      data: Array<Record<string, unknown>>;
+      skipDuplicates?: boolean;
+    }) => {
+      let count = 0;
+      for (const row of data) {
+        try {
+          assertUniqueExternalId(row.externalPaymentId);
+        } catch (err) {
+          if (skipDuplicates) continue;
+          throw err;
+        }
+        db.ledger.push(row);
+        count += 1;
+      }
+      return { count };
+    },
     // План возвратов сверяется с реестром: возвращается то, за что
     // действительно платили, а не всё, что помечено оплаченным.
     findMany: async ({
@@ -99,11 +120,16 @@ const prismaMock = {
         (row) => row.matchId === where.matchId && where.userId.in.includes(row.userId as string),
       ),
   },
-  $transaction: async (ops: PromiseLike<unknown>[]) => {
+  $transaction: async (
+    ops: PromiseLike<unknown>[] | ((tx: unknown) => Promise<unknown>),
+  ): Promise<unknown> => {
     const balancesBefore = new Map([...db.users].map(([id, u]) => [id, u.ticketBalance]));
     const ledgerBefore = db.ledger.length;
     const out: unknown[] = [];
     try {
+      // Interactive form: the callback gets the client itself and the whole
+      // body rolls back on a throw, like a real interactive transaction.
+      if (typeof ops === "function") return await ops(prismaMock);
       for (const op of ops) out.push(await op);
       return out;
     } catch (err) {
@@ -122,6 +148,8 @@ vi.mock("@gennety/db", () => ({ prisma: prismaMock }));
 const {
   planMatchTicketRefunds,
   applyTicketRefunds,
+  applyTicketRefundsInTx,
+  refundMatchTicketsInTx,
   refundMatchTickets,
   ticketRefundNoticeKey,
 } = await import("./ticket-refund.js");
@@ -422,6 +450,48 @@ describe("refundMatchTickets", () => {
 
     expect(outcomes[0].refunded).toBe(1); // only the outstanding slot
     expect(db.users.get(A)!.ticketBalance).toBe(2);
+    expect(refundRows()).toHaveLength(2);
+  });
+});
+
+describe("refunds inside the cancelling transaction", () => {
+  it("rolls the credit back with a cancellation that fails after it", async () => {
+    // The claim and the credit commit together or not at all: a ticket is
+    // never returned for a date that is, in the end, still on — and a date is
+    // never cancelled with its ticket left behind.
+    seedMatch();
+    await expect(
+      prismaMock.$transaction(async (tx) => {
+        await refundMatchTicketsInTx(tx as typeof prismaMock as never, "m1");
+        throw new Error("cancel failed later");
+      }),
+    ).rejects.toThrow("cancel failed later");
+
+    expect(db.users.get(A)!.ticketBalance).toBe(0);
+    expect(db.users.get(B)!.ticketBalance).toBe(0);
+    expect(refundRows()).toEqual([]);
+  });
+
+  it("credits nothing to an account deleted in the same transaction, but still its partner", async () => {
+    seedMatch();
+    const plan = await planMatchTicketRefunds("m1");
+
+    const outcomes = await applyTicketRefundsInTx(prismaMock as never, plan, { skipUserIds: [A] });
+
+    expect(outcomes.map((o) => o.userId)).toEqual([B]);
+    expect(db.users.get(A)!.ticketBalance).toBe(0);
+    expect(db.users.get(B)!.ticketBalance).toBe(1);
+  });
+
+  it("is idempotent without aborting the transaction on an existing key", async () => {
+    seedMatch();
+    await refundMatchTickets("m1");
+    const again = await prismaMock.$transaction((tx) =>
+      refundMatchTicketsInTx(tx as never, "m1"),
+    );
+
+    expect((again as Array<{ refunded: number }>).map((o) => o.refunded)).toEqual([0, 0]);
+    expect(db.users.get(A)!.ticketBalance).toBe(1);
     expect(refundRows()).toHaveLength(2);
   });
 });

@@ -18,7 +18,12 @@ vi.mock("@gennety/db", () => ({
     // `findMany` — план возвратов сверяется с реестром: возвращается то, за
     // что действительно платили. Пустой список означал бы «никто не платил»,
     // поэтому фикстуры ниже сеют след оплаты явно.
-    ticketLedger: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+    ticketLedger: {
+      create: vi.fn(),
+      // The in-transaction refund writer (`INSERT … ON CONFLICT DO NOTHING`).
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     // `grantTickets` uses the array form.
     $transaction: vi.fn(),
   },
@@ -49,7 +54,11 @@ const mMatch = prisma.match as unknown as {
   updateMany: MockFn;
 };
 const mUser = prisma.user as unknown as { findUnique: MockFn; update: MockFn };
-const mLedger = prisma.ticketLedger as unknown as { create: MockFn; findMany: MockFn };
+const mLedger = prisma.ticketLedger as unknown as {
+  create: MockFn;
+  createMany: MockFn;
+  findMany: MockFn;
+};
 const mTx = prisma.$transaction as unknown as MockFn;
 const mComp = applyEmergencyCancellationPeerBoost as unknown as MockFn;
 const mPush = sendPushToUser as unknown as MockFn;
@@ -349,13 +358,14 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
 
     const credited = mUser.update.mock.calls.map((c) => c[0].where.id);
     expect(credited.sort()).toEqual([LEAVING, PARTNER].sort());
-    expect(mLedger.create).toHaveBeenCalledTimes(2);
-    const keys = mLedger.create.mock.calls.map((c) => c[0].data.externalPaymentId);
+    expect(mLedger.createMany).toHaveBeenCalledTimes(2);
+    const keys = mLedger.createMany.mock.calls.map((c) => c[0].data[0].externalPaymentId);
     expect(keys).toContain(`refund:match:m1:${LEAVING}:A`);
     expect(keys).toContain(`refund:match:m1:${PARTNER}:B`);
-    for (const call of mLedger.create.mock.calls) {
-      expect(call[0].data.reason).toBe("refund");
-      expect(call[0].data.delta).toBe(1);
+    for (const call of mLedger.createMany.mock.calls) {
+      expect(call[0].data[0].reason).toBe("refund");
+      expect(call[0].data[0].delta).toBe(1);
+      expect(call[0].skipDuplicates).toBe(true);
     }
 
     // The partner's neutral notice carries the refund line; the leaving user
@@ -373,7 +383,7 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
 
     const credited = mUser.update.mock.calls.map((c) => c[0].where.id);
     expect(credited).toEqual([LEAVING, LEAVING]);
-    const keys = mLedger.create.mock.calls.map((c) => c[0].data.externalPaymentId);
+    const keys = mLedger.createMany.mock.calls.map((c) => c[0].data[0].externalPaymentId);
     expect(keys).toEqual([
       `refund:match:m1:${LEAVING}:A`,
       `refund:match:m1:${LEAVING}:B`,
@@ -386,7 +396,7 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
     await cancelInFlightMatchesForUser(LEAVING, null);
 
     expect(mUser.update.mock.calls.map((c) => c[0].where.id)).toEqual([LEAVING]);
-    expect(mLedger.create.mock.calls[0][0].data.externalPaymentId).toBe(
+    expect(mLedger.createMany.mock.calls[0][0].data[0].externalPaymentId).toBe(
       `refund:match:m1:${LEAVING}:A`,
     );
   });
@@ -411,7 +421,7 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
     await cancelInFlightMatchesForUser(LEAVING, null);
 
     expect(mUser.update).not.toHaveBeenCalled();
-    expect(mLedger.create).not.toHaveBeenCalled();
+    expect(mLedger.createMany).not.toHaveBeenCalled();
   });
 
   it("still refunds the surviving partner when the payer's account is gone", async () => {
@@ -426,9 +436,10 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
     expect(mUser.update.mock.calls.map((c) => c[0].where.id)).toEqual([PARTNER]);
   });
 
+  // Non-strict only: no transaction here, so the cancel has already committed.
   it("never fails the cancellation because a refund failed", async () => {
     gate();
-    mTx.mockRejectedValue(new Error("wallet down"));
+    mLedger.createMany.mockRejectedValue(new Error("wallet down"));
 
     const result = await cancelInFlightMatchesForUser(LEAVING, null);
 

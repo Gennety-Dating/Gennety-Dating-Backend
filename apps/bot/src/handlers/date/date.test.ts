@@ -6,14 +6,16 @@ import { DEFAULT_SESSION, t } from "@gennety/shared";
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
     match: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     profile: { findUnique: vi.fn() },
     profilerAnswer: { findMany: vi.fn().mockResolvedValue([]) },
-  },
-}));
+  };
+  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  return { prisma };
+});
 
 vi.mock("../../config.js", () => ({
   env: {
@@ -49,7 +51,7 @@ vi.mock("../../utils/elo-calculator.js", () => ({
 vi.mock("../../services/ticket-refund.js", async () => {
   const actual = await import("../../services/ticket-refund.js");
   return {
-    refundMatchTickets: vi.fn().mockResolvedValue([]),
+    refundMatchTicketsInTx: vi.fn().mockResolvedValue([]),
     ticketRefundNoticeKey: actual.ticketRefundNoticeKey,
   };
 });
@@ -64,7 +66,7 @@ import {
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
 import { callOpenAIJson } from "../../services/openai.js";
 import { appendNegativeConstraint } from "../matching/negative-constraints.js";
-import { refundMatchTickets } from "../../services/ticket-refund.js";
+import { refundMatchTicketsInTx as refundMatchTickets } from "../../services/ticket-refund.js";
 import {
   handleFeedbackVoiceStart,
   handleFeedbackVoiceText,
@@ -449,7 +451,7 @@ describe("emergency cancellation", () => {
 
     await handleEmergencyReason(ctx);
 
-    expect(mRefundMatchTickets).toHaveBeenCalledWith("match-1");
+    expect(mRefundMatchTickets).toHaveBeenCalledWith(expect.anything(), "match-1");
     // The one who cancelled honestly is refunded too — the Elo/ghosting penalty
     // is the only penalty (PRODUCT_SPEC §3.5b).
     expect(ctx.reply.mock.calls[0][0]).toContain("Both Date Tickets");
@@ -486,7 +488,9 @@ describe("emergency cancellation", () => {
     expect(ctx.reply.mock.calls[0][0]).not.toContain("wallet");
   });
 
-  it("handleEmergencyReason still cancels when the refund throws", async () => {
+  it("handleEmergencyReason tells nobody anything when the refund fails — the cancel rolled back", async () => {
+    // The cancel and the ticket credit share one transaction, so a failed
+    // credit leaves the date on, and the partner must not hear it is off.
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValue(matchRow());
     mRefundMatchTickets.mockRejectedValueOnce(new Error("wallet down"));
@@ -497,10 +501,8 @@ describe("emergency cancellation", () => {
       fromId: 1001,
     });
 
-    await handleEmergencyReason(ctx);
-
-    expect(mMatch.updateMany).toHaveBeenCalled();
-    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    await expect(handleEmergencyReason(ctx)).rejects.toThrow("wallet down");
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
   });
 
   // A13-M20. The emergency button stays in the chat after the date, and the

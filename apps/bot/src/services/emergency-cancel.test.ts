@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const matchFindUnique = vi.fn();
 const matchUpdateMany = vi.fn();
 const userFindUnique = vi.fn();
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma: Record<string, unknown> = {
     match: { findUnique: matchFindUnique, updateMany: matchUpdateMany },
     user: { findUnique: userFindUnique },
-  },
-}));
+  };
+  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  return { prisma };
+});
 
 const applyEmergencyCancellationPeerBoost = vi.fn();
 vi.mock("../utils/elo-calculator.js", () => ({ applyEmergencyCancellationPeerBoost }));
@@ -16,8 +18,8 @@ vi.mock("../utils/elo-calculator.js", () => ({ applyEmergencyCancellationPeerBoo
 const sendPushToUser = vi.fn();
 vi.mock("./push.js", () => ({ sendPushToUser }));
 
-const refundMatchTickets = vi.fn();
-vi.mock("./ticket-refund.js", () => ({ refundMatchTickets }));
+const refundMatchTicketsInTx = vi.fn();
+vi.mock("./ticket-refund.js", () => ({ refundMatchTicketsInTx }));
 
 const getMainBotApi = vi.fn((): unknown => null);
 vi.mock("./main-bot-api.js", () => ({ getMainBotApi }));
@@ -51,7 +53,7 @@ beforeEach(() => {
   userFindUnique.mockReset().mockResolvedValue({ language: "ru" });
   applyEmergencyCancellationPeerBoost.mockReset().mockResolvedValue(505);
   sendPushToUser.mockReset().mockResolvedValue(true);
-  refundMatchTickets.mockReset().mockResolvedValue([
+  refundMatchTicketsInTx.mockReset().mockResolvedValue([
     { userId: ACTOR, refunded: 1 },
     { userId: PEER, refunded: 1 },
   ]);
@@ -84,7 +86,7 @@ describe("cancelScheduledDate", () => {
     expect(applyEmergencyCancellationPeerBoost).toHaveBeenCalledWith(PEER);
     // The canceller is refunded too — charging them on top of the Elo penalty
     // would make an honest cancellation cost more than a silent no-show.
-    expect(refundMatchTickets).toHaveBeenCalledWith("m1");
+    expect(refundMatchTicketsInTx).toHaveBeenCalledWith(expect.anything(), "m1");
   });
 
   /**
@@ -112,7 +114,7 @@ describe("cancelScheduledDate", () => {
       data: { status: "cancelled", emergencyCancelledBy: ACTOR, emergencyReason: "x" },
     });
     expect(applyEmergencyCancellationPeerBoost).toHaveBeenCalledWith(PEER);
-    expect(refundMatchTickets).toHaveBeenCalledWith("m1");
+    expect(refundMatchTicketsInTx).toHaveBeenCalledWith(expect.anything(), "m1");
     expect(refundPrimeTimeForDeadMatch).toHaveBeenCalledWith("m1");
     expect(sendPushToUser).toHaveBeenCalledWith(PEER, expect.anything());
   });
@@ -129,7 +131,7 @@ describe("cancelScheduledDate", () => {
 
     expect(result).toEqual({ ok: false, error: "wrong-state" });
     // Nothing downstream may run for the loser of the race.
-    expect(refundMatchTickets).not.toHaveBeenCalled();
+    expect(refundMatchTicketsInTx).not.toHaveBeenCalled();
     expect(sendPushToUser).not.toHaveBeenCalled();
     expect(refreshStatusBanners).not.toHaveBeenCalled();
   });
@@ -210,7 +212,7 @@ describe("cancelScheduledDate", () => {
 
     expect(result).toEqual({ ok: false, error: "date-started" });
     expect(matchUpdateMany).not.toHaveBeenCalled();
-    expect(refundMatchTickets).not.toHaveBeenCalled();
+    expect(refundMatchTicketsInTx).not.toHaveBeenCalled();
     expect(applyEmergencyCancellationPeerBoost).not.toHaveBeenCalled();
     expect(sendPushToUser).not.toHaveBeenCalled();
   });
@@ -230,20 +232,19 @@ describe("cancelScheduledDate", () => {
     );
   });
 
-  it("still cancels when the refund rail throws", async () => {
+  it("does not cancel without the refund — both commit together or neither does", async () => {
     matchFindUnique.mockResolvedValue(scheduledRow());
-    refundMatchTickets.mockRejectedValue(new Error("ledger down"));
+    refundMatchTicketsInTx.mockRejectedValue(new Error("ledger down"));
 
-    const result = await cancelScheduledDate({
-      matchId: "m1",
-      actorUserId: ACTOR,
-      reason: "x",
-    });
-
-    expect(result.ok).toBe(true);
-    // The row is already cancelled at this point; unwinding it because a
-    // refund failed would leave a date on that both sides believe is off.
-    expect(matchUpdateMany).toHaveBeenCalled();
+    // The claim and the credit share one transaction: a failed credit rolls the
+    // cancellation back with it, so a `cancelled` row can never exist without
+    // its tickets returned (no rail revisits a cancelled match). Nobody has
+    // been told anything yet — every notice goes out after the commit.
+    await expect(
+      cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x" }),
+    ).rejects.toThrow("ledger down");
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(applyEmergencyCancellationPeerBoost).not.toHaveBeenCalled();
   });
 
   it("caps the forwarded reason at the same length as the Telegram rail", async () => {

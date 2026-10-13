@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma: Record<string, unknown> = {
     match: { findUnique: vi.fn(), updateMany: vi.fn() },
     profile: { update: vi.fn() },
-  },
-}));
+  };
+  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  return { prisma };
+});
 
 vi.mock("../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
@@ -19,7 +21,7 @@ vi.mock("./match-decision-shared.js", () => ({
 vi.mock("./ticket-refund.js", async () => {
   const actual = await import("./ticket-refund.js");
   return {
-    refundMatchTickets: vi.fn().mockResolvedValue([]),
+    refundMatchTicketsInTx: vi.fn().mockResolvedValue([]),
     ticketRefundNoticeKey: actual.ticketRefundNoticeKey,
   };
 });
@@ -27,7 +29,7 @@ vi.mock("./ticket-refund.js", async () => {
 import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
-import { refundMatchTickets } from "./ticket-refund.js";
+import { refundMatchTicketsInTx as refundMatchTickets } from "./ticket-refund.js";
 import {
   STALL_CHECK_IN_MS,
   STALL_TIMEOUT_MS,
@@ -596,7 +598,7 @@ describe("cancelStalledMatch — ticket refunds", () => {
 
     await cancelStalledMatch(api as never, "match-1", NOW);
 
-    expect(refundMatchTickets).toHaveBeenCalledWith("match-1");
+    expect(refundMatchTickets).toHaveBeenCalledWith(expect.anything(), "match-1");
     // Ghosting is priced in Elo above; taking the ticket on top would make
     // silence cost money that an honest "plans changed" does not.
     const bodies = api.sendMessage.mock.calls.map((c) => String(c[1]));
@@ -615,13 +617,18 @@ describe("cancelStalledMatch — ticket refunds", () => {
     }
   });
 
-  it("still cancels when the refund throws", async () => {
+  it("does not cancel without the refund — the claim and the credit commit together", async () => {
+    // A `cancelled` row is never revisited, so a cancel that committed without
+    // its refund lost the ticket for good. The failure now rolls the claim back
+    // and reports not-cancelled; the next stall tick retries the whole thing.
     (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
     (refundMatchTickets as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("wallet down"));
+    const sendMessage = vi.fn().mockResolvedValue({});
 
-    const result = await cancelStalledMatch(mockApi(), "match-1", NOW);
+    const result = await cancelStalledMatch({ sendMessage } as never, "match-1", NOW);
 
-    expect(result.cancelled).toBe(true);
+    expect(result.cancelled).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -641,7 +648,7 @@ describe("cancelPlanningByUser — ticket refunds", () => {
 
     const result = await cancelPlanningByUser(api as never, "match-1", "user-b");
 
-    expect(refundMatchTickets).toHaveBeenCalledWith("match-1");
+    expect(refundMatchTickets).toHaveBeenCalledWith(expect.anything(), "match-1");
     // He covered both tickets and is ending it himself — both come back.
     expect(result.ackText).toContain("Both Date Tickets");
     // The partner paid nothing, so their notice stays refund-free.

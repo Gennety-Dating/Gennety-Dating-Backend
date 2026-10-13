@@ -197,7 +197,12 @@ export async function deleteUserAccount(
   let cancelled: Awaited<ReturnType<typeof claimInFlightMatchCancellations>> = [];
   let staleRefunds: RefundInFlightRow[] = refunds.stale;
   const deletedFounderReports = await prisma.$transaction(async (tx) => {
-    cancelled = await claimInFlightMatchCancellations(user.id, tx, { strict: true });
+    cancelled = await claimInFlightMatchCancellations(user.id, tx, {
+      strict: true,
+      // This row is deleted below, in this transaction: the partner's ticket
+      // is credited here, the leaver's wallet goes with the account.
+      refundSkipUserIds: [user.id],
+    });
     // Re-checked where it commits: a payment or a failed refund that landed
     // after the check above would otherwise lose its owner with this row.
     // Rolling back here undoes the cancellation too. (Storage is already gone

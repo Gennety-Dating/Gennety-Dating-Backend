@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { t } from "@gennety/shared";
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma: Record<string, unknown> = {
     user: { findUnique: vi.fn() },
     match: { findUnique: vi.fn(), updateMany: vi.fn() },
-  },
-}));
+  };
+  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  return { prisma };
+});
 
 vi.mock("../../services/match-decision-shared.js", () => ({
   boostAcceptedSidePriority: vi.fn().mockResolvedValue(true),
@@ -19,7 +21,7 @@ vi.mock("../../utils/elo-calculator.js", () => ({
 // Ticket refunds have their own suite; stub them so this file's output stays
 // about the buttons and doesn't log a swallowed wallet error on every cancel.
 vi.mock("../../services/ticket-refund.js", () => ({
-  refundMatchTickets: vi.fn().mockResolvedValue([]),
+  refundMatchTicketsInTx: vi.fn().mockResolvedValue([]),
   ticketRefundNoticeKey: vi.fn().mockReturnValue(null),
 }));
 

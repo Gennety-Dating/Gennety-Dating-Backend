@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma: Record<string, unknown> = {
     match: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -9,8 +9,12 @@ vi.mock("@gennety/db", () => ({
       updateMany: vi.fn(),
     },
     profile: { update: vi.fn() },
-  },
-}));
+  };
+  // The stall cancel claims the row and credits ticket refunds in one
+  // interactive transaction.
+  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  return { prisma };
+});
 
 // The stall chain's cancellation settles Elo/priority — stub both so the worker
 // tests stay about scheduling and dispatch. Their own behaviour is covered in
@@ -20,6 +24,12 @@ vi.mock("../services/match-decision-shared.js", () => ({
 }));
 vi.mock("../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
+}));
+// Ticket refunds ride the cancel's transaction; their semantics live in
+// `services/ticket-refund.test.ts`.
+vi.mock("../services/ticket-refund.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/ticket-refund.js")>()),
+  refundMatchTicketsInTx: vi.fn().mockResolvedValue([]),
 }));
 
 // The app rail. `services/match-stall.ts` imports the same module for its

@@ -5,10 +5,10 @@ import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js"
 import { sendPushToUser } from "./push.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import {
-  applyTicketRefunds,
+  applyTicketRefundsInTx,
   planMatchTicketRefunds,
   ticketRefundNoticeKey,
-  type TicketRefundCredit,
+  type TicketRefundOutcome,
 } from "./ticket-refund.js";
 
 /**
@@ -38,24 +38,31 @@ export interface CancelledPartner {
   partnerLanguage: Language;
   partnerPlatform: string;
   /**
-   * Who is owed a Date Ticket back for this match (PRODUCT_SPEC §3.5b). Planned
-   * here, inside the caller's transaction, because account deletion cascades
-   * the match row away on commit — a post-commit lookup would find nothing and
-   * the surviving partner would silently lose a ticket they paid for. Covers
-   * BOTH participants, not just the partner.
+   * The Date Tickets returned for this match (PRODUCT_SPEC §3.5b), credited
+   * inside the caller's transaction, in the same commit as the cancellation.
+   * Account deletion cascades the match row away on commit, and a `cancelled`
+   * row is never revisited by any sweep — so a credit attempted after the
+   * commit and lost (restart, DB error) could never be recovered. Covers BOTH
+   * participants, not just the partner. Read by the delivery half only for the
+   * notice text.
    */
-  ticketRefunds: TicketRefundCredit[];
+  ticketRefunds: TicketRefundOutcome[];
 }
 
 interface CancelOptions {
   /** Abort the caller when a DB cancellation fails (used before hard delete). */
   strict?: boolean;
+  /**
+   * Accounts deleted in the caller's transaction: their own wallet goes with
+   * the row, so no ticket is credited to them — their partner still is.
+   */
+  refundSkipUserIds?: readonly string[];
 }
 
 // `ticketLedger` — потому что план возвратов теперь сверяется с реестром:
 // возвращается то, за что действительно платили, а не всё, что помечено
 // оплаченным (Premium закрывает слот бесплатно той же отметкой).
-type CancellationDb = Pick<typeof prisma, "match" | "ticketLedger">;
+type CancellationDb = Pick<typeof prisma, "match" | "ticketLedger" | "user">;
 
 /**
  * Claim all cancellation state changes using the caller's DB client. Passing a
@@ -111,17 +118,25 @@ async function claimOneMatch(
     return null;
   }
 
-  // Read the refund plan AFTER the cancelling write above, in the same
+  // Plan AND credit the refunds AFTER the cancelling write above, in the same
   // transaction: that write holds the match row lock, so the ticket-expiry
   // rail's own `negotiating`-guarded claim cannot interleave and decide to
-  // refund the same slot.
-  let ticketRefunds: TicketRefundCredit[] = [];
+  // refund the same slot, and the credit commits with the cancellation or not
+  // at all. A failure here throws rather than being swallowed: inside a
+  // Postgres transaction any failed statement aborts the whole transaction
+  // anyway, and a cancellation that commits without its refund is exactly the
+  // silent loss this replaces. Only the non-strict caller — no transaction, the
+  // cancel above already committed on its own — keeps the old best-effort
+  // behaviour, because there the cancellation is the safety-critical half.
+  let ticketRefunds: TicketRefundOutcome[] = [];
   try {
-    ticketRefunds = await planMatchTicketRefunds(match.id, db);
+    const plan = await planMatchTicketRefunds(match.id, db);
+    ticketRefunds = await applyTicketRefundsInTx(db, plan, {
+      ...(options.refundSkipUserIds ? { skipUserIds: options.refundSkipUserIds } : {}),
+    });
   } catch (err) {
-    // A refund plan is never worth failing the cancellation over — the
-    // cancellation is the safety-critical half.
-    console.warn("[cancel-in-flight] ticket refund plan failed:", err);
+    if (options.strict) throw err;
+    console.error(`[cancel-in-flight] ticket refund failed for match ${match.id}:`, err);
   }
 
   const isA = match.userAId === userId;
@@ -197,14 +212,10 @@ export async function deliverCancelledPartnerEffects(
       console.warn("[cancel-in-flight] partner compensation failed:", err);
     });
 
-    // The date isn't happening, so every paid ticket goes back to whoever paid
-    // for it — no fault-finding (PRODUCT_SPEC §3.5b). Post-commit by design: on
-    // hard delete the leaver's row is already gone and is skipped, while the
-    // partner is still refunded.
-    const refunds = await applyTicketRefunds(item.ticketRefunds).catch((err: unknown) => {
-      console.warn("[cancel-in-flight] ticket refund failed:", err);
-      return [];
-    });
+    // The date isn't happening, so every paid ticket went back to whoever paid
+    // for it — no fault-finding (PRODUCT_SPEC §3.5b) — inside the cancelling
+    // transaction (`claimOneMatch`). Only the notice is left to deliver.
+    const refunds = item.ticketRefunds;
     // The pass follows the ticket (§9.1): the date did not happen, so the Stars
     // spent on the evening band go back to whoever spent them. A band opened by
     // a subscription has no purchase row and is therefore a no-op.
