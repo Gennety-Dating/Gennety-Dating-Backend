@@ -468,8 +468,20 @@ async function buildChatMessages(
         const parts: Array<TextPart | ImagePart> = [];
         const txt = row.content ?? "";
         if (txt) parts.push({ type: "text", text: txt });
-        for (const path of images) {
-          const signed = await createChatImageSignedUrl(path);
+        // Every photo of the album is signed at once rather than one Storage
+        // round-trip after another inside the user's turn — the same single
+        // route, bucket and TTL per photo as before. Answers are awaited in
+        // album order, so a Storage error still fails the turn with the error
+        // it failed with before, and no later than it did; photos after it may
+        // now be in flight, and their answers are simply dropped. Not the
+        // batch route: there a whole-batch failure degrades to `null`, which
+        // would turn that error into silently missing photos.
+        const signing = images.map((path) => createChatImageSignedUrl(path));
+        // A rejection behind the one that ends the turn is never awaited;
+        // mark every one handled so it cannot surface as an unhandled rejection.
+        for (const pending of signing) pending.catch(() => undefined);
+        for (const [index, path] of images.entries()) {
+          const signed = await signing[index]!;
           if (!signed) continue;
           parts.push({ type: "image_url", image_url: { url: signed } });
           // Surface the storage path so the model can pass it back into

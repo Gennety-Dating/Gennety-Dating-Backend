@@ -25,7 +25,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 vi.mock("../config.js", () => ({ env: { OPENAI_API_KEY: "sk-test" } }));
-const signedUrl = vi.fn(async (path: string) => `https://signed.example/${path}`);
+const signedUrl = vi.fn(async (path: string): Promise<string | null> => `https://signed.example/${path}`);
 vi.mock("./storage.js", () => ({ createChatImageSignedUrl: signedUrl }));
 vi.mock("./openai-fetch.js", () => ({ openaiFetch: vi.fn() }));
 vi.mock("./chat-profile-tools.js", () => ({
@@ -337,5 +337,105 @@ describe("chat agent images", () => {
         }),
       }),
     );
+  });
+});
+
+/**
+ * An album's photos are signed together instead of one Storage round-trip after
+ * another. What the model sees, and how a Storage failure ends the turn, must
+ * be what the one-by-one loop produced.
+ */
+describe("chat agent album signing", () => {
+  const ALBUM = [`${USER}/1.jpg`, `${USER}/2.jpg`, `${USER}/3.jpg`];
+  const defaultSign = async (path: string) => `https://signed.example/${path}`;
+
+  function albumTurn() {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "вот", imageUrl: ALBUM[0], imageUrls: ALBUM, context: null },
+    ]);
+    const seen: unknown[] = [];
+    const fetchFn = vi.fn(async (_url: string, init: { body: string }) => {
+      seen.push(JSON.parse(init.body).messages);
+      return new Response(JSON.stringify({ choices: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const run = () =>
+      runChatTurn(
+        { userId: USER, text: "вот", imageUrls: ALBUM },
+        { fetchFn: fetchFn as unknown as typeof fetch },
+      );
+    const lastTurnParts = () =>
+      (seen[0] as Array<{ content: unknown }>).at(-1)!.content as Array<{
+        type: string;
+        text?: string;
+        image_url?: { url: string };
+      }>;
+    return { run, lastTurnParts, fetchFn };
+  }
+
+  beforeEach(() => {
+    signedUrl.mockReset().mockImplementation(defaultSign);
+  });
+
+  it("asks for every photo before any answer arrives, and keeps album order", async () => {
+    const release: Array<() => void> = [];
+    signedUrl.mockImplementation(
+      (path: string) =>
+        new Promise<string>((resolve) => {
+          release.push(() => resolve(`https://signed.example/${path}`));
+        }),
+    );
+    const { run, lastTurnParts } = albumTurn();
+    const turn = run();
+    await vi.waitFor(() => expect(signedUrl).toHaveBeenCalledTimes(3));
+    // Answer out of order — the parts must still follow the album.
+    release[2]!();
+    release[0]!();
+    release[1]!();
+    await turn;
+
+    expect(signedUrl.mock.calls.map(([path]) => path)).toEqual(ALBUM);
+    expect(lastTurnParts().map((part) => part.image_url?.url ?? part.text)).toEqual([
+      "вот",
+      `https://signed.example/${ALBUM[0]}`,
+      `[imageUrl=${ALBUM[0]}]`,
+      `https://signed.example/${ALBUM[1]}`,
+      `[imageUrl=${ALBUM[1]}]`,
+      `https://signed.example/${ALBUM[2]}`,
+      `[imageUrl=${ALBUM[2]}]`,
+    ]);
+  });
+
+  it("skips a photo Storage no longer has, as before", async () => {
+    signedUrl.mockImplementation(async (path: string) =>
+      path === ALBUM[1] ? null : `https://signed.example/${path}`,
+    );
+    const { run, lastTurnParts } = albumTurn();
+    await run();
+
+    expect(lastTurnParts().filter((part) => part.type === "text").map((part) => part.text)).toEqual([
+      "вот",
+      `[imageUrl=${ALBUM[0]}]`,
+      `[imageUrl=${ALBUM[2]}]`,
+    ]);
+  });
+
+  it("fails the turn with the first photo's error in album order, without waiting on later photos", async () => {
+    const first = new Error("storage timeout on photo 1");
+    signedUrl.mockImplementation((path: string) => {
+      if (path === ALBUM[0]) {
+        return new Promise<string | null>((_resolve, reject) => setTimeout(() => reject(first), 20));
+      }
+      if (path === ALBUM[1]) return Promise.reject(new Error("storage refused photo 2"));
+      // Photo 3 never answers: the one-by-one loop never got to it either.
+      return new Promise<string | null>(() => undefined);
+    });
+    const { run, fetchFn } = albumTurn();
+
+    await expect(run()).rejects.toBe(first);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
