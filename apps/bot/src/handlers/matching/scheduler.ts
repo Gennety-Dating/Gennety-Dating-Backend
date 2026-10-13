@@ -2,7 +2,13 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
-import { DATE_ALERT_HOURS, DEFAULT_TIME_ZONE, t, type Language } from "@gennety/shared";
+import {
+  CALENDAR_TIME_SLOTS,
+  CALENDAR_TIME_ZONE,
+  DATE_ALERT_HOURS,
+  t,
+  type Language,
+} from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { announceVenueNegotiation, claimVenueNegotiation } from "./venue-negotiation.js";
 import { lockMatchRow } from "../../services/match-row-lock.js";
@@ -54,34 +60,13 @@ import {
 
 export const CALENDAR_DAY_COUNT = 6;
 
-export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }> = [
-  { hour: 13, minute: 0 },
-  { hour: 13, minute: 30 },
-  { hour: 14, minute: 0 },
-  { hour: 14, minute: 30 },
-  { hour: 15, minute: 0 },
-  { hour: 15, minute: 30 },
-  { hour: 16, minute: 0 },
-  { hour: 16, minute: 30 },
-  { hour: 17, minute: 0 },
-  { hour: 17, minute: 30 },
-  { hour: 18, minute: 0 },
-  { hour: 18, minute: 30 },
-  { hour: 19, minute: 0 },
-  { hour: 19, minute: 30 },
-];
+// The grid's hours and default zone live in @gennety/shared (`constants.ts`,
+// `timezone.ts`) so `services/prime-time.ts` can read them without importing
+// this handler; re-exported here for everything that already imports them
+// from the scheduler.
+export { CALENDAR_TIME_SLOTS, CALENDAR_TIME_ZONE };
 
 export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.length;
-
-/**
- * The DEFAULT clock of the calendar grid — the zone used when a match's date
- * city is unknown. A match's grid is written in its date city's zone
- * (`services/match-time-zone.ts`, audit C-25), which for every Kyiv pair IS
- * this value. Deliberately NOT the server's own timezone: the droplet runs in UTC, so a bare `setHours(13)`
- * would write 13:00 UTC (≈16:00 Kyiv) and the "13:00" the user picked would
- * drift. We resolve each Kyiv wall-clock slot to its exact UTC instant instead.
- */
-export const CALENDAR_TIME_ZONE = DEFAULT_TIME_ZONE;
 
 /**
  * Запас, на который слот обязан отстоять от «сейчас», чтобы его ещё можно

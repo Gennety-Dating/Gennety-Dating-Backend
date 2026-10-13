@@ -35,6 +35,18 @@
  */
 export const DEFAULT_TIME_ZONE = "Europe/Kyiv";
 
+/**
+ * The DEFAULT clock of the calendar grid — the zone used when a match's date
+ * city is unknown. A match's grid is written in its date city's zone
+ * (`services/match-time-zone.ts`, audit C-25), which for every Kyiv pair IS
+ * this value. Deliberately NOT the server's own timezone: the droplet runs in UTC, so a bare `setHours(13)`
+ * would write 13:00 UTC (≈16:00 Kyiv) and the "13:00" the user picked would
+ * drift. We resolve each Kyiv wall-clock slot to its exact UTC instant instead.
+ *
+ * Lived in `handlers/matching/scheduler.ts`, which still re-exports it.
+ */
+export const CALENDAR_TIME_ZONE = DEFAULT_TIME_ZONE;
+
 /** Country code (ISO-3166 alpha-2, upper-case) → representative IANA zone. */
 const COUNTRY_TO_TZ: Record<string, string> = {
   UA: "Europe/Kyiv",

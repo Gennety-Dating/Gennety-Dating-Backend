@@ -2,11 +2,8 @@ import { env } from "../config.js";
 import { appStoreConfigured } from "./appstore.js";
 import { isPremiumHeadActive, type PremiumHead } from "./premium.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
+import { CALENDAR_TIME_SLOTS, CALENDAR_TIME_ZONE } from "@gennety/shared";
 import { zonedParts } from "./profiler-schedule.js";
-import {
-  CALENDAR_TIME_SLOTS,
-  CALENDAR_TIME_ZONE,
-} from "../handlers/matching/scheduler.js";
 
 /**
  * Prime Time — the paid evening band of the calendar grid

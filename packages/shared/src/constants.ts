@@ -332,6 +332,32 @@ export const MAX_MAJOR_LENGTH = 100;
 export const MAX_HOBBIES = 10;
 export const MAX_HOBBY_LENGTH = 50;
 
+/**
+ * The time slots of each day of the calendar grid, as wall-clock times in the
+ * match's date-city zone (`CALENDAR_TIME_ZONE` when it is unknown).
+ *
+ * The one definition of the grid's hours: the scheduler builds the grid from
+ * it and Prime Time derives its paid evening band as a suffix of it. Lived in
+ * `handlers/matching/scheduler.ts`, which still re-exports it; moved here so
+ * `services/prime-time.ts` no longer imports the handler that imports it.
+ */
+export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }> = [
+  { hour: 13, minute: 0 },
+  { hour: 13, minute: 30 },
+  { hour: 14, minute: 0 },
+  { hour: 14, minute: 30 },
+  { hour: 15, minute: 0 },
+  { hour: 15, minute: 30 },
+  { hour: 16, minute: 0 },
+  { hour: 16, minute: 30 },
+  { hour: 17, minute: 0 },
+  { hour: 17, minute: 30 },
+  { hour: 18, minute: 0 },
+  { hour: 18, minute: 30 },
+  { hour: 19, minute: 0 },
+  { hour: 19, minute: 30 },
+];
+
 /** Phase 4: Date lifecycle timing */
 /**
  * How many hours before the date the ice-breakers land, together with a
