@@ -12,3 +12,11 @@
  * only means that update's write-back is not skipped.
  */
 export const BOT_SESSION_SNAPSHOT_MAX_KEYS = 10_000;
+
+/**
+ * Telegram ids this process has already seen cleared of `botBlockedAt`
+ * (`apps/bot/src/services/bot-blocked.ts`). Past the cap the oldest id is
+ * forgotten, which only means its next inbound update runs the clearing UPDATE
+ * again.
+ */
+export const BOT_REACHABLE_CACHE_MAX_IDS = 20_000;

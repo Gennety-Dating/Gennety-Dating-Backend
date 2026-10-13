@@ -1,6 +1,7 @@
 import { GrammyError } from "grammy";
 import type { Api, RawApi, Transformer } from "grammy";
 import { prisma } from "@gennety/db";
+import { BOT_REACHABLE_CACHE_MAX_IDS } from "@gennety/shared";
 
 /**
  * Remembering that Telegram has shut the door.
@@ -46,30 +47,97 @@ export function isPermanentTelegramRefusal(err: unknown): boolean {
  */
 const BOT_CHAT_PLATFORMS = ["telegram", "both"] as const;
 
+/**
+ * Telegram ids whose `botBlockedAt` this process has itself seen cleared, so
+ * the next inbound update from them can skip the clearing UPDATE — it would
+ * match no row. Only two things can put a stamp back under an id: the stamp
+ * itself (`markBotBlocked`) and an account adoption moving the id onto another
+ * user row; both run inside `withBotReachabilityChange`. Bounded; insertion
+ * order is age, and a forgotten id simply runs the UPDATE again. Empty after a
+ * restart, so the first update from every chat still clears.
+ */
+const knownReachable = new Set<bigint>();
+
+/**
+ * Reachability changes started so far, and those not yet settled. A clear only
+ * records its id when no change was in flight as it started and none started
+ * before it settled: a change racing it may commit after it, and then the
+ * stamp has to be cleared by the next update — exactly as it would have been
+ * without this cache.
+ */
+let changesStarted = 0;
+let changesInFlight = 0;
+
+function rememberReachable(telegramId: bigint): void {
+  knownReachable.delete(telegramId);
+  knownReachable.add(telegramId);
+  if (knownReachable.size > BOT_REACHABLE_CACHE_MAX_IDS) {
+    const oldest = knownReachable.values().next().value;
+    if (oldest !== undefined) knownReachable.delete(oldest);
+  }
+}
+
+/**
+ * Run `change`, which may leave a `botBlockedAt` stamp under `telegramId` —
+ * the stamp itself, or moving the id onto a user row whose stamp this process
+ * has never seen (account adoption). Until it settles no clear may record the
+ * id as reachable, so every inbound update keeps running the clearing UPDATE.
+ */
+export async function withBotReachabilityChange<T>(
+  telegramId: bigint,
+  change: () => Promise<T>,
+): Promise<T> {
+  knownReachable.delete(telegramId);
+  changesStarted += 1;
+  changesInFlight += 1;
+  try {
+    return await change();
+  } finally {
+    changesInFlight -= 1;
+  }
+}
+
+/** Test seam: the cache and the change counters are module state. */
+export function __resetBotReachableForTests(): void {
+  knownReachable.clear();
+  changesStarted = 0;
+  changesInFlight = 0;
+}
+
 /** Stamp the door shut. Best-effort: this may never fail a send path. */
 export async function markBotBlocked(telegramId: bigint): Promise<void> {
   if (telegramId <= 0n) return;
-  await prisma.user
-    .updateMany({
-      where: { telegramId, botBlockedAt: null, platform: { in: [...BOT_CHAT_PLATFORMS] } },
-      data: { botBlockedAt: new Date() },
-    })
-    .then((result) => {
-      if (result.count > 0) {
-        console.warn(`[bot-blocked] telegramId=${telegramId} marked unreachable`);
-      }
-    })
-    .catch((err: unknown) => {
-      console.warn(`[bot-blocked] could not mark telegramId=${telegramId}:`, err);
-    });
+  await withBotReachabilityChange(telegramId, () =>
+    prisma.user
+      .updateMany({
+        where: { telegramId, botBlockedAt: null, platform: { in: [...BOT_CHAT_PLATFORMS] } },
+        data: { botBlockedAt: new Date() },
+      })
+      .then((result) => {
+        if (result.count > 0) {
+          console.warn(`[bot-blocked] telegramId=${telegramId} marked unreachable`);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn(`[bot-blocked] could not mark telegramId=${telegramId}:`, err);
+      }),
+  );
 }
 
 /**
  * Forget it. Any update from that chat is proof the door is open again —
  * stronger proof than a successful send, because it came from the person.
+ *
+ * Runs before the flood gate on every inbound update, so the UPDATE is skipped
+ * once this process has already cleared the id (see `knownReachable`): it
+ * could only match a row stamped since, and every path that stamps one drops
+ * the id first.
  */
 export async function clearBotBlocked(telegramId: bigint): Promise<void> {
   if (telegramId <= 0n) return;
+  if (knownReachable.has(telegramId)) return;
+  const noChangeInFlight = changesInFlight === 0;
+  const changesBefore = changesStarted;
   await prisma.user
     .updateMany({
       where: { telegramId, botBlockedAt: { not: null } },
@@ -79,6 +147,7 @@ export async function clearBotBlocked(telegramId: bigint): Promise<void> {
       if (result.count > 0) {
         console.info(`[bot-blocked] telegramId=${telegramId} is reachable again`);
       }
+      if (noChangeInFlight && changesStarted === changesBefore) rememberReachable(telegramId);
     })
     .catch(() => {});
 }

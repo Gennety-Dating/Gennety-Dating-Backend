@@ -10,6 +10,8 @@ import {
   markBotBlocked,
   clearBotBlocked,
   installBotBlockedObserver,
+  withBotReachabilityChange,
+  __resetBotReachableForTests,
 } from "./bot-blocked.js";
 
 const TOKEN = "123456:AAHtesttoken";
@@ -32,6 +34,7 @@ function stubTransport(response: ApiResponse<unknown>) {
 beforeEach(() => {
   updateMany.mockReset();
   updateMany.mockResolvedValue({ count: 1 });
+  __resetBotReachableForTests();
 });
 
 describe("isPermanentTelegramRefusal", () => {
@@ -138,5 +141,89 @@ describe("marking and forgetting", () => {
       where: { telegramId: 4242n, botBlockedAt: { not: null } },
       data: { botBlockedAt: null },
     });
+  });
+});
+
+describe("the clearing UPDATE on every inbound update", () => {
+  function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  it("runs once per id, then not again while nothing stamped it", async () => {
+    await clearBotBlocked(4242n);
+    await clearBotBlocked(4242n);
+    await clearBotBlocked(4242n);
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs for every id on its own, and again after a restart", async () => {
+    await clearBotBlocked(4242n);
+    await clearBotBlocked(5353n);
+    __resetBotReachableForTests();
+    await clearBotBlocked(4242n);
+
+    expect(updateMany.mock.calls.map((c) => c[0].where.telegramId)).toEqual([4242n, 5353n, 4242n]);
+  });
+
+  it("runs again after the chat was stamped blocked", async () => {
+    await clearBotBlocked(4242n);
+    await markBotBlocked(4242n);
+    await clearBotBlocked(4242n);
+
+    expect(updateMany).toHaveBeenCalledTimes(3);
+    expect(updateMany.mock.calls[2]![0]).toEqual({
+      where: { telegramId: 4242n, botBlockedAt: { not: null } },
+      data: { botBlockedAt: null },
+    });
+  });
+
+  it("does not remember a clear that a stamp overtook", async () => {
+    // The stamp may commit after the clear, so the row can be stamped although
+    // the clear succeeded — the next update has to clear again.
+    const slowClear = deferred<{ count: number }>();
+    updateMany.mockReturnValueOnce(slowClear.promise);
+    const clearing = clearBotBlocked(4242n);
+    await markBotBlocked(4242n);
+    slowClear.resolve({ count: 0 });
+    await clearing;
+
+    await clearBotBlocked(4242n);
+
+    expect(updateMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not remember a clear that started while a change was still in flight", async () => {
+    const adoption = deferred<string>();
+    const adopting = withBotReachabilityChange(4242n, () => adoption.promise);
+    await clearBotBlocked(4242n);
+    adoption.resolve("adopted");
+    await expect(adopting).resolves.toBe("adopted");
+
+    await clearBotBlocked(4242n);
+    await clearBotBlocked(4242n);
+
+    // Both clears after the change ran; only the last of them was skipped.
+    expect(updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets an id that a change touches, even one already remembered", async () => {
+    await clearBotBlocked(4242n);
+    await withBotReachabilityChange(4242n, async () => undefined);
+    await clearBotBlocked(4242n);
+
+    expect(updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not remember a clear that failed", async () => {
+    updateMany.mockRejectedValueOnce(new Error("pool timeout"));
+    await clearBotBlocked(4242n);
+    await clearBotBlocked(4242n);
+
+    expect(updateMany).toHaveBeenCalledTimes(2);
   });
 });

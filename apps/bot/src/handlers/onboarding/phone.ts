@@ -10,6 +10,7 @@ import {
 } from "../../services/account-linking.js";
 import { sendCompletedUserEntry } from "../start.js";
 import { restoreSafetyHistoryAfterAttach } from "../../services/safety-tombstone.js";
+import { withBotReachabilityChange } from "../../services/bot-blocked.js";
 
 /**
  * Registration v2 — phone verification for the GENERAL track: one branch of the
@@ -116,13 +117,17 @@ async function resolvePhoneConflict(
     return;
   }
 
-  const adopted = await adoptAccountByPhone({
-    ownerId: decision.ownerId,
-    stubId: decision.stubId,
-    telegramId,
-    phone,
-    telegramUsername: ctx.from?.username ?? null,
-  });
+  // The owner row may carry a `botBlockedAt` stamp from an earlier Telegram id;
+  // once it holds this one, the next update from the chat must clear it.
+  const adopted = await withBotReachabilityChange(telegramId, () =>
+    adoptAccountByPhone({
+      ownerId: decision.ownerId,
+      stubId: decision.stubId,
+      telegramId,
+      phone,
+      telegramUsername: ctx.from?.username ?? null,
+    }),
+  );
   if (adopted.kind === "stale") {
     await ctx.reply(phoneCopy(lang, "taken"));
     return;
