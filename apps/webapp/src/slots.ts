@@ -60,6 +60,30 @@ export function formatTime(slot: Date, lang: string, timeZone: string): string {
 }
 
 /**
+ * One day-key formatter per zone. The calendar groups every proposed slot on
+ * each render, tap and poll-driven repaint, and building an
+ * `Intl.DateTimeFormat` was the expensive part of each call. A formatter is
+ * immutable and its output depends only on its options and the date, so a
+ * shared one answers exactly what a fresh one would. A zone name `Intl`
+ * rejects still throws from the constructor, as before, and is not stored.
+ */
+const dayKeyFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function dayKeyFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = dayKeyFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dayKeyFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+/**
  * `YYYY-MM-DD` of the slot in the market's zone — the key the grid groups by.
  *
  * Built from `formatToParts` rather than `toISOString().slice(0, 10)`: the
@@ -69,12 +93,7 @@ export function formatTime(slot: Date, lang: string, timeZone: string): string {
  * locale data the browser ships.
  */
 export function slotDayKey(slot: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(slot);
+  const parts = dayKeyFormatter(timeZone).formatToParts(slot);
   const at = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
   return `${at("year")}-${at("month")}-${at("day")}`;

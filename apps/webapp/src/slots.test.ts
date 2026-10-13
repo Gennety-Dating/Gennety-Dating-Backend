@@ -57,4 +57,17 @@ describe("slotDayKey", () => {
     // (or by the device's) would file it under the wrong day button.
     expect(slotDayKey(new Date("2026-04-10T22:00:00Z"), KYIV)).toBe("2026-04-11");
   });
+
+  it("keeps each zone's own answer across repeated calls", () => {
+    const late = new Date("2026-04-10T22:00:00Z");
+    for (let i = 0; i < 3; i++) {
+      expect(slotDayKey(late, KYIV)).toBe("2026-04-11");
+      expect(slotDayKey(late, "America/New_York")).toBe("2026-04-10");
+    }
+  });
+
+  it("still rejects a zone Intl does not know, every time", () => {
+    expect(() => slotDayKey(new Date(), "Not/AZone")).toThrow(RangeError);
+    expect(() => slotDayKey(new Date(), "Not/AZone")).toThrow(RangeError);
+  });
 });

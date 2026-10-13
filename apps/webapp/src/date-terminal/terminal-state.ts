@@ -148,10 +148,44 @@ export function formatDistance(
     const shown = Math.max(DISTANCE_STEP_M, Math.ceil(meters / DISTANCE_STEP_M) * DISTANCE_STEP_M);
     return s.metres.replace("{n}", String(shown));
   }
-  const km = new Intl.NumberFormat(lang, { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(
-    Math.ceil(meters / 100) / 10,
-  );
+  const km = kilometreFormatter(lang).format(Math.ceil(meters / 100) / 10);
   return s.kilometres.replace("{n}", km);
+}
+
+/**
+ * The terminal re-renders on every GPS fix and every poll, and each render
+ * used to build these formatters anew. An `Intl` formatter is immutable and
+ * answers from its options alone, so one per language (and venue zone) gives
+ * exactly the same text. A locale or zone `Intl` rejects still throws from the
+ * constructor, as before, and is never stored.
+ */
+const kilometreFormatters = new Map<string, Intl.NumberFormat>();
+
+function kilometreFormatter(lang: string): Intl.NumberFormat {
+  let formatter = kilometreFormatters.get(lang);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(lang, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+    kilometreFormatters.set(lang, formatter);
+  }
+  return formatter;
+}
+
+const CLOCK_OPTIONS: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+const venueClockFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Only the venue-zone clock is shared. The device-zone fallback below is still
+ * built per call: a formatter fixes the zone it was created in, and the phone's
+ * own zone can change while the page is open.
+ */
+function venueClockFormatter(lang: string, timeZone: string): Intl.DateTimeFormat {
+  const key = `${lang}\u0000${timeZone}`;
+  let formatter = venueClockFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(lang, { ...CLOCK_OPTIONS, timeZone });
+    venueClockFormatters.set(key, formatter);
+  }
+  return formatter;
 }
 
 /**
@@ -164,13 +198,12 @@ export function formatDistance(
  * `Intl`; that falls back too rather than taking the whole terminal down.
  */
 export function formatClock(at: Date, lang: string, timeZone?: string | null): string {
-  const base: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
   if (timeZone) {
     try {
-      return new Intl.DateTimeFormat(lang, { ...base, timeZone }).format(at);
+      return venueClockFormatter(lang, timeZone).format(at);
     } catch {
       // RangeError: not a zone this runtime knows. Device zone below.
     }
   }
-  return new Intl.DateTimeFormat(lang, base).format(at);
+  return new Intl.DateTimeFormat(lang, CLOCK_OPTIONS).format(at);
 }

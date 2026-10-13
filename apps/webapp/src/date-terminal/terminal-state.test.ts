@@ -148,4 +148,16 @@ describe("formatting", () => {
     expect(formatClock(at, "en", null)).toBe("18:45");
     expect(formatClock(at, "en", "Not/AZone")).toBe("18:45");
   });
+
+  it("answers the same on every call — a shared formatter per language and zone", () => {
+    const at = new Date("2026-09-11T16:00:00Z");
+    for (let i = 0; i < 3; i++) {
+      expect(formatClock(at, "en", "Europe/Kyiv")).toBe("19:00");
+      expect(formatClock(at, "en", "America/New_York")).toBe("12:00");
+      // A rejected zone is never remembered as if it were valid.
+      expect(formatClock(new Date(2026, 8, 11, 18, 45), "en", "Not/AZone")).toBe("18:45");
+      expect(formatDistance(1420, "en", UNITS)).toBe("1.5 km");
+      expect(formatDistance(1420, "ru", UNITS)).toBe("1,5 km");
+    }
+  });
 });
