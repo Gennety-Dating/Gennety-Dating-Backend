@@ -9,6 +9,8 @@ export {
   STRANDED_PROPOSAL_SWEEP_BATCH,
   NO_MATCH_NOTICE_RESUME_WINDOW_MS,
   SAFETY_TOMBSTONE_RETENTION_MONTHS,
+  LINKED_ACCOUNTS_MAX,
+  LINKED_ACCOUNT_GROUPS_MAX,
 } from "./constants.js";
 export { CADENCE, CADENCES, resolveCadence, dropOutpacesNotices } from "./cadence.js";
 export {

@@ -128,6 +128,14 @@ vi.mock("../services/verification-pipeline.js", () => ({
   runFaceMatchVerificationDefault: runPipeline,
 }));
 
+const { linkedAccountsOf } = vi.hoisted(() => ({
+  linkedAccountsOf: vi.fn(async () => [] as unknown[]),
+}));
+vi.mock("../services/linked-accounts.js", () => ({
+  linkedAccountsOf,
+  linkedAccountGroups: vi.fn(async () => []),
+}));
+
 vi.mock("../services/storage.js", () => ({
   downloadProfileImage: vi.fn(),
   downloadChatImage: vi.fn(),
@@ -393,6 +401,7 @@ describe("GET /admin/users/:id", () => {
     expect(res.body.telegramId).toBe("123456789");
     expect(res.body.messageHistory).toEqual([{ role: "user", content: "Hi" }]);
     expect(res.body.profile.psychologicalSummary).toBe("Raw LLM dump…");
+    expect(res.body.linkedAccounts).toEqual([]);
   });
 
   it("returns 404 for unknown id", async () => {
@@ -743,5 +752,40 @@ describe("PATCH /admin/reports/:id/review", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not found/i);
+  });
+});
+
+describe("linked accounts (decision 2026-10-13)", () => {
+  it("carries the accounts that look like the same person on the user card", async () => {
+    linkedAccountsOf.mockResolvedValueOnce([
+      {
+        userId: "00000000-0000-0000-0000-000000000009",
+        firstName: null,
+        deleted: true,
+        at: new Date("2026-09-01T00:00:00Z"),
+        signals: ["former_account"],
+        sharedPhotos: 0,
+        sharedIdentities: ["telegram"],
+      },
+    ]);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "00000000-0000-0000-0000-000000000001",
+      telegramId: BigInt(1),
+    } as never);
+    const res = await request(app)
+      .get("/admin/users/00000000-0000-0000-0000-000000000001")
+      .set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.linkedAccounts).toEqual([
+      expect.objectContaining({ deleted: true, at: "2026-09-01T00:00:00.000Z", signals: ["former_account"] }),
+    ]);
+  });
+
+  it("serves the groups list on its own path, not as a user id", async () => {
+    const res = await request(app)
+      .get("/admin/users/linked-groups")
+      .set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ data: [], total: 0 });
   });
 });

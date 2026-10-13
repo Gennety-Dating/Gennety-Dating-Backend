@@ -39,6 +39,8 @@ import { classifyAllUsers } from "./utils/user-health-source.js";
 import { USER_HEALTH_CLASSES, type UserHealthClass } from "./utils/user-health.js";
 import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
 import { isUuid } from "./utils/uuid.js";
+import { linkedAccountsRouter } from "./routes/linked-accounts.js";
+import { linkedAccountsOf } from "../services/linked-accounts.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -211,6 +213,9 @@ app.use(announcementsRouter);
 // Диагностика одного аккаунта: класс здоровья + какое правило сработало.
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);
+// Accounts that look like one person (shared photo, re-registration after a
+// deletion) — informational only. Its static path must precede `/admin/users/:id`.
+app.use(linkedAccountsRouter);
 app.use(activityRouter);
 // Виральность: K-фактор (прямой и сарафанный), матрица созревания когорт,
 // кластерный срез и аномалии. Читает предагрегат `virality_days` /
@@ -951,7 +956,7 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const [user, matches, profilerAnswers, purchases] = await Promise.all([
+    const [user, matches, profilerAnswers, purchases, linkedAccounts] = await Promise.all([
       prisma.user.findUnique({ where: { id }, select: USER_DETAIL_SELECT }),
       // Every pairing this person has been in, either side. The card's job is
       // to explain a user's situation, and "has never been matched" vs "was
@@ -984,6 +989,9 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
       // the same read model the `/admin/purchases` list uses, so the card and
       // the list can never disagree about a charge.
       purchasesForUser(id),
+      // Accounts that look like the same person — a shared photo, or a deleted
+      // account with the same Telegram id / phone / email. Informational only.
+      linkedAccountsOf(id),
     ]);
 
     if (!user) {
@@ -1027,6 +1035,10 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
         ...purchases.summary,
         lastPurchaseAt: purchases.summary.lastPurchaseAt?.toISOString() ?? null,
       },
+      linkedAccounts: linkedAccounts.map((account) => ({
+        ...account,
+        at: account.at.toISOString(),
+      })),
     });
   } catch (err) {
     console.error("[admin] user detail error:", err);

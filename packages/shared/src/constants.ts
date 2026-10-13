@@ -726,6 +726,15 @@ export const ACCOUNT_DELETION_REFUND_DEFER_DAYS = 7;
 export const SAFETY_TOMBSTONE_RETENTION_MONTHS = 24;
 
 /**
+ * Admin "linked accounts" (decision 2026-10-13): accounts that look like the
+ * same person — a shared profile photo, or a deleted account with the same
+ * proven identity. Shown to the operator only; nothing in the product reads
+ * it. Caps keep the admin card and the groups list bounded.
+ */
+export const LINKED_ACCOUNTS_MAX = 50;
+export const LINKED_ACCOUNT_GROUPS_MAX = 200;
+
+/**
  * How many chats' Telegram updates (and out-of-band chat work) may run at once
  * (A13-H9). Per-chat order is kept by the chat queue; this is the ceiling ACROSS
  * chats, so a burst queues for a slot instead of starting hundreds of agent
