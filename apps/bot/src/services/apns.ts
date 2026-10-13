@@ -350,8 +350,8 @@ export function buildLiveActivityStartPayload(
  * Apple asks providers to keep connections open rather than reconnect per
  * notification, and a fresh TLS + HTTP/2 handshake per push was the bulk of
  * each send's latency — an announcement fan-out opened one per recipient. A
- * session leaves the pool the moment it closes, errors, or receives a GOAWAY,
- * and the next push dials a new one. `unref` so an idle pooled connection never
+ * session leaves the pool the moment it closes, errors, receives a GOAWAY, or
+ * lets a request time out, and the next push dials a new one. `unref` so an idle pooled connection never
  * holds a shutting-down process open; the idle timeout ends a quiet connection
  * on our side rather than waiting for Apple to.
  */
@@ -384,6 +384,15 @@ export function getApnsSession(host: string): http2.ClientHttp2Session {
   return session;
 }
 
+/**
+ * Take `session` out of the pool (if it is still the pooled one) and close it
+ * gracefully: no new streams, the open ones run to completion.
+ */
+function retireApnsSession(host: string, session: http2.ClientHttp2Session): void {
+  if (apnsSessions.get(host) === session) apnsSessions.delete(host);
+  session.close();
+}
+
 /** Test seam: dial through `fake` (null → the real `http2.connect`) on an empty pool. */
 export function __setApnsConnectForTests(fake: Http2Connect | null): void {
   for (const session of apnsSessions.values()) session.destroy();
@@ -406,11 +415,16 @@ function http2Post(
       clearTimeout(timer);
       reject(err);
     };
+    let stream: http2.ClientHttp2Stream | null = null;
     const timer = setTimeout(() => {
-      // A connection that cannot answer within the timeout is not one to keep
-      // reusing: destroying it evicts it from the pool and fails this request.
-      session.destroy();
       fail(new Error("APNs request timed out"));
+      // Only THIS stream is abandoned. Destroying the session here used to fail
+      // every other push in flight on the connection as "transport", although
+      // they were answering fine. A connection that let one request time out
+      // is still not one to hand new pushes: it leaves the pool, and `close`
+      // lets the streams already on it finish before it goes.
+      stream?.close(http2.constants.NGHTTP2_CANCEL);
+      retireApnsSession(host, session);
     }, APNS_TIMEOUT_MS);
 
     const req = session.request({
@@ -419,6 +433,7 @@ function http2Post(
       "content-type": "application/json",
       ...headers,
     });
+    stream = req;
 
     let status = 0;
     let data = "";
