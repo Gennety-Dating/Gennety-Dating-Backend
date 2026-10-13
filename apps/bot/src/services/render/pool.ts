@@ -45,17 +45,43 @@ const HANDSHAKE_TIMEOUT_MS = 10_000;
  */
 const MAX_WORKERS = 2;
 
+/**
+ * Потолок одного задания в потоке. Самая тяжёлая карточка считается ~45 с на
+ * одном ядре; задание, которое идёт втрое дольше, считаем зависшим. Поток
+ * тогда убивается: на проде он один, и занятый навсегда слот означал бы, что
+ * все последующие карточки ждут вечно.
+ */
+const JOB_TIMEOUT_MS = 3 * 60 * 1000;
+
+/**
+ * Сколько раз за жизнь процесса поднимать пул заново после гибели всех
+ * потоков (OOM на большой карточке, убитое зависшее задание). Дальше — inline
+ * навсегда, чтобы падающий на каждом задании поток не крутился по кругу.
+ */
+const MAX_POOL_RESPAWNS = 3;
+
 type Pending = {
   resolve: (value: RenderResult) => void;
   reject: (error: Error) => void;
 };
 
-type Slot = { worker: Worker; busy: boolean };
+type Slot = {
+  worker: Worker;
+  busy: boolean;
+  /** Задание в полёте — его надо отклонить, если поток умрёт. */
+  jobId: number | null;
+  jobTimer: NodeJS.Timeout | null;
+  dead: boolean;
+};
+
+/** Задание убито по `JOB_TIMEOUT_MS`: повторять его inline нельзя — оно повесит loop. */
+class RenderJobTimeoutError extends Error {}
 
 let pool: Slot[] | null = null;
 let initialising: Promise<Slot[] | null> | null = null;
 /** Однажды признав потоки непригодными, больше не пробуем — и не шумим в лог. */
 let disabled = false;
+let respawns = 0;
 
 const pending = new Map<number, Pending>();
 let nextId = 1;
@@ -100,7 +126,7 @@ function spawn(entry: string): Promise<Slot | null> {
       return;
     }
 
-    const slot: Slot = { worker, busy: false };
+    const slot: Slot = { worker, busy: false, jobId: null, jobTimer: null, dead: false };
 
     worker.on("message", (message: Record<string, unknown>) => {
       if (message.ready === true) {
@@ -112,6 +138,9 @@ function spawn(entry: string): Promise<Slot | null> {
       const waiter = pending.get(id);
       if (!waiter) return;
       pending.delete(id);
+      if (slot.jobTimer) clearTimeout(slot.jobTimer);
+      slot.jobTimer = null;
+      slot.jobId = null;
       slot.busy = false;
       // Простаивающий поток не обязан удерживать процесс живым. Держим его
       // ref'нутым РОВНО пока задание в полёте — иначе скрипт с одним
@@ -141,14 +170,41 @@ function spawn(entry: string): Promise<Slot | null> {
   });
 }
 
-/** Убрать умерший поток и отпустить всех, кто ждал именно его. */
-function retire(slot: Slot): void {
-  if (!pool) return;
-  pool = pool.filter((s) => s !== slot);
-  if (pool.length === 0) {
-    pool = null;
-    disabled = true;
+/**
+ * Убрать умерший поток и отпустить всех, кто ждал именно его.
+ *
+ * До 2026-10-13 здесь только вычёркивали поток из пула: задание, которое он
+ * считал, оставалось в `pending` навсегда, его вызывающий не получал ни
+ * ответа, ни ошибки, а очередь ждущих свободного слота больше никто не
+ * будил. На проде поток один — после первого OOM все карточки висели.
+ */
+function retire(slot: Slot, reason: Error = new Error("render worker exited")): void {
+  if (slot.dead) return;
+  slot.dead = true;
+  slot.busy = true; // мёртвый слот больше никогда не выдаётся
+  if (slot.jobTimer) clearTimeout(slot.jobTimer);
+  slot.jobTimer = null;
+  if (slot.jobId !== null) {
+    const waiter = pending.get(slot.jobId);
+    pending.delete(slot.jobId);
+    slot.jobId = null;
+    waiter?.reject(reason);
   }
+  if (pool) {
+    pool = pool.filter((s) => s !== slot);
+    if (pool.length === 0) {
+      pool = null;
+      if (respawns < MAX_POOL_RESPAWNS) {
+        respawns += 1;
+        console.warn(`[render] all workers gone — respawning on next job (${respawns}/${MAX_POOL_RESPAWNS})`);
+      } else {
+        console.warn("[render] workers keep dying — rendering inline from now on");
+        disabled = true;
+      }
+    }
+  }
+  // Ждущие получат живой слот или `undefined` → inline. Но не повиснут.
+  for (const wake of queue.splice(0)) wake();
 }
 
 async function ensurePool(): Promise<Slot[] | null> {
@@ -192,17 +248,38 @@ export async function runRenderJob(job: RenderJob): Promise<RenderResult> {
   const slots = await ensurePool();
   if (!slots) return runJobInline(job);
 
-  const slot = freeSlot(slots) ?? (await waitForFreeSlot(slots));
-  if (!slot) return runJobInline(job);
+  const slot = freeSlot(slots) ?? (await waitForFreeSlot());
+  // Пул умер, пока ждали: respawn или inline решит `ensurePool` (число
+  // перезапусков ограничено, так что рекурсия конечна).
+  if (!slot) return runRenderJob(job);
 
   slot.busy = true;
   const id = nextId++;
   return new Promise<RenderResult>((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    // На время задания поток удерживает процесс: ответ обязан быть дождан.
-    slot.worker.ref();
-    slot.worker.postMessage({ id, job });
+    slot.jobId = id;
+    try {
+      // На время задания поток удерживает процесс: ответ обязан быть дождан.
+      slot.worker.ref();
+      slot.worker.postMessage({ id, job });
+    } catch (error) {
+      pending.delete(id);
+      slot.jobId = null;
+      slot.busy = false;
+      slot.worker.unref();
+      queue.shift()?.();
+      reject(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    slot.jobTimer = setTimeout(() => {
+      console.error(`[render] job ${job.kind} exceeded ${JOB_TIMEOUT_MS}ms — terminating its worker`);
+      retire(slot, new RenderJobTimeoutError(`render job ${job.kind} timed out`));
+      void slot.worker.terminate().catch(() => undefined);
+    }, JOB_TIMEOUT_MS);
+    slot.jobTimer.unref();
   }).catch(async (error: unknown) => {
+    // Зависшее задание inline повесило бы уже главный поток — отдаём ошибку.
+    if (error instanceof RenderJobTimeoutError) throw error;
     // Поток не справился — не терять карточку из-за этого. Считаем на месте,
     // приняв разовую блокировку loop'а как меньшее зло.
     console.warn("[render] job failed in worker, retrying inline:", error);
@@ -210,11 +287,20 @@ export async function runRenderJob(job: RenderJob): Promise<RenderResult> {
   });
 }
 
-function waitForFreeSlot(slots: Slot[]): Promise<Slot | undefined> {
+/**
+ * Дождаться свободного слота. `undefined` — пула больше нет (все потоки
+ * умерли): вызывающий заново проходит через `ensurePool`.
+ */
+function waitForFreeSlot(): Promise<Slot | undefined> {
   return new Promise((resolve) => {
-    queue.push(() => {
-      resolve(freeSlot(slots));
-    });
+    const wake = (): void => {
+      // Текущий пул, а не снимок: слот, ради которого ждали, мог умереть.
+      if (!pool) return resolve(undefined);
+      const slot = freeSlot(pool);
+      if (slot) resolve(slot);
+      else queue.push(wake);
+    };
+    queue.push(wake);
   });
 }
 
@@ -236,6 +322,7 @@ export async function shutdownRenderPool(): Promise<void> {
   const slots = pool;
   pool = null;
   disabled = false;
+  respawns = 0;
   if (!slots) return;
   await Promise.all(slots.map((s) => s.worker.terminate()));
 }
