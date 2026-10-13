@@ -966,8 +966,16 @@ function startPolling(): void {
           for (const key of changed) patchCard(key);
           syncBoardChrome();
         }
-      } catch {
-        /* transient poll failure — next tick retries */
+      } catch (err) {
+        // The date itself is gone — the partner deleted their account, which
+        // takes the match row with it. That is not a blip: polling on would
+        // keep a live-looking board up every 4s for a date that no longer
+        // exists, and every button on it would only answer "try again".
+        if (err instanceof CalendarApiError && err.reason === "match-not-found") {
+          stopPolling();
+          showMessage("pin", s.closedGeneric);
+        }
+        /* anything else is a transient poll failure — next tick retries */
       }
     })();
   }, 4000);
@@ -988,6 +996,8 @@ function errorMessage(err: unknown): string {
       return s.closedCutoff;
     case "send-failed":
       return s.offerSendFailed;
+    case "match-not-found":
+      return s.closedGeneric;
     default:
       return s.errGeneric;
   }

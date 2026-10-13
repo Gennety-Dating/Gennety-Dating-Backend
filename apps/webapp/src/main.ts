@@ -1546,8 +1546,20 @@ function errorMessage(err: CalendarApiError): string {
   }
 }
 
+/**
+ * A refusal that no retry can change: the match left this state (`stale_action`
+ * — freeze, ban, a cancellation) or the match row is gone altogether
+ * (`match-not-found` — the partner deleted their account, and matches cascade
+ * with it). The poll used to retire only the first, so a deleted partner left
+ * the other person on a waiting screen that re-polled every 4s indefinitely.
+ */
 function retireStaleCalendar(err: unknown): boolean {
-  if (!(err instanceof CalendarApiError) || err.reason !== "stale_action") return false;
+  if (
+    !(err instanceof CalendarApiError) ||
+    (err.reason !== "stale_action" && err.reason !== "match-not-found")
+  ) {
+    return false;
+  }
   app?.showAlert(errorMessage(err), () => app?.close());
   return true;
 }
