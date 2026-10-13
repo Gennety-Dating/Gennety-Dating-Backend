@@ -791,3 +791,13 @@ export const NO_MATCH_NOTICE_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;
  * handoff still in progress is never run twice.
  */
 export const STRANDED_HANDOFF_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * How long a proposal's silent side must have been unreachable on every rail —
+ * the bot blocked (`User.botBlockedAt`) and no app to push to — before the
+ * expiry sweep stops waiting for their answer and closes the proposal early
+ * (founder decision 2026-10-13). Long enough that someone who blocks and
+ * unblocks the bot in a moment of irritation still gets to answer; far shorter
+ * than the full reply window the other side would otherwise sit through.
+ */
+export const UNREACHABLE_SILENT_SIDE_GRACE_MS = 2 * 60 * 60 * 1000;
