@@ -99,6 +99,17 @@ describe("presence facts", () => {
 });
 
 describe("the change counter", () => {
+  // One entry per date that ever opened its chat used to stay for the life of
+  // the process. Forgetting one must never hand a reader a version it holds.
+  it("forgets long-quiet matches without ever repeating a version", () => {
+    bumpProxyChat("old");
+    const heldByOldReader = proxyChatVersion("old");
+    for (let i = 0; i < 5_001; i += 1) bumpProxyChat(`m-${i}`);
+    expect(proxyChatVersion("old")).not.toBe(heldByOldReader);
+    bumpProxyChat("old");
+    expect(proxyChatVersion("old")).not.toBe(heldByOldReader);
+  });
+
   it("moves when what the partner sees moves, and only then", () => {
     const v0 = proxyChatVersion(M);
     markPresence({ matchId: M, userId: A, place: "app" });

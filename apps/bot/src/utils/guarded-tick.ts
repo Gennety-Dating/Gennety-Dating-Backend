@@ -180,22 +180,25 @@ export function guardedTick(
       result = Promise.reject(err);
     }
     void result
-      .then(async () => {
+      .then(() => {
         const previousFailures = consecutiveFailures;
         consecutiveFailures = 0;
         // Recovery is announced only when a degradation was, so a single
         // failed tick stays what it is: an entry in the log.
+        // Not awaited, here or below: the alert is a Telegram send, and the
+        // in-flight flag clears in `finally` — awaiting it kept a slow Bot API
+        // call holding the job "running" and its next ticks skipped.
         if (degradedAlertSent) {
           degradedAlertSent = false;
-          await notifyHealth("recovered", previousFailures);
+          void notifyHealth("recovered", previousFailures);
         }
       })
-      .catch(async (err) => {
+      .catch((err) => {
         console.error(`[cron] "${name}" tick failed:`, err);
         consecutiveFailures += 1;
         if (consecutiveFailures >= alertThreshold && !degradedAlertSent) {
           degradedAlertSent = true;
-          await notifyHealth("degraded", consecutiveFailures);
+          void notifyHealth("degraded", consecutiveFailures);
         }
       })
       .finally(() => {

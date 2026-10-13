@@ -76,7 +76,17 @@ interface Beat {
 }
 
 const beats = new Map<string, Beat>();
+/**
+ * Last version handed out per match. Values come from ONE process-wide counter,
+ * not a per-match one starting at 0, so an entry can be forgotten safely: a
+ * forgotten match reads as 0, which no bump ever hands out again — a reader
+ * holding an older version simply sees "changed" and re-reads once. That is
+ * what lets the map be capped; before, it kept one entry per date that ever
+ * opened its chat, for the life of the process.
+ */
 const versions = new Map<string, number>();
+let versionSeq = 0;
+const VERSIONS_SOFT_CAP = 5_000;
 const changes = new EventEmitter();
 // One listener per held long-poll, keyed by match id. The rate limiter bounds
 // how many a person can open; the default warning at 10 would only be noise.
@@ -115,8 +125,21 @@ export function proxyChatVersion(matchId: string): string {
  * cursor and presence itself.
  */
 export function bumpProxyChat(matchId: string): void {
-  versions.set(matchId, (versions.get(matchId) ?? 0) + 1);
+  // Delete-then-set keeps the map in least-recently-bumped order for pruning.
+  versions.delete(matchId);
+  versions.set(matchId, ++versionSeq);
+  if (versions.size > VERSIONS_SOFT_CAP) pruneVersions();
   changes.emit(matchId);
+}
+
+/** Forget the least recently bumped matches nobody is holding a read on. */
+function pruneVersions(): void {
+  const target = Math.floor(VERSIONS_SOFT_CAP * 0.8);
+  for (const id of versions.keys()) {
+    if (versions.size <= target) break;
+    if (changes.listenerCount(id) > 0) continue;
+    versions.delete(id);
+  }
 }
 
 /** What `userId`'s partner would be shown about `userId` right now. */
@@ -267,5 +290,6 @@ export function resetProxyPresenceForTest(): void {
   for (const beat of beats.values()) clearTimeout(beat.timer);
   beats.clear();
   versions.clear();
+  versionSeq = 0;
   changes.removeAllListeners();
 }
