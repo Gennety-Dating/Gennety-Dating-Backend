@@ -1,6 +1,7 @@
 import { prisma, type OnboardingStep } from "@gennety/db";
 import { PROMO_DEFERRED_CLAIM_WINDOW_MS } from "@gennety/shared";
 import { env } from "../config.js";
+import { hasFormerAccount } from "./former-account.js";
 import { grantComplimentaryPremiumMonths } from "./premium.js";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 
@@ -236,6 +237,10 @@ export async function grantPromoRewardsForUser(
   // before completion. An account past onboarding is an existing account, and
   // the spec keeps promo codes away from those whatever attribution it carries.
   if (user.onboardingStep === "completed") return null;
+  // Checked before the claim, so a returning person never burns a slot of a
+  // capped code: deleting an account and registering again does not re-mint
+  // the gift (decision 2026-10-13).
+  if (await hasFormerAccount(user.id)) return null;
 
   const claim = await claimRedemption(user.id, user.referralSource);
   if (!claim) return null;

@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   grantTickets: vi.fn(),
   isUniqueViolation: vi.fn((e: unknown) => (e as { code?: string })?.code === "P2002"),
   grantComplimentaryPremiumMonths: vi.fn(),
+  hasFormerAccount: vi.fn(),
 }));
 
 vi.mock("@gennety/db", () => ({
@@ -32,6 +33,7 @@ vi.mock("./ticket-wallet.js", () => ({
   grantTickets: h.grantTickets,
   isUniqueViolation: h.isUniqueViolation,
 }));
+vi.mock("./former-account.js", () => ({ hasFormerAccount: h.hasFormerAccount }));
 vi.mock("./premium.js", () => ({
   grantComplimentaryPremiumMonths: h.grantComplimentaryPremiumMonths,
 }));
@@ -70,6 +72,7 @@ beforeEach(() => {
     fn.mockReset();
   }
   h.redemptionFindUnique.mockResolvedValue(null);
+  h.hasFormerAccount.mockResolvedValue(false);
   h.env.PROMO_FEATURE_ENABLED = true;
   h.env.PROMO_MANUAL_ENTRY_ENABLED = false;
   h.isUniqueViolation.mockImplementation(
@@ -231,6 +234,15 @@ describe("grantPromoRewardsForUser", () => {
   it("grants nothing to an account that already finished onboarding", async () => {
     mockUser({ onboardingStep: "completed" });
     expect(await grantPromoRewardsForUser("u1")).toBeNull();
+    expect(h.$transaction).not.toHaveBeenCalled();
+    expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("grants nothing to a person who deleted an account and came back — and burns no slot", async () => {
+    mockUser();
+    h.hasFormerAccount.mockResolvedValueOnce(true);
+    expect(await grantPromoRewardsForUser("u1")).toBeNull();
+    expect(h.promoFindUnique).not.toHaveBeenCalled();
     expect(h.$transaction).not.toHaveBeenCalled();
     expect(h.grantTickets).not.toHaveBeenCalled();
   });

@@ -45,7 +45,7 @@ vi.mock("@gennety/db", () => {
   };
 });
 
-const testEnv = vi.hoisted(() => ({ JWT_SECRET: "unit-test-secret" }));
+const testEnv = vi.hoisted(() => ({ JWT_SECRET: "unit-test-secret", DEMO_MODE_ENABLED: false }));
 vi.mock("../config.js", () => ({ env: testEnv }));
 vi.mock("../public/jwt.js", () => ({ revokeAllSessions: mocks.revokeAllSessions }));
 vi.mock("./cancel-in-flight-matches.js", () => ({
@@ -100,6 +100,7 @@ function deletionTx(user: Record<string, unknown> | null, against: { reports: nu
 beforeEach(() => {
   vi.clearAllMocks();
   testEnv.JWT_SECRET = "unit-test-secret";
+  testEnv.DEMO_MODE_ENABLED = false;
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -197,12 +198,24 @@ describe("writeSafetyTombstones (inside the deletion transaction)", () => {
     expect(rows[0]).toMatchObject({ status: "suspended", suspendedUntil: until, strikes: 2 });
   });
 
-  it("leaves nothing behind for a clean record", async () => {
+  it("leaves only a bare tombstone for a clean record — enough to recognise a returning person", async () => {
+    const tx = deletionTx({ ...IDENTITY, status: "active", strikes: 0, suspendedUntil: null }, { reports: 0, blocks: 0 });
+    const result = await writeSafetyTombstones(tx as never, FORMER_ID, "secret");
+    expect(result.tombstones).toBe(3);
+    const rows = tx.safetyTombstone.createMany.mock.calls[0]![0].data as Array<Record<string, unknown>>;
+    for (const row of rows) {
+      expect(row).toMatchObject({ formerUserId: FORMER_ID, status: null, suspendedUntil: null, strikes: 0 });
+    }
+    expect(tx.report.updateMany).not.toHaveBeenCalled();
+    expect(tx.userBlock.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("writes no bare tombstone in the demo, where /restart deletes the visitor on purpose", async () => {
+    testEnv.DEMO_MODE_ENABLED = true;
     const tx = deletionTx({ ...IDENTITY, status: "active", strikes: 0, suspendedUntil: null }, { reports: 0, blocks: 0 });
     const result = await writeSafetyTombstones(tx as never, FORMER_ID, "secret");
     expect(result.tombstones).toBe(0);
     expect(tx.safetyTombstone.createMany).not.toHaveBeenCalled();
-    expect(tx.report.updateMany).not.toHaveBeenCalled();
   });
 
   it("carries a report against an otherwise clean account (the blocked or reported side)", async () => {

@@ -83,6 +83,9 @@ const prismaMock = {
 
 vi.mock("@gennety/db", () => ({ prisma: prismaMock }));
 
+const former = vi.hoisted(() => ({ hasFormerAccount: vi.fn(async () => false) }));
+vi.mock("./former-account.js", () => former);
+
 const {
   grantTickets,
   spendTickets,
@@ -99,6 +102,8 @@ beforeEach(() => {
   db.profile = { userId: "u1", photos: [], profileMedia: [], photoBonusTicketAt: null, videoBonusTicketAt: null };
   db.ledger = [];
   flag.TICKET_FEATURE_ENABLED = true;
+  former.hasFormerAccount.mockReset();
+  former.hasFormerAccount.mockResolvedValue(false);
 });
 
 describe("grant/spend", () => {
@@ -214,6 +219,30 @@ describe("video bonus", () => {
     db.profile.profileMedia = [{ type: "photo", photo: "p1" }];
     const res = await grantVideoBonusIfEligible("u1");
     expect(res.granted).toBe(false);
+  });
+});
+
+describe("sign-up gifts for a person who deleted an account and came back", () => {
+  it("withholds the welcome, student, photo and video gifts", async () => {
+    former.hasFormerAccount.mockResolvedValue(true);
+    db.profile.photos = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    db.profile.profileMedia = [{ type: "video", video: "vid_1" }];
+
+    expect((await grantWelcomeGiftIfEligible("u1")).granted).toBe(false);
+    expect((await grantStudentBonusIfEligible("u1")).granted).toBe(false);
+    expect((await grantPhotoBonusIfEligible("u1")).granted).toBe(false);
+    expect((await grantVideoBonusIfEligible("u1")).granted).toBe(false);
+    expect(db.ledger).toHaveLength(0);
+    expect(db.user.ticketBalance).toBe(0);
+    // The markers stay unset, so nothing is silently "spent" on a refusal.
+    expect(db.profile.photoBonusTicketAt).toBeNull();
+    expect(db.profile.videoBonusTicketAt).toBeNull();
+  });
+
+  it("fails open when the lookup itself breaks — a sign-up never throws over a free ticket", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    former.hasFormerAccount.mockRejectedValue(new Error("db blip"));
+    expect(await grantWelcomeGiftIfEligible("u1")).toEqual({ granted: true, balance: 1 });
   });
 });
 

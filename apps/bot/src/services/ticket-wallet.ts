@@ -6,6 +6,7 @@ import {
   profileMediaHasVideo,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { hasFormerAccount } from "./former-account.js";
 
 /**
  * Ticket wallet — the user-owned balance of Date Tickets (PRODUCT_SPEC §3.5b).
@@ -362,6 +363,24 @@ interface BonusResult {
   balance: number;
 }
 
+/**
+ * The one-time sign-up gifts below (welcome, student, photo, video) are not
+ * handed out again to a person who deleted an account and registered anew
+ * (decision 2026-10-13). Recognised by the tombstones the deletion left
+ * (`services/former-account.ts`), so it is a plain "no" — never an error, and
+ * never a reason to refuse the person anything else.
+ */
+async function giftAlreadyClaimedByFormerAccount(userId: string): Promise<boolean> {
+  try {
+    return await hasFormerAccount(userId);
+  } catch (err) {
+    // A failed lookup costs at most one free ticket; a sign-up that throws
+    // costs the person. Fail open, loudly.
+    console.error(`[ticket-wallet] former-account lookup failed user=${userId}:`, err);
+    return false;
+  }
+}
+
 function isSerializationConflict(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -385,7 +404,7 @@ function isSerializationConflict(error: unknown): boolean {
 export async function grantStudentBonusIfEligible(
   userId: string,
 ): Promise<BonusResult> {
-  if (!env.TICKET_FEATURE_ENABLED) {
+  if (!env.TICKET_FEATURE_ENABLED || (await giftAlreadyClaimedByFormerAccount(userId))) {
     return { granted: false, balance: await getBalance(userId) };
   }
 
@@ -442,7 +461,7 @@ export async function grantStudentBonusIfEligible(
 export async function grantWelcomeGiftIfEligible(
   userId: string,
 ): Promise<BonusResult> {
-  if (!env.TICKET_FEATURE_ENABLED) {
+  if (!env.TICKET_FEATURE_ENABLED || (await giftAlreadyClaimedByFormerAccount(userId))) {
     return { granted: false, balance: await getBalance(userId) };
   }
 
@@ -499,7 +518,11 @@ export async function grantPhotoBonusIfEligible(userId: string): Promise<BonusRe
     where: { userId },
     select: { photos: true, photoBonusTicketAt: true },
   });
-  if (!profile || profile.photoBonusTicketAt) {
+  if (
+    !profile ||
+    profile.photoBonusTicketAt ||
+    (await giftAlreadyClaimedByFormerAccount(userId))
+  ) {
     return { granted: false, balance: await getBalance(userId) };
   }
   if (profile.photos.length < PHOTO_BONUS_TICKET_THRESHOLD) {
@@ -555,7 +578,11 @@ export async function grantVideoBonusIfEligible(userId: string): Promise<BonusRe
     where: { userId },
     select: { photos: true, profileMedia: true, videoBonusTicketAt: true },
   });
-  if (!profile || profile.videoBonusTicketAt) {
+  if (
+    !profile ||
+    profile.videoBonusTicketAt ||
+    (await giftAlreadyClaimedByFormerAccount(userId))
+  ) {
     return { granted: false, balance: await getBalance(userId) };
   }
   const media = normalizeProfileMedia(profile.profileMedia, profile.photos);

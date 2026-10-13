@@ -12,7 +12,9 @@ mutual can use as a cheat sheet for a second date — unless you hide it. To fin
 search and read the public product details of shop pages; you can also say it
 in a voice note or add screenshots, which are read and not kept. The new data, its
 legal bases, who sees it and for how long are in Sections 4, 7, 9, 12.1, 14, 16
-and 18. Everything else is unchanged from version 4.2 (26 September 2026), which
+and 18. It also says what deleting an account leaves behind: keyed hashes of its
+identifiers, so a person who registers again does not receive the one-time
+sign-up gifts twice (Sections 7 and 16). Everything else is unchanged from version 4.2 (26 September 2026), which
 added Tempo Sync, the optional Apple Health feature. Earlier versions are
 available on request (Section 21).
 
@@ -299,6 +301,7 @@ data).
 | Process purchases (tickets, bundles, paid venue changes, Date Wishlist unlocks) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
 | Handle cancellations and understand why people leave | Subscription records, the cancellation reason if you give one | Contract; **consent** for the free-text reason |
 | Trust & safety: moderation, reports, strikes, suspensions, investigations | Reports, photos/video safety scans, relay-chat logs, strikes | Legitimate interests in user safety; legal obligation |
+| Recognise a person who deletes an account and registers again, or who runs more than one account — so one-time sign-up gifts (welcome, student, photo, video and promo gifts) are not given twice, and so the operator can see which accounts belong together. Having a second account is not restricted by this | Keyed hashes of the Telegram ID, verified phone number and verified email of a deleted account (never the identifiers themselves); the perceptual hashes of your photos | Legitimate interests in preventing abuse of free gifts |
 | Send service messages, reminders, push notifications and Live Activities | Account, usage, push tokens | Contract; legitimate interests |
 | Operate an internal founder/operations feed (Section 12.2) | Profile card, photos, match and date summaries | Legitimate interests in operating and quality-checking a small, early-stage service |
 | Measure onboarding drop-off and product health | Step telemetry, aggregate counters | Legitimate interests in improving the Service |
@@ -749,6 +752,7 @@ We keep personal data only as long as necessary for the purposes above.
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries (including Date Wishlist unlocks) | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
 | Safety records after account deletion (moderation status, strikes, and reports and blocks made against the account) | Kept only if the deleted account had them, linked solely to keyed hashes of its Telegram ID, verified phone number and verified email — never the identifiers themselves — and used only to stop a restricted or blocked person from resetting them by registering again; **24 months** after deletion, then deleted |
+| Keyed hashes of a deleted account's identifiers (its Telegram ID, verified phone number and verified email — never the identifiers themselves), with no profile data | Kept for every deleted account that had one, and used only to recognise the same person registering again: so one-time sign-up gifts are not given twice, and so the operator can see that the new account belongs to someone who had one before; **24 months** after deletion, then deleted |
 | Internal weekly-report snapshots | Deleted for your account when you delete your account |
 | Website cookie-consent records | Kept as proof of consent for as long as required to demonstrate compliance (append-only; see the Cookie Policy) |
 | Diagnostic / technical logs | Short-term, then rotated |
@@ -757,10 +761,11 @@ We keep personal data only as long as necessary for the purposes above.
 (verification selfies, profile media, chat attachments, voice recordings, Date
 Wishlist images — everything stored under your account, not only what your
 profile currently shows), remove any internal report snapshot containing your account, and then
-delete your account and the data tied to it across our database. Two kinds of
+delete your account and the data tied to it across our database. Three kinds of
 record remain afterwards: payment and subscription ledger entries, detached from
-your profile, and — only if your account had them — the safety records described
-in the retention table above. If a refund connected to your account is still
+your profile; keyed hashes of your identifiers, used only to recognise you if you
+register again; and — only if your account had them — the safety records
+described in the retention table above. If a refund connected to your account is still
 being processed, deletion waits until it has gone through, so the money has
 somewhere to go; you can retry then. If storage erasure is temporarily unavailable, the deletion
 does **not** report success and you can retry — we never leave a half-deleted

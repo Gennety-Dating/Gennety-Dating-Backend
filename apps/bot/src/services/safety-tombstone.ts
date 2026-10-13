@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma, type UserStatus } from "@gennety/db";
 import { env } from "../config.js";
@@ -11,6 +10,7 @@ import {
 import { notifyFounderSafetyRestoreFailed } from "./founder-notify.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { isModerationLockedStatus } from "./user-status.js";
+import { IDENTITY_SELECT, safetyIdentitiesOf } from "./identity-hash.js";
 
 /**
  * Safety continuity across account deletion (A13-H14, decision 2026-09-14).
@@ -25,6 +25,8 @@ import { isModerationLockedStatus } from "./user-status.js";
  *    account has something to carry, it writes one `SafetyTombstone` per
  *    identity it had and stamps `reports.reported_former_id` /
  *    `user_blocks.blocked_former_id` with the id that is about to disappear.
+ *    A clean account leaves a bare tombstone (no status, no strikes) — enough
+ *    to recognise the person if they register again (`hasFormerAccount`).
  *  - **`restoreSafetyHistory`** runs whenever an identity becomes attached to an
  *    account. A tombstone for that identity puts the history back: the reports
  *    and blocks are relinked, the strictest moderation status and the highest
@@ -39,32 +41,14 @@ import { isModerationLockedStatus } from "./user-status.js";
  * looked up — a weakly keyed hash of a phone number is worse than none.
  */
 
-export type SafetyIdentityKind = "telegram" | "phone" | "email";
-
-/** The identity columns of a user row that a tombstone can be keyed on. */
-export interface SafetyIdentitySource {
-  telegramId: bigint;
-  phone: string | null;
-  phoneVerifiedAt: Date | null;
-  email: string | null;
-  isEmailVerified: boolean;
-}
-
-export interface SafetyIdentity {
-  kind: SafetyIdentityKind;
-  identityHash: string;
-}
-
-/** Bumping the label is a deliberate, total reset of every tombstone. */
-const TOMBSTONE_KEY_LABEL = "safety-tombstone/v1";
-
-const IDENTITY_SELECT = {
-  telegramId: true,
-  phone: true,
-  phoneVerifiedAt: true,
-  email: true,
-  isEmailVerified: true,
-} as const satisfies Prisma.UserSelect;
+export {
+  IDENTITY_SELECT,
+  keyedIdentitiesOf,
+  safetyIdentitiesOf,
+  type SafetyIdentity,
+  type SafetyIdentityKind,
+  type SafetyIdentitySource,
+} from "./identity-hash.js";
 
 /**
  * Moderation statuses a tombstone carries, strictest last. `suspended` only
@@ -76,48 +60,6 @@ const STATUS_RANK: Partial<Record<UserStatus, number>> = {
   pending_investigation: 2,
   banned: 3,
 };
-
-/**
- * Every identity of `user` a tombstone may be keyed on, hashed. Only identities
- * the account PROVED: a positive Telegram id (a negative one is a synthetic
- * placeholder for an app-only account), a phone with `phoneVerifiedAt`, an email
- * with `isEmailVerified`. An unproven value could be someone else's, and keying
- * on it would let a stranger inherit — or erase — another person's history.
- */
-export function safetyIdentitiesOf(
-  user: SafetyIdentitySource,
-  secret: string = env.JWT_SECRET,
-): SafetyIdentity[] {
-  return keyedIdentitiesOf(user, TOMBSTONE_KEY_LABEL, secret);
-}
-
-/**
- * The same proven-identity hashing under a caller-chosen key label, so another
- * store can recognise a returning person without its hashes being joinable to
- * `safety_tombstones` (the referral program keys `referral_identities` with its
- * own label). Same rules as `safetyIdentitiesOf`: proven identities only, and
- * nothing at all without a `JWT_SECRET`.
- */
-export function keyedIdentitiesOf(
-  user: SafetyIdentitySource,
-  label: string,
-  secret: string = env.JWT_SECRET,
-): SafetyIdentity[] {
-  if (!secret) return [];
-  const key = createHmac("sha256", secret).update(label).digest();
-  const hash = (kind: SafetyIdentityKind, value: string): SafetyIdentity => ({
-    kind,
-    identityHash: createHmac("sha256", key).update(`${kind}:${value}`).digest("hex"),
-  });
-
-  const identities: SafetyIdentity[] = [];
-  if (user.telegramId > 0n) identities.push(hash("telegram", user.telegramId.toString()));
-  const phone = user.phone?.trim();
-  if (phone && user.phoneVerifiedAt) identities.push(hash("phone", phone));
-  const email = user.email?.trim().toLowerCase();
-  if (email && user.isEmailVerified) identities.push(hash("email", email));
-  return identities;
-}
 
 export interface SafetyTombstoneWrite {
   tombstones: number;
@@ -139,8 +81,9 @@ type TombstoneWriteDb = Pick<
  * have to commit with the deletion or not at all, or a crash between them
  * leaves reports pointing at nobody and no way to relink them.
  *
- * Carries only when there is something to carry: a moderation status, strikes,
- * or a report or block filed AGAINST the account. Reports the account FILED and
+ * Carries safety state only when there is something to carry: a moderation
+ * status, strikes, or a report or block filed AGAINST the account. Otherwise
+ * the tombstones are bare — identity hashes and the former id, nothing else. Reports the account FILED and
  * blocks it DREW are not this function's business: the former keep their row
  * with `reporterId` nulled by the schema, the latter cascade away with it.
  *
@@ -180,9 +123,31 @@ export async function writeSafetyTombstones(
   ]);
   const moderated = STATUS_RANK[user.status] !== undefined;
   const carries = moderated || user.strikes > 0 || reportsAgainst > 0 || blocksAgainst > 0;
-  if (!carries) return result;
-
   const identities = safetyIdentitiesOf(user, secret);
+  if (!carries) {
+    // A clean record still leaves a BARE tombstone (no status, no strikes):
+    // "this identity had an account that was deleted". It restores nothing,
+    // but it is what lets a returning person be recognised — the one-time
+    // sign-up gifts are not handed out twice (`hasFormerAccount`), and the
+    // admin card links the new account to the old one (decision 2026-10-13).
+    // Not in the demo: `/restart` deletes the visitor on purpose so they can
+    // walk the whole onboarding again, gifts included.
+    if (identities.length > 0 && !env.DEMO_MODE_ENABLED) {
+      const created = await db.safetyTombstone.createMany({
+        data: identities.map((identity) => ({
+          identityHash: identity.identityHash,
+          kind: identity.kind,
+          formerUserId: userId,
+          status: null,
+          suspendedUntil: null,
+          strikes: 0,
+        })),
+      });
+      result.tombstones = created.count;
+    }
+    return result;
+  }
+
   if (identities.length === 0) {
     const [reports, blocks] = await Promise.all([
       db.report.deleteMany({ where: { reportedId: userId } }),
