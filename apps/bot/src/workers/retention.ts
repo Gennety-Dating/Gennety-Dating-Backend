@@ -6,6 +6,7 @@ import {
   SAFETY_TOMBSTONE_RETENTION_MONTHS,
 } from "@gennety/shared";
 import { deleteStaleRhythms } from "../services/rhythm/store.js";
+import { BIGINT_TEXT_PATTERN } from "../prisma-session-adapter.js";
 
 /**
  * Data-retention sweep (audit DATA-1).
@@ -324,10 +325,18 @@ export async function retentionTick(
     (ids) => prisma.inboxItem.deleteMany({ where: { id: { in: ids } } }),
   );
 
-  // Raw, because there is no relation to traverse: the join is
-  // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
-  // the schema does not express. Anti-join rather than "load all keys and diff
-  // in Node" so the work stays in Postgres and the batch limit is real.
+  // Raw, because there is no relation to traverse: a session belongs to the
+  // user whose `telegram_id::text` equals its key, which is exactly the
+  // coupling the schema does not express. Anti-join rather than "load all keys
+  // and diff in Node" so the work stays in Postgres and the batch limit is real.
+  //
+  // The comparison is made on the bigint side, not as text: casting every
+  // `users.telegram_id` to text kept the planner off the unique index. A key
+  // equals some bigint's text exactly when it has that text's shape
+  // (`BIGINT_TEXT_PATTERN`) and its value fits a bigint — then it is that
+  // bigint; any other key matches no user, as before. The nested CASE is the
+  // evaluation order Postgres guarantees, so the casts only ever see keys that
+  // are digits, and only values in range reach `::bigint`.
   const orphanCutoff = new Date(now.getTime() - ORPHAN_SESSION_RETENTION_MS);
   // Batched to exhaustion like every other table above: one batch a night left
   // orphans accumulating whenever more than `BATCH_LIMIT` of them appeared in a
@@ -339,7 +348,12 @@ export async function retentionTick(
       WHERE key IN (
         SELECT b.key
         FROM bot_sessions b
-        LEFT JOIN users u ON u.telegram_id::text = b.key
+        LEFT JOIN users u ON u.telegram_id = CASE
+          WHEN b.key ~ ${BIGINT_TEXT_PATTERN} THEN CASE
+            WHEN b.key::numeric BETWEEN -9223372036854775808 AND 9223372036854775807
+            THEN b.key::bigint
+          END
+        END
         WHERE u.id IS NULL
           AND b.updated_at < ${orphanCutoff}
         ORDER BY b.updated_at ASC

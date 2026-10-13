@@ -98,12 +98,21 @@ const INT8_MIN = -(2n ** 63n);
 const INT8_MAX = 2n ** 63n - 1n;
 
 /**
+ * The shape of a decimal bigint exactly as Postgres prints one (`bigint::text`):
+ * no sign but `-`, no leading zero, no `-0`, at most 19 digits. Written in the
+ * subset JavaScript and Postgres regular expressions share, because the
+ * retention sweep matches session keys with it in SQL too.
+ */
+export const BIGINT_TEXT_PATTERN = "^(0|-?[1-9][0-9]{0,18})$";
+const BIGINT_TEXT = new RegExp(BIGINT_TEXT_PATTERN);
+
+/**
  * The `users.telegram_id` a session key can belong to: the key must be exactly
  * how Postgres prints that bigint (`telegram_id::text = key` is the coupling
  * the retention sweep uses). `null` for any key no user can own.
  */
 export function telegramIdOfSessionKey(key: string): bigint | null {
-  if (!/^(0|-?[1-9][0-9]{0,18})$/.test(key)) return null;
+  if (!BIGINT_TEXT.test(key)) return null;
   const id = BigInt(key);
   return id >= INT8_MIN && id <= INT8_MAX ? id : null;
 }

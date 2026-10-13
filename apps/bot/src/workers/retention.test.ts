@@ -41,6 +41,7 @@ const {
   PLACE_VISIT_RETENTION_DAYS,
   safetyTombstoneCutoff,
 } = await import("./retention.js");
+const { BIGINT_TEXT_PATTERN } = await import("../prisma-session-adapter.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
 const ALL_MODELS = [
@@ -302,9 +303,35 @@ describe("retentionTick", () => {
       await retentionTick(NOW);
       const { sql } = rawCall();
       expect(sql).toContain("DELETE FROM bot_sessions");
-      // The coupling the schema does not express: chat id as text.
-      expect(sql).toContain("u.telegram_id::text = b.key");
       expect(sql).toContain("u.id IS NULL");
+    });
+
+    it("matches a key to a user on the bigint side, so the unique index is usable", async () => {
+      await retentionTick(NOW);
+      const { sql, values } = rawCall();
+      // The coupling the schema does not express — a key is the user's
+      // `telegram_id` printed as text — compared without casting the column.
+      expect(sql).not.toContain("telegram_id::text");
+      expect(sql).toContain("u.telegram_id = CASE");
+      // Only a key shaped like bigint text whose value fits a bigint is cast.
+      expect(sql).toContain("b.key ~ ?");
+      expect(values).toContain(BIGINT_TEXT_PATTERN);
+      expect(sql).toContain(
+        "b.key::numeric BETWEEN -9223372036854775808 AND 9223372036854775807",
+      );
+      expect(sql).toContain("THEN b.key::bigint");
+    });
+
+    it("uses the shape the session adapter accepts as a user's key", () => {
+      // Same pattern as `telegramIdOfSessionKey`, which mirrors what
+      // `bigint::text` can print; the SQL and the adapter cannot drift apart.
+      const shape = new RegExp(BIGINT_TEXT_PATTERN);
+      for (const key of ["0", "42", "-1001234567890", "9223372036854775807"]) {
+        expect(shape.test(key)).toBe(true);
+      }
+      for (const key of ["-0", "007", "+5", " 5", "abc", "1e3", "12345678901234567890"]) {
+        expect(shape.test(key)).toBe(false);
+      }
     });
 
     it("will not race registration — only sessions untouched for a week", async () => {
