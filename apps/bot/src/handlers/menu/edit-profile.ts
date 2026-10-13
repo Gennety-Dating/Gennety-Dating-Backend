@@ -52,6 +52,7 @@ import {
 } from "../../services/ai-stream.js";
 import { photoUploadSteps } from "../../services/analysis-status.js";
 import { dispatchToChat } from "../../chat-queue.js";
+import { forgetSessionSnapshot } from "../../prisma-session-adapter.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { env } from "../../config.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
@@ -1212,6 +1213,7 @@ async function flushPhotoBatch(batch: PhotoUploadBatch, liveSession?: SessionDat
     create: { key, data: session as unknown as object },
     update: { data: session as unknown as object },
   });
+  forgetSessionSnapshot(key);
 }
 
 /**

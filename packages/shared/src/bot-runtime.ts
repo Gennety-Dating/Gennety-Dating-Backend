@@ -1,0 +1,14 @@
+/**
+ * Bookkeeping limits and cadences for the bot process's own runtime: in-memory
+ * caches that only save database round trips, and the runtime metrics line.
+ * None of them changes what a user sees; each bounds memory or log volume.
+ */
+
+/**
+ * Session rows whose stored JSON the adapter remembers between an update's
+ * read and its write-back (`apps/bot/src/prisma-session-adapter.ts`). An entry
+ * normally lives for one update; only updates that threw before the write-back
+ * leave one behind, and the oldest of those is dropped first. A dropped entry
+ * only means that update's write-back is not skipped.
+ */
+export const BOT_SESSION_SNAPSHOT_MAX_KEYS = 10_000;

@@ -41,6 +41,7 @@ import { showMainMenu } from "../menu/main.js";
 import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { dispatchToChat } from "../../chat-queue.js";
+import { forgetSessionSnapshot } from "../../prisma-session-adapter.js";
 import { sendVerificationCTA } from "./verification.js";
 import { sendVoicePromptAskIfRequested } from "./voice-prompt.js";
 import {
@@ -929,12 +930,14 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       ...((row?.data ?? {}) as Partial<SessionData>),
     };
 
-    const persistSession = (): Promise<unknown> =>
-      prisma.botSession.upsert({
+    const persistSession = async (): Promise<void> => {
+      await prisma.botSession.upsert({
         where: { key },
         create: { key, data: session as unknown as object },
         update: { data: session as unknown as object },
       });
+      forgetSessionSnapshot(key);
+    };
 
     /**
      * Report where the stage stands, then persist.
@@ -1011,11 +1014,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           session,
           result,
         );
-        await prisma.botSession.upsert({
-          where: { key },
-          create: { key, data: session as unknown as object },
-          update: { data: session as unknown as object },
-        });
+        await persistSession();
         if (!askedVoice) await replyText(acc.api, acc.chatId, result.reply, session);
         return;
       }
@@ -1029,11 +1028,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
     const count = session.pendingPhotos.length;
     if (!acc.unsolicited) {
       session.expectingPhoto = true;
-      await prisma.botSession.upsert({
-        where: { key },
-        create: { key, data: session as unknown as object },
-        update: { data: session as unknown as object },
-      });
+      await persistSession();
 
       // A mixed batch (some accepted, some not) is exactly where the old code
       // hurt most: the user saw "3/4" plus one floating line. Explain each
@@ -1092,11 +1087,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       result,
     );
 
-    await prisma.botSession.upsert({
-      where: { key },
-      create: { key, data: session as unknown as object },
-      update: { data: session as unknown as object },
-    });
+    await persistSession();
 
     if (!askedVoicePrompt) {
       await replyText(acc.api, acc.chatId, result.reply, session);

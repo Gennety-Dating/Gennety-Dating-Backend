@@ -7,6 +7,7 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import type { BotContext } from "../../session.js";
+import { forgetSessionSnapshot } from "../../prisma-session-adapter.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { typeRadarInviteCopy } from "../../services/type-radar-copy.js";
 import { runAgentTurn, type AgentTurnResult } from "../../services/onboarding-agent.js";
@@ -191,6 +192,7 @@ export async function patchOnboardingSession(
     create: { key, data: next as unknown as object },
     update: { data: next as unknown as object },
   });
+  forgetSessionSnapshot(key);
 }
 
 async function userLanguage(telegramId: bigint): Promise<Language | null> {
