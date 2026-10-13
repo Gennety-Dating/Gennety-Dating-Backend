@@ -472,6 +472,11 @@ vi.mock("@gennety/db", async () => {
         findUnique: vi.fn().mockResolvedValue(null),
       },
 
+      // ----- profileMusicTrack ----- (the partner's pinned tracks on /current)
+      profileMusicTrack: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+
       // ----- liveActivityToken ----- (released on sign-out, audit A13-L12)
       liveActivityToken: {
         deleteMany: vi.fn(async () => ({ count: 0 })),
@@ -4475,6 +4480,127 @@ describe("/v1/matches/*", () => {
     expect(res.body.match.partnerFrequentPlaces[0].longitude).toBe(30.5486);
     expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("latitude");
     expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("longitude");
+  });
+
+  // The people on the row are read after it is picked (perf 2026-10-13): the
+  // partner's card, the caller's own zone, and the voice prompt / pinned tracks
+  // only behind their flags. These pin the partner-derived fields both ways.
+  describe("GET /current partner fields", () => {
+    afterEach(() => {
+      envMock.VOICE_PROMPT_ENABLED = false;
+      envMock.PROFILE_MUSIC_ENABLED = undefined;
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockReset().mockResolvedValue(null);
+      vi.mocked(prismaMock.profileMusicTrack.findMany).mockReset().mockResolvedValue([]);
+    });
+
+    const TRACK = {
+      provider: "apple_music",
+      trackId: "t-1",
+      title: "Song",
+      artists: "Band",
+      albumName: null,
+      coverUrl: null,
+      trackUrl: "https://music.test/t-1",
+      previewUrl: null,
+      explicit: false,
+      storefront: "ua",
+    };
+
+    async function pair() {
+      const alice = await seedUser({
+        firstName: "Alice",
+        profile: {
+          id: crypto.randomUUID(),
+          userId: "temp",
+          hobbies: [],
+          partnerPreferences: null,
+          psychologicalSummary: null,
+          ageRangeMin: null,
+          ageRangeMax: null,
+          photos: [],
+          matchRadius: "citywide",
+          timeZone: "Europe/Kyiv",
+        },
+      });
+      if (alice.profile) alice.profile.userId = alice.id;
+      const bob = await seedUser({
+        firstName: "Bob",
+        age: 25,
+        gender: "male",
+        preference: "women",
+        universityDomain: "kpi.ua",
+      });
+      await seedMatch(bob.id, alice.id, { status: "proposed" });
+      return { alice, bob };
+    }
+
+    it("serves the partner's card and the caller's zone with both flags off", async () => {
+      const { alice } = await pair();
+
+      const res = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.match).toMatchObject({
+        partnerFirstName: "Bob",
+        partnerAge: 25,
+        partnerGender: "male",
+        partnerUniversityDomain: "kpi.ua",
+        partnerVoicePrompt: null,
+        timeZone: "Europe/Kyiv",
+      });
+      expect(res.body.match).not.toHaveProperty("partnerMusicTracks");
+      expect(prismaMock.voicePrompt.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.profileMusicTrack.findMany).not.toHaveBeenCalled();
+    });
+
+    it("serves the partner's voice prompt and pinned tracks with both flags on", async () => {
+      envMock.VOICE_PROMPT_ENABLED = true;
+      envMock.PROFILE_MUSIC_ENABLED = true;
+      const { alice, bob } = await pair();
+      const voice = {
+        durationSec: 12,
+        waveform: [3, 9, 4],
+        storagePath: `${bob.id}/1716000000000-abc.m4a`,
+      };
+      // On the row too, where a nested `voicePrompt` select would find it.
+      Object.assign(bob, { voicePrompt: voice });
+      vi.mocked(prismaMock.voicePrompt.findUnique).mockResolvedValue(voice as never);
+      vi.mocked(prismaMock.profileMusicTrack.findMany).mockResolvedValue([TRACK] as never);
+      const { serializeMusicTrack } = await import("../services/music/profile-music.js");
+
+      const res = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.match.partnerVoicePrompt).toEqual({
+        durationSec: 12,
+        waveform: [3, 9, 4],
+        audioUrl: `https://signed.test/voice/${bob.id}/1716000000000-abc.m4a`,
+      });
+      expect(res.body.match.partnerMusicTracks).toEqual([serializeMusicTrack(TRACK)]);
+      // The PARTNER's rows — never the caller's.
+      expect(prismaMock.voicePrompt.findUnique).toHaveBeenCalledWith({
+        where: { userId: bob.id },
+        select: { durationSec: true, waveform: true, storagePath: true },
+      });
+      expect(prismaMock.profileMusicTrack.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: bob.id }, orderBy: { position: "asc" } }),
+      );
+    });
+
+    it("answers [] for a partner with no pinned tracks while music is on", async () => {
+      envMock.PROFILE_MUSIC_ENABLED = true;
+      const { alice } = await pair();
+
+      const res = await request(app)
+        .get("/v1/matches/current")
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.body.match.partnerMusicTracks).toEqual([]);
+    });
   });
 
   // The partner's face is the one piece of another user's data this API hands

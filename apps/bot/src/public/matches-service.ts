@@ -412,43 +412,43 @@ export async function getCurrentMatchForUser(
       proxyOpenedAt: true,
       proxyReadAtA: true,
       proxyReadAtB: true,
-      // `profile.timeZone` is read for the CALLER's side only (see `timeZone`
-      // below); it is selected on both because which side the caller is on is
-      // not known until the row is picked.
-      userA: {
-        select: {
-          firstName: true,
-          age: true,
-          gender: true,
-          universityDomain: true,
-          profile: { select: { timeZone: true } },
-          voicePrompt: {
-            select: { durationSec: true, waveform: true, storagePath: true },
-          },
-          musicTracks: { orderBy: { position: "asc" }, select: MUSIC_TRACK_SELECT },
-        },
-      },
-      userB: {
-        select: {
-          firstName: true,
-          age: true,
-          gender: true,
-          universityDomain: true,
-          profile: { select: { timeZone: true } },
-          voicePrompt: {
-            select: { durationSec: true, waveform: true, storagePath: true },
-          },
-          musicTracks: { orderBy: { position: "asc" }, select: MUSIC_TRACK_SELECT },
-        },
-      },
     },
   });
   const match = pickCurrentMatch(matches);
   if (!match) return null;
 
   const side: MatchSide = match.userAId === userId ? "A" : "B";
-  const partner = side === "A" ? match.userB : match.userA;
-  const me = side === "A" ? match.userA : match.userB;
+  const partnerId = side === "A" ? match.userBId : match.userAId;
+  // The people on the row are read only once it is picked, and only what the
+  // answer shows: the partner's card, the CALLER's own city zone, and the
+  // partner's voice prompt and pinned tracks only while their flags are on.
+  // Nesting them in the select above loaded all of it for both sides of every
+  // live row on each 15–20 s poll — nine queries where this is two to four.
+  const [partner, myProfile, partnerVoicePrompt, partnerMusicTracks] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: partnerId },
+      select: { firstName: true, age: true, gender: true, universityDomain: true },
+    }),
+    prisma.profile.findUnique({ where: { userId }, select: { timeZone: true } }),
+    env.VOICE_PROMPT_ENABLED
+      ? prisma.voicePrompt.findUnique({
+          where: { userId: partnerId },
+          select: { durationSec: true, waveform: true, storagePath: true },
+        })
+      : Promise.resolve(null),
+    env.PROFILE_MUSIC_ENABLED
+      ? prisma.profileMusicTrack.findMany({
+          where: { userId: partnerId },
+          orderBy: { position: "asc" },
+          select: MUSIC_TRACK_SELECT,
+        })
+      : Promise.resolve(null),
+  ]);
+  // `userA`/`userB` are required relations: a row whose participant is gone
+  // failed the nested read before, and fails here the same way.
+  if (!partner) {
+    throw new Error(`[matches-service] match ${match.id} has no partner row ${partnerId}`);
+  }
   // Only ever this side's own column — the peer's stays unread here.
   const myAccepted = side === "A" ? match.acceptedByA : match.acceptedByB;
 
@@ -564,14 +564,14 @@ export async function getCurrentMatchForUser(
     // Null exactly where the window is, so "no chat" reads the same in both.
     proxyChatUnreadCount: proxyWindow ? await proxyUnreadBestEffort(match, userId) : null,
     proposalDeadlineAt,
-    partnerVoicePrompt: await serializePartnerVoicePrompt(partner.voicePrompt),
-    ...(env.PROFILE_MUSIC_ENABLED
-      ? { partnerMusicTracks: partner.musicTracks.map(serializeMusicTrack) }
+    partnerVoicePrompt: await serializePartnerVoicePrompt(partnerVoicePrompt),
+    // Read only while PROFILE_MUSIC_ENABLED is on (above), so the key is
+    // present exactly when the flag is — `[]` when nothing is pinned.
+    ...(partnerMusicTracks
+      ? { partnerMusicTracks: partnerMusicTracks.map(serializeMusicTrack) }
       : {}),
-    partnerFrequentPlaces: await partnerPlacesBestEffort(
-      side === "A" ? match.userBId : match.userAId,
-    ),
-    timeZone: me.profile?.timeZone ?? null,
+    partnerFrequentPlaces: await partnerPlacesBestEffort(partnerId),
+    timeZone: myProfile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),
   };
 }
