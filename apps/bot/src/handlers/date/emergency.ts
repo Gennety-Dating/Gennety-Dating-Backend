@@ -227,7 +227,13 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
       userB: { select: { telegramId: true, platform: true, language: true } },
     },
   });
-  if (!match) return;
+  // The row is gone — the partner deleted their account while the reason was
+  // being typed, and the cascade took the match. The date is off either way,
+  // but silence would read as if THIS cancellation had gone through.
+  if (!match) {
+    await ctx.reply(t(ctx.session.language, "emergencyStaleAction")).catch(() => {});
+    return;
+  }
 
   // Everything irreversible — the status CAS, the peer boost, the refunds —
   // lives in the shared service, so this handler and the native rail cannot

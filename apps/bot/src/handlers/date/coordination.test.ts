@@ -422,6 +422,22 @@ describe("handleProxyRelay", () => {
     expect(ctx.reply).toHaveBeenCalledWith(t("en", "coordProxyUnavailable"));
   });
 
+  it("answers a message sent after the partner's deletion took the match row", async () => {
+    // Account deletion cascades the match away, so the relay sees `not-found`
+    // rather than `wrong-state`. The person already in the chat typed a line
+    // the router consumed; swallowing it silently read as delivered.
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(null);
+
+    const ctx = createCtx({ messageText: "I'm here", session: inChat, fromId: 1001 });
+    await handleProxyRelay(ctx);
+
+    expect(mProxy.create).not.toHaveBeenCalled();
+    expect(mockPartnerSend).not.toHaveBeenCalled();
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "coordProxyUnavailable"));
+  });
+
   it("ends the session on media sent into a date that is no longer on", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
     mMatch.findUnique.mockResolvedValueOnce(openMatch({ status: "cancelled" }));
