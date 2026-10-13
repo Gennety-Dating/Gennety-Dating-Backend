@@ -219,10 +219,16 @@ export interface AdminAnnouncementDto {
   updatedAt: string;
 }
 
-async function toAdminDto(row: AdminRow, withMedia: boolean): Promise<AdminAnnouncementDto> {
+async function toAdminDto(
+  row: AdminRow,
+  withMedia: boolean,
+  counts?: { readCount: number; pendingPushCount: number },
+): Promise<AdminAnnouncementDto> {
   const [readCount, pendingPushCount, mediaUrl, posterUrl] = await Promise.all([
-    prisma.inboxItem.count({ where: { announcementId: row.id, readAt: { not: null } } }),
-    prisma.inboxItem.count({ where: { announcementId: row.id, pushedAt: null } }),
+    counts?.readCount ??
+      prisma.inboxItem.count({ where: { announcementId: row.id, readAt: { not: null } } }),
+    counts?.pendingPushCount ??
+      prisma.inboxItem.count({ where: { announcementId: row.id, pushedAt: null } }),
     withMedia && row.mediaPath ? createAnnouncementAssetSignedUrl(row.mediaPath, 3600) : null,
     withMedia && row.posterPath ? createAnnouncementAssetSignedUrl(row.posterPath, 3600) : null,
   ]);
@@ -255,7 +261,34 @@ export async function listAnnouncements(): Promise<AdminAnnouncementDto[]> {
     take: 100,
     select: ADMIN_SELECT,
   });
-  return Promise.all(rows.map((r) => toAdminDto(r, false)));
+  // Two grouped counts for the whole page, not two counts per row: the list
+  // used to launch ~200 concurrent queries into the process's shared
+  // three-connection pool every time the admin page opened.
+  const ids = rows.map((r) => r.id);
+  const [read, pending] = ids.length
+    ? await Promise.all([
+        prisma.inboxItem.groupBy({
+          by: ["announcementId"],
+          where: { announcementId: { in: ids }, readAt: { not: null } },
+          _count: { _all: true },
+        }),
+        prisma.inboxItem.groupBy({
+          by: ["announcementId"],
+          where: { announcementId: { in: ids }, pushedAt: null },
+          _count: { _all: true },
+        }),
+      ])
+    : [[], []];
+  const readBy = new Map(read.map((g) => [g.announcementId, g._count._all]));
+  const pendingBy = new Map(pending.map((g) => [g.announcementId, g._count._all]));
+  return Promise.all(
+    rows.map((r) =>
+      toAdminDto(r, false, {
+        readCount: readBy.get(r.id) ?? 0,
+        pendingPushCount: pendingBy.get(r.id) ?? 0,
+      }),
+    ),
+  );
 }
 
 export async function getAnnouncement(id: string): Promise<AdminAnnouncementDto | null> {
