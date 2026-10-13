@@ -1,26 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { ADMIN_DB_CONCURRENCY } from "@gennety/shared";
 
-/**
- * How many admin analytics queries may be out at the database at once,
- * process-wide.
- *
- * The admin API shares ONE Prisma pool with the iOS/Mini App API, the bot and
- * every cron job, and in production that pool is 3 connections. A dashboard
- * load used to start ~21 queries in one `Promise.all` (a founder-digest cache
- * miss ~34), so every connection — and the pool's wait queue — filled with
- * admin work, and a user's request that arrived next waited behind all of it.
- * Prisma serves its wait queue in arrival order, so the admin side now keeps
- * at most this many queries in that queue and holds the rest here, where only
- * admin requests wait.
- *
- * Only the scheduling changes: every query still runs, with the same
- * arguments, and the response is assembled from the same results. With a pool
- * of 3 the admin side never had more than 3 queries running anyway; what it
- * gives up is only the pool's queue position, so the founder-facing latency of
- * a heavy page rises only where the pool would have let more than 3 run at once
- * (the pending 10-connection pool).
- */
-export const ADMIN_DB_CONCURRENCY = 3;
+// The limit lives in shared constants (AGENTS rule 8); re-exported for callers and tests.
+export { ADMIN_DB_CONCURRENCY };
 
 export interface ConcurrencyGate {
   /**

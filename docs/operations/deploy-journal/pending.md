@@ -11,6 +11,24 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Performance wave «только безопасное» (code only: no migration, no env, no contract change).**
+Commits `5d935472..278b6e83` + the lead's follow-up (37 agent commits: `/v1` read path, bot runtime/workers, compute and
+external I/O, admin + Mini App). A plain restart ships it, but `main` also carries the PENDING blocks below with
+migrations — deploy in their order (migrations before the restart), not this block alone. Fewer SQL per iOS poll
+(e.g. `/v1/matches/current` 9 → 3–5, `/v1/countdown` 6 → 3, proxy-chat presence 3 → 1), no bot_sessions UPSERT for
+an unchanged session, admin analytics at most 3 queries in the pool queue, referral card rasterised in the render
+worker, drop scoring ~4× cheaper and yielding every 25 ms. Founder-visible: the four lifecycle-cadence jobs split
+off `date-lifecycle` alert under their own names (`pre-date-safety`, `proxy-coordination`, `venue-selection-retry`,
+`venue-time-lapse`); a new `[runtime] {json}` log line every 60 s (event-loop delay, chat queue, rss/heap; `warn` at
+p99 ≥ 200 ms). Demo: unchanged (same code paths). iOS/Mini App: no contract change; the partner voice link on
+`/v1/matches/current` is reused while ≥ 240 s of it is left (was minted per poll, TTL still 300 s); the Mini App
+build changes (venue-change/ticket pollers, typed SDK calls) — rebuild and upload the webapp as usual.
+- **Проверка:** `pnpm typecheck && pnpm lint && pnpm test` green (one known flake: `spotify-import.test.ts` top-tracks
+  under the full run); after the restart `pm2 logs gennety-bot --lines 200 | grep "\[runtime\]"` shows a line a
+  minute with `eventLoop.p99` well under 200 ms; no `[apns]` "transport" bursts after a single timeout; the admin
+  dashboard loads as before.
+- **Откат:** `git revert` of the range (no data to undo; in-process caches start empty).
+
 **PENDING 2026-10-13 — Dead ends, founder calls: block after the start, unreachable proposal, report a deleted partner (MIGRATION `20261013120000_former_matches`, additive).**
 Branch `claude/dating-edge-cases-ihp2ur`, on top of the dead-end audit block below — ship together. A block after
 `agreedTime` records the block and force-closes the proxy chat (no cancellation, no refunds, nothing to the blocked
