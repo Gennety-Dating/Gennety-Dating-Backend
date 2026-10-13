@@ -4,6 +4,7 @@ import { isUuid } from "../utils/uuid.js";
 import { classifyAllUsers } from "../utils/user-health-source.js";
 import { normalizeChannel } from "../utils/growth.js";
 import { loadPayerIndex } from "../../services/purchases.js";
+import { adminQuery, adminQueryExclusive } from "../utils/db-gate.js";
 import { getOrCompute } from "../utils/cache.js";
 import {
   AD_SPEND_CATEGORIES,
@@ -100,8 +101,10 @@ adSpendRouter.get("/admin/ad-spend/channels", async (_req: Request, res: Respons
       // одном месте (`user-health.ts`) — тот же приём, что уже применяет
       // `monetization-source.ts`.
       classifyAllUsers(),
-      prisma.user.findMany({ select: { id: true, referralSource: true } }),
-      prisma.adSpend.findMany({ select: { channel: true }, distinct: ["channel"] }),
+      adminQuery(() => prisma.user.findMany({ select: { id: true, referralSource: true } })),
+      adminQuery(() =>
+        prisma.adSpend.findMany({ select: { channel: true }, distinct: ["channel"] }),
+      ),
     ]);
 
     const testIds = new Set(
@@ -269,31 +272,36 @@ adSpendRouter.get(
         async () => {
           const [health, adSpendRows, userRows, matchPairs, payerIndex] = await Promise.all([
             classifyAllUsers(),
-            prisma.adSpend.findMany({
-              select: {
-                channel: true,
-                category: true,
-                periodStart: true,
-                periodEnd: true,
-                amountUsdCents: true,
-              },
-            }),
-            prisma.user.findMany({
-              select: {
-                id: true,
-                referralSource: true,
-                createdAt: true,
-                status: true,
-                verificationStatus: true,
-                gender: true,
-                onboardingStep: true,
-              },
-            }),
+            adminQuery(() =>
+              prisma.adSpend.findMany({
+                select: {
+                  channel: true,
+                  category: true,
+                  periodStart: true,
+                  periodEnd: true,
+                  amountUsdCents: true,
+                },
+              }),
+            ),
+            adminQuery(() =>
+              prisma.user.findMany({
+                select: {
+                  id: true,
+                  referralSource: true,
+                  createdAt: true,
+                  status: true,
+                  verificationStatus: true,
+                  gender: true,
+                  onboardingStep: true,
+                },
+              }),
+            ),
             // The exact query `growth.ts`'s `computeAcquisition` uses for its
             // own `matched` set — kept verbatim so the two never define
             // "matched" two different ways (see the plan's Grounding note).
-            prisma.match.findMany({ select: { userAId: true, userBId: true } }),
-            loadPayerIndex(),
+            adminQuery(() => prisma.match.findMany({ select: { userAId: true, userBId: true } })),
+            // Fans out to five queries of its own — runs with the gate to itself.
+            adminQueryExclusive(() => loadPayerIndex()),
           ]);
 
           const testIds = new Set(

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { getOrCompute } from "../utils/cache.js";
+import { adminQuery } from "../utils/db-gate.js";
 import {
   computeOnboardingFunnel,
   type StepEventLite,
@@ -51,17 +52,21 @@ onboardingFunnelRouter.get(
     try {
       const data = await getOrCompute("onboarding_funnel:v1", 900, async () => {
         const [events, users] = await Promise.all([
-          prisma.onboardingStepEvent.findMany({
-            select: { userId: true, step: true, kind: true, dwellMs: true },
-          }),
-          prisma.user.findMany({
-            select: {
-              id: true,
-              status: true,
-              onboardingStep: true,
-              verificationStatus: true,
-            },
-          }),
+          adminQuery(() =>
+            prisma.onboardingStepEvent.findMany({
+              select: { userId: true, step: true, kind: true, dwellMs: true },
+            }),
+          ),
+          adminQuery(() =>
+            prisma.user.findMany({
+              select: {
+                id: true,
+                status: true,
+                onboardingStep: true,
+                verificationStatus: true,
+              },
+            }),
+          ),
         ]);
 
         // A user is still inside the conversational funnel until they reach the
@@ -131,61 +136,78 @@ onboardingFunnelRouter.get(
           geoUsers,
           monetization,
         ] = await Promise.all([
-          prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
-          prisma.user.count({
-            where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
-          }),
-          prisma.user.count({
-            where: {
-              onboardingStep: "completed",
-              updatedAt: { gte: weekAgo },
-            },
-          }),
-          prisma.user.count({ where: { status: "active" } }),
-          prisma.user.count(),
-          prisma.match.groupBy({ by: ["status"], _count: { _all: true } }),
-          prisma.match.count({ where: { createdAt: { gte: weekAgo } } }),
-          prisma.match.count({
-            where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
-          }),
-          prisma.noMatchNotice.count({ where: { sentAt: { gte: weekAgo } } }),
-          prisma.noMatchNotice.groupBy({
-            by: ["tier"],
-            where: { sentAt: { gte: weekAgo } },
-            _count: { _all: true },
-          }),
+          adminQuery(() => prisma.user.count({ where: { createdAt: { gte: weekAgo } } })),
+          adminQuery(() =>
+            prisma.user.count({
+              where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+            }),
+          ),
+          adminQuery(() =>
+            prisma.user.count({
+              where: {
+                onboardingStep: "completed",
+                updatedAt: { gte: weekAgo },
+              },
+            }),
+          ),
+          adminQuery(() => prisma.user.count({ where: { status: "active" } })),
+          adminQuery(() => prisma.user.count()),
+          adminQuery(() => prisma.match.groupBy({ by: ["status"], _count: { _all: true } })),
+          adminQuery(() => prisma.match.count({ where: { createdAt: { gte: weekAgo } } })),
+          adminQuery(() =>
+            prisma.match.count({
+              where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+            }),
+          ),
+          adminQuery(() => prisma.noMatchNotice.count({ where: { sentAt: { gte: weekAgo } } })),
+          adminQuery(() =>
+            prisma.noMatchNotice.groupBy({
+              by: ["tier"],
+              where: { sentAt: { gte: weekAgo } },
+              _count: { _all: true },
+            }),
+          ),
           // "Unattended" matches: proposals nobody acted on before the 24h TTL.
-          prisma.match.count({
-            where: { status: "expired", updatedAt: { gte: weekAgo } },
-          }),
+          adminQuery(() =>
+            prisma.match.count({
+              where: { status: "expired", updatedAt: { gte: weekAgo } },
+            }),
+          ),
           // Ghosting telemetry: who let a live pitch expire this week.
-          prisma.matchEvent.groupBy({
-            by: ["actionType"],
-            where: { createdAt: { gte: weekAgo } },
-            _count: { _all: true },
-          }),
-          prisma.user.groupBy({
-            by: ["verificationStatus"],
-            where: { onboardingStep: "completed" },
-            _count: { _all: true },
-          }),
+          adminQuery(() =>
+            prisma.matchEvent.groupBy({
+              by: ["actionType"],
+              where: { createdAt: { gte: weekAgo } },
+              _count: { _all: true },
+            }),
+          ),
+          adminQuery(() =>
+            prisma.user.groupBy({
+              by: ["verificationStatus"],
+              where: { onboardingStep: "completed" },
+              _count: { _all: true },
+            }),
+          ),
           // Geography snapshot — active users placed by their matching city.
-          prisma.user.findMany({
-            where: { status: "active" },
-            select: {
-              id: true,
-              gender: true,
-              profile: {
-                select: {
-                  homeCityKey: true,
-                  homeCity: true,
-                  homeCountryCode: true,
-                  latitude: true,
-                  longitude: true,
+          adminQuery(() =>
+            prisma.user.findMany({
+              where: { status: "active" },
+              select: {
+                id: true,
+                gender: true,
+                profile: {
+                  select: {
+                    homeCityKey: true,
+                    homeCity: true,
+                    homeCountryCode: true,
+                    latitude: true,
+                    longitude: true,
+                  },
                 },
               },
-            },
-          }),
+            }),
+          ),
+          // Not wrapped: it gates its own queries.
           // Монетизация. Считается той же функцией, что и полная вкладка
           // `/admin/analytics/monetization`, и урезается до компактного блока
           // — Hermes обязан дёргать `founder-digest` каждый прогон, так что
@@ -320,19 +342,21 @@ onboardingFunnelRouter.get(
         const dormantBefore = new Date(Date.now() - DORMANT_DAYS * 86_400_000);
 
         const [users, matchPairs, statusGroups] = await Promise.all([
-          prisma.user.findMany({
-            select: {
-              id: true,
-              referralSource: true,
-              onboardingStep: true,
-              status: true,
-              createdAt: true,
-              verifiedAt: true,
-              lastMessageAt: true,
-            },
-          }),
-          prisma.match.findMany({ select: { userAId: true, userBId: true } }),
-          prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
+          adminQuery(() =>
+            prisma.user.findMany({
+              select: {
+                id: true,
+                referralSource: true,
+                onboardingStep: true,
+                status: true,
+                createdAt: true,
+                verifiedAt: true,
+                lastMessageAt: true,
+              },
+            }),
+          ),
+          adminQuery(() => prisma.match.findMany({ select: { userAId: true, userBId: true } })),
+          adminQuery(() => prisma.user.groupBy({ by: ["status"], _count: { _all: true } })),
         ]);
 
         const matchedIds = new Set<string>();

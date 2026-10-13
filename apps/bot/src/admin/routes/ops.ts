@@ -29,6 +29,7 @@ import {
   type AcquisitionCostUserInput,
 } from "../utils/ad-spend.js";
 import { loadPayerIndex } from "../../services/purchases.js";
+import { adminQuery, adminQueryExclusive } from "../utils/db-gate.js";
 
 /**
  * Operational + top-level resource endpoints for the admin surface.
@@ -145,21 +146,22 @@ async function collectStats(): Promise<{
     strandedProposed,
     health,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.user.groupBy({ by: ["onboardingStep"], _count: { _all: true } }),
-    prisma.user.groupBy({ by: ["verificationStatus"], _count: { _all: true } }),
-    prisma.match.count(),
-    prisma.match.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.report.groupBy({ by: ["tier"], _count: { _all: true } }),
-    prisma.report.count({ where: { tier: 3, adminReviewed: false } }),
+    adminQuery(() => prisma.user.count()),
+    adminQuery(() => prisma.user.groupBy({ by: ["status"], _count: { _all: true } })),
+    adminQuery(() => prisma.user.groupBy({ by: ["onboardingStep"], _count: { _all: true } })),
+    adminQuery(() => prisma.user.groupBy({ by: ["verificationStatus"], _count: { _all: true } })),
+    adminQuery(() => prisma.match.count()),
+    adminQuery(() => prisma.match.groupBy({ by: ["status"], _count: { _all: true } })),
+    adminQuery(() => prisma.report.groupBy({ by: ["tier"], _count: { _all: true } })),
+    adminQuery(() => prisma.report.count({ where: { tier: 3, adminReviewed: false } })),
     // A `proposed` row that was never stamped. Must be 0: every consumer of a
     // proposal filters `dispatchedAt: { not: null }`, so such a row is invisible
     // to the expiry sweep, the countdown and both nudge cadences at once while
     // still holding BOTH participants out of every drop (§3.3). Surfaced here
     // rather than only in `scripts/audit-stuck-matches.mjs` because the script
     // has to be remembered and this number is already on the dashboard.
-    prisma.match.count({ where: { status: "proposed", dispatchedAt: null } }),
+    adminQuery(() => prisma.match.count({ where: { status: "proposed", dispatchedAt: null } })),
+    // Not wrapped: it gates its own queries.
     classifyAllUsers(),
   ]);
 
@@ -287,6 +289,9 @@ opsRouter.get("/admin/stats", async (_req: Request, res: Response) => {
  */
 opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
   try {
+    // Taken when the request starts, as before, not when the gate lets the
+    // count through.
+    const signupsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const [
       { stats, conversionMatches, classified },
       recentMatches,
@@ -296,25 +301,27 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       payerIndex,
     ] = await Promise.all([
       collectStats(),
-      prisma.match.findMany({
-        take: 10,
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          synergyScore: true,
-          agreedTime: true,
-          venueName: true,
-          source: true,
-          createdAt: true,
-        },
-      }),
-      prisma.user.count({
-        where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      }),
-      prisma.adSpend.findMany({
-        select: { channel: true, category: true, periodStart: true, periodEnd: true, amountUsdCents: true },
-      }),
+      adminQuery(() =>
+        prisma.match.findMany({
+          take: 10,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            synergyScore: true,
+            agreedTime: true,
+            venueName: true,
+            source: true,
+            createdAt: true,
+          },
+        }),
+      ),
+      adminQuery(() => prisma.user.count({ where: { createdAt: { gte: signupsSince } } })),
+      adminQuery(() =>
+        prisma.adSpend.findMany({
+          select: { channel: true, category: true, periodStart: true, periodEnd: true, amountUsdCents: true },
+        }),
+      ),
       // Второй скан `users` за запрос: у `classifyAllUsers` фиксированная форма
       // выхода без `referralSource` (см. `admin/utils/user-health.ts`), а копия
       // её правил стоила бы дороже одного лишнего `findMany` — тот же размен,
@@ -326,18 +333,21 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       // кеша — платить за третий скан таблицы ради поля, у которого уже есть
       // кешируемый маршрут (`GET /admin/analytics/acquisition-cost`), было бы
       // регрессией именно там, где эту регрессию труднее всего заметить.
-      prisma.user.findMany({
-        select: {
-          id: true,
-          referralSource: true,
-          createdAt: true,
-          status: true,
-          verificationStatus: true,
-          gender: true,
-          onboardingStep: true,
-        },
-      }),
-      loadPayerIndex(),
+      adminQuery(() =>
+        prisma.user.findMany({
+          select: {
+            id: true,
+            referralSource: true,
+            createdAt: true,
+            status: true,
+            verificationStatus: true,
+            gender: true,
+            onboardingStep: true,
+          },
+        }),
+      ),
+      // Fans out to five queries of its own — runs with the gate to itself.
+      adminQueryExclusive(() => loadPayerIndex()),
     ]);
 
     const { matches, userHealth, funnel } = stats;

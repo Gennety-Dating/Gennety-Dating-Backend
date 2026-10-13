@@ -14,6 +14,7 @@
 import { prisma } from "@gennety/db";
 import { loadPayerIndex } from "../../services/purchases.js";
 import { classifyAllUsers } from "./user-health-source.js";
+import { adminQuery, adminQueryExclusive } from "./db-gate.js";
 import {
   computeMonetization,
   type MonetizationSummary,
@@ -40,12 +41,14 @@ const WEEK_MS = 7 * 86_400_000;
  * обнуляют.
  */
 async function loadPaywallReached(): Promise<Set<string>> {
-  const rows = await prisma.match.findMany({
-    where: {
-      OR: [{ ticketExpiresAt: { not: null } }, { NOT: { ticketStatus: "pending" } }],
-    },
-    select: { userAId: true, userBId: true },
-  });
+  const rows = await adminQuery(() =>
+    prisma.match.findMany({
+      where: {
+        OR: [{ ticketExpiresAt: { not: null } }, { NOT: { ticketStatus: "pending" } }],
+      },
+      select: { userAId: true, userBId: true },
+    }),
+  );
   const out = new Set<string>();
   for (const row of rows) {
     out.add(row.userAId);
@@ -68,21 +71,24 @@ export async function loadMonetizationSummary(
     // Второй скан `users` за запрос: у `classifyAllUsers` фиксированная форма
     // выхода, в ней нет ни канала, ни города, ни трека. Осознанный размен —
     // эндпоинт кэшируется на 15 минут, а альтернатива это копия правил.
-    prisma.user.findMany({
-      select: {
-        id: true,
-        gender: true,
-        registrationTrack: true,
-        referralSource: true,
-        createdAt: true,
-        status: true,
-        verificationStatus: true,
-        profile: { select: { homeCityKey: true } },
-      },
-    }),
-    loadPayerIndex(),
-    loadPayerIndex({ since: weekAgo }),
-    loadPayerIndex({ since: twoWeeksAgo, until: weekAgo }),
+    adminQuery(() =>
+      prisma.user.findMany({
+        select: {
+          id: true,
+          gender: true,
+          registrationTrack: true,
+          referralSource: true,
+          createdAt: true,
+          status: true,
+          verificationStatus: true,
+          profile: { select: { homeCityKey: true } },
+        },
+      }),
+    ),
+    // Each fans out to five queries of its own — one at a time, alone.
+    adminQueryExclusive(() => loadPayerIndex()),
+    adminQueryExclusive(() => loadPayerIndex({ since: weekAgo })),
+    adminQueryExclusive(() => loadPayerIndex({ since: twoWeeksAgo, until: weekAgo })),
     loadPaywallReached(),
   ]);
 

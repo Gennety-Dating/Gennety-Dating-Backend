@@ -6,6 +6,7 @@
  */
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
+import { adminQuery } from "./db-gate.js";
 import {
   HEALTH_CONFIG,
   classifyUser,
@@ -75,11 +76,13 @@ type HealthUserRow = {
 async function countInboundByUser(): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   try {
-    const groups = await prisma.chatEvent.groupBy({
-      by: ["userId"],
-      where: { direction: "in" },
-      _count: { _all: true },
-    });
+    const groups = await adminQuery(() =>
+      prisma.chatEvent.groupBy({
+        by: ["userId"],
+        where: { direction: "in" },
+        _count: { _all: true },
+      }),
+    );
     for (const g of groups) out.set(g.userId, g._count._all);
   } catch (err) {
     console.warn(
@@ -123,7 +126,7 @@ export async function medianResponseSeconds(
   // replied" — that is what shipped between 2026-09-07 and 2026-09-22.
   let rows: Array<{ userId: string; medianSec: number | null; samples: bigint }> = [];
   try {
-    rows = await prisma.$queryRaw<
+    rows = await adminQuery(() => prisma.$queryRaw<
       Array<{ userId: string; medianSec: number | null; samples: bigint }>
     >`
       WITH ordered AS (
@@ -143,7 +146,7 @@ export async function medianResponseSeconds(
         FROM ordered
        WHERE direction = 'in' AND prev_direction = 'out'
        GROUP BY user_id
-    `;
+    `);
   } catch (err) {
     console.warn(
       "[admin] user-health: chat_events unavailable, reply timing skipped:",
@@ -202,12 +205,15 @@ export async function classifyAllUsers(
   cfg: HealthConfig = effectiveHealthConfig(),
 ): Promise<{ users: ClassifiedUser[]; scanned: number; truncated: boolean }> {
   const [rows, total, inbound] = await Promise.all([
-    prisma.user.findMany({
-      take: cfg.max_scan_users,
-      orderBy: { createdAt: "desc" },
-      select: HEALTH_USER_SELECT,
-    }) as unknown as Promise<HealthUserRow[]>,
-    prisma.user.count(),
+    adminQuery(
+      () =>
+        prisma.user.findMany({
+          take: cfg.max_scan_users,
+          orderBy: { createdAt: "desc" },
+          select: HEALTH_USER_SELECT,
+        }) as unknown as Promise<HealthUserRow[]>,
+    ),
+    adminQuery(() => prisma.user.count()),
     countInboundByUser(),
   ]);
 
@@ -241,24 +247,28 @@ export async function classifyOneUser(
   now: Date = new Date(),
   cfg: HealthConfig = effectiveHealthConfig(),
 ): Promise<{ input: HealthUserInput; verdict: ClassifiedUser["verdict"] } | null> {
-  const row = (await prisma.user.findUnique({
-    where: { id: userId },
-    select: HEALTH_USER_SELECT,
-  })) as HealthUserRow | null;
+  const row = (await adminQuery(() =>
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: HEALTH_USER_SELECT,
+    }),
+  )) as HealthUserRow | null;
   if (!row) return null;
 
   const windowMs = cfg.bot_batch_window_min * 60 * 1000;
   const [inboundCount, timing, burstSize] = await Promise.all([
     countInboundForUser(userId),
     medianResponseSeconds([userId]),
-    prisma.user.count({
-      where: {
-        createdAt: {
-          gte: new Date(row.createdAt.getTime() - windowMs),
-          lte: new Date(row.createdAt.getTime() + windowMs),
+    adminQuery(() =>
+      prisma.user.count({
+        where: {
+          createdAt: {
+            gte: new Date(row.createdAt.getTime() - windowMs),
+            lte: new Date(row.createdAt.getTime() + windowMs),
+          },
         },
-      },
-    }),
+      }),
+    ),
   ]);
 
   const input = toInput(row, inboundCount, timing.get(userId), burstSize);
@@ -267,7 +277,9 @@ export async function classifyOneUser(
 
 async function countInboundForUser(userId: string): Promise<number> {
   try {
-    return await prisma.chatEvent.count({ where: { userId, direction: "in" } });
+    return await adminQuery(() =>
+      prisma.chatEvent.count({ where: { userId, direction: "in" } }),
+    );
   } catch {
     return 0;
   }

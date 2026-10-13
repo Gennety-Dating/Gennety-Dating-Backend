@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@gennety/db";
+import { adminQuery } from "./db-gate.js";
 import type { ClassifiedUser } from "./user-health.js";
 import type { ConversionMatchInput } from "./match-conversion.js";
 
@@ -54,11 +55,13 @@ const MATCH_SELECT = {
 
 /** Сколько слотов вернулось по каждому матчу. */
 async function loadRefundedSlots(): Promise<Map<string, number>> {
-  const rows = await prisma.ticketLedger.groupBy({
-    by: ["matchId"],
-    where: { matchId: { not: null }, reason: { in: [...REFUND_REASONS] } },
-    _count: { _all: true },
-  });
+  const rows = await adminQuery(() =>
+    prisma.ticketLedger.groupBy({
+      by: ["matchId"],
+      where: { matchId: { not: null }, reason: { in: [...REFUND_REASONS] } },
+      _count: { _all: true },
+    }),
+  );
   const out = new Map<string, number>();
   for (const r of rows) {
     if (r.matchId) out.set(r.matchId, r._count._all);
@@ -81,7 +84,7 @@ export async function loadConversionMatches(
   );
 
   const [matches, refunds] = await Promise.all([
-    prisma.match.findMany({ select: MATCH_SELECT, orderBy: { createdAt: "desc" } }),
+    adminQuery(() => prisma.match.findMany({ select: MATCH_SELECT, orderBy: { createdAt: "desc" } })),
     loadRefundedSlots(),
   ]);
 
