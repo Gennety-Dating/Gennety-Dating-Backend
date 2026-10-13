@@ -8,6 +8,7 @@ import { dateTicketsPhrase, t } from "@gennety/shared";
 import { svgToPng } from "../date-card/image.js";
 import { butterflyPng } from "../match-card/collage.js";
 import { runRenderJob } from "../render/pool.js";
+import { fontFile } from "../card-fonts.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
@@ -66,20 +67,18 @@ type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 let cachedFonts: SatoriFonts | null = null;
 function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Bold.ttf"), weight: 700, style: "normal" },
+    { name: "Archivo Black", data: fontFile("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
     // Archivo Black ships Latin-only (no Cyrillic glyphs at all) — registering
     // a second font under the SAME name does NOT give satori per-glyph
     // fallthrough within a family (verified empirically: it only ever primary-
     // matches the first entry for a given name/weight/style, same trap
     // ARCHITECTURE.md flags for Unbounded). The fix is a distinct family name
     // that resolves unambiguously, picked per-language below.
-    { name: "Headline Cyr", data: read("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
+    { name: "Headline Cyr", data: fontFile("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
   ];
   return cachedFonts;
 }

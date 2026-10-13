@@ -9,8 +9,7 @@
  * caller falls back to the classic photo media-group — a match proposal must
  * never be blocked by cosmetics.
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fontFile } from "../card-fonts.js";
 import satori from "satori";
 import { grainPng, toPngBuffer, svgToPng} from "../date-card/image.js";
 import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } from "./collage.js";
@@ -47,12 +46,10 @@ let cachedFonts: SatoriFonts | null = null;
 /** Exported as a test seam: the registration SHAPE is the thing that broke. */
 export function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Bold.ttf"), weight: 700, style: "normal" },
     // The FULL Unbounded, under one family name.
     //
     // This used to register the `cyrillic` and `latin` subset woffs BOTH as
@@ -68,7 +65,7 @@ export function loadFonts(): SatoriFonts {
     // navigating it, and additionally covers Polish (Ą Ł Ż Ś Ć Ź Ń Ę live in
     // `latin-ext`, which neither subset carries). Same call, and the same
     // asset, as `services/expiry-card.ts`.
-    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
+    { name: "Unbounded", data: fontFile("unbounded-700.woff"), weight: 700, style: "normal" },
   ];
   return cachedFonts;
 }

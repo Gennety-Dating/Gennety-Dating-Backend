@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fontFile } from "../card-fonts.js";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import {
   CARD_W,
@@ -62,10 +61,7 @@ let fontReady: boolean | null = null;
 function ensureFont(): boolean {
   if (fontReady !== null) return fontReady;
   try {
-    const data = readFileSync(
-      fileURLToPath(new URL("../../assets/fonts/Roboto-Regular.ttf", import.meta.url)),
-    );
-    fontReady = Boolean(GlobalFonts.register(data, FONT_ALIAS));
+    fontReady = Boolean(GlobalFonts.register(fontFile("Roboto-Regular.ttf"), FONT_ALIAS));
   } catch {
     fontReady = false;
   }

@@ -36,18 +36,35 @@ export type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 
 let cached: SatoriFonts | null = null;
 
-function read(file: string): Buffer {
-  return readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
+/** Bundled font files already read, by file name under `assets/fonts/`. */
+const fontFiles = new Map<string, Buffer>();
+
+/**
+ * The bytes of one bundled font file (`assets/fonts/<file>`), read once per
+ * process and handed to every card's font list.
+ *
+ * Each card module used to read its own copy of the same files — Roboto
+ * Regular and Medium seven times each, Bold four, ~0.5 MB a copy — and satori
+ * caches a parsed font by the identity of its `data` buffer, so every copy was
+ * also parsed and held again. One buffer per file means one read and one parse
+ * per process; the bytes, and so every rendered card, are the same.
+ */
+export function fontFile(file: string): Buffer {
+  const known = fontFiles.get(file);
+  if (known) return known;
+  const data = readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
+  fontFiles.set(file, data);
+  return data;
 }
 
 export function cardFonts(): SatoriFonts {
   if (cached) return cached;
   cached = [
-    { name: BODY_FAMILY, data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: BODY_FAMILY, data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: BODY_FAMILY, data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    { name: DISPLAY_FAMILY, data: read("GennetyDisplay-Bold.ttf"), weight: 700, style: "normal" },
-    { name: DISPLAY_FAMILY, data: read("GennetyDisplay-ExtraBold.ttf"), weight: 800, style: "normal" },
+    { name: BODY_FAMILY, data: fontFile("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: BODY_FAMILY, data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: BODY_FAMILY, data: fontFile("Roboto-Bold.ttf"), weight: 700, style: "normal" },
+    { name: DISPLAY_FAMILY, data: fontFile("GennetyDisplay-Bold.ttf"), weight: 700, style: "normal" },
+    { name: DISPLAY_FAMILY, data: fontFile("GennetyDisplay-ExtraBold.ttf"), weight: 800, style: "normal" },
   ];
   return cached;
 }

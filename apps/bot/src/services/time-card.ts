@@ -21,8 +21,7 @@
  * plain text confirmation. The concierge flow must never wedge on a render.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fontFile } from "./card-fonts.js";
 import satori from "satori";
 import type { Language } from "@gennety/shared";
 import { LOCALE_TAGS, RENDER_TZ } from "./datetime-entity.js";
@@ -100,11 +99,9 @@ let cachedFonts: SatoriFonts | null = null;
 /** Exported as a test seam: the registration SHAPE is the thing that broke. */
 export function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Unbounded", data: fontFile("unbounded-700.woff"), weight: 700, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
   ];
   return cachedFonts;
 }

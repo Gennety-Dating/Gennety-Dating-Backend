@@ -28,8 +28,7 @@
  * plain text notice that ships today.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fontFile } from "./card-fonts.js";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
@@ -249,13 +248,11 @@ let cachedFonts: SatoriFonts | null = null;
  */
 function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Unbounded", data: fontFile("unbounded-700.woff"), weight: 700, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Archivo Black", data: fontFile("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
   ];
   return cachedFonts;
 }

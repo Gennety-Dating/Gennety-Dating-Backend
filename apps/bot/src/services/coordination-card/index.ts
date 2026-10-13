@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fontFile } from "../card-fonts.js";
 import satori from "satori";
 import type { Language } from "@gennety/shared";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
@@ -49,14 +48,12 @@ let cachedFonts: SatoriFonts | null = null;
  */
 function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
-  const read = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
-    { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
-    { name: "Headline Cyr", data: read("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Medium.ttf"), weight: 500, style: "normal" },
+    { name: "Roboto", data: fontFile("Roboto-Bold.ttf"), weight: 700, style: "normal" },
+    { name: "Archivo Black", data: fontFile("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+    { name: "Headline Cyr", data: fontFile("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
   ];
   return cachedFonts;
 }

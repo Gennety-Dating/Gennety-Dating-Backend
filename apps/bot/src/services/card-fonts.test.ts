@@ -4,7 +4,10 @@ import { describe, it, expect } from "vitest";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 
-import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY, type SatoriFonts } from "./card-fonts.js";
+import { cardFonts, DISPLAY_FAMILY, BODY_FAMILY, fontFile, type SatoriFonts } from "./card-fonts.js";
+import { loadFonts as timeCardFonts } from "./time-card.js";
+import { loadFonts as matchCardFonts } from "./match-card/index.js";
+import { loadFonts as rematchCardFonts } from "./rematch-card.js";
 
 /**
  * Display-type coverage of the date card's Gennety Display (`card-fonts.ts`).
@@ -111,5 +114,42 @@ describe("date card uses the brand face", () => {
     const code = source(rel);
     expect(code).not.toMatch(/fontFamily:\s*"(Archivo Black|Unbounded|Headline Cyr)"/);
     expect(code).not.toMatch(/name:\s*"(Archivo Black|Unbounded|Headline Cyr)"/);
+  });
+});
+
+/**
+ * Every card's font list shares one buffer per bundled file (`fontFile`).
+ * Satori caches a parsed font by the identity of its `data`, so the shared
+ * buffer is what makes the files read and parsed once per process instead of
+ * once per card module — and the bytes must still be exactly the file's.
+ */
+describe("fontFile — one buffer per bundled font file", () => {
+  const onDisk = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
+
+  it("returns the file's bytes, and the same buffer on every call", () => {
+    for (const file of ["Roboto-Regular.ttf", "Roboto-Medium.ttf", "unbounded-700.woff"]) {
+      const first = fontFile(file);
+      expect(first.equals(onDisk(file))).toBe(true);
+      expect(fontFile(file)).toBe(first);
+    }
+  });
+
+  it("is the buffer every card's font list carries", () => {
+    const medium = fontFile("Roboto-Medium.ttf");
+    const unbounded = fontFile("unbounded-700.woff");
+    const lists = {
+      date: cardFonts(),
+      time: timeCardFonts(),
+      match: matchCardFonts(),
+      rematch: rematchCardFonts(),
+    };
+    for (const [card, fonts] of Object.entries(lists)) {
+      const robotoMedium = fonts.find((f) => f.name === "Roboto" && f.weight === 500);
+      expect(robotoMedium?.data, card).toBe(medium);
+    }
+    for (const fonts of [lists.time, lists.match, lists.rematch]) {
+      expect(fonts.find((f) => f.name === "Unbounded")?.data).toBe(unbounded);
+    }
   });
 });
