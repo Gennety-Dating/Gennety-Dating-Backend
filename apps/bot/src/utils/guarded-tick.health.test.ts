@@ -112,4 +112,37 @@ describe("guardedTick health", () => {
     // Reached, and swallowed: a broken notifier must not mask every broken job.
     expect(notifyHealth).toHaveBeenCalled();
   });
+
+  // A run that never settles neither fails nor succeeds, so the failure counter
+  // never sees it — every later tick was skipped with a warn, forever.
+  it("calls a run that never finishes stuck, once, and says when it ends", async () => {
+    const notifyHealth = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    let clock = 0;
+    let release: () => void = () => {};
+    const tick = guardedTick(
+      "date-lifecycle",
+      () => new Promise<void>((resolve) => { release = resolve; }),
+      { notifyHealth, stuckAlertAfterMs: 1000, now: () => clock },
+    );
+
+    tick();
+    clock = 500;
+    tick(); // still young — an ordinary skip
+    await settle();
+    expect(notifyHealth).not.toHaveBeenCalled();
+
+    clock = 1500;
+    tick();
+    tick();
+    await settle();
+    expect(notifyHealth).toHaveBeenCalledTimes(1);
+    expect(notifyHealth).toHaveBeenCalledWith("date-lifecycle", "stuck", 2);
+
+    release();
+    await settle();
+    await settle();
+    expect(notifyHealth).toHaveBeenLastCalledWith("date-lifecycle", "recovered", 3);
+  });
 });

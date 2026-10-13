@@ -119,15 +119,19 @@ function founderChatId(): number {
  */
 export async function notifyFounderSubsystemHealth(
   subsystem: string,
-  state: "degraded" | "recovered",
+  state: "degraded" | "recovered" | "stuck",
   consecutiveFailures: number,
 ): Promise<void> {
   const api = getFounderApi();
   if (!api) return;
+  // For "stuck" the count is ticks skipped behind a run that never finished;
+  // for "recovered" after a stuck run it is the same count.
   const text =
     state === "degraded"
       ? `⚠️ «${subsystem}» падает ${consecutiveFailures} тик(а/ов) подряд.`
-      : `✅ «${subsystem}» снова работает — после ${consecutiveFailures} упавших тиков.`;
+      : state === "stuck"
+        ? `🧊 «${subsystem}» завис: один прогон не завершается, ${consecutiveFailures} тик(а/ов) пропущено. Работа стоит до его окончания или рестарта.`
+        : `✅ «${subsystem}» снова работает — после ${consecutiveFailures} упавших/пропущенных тиков.`;
   try {
     await api.sendMessage(founderChatId(), text);
   } catch (err) {
