@@ -1942,6 +1942,49 @@ async function loadEligibleUsersForIds(
   requestedIds?: readonly string[],
   options: LoadEligibleOptions = {},
 ): Promise<BatchUser[]> {
+  const rows = await loadEligibleRows(db, requestedIds, options);
+  if (rows.length === 0) return [];
+  return toBatchUsers(db, rows, options.rhythm !== false);
+}
+
+/**
+ * The ids `loadEligibleUsersForIds(db, requestedIds)` would answer, in its
+ * order, without reading a single vector: the same two scans, and an
+ * "embedding IS NOT NULL" test where it reads every `embedding::text` only to
+ * check that it is there. For callers that need nothing but the ids.
+ */
+async function loadEligibleUserIds(
+  db: MatchReadClient,
+  requestedIds: readonly string[],
+): Promise<string[]> {
+  const rows = await loadEligibleRows(db, requestedIds, {});
+  if (rows.length === 0) return [];
+  const ids = rows.map((u) => u.id);
+  const withEmbedding = await idsWithEmbedding(db, ids);
+  return ids.filter((id) => withEmbedding.has(id));
+}
+
+/**
+ * Which of `ids` have an embedding. `embedding::text` of a stored vector is
+ * never empty, so this is exactly the set `toBatchUsers` keeps.
+ */
+async function idsWithEmbedding(
+  db: MatchReadClient,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  const rows = await db.$queryRawUnsafe<Array<{ user_id: string }>>(
+    `SELECT user_id FROM profiles WHERE user_id = ANY($1::uuid[]) AND embedding IS NOT NULL`,
+    ids,
+  );
+  return new Set(rows.map((row) => row.user_id));
+}
+
+/** The two eligibility scans, deduped by id in scan order. */
+async function loadEligibleRows(
+  db: MatchReadClient,
+  requestedIds: readonly string[] | undefined,
+  options: LoadEligibleOptions,
+) {
   const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
   if (requestedIds?.length === 0) return [];
   const requestedWhere = {
@@ -2073,15 +2116,27 @@ async function loadEligibleUsersForIds(
 
   const allUsers = [...users, ...neverMatched];
   const uniqueIds = new Set<string>();
-  const deduped = allUsers.filter((u) => {
+  return allUsers.filter((u) => {
     if (uniqueIds.has(u.id)) return false;
     uniqueIds.add(u.id);
     return true;
   });
+}
 
+type EligibleRow = Awaited<ReturnType<typeof loadEligibleRows>>[number];
+
+/**
+ * Batch rows for eligible `rows`, in their order: each one's vector literal
+ * and (with `withRhythm`) life rhythm, and its allocation fingerprint. A row
+ * without an embedding is not eligible and is dropped here.
+ */
+async function toBatchUsers(
+  db: MatchReadClient,
+  rows: readonly EligibleRow[],
+  withRhythm: boolean,
+): Promise<BatchUser[]> {
   // Batch-fetch embeddings for all users (pgvector is Unsupported in Prisma).
-  const ids = deduped.map((u) => u.id);
-  if (ids.length === 0) return [];
+  const ids = rows.map((u) => u.id);
 
   const embeddingRows = await db.$queryRawUnsafe<
     Array<{ user_id: string; embedding: string | null }>
@@ -2094,10 +2149,9 @@ async function loadEligibleUsersForIds(
     embeddingMap.set(row.user_id, row.embedding);
   }
 
-  const rhythms =
-    options.rhythm === false ? new Map<string, RhythmTags>() : await loadRhythmTags(ids);
+  const rhythms = withRhythm ? await loadRhythmTags(ids) : new Map<string, RhythmTags>();
 
-  return deduped
+  return rows
     .filter((u) => embeddingMap.get(u.id)) // Must have an embedding
     .map((u) => {
       const snapshot: Omit<BatchUser, "allocationFingerprint" | "rhythm"> = {
@@ -2470,7 +2524,8 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   // A user can pause, freeze, or edit their matching inputs after preview.
   // Reuse the allocation eligibility predicate so a stale plan never awards a
   // standby boost to a user who is no longer actually waiting for a match.
-  const currentMissedUsers = await loadEligibleUsersForIds(prisma, missedCandidates);
+  // Only the ids are needed, so the vectors (~19 KB of text each) are not read.
+  const currentMissedUserIds = await loadEligibleUserIds(prisma, missedCandidates);
   // A synthetic pairing is neutral on starvation: NEITHER reset nor increment.
   // They were offered something, so they did not go hungry this drop; it was
   // not a real partner, so the counter that measures real famine must not be
@@ -2483,9 +2538,7 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   // `proposed` match), and `pairedUserIds` covers pass 1 only — so this filter
   // is belt-and-braces. It is written out anyway because the property is a
   // product rule, not a side effect of two unrelated queries.
-  const missedUserIds = currentMissedUsers
-    .map((user) => user.id)
-    .filter((id) => !syntheticPairedRealIds.has(id));
+  const missedUserIds = currentMissedUserIds.filter((id) => !syntheticPairedRealIds.has(id));
   const now = new Date();
 
   await prisma.$transaction([
@@ -2543,8 +2596,9 @@ export async function runDropBatch(): Promise<DropBatchResult> {
  * than replacing the predicate.
  *
  * Omitted (the scheduled batch) the behaviour is byte-for-byte what it was
- * before the parameter existed — `loadEligibleUsers()` is called with no
- * arguments, which is what `match-engine-eligibility.test.ts` pins.
+ * before the parameter existed — the pool is read with no `requestedIds`, the
+ * same scans `loadEligibleUsers()` runs, which is what
+ * `match-engine-eligibility.test.ts` pins.
  */
 /**
  * People one city may bring to a single drop.
@@ -2570,11 +2624,11 @@ const MAX_POOL_PER_CITY = 400;
  * this decides who is in a drop, and "roughly the same" is not good enough for
  * that.
  */
-export function capPoolPerCity(
-  users: readonly BatchUser[],
+export function capPoolPerCity<T extends Pick<BatchUser, "id" | "homeCityKey" | "standbyCount">>(
+  users: readonly T[],
   limit: number = MAX_POOL_PER_CITY,
-): { kept: BatchUser[]; cut: BatchUser[] } {
-  const byCity = new Map<string, BatchUser[]>();
+): { kept: T[]; cut: T[] } {
+  const byCity = new Map<string, T[]>();
   for (const user of users) {
     const key = user.homeCityKey ?? "";
     const bucket = byCity.get(key);
@@ -2582,8 +2636,8 @@ export function capPoolPerCity(
     else byCity.set(key, [user]);
   }
 
-  const kept: BatchUser[] = [];
-  const cut: BatchUser[] = [];
+  const kept: T[] = [];
+  const cut: T[] = [];
   for (const [city, bucket] of byCity) {
     if (bucket.length <= limit) {
       kept.push(...bucket);
@@ -2602,27 +2656,85 @@ export function capPoolPerCity(
   return { kept, cut };
 }
 
+/**
+ * The drop's pool: how many are eligible, who is in (`capPoolPerCity`), and
+ * who is carried to the next drop.
+ *
+ * The cap reads a user's city, standby count and id — never the vector — so
+ * when a city has more eligibility rows than the cap, who is in is decided
+ * from whether each one HAS an embedding, and vectors (~19 KB of text each)
+ * are read for the kept users only, instead of for everyone the cap then cuts.
+ * Same people, same order, same counts. Every other drop — no city past the
+ * cap, so the cap cuts nobody — reads exactly what it always read.
+ */
+async function loadDropPool(
+  requestedIds: readonly string[] | undefined,
+): Promise<{ eligible: number; kept: BatchUser[]; carriedIds: string[] }> {
+  const rows = await loadEligibleRows(prisma, requestedIds, {});
+  if (rows.length === 0) return { eligible: 0, kept: [], carriedIds: [] };
+
+  if (!anyCityOverCap(rows)) {
+    const users = await toBatchUsers(prisma, rows, true);
+    const { kept, cut } = capPoolPerCity(users);
+    return { eligible: users.length, kept, carriedIds: cut.map((u) => u.id) };
+  }
+
+  const withEmbedding = await idsWithEmbedding(
+    prisma,
+    rows.map((row) => row.id),
+  );
+  const candidates = rows
+    .filter((row) => withEmbedding.has(row.id))
+    .map((row) => ({
+      id: row.id,
+      // Exactly the values the batch row carries (`toBatchUsers`).
+      homeCityKey: row.profile?.homeCityKey ?? null,
+      standbyCount: row.profile?.standbyCount ?? 0,
+      row,
+    }));
+  const { kept, cut } = capPoolPerCity(candidates);
+  const users = await toBatchUsers(
+    prisma,
+    kept.map((candidate) => candidate.row),
+    true,
+  );
+  return {
+    eligible: candidates.length,
+    kept: users,
+    carriedIds: cut.map((candidate) => candidate.id),
+  };
+}
+
+/** Whether any city has more eligibility rows than `MAX_POOL_PER_CITY`. */
+function anyCityOverCap(rows: readonly EligibleRow[]): boolean {
+  const perCity = new Map<string, number>();
+  for (const row of rows) {
+    const key = row.profile?.homeCityKey ?? "";
+    const count = (perCity.get(key) ?? 0) + 1;
+    if (count > MAX_POOL_PER_CITY) return true;
+    perCity.set(key, count);
+  }
+  return false;
+}
+
 export async function previewDropBatch(
   restrictToUserIds?: readonly string[],
 ): Promise<DropBatchPlan> {
-  const eligible = restrictToUserIds
-    ? await loadEligibleUsersForIds(prisma, restrictToUserIds)
-    : await loadEligibleUsers();
-  const { kept: users, cut: carried } = capPoolPerCity(eligible);
+  const { eligible, kept: users, carriedIds } = await loadDropPool(restrictToUserIds);
   if (users.length === 0) {
     return {
-      eligible: eligible.length,
+      eligible,
       pairs: 0,
       finalPairs: [],
-      missedUserIds: carried.map((u) => u.id),
+      missedUserIds: carriedIds,
     };
   }
   if (users.length === 1) {
     return {
-      eligible: eligible.length,
+      eligible,
       pairs: 0,
       finalPairs: [],
-      missedUserIds: [users[0]!.id, ...carried.map((u) => u.id)],
+      missedUserIds: [users[0]!.id, ...carriedIds],
     };
   }
 
@@ -2647,14 +2759,14 @@ export async function previewDropBatch(
   return {
     // Everyone the eligibility scan found, not only those this run could fit —
     // the number is read as "how many people were up for a match this week".
-    eligible: eligible.length,
+    eligible,
     pairs: finalPairs.length,
     finalPairs,
     missedUserIds: [
       ...users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id),
       // Carried over rather than dropped: this is the list that raises their
       // standby priority for the next drop.
-      ...carried.map((u) => u.id),
+      ...carriedIds,
     ],
   };
 }
