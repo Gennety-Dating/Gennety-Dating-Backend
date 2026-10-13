@@ -608,46 +608,57 @@ export async function sendMatchProposal(
   let synergyReasonA = match.synergyReason;
   let synergyReasonB = match.synergyReasonB;
 
-  if (!pitchForA) {
-    const resultA = await pitch({
-      selfFirstName: match.userA.firstName,
-      otherFirstName: match.userB.firstName,
-      selfSummary: summaryWithVoicePrompt(
-        match.userA.profile?.psychologicalSummary,
-        match.userA.voicePrompt?.transcript,
-      ),
-      otherSummary: summaryWithVoicePrompt(
-        match.userB.profile?.psychologicalSummary,
-        match.userB.voicePrompt?.transcript,
-      ),
-      otherOccupation: match.userB.major,
-      language: langA,
-    });
-    pitchForA = resultA.pitch;
-    if (synergyScore == null) synergyScore = resultA.synergyScore;
-    if (!synergyReasonA) synergyReasonA = resultA.synergyReason;
+  // The two generations read only the stored match, never each other's
+  // output, so they run at once: a drop pitches one pair at a time, and every
+  // later pair's reply window used to shrink by each predecessor's two
+  // back-to-back LLM calls. The results are applied A then B, as before.
+  const [sideA, sideB] = await Promise.all([
+    pitchForA
+      ? { pitch: pitchForA, generated: null }
+      : pitch({
+          selfFirstName: match.userA.firstName,
+          otherFirstName: match.userB.firstName,
+          selfSummary: summaryWithVoicePrompt(
+            match.userA.profile?.psychologicalSummary,
+            match.userA.voicePrompt?.transcript,
+          ),
+          otherSummary: summaryWithVoicePrompt(
+            match.userB.profile?.psychologicalSummary,
+            match.userB.voicePrompt?.transcript,
+          ),
+          otherOccupation: match.userB.major,
+          language: langA,
+        }).then((generated) => ({ pitch: generated.pitch, generated })),
+    pitchForB
+      ? { pitch: pitchForB, generated: null }
+      : pitch({
+          selfFirstName: match.userB.firstName,
+          otherFirstName: match.userA.firstName,
+          selfSummary: summaryWithVoicePrompt(
+            match.userB.profile?.psychologicalSummary,
+            match.userB.voicePrompt?.transcript,
+          ),
+          otherSummary: summaryWithVoicePrompt(
+            match.userA.profile?.psychologicalSummary,
+            match.userA.voicePrompt?.transcript,
+          ),
+          otherOccupation: match.userA.major,
+          language: langB,
+        }).then((generated) => ({ pitch: generated.pitch, generated })),
+  ]);
+  pitchForA = sideA.pitch;
+  pitchForB = sideB.pitch;
+
+  if (sideA.generated) {
+    if (synergyScore == null) synergyScore = sideA.generated.synergyScore;
+    if (!synergyReasonA) synergyReasonA = sideA.generated.synergyReason;
   }
 
-  if (!pitchForB) {
-    const resultB = await pitch({
-      selfFirstName: match.userB.firstName,
-      otherFirstName: match.userA.firstName,
-      selfSummary: summaryWithVoicePrompt(
-        match.userB.profile?.psychologicalSummary,
-        match.userB.voicePrompt?.transcript,
-      ),
-      otherSummary: summaryWithVoicePrompt(
-        match.userA.profile?.psychologicalSummary,
-        match.userA.voicePrompt?.transcript,
-      ),
-      otherOccupation: match.userA.major,
-      language: langB,
-    });
-    pitchForB = resultB.pitch;
+  if (sideB.generated) {
     // If side A was already cached but the score was somehow missing (older
     // row pre-feature), backfill from side B's call as a last resort.
-    if (synergyScore == null) synergyScore = resultB.synergyScore;
-    if (!synergyReasonB) synergyReasonB = resultB.synergyReason;
+    if (synergyScore == null) synergyScore = sideB.generated.synergyScore;
+    if (!synergyReasonB) synergyReasonB = sideB.generated.synergyReason;
   }
 
   if (

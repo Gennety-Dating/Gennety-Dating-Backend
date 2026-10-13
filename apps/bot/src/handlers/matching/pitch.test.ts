@@ -327,3 +327,85 @@ describe("sendMatchProposal — synergy reason language", () => {
     expect(draftsFor(stream, 1002).at(-1)).toContain("Your values line up.");
   });
 });
+
+describe("sendMatchProposal — pitch generation", () => {
+  function uncachedRow() {
+    const row = payload();
+    row.userB.language = "ru";
+    row.pitchForA = null;
+    row.pitchForB = null;
+    row.synergyScore = null;
+    row.synergyReason = null;
+    row.synergyReasonB = null;
+    return row;
+  }
+
+  it("generates both sides at once, and still takes the pair's score from side A", async () => {
+    mFindUnique.mockResolvedValue(uncachedRow());
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+    const started: string[] = [];
+    const release: Array<() => void> = [];
+    const pitchImpl = vi.fn(
+      (input: { language: string }) =>
+        new Promise<{ pitch: string; synergyScore: number; synergyReason: string }>((resolve) => {
+          started.push(input.language);
+          release.push(() =>
+            resolve({
+              pitch: `pitch-${input.language}`,
+              synergyScore: input.language === "ru" ? 55 : 91,
+              synergyReason: `reason-${input.language}`,
+            }),
+          );
+        }),
+    );
+
+    const sending = sendMatchProposal(makeApi(), "match-1", { streamImpl: stream, pitchImpl });
+    await vi.waitFor(() => expect(started).toEqual(["en", "ru"]));
+    // Side B answers first; the stored score is still side A's.
+    release[1]!();
+    release[0]!();
+    await sending;
+
+    expect(mUpdate).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: {
+        pitchForA: "pitch-en",
+        pitchForB: "pitch-ru",
+        synergyScore: 91,
+        synergyReason: "reason-en",
+        synergyReasonB: "reason-ru",
+      },
+    });
+  });
+
+  it("regenerates only the side that has no stored pitch", async () => {
+    const row = uncachedRow();
+    row.pitchForA = "stored A";
+    row.synergyScore = 70;
+    row.synergyReason = "stored reason";
+    mFindUnique.mockResolvedValue(row);
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+    const pitchImpl = vi.fn(async (input: { language: string }) => ({
+      pitch: `pitch-${input.language}`,
+      synergyScore: 12,
+      synergyReason: `reason-${input.language}`,
+    }));
+
+    await sendMatchProposal(makeApi(), "match-1", { streamImpl: stream, pitchImpl });
+
+    expect(pitchImpl).toHaveBeenCalledTimes(1);
+    expect(pitchImpl.mock.calls[0]![0].language).toBe("ru");
+    expect(mUpdate).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: {
+        pitchForA: "stored A",
+        pitchForB: "pitch-ru",
+        synergyScore: 70,
+        synergyReason: "stored reason",
+        synergyReasonB: "reason-ru",
+      },
+    });
+  });
+});
