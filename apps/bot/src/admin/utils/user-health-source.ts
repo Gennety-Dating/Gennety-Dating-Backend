@@ -7,6 +7,7 @@
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { adminQuery } from "./db-gate.js";
+import { createSingleFlight } from "./single-flight.js";
 import {
   HEALTH_CONFIG,
   classifyUser,
@@ -193,17 +194,37 @@ function toInput(
   };
 }
 
+/** What `classifyAllUsers` reads from the database — no `now`, no verdicts. */
+interface HealthScan {
+  rows: HealthUserRow[];
+  total: number;
+  inbound: Map<string, number>;
+  timing: Map<string, { medianSec: number | null; samples: number }>;
+}
+
 /**
- * Классификация всей базы (с потолком `max_scan_users`).
- *
- * Сначала считаем входящие по всем, тайминг ответов — только для тех, у кого
- * сообщений достаточно, чтобы правило вообще могло сработать: тянуть события
- * по всей базе ради медианы не нужно.
+ * The scan depends on exactly two config values: how many users it reads and
+ * the message count that makes reply timing worth fetching. Callers whose
+ * configs agree on both can share one scan.
  */
-export async function classifyAllUsers(
-  now: Date = new Date(),
-  cfg: HealthConfig = effectiveHealthConfig(),
-): Promise<{ users: ClassifiedUser[]; scanned: number; truncated: boolean }> {
+function scanKey(cfg: HealthConfig): string {
+  return `${cfg.max_scan_users}|${cfg.suspicious_min_messages}`;
+}
+
+/**
+ * One scan for every caller that asks while it is running.
+ *
+ * `/admin/dashboard`, the founder digest (through `loadMonetizationSummary`),
+ * acquisition cost and the users list all classify the whole base, and a
+ * dashboard open alongside a Hermes run used to read `users` and the
+ * `chat_events` window function once per caller, concurrently. Only the
+ * in-flight scan is shared — nothing is kept after it lands, so a later call
+ * always reads the database again. Each caller still classifies with its own
+ * `now` and its own config.
+ */
+const scans = createSingleFlight<string, HealthScan>();
+
+async function scanHealthInputs(cfg: HealthConfig): Promise<HealthScan> {
   const [rows, total, inbound] = await Promise.all([
     adminQuery(
       () =>
@@ -221,6 +242,23 @@ export async function classifyAllUsers(
     .filter((r) => (inbound.get(r.id) ?? 0) >= cfg.suspicious_min_messages)
     .map((r) => r.id);
   const timing = await medianResponseSeconds(candidates);
+  return { rows, total, inbound, timing };
+}
+
+/**
+ * Классификация всей базы (с потолком `max_scan_users`).
+ *
+ * Сначала считаем входящие по всем, тайминг ответов — только для тех, у кого
+ * сообщений достаточно, чтобы правило вообще могло сработать: тянуть события
+ * по всей базе ради медианы не нужно.
+ */
+export async function classifyAllUsers(
+  now: Date = new Date(),
+  cfg: HealthConfig = effectiveHealthConfig(),
+): Promise<{ users: ClassifiedUser[]; scanned: number; truncated: boolean }> {
+  const { rows, total, inbound, timing } = await scans.join(scanKey(cfg), () =>
+    scanHealthInputs(cfg),
+  ).result;
   const bursts = computeRegistrationBursts(rows, cfg);
 
   const users = rows.map((row) => {
