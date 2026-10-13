@@ -51,6 +51,7 @@ import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { returnParams } from "./return-to.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
+import { createIntervalPoller } from "./poller.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -917,7 +918,6 @@ let selection = new Set<string>();
 let peerSeen = new Set<string>();
 /** Which screen is showing — polling only live-updates the board itself. */
 let screen: "board" | "detail" | "overlap" | "agreed" | "success" | "other" = "other";
-let pollTimer: number | null = null;
 /** Suppresses poll re-routing while a payment / request is in flight. */
 let busy = false;
 let saving = false;
@@ -941,50 +941,54 @@ function keyOf(v: VenueChangeCatalogItem): string {
   return v.placeId ?? `${v.name}|${v.address}`;
 }
 
+async function pollBoard(): Promise<void> {
+  if (busy) return;
+  try {
+    const fresh = await fetchVenueBoardState(getInitData(), matchId);
+    const prev = boardState;
+    boardState = fresh;
+    if (!prev) return;
+    // A success screen is the user's moment — never route out from under it.
+    if (screen === "success") return;
+    // Status flips (agreement, settle, lapse, his decline) re-route.
+    if (fresh.status !== prev.status || fresh.myAction !== prev.myAction) {
+      route();
+      return;
+    }
+    // On the live board only the partner's marks move under us — patch the
+    // cards that actually changed rather than rebuilding the list (which
+    // would replay every entry animation and read as a flash).
+    if (screen === "board" && fresh.peerLikes.join() !== prev.peerLikes.join()) {
+      const changed = new Set([...fresh.peerLikes, ...prev.peerLikes]);
+      for (const key of changed) patchCard(key);
+      syncBoardChrome();
+    }
+  } catch (err) {
+    // The date itself is gone — the partner deleted their account, which
+    // takes the match row with it. That is not a blip: polling on would
+    // keep a live-looking board up every 4s for a date that no longer
+    // exists, and every button on it would only answer "try again".
+    if (err instanceof CalendarApiError && err.reason === "match-not-found") {
+      stopPolling();
+      showMessage("pin", s.closedGeneric);
+    }
+    /* anything else is a transient poll failure — next tick retries */
+  }
+}
+
+/**
+ * Every 4 s, one read at a time: a tick that finds the last read still out
+ * (the client timeout is 20 s) is skipped, so slow answers can no longer stack
+ * up and land out of order — see `poller.ts`.
+ */
+const boardPoll = createIntervalPoller(4000, pollBoard);
+
 function startPolling(): void {
-  if (pollTimer != null || previewMode) return;
-  pollTimer = window.setInterval(() => {
-    void (async () => {
-      if (busy) return;
-      try {
-        const fresh = await fetchVenueBoardState(getInitData(), matchId);
-        const prev = boardState;
-        boardState = fresh;
-        if (!prev) return;
-        // A success screen is the user's moment — never route out from under it.
-        if (screen === "success") return;
-        // Status flips (agreement, settle, lapse, his decline) re-route.
-        if (fresh.status !== prev.status || fresh.myAction !== prev.myAction) {
-          route();
-          return;
-        }
-        // On the live board only the partner's marks move under us — patch the
-        // cards that actually changed rather than rebuilding the list (which
-        // would replay every entry animation and read as a flash).
-        if (screen === "board" && fresh.peerLikes.join() !== prev.peerLikes.join()) {
-          const changed = new Set([...fresh.peerLikes, ...prev.peerLikes]);
-          for (const key of changed) patchCard(key);
-          syncBoardChrome();
-        }
-      } catch (err) {
-        // The date itself is gone — the partner deleted their account, which
-        // takes the match row with it. That is not a blip: polling on would
-        // keep a live-looking board up every 4s for a date that no longer
-        // exists, and every button on it would only answer "try again".
-        if (err instanceof CalendarApiError && err.reason === "match-not-found") {
-          stopPolling();
-          showMessage("pin", s.closedGeneric);
-        }
-        /* anything else is a transient poll failure — next tick retries */
-      }
-    })();
-  }, 4000);
+  if (boardPoll.running || previewMode) return;
+  boardPoll.start();
 }
 function stopPolling(): void {
-  if (pollTimer != null) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  boardPoll.stop();
 }
 
 function errorMessage(err: unknown): string {

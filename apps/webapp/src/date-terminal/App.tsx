@@ -7,6 +7,7 @@ import { useActionBarSpace } from "../ticket/action-bar.js";
 import { pickLang as pickTicketLang, strings as ticketStrings } from "../ticket/i18n.js";
 import { CanvasApiError, fetchDateState, postBump, type DateStateResponse } from "../canvas/api.js";
 import { isCanvasState } from "../canvas/sheet.js";
+import { createResponseEpoch } from "../request-epoch.js";
 import {
   backoffFor,
   connectionTroubleFor,
@@ -102,6 +103,8 @@ const DECK_POLL_MS = 1_500;
  * locally played scene) is not up to a whole 5 s radar interval late.
  */
 const ALONE_WATCH_MS = 12_000;
+/** Which `/v1/date/state` answer may still paint — see `load` below. */
+const stateEpoch = createResponseEpoch();
 /** Where the arrival ring starts filling, in metres from the venue. */
 const RING_FAR_M = 1000;
 
@@ -208,16 +211,24 @@ export function DateTerminal(): ReactElement {
 
   const load = useCallback(async (): Promise<void> => {
     if (!initData || !matchId) return;
+    // The poll re-arms whenever the phase moves (a GPS fix can do that), so a
+    // read can leave while the previous one is still out, and the hold asks for
+    // its own. Their answers land in network order; only one newer than what
+    // is already on screen may paint — see `request-epoch.ts`.
+    const ticket = stateEpoch.begin();
     try {
       const sentAt = wallNow();
       const next = await fetchDateState(initData);
+      // Every answer is a valid clock sample, painted or not.
       clockRef.current.record({ sentAt, receivedAt: wallNow(), serverNow: parseServerTime(next.serverNow) });
+      if (!stateEpoch.claim(ticket)) return;
       setFailures(0);
       setTrouble(null);
       // An unknown state from a newer server reads as "nothing on", like the
       // canvas does — the contract declares states as open strings.
       setDateState(isCanvasState(next.state) ? next : { ...next, state: "IDLE_EXPLORING" });
     } catch (err) {
+      if (!stateEpoch.claim(ticket)) return;
       setFailures((n) => n + 1);
       // A13-M31: once the ticket is drawn a failed poll used to change nothing
       // on screen, so a dead connection kept presenting the last state as live.

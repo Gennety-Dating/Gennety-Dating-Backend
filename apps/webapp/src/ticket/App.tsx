@@ -25,6 +25,7 @@ import {
 } from "./ticket-state.js";
 import { createInFlightGuard, pollUntil } from "../pay-flow.js";
 import { createResponseEpoch } from "../request-epoch.js";
+import { createIntervalPoller } from "../poller.js";
 import { Ticket3D } from "./Ticket3D.js";
 import { useActionBarSpace } from "./action-bar.js";
 import { Confetti } from "./Confetti.js";
@@ -180,8 +181,11 @@ export function App(): ReactElement {
     // staring at a pay button she'd pay twice on), and the gate may expire and
     // open the Calendar for free (the buttons must become the "closed" screen).
     if (screen !== "waiting" && screen !== "cover-partner" && screen !== "offer") return;
-    const id = setInterval(() => void load(), 4000);
-    return () => clearInterval(id);
+    // Same 4 s cadence, one read at a time: a tick that finds the last read
+    // (its photo preload included) still out is skipped — see `poller.ts`.
+    const poll = createIntervalPoller(4000, load);
+    poll.start();
+    return () => poll.stop();
   }, [screen, load]);
 
   // ── Payment actions ──────────────────────────────────────────────────────
