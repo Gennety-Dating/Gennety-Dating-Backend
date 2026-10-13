@@ -328,6 +328,21 @@ async function notifyParticipant(
 }
 
 /**
+ * Run post-commit notifications without holding the HTTP response.
+ *
+ * The decision endpoints used to await them in sequence: a Telegram send
+ * (whose 429 auto-retry can sleep up to 15 s) plus an APNs push (≤10 s) per
+ * participant, then the Rematch offer — all after the state was already
+ * committed, all best-effort, and all on the iOS app's request. One chain, so
+ * their order is kept; its failure is logged, never surfaced to the caller.
+ */
+function notifyAfterResponse(label: string, work: () => Promise<void>): void {
+  void work().catch((err: unknown) => {
+    console.warn(`[matches-service] ${label} failed:`, err);
+  });
+}
+
+/**
  * Fetch the most relevant in-flight match for this user. Priority order
  * mirrors what the Expo UI wants on the "Current match" screen:
  *   1. `scheduled` — the date is locked in, show countdown + venue
@@ -737,26 +752,28 @@ export async function applyMatchDecision(
           else await startScheduling(api, matchId);
         }
         const telegramHandledByCta = Boolean(api);
-        await notifyParticipant(
-          actor,
-          "matchBothAccepted",
-          {
-            type: "match.both_accepted",
-            title: "It's a match",
-            matchId,
-          },
-          { telegram: !telegramHandledByCta },
-        );
-        await notifyParticipant(
-          peer,
-          "matchBothAccepted",
-          {
-            type: "match.both_accepted",
-            title: "It's a match",
-            matchId,
-          },
-          { telegram: !telegramHandledByCta },
-        );
+        notifyAfterResponse("both-accepted notify", async () => {
+          await notifyParticipant(
+            actor,
+            "matchBothAccepted",
+            {
+              type: "match.both_accepted",
+              title: "It's a match",
+              matchId,
+            },
+            { telegram: !telegramHandledByCta },
+          );
+          await notifyParticipant(
+            peer,
+            "matchBothAccepted",
+            {
+              type: "match.both_accepted",
+              title: "It's a match",
+              matchId,
+            },
+            { telegram: !telegramHandledByCta },
+          );
+        });
       }
       return getCurrentMatchForUser(userId);
     }
@@ -777,35 +794,39 @@ export async function applyMatchDecision(
         side === "B" ? true : false,
       );
       const boosted = syntheticPair ? false : await boostAcceptedSidePriority(actorId);
-      await notifyParticipant(actor, outcomeRevealKey(true, false, boosted), {
-        type: "match.outcome",
-        title: "Gennety",
-        matchId,
+      notifyAfterResponse("mixed-verdict notify", async () => {
+        await notifyParticipant(actor, outcomeRevealKey(true, false, boosted), {
+          type: "match.outcome",
+          title: "Gennety",
+          matchId,
+        });
+        await notifyParticipant(peer, outcomeRevealKey(false, true, boosted), {
+          type: "match.outcome",
+          title: "Gennety",
+          matchId,
+        });
+        // Rematch is Telegram-only, but a decision taken in the iOS app still
+        // frees a TELEGRAM participant — without this hook their offer would be
+        // silently lost purely because their partner used the other client.
+        // `sendRematchOfferIfEligible` skips synthetic negative telegramIds, so a
+        // mobile-only user correctly gets nothing. A synthetic TEST pair is
+        // suppressed for a different reason — see `syntheticPair` above.
+        if (!syntheticPair) {
+          await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+        }
       });
-      await notifyParticipant(peer, outcomeRevealKey(false, true, boosted), {
-        type: "match.outcome",
-        title: "Gennety",
-        matchId,
-      });
-      // Rematch is Telegram-only, but a decision taken in the iOS app still
-      // frees a TELEGRAM participant — without this hook their offer would be
-      // silently lost purely because their partner used the other client.
-      // `sendRematchOfferIfEligible` skips synthetic negative telegramIds, so a
-      // mobile-only user correctly gets nothing. A synthetic TEST pair is
-      // suppressed for a different reason — see `syntheticPair` above.
-      if (!syntheticPair) {
-        await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
-      }
       return { status: "resolved" };
     }
 
     // First decider accepted → keep the row `proposed` (blind invariant) and
     // send the peer a neutral "your match answered" nudge that reveals nothing.
-    await notifyParticipant(peer, "matchPeerDecided", {
-      type: "match.peer_decided",
-      title: "Gennety",
-      matchId,
-    });
+    notifyAfterResponse("peer-decided notify", () =>
+      notifyParticipant(peer, "matchPeerDecided", {
+        type: "match.peer_decided",
+        title: "Gennety",
+        matchId,
+      }),
+    );
     return getCurrentMatchForUser(userId);
   }
 
@@ -840,11 +861,13 @@ export async function applyMatchDecision(
   if (peerPrior === null) {
     // First decider declines: KEEP `proposed` so the peer's keyboard stays
     // live and they decide blind. Only record this side's verdict + nudge.
-    await notifyParticipant(peer, "matchPeerDecided", {
-      type: "match.peer_decided",
-      title: "Gennety",
-      matchId,
-    });
+    notifyAfterResponse("peer-decided notify", () =>
+      notifyParticipant(peer, "matchPeerDecided", {
+        type: "match.peer_decided",
+        title: "Gennety",
+        matchId,
+      }),
+    );
     return getCurrentMatchForUser(userId);
   }
 
@@ -865,22 +888,24 @@ export async function applyMatchDecision(
     peerPrior === true && !syntheticPair
       ? await boostAcceptedSidePriority(targetId)
       : false;
-  await notifyParticipant(actor, outcomeRevealKey(false, peerPrior, boosted), {
-    type: "match.outcome",
-    title: "Gennety",
-    matchId,
+  notifyAfterResponse("decline notify", async () => {
+    await notifyParticipant(actor, outcomeRevealKey(false, peerPrior, boosted), {
+      type: "match.outcome",
+      title: "Gennety",
+      matchId,
+    });
+    await notifyParticipant(peer, outcomeRevealKey(peerPrior, false, boosted), {
+      type: "match.outcome",
+      title: "Gennety",
+      matchId,
+    });
+    // Same reason as the mixed-verdict branch above: a decline taken in the iOS
+    // app still frees a Telegram participant, who should still get the offer —
+    // unless the rejection was staged by a synthetic test profile.
+    if (!syntheticPair) {
+      await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+    }
   });
-  await notifyParticipant(peer, outcomeRevealKey(peerPrior, false, boosted), {
-    type: "match.outcome",
-    title: "Gennety",
-    matchId,
-  });
-  // Same reason as the mixed-verdict branch above: a decline taken in the iOS
-  // app still frees a Telegram participant, who should still get the offer —
-  // unless the rejection was staged by a synthetic test profile.
-  if (!syntheticPair) {
-    await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
-  }
   return { status: "resolved" };
 }
 

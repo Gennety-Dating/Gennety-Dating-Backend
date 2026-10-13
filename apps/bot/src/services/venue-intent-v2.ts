@@ -1488,44 +1488,55 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     generateAndSaveWingmanHints(matchId).catch((error) => {
       console.warn(`[venue-intent-v2] wingman generation failed for ${matchId}:`, error);
     });
-    // Deliver the rich scheduled confirmation — the SAME date-card PNG + tappable
-    // `date_time` entity + Maps/Change-venue keyboard + grounded venue blurb +
-    // founder feed as the legacy concierge path (services/scheduled-confirmation.ts),
-    // instead of a bare "venue ready + link" text. Telegram-only (the helper
-    // no-ops mobile targets); any render failure degrades to text inside it, so
-    // scheduling never wedges.
-    const api = (await import("../public/server.js")).getBotApi();
-    if (api) {
-      const venueForCard: Venue = {
-        name: record.name,
-        address: record.address,
-        googleMapsUri: record.mapsUri,
-        lat: record.lat,
-        lng: record.lng,
-        photoName: record.photoName,
-        rating: record.rank.rating ?? null,
-        userRatingCount: record.rank.reviews ?? null,
-        placeId: record.rank.placeId,
-        source: record.source,
-      };
-      const keywords = [...new Set<string>([...a.experiences, ...b.experiences])];
-      await deliverScheduledConfirmation(api, matchId, {
-        venue: venueForCard,
-        category: record.category,
-        keywords,
-      }).catch((error) => {
-        console.warn(`[venue-intent-v2] scheduled confirmation failed for ${matchId}:`, error);
-      });
-    }
-    // Mobile participants still get the lightweight push (the rich card is
-    // Telegram-only); skip the redundant Telegram plain-text for `scheduled`
-    // since deliverScheduledConfirmation already owns that surface.
-    await notifyVenueIntentParticipants(
-      match,
-      "scheduled",
-      { venueName: record.name, mapsUri: record.mapsUri },
-      { telegram: false },
-    );
+    // Delivery runs DETACHED from the commit above (2026-10-13). It is
+    // best-effort by construction (every failure degrades inside it), but it is
+    // also slow — LLM blurbs, a Places photo, a card render, and a status script
+    // that never cuts short — and iOS's PUT /venue-intent awaited all of it:
+    // the second confirmer's app sat on a spinner for the partner's Telegram
+    // card, and could hit its own request timeout although the date was
+    // already scheduled. The response only needs the committed state.
+    void (async () => {
+      // Deliver the rich scheduled confirmation — the SAME date-card PNG + tappable
+      // `date_time` entity + Maps/Change-venue keyboard + grounded venue blurb +
+      // founder feed as the legacy concierge path (services/scheduled-confirmation.ts),
+      // instead of a bare "venue ready + link" text. Telegram-only (the helper
+      // no-ops mobile targets); any render failure degrades to text inside it, so
+      // scheduling never wedges.
+      const api = (await import("../public/server.js")).getBotApi();
+      if (api) {
+        const venueForCard: Venue = {
+          name: record.name,
+          address: record.address,
+          googleMapsUri: record.mapsUri,
+          lat: record.lat,
+          lng: record.lng,
+          photoName: record.photoName,
+          rating: record.rank.rating ?? null,
+          userRatingCount: record.rank.reviews ?? null,
+          placeId: record.rank.placeId,
+          source: record.source,
+        };
+        const keywords = [...new Set<string>([...a.experiences, ...b.experiences])];
+        await deliverScheduledConfirmation(api, matchId, {
+          venue: venueForCard,
+          category: record.category,
+          keywords,
+        }).catch((error) => {
+          console.warn(`[venue-intent-v2] scheduled confirmation failed for ${matchId}:`, error);
+        });
+      }
+      // Mobile participants still get the lightweight push (the rich card is
+      // Telegram-only); skip the redundant Telegram plain-text for `scheduled`
+      // since deliverScheduledConfirmation already owns that surface.
+      await notifyVenueIntentParticipants(
+        match,
+        "scheduled",
+        { venueName: record.name, mapsUri: record.mapsUri },
+        { telegram: false },
+      );
+    })().catch((error: unknown) => {
+      console.warn(`[venue-intent-v2] scheduled delivery failed for ${matchId}:`, error);
+    });
   };
 
   /**
