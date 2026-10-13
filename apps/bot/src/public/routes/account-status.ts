@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { MIN_PHOTOS } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
-import { serializeProfile, serializeUser } from "./serializers.js";
+import { SERIALIZED_ME_SELECT, serializeProfile, serializeUser } from "./serializers.js";
 import {
   freezeAccount,
   transitionAccountStatus,
@@ -24,7 +24,7 @@ accountStatusRouter.use(requireAuth);
 async function respondWithMe(userId: string, res: Response): Promise<void> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    include: { profile: true },
+    select: SERIALIZED_ME_SELECT,
   });
   res.json({
     user: serializeUser(user),

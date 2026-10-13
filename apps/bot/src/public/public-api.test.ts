@@ -1727,6 +1727,103 @@ describe("GET /v1/me", () => {
     expect(res.body.user).not.toHaveProperty("messageHistory");
     expect(res.body.profile).toBeNull();
   });
+
+  // The route reads only what the response shows (perf 2026-10-13): the whole
+  // row carried `message_history` and the JSON blobs on every 20 s poll. The
+  // body itself is pinned field by field so the narrower read cannot drop one.
+  it("serializes every user and profile field from an explicit select", async () => {
+    const premiumUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const extra = {
+      theme: "dark",
+      themeMode: "system",
+      researchOptIn: true,
+      ticketBalance: 3,
+      premiumUntil,
+      premiumProvider: "appstore",
+    };
+    const user = await seedUser({
+      ...extra,
+      surname: "Smith",
+      major: "CS",
+      messageHistory: [{ role: "user", content: "private" }],
+      profile: {
+        id: crypto.randomUUID(),
+        userId: "temp",
+        hobbies: ["chess"],
+        partnerPreferences: "kind",
+        psychologicalSummary: "curious",
+        ageRangeMin: 20,
+        ageRangeMax: 28,
+        photos: ["p/1.jpg"],
+        profileMedia: [{ kind: "photo" }],
+        referenceFaceEmbedding: [0.1, 0.2],
+        matchRadius: "citywide",
+        standbyCount: 1,
+        latitude: 50.45,
+        longitude: 30.52,
+        locationUpdatedAt: new Date("2026-10-01T10:00:00.000Z"),
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: "place-1",
+      },
+    } as Partial<UserRow>);
+    if (user.profile) user.profile.userId = user.id;
+
+    const res = await request(app)
+      .get("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      user: {
+        id: user.id,
+        email: user.email,
+        universityDomain: "stanford.edu",
+        firstName: "Alice",
+        surname: "Smith",
+        age: 22,
+        gender: "female",
+        preference: "men",
+        major: "CS",
+        language: "en",
+        theme: "dark",
+        themeMode: "system",
+        status: "active",
+        onboardingStep: "completed",
+        termsAccepted: true,
+        researchOptIn: true,
+        ticketBalance: 3,
+        appAccountToken: expect.any(String),
+        premium: { active: true, expiresAt: premiumUntil.toISOString(), source: "appstore" },
+      },
+      profile: {
+        hobbies: ["chess"],
+        partnerPreferences: "kind",
+        psychologicalSummary: "curious",
+        ageRangeMin: 20,
+        ageRangeMax: 28,
+        photos: ["p/1.jpg"],
+        matchRadius: "citywide",
+        standbyCount: 1,
+        latitude: 50.45,
+        longitude: 30.52,
+        locationUpdatedAt: "2026-10-01T10:00:00.000Z",
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: "place-1",
+      },
+    });
+    const call = vi.mocked(prismaMock.user.findUnique).mock.calls.at(-1)?.[0] as {
+      include?: unknown;
+      select: Record<string, unknown> & { profile: { select: Record<string, unknown> } };
+    };
+    expect(call.include).toBeUndefined();
+    expect(call.select).not.toHaveProperty("messageHistory");
+    expect(call.select.profile.select).not.toHaveProperty("profileMedia");
+    expect(call.select.profile.select).not.toHaveProperty("referenceFaceEmbedding");
+  });
 });
 
 describe("PATCH /v1/me/preferences", () => {

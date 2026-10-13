@@ -1,4 +1,62 @@
-import type { Profile, User } from "@gennety/db";
+import type { Prisma, Profile, User } from "@gennety/db";
+
+/**
+ * Exactly the user columns `serializeUser` reads. Routes that only answer with
+ * the serialized user select this instead of the whole row — which carries the
+ * agent's `message_history` (up to 200 replies) and a dozen JSON blobs no
+ * response ever shows. `serializeUser` is typed by it, so a field added there
+ * without being added here does not compile.
+ */
+export const SERIALIZED_USER_SELECT = {
+  id: true,
+  email: true,
+  universityDomain: true,
+  firstName: true,
+  surname: true,
+  age: true,
+  gender: true,
+  preference: true,
+  major: true,
+  language: true,
+  theme: true,
+  themeMode: true,
+  status: true,
+  onboardingStep: true,
+  termsAccepted: true,
+  researchOptIn: true,
+  ticketBalance: true,
+} as const satisfies Prisma.UserSelect;
+
+export type SerializableUser = Prisma.UserGetPayload<{ select: typeof SERIALIZED_USER_SELECT }>;
+
+/** Exactly the profile columns `serializeProfile` reads — same reasoning as the user's. */
+export const SERIALIZED_PROFILE_SELECT = {
+  hobbies: true,
+  partnerPreferences: true,
+  psychologicalSummary: true,
+  ageRangeMin: true,
+  ageRangeMax: true,
+  photos: true,
+  matchRadius: true,
+  standbyCount: true,
+  latitude: true,
+  longitude: true,
+  locationUpdatedAt: true,
+  homeCity: true,
+  homeCountryCode: true,
+  homeCityKey: true,
+  homePlaceId: true,
+} as const satisfies Prisma.ProfileSelect;
+
+export type SerializableProfile = Prisma.ProfileGetPayload<{
+  select: typeof SERIALIZED_PROFILE_SELECT;
+}>;
+
+/** The `{ user, profile }` answer of the `/v1/me` family, read in one call. */
+export const SERIALIZED_ME_SELECT = {
+  ...SERIALIZED_USER_SELECT,
+  profile: { select: SERIALIZED_PROFILE_SELECT },
+} as const satisfies Prisma.UserSelect;
 
 /**
  * Shape returned by `/v1/me` and `/v1/auth/otp/verify`. Mirrors
@@ -60,7 +118,7 @@ export interface SerializedProfile {
   homePlaceId: string | null;
 }
 
-export function serializeUser(user: User): SerializedUser {
+export function serializeUser(user: SerializableUser): SerializedUser {
   return {
     id: user.id,
     email: user.email,
@@ -82,7 +140,7 @@ export function serializeUser(user: User): SerializedUser {
   };
 }
 
-export function serializeProfile(profile: Profile): SerializedProfile {
+export function serializeProfile(profile: SerializableProfile): SerializedProfile {
   return {
     hobbies: profile.hobbies,
     partnerPreferences: profile.partnerPreferences,

@@ -19,7 +19,8 @@ vi.mock("./auth-middleware.js", () => ({
   },
 }));
 
-vi.mock("./routes/serializers.js", () => ({
+vi.mock("./routes/serializers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./routes/serializers.js")>()),
   serializeUser: vi.fn((u: { id?: string; status?: string }) => ({
     id: u.id ?? "user-1",
     status: u.status,
@@ -153,5 +154,21 @@ describe("POST /v1/me/freeze", () => {
     const res = await request(buildApp()).post("/v1/me/freeze").send({});
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "User not found" });
+  });
+});
+
+describe("the /v1/me answer after a transition", () => {
+  // Read with the serializers' own select (perf 2026-10-13), not the whole row
+  // with its `message_history`: exactly the columns the answer is built from.
+  it("reads only the serialized user and profile columns", async () => {
+    freezeAccount.mockResolvedValue({ kind: "changed", status: "frozen" });
+    await request(buildApp()).post("/v1/me/freeze").send({});
+    const { SERIALIZED_ME_SELECT } = await import("./routes/serializers.js");
+    expect(userFindUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: SERIALIZED_ME_SELECT,
+    });
+    expect(SERIALIZED_ME_SELECT).not.toHaveProperty("messageHistory");
+    expect(Object.keys(SERIALIZED_ME_SELECT.profile.select)).toHaveLength(15);
   });
 });

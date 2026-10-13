@@ -19,7 +19,13 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
-import { serializeProfile, serializeUser } from "./serializers.js";
+import {
+  SERIALIZED_ME_SELECT,
+  SERIALIZED_PROFILE_SELECT,
+  SERIALIZED_USER_SELECT,
+  serializeProfile,
+  serializeUser,
+} from "./serializers.js";
 import {
   accountDeleteLimiter,
   photoUploadLimiter,
@@ -92,10 +98,17 @@ meRouter.use(requireAuth);
 // shared with the removed /verify-selfie endpoint.
 const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
 
+/** GET /v1/me reads the serialized pair plus the Premium head it summarises. */
+const ME_GET_SELECT = {
+  ...SERIALIZED_ME_SELECT,
+  premiumUntil: true,
+  premiumProvider: true,
+} as const satisfies Prisma.UserSelect;
+
 meRouter.get("/", async (req: Request, res: Response): Promise<void> => {
   const user = await prisma.user.findUnique({
     where: { id: req.userId! },
-    include: { profile: true },
+    select: ME_GET_SELECT,
   });
   if (!user) {
     res.status(404).json({ error: "User not found" });
@@ -437,7 +450,7 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
-    include: { profile: true },
+    select: SERIALIZED_ME_SELECT,
   });
   res.json({
     user: serializeUser(user),
@@ -526,6 +539,7 @@ meRouter.post("/home-location", async (req: Request, res: Response): Promise<voi
   const profile = await saveHomeLocationForUser(req.userId!, validation.data);
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
+    select: SERIALIZED_USER_SELECT,
   });
 
   res.json({
@@ -546,10 +560,12 @@ meRouter.patch("/preferences", async (req: Request, res: Response): Promise<void
     where: { userId: req.userId! },
     update: { matchRadius: radius },
     create: { userId: req.userId!, matchRadius: radius },
+    select: SERIALIZED_PROFILE_SELECT,
   });
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
+    select: SERIALIZED_USER_SELECT,
   });
 
   res.json({
@@ -582,8 +598,14 @@ meRouter.patch("/theme", async (req: Request, res: Response): Promise<void> => {
 
   await setUserThemeById(req.userId!, parsed.theme, parsed.mode);
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-  const profile = await prisma.profile.findUnique({ where: { userId: req.userId! } });
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: req.userId! },
+    select: SERIALIZED_USER_SELECT,
+  });
+  const profile = await prisma.profile.findUnique({
+    where: { userId: req.userId! },
+    select: SERIALIZED_PROFILE_SELECT,
+  });
 
   res.json({
     user: serializeUser(user),
@@ -612,8 +634,14 @@ meRouter.patch("/language", async (req: Request, res: Response): Promise<void> =
 
   await setUserLanguageById(req.userId!, parsed.language);
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-  const profile = await prisma.profile.findUnique({ where: { userId: req.userId! } });
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: req.userId! },
+    select: SERIALIZED_USER_SELECT,
+  });
+  const profile = await prisma.profile.findUnique({
+    where: { userId: req.userId! },
+    select: SERIALIZED_PROFILE_SELECT,
+  });
 
   res.json({
     user: serializeUser(user),
