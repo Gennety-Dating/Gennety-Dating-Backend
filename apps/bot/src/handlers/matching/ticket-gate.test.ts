@@ -189,12 +189,27 @@ describe("ticket gate post-accept status message", () => {
     // The ticket card id is NOT stored in calendarMessageId* — that field tracks
     // the SEPARATE Calendar card, so the scheduling/venue/time-lock flows never
     // edit or delete the persistent ticket entry. PRODUCT_SPEC §3.5b.
-    const updateDataKeys = mMatch.update.mock.calls.flatMap((c) =>
-      Object.keys((c[0] as { data: Record<string, unknown> }).data),
+    const updateDataKeys = [...mMatch.update.mock.calls, ...mMatch.updateMany.mock.calls].flatMap(
+      (c) => Object.keys((c[0] as { data: Record<string, unknown> }).data),
     );
     expect(updateDataKeys).toContain("ticketStatus");
     expect(updateDataKeys).not.toContain("calendarMessageIdA");
     expect(updateDataKeys).not.toContain("calendarMessageIdB");
+  });
+
+  it("sends nothing when the match left `negotiating` before the offer (a block mid-accept)", async () => {
+    // The accept flips `proposed → negotiating`, then calls this. A block or a
+    // freeze committing in between cancelled the match; the offer used to write
+    // the gate unconditionally and send both people the mutual reveal anyway.
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    await sendTicketOffer(api, "match-1");
+
+    expect(mMatch.updateMany.mock.calls[0]![0]).toMatchObject({
+      where: { id: "match-1", status: "negotiating" },
+    });
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("plays the falling-hearts effect on BOTH sides' mutual-match reveal", async () => {

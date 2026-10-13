@@ -578,14 +578,22 @@ export async function settlePremiumSlots(matchId: string): Promise<Side[]> {
  */
 export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promise<void> {
   const expiresAt = ticketGateDeadline();
-  await prisma.match.update({
-    where: { id: matchId },
+  // Guarded on the stage the offer belongs to. The caller's `proposed →
+  // negotiating` flip and this write are separate statements, and a block,
+  // freeze or moderation cancel can land between them: an unguarded write then
+  // sent both people "It's mutual 🤍" with a ticket button for a match that was
+  // already cancelled — to the blocker and to the person they had just blocked.
+  // (`updateMany` also means a row an account deletion took is a no-op here,
+  // not a thrown P2025.)
+  const armed = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating" },
     data: {
       ticketStatus: "pending",
       ticketPriceCents: env.TICKET_PRICE_CENTS,
       ticketExpiresAt: expiresAt,
     },
   });
+  if (armed.count === 0) return;
 
   let match = await loadTicketMatch(matchId);
   if (!match) return;
