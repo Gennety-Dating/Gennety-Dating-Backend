@@ -482,6 +482,8 @@ model User {
   blocksFiled   UserBlock[] @relation("UserBlockBlocker")
   blocksAgainst UserBlock[] @relation("UserBlockBlocked")
 
+  formerMatches FormerMatch[]
+
   messages     Message[]
   chatSessions ChatSession[]
   inboxItems   InboxItem[]
@@ -2769,6 +2771,43 @@ model UserBlock {
   @@index([blockedId])
   @@index([blockedFormerId])
   @@map("user_blocks")
+}
+
+/// A match whose other side deleted their account — kept for the person who
+/// stayed, so they can still report the one who left (decision 2026-10-13).
+///
+/// Deleting an account cascades its `matches`, so the survivor's Report button
+/// used to lead nowhere: the match row was gone, and a person who behaved badly
+/// and then deleted the account left no way to file it. This row is the
+/// minimum needed to keep that door open — the old match id (what the
+/// survivor's buttons still carry), the survivor, and the deleted account's id.
+/// No names, no venue, no times.
+///
+/// Written inside the deletion transaction by `recordFormerMatches`, and only
+/// when the deletion left a `SafetyTombstone`: that is what a report against
+/// the account attaches to (`reports.reported_former_id` → tombstone
+/// `former_user_id`) and what carries its consequences if the person returns.
+/// Only matches touched in the last `FORMER_MATCH_REPORT_WINDOW_DAYS`;
+/// swept that long after `createdAt` by `workers/retention.ts`.
+///
+/// `matchId` and `formerUserId` have no FK — both rows are gone. `reportedAt`
+/// is the one-report-per-match guard the `(reporter_id, match_id)` unique used
+/// to be; it is stamped at write time when the survivor had already reported
+/// this match before the deletion.
+model FormerMatch {
+  id           String    @id @default(uuid()) @db.Uuid
+  matchId      String    @map("match_id") @db.Uuid
+  survivorId   String    @map("survivor_id") @db.Uuid
+  formerUserId String    @map("former_user_id") @db.Uuid
+  reportedAt   DateTime? @map("reported_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  survivor User @relation(fields: [survivorId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, survivorId])
+  @@index([survivorId, createdAt])
+  @@index([createdAt])
+  @@map("former_matches")
 }
 
 /// What account deletion keeps so a restricted or blocked person cannot reset

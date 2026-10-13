@@ -9,6 +9,7 @@ const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
 const inboxItem = { findMany: vi.fn(), deleteMany: vi.fn() };
 const safetyTombstone = { findMany: vi.fn(), deleteMany: vi.fn() };
+const formerMatch = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userRhythmProfile = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
@@ -23,6 +24,7 @@ vi.mock("@gennety/db", () => ({
     userPlaceVisit,
     inboxItem,
     safetyTombstone,
+    formerMatch,
     userRhythmProfile,
     $executeRaw,
   },
@@ -51,6 +53,7 @@ const ALL_MODELS = [
   userPlaceVisit,
   inboxItem,
   safetyTombstone,
+  formerMatch,
 ];
 
 beforeEach(() => {
@@ -124,6 +127,7 @@ describe("retentionTick", () => {
       safetyTombstones: 0,
       orphanReports: 0,
       orphanBlocks: 0,
+      formerMatches: 0,
     });
     for (const model of ALL_MODELS) {
       expect(model.deleteMany).not.toHaveBeenCalled();
@@ -269,6 +273,7 @@ describe("retentionTick", () => {
       safetyTombstones: 0,
       orphanReports: 0,
       orphanBlocks: 0,
+      formerMatches: 0,
     });
   });
 
@@ -345,6 +350,20 @@ describe("retentionTick", () => {
       });
       expect(safetyTombstone.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["t1"] } } });
       expect(result.safetyTombstones).toBe(1);
+    });
+
+    it("sweeps survivors' former-match traces once the report window has passed", async () => {
+      formerMatch.findMany.mockResolvedValue([{ id: "f1" }]);
+      formerMatch.deleteMany.mockResolvedValue({ count: 1 });
+
+      const result = await retentionTick(NOW);
+
+      expect(formerMatch.findMany.mock.calls[0][0]).toMatchObject({
+        where: { createdAt: { lt: new Date("2026-07-02T03:45:00.000Z") } },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(formerMatch.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["f1"] } } });
+      expect(result.formerMatches).toBe(1);
     });
 
     it("then clears reports and blocks no tombstone can ever relink", async () => {

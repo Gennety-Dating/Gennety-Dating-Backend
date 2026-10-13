@@ -43,6 +43,13 @@ vi.mock("../../services/cancel-in-flight-matches.js", () => ({
   deliverCancelledPartnerEffects,
 }));
 
+const findFormerMatch = vi.fn();
+const fileFormerPartnerReport = vi.fn();
+vi.mock("../../services/former-match.js", () => ({
+  findFormerMatch,
+  fileFormerPartnerReport,
+}));
+
 const {
   handleReportOpen,
   handleReportCancel,
@@ -62,6 +69,8 @@ describe("structured report flow", () => {
     });
     reportFindUnique.mockResolvedValue(null);
     reportCreate.mockResolvedValue({});
+    findFormerMatch.mockResolvedValue(null);
+    fileFormerPartnerReport.mockResolvedValue("filed");
     applyReportAction.mockImplementation(async ({ tier }: { tier: number }) =>
       tier === 3
         ? { kind: "tier3_frozen" }
@@ -461,5 +470,106 @@ describe("structured report flow", () => {
     expect(applyReportAction).not.toHaveBeenCalled();
     expect(notifyReportedUser).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledWith("reportThanksT3");
+  });
+
+  // ── A partner who deleted their account (decision 2026-10-13) ──────────
+
+  function skipCtx(category = "unsafe_red_flag") {
+    return {
+      from: { id: 12345 },
+      callbackQuery: { data: "rs:match-gone" },
+      session: {
+        language: "en",
+        matchFlow: "awaiting_report_details",
+        activeMatchId: "match-gone",
+        pendingReportCategory: category,
+      },
+      api: { token: "bot" },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+  }
+
+  it("opens the report menu on a match whose partner deleted their account", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    findFormerMatch.mockResolvedValue({ formerUserId: "gone-1", reportedAt: null });
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "report:open:match-gone" },
+      session: { language: "en", matchFlow: "idle", activeMatchId: null },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportOpen(ctx);
+
+    expect(findFormerMatch).toHaveBeenCalledWith("match-gone", "reporter-1");
+    expect(ctx.reply).toHaveBeenCalledWith("reportAsk", expect.anything());
+  });
+
+  it("answers 'already reported' for a former match the survivor already reported", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    findFormerMatch.mockResolvedValue({ formerUserId: "gone-1", reportedAt: new Date() });
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "report:open:match-gone" },
+      session: { language: "en", matchFlow: "idle", activeMatchId: null },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportOpen(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith("reportDuplicate");
+  });
+
+  it("stays silent on a match that is gone with no trace, as before", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "report:open:match-gone" },
+      session: { language: "en", matchFlow: "idle", activeMatchId: null },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportOpen(ctx);
+
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+
+  it("files the report against the former account, with the same tier the live flow would apply", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    findFormerMatch.mockResolvedValue({ formerUserId: "gone-1", reportedAt: null });
+    const ctx = skipCtx("unsafe_red_flag");
+
+    await handleReportSkip(ctx);
+
+    expect(fileFormerPartnerReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchId: "match-gone",
+        reporterId: "reporter-1",
+        tier: 3,
+        enforce: true,
+        adminReviewed: false,
+        api: ctx.api,
+      }),
+    );
+    // Nothing goes through the live path: there is no account to act on.
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(applyReportAction).not.toHaveBeenCalled();
+    expect(notifyReportedUser).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith("reportThanksT3");
+  });
+
+  it("tells the survivor when the former match was reported in the meantime", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    findFormerMatch.mockResolvedValue({ formerUserId: "gone-1", reportedAt: null });
+    fileFormerPartnerReport.mockResolvedValue("duplicate");
+    const ctx = skipCtx("fake_photos");
+
+    await handleReportSkip(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith("reportDuplicate");
   });
 });

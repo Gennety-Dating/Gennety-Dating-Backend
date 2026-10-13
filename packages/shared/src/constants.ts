@@ -726,6 +726,15 @@ export const ACCOUNT_DELETION_REFUND_DEFER_DAYS = 7;
 export const SAFETY_TOMBSTONE_RETENTION_MONTHS = 24;
 
 /**
+ * How long the person who stayed can still report a partner who deleted their
+ * account (decision 2026-10-13). Account deletion records the deleted account's
+ * matches touched within this many days (`former_matches`); the retention sweep
+ * removes each row this long after it was written. Past it, a Report button on
+ * that match leads nowhere again, as it did before.
+ */
+export const FORMER_MATCH_REPORT_WINDOW_DAYS = 30;
+
+/**
  * Admin "linked accounts" (decision 2026-10-13): accounts that look like the
  * same person — a shared profile photo, or a deleted account with the same
  * proven identity. Shown to the operator only; nothing in the product reads

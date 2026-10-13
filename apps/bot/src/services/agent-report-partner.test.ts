@@ -24,6 +24,10 @@ vi.mock("@gennety/db", () => ({
   },
   Prisma: {},
 }));
+const latestReportableFormerMatch = vi.fn(async (_id: string): Promise<unknown> => null);
+vi.mock("./former-match.js", () => ({
+  latestReportableFormerMatch: (id: string) => latestReportableFormerMatch(id),
+}));
 vi.mock("./rematch.js", () => ({ checkRematchEligibility: async () => ({ ok: false }) }));
 vi.mock("../handlers/menu/city-switch.js", () => ({ isMarketPending: () => false }));
 
@@ -34,6 +38,8 @@ beforeEach(() => {
   userFindUnique.mockResolvedValue({ id: "u1", language: "en" });
   matchFindFirst.mockReset();
   matchFindFirst.mockResolvedValue({ id: "m-42" });
+  latestReportableFormerMatch.mockReset();
+  latestReportableFormerMatch.mockResolvedValue(null);
 });
 
 describe("propose_report_partner", () => {
@@ -70,6 +76,19 @@ describe("propose_report_partner", () => {
     const parsed = JSON.parse(out.result);
     expect(parsed.success).toBe(false);
     expect(parsed.error).toMatch(/seriously/i);
+  });
+
+  it("партнёр удалил аккаунт — кнопка ведёт к следу матча", async () => {
+    matchFindFirst.mockResolvedValue(null);
+    latestReportableFormerMatch.mockResolvedValue({ matchId: "m-gone" });
+
+    const out = await executeAgentTool(1n, "propose_report_partner", {});
+
+    expect(latestReportableFormerMatch).toHaveBeenCalledWith("u1");
+    expect(out.action).toEqual({
+      kind: "entry_point",
+      entry: { label: expect.any(String), callbackData: "report:open:m-gone" },
+    });
   });
 
   it("инструкция запрещает выспрашивать подробности", async () => {

@@ -281,6 +281,32 @@ refunds and the partner's cancellation notice run only after commit, on the same
 rail freeze and moderation use. See [PRODUCT_SPEC.md](../product/product-spec.md)
 §Blocking.
 
+### `former_matches`
+
+The person who stayed keeps a way to report a partner who deleted their account
+(decision journal 2026-10-13). Account deletion cascades `matches`, so every
+Report button the survivor still had named a match that no longer existed.
+Written by `recordFormerMatches` (`services/former-match.ts`) inside the
+`deleteUserAccount` transaction, right after `writeSafetyTombstones`, and only
+when that wrote at least one tombstone — the report attaches to it. One row per
+match the deleted account touched within `FORMER_MATCH_REPORT_WINDOW_DAYS` (30;
+`updatedAt` or `agreedTime` inside the window).
+
+- `matchId` — the deleted match's id, no FK. What the survivor's buttons carry.
+- `survivorId` — FK to `users`, `ON DELETE CASCADE`.
+- `formerUserId` — the deleted account's id, no FK; joins
+  `safety_tombstones.former_user_id`.
+- `reportedAt` — the one-report-per-match guard, stamped when a report is filed
+  through the row, or at write time when the survivor had already reported
+  this match. Unique `(match_id, survivor_id)`.
+- `createdAt` — the retention sweep deletes the row 30 days after it.
+
+`fileFormerPartnerReport` stores the report with `reported_former_id` and
+applies its Tier to the tombstones (strike → suspension → ban, Tier 3 →
+`pending_investigation`, never milder than what is stored); if the tombstones
+were already restored onto a returning account, the report goes to that account
+through `applyReportAction`.
+
 ### `safety_tombstones`
 
 What account deletion keeps so a restricted or blocked person cannot reset it

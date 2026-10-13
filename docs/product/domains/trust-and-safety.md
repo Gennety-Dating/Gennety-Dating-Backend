@@ -152,3 +152,10 @@ of the person who reported or blocked them. Now:
   no longer turns a restored lock into `active`.
 - **24 months** after deletion the tombstones, and the reports and blocks that
   only they could relink, are deleted (privacy policy §16).
+- **The partner can still report the one who left** (2026-10-13). For 30 days
+  after the deletion, the Report button on a recent match with that person
+  (Telegram card, app, menu agent) files against the deleted account: the
+  report and its consequence — a strike, a suspension, a ban, a freeze — are
+  kept on the tombstone and land on the person if they come back. If they
+  already came back, it goes to the new account like any report. One report per
+  match. Only where the deletion left a tombstone (never in the demo).

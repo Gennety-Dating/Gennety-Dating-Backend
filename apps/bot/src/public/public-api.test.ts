@@ -271,6 +271,22 @@ type UserBlockRow = {
   createdAt: Date;
 };
 
+/**
+ * One `OR` arm of a match filter in the fake `match` client: a participant, or
+ * the "not started yet" cut-off a block after `agreedTime` uses
+ * (`notStartedFilter`). Anything else matches nothing.
+ */
+function matchOrArmMatches(m: MatchRow, clause: any): boolean {
+  if (clause.userAId !== undefined) return m.userAId === clause.userAId;
+  if (clause.userBId !== undefined) return m.userBId === clause.userBId;
+  if (clause.status?.not !== undefined) return m.status !== clause.status.not;
+  if ("agreedTime" in clause) {
+    if (clause.agreedTime === null) return m.agreedTime === null;
+    if (clause.agreedTime?.gt) return m.agreedTime !== null && m.agreedTime > clause.agreedTime.gt;
+  }
+  return false;
+}
+
 const db = {
   users: new Map<string, UserRow>(),
   otps: [] as OtpRow[],
@@ -577,7 +593,13 @@ vi.mock("@gennety/db", async () => {
           const statusFilter = (where.status?.in as string[]) ?? null;
           const idIsUserA = (m: MatchRow, uid: string) => m.userAId === uid;
           const idIsUserB = (m: MatchRow, uid: string) => m.userBId === uid;
-          const uid = where.OR?.[0]?.userAId as string | undefined;
+          // The participant arm may sit at the top or inside `AND` next to
+          // other `OR` filters (`claimMatchCancellation`).
+          const andClauses: any[] = where.AND ?? [];
+          const userOr =
+            where.OR ?? andClauses.find((c) => c.OR?.some((x: any) => x.userAId !== undefined))?.OR;
+          const uid = userOr?.[0]?.userAId as string | undefined;
+          const otherAnd = andClauses.filter((c) => c.OR && c.OR !== userOr);
           const hit =
             list.find(
               (m) =>
@@ -587,6 +609,7 @@ vi.mock("@gennety/db", async () => {
                 // about a match that isn't the one under test.
                 (where.id === undefined || m.id === where.id) &&
                 (!statusFilter || statusFilter.includes(m.status)) &&
+                otherAnd.every((c) => c.OR.some((arm: any) => matchOrArmMatches(m, arm))) &&
                 (idIsUserA(m, uid ?? "") || idIsUserB(m, uid ?? "")),
             ) ?? null;
           if (!hit) return null;
@@ -624,8 +647,7 @@ vi.mock("@gennety/db", async () => {
               (typeof where.status === "string" && m.status === where.status) ||
               (where.status?.in && where.status.in.includes(m.status));
             const userMatches =
-              !where.OR ||
-              where.OR.some((clause: any) => clause.userAId === m.userAId || clause.userBId === m.userBId);
+              !where.OR || where.OR.some((clause: any) => matchOrArmMatches(m, clause));
             const acceptedByAMatches =
               where.acceptedByA === undefined || m.acceptedByA === where.acceptedByA;
             const acceptedByBMatches =
@@ -685,6 +707,11 @@ vi.mock("@gennety/db", async () => {
           }
           return { count };
         }),
+      },
+
+      // ----- formerMatch ----- (no deleted partners in these fixtures)
+      formerMatch: {
+        findUnique: vi.fn(async () => null),
       },
 
       // ----- report -----
@@ -4988,6 +5015,16 @@ describe("/v1/matches/*", () => {
     const res = await request(app)
       .post(`/v1/matches/${match.id}/report`)
       .set("Authorization", `Bearer ${signAccess(eve.id)}`)
+      .send({ category: "tier1_disappointment", message: "not my vibe" });
+    expect(res.status).toBe(403);
+    expect(db.reports).toHaveLength(0);
+  });
+
+  it("POST /:id/report on a match that is gone with no trace is 403, not a 500", async () => {
+    const alice = await seedUser();
+    const res = await request(app)
+      .post(`/v1/matches/${crypto.randomUUID()}/report`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ category: "tier1_disappointment", message: "not my vibe" });
     expect(res.status).toBe(403);
     expect(db.reports).toHaveLength(0);

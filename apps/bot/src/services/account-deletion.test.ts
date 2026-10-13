@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   unpinKnownStatusBanner: vi.fn(),
   findRefundsInFlight: vi.fn(),
   writeSafetyTombstones: vi.fn(),
+  recordFormerMatches: vi.fn(),
   listStorageObjects: vi.fn(),
   storageBucketState: vi.fn(),
   /** Any payment-table write inside the deletion transaction. There must be none. */
@@ -82,6 +83,9 @@ vi.mock("./refund-in-flight.js", () => ({
 }));
 vi.mock("./safety-tombstone.js", () => ({
   writeSafetyTombstones: mocks.writeSafetyTombstones,
+}));
+vi.mock("./former-match.js", () => ({
+  recordFormerMatches: mocks.recordFormerMatches,
 }));
 vi.mock("./main-bot-api.js", () => ({
   getMainBotApi: mocks.getMainBotApi,
@@ -170,6 +174,7 @@ beforeEach(() => {
   mocks.notifyFounderStuckRefunds.mockResolvedValue(undefined);
   mocks.unpinKnownStatusBanner.mockResolvedValue(undefined);
   mocks.findRefundsInFlight.mockResolvedValue({ blocking: [], stale: [] });
+  mocks.recordFormerMatches.mockResolvedValue(0);
   mocks.writeSafetyTombstones.mockResolvedValue({
     tombstones: 0,
     reportsKept: 0,
@@ -253,6 +258,32 @@ describe("deleteUserAccount", () => {
     expect(mocks.writeSafetyTombstones.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.userDelete.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("keeps the survivors' match traces when a tombstone was written, before the matches go", async () => {
+    mocks.writeSafetyTombstones.mockResolvedValueOnce({
+      tombstones: 2,
+      reportsKept: 0,
+      blocksKept: 0,
+      reportsDropped: 0,
+      blocksDropped: 0,
+    });
+
+    await deleteUserAccount(USER_ID, null);
+
+    expect(mocks.recordFormerMatches).toHaveBeenCalledWith(expect.anything(), USER_ID);
+    expect(mocks.recordFormerMatches.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.writeSafetyTombstones.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.recordFormerMatches.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.userDelete.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("keeps no match trace when no tombstone exists for a report to attach to", async () => {
+    await deleteUserAccount(USER_ID, null);
+
+    expect(mocks.recordFormerMatches).not.toHaveBeenCalled();
   });
 
   it("defers while a refund is in flight, before erasing anything", async () => {
