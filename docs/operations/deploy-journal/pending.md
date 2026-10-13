@@ -11,6 +11,20 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Money audit fixes (code only, no migration, no env).**
+Branch `claude/amazing-cannon-y8a21a`. Wallet spend refunds keyed per spend row; cancellation refunds credited
+inside the cancelling transaction (a failed credit now rolls the cancel back — emergency cancel surfaces it as an
+error, the stall worker logs and retries next tick); Premium-settled slots not refunded; refund sweeps
+(ticket-expiry, venue-change, Prime Time) now registered regardless of sales flags; venue/Prime Time refunds claim
+the row before Stars move; wishlist purchase/refund fixes; App Store Premium refund subtracts only credited days;
+`/v1/me/referral/claim` new accounts only (409 `not-eligible`). Demo: unchanged (no-charge rail).
+iOS: `referral/claim` may now answer 409 `reason: "not-eligible"` for a finished account (was 200).
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/ticket-refund.test.ts
+  src/handlers/matching/ticket-gate.test.ts src/services/appstore-wishlist.test.ts`; after restart
+  `pm2 logs` shows `[cron] Ticket expiry / Venue-change refund / Prime Time refund ... scheduled` even with the
+  features off.
+- **Откат:** `git revert` of the branch commits; no data to undo (ledger keys are the same `refund:match:…`).
+
 **PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
 Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
 no row rewritten — apply BEFORE the restart (the new code selects the column in the eligibility scan, the famine
