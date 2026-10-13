@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
 import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { dateTicketsPhrase, t } from "@gennety/shared";
+import { svgToPng } from "../date-card/image.js";
 import { butterflyPng } from "../match-card/collage.js";
+import { runRenderJob } from "../render/pool.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
@@ -402,12 +403,29 @@ async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
   }
 }
 
-/** Rasterize the card SVG. Opaque background — the card has no transparency. */
-function rasterize(svg: string) {
-  return new Resvg(svg, {
-    fitTo: { mode: "width", value: CARD_W },
-    background: "#17090D",
-  }).render();
+/** Opaque background the card is rasterized onto — the card has no transparency. */
+const CARD_BACKGROUND = "#17090D";
+
+/**
+ * Rasterize the card SVG to raw RGBA, off the main thread (`services/render/pool.ts`,
+ * which falls back to rendering right here when no worker is available).
+ * `Resvg.render()` is synchronous native work that used to run on the public
+ * request path on a cache miss. `fitTo: width` makes resvg's output exactly
+ * `CARD_W` wide, so the height is what the pixel buffer holds per row.
+ */
+async function rasterizeRgba(
+  svg: string,
+): Promise<{ pixels: Uint8Array; width: number; height: number }> {
+  const out = await runRenderJob({
+    kind: "svg-to-rgba",
+    svg,
+    fitToWidth: CARD_W,
+    background: CARD_BACKGROUND,
+  });
+  // `svg-to-rgba` never answers `null`: there is nothing to decode, and a
+  // broken SVG is an exception rather than an empty result.
+  const pixels = out!;
+  return { pixels, width: CARD_W, height: pixels.length / (4 * CARD_W) };
 }
 
 /**
@@ -418,7 +436,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
   const svg = await buildCardSvg(input);
   if (!svg) return null;
   try {
-    return Buffer.from(rasterize(svg).asPng());
+    return await svgToPng(svg, CARD_W, CARD_BACKGROUND);
   } catch (err) {
     console.warn("[referral-card] rasterize failed", err);
     return null;
@@ -448,7 +466,7 @@ export async function referralCardImage(
   const svg = await buildCardSvg(input);
   if (!svg) return null;
   try {
-    const rendered = rasterize(svg);
+    const rendered = await rasterizeRgba(svg);
     const { width, height } = rendered;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");

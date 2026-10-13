@@ -13,6 +13,13 @@ import { Resvg } from "@resvg/resvg-js";
 
 export type RenderJob =
   | { kind: "svg-to-png"; svg: string; fitToWidth?: number; background?: string }
+  /**
+   * Растеризация в сырые RGBA-пиксели (`RenderedImage.pixels`) — для тех, кто
+   * кодирует результат сам (реферальная карточка жмёт JPEG прямо из пикселей,
+   * без промежуточного PNG). Ширина ответа — ровно `fitToWidth`: так
+   * `fitTo: width` у resvg и устроен; высота — `длина / (4 × ширина)`.
+   */
+  | { kind: "svg-to-rgba"; svg: string; fitToWidth: number; background: string }
   | { kind: "to-png"; bytes: Uint8Array }
   | { kind: "resize-png"; bytes: Uint8Array; targetW: number }
   | {
@@ -40,6 +47,12 @@ function svgToPngInline(svg: string, fitToWidth?: number, background?: string): 
   })
     .render()
     .asPng();
+}
+
+function svgToRgbaInline(svg: string, fitToWidth: number, background: string): Uint8Array {
+  return new Resvg(svg, { fitTo: { mode: "width", value: fitToWidth }, background })
+    .render()
+    .pixels;
 }
 
 async function toPngInline(bytes: Uint8Array): Promise<RenderResult> {
@@ -122,6 +135,8 @@ export async function runJobInline(job: RenderJob): Promise<RenderResult> {
   switch (job.kind) {
     case "svg-to-png":
       return svgToPngInline(job.svg, job.fitToWidth, job.background);
+    case "svg-to-rgba":
+      return svgToRgbaInline(job.svg, job.fitToWidth, job.background);
     case "to-png":
       return toPngInline(job.bytes);
     case "resize-png":
