@@ -1,21 +1,22 @@
 # Gennety — Privacy Policy
 
-**Last Updated: 8 October 2026**
+**Last Updated: 13 October 2026**
 
-**Version: 4.3** — adds two things that happen after a date. **The Morning
-After**: the morning after a date, each of you is asked privately whether you
-would like to see the other person again. A "didn't click" is never passed on;
-only when you both say it was great are you both told. **The Date Wishlist**: an
-optional list of things you love — places, drinks, flowers, perfume, gifts —
-that you build with our AI agent and that a person with whom the interest is
-mutual can use as a cheat sheet for a second date — unless you hide it. To find real products, we send what you type to our AI provider's web
-search and read the public product details of shop pages; you can also say it
-in a voice note or add screenshots, which are read and not kept. The new data, its
-legal bases, who sees it and for how long are in Sections 4, 7, 9, 12.1, 14, 16
-and 18. It also says what deleting an account leaves behind: keyed hashes of its
-identifiers, so a person who registers again does not receive the one-time
-sign-up gifts twice (Sections 7 and 16). Everything else is unchanged from version 4.2 (26 September 2026), which
-added Tempo Sync, the optional Apple Health feature. Earlier versions are
+**Version: 4.4** — an audit of this Policy against what the Service actually
+does today. Nothing about how we treat your data got looser; what changed is
+that several things the Service already does are now written down. New: a
+section that explains **every permission our iPhone app asks for and why**
+(Section 4.4); **frequently visited places** — the up-to-three cafés,
+restaurants, lounges or museums you keep going back to, which your match can
+see, and how to switch that off (Sections 4.1, 7, 11, 12.1 and 16); **Date
+Radar** and the **Date Bump**, which use your location on the day of a date without storing where you were
+(Section 11); **music on your profile** and a **recorded voice answer**, where
+offered (Sections 4.1 and 12.1); the **Prime Time Pass** and the three- and
+six-month Premium packages (Section 14); what a **push notification** can show
+on your lock screen (Section 4.2); and the **clipboard** read that carries a
+promo code into the app (Section 4.2). Map colouring ("explored areas") was
+retired on 2 October 2026 and is described as such. Version 4.3 (8 October
+2026) added The Morning After and the Date Wishlist. Earlier versions are
 available on request (Section 21).
 
 This Privacy Policy explains how Gennety ("**Gennety**", "**we**", "**us**", or
@@ -46,13 +47,14 @@ below.
 | Question | Short answer |
 |---|---|
 | Who is responsible? | Gennety, operated from Kyiv, Ukraine. Contact: **legal@gennety.com** (Section 2). |
-| What do you collect? | Account and contact-verification data (email **or** phone), profile answers, photos and optional video, a liveness selfie, location for your dating city and date logistics, your messages with our AI, your answers after a date, your Date Wishlist if you make one, payment records, and technical data (Section 4). |
+| What do you collect? | Account and contact-verification data (email **or** phone), profile answers, photos and optional video, a liveness selfie, location for your dating city and date logistics, the places you often go to (unless you switch that off), your messages with our AI, your answers after a date, your Date Wishlist if you make one, payment records, and technical data (Section 4). |
 | Do you use AI on my data? | Yes. AI builds your psychological summary, an embedding, an attractiveness/"league" rating, icebreakers, and venue choices (Sections 7 and 8). |
+| Which phone permissions do you ask for? | Camera and photo library (photos, the verification selfie), location while you use the app (your city, your date, frequently visited places), notifications, and — only if you use the feature — microphone, Apple Health and Apple Music. Never background location, contacts, or tracking. Each one is explained in Section 4.4, and every one except the camera for verification is optional. |
 | Do you use biometrics? | Yes — a liveness selfie and face comparison against your photos, only with your explicit consent. The selfie is deleted after 90 days (Sections 6 and 10). |
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
-| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form. If you both want to see each other again after a date and you have made a Date Wishlist, that person can also see it — unless you have hidden it (Section 12.1). |
+| Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form — including, unless you switch it off, up to three places you often go to (Section 12.1). If you both want to see each other again after a date and you have made a Date Wishlist, that person can also see it — unless you have hidden it (Section 12.1). |
 | Does a human see my data? | Yes — the operator of the service, through an internal administration interface and a private operations feed (Section 12.2 and 12.3). |
-| Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure), with one disclosed exception: an internal operational notification (Section 12.2). |
+| Can I delete everything? | Yes, inside the app or the bot, without writing to anyone: freeze (reversible) or delete (irreversible cascading erasure of your profile, photos, verification selfie and everything else), with the disclosed exceptions in Section 16 — payment records, keyed hashes, and an internal operational notification (Section 12.2). How: Section 18. |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
 
 ---
@@ -122,13 +124,16 @@ the Service, and data we derive or generate to power matchmaking.
 | **Identity verification (biometric)** | A liveness selfie captured by our verification provider, used to confirm you are a real person and that your profile photos are of you. See Section 10. |
 | **Follow-up questionnaire answers** | Short optional questions we send after onboarding ("Profiler") to fuel icebreakers, date hints and Date Wishlist suggestions — you can skip any of them. One answer (today: your favourite flowers) can be shown to a match as a hint after mutual interest — see Section 12.1. |
 | **Visual type preference (optional feature)** | Where we offer the visual "type" calibration step, the picks you make from a set of sample portraits, and the compiled preference this produces. |
-| **Location** | The dating city you select and its coordinates; coordinates resolved from your browser/device geolocation or a place you pick on a map; the departure point you mark for a date, with its human-readable label if you selected it via search. |
-| **Explored areas (optional, off by default)** | Only if you switch on map colouring: the **approximate areas** you have been in, stored as grid squares roughly 1.2 km across — never your exact position, and never a coordinate. Recorded only while the map screen is open, and only inside a city we operate in. |
+| **Location** | The dating city you select. If you let us use your device location to find it, the position is used only to work out which of our cities you are in, and **we store the centre of that city, not your position**. The departure point you mark for a date (a map pin, a shared Telegram location, or a place you picked in search), with its human-readable label. On the day of a date, your position for Date Radar and the Date Bump is checked and **not stored** (Section 11). |
+| **Frequently visited places (on unless you switch it off)** | While the iPhone app is open, it checks when it opens and every ten minutes while it stays open whether you are at one of the public cafés, restaurants, lounges or museums in our venue catalog. When you stay at the same one for at least 15 minutes, we record **that place and the calendar day** — never the coordinates, the time of day or how long you stayed. Up to three places you keep returning to are shown on your profile and to your match. See Sections 11 and 12.1. |
+| **Explored areas (retired)** | Until 2 October 2026 an optional, off-by-default map-colouring feature recorded the approximate areas (grid squares about 1.2 km across) you had been in while its screen was open. **It no longer exists and nothing is collected for it.** The date map that replaced it is drawn only from the venues of dates you attended. |
+| **Music on your profile (optional, where offered)** | Up to three songs you pin to your profile — title, artists, album, cover image, and the song's identifier at Apple Music or Spotify. If you import them, the iPhone app reads your recently played songs from Apple Music on the device, or we read your top tracks from Spotify **once**, after you log in to Spotify; we do not keep any Spotify login token. |
+| **Recorded voice answer (optional, where offered)** | A 3–30 second voice answer to an onboarding question, its waveform, and its transcript. |
 | **Date preferences ("venue intent")** | What kind of date you want — experience, atmosphere, format — plus any requirements you explicitly confirm, including **dietary requirements** (e.g. vegan, vegetarian, halal, kosher, gluten-free), an **alcohol-free** requirement, and a **step-free access** requirement. See Section 6 — some of these can reveal special-category data. |
 | **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); your **morning-after answer** — the one question we ask the morning after a date ("It was great, I want to see them again" or "Didn't click") and when you answered; free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
 | **Date Wishlist (optional)** | Only if you make one: the items you choose to keep — each with a category (place, drink, flowers, perfume, beauty, fashion, jewellery, gift, or experience), a title, an optional brand and short note of your own, the shop link you pasted or picked, a product image, and a **price range** (never an exact price) — and their order. Also what you type or paste to find an item (a description, a list, or links) — or say in a voice note, or show on screenshots you add from your photo library, which are read once and **not kept** — whether each item came from our catalog, a search, a link, or your own words, when you last added or removed an item, and whether you have hidden the list from your matches. See Sections 9 and 12.1. |
 | **Consent records** | Which version of these documents you accepted and when, and your biometric consent (Section 10). |
-| **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, Date Wishlist unlocks, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
+| **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, Prime Time Passes, Date Wishlist unlocks, Gennety Premium (the monthly subscription and the three- and six-month packages), and any other one-off purchase we offer. **We never receive or store your full card number** — see Section 14. |
 | **Subscription cancellation reason** | If you cancel Gennety Premium in chat and choose to answer, the free-text reason you give. |
 | **Support correspondence** | Anything you send us at our support handle or at legal@gennety.com. |
 
@@ -140,7 +145,10 @@ the Service, and data we derive or generate to power matchmaking.
 | **Onboarding funnel telemetry** | For each onboarding step: which step it was, whether it was asked, answered or skipped, how long you spent on it, your language and platform. **We never store your answer text in this telemetry** — only the step key, its outcome, and timing. |
 | **Technical & device data** | IP address, device and operating-system information, app version, and diagnostic logs. |
 | **Session data** | For the mobile app, sign-in sessions and refresh tokens (stored hashed) so you stay logged in and we can revoke access. |
-| **Push tokens** | Device push tokens for Apple push notifications and Live Activities (the live "date day" / "decision" widget), so we can notify you. |
+| **Push tokens** | Device push tokens for Apple push notifications and Live Activities (the live "date day" / "decision" widget), so we can notify you. A notification can appear on your lock screen, so we keep it short: a new-match alert never names the person, but a date notification can show the venue's name and the time. You can turn notifications off in iOS Settings → Notifications → Gennety at any time; the Service keeps working, you just need to open it to see what is new. |
+| **Date Bump** | When you and your date put your phones together at the venue, we record that each of you did and when, and whether the bump confirmed that you met. Your position is checked at that moment (Section 11) and not stored. |
+| **Clipboard (promo links only)** | If you open a Gennety promo link on an iPhone before installing the app, the page copies the promo code to your clipboard, and the app reads it **once** on first launch so the reward follows you. iOS asks you before the app can read it. Nothing else on the clipboard is used or stored. |
+| **In-app product events (where enabled)** | A random installation identifier (not an advertising identifier, and not the device's vendor identifier), the name of a screen or action, the app version, the iOS version and your language. Kept **90 days**. We do **not** use third-party analytics, advertising or attribution SDKs, and we do not track you across other companies' apps or websites. |
 | **Voice & video transcripts** | Text transcriptions of voice notes you send. The audio of a profile video is transcribed **transiently** for a safety check and is not retained. |
 | **Usage metering** | Per-user counters for how many messages and how much AI processing you use, so we can enforce fair-use limits and stop abuse. These are held in memory and are not a long-term profile. |
 | **Chat timeline** | A short-lived record of what happened in your Telegram chat — the messages we sent, the buttons you tapped (by their visible label), what you typed, and actions you took in a Mini App. It lets our assistant answer a follow-up like "why?" against the message directly above it instead of guessing. A verification code you type is masked before storage. Kept **30 days**. |
@@ -166,6 +174,50 @@ the Service, and data we derive or generate to power matchmaking.
 We **do not** create per-message embeddings of your conversations. **We do not
 sell your data**, and we do not use your data for third-party advertising or
 ad-profiling.
+
+### 4.4 Permissions on your phone, and why we ask
+
+Your phone asks your permission before our iPhone app (or a Telegram Mini App)
+can use any of the features below. We ask for each one **only at the moment you
+use the feature that needs it**, never all at once at launch. Saying no to one
+switches off only that feature, and you can change your mind at any time in iOS
+Settings → Gennety (or, in Telegram, in your device's settings for Telegram).
+
+- **Camera** — to take profile photos or a profile video, and for the identity
+  check: the liveness selfie that confirms you are a real person and that your
+  photos are of you (Section 10). The identity check is required to be matched,
+  so the camera is the one permission without which you cannot be matched;
+  photos can also come from your library instead.
+- **Photo library** — to choose profile photos or a video, or screenshots for
+  your Date Wishlist. We receive only the items you pick; with the iOS photo
+  picker the app does not see the rest of your library.
+- **Location while using the app** — to find your dating city, to propose a
+  meeting point and venue that are fair for both of you, for Date Radar and the
+  Date Bump on the day of the date, and for frequently visited places (Section
+  11). **We never ask for "Always" location and never collect your location in
+  the background.** Precise location is needed only for Date Radar, the Date
+  Bump and frequently visited places; with approximate location the rest still
+  works.
+- **Notifications** — to tell you about a new match, your partner's answer, the
+  time and venue of a date, and reminders; and for the Live Activity on your
+  lock screen on the day of a date. Optional: without it, you see the same
+  things when you open the app.
+- **Microphone** (where offered) — only while you record a voice note for our
+  AI concierge or your Date Wishlist, or a voice answer for your profile. We
+  never listen in the background.
+- **Apple Health** (optional) — only if you connect Tempo Sync: read access to
+  your step count for the last 28 days, turned into two labels on your phone
+  (Sections 5.5 and 6). We never write to Apple Health.
+- **Apple Music / Media Library** (optional, where offered) — only if you
+  import songs for your profile: the app reads your recently played songs on
+  the device and sends us only the songs' identifiers.
+- **Clipboard** — iOS asks before the app reads a promo code you copied from a
+  Gennety promo link (Section 4.2).
+
+We do **not** ask for access to your contacts, Bluetooth, local network,
+motion sensors (the Date Bump is a press-and-hold, not a shake), or calendar, and we do not ask for permission to track you (App Tracking
+Transparency), because we do not track you and have no advertising identifier
+to read.
 
 ---
 
@@ -293,12 +345,15 @@ data).
 | Derive coarse appearance tags (hair, build, style, tattoos) from your photos so you can be scored against another user's stated visual preference | Your profile photos | Legitimate interests in effective matchmaking. Unlike the picks above this runs for everyone, is not skippable, and produces no special-category data — see Section 8 |
 | Generate pitches, icebreakers, date hints, and venue choices | Profile, follow-up answers, location, vibe, date preferences | Contract; legitimate interests |
 | Arrange and confirm dates; select and change venues | Availability, departure point, date preferences, agreed time | Contract |
+| Date Radar (telling your date you are on the way or have arrived) and the Date Bump (confirming at the venue that you met) | Your position at that moment, checked and not stored; the time of the bump | Contract — both are parts of the date you use only on the day, from the app |
+| Frequently visited places — recognising, while the iPhone app is open, the catalog venues you keep going back to, and showing up to three of them on your profile and to your match as conversation material | Your position at that moment (checked and not stored), the place and the calendar day of a visit, the dates you attended | **Legitimate interests** (Art. 6(1)(f)) in helping two people who are about to meet find common ground. It is on unless you switch it off, so we do not call it consent: you can switch it off, or hide any single place, at any time (Section 11), and you can object (Section 18) |
+| Music on your profile and a recorded voice answer (where offered) | The songs you pin or import; your recording and its transcript | Contract — features you choose to use. The transcript of a voice answer is also used, like your other onboarding answers, to build your matching profile |
 | Filter venues on dietary / alcohol-free / step-free requirements | The requirement you confirmed | **Explicit consent** (Art. 9(2)(a)) where the requirement is special-category; otherwise contract |
 | Ask each of you privately, the morning after a date, whether you want to see the other again; tell you both only when the interest is mutual; use your answer, like other post-date feedback, in future matching | Your morning-after answer, the match record | Contract; legitimate interests in better matches |
 | Help you build a Date Wishlist — the catalog, personalised suggestions, finding products from what you type, paste, say in a voice note or show on a screenshot, reading shop pages, keeping the product image | What you type or paste, a voice note or screenshots you add (read once, not kept), your wishlist items, your profile and follow-up answers, the places of your past dates and the places you saved; the places you visit often **only if** that setting is on | **Contract** (Art. 6(1)(b)) — it is a feature you choose to use |
 | Show your Date Wishlist to a person with whom the interest is mutual — part of it free, the rest once they buy the unlock or have Premium — with when you last changed it, once that is 45 days or more ago | Your wishlist items; the date of your last change | **Contract** (Art. 6(1)(b)) — showing the list to a person with whom the interest is mutual is what the Date Wishlist is for. Making one is your choice, the wishlist says who will see it when you build it, and you can hide it at any time |
 | Show a person with whom the interest is mutual one of your follow-up answers as a hint (today: your favourite flowers) | That one answer | Contract; legitimate interests in helping a mutual match plan a second date. Used only if you accepted this version of the Policy or have made a Date Wishlist, and never while your list is hidden; you can object (Section 18) |
-| Process purchases (tickets, bundles, paid venue changes, Date Wishlist unlocks) and manage the Premium subscription | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
+| Process purchases (tickets, bundles, paid venue changes, Prime Time Passes, Date Wishlist unlocks) and manage Gennety Premium | Purchase records, ledger entries, processor confirmations, entitlement dates | Contract; **legal obligation** for accounting |
 | Handle cancellations and understand why people leave | Subscription records, the cancellation reason if you give one | Contract; **consent** for the free-text reason |
 | Trust & safety: moderation, reports, strikes, suspensions, investigations | Reports, photos/video safety scans, relay-chat logs, strikes | Legitimate interests in user safety; legal obligation |
 | Recognise a person who deletes an account and registers again, or who runs more than one account — so one-time sign-up gifts (welcome, student, photo, video and promo gifts) are not given twice, and so the operator can see which accounts belong together. Having a second account is not restricted by this | Keyed hashes of the Telegram ID, verified phone number and verified email of a deleted account (never the identifiers themselves); the perceptual hashes of your photos | Legitimate interests in preventing abuse of free gifts |
@@ -461,35 +516,67 @@ the EU), how long it is kept, and what happens if you say no.
 
 ## 11. Location Data
 
-We use location data for three narrow purposes. The first two are part of the
-service; the third is an optional feature that does nothing unless you turn it
-on:
+Location is the most sensitive thing a dating service can hold after your
+face, so we use it only for the purposes below, only while you are using the
+app, and we store as little of it as each purpose needs. **We never collect
+your location in the background**, the iPhone app never asks for "Always"
+access, and we never show your position to another user.
 
-- **Your dating city.** The city you select — and its coordinates — determines
-  your match pool. You can search for a city or let us resolve it from your
-  browser/device geolocation. A raw coordinate alone does not make you eligible
-  for matching; you must set a city.
+- **Your dating city.** The city you select determines your match pool. You can
+  search for it or let us find it from your device location — in that case the
+  position is used once, to work out which of our cities you are in, and **we
+  store the centre of that city, not your position**.
 - **Date logistics.** For a confirmed date, the **departure point** you mark
-  (and any raw location pin you choose to share) is used to compute a fair
-  meeting area and to find a venue that is convenient for both of you. Your
-  match is **never shown your departure point** — only the agreed venue.
+  (a pin, a shared Telegram location, or a place you searched for) is used to
+  compute a fair meeting area and to find a venue that is convenient for both
+  of you. It is kept with the date record. Your match is **never shown your
+  departure point** — only the agreed venue. To search for a place, what you
+  type is sent to Google, together with our city's centre (or, outside our
+  cities, the centre of the map you are looking at); to choose the venue, only
+  the pair's meeting-area point is sent to Google, and to check the weather only
+  that point and the date are sent to Open-Meteo — never who you are.
+- **Date Radar (the day of the date).** In the 45 minutes before the date,
+  while you have the app open, your phone sends its position so we can tell
+  your date "on the way", "arriving around 19:05" or "here". Your date sees only
+  that status — never your position or your route. **The position is held in
+  memory for the moment and is never written to our database or logs.**
+- **The Date Bump (at the venue).** When you and your date put your phones
+  together, we check that each phone is within about 100 m of the venue, so the
+  bump cannot be faked from elsewhere. The position is checked and **not
+  stored**; we keep only that the bump happened and when.
+- **Frequently visited places (iPhone app; on unless you switch it off).**
+  While the app is open — once when it opens and then every ten minutes — it
+  compares your position with the circles around the public cafés,
+  restaurants, lounges and museums in our venue catalog, and sends it to us
+  only when you are near one of them (otherwise it sends only "away", with no
+  position). A single check is never a visit: you must be at the same place for
+  at least 15 minutes. We then store **the place and the calendar day only**;
+  the coordinates are discarded at once, and no time of day or duration is kept
+  anywhere. Parks are deliberately excluded, because a park crossed every day
+  can reveal where someone lives. Visits are deleted after **180 days**. Up to
+  three places you keep returning to are shown on your profile and to your
+  match, with the venue's name, category, photo and its public map location —
+  never how often or when you were there (Section 12.1). They are never sent
+  to our AI provider and never used to score or rank you; besides your profile,
+  they are used only to suggest places for your own Date Wishlist.
+  **How to control it:** switch it off in the app, where your frequently
+  visited places are shown — collection stops immediately and the block disappears for
+  you and your match; or hide any single place, which stops it being shown.
+  Switching off does not delete the visits already recorded — they expire after
+  180 days, or you can ask us to erase them now (Section 18), and they are
+  erased with your account. Denying location access in iOS also stops it.
+- **Map colouring ("explored areas") — retired.** This optional feature,
+  off unless you switched it on, recorded approximate grid squares (about
+  1.2 km across) while its screen was open. It was withdrawn on 2 October 2026;
+  nothing has been collected for it since, and anything recorded earlier is
+  no longer used and is erased with your account. The date map in the app is
+  now drawn only from the venues of dates you attended.
 
-- **Colouring in the map you have explored (optional).** If — and only if — you
-  switch this on, we note the **approximate area** you are in while the map
-  screen is open, so the map can show the parts of the city you have actually
-  been to. We store it as a grid square roughly 1.2 km across, which is about a
-  neighbourhood: it can record that you have been around a district, and it
-  cannot record which street or which building. **Your exact position is never
-  stored for this**, and the areas are yours alone — they are never shown to a
-  match or to anyone else. You can switch it off at any time; switching it off
-  stops the recording and keeps the map you have already uncovered. To erase the
-  areas themselves, delete your account (Section 15).
-
-We do **not** continuously track your location, and we do not run background
-location collection — including for the optional feature above, which records
-only while you have the map screen open in front of you, and which is off until
-you switch it on. Map tiles shown in our Mini Apps are proxied through our own
-servers, so the map provider does not receive your IP address.
+Map tiles shown in our Mini Apps and app are proxied through our own servers,
+so the map provider does not receive your IP address. Opening a ride or
+directions hand-off (Uber, Apple Maps, Google Maps) from a date screen passes
+only the venue's address to that app; your own location is never put into the
+link.
 
 **Date Wishlist suggestions collect no location.** They draw only on what we
 already hold: the places of your past Gennety dates, the places you saved, and —
@@ -509,7 +596,12 @@ only.
 
 When a match is created, the other person sees: your first name, age, photos
 (and profile video, if you added one), a verification indicator, and
-AI-generated text about you (a pitch, icebreakers, a hint). They do **not** see
+AI-generated text about you (a pitch, icebreakers, a hint). Where you have
+them, they also see the songs on your profile, can listen to your recorded
+voice answer (through a short-lived private link — its transcript is never
+shown), and see **up to three of your frequently visited places** — each
+venue's name, category, photo and public map location, but never how often,
+on which days or at what time you were there (Section 11). They do **not** see
 your contact details, your email or phone, your exact location or departure
 point, your psychological summary, your ratings or scores, or
 your safety history. Telegram contact details are exchanged only if you both
@@ -620,15 +712,16 @@ may process data outside Ukraine or your country (see Section 15).
 
 | Processor | Purpose | Data shared |
 |---|---|---|
-| **Amazon Web Services (Rekognition Face Liveness)** | Identity / liveness verification. Your device streams the liveness video directly to AWS; it never passes through our servers | Liveness video and the reference selfie it produces |
-| **Amazon Web Services (Rekognition)** | Face comparison, face detection, and content-safety analysis of photos and video frames | Profile photos, verification selfie, transient video frames |
-| **OpenAI** | Psychological analysis, embeddings, conversational agents (including the Date Wishlist agent), web search for Date Wishlist products, reading Date Wishlist screenshots, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos; for web search, the text you typed to find a product (with at most your city and language); for the Date Wishlist, a voice note or screenshots you choose to add |
-| **Supabase** | PostgreSQL database hosting and private file storage (verification selfies, mobile profile photos, chat images, Date Wishlist product images) | Account, profile, photos, embeddings, all relational data |
+| **Amazon Web Services (Rekognition Face Liveness, EU — Ireland)** | Identity / liveness verification. Your device streams the liveness video directly to AWS; it never passes through our servers. We ask AWS to keep no audit images and to store nothing in its own storage | Liveness video and the reference selfie it produces |
+| **Amazon Web Services (Rekognition, EU — Frankfurt)** | Face comparison, face detection, and content-safety analysis of photos and video frames. Each request is processed and answered; no face collection is kept at AWS | Profile photos, verification selfie, transient video frames |
+| **OpenAI** | Psychological analysis, embeddings, conversational agents (including the Date Wishlist agent), icebreakers for the Date Bump, transcription of a recorded voice answer, web search for Date Wishlist products, reading Date Wishlist screenshots, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos; for web search, the text you typed to find a product (with at most your city and language); for the Date Wishlist, a voice note or screenshots you choose to add |
+| **Supabase (EU — Ireland)** | PostgreSQL database hosting and private file storage (verification selfies, profile photos and videos, recorded voice answers, chat images, Date Wishlist product images) | Account, profile, photos, embeddings, all relational data |
 | **Resend** | Delivering university-email verification codes | Email address, one-time code |
 | **Twilio** | Delivering phone verification codes by SMS to mobile-app users (primary rail) | Phone number, verification status |
 | **Telegram Gateway** | Optional secondary rail for delivering a phone verification code as an official Telegram service message | Phone number, verification code |
-| **Telegram** | The messaging platform the bot and Mini Apps run on; also the Telegram Stars payment rail | Everything you exchange with the bot, processed by Telegram under its own policy; payment amount and confirmation |
-| **Apple** | Push notifications and Live Activities (APNs); App Store purchases and subscriptions (App Store Server API) | Device push token and notification content; transaction identifiers and subscription status |
+| **Telegram** | The messaging platform the bot and Mini Apps run on; "Continue with Telegram" sign-in in the iPhone app; the Telegram Stars payment rail | Everything you exchange with the bot, processed by Telegram under its own policy; payment amount and confirmation |
+| **Apple** | Push notifications and Live Activities (APNs); App Store purchases and subscriptions (App Store Server API); song details for music on your profile (Apple Music API, where offered) | Device push token and notification content; transaction identifiers and subscription status; song identifiers (never your Apple ID) |
+| **Spotify** (where offered) | Song search, song details, and a one-time import of your top tracks if you log in to Spotify for it | Song identifiers; for the import, a one-time authorisation that we exchange, use once and do not keep |
 | **Google (Places)** | Venue search, venue details and venue photos for arranging dates | Approximate meeting-area coordinates of a matched pair (never your identity) |
 | **CARTO** | Base map tiles for the map pickers, proxied through our servers | Tile coordinates only — **not** your IP address |
 | **Open-Meteo** | Weather forecast for the date's city and hour, so an outdoor venue is not suggested into a thunderstorm | Approximate city coordinates and a date — never your identity |
@@ -694,7 +787,17 @@ Paid features are optional. When you buy something:
   those under their own terms and privacy policies.
 - **We retain a record of the transaction** — amount, currency, status, time,
   the provider's transaction identifier, and what it relates to (a match, a
-  bundle, a venue change, a Date Wishlist unlock, or a subscription period).
+  bundle, a venue change, a Prime Time Pass, a Date Wishlist unlock, or a
+  Premium period).
+- **For App Store purchases**, the app attaches a random-looking identifier
+  derived from your Gennety account (Apple calls it an `appAccountToken`), so
+  that a purchase is credited to the right account and cannot be claimed by
+  another one. We then confirm each purchase directly with Apple's servers
+  rather than trusting the phone. We never receive your Apple ID, name, or
+  payment details from Apple.
+- **For a Prime Time Pass** — a one-off purchase that opens the late-evening
+  times in the calendar for one date — the record notes which date it belongs
+  to, so it can be returned if the date does not happen.
   This append-only ledger is what makes a purchase count exactly once, makes a
   refund possible, and meets our accounting obligations.
 - **For a Date Wishlist unlock** — a one-off purchase, per match, that opens
@@ -703,9 +806,10 @@ Paid features are optional. When you buy something:
   and a refund can be traced. It holds no wishlist content. If your list is the
   one unlocked, that record is therefore partly about you, and it is kept as
   part of the buyer's payment records (Section 16).
-- **For the Gennety Premium subscription**, we additionally store when your
-  entitlement started and ends, whether auto-renewal is on, which rail it came
-  from, and the recurring transaction identifier we use to recognise renewals.
+- **For Gennety Premium** (the monthly subscription, or a three- or six-month
+  package), we additionally store when your entitlement started and ends,
+  whether auto-renewal is on, which rail it came from, and the recurring
+  transaction identifier we use to recognise renewals.
 - **If you cancel in chat and choose to tell us why**, that free-text reason is
   stored against the cancellation record and used to understand churn.
 - Refunds and their conditions are described in the
@@ -736,13 +840,19 @@ We keep personal data only as long as necessary for the purposes above.
 | Face-match scores | While your account exists (they are scores, not images) |
 | Profile video frames, audio, transcript | **Not retained** — transient safety validation only |
 | Rejected-media records | Minimal audit record (reason, media type, time) — no media kept |
-| Email / phone one-time codes | Short-lived; hashed, expire quickly, and are marked consumed after use |
+| Email / phone one-time codes | Short-lived; hashed, expire quickly, and are marked consumed after use; phone-code records are deleted after **7 days** |
 | Mobile sign-in sessions / refresh tokens | Until they expire, you sign out, or the account is deleted; stored hashed |
 | Push and Live Activity tokens | Until the device unregisters, the token is reported dead, or the account is deleted |
 | Relay-chat message logs | **90 days**, and in any case deleted with the match |
 | Chat timeline | **30 days**, then automatically deleted |
 | Promo attribution fingerprint | Up to **1 hour**, held in memory only |
-| Explored areas (map colouring) | While your account exists; erased on account deletion. Switching the feature off stops new recording and keeps what you have uncovered |
+| Frequently visited places (place + calendar day, no coordinates) | **180 days** from the visit, then automatically deleted; erased on account deletion. Switching the feature off stops collection; what is already recorded ages out, or is erased on request |
+| Positions for Date Radar and the Date Bump, and the position sent for frequently visited places | **Not stored** — checked in memory and discarded |
+| Departure point for a date | With the date record, while your account exists; erased on account deletion |
+| Explored areas (map colouring, retired 2 October 2026) | No longer collected or used; anything recorded earlier is erased on account deletion |
+| Music on your profile | Until you remove a song, or your account; a song the provider withdraws is removed |
+| Recorded voice answer and its transcript | Until you record a new one (the old one is deleted) or delete your account |
+| In-app product events (where enabled) | **90 days**, then automatically deleted |
 | Life rhythm (Tempo Sync) | While connected. Replaced on every refresh; **deleted 35 days after the last refresh**, immediately on "Disconnect", and on account deletion |
 | Match records (including morning-after answers and mutual interest), score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Date Wishlist items and their product images | Until you delete them, or your account. Deleting an item removes it from your match's cheat sheet too |
@@ -758,8 +868,8 @@ We keep personal data only as long as necessary for the purposes above.
 | Diagnostic / technical logs | Short-term, then rotated |
 
 **On account deletion** we erase the storage objects we hold for you
-(verification selfies, profile media, chat attachments, voice recordings, Date
-Wishlist images — everything stored under your account, not only what your
+(verification selfies, profile photos and videos, chat attachments, voice
+recordings, Date Wishlist images — everything stored under your account, not only what your
 profile currently shows), remove any internal report snapshot containing your account, and then
 delete your account and the data tied to it across our database. Three kinds of
 record remain afterwards: payment and subscription ledger entries, detached from
@@ -842,7 +952,21 @@ that the request comes from you.
   counterpart is told neutrally. You are silently reactivated the next time you
   open the bot or the app;
 - **Delete** your account — permanent and irreversible erasure as described in
-  Section 16;
+  Section 16, including your photos, your verification selfie and everything
+  stored under your account. You do it yourself, without writing to anyone: in
+  the iPhone app, in Settings → Delete account; in Telegram, in ⚙️ Settings →
+  🗑 Delete Account. You confirm once and the erasure runs at once. Two things
+  to know: **removing the app from your phone does not delete your account**,
+  and **deleting your account does not cancel a running Premium
+  subscription** — Apple or Telegram bills it, not us. Cancel it first: in iOS
+  Settings → your name → Subscriptions, or in Telegram → Settings → My Stars →
+  Subscriptions (or just tell our bot you want to cancel). If a refund
+  connected to your account is still being processed, the app tells you so and
+  asks you to retry once it has gone through;
+- **Switch off frequently visited places**, or hide any single place, in the
+  app (Section 11);
+- **Withhold or withdraw any device permission** in iOS Settings → Gennety
+  (Section 4.4);
 - **Edit or delete your Date Wishlist** — item by item — and **hide it**
   ("Don't show my list"), at any time, from My wishlist in your profile.
   Deleted items disappear from your match's cheat sheet too, and hiding the

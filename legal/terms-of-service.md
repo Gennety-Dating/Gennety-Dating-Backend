@@ -1,17 +1,18 @@
 # Gennety — Terms of Service
 
-**Last Updated: 8 October 2026**
+**Last Updated: 13 October 2026**
 
-**Version: 3.1** — published alongside Privacy Policy v4.3. It adds **The
-Morning After** (Section 5), the optional **Date Wishlist** and the rules for
-what goes on it (Section 6), and the **Date Wishlist unlock**, a new one-off
-purchase (Section 11.5). It also changes **Gennety Premium**: Premium no longer
-covers your own Date Ticket — if you paid for a Premium period before this
-change took effect, your ticket stays covered until the end of that period —
-and it now includes opening the Date Wishlist cheat sheet (Section 11.4).
-Refunds move to Section 11.6. Version 3.0 (1 August 2026) named Amazon
-Rekognition Face Liveness and the separate consent step for identity
-verification (Section 4).
+**Version: 3.2** — published alongside Privacy Policy v4.4. It describes paid
+features that already exist but were missing here: the **Prime Time Pass**
+(Section 11.6) and the three- and six-month **Premium packages** (Section 11.4);
+corrects the venue-change limit to **two per date** (Sections 9 and 11.3); adds
+the App Store subscription terms Apple requires (Section 11.4); states our
+**zero tolerance for objectionable content and abusive users** and how to report
+and block (Section 8); explains how to delete your account in the app and what
+that does and does not cancel (Section 13); and completes the **Apple licence
+terms** (Section 18). The definition of the retired "AI Export" is removed.
+Refunds move to Section 11.7. Version 3.1 (8 October 2026) added The Morning
+After and the Date Wishlist.
 
 These Terms of Service ("**Terms**") are a binding agreement between you and
 Gennety ("**Gennety**", "**we**", "**us**", or "**our**") governing your use of
@@ -48,8 +49,6 @@ phone number (Section 3).
 - **Premium** — the optional **Gennety Premium** recurring subscription.
 - **Content** — any text, photos, video, voice notes, or other material you
   submit.
-- **AI Export** — the optional psychological analysis you paste from your own AI
-  assistant during onboarding.
 - **Virtual Items** — Tickets, bonuses, discounts, and any other non-monetary
   in-service item.
 - **Mutual interest** — when, the morning after a date, you and your match
@@ -61,6 +60,12 @@ phone number (Section 3).
   have mutual interest, as a **cheat sheet** for a second date (Section 6).
 - **Date Wishlist unlock** — a one-off purchase that opens the rest of one
   match's cheat sheet (Section 11.5).
+- **Venue change** — replacing the venue chosen for a scheduled date with
+  another one (Sections 9 and 11.3).
+- **Prime Time Pass** — a one-off purchase that opens the late-evening times in
+  the calendar of one date (Section 11.6).
+- **App** — our iOS application, also called the "Licensed Application" in
+  Section 18.
 
 ---
 
@@ -135,7 +140,7 @@ or honesty (Section 10).
 ## 5. How the Service Works (and Your Responsibilities)
 
 Gennety relies on the information you provide. You are responsible for the
-accuracy and honesty of your profile, answers, photos, and any AI Export.
+accuracy and honesty of your profile, answers, photos, and recordings.
 
 - Our matching is **automated** and based on the data you give us. We do **not**
   guarantee any match, any number of matches, any particular quality of match,
@@ -264,6 +269,22 @@ You agree **not** to:
 - resell, trade, or transfer your account, Tickets, or any Virtual Item; or
 - use the Service if you are under 18 or otherwise ineligible.
 
+**Zero tolerance.** There is no tolerance on Gennety for objectionable
+content — including sexual, hateful, violent, harassing or threatening content,
+and content that sexualises minors — or for abusive users. Every photo and
+video is checked automatically before anyone else can see it, and free text is
+moderated.
+
+**Report and block.** You can **report** a match from the match or date
+screen, from the anonymous relay chat, or by writing to **@gennetysupport**
+on Telegram or **legal@gennety.com**; and you can
+**block** a match at any time, which ends any match you have with them, stops
+them from being proposed to you again, and is never shown to them. Reports
+are triaged at once (Section 12), safety reports are reviewed by a person, and
+we aim to act on a report of objectionable content or
+abusive behaviour **within 24 hours** — by removing the content and, where it
+is warranted, suspending or removing the user who posted it.
+
 We may remove Content, restrict features, suspend, or terminate accounts that
 breach this Section, and we may report unlawful conduct to the authorities.
 
@@ -278,7 +299,8 @@ breach this Section, and we may report unlawful conduct to the authorities.
   time public places. We do **not** book, reserve, or hold a table for you, and
   we are not responsible if a venue is full, changes its hours, or closes.
 - Where offered, you may agree a **venue change** with your match before the
-  date. Changing the venue is a paid action (Section 11). If nobody pays, or one
+  date — at most **two per date**. Changing the venue is a paid action unless
+  it is included in Premium (Section 11). If nobody pays, or one
   of you decides against it, **the originally assigned venue simply stands** —
   the date is never cancelled because a venue change did not go through.
 - You may cancel a date through the emergency flow. Cancellation is
@@ -345,31 +367,53 @@ charged, are always shown to you **before** you confirm a purchase.
 
 ### 11.3 Venue changes
 
-- Where offered, agreeing a venue change is a **flat one-off charge**. Browsing,
-  liking, and agreeing are free; you only pay at the moment a change is
-  finalised, so there is nothing to refund if it does not happen.
-- Only one paid venue change per date.
-- If two payments race, the losing payment is **automatically refunded**.
+- Where offered, agreeing a venue change is a **flat one-off charge** (at
+  launch, 150 Telegram Stars or the App Store price shown before you confirm).
+  Browsing, liking, and agreeing are free; you only pay at the moment a change
+  is finalised, so there is nothing to refund if it does not happen.
+- At most **two venue changes per date**. Gennety Premium includes them.
+- If two payments race, or a change cannot be completed after you paid in
+  Telegram Stars, the payment is **automatically refunded**. For an App Store
+  payment that could not be completed, Apple issues the refund; write to us and
+  we will support your request (Section 11.7).
 
-### 11.4 Gennety Premium (recurring subscription)
+### 11.4 Gennety Premium
 
-- **Gennety Premium is an auto-renewing subscription.** It renews every 30 days
-  at the then-current price until you cancel. The price is shown before you
-  subscribe.
-- **How to cancel.** In Telegram: through Telegram → Settings → Subscriptions,
-  or by simply telling our bot you want to cancel, which gives you a
-  confirmation button. On iOS: through iOS Settings → your Apple Account →
+- **Two ways to buy it.** The **monthly plan** is an **auto-renewing
+  subscription**: it renews every 30 days at the then-current price until you
+  cancel. In Telegram you may instead buy a **three-month or six-month
+  package**, paid once in Telegram Stars at a discount shown before you buy;
+  a package **does not renew** — it simply ends, and we remind you shortly
+  before it does. Prices are always shown before you confirm.
+- **App Store subscription terms.** If you subscribe in our iOS app:
+  - the subscription is **Gennety Premium — Monthly**, one month long, at the
+    price shown in the app before you confirm;
+  - payment is charged to your **Apple Account** when you confirm the
+    purchase;
+  - the subscription **renews automatically** unless auto-renew is turned off
+    **at least 24 hours before the end of the current period**, and your
+    account is charged for the renewal within the 24 hours before the period
+    ends;
+  - you can manage the subscription and turn off auto-renew at any time in
+    iOS Settings → your name → Subscriptions, after purchase;
+  - if a free trial or introductory offer is ever made available, any unused
+    part of it ends when you buy a subscription.
+- **How to cancel.** In Telegram: through Telegram → Settings → My Stars →
+  Subscriptions, or by simply telling our bot you want to cancel, which gives
+  you a confirmation button. On iOS: through iOS Settings → your name →
   Subscriptions — **Apple, not Gennety, controls App Store subscriptions and we
-  cannot cancel them for you.**
+  cannot cancel them for you.** Deleting your Gennety account or the app does
+  **not** cancel a subscription; cancel it first.
 - **Cancellation stops the next renewal.** Your Premium access continues to the
   end of the period you already paid for; there is **no partial refund of the
   current period**.
-- Cancel at least 24 hours before the renewal date to avoid being charged for
-  the next period.
 - **What Premium includes.** The current benefits are listed on the Premium
-  screen before you subscribe. They include opening the **Date Wishlist cheat
-  sheet** of a person with whom you have mutual interest, without buying an
-  unlock (Section 11.5). **Premium does not cover your own Date Ticket.**
+  screen before you subscribe. Today they are: opening the **Date Wishlist
+  cheat sheet** of a person with whom you have mutual interest, without buying
+  an unlock (Section 11.5); **all the late-evening times** in the calendar,
+  without a Prime Time Pass (Section 11.6); **up to two venue changes per
+  date** at no extra charge, with a wider choice of venues (Section 11.3); and
+  access to our top venues. **Premium does not cover your own Date Ticket.**
 - **Ticket cover paid for before the change.** Premium used to cover your own
   Date Ticket. If you paid for a Premium period before that change took effect,
   your own ticket stays covered until the end of that period. A renewal or a
@@ -403,13 +447,30 @@ charged, are always shown to you **before** you confirm a purchase.
   all when you paid — for example because it was hidden at that same
   moment — write to **legal@gennety.com**: we refund a Telegram Stars purchase,
   and for an Apple purchase we support your refund request to Apple
-  (Section 11.6). Your rights under mandatory consumer law are not affected.
+  (Section 11.7). Your rights under mandatory consumer law are not affected.
 - You pay Gennety. The owner of the list is not paid and pays nothing, and
   nobody is obliged to buy anything from it.
 - Use the cheat sheet only to plan a date with that person, and do not share
   it (Section 6). We do not sell or deliver the products on it.
 
-### 11.6 Refunds
+### 11.6 Prime Time Pass
+
+- The last times of each evening in the date calendar (at launch 18:30, 19:00
+  and 19:30) are **Prime Time**. They are open to a pair if either of you has
+  Gennety Premium, or once one of you buys a **Prime Time Pass**.
+- A Prime Time Pass is a **one-off purchase for one date** (at launch, 50
+  Telegram Stars, or the App Store price shown before you confirm). It opens
+  those times **for both of you, for that date**, as soon as payment is
+  confirmed; it does not renew and does not carry over to another date.
+- Buying a pass does not guarantee that your match picks a Prime Time slot, or
+  that a venue is available then.
+- **If the date does not happen** — for example the match is cancelled before
+  a time is agreed — a pass paid in Telegram Stars is **refunded automatically**,
+  as is a payment that lost a race with your match's. For an App Store pass,
+  Apple issues refunds: write to **legal@gennety.com** and we will support your
+  request to Apple (Section 11.7).
+
+### 11.7 Refunds
 
 - **EEA/UK consumers — right of withdrawal.** You normally have 14 days to
   withdraw from a distance contract for digital content. By confirming a
@@ -421,8 +482,10 @@ charged, are always shown to you **before** you confirm a purchase.
 - Except where consumer law requires otherwise, purchases are otherwise
   **non-refundable**.
 - Where a paid date does not proceed for a reason the Service recognises (a
-  payment window expiring, a moderation action, a lost payment race), we return
-  the **ticket or charge** automatically as described above.
+  payment window expiring, the date being cancelled before it happens, a
+  moderation action, a lost payment race), we return the **ticket, the Prime
+  Time Pass or the Telegram Stars charge** automatically as described above. A
+  ticket that was used comes back to the wallet of whoever paid for it.
 - A no-show, a bad date, a declined match, or your own change of mind does
   **not** entitle you to a refund.
 - A **Date Wishlist unlock** is fully supplied when the cheat sheet opens. It
@@ -460,7 +523,7 @@ will review it.
 We may suspend or terminate your account, with or without notice, if you breach
 these Terms or applicable law, or where necessary to protect users or the
 Service. We may also discontinue the Service or any feature. On termination,
-Sections 6 (as to licences already granted), 10, 11.6, 14, 15, 16, 17, 19 and 20
+Sections 6 (as to licences already granted), 10, 11.7, 14, 15, 16, 17, 19 and 20
 survive.
 
 ---
@@ -477,6 +540,15 @@ survive.
   of your data, subject to records we must keep by law or hold in anonymised
   form (see the Privacy Policy, Section 16). It also deletes your Date
   Wishlist, so a match who unlocked it no longer sees it.
+- **You delete your account yourself, inside the Service**: in the iOS app in
+  Settings → Delete account, or in Telegram in ⚙️ Settings → 🗑 Delete Account.
+  You do not need to write to us. If a refund connected to your account is
+  still being processed, we ask you to retry once it has gone through, so the
+  money has somewhere to go.
+- **Deleting the app is not deleting the account**, and **deleting the account
+  does not cancel a running subscription** billed by Apple or Telegram —
+  cancel it first (Section 11.4). Unused Virtual Items are lost on deletion
+  (Section 11.7).
 
 ---
 
@@ -533,33 +605,58 @@ arises from our own breach or negligence, or where the law does not allow it.
 
 ---
 
-## 18. Apple App Store — Additional Terms
+## 18. Apple App Store — Additional Terms (End User Licence)
 
-These Terms apply to your use of our iOS application. Where you obtained the app
-from Apple's App Store, the following also applies and prevails over any
-conflicting provision:
+These Terms are the end-user licence agreement for our iOS application (the
+"**Licensed Application**"). Where you obtained it from Apple's App Store, the
+following also applies and prevails over any conflicting provision:
 
-- These Terms are between you and **Gennety only, not Apple**. Apple is not
-  responsible for the app or its content.
-- Apple has **no obligation** to furnish any maintenance or support for the app.
-- If the app fails to conform to any applicable warranty, you may notify Apple,
-  and Apple will refund the purchase price (if any). To the maximum extent
-  permitted by law, Apple has **no other warranty obligation** with respect to
-  the app.
-- **Gennety, not Apple**, is responsible for addressing any claim relating to
-  the app, including product-liability claims, claims that the app fails to
-  conform to a legal requirement, and claims under consumer-protection or
-  privacy law.
-- **Gennety, not Apple**, is responsible for the investigation, defence,
-  settlement, and discharge of any third-party intellectual-property
-  infringement claim relating to the app.
-- You represent that you are not located in a country subject to a U.S.
-  Government embargo or designated as "terrorist supporting", and that you are
-  not on any U.S. Government list of prohibited or restricted parties.
-- Apple and its subsidiaries are **third-party beneficiaries** of these Terms
-  and may enforce them against you.
-- Your use of the app must comply with the **Apple Media Services Terms and
-  Conditions** in force.
+- **Parties.** These Terms are between you and **Gennety only, not Apple**.
+  Gennety, not Apple, is solely responsible for the Licensed Application and
+  its content.
+- **Scope of licence.** We grant you a limited, non-transferable, revocable
+  licence to use the Licensed Application on any Apple-branded products that
+  you own or control, as permitted by the **Usage Rules** in the Apple Media
+  Services Terms and Conditions — except that it may also be accessed by other
+  accounts associated with you through Family Sharing or volume purchasing,
+  where applicable.
+- **Maintenance and support.** Gennety is solely responsible for maintenance
+  and support of the Licensed Application, as described in these Terms or as
+  required by law — contact us at **legal@gennety.com** or **@gennetysupport**
+  on Telegram. Apple has **no obligation** to furnish any maintenance or
+  support for it.
+- **Warranty.** If the Licensed Application fails to conform to any applicable
+  warranty, you may notify Apple, and Apple will refund the purchase price (if
+  any) for it. To the maximum extent permitted by law, Apple has **no other
+  warranty obligation** with respect to the Licensed Application, and any
+  other claims, losses, liabilities, damages, costs or expenses attributable to
+  a failure to conform to a warranty are Gennety's responsibility.
+- **Product claims.** **Gennety, not Apple**, is responsible for addressing any
+  claim by you or a third party relating to the Licensed Application or your
+  possession and use of it, including (i) product-liability claims; (ii) any
+  claim that it fails to conform to an applicable legal or regulatory
+  requirement; and (iii) claims arising under consumer-protection, privacy, or
+  similar legislation, including in connection with its use of HealthKit.
+- **Intellectual property.** If a third party claims that the Licensed
+  Application or your possession and use of it infringes that third party's
+  intellectual-property rights, **Gennety, not Apple**, is solely responsible
+  for the investigation, defence, settlement and discharge of that claim.
+- **Legal compliance.** You represent and warrant that you are not located in a
+  country subject to a U.S. Government embargo or designated by the U.S.
+  Government as "terrorist supporting", and that you are not listed on any U.S.
+  Government list of prohibited or restricted parties.
+- **Developer contact.** Questions, complaints or claims about the Licensed
+  Application go to Gennety: **legal@gennety.com** (Gleb Gosha, Kyiv, Ukraine).
+- **Third-party terms.** You must comply with the terms of any third-party
+  service you use with the app — for example Telegram when you continue with
+  Telegram, and your mobile carrier.
+- **In-app purchases.** Purchases in the app are made with Apple's In-App
+  Purchase and are subject to the Apple Media Services Terms and Conditions;
+  App Store refunds are handled by Apple (Section 11.7).
+- **Third-party beneficiary.** Apple and its subsidiaries are **third-party
+  beneficiaries** of these Terms, and once you accept them Apple will have the
+  right (and will be deemed to have accepted the right) to enforce them against
+  you as a third-party beneficiary.
 
 ---
 

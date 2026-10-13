@@ -1,6 +1,9 @@
 # Gennety — Record of Processing Activities (GDPR Article 30)
 
-**Version 1.2 — 8 October 2026** (adds §2.5d–2.5f, The Morning After and the
+**Version 1.3 — 13 October 2026** (adds §2.5g frequently visited places,
+§2.5h Date Radar and the Date Bump, §2.5i music and the recorded voice answer,
+the Prime Time Pass and the Premium packages in §2.8; closes open item 12 in
+part; v1.2 — 8 October 2026, adds §2.5d–2.5f, The Morning After and the
 Date Wishlist, and the wishlist unlock in §2.8; carries the 2026-10-02
 retirement of §2.5b; v1.1 — 26 September 2026, Tempo Sync; v1.0 — 1 August
 2026). Internal document. Not published; produced to a
@@ -117,6 +120,38 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Retention** | Replaced on each refresh; deleted after 35 days without one, on "Disconnect", and on account deletion (cascade) |
 | **Note** | Only the iOS app can read Apple Health; Telegram-only accounts never have a rhythm and are matched exactly as before. Analytics see only pair-level aggregates with cells under 20 suppressed (`/admin/analytics/rhythm-outcomes`) |
 
+### 2.5g Frequently visited places (iOS) — on by default
+
+| | |
+|---|---|
+| **Purpose** | Show up to three catalog venues a person keeps returning to on their profile and to their current match, as conversation material; suggest places for the owner's own Date Wishlist |
+| **Legal basis** | Art. 6(1)(f) **legitimate interests**, with an opt-out (founder decision 2026-09-11: `users.frequent_places_opt_in` defaults to true). Consent is deliberately NOT claimed: an on-by-default switch cannot carry it. Balancing: catalog venues only (public places; parks excluded as a home proxy), place + day only, 180-day sweep, foreground only, no LLM, per-place hide, one switch stops collection and the match's view at once. Residual risk in DPIA R15 |
+| **Data categories** | `user_place_visits` (user, Google place id, local calendar day). Fixes (`lat`, `lng`, `accuracyM`, `ageSeconds`) are read and discarded; the open stay lives in process memory. Per-place visibility flags |
+| **Recipients** | The person's current match (name, category, catalog photo via the showcase route, catalog coordinates of the venue). Google Places only when an image loader follows the thumbnail link and the cache misses — no user data in that request. Never OpenAI, never the operations feed |
+| **Retention** | Visits swept after 180 days (`workers/retention.ts`); cascade on account deletion. Switching off keeps stored days to age out (no silent delete); erasure on request |
+| **Note** | Disclosed from Privacy v4.4 (§4.1, §4.4, §7, §11, §12.1, §16). Existing users accepted earlier text — the Art. 13 notice in item 13 below |
+
+### 2.5h Date Radar and the Date Bump
+
+| | |
+|---|---|
+| **Purpose** | On the day of the date: tell the partner "on the way / arriving / here" (Radar, T-45 min); confirm at the venue that the pair met (Bump, within 100 m) |
+| **Legal basis** | Art. 6(1)(b) contract |
+| **Data categories** | Radar: a position held in memory only, never written or logged; the partner receives a status and an ETA. Bump: a position checked against the venue and discarded; stored `date_bump_sessions` (per-side hold time, verified flag, verified time, an AI icebreaker deck) |
+| **Recipients** | OpenAI (the icebreaker deck — from profile text, no position). The partner (status only) |
+| **Retention** | Positions: none. Bump session: with the match; cascade on deletion |
+
+### 2.5i Music on the profile and the recorded voice answer (where offered)
+
+| | |
+|---|---|
+| **Purpose** | Let a person show up to three songs and a 3–30 s voice answer to their match |
+| **Legal basis** | Art. 6(1)(b) contract (optional features) |
+| **Data categories** | `profile_music_tracks` (provider, track id, storefront, isrc, title, artists, album, cover URL, track/preview URLs). Apple Music import: recently played read on the device, only catalogue ids sent. Spotify import: one OAuth exchange, `/me/top/tracks` read once, no token or Spotify user id stored. `voice_prompts` (Telegram file id or Supabase `voice-prompts` object, duration, waveform, transcript) |
+| **Recipients** | Apple Music API and Spotify (song metadata, Gennety's own credentials); OpenAI (transcription and moderation of the voice answer); the match (songs; playback through a short-lived signed URL; never the transcript) |
+| **Retention** | Until removed or replaced; a track the provider withdraws is deleted; cascade on account deletion. The voice transcript feeds the matching embedding like other onboarding answers |
+| **Note** | Both features ship behind flags (`PROFILE_MUSIC_ENABLED`, `VOICE_PROMPT_ENABLED`); disclosed as "where offered" |
+
 ### 2.5d–2.5f Date Wishlist & The Morning After (2026-10-08)
 
 One feature set, recorded as three purposes because each has its own legal
@@ -187,7 +222,7 @@ shared rules in `packages/shared/src/wishlist.ts`.
 
 | | |
 |---|---|
-| **Purpose** | Sell Date Tickets, venue changes, Date Wishlist unlocks and the Premium subscription; refund; account |
+| **Purpose** | Sell Date Tickets, venue changes, Prime Time Passes (`prime_time_purchases`, one per match), Date Wishlist unlocks, and Premium (monthly subscription; three- and six-month one-off Stars packages); refund; account |
 | **Legal basis** | Art. 6(1)(b) contract; Art. 6(1)(c) legal obligation (accounting) |
 | **Data categories** | Purchase records, provider transaction identifiers, amounts, entitlement periods, ledger audit rows, optional free-text cancellation reason (**consent**). **Date Wishlist unlock** (`wishlist_unlocks`, one per buyer and match): buyer (`user_id`, set to null when the buyer's account is deleted), the list's owner (`owner_id`) and the match (`match_id`) as bare ids, rail, external payment id, Stars or cents, `refunded_at` — no wishlist content. **Premium ticket cover** grandfathering: `users.premium_ticket_cover_until`, set once by the migration to the then-current `premium_until` and never moved by a renewal |
 | **Recipients** | Telegram (Stars), Apple (App Store Server API) |
@@ -309,7 +344,10 @@ opinions, trade-union membership, genetic data.
 | 9 | Existing users and v4.3 | `LEGAL_DOCS_VERSION` moved to `2026-10-08`, but nothing re-presents the documents to people who accepted an earlier version. Nothing in §2.5d–2.5f relies on that acceptance as *consent*: the wishlist disclosure rests on contract with the wishlist session's own first line as the notice at collection, and the taste hint is gated on the version or on having built a wishlist. Art. 13 still requires informing existing users of the new purposes — a one-time in-product notice is owed before the flags go on |
 | 10 | Hide the cheat sheet and the taste hint when either side blocks or reports the other, or the match is cancelled for safety | A block in either direction already closes both (`services/wishlist.ts`, `loadMutualPair`); a report without a block, and a safety cancellation, still to confirm — see DPIA R12 |
 | 11 | Product images copied from shop pages | Copyright, not data protection: keep the notice-and-takedown route in Terms §6 working (remove on a rights holder's request) |
-| 12 | Frequently visited places, saved places, date map — no activity row here, no section in the Privacy Policy | Found while writing §2.5e, which reads them. Frequently visited places (`user_place_visits`, live since 2026-09-22) is location-derived, **on by default** (`frequent_places_opt_in` defaults to true) and shown to the match — it needs its own row with a basis that fits an opt-out default (Art. 6(1)(f) with a balancing test, not consent), and its own Privacy §4/§11/§12.1/§16 text. Saved places and the date map need at least a §4 row |
+| 12 | Frequently visited places, saved places, date map — no activity row here, no section in the Privacy Policy. **2026-10-13: frequently visited places now has §2.5g and Privacy v4.4 text; the date map is described in Privacy §11. Saved places still to trace** | Found while writing §2.5e, which reads them. Frequently visited places (`user_place_visits`, live since 2026-09-22) is location-derived, **on by default** (`frequent_places_opt_in` defaults to true) and shown to the match — it needs its own row with a basis that fits an opt-out default (Art. 6(1)(f) with a balancing test, not consent), and its own Privacy §4/§11/§12.1/§16 text. Saved places and the date map need at least a §4 row |
+| 13 | Existing users and v4.4 | Frequently visited places ran from 2026-09-22 with no disclosure, on by default. Privacy v4.4 discloses it; people who accepted an earlier version are still owed an Art. 13/14 notice — a one-time in-app notice with the switch on the same screen (`legal/ios-permission-strings.md` §3 item 3). Until it ships, the founder should weigh switching the default to off for accounts that never saw the notice |
+| 14 | Telegram Stars Premium survives account deletion | `deleteUserAccount` does not call `editUserStarSubscription(…, true)`, so Telegram keeps renewing a deleted user's monthly Premium, and `handlePremiumSuccessfulPayment` answers `user-not-found` without a refund. Privacy §18 and Terms §13 tell users to cancel first; the code fix is owed |
+| 15 | `referral_identities` has no retention limit | HMAC hashes of a counted invitee's identifiers survive deletion (`SetNull`) with no sweep, unlike `safety_tombstones` (24 months). Referral is off in production; add a 24-month sweep before it is switched on, and disclose it then |
 
 **DPO assessment (Art. 37).** A DPO is required where core activities involve
 regular and systematic monitoring of data subjects **on a large scale**, or
