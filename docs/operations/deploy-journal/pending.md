@@ -11,6 +11,18 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-13 — Background-job hardening: hangs, leaks, API latency (code only, no migration, no env).**
+Branch `claude/server-background-tasks-optimization-v4mykb`. No schema change, no new env var, no new dependency.
+Behaviour visible to ops: a founder alert «завис» when a cron run stays in flight >30 min; hourly sweeps now fire at
+:07/:13/:17/:23/:37/:43/:47 and stranded/no-match retries at :04/:08 past each quarter (env overrides still win);
+iOS gets 503 + `Retry-After` instead of 500 on DB pool exhaustion (503 is already in the `/v1` contract).
+Demo: same code; nothing demo-specific beyond capped driver maps.
+- **Проверка:** after restart `pm2 logs gennety-bot --lines 200 | grep "\[cron\]"` shows the new minutes; no
+  `[render] job … exceeded` / `stuck` lines in normal operation; a drop log still prints `Batch complete: … pairs=N`
+  with N in line with the previous drops; `pnpm --filter @gennety/bot exec vitest run src/utils/guarded-tick
+  src/services/render src/services/match-engine-pool.test.ts`.
+- **Откат:** `git revert` of the branch commits; nothing persistent to undo.
+
 **PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
 Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
 no row rewritten — apply BEFORE the restart (the new code selects the column in the eligibility scan, the famine
