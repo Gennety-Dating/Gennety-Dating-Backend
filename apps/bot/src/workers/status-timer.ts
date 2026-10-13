@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { GrammyError } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type UserStatus } from "@gennety/db";
 import { dropOutpacesNotices, type Language } from "@gennety/shared";
 import {
   buildStatusBannerKeyboard,
@@ -17,6 +17,29 @@ import { isMarketPending } from "../handlers/menu/city-switch.js";
 import { BoundedMap } from "../utils/bounded-map.js";
 
 const MAX_EDITS_PER_SECOND = 25;
+
+/**
+ * Every status but `active`, spelled out: `status <> 'active'` cannot use an
+ * index range, while `status IN (…)` walks `[status, statusMessageId]` straight
+ * to the accounts that still have a banner pinned.
+ */
+const NON_ACTIVE_STATUSES = [
+  "onboarding",
+  "paused",
+  "frozen",
+  "suspended",
+  "pending_investigation",
+  "banned",
+] as const satisfies readonly Exclude<UserStatus, "active">[];
+// A status added to the enum and not to the list above fails the typecheck here
+// instead of leaving its banners pinned forever.
+const nonActiveStatusesAreExhaustive: Exclude<
+  Exclude<UserStatus, "active">,
+  (typeof NON_ACTIVE_STATUSES)[number]
+> extends never
+  ? true
+  : false = true;
+void nonActiveStatusesAreExhaustive;
 /**
  * Active accounts one tick will look at.
  *
@@ -156,9 +179,15 @@ export async function statusTimerTick(
   const stalePointers = await prisma.user.findMany({
     where: {
       ...reachable,
-      status: { not: "active" },
+      status: { in: [...NON_ACTIVE_STATUSES] },
       statusMessageId: { not: null },
     },
+    // Not for the order itself — the set drains, any order will do. The planner
+    // reads `status` and `statusMessageId` as independent, guesses tens of
+    // thousands of rows, and with a LIMIT that makes a seq scan look cheap.
+    // Asked for in index order, `[status, statusMessageId]` is the only plan
+    // that avoids a sort, so it reads just the rows that qualify.
+    orderBy: [{ status: "asc" }, { statusMessageId: "asc" }],
     take: STALE_POINTERS_PER_TICK,
     select,
   });

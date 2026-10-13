@@ -34,11 +34,24 @@
 /** Consecutive failures before a job is called broken rather than unlucky. */
 const FAILURE_ALERT_THRESHOLD = 3;
 
+/**
+ * How long one run may stay in flight before a skipped tick calls it stuck.
+ *
+ * Single-flight has a blind spot the failure counter cannot see: a run whose
+ * promise never settles (an upstream call with no timeout, a lock nobody
+ * releases) neither fails nor succeeds, so every later tick is skipped with a
+ * `console.warn` and the job is silently off until the next restart. Half an
+ * hour is longer than any legitimate run of a frequent job (the longest paced
+ * sweeps are bounded to minutes) and is only ever checked when a tick is
+ * actually skipped, so a once-a-day job that runs long is never flagged.
+ */
+const STUCK_ALERT_AFTER_MS = 30 * 60 * 1000;
+
 export interface GuardedTickDeps {
   /** Injected in tests; defaults to the founder ops feed. */
   notifyHealth?: (
     subsystem: string,
-    state: "degraded" | "recovered",
+    state: SubsystemHealthState,
     consecutiveFailures: number,
   ) => Promise<void>;
   /**
@@ -50,7 +63,17 @@ export interface GuardedTickDeps {
    * the first failure IS the outage.
    */
   failureAlertThreshold?: number;
+  /**
+   * A run in flight longer than this when the next tick comes is announced as
+   * stuck (default 30 min). Jobs that legitimately pace for longer — the drop's
+   * dispatch — pass their own.
+   */
+  stuckAlertAfterMs?: number;
+  /** Injected in tests. */
+  now?: () => number;
 }
+
+export type SubsystemHealthState = "degraded" | "recovered" | "stuck";
 
 /**
  * Ticks running right now, by name — what a graceful shutdown waits for
@@ -100,12 +123,17 @@ export function guardedTick(
   deps: GuardedTickDeps = {},
 ): () => void {
   let running = false;
+  let runStartedAt = 0;
+  let skippedWhileRunning = 0;
   let consecutiveFailures = 0;
   let degradedAlertSent = false;
+  let stuckAlertSent = false;
   const alertThreshold = Math.max(1, deps.failureAlertThreshold ?? FAILURE_ALERT_THRESHOLD);
+  const stuckAfterMs = Math.max(0, deps.stuckAlertAfterMs ?? STUCK_ALERT_AFTER_MS);
+  const now = deps.now ?? Date.now;
 
   const notifyHealth = async (
-    state: "degraded" | "recovered",
+    state: SubsystemHealthState,
     failures: number,
   ): Promise<void> => {
     try {
@@ -122,10 +150,25 @@ export function guardedTick(
 
   return () => {
     if (running) {
-      console.warn(`[cron] "${name}" still in flight — skipping this tick`);
+      skippedWhileRunning += 1;
+      const elapsedMs = now() - runStartedAt;
+      if (elapsedMs >= stuckAfterMs) {
+        console.error(
+          `[cron] "${name}" in flight for ${Math.round(elapsedMs / 1000)}s — ` +
+            `${skippedWhileRunning} tick(s) skipped; the job is stuck`,
+        );
+        if (!stuckAlertSent) {
+          stuckAlertSent = true;
+          void notifyHealth("stuck", skippedWhileRunning);
+        }
+      } else {
+        console.warn(`[cron] "${name}" still in flight — skipping this tick`);
+      }
       return;
     }
     running = true;
+    runStartedAt = now();
+    skippedWhileRunning = 0;
     tickStarted(name);
     // Invoke synchronously so the in-flight flag reflects the run immediately;
     // normalise a synchronous throw into a rejection so the chain below always
@@ -137,27 +180,38 @@ export function guardedTick(
       result = Promise.reject(err);
     }
     void result
-      .then(async () => {
+      .then(() => {
         const previousFailures = consecutiveFailures;
         consecutiveFailures = 0;
         // Recovery is announced only when a degradation was, so a single
         // failed tick stays what it is: an entry in the log.
+        // Not awaited, here or below: the alert is a Telegram send, and the
+        // in-flight flag clears in `finally` — awaiting it kept a slow Bot API
+        // call holding the job "running" and its next ticks skipped.
         if (degradedAlertSent) {
           degradedAlertSent = false;
-          await notifyHealth("recovered", previousFailures);
+          void notifyHealth("recovered", previousFailures);
         }
       })
-      .catch(async (err) => {
+      .catch((err) => {
         console.error(`[cron] "${name}" tick failed:`, err);
         consecutiveFailures += 1;
         if (consecutiveFailures >= alertThreshold && !degradedAlertSent) {
           degradedAlertSent = true;
-          await notifyHealth("degraded", consecutiveFailures);
+          void notifyHealth("degraded", consecutiveFailures);
         }
       })
       .finally(() => {
         running = false;
         tickFinished(name);
+        if (stuckAlertSent) {
+          // The stuck run did end after all; say so, whichever way it ended.
+          stuckAlertSent = false;
+          console.warn(
+            `[cron] "${name}" stuck run finished after ${Math.round((now() - runStartedAt) / 1000)}s`,
+          );
+          void notifyHealth("recovered", skippedWhileRunning);
+        }
       });
   };
 }

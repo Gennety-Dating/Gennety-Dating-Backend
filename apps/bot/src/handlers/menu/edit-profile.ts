@@ -815,10 +815,23 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   }
 
   if (!ctx.chat) return;
+  const chatId = ctx.chat.id;
   const batch = openPhotoBatch(ctx, ctx.message?.media_group_id ?? null);
-  const outcome = await processPhotoFrame(ctx, incoming);
-  recordFrameOutcome(batch, outcome, ctx.message?.message_id);
-  armPhotoBatchFlush(batch);
+  // A frame that throws (Prisma, file download, validation) must still arm the
+  // flush: otherwise the batch stayed in the map with no timer, its rich-draft
+  // shimmer kept re-sending every 20 s, and the user never got a summary —
+  // until they happened to touch the photo manager again. Mirrors the
+  // onboarding photo handler.
+  let outcome: PhotoFrameOutcome = { kind: "infra_error" };
+  try {
+    outcome = await processPhotoFrame(ctx, incoming);
+  } catch (err) {
+    console.error("[edit-profile] photo frame handling failed:", err);
+  } finally {
+    recordFrameOutcome(batch, outcome, ctx.message?.message_id);
+    // Only while still the chat's live batch — Done/delete may have torn it down.
+    if (photoUploadBatches.get(chatId) === batch) armPhotoBatchFlush(batch);
+  }
 }
 
 /** What one validated frame did, with no user-facing side effects. */

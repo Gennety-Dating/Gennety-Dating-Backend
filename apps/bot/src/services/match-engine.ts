@@ -2045,9 +2045,35 @@ export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
 
+/** Longest stretch the pairwise loop runs before yielding to the event loop. */
+const PAIRWISE_YIELD_SLICE_MS = 25;
+
 /**
- * Compute embedding distances between all eligible pairs via a single SQL
- * call. Returns a Map keyed by "userAId:userBId" → distance.
+ * Parse a pgvector text literal (`[0.1,0.2,…]`) into float32 plus its norm.
+ * Null when it is malformed or has zero magnitude. Exported for tests.
+ */
+export function parseEmbeddingLiteral(
+  literal: string | null,
+): { v: Float32Array; norm: number } | null {
+  if (!literal) return null;
+  const body = literal.trim();
+  if (!body.startsWith("[") || !body.endsWith("]")) return null;
+  const parts = body.slice(1, -1).split(",");
+  const v = new Float32Array(parts.length);
+  let sq = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const n = Number(parts[i]);
+    if (!Number.isFinite(n)) return null;
+    v[i] = n;
+    sq += v[i]! * v[i]!;
+  }
+  const norm = Math.sqrt(sq);
+  return norm > 0 ? { v, norm } : null;
+}
+
+/**
+ * Cosine distances (pgvector `<=>` semantics) between all eligible same-city
+ * pairs. Returns a Map keyed by "userAId:userBId" → distance.
  */
 export async function computePairwiseDistances(
   users: BatchUser[],
@@ -2055,9 +2081,6 @@ export async function computePairwiseDistances(
   const distances = new Map<string, number>();
   if (users.length < 2) return distances;
 
-  // Build a batch SQL query: for each pair compute cosine distance.
-  // We chunk to avoid extremely large queries.
-  //
   // Grouped by city FIRST, and that is not an optimisation with a trade-off:
   // `areMutuallyCompatible` requires an identical `homeCityKey`, so every
   // cross-city pair this loop used to build was built only to be thrown away
@@ -2076,47 +2099,48 @@ export async function computePairwiseDistances(
     else byCity.set(user.homeCityKey, [user]);
   }
 
-  const pairs: Array<{ aId: string; bId: string; aEmb: string; bEmb: string }> = [];
+  // Cosine distance in-process (2026-10-13), the same quantity pgvector's
+  // `<=>` returns (1 − cos). It used to be computed in Postgres by shipping
+  // BOTH vectors of EVERY pair as `vector(1536)` text literals — ~17 MB of
+  // parameters per 500-pair query and up to ~80 queries per 400-user city,
+  // serialised on the main thread during the evening drop, while the same
+  // three pool connections served the iOS API. Each embedding is now parsed
+  // once (as float32, exactly what pgvector stores) and the pairs cost
+  // 3 × 1536 multiply-adds each.
+  const parsed = new Map<string, { v: Float32Array; norm: number } | null>();
+  const vectorOf = (user: BatchUser): { v: Float32Array; norm: number } | null => {
+    let entry = parsed.get(user.id);
+    if (entry === undefined) {
+      entry = parseEmbeddingLiteral(user.embeddingLiteral);
+      parsed.set(user.id, entry);
+    }
+    return entry;
+  };
+
+  // A full 400-user city is ~120 M multiply-adds — a few hundred ms of CPU.
+  // Hand the event loop back every slice so the API and bot keep answering.
+  let sliceStartedAt = Date.now();
   for (const cityUsers of byCity.values()) {
     for (let i = 0; i < cityUsers.length; i++) {
-    for (let j = i + 1; j < cityUsers.length; j++) {
-      const a = cityUsers[i]!;
-      const b = cityUsers[j]!;
-      if (!areMutuallyCompatible(a, b)) continue;
-      if (!a.embeddingLiteral || !b.embeddingLiteral) continue;
-      // Defense-in-depth: refuse to splice anything that doesn't match the
-      // UUID shape into the SQL string. The `users` table column is `@db.Uuid`
-      // so this should never trigger in practice, but a future regression
-      // (e.g. someone calling this fn with stub data from a test or the
-      // mobile API) won't open a SQL-injection hole.
-      if (!isUuid(a.id) || !isUuid(b.id)) {
-        console.warn(
-          `[match-engine] computePairwiseDistances: refusing non-UUID id (a=${a.id}, b=${b.id})`,
-        );
-        continue;
+      if (Date.now() - sliceStartedAt > PAIRWISE_YIELD_SLICE_MS) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        sliceStartedAt = Date.now();
       }
-      pairs.push({ aId: a.id, bId: b.id, aEmb: a.embeddingLiteral, bEmb: b.embeddingLiteral });
-    }
-    }
-  }
-
-  // Process in chunks of 500 to keep SQL query size reasonable.
-  const CHUNK_SIZE = 500;
-  for (let offset = 0; offset < pairs.length; offset += CHUNK_SIZE) {
-    const chunk = pairs.slice(offset, offset + CHUNK_SIZE);
-    const unionParts = chunk.map(
-      (p, idx) =>
-        `SELECT '${p.aId}' AS a_id, '${p.bId}' AS b_id, ($${idx * 2 + 1}::vector <=> $${idx * 2 + 2}::vector) AS distance`,
-    );
-    const sql = unionParts.join(" UNION ALL ");
-    const params = chunk.flatMap((p) => [p.aEmb, p.bEmb]);
-
-    const rows = await prisma.$queryRawUnsafe<
-      Array<{ a_id: string; b_id: string; distance: number }>
-    >(sql, ...params);
-
-    for (const row of rows) {
-      distances.set(`${row.a_id}:${row.b_id}`, Number(row.distance));
+      for (let j = i + 1; j < cityUsers.length; j++) {
+        const a = cityUsers[i]!;
+        const b = cityUsers[j]!;
+        if (!areMutuallyCompatible(a, b)) continue;
+        const va = vectorOf(a);
+        const vb = vectorOf(b);
+        // A malformed, mismatched or zero vector has no defined cosine
+        // (pgvector answered NaN); such a pair is simply not scored.
+        if (!va || !vb || va.v.length !== vb.v.length) continue;
+        let dot = 0;
+        const x = va.v;
+        const y = vb.v;
+        for (let k = 0; k < x.length; k++) dot += x[k]! * y[k]!;
+        distances.set(`${a.id}:${b.id}`, 1 - dot / (va.norm * vb.norm));
+      }
     }
   }
 

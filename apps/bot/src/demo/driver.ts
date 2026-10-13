@@ -60,6 +60,7 @@ import {
   demoText,
   type DemoBeat,
 } from "./script.js";
+import { BoundedMap } from "../utils/bounded-map.js";
 
 const LOG = "[demo]";
 
@@ -92,10 +93,17 @@ const LOG = "[demo]";
  *     would go out again after every restart — which is why the ending also has
  *     to be fresh (`DEMO_ENDING_OFFER_MAX_AGE_MS`).
  */
-const spokenBeats = new Map<string, Set<DemoBeat>>();
-const pendingSince = new Map<string, { key: string; at: number }>();
+//
+// Capped (`BoundedMap`): each is keyed per visitor, and only `/restart` used to
+// remove an entry, so every visitor the demo ever served stayed in memory for
+// the life of the process. 5 000 is far above any number of visitors walking
+// the demo at once; the one evicted is the longest-untouched, whose demo ended
+// long ago (and whose ending is past `DEMO_ENDING_OFFER_MAX_AGE_MS` anyway).
+const DEMO_VISITOR_STATE_CAP = 5_000;
+const spokenBeats = new BoundedMap<string, Set<DemoBeat>>(DEMO_VISITOR_STATE_CAP);
+const pendingSince = new BoundedMap<string, { key: string; at: number }>(DEMO_VISITOR_STATE_CAP);
 const inFlight = new Set<string>();
-const redoOffered = new Map<string, string>();
+const redoOffered = new BoundedMap<string, string>(DEMO_VISITOR_STATE_CAP);
 /**
  * How many times the same action may be refused before the demo stops trying
  * and says so.

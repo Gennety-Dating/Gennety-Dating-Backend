@@ -39,7 +39,7 @@ export async function toAvatarThumbnail(bytes: Buffer): Promise<Buffer> {
     const canvas = createCanvas(w, h);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(image, 0, 0, w, h);
-    return canvas.toBuffer("image/jpeg", JPEG_QUALITY);
+    return await canvas.encode("jpeg", JPEG_QUALITY);
   } catch {
     return bytes;
   }

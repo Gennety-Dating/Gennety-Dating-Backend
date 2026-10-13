@@ -83,6 +83,7 @@ import {
   waitForGuardedTicksIdle,
 } from "./utils/guarded-tick.js";
 import { assertValidCronSchedules } from "./utils/cron-schedules.js";
+import { connectionLimitOf } from "./utils/db-pool-url.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -185,6 +186,18 @@ function resolvePeerWaitTickMs(raw: string | undefined): number {
 }
 const PEER_WAIT_TICK_MS = resolvePeerWaitTickMs(process.env.PEER_WAIT_TICK_MS);
 
+/*
+ * Minute offsets (2026-10-13). Every hourly sweep used to default to minute 0,
+ * where it met match-nudge, the every-minute and every-five-minute jobs and the
+ * quarter-hour sweeps — about 18 ticks starting in the same second against a
+ * Prisma pool of three connections (1 vCPU, no `connection_limit`), which is
+ * what the iOS app queued behind at the top of every hour. Sweeps whose exact
+ * minute nobody sees (refund retries, expiry/premium/referral passes,
+ * auto-unsuspend, the stranded and no-match retries) now sit on their own
+ * minutes, none of them a multiple of five. Their cadence is unchanged; an
+ * explicit env override still wins.
+ */
+
 /**
  * Expiry cron schedule. Runs every 15 minutes to expire proposals
  * that have been dispatched but not mutually accepted within 24 hours.
@@ -214,7 +227,7 @@ const NO_MATCH_NOTICE_CRON_SCHEDULE =
  * hour of nine.
  */
 const NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE =
-  process.env.NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE ?? "*/15 * * * *";
+  process.env.NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE ?? "8-59/15 * * * *";
 
 /**
  * Stranded-proposal sweep (A13-H7): resumes `proposed` rows a crashed or
@@ -222,7 +235,7 @@ const NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE =
  * exactly when a dispatch has just died.
  */
 const STRANDED_DISPATCH_CRON_SCHEDULE =
-  process.env.STRANDED_DISPATCH_CRON_SCHEDULE ?? "*/15 * * * *";
+  process.env.STRANDED_DISPATCH_CRON_SCHEDULE ?? "4-59/15 * * * *";
 
 /**
  * Proposal-countdown cron: every minute (2026-07-25; was every five). The button
@@ -277,7 +290,7 @@ const MATCH_PREROLL_DELAY_MS = Number(process.env.MATCH_PREROLL_DELAY_MS ?? 2 * 
  * DB, independent of however often the batch itself now runs.
  */
 const AUTO_UNSUSPEND_CRON_SCHEDULE =
-  process.env.AUTO_UNSUSPEND_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.AUTO_UNSUSPEND_CRON_SCHEDULE ?? "7 * * * *";
 
 /**
  * M-2: embedding-refresh. Scans dirty profiles every 5 minutes and rebuilds
@@ -352,12 +365,12 @@ const VENUE_REVALIDATION_CRON_SCHEDULE =
  * are ever in pending/partial).
  */
 const TICKET_EXPIRY_CRON_SCHEDULE =
-  process.env.TICKET_EXPIRY_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.TICKET_EXPIRY_CRON_SCHEDULE ?? "17 * * * *";
 /// Gennety Premium expiry reminders (§3.8). Hourly: the buckets are 24h and 48h
 /// wide, so an hourly sweep cannot miss one, and a finer cadence would only
 /// re-ask the same question of the same rows.
 const PREMIUM_REMINDER_CRON_SCHEDULE =
-  process.env.PREMIUM_REMINDER_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.PREMIUM_REMINDER_CRON_SCHEDULE ?? "23 * * * *";
 
 /**
  * Rematch refund retry (REMATCH_PRODUCT_SPEC.md, D1). Hourly: retries refunds
@@ -367,7 +380,7 @@ const PREMIUM_REMINDER_CRON_SCHEDULE =
  * best-effort. Always registered, even when new Rematch sales are disabled.
  */
 const REMATCH_REFUND_CRON_SCHEDULE =
-  process.env.REMATCH_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.REMATCH_REFUND_CRON_SCHEDULE ?? "13 * * * *";
 
 /**
  * Venue-change refund retry (PRODUCT_SPEC §3.7b). Hourly twin of the rematch
@@ -375,7 +388,7 @@ const REMATCH_REFUND_CRON_SCHEDULE =
  * abandoned mid-settle. Registered only when VENUE_CHANGE_FEATURE_ENABLED.
  */
 const VENUE_CHANGE_REFUND_CRON_SCHEDULE =
-  process.env.VENUE_CHANGE_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.VENUE_CHANGE_REFUND_CRON_SCHEDULE ?? "37 * * * *";
 
 /**
  * Prime Time refund retry (PRIME_TIME_PRODUCT_SPEC.md §9). Hourly, same shape
@@ -384,7 +397,7 @@ const VENUE_CHANGE_REFUND_CRON_SCHEDULE =
  * charged for has no refunds to retry.
  */
 const PRIME_TIME_REFUND_CRON_SCHEDULE =
-  process.env.PRIME_TIME_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.PRIME_TIME_REFUND_CRON_SCHEDULE ?? "43 * * * *";
 
 /**
  * Referral held-reward release (§Referral). Hourly: pays ladder rungs the daily
@@ -393,7 +406,7 @@ const PRIME_TIME_REFUND_CRON_SCHEDULE =
  * becoming payable. Registered only when REFERRAL_FEATURE_ENABLED.
  */
 const REFERRAL_RELEASE_CRON_SCHEDULE =
-  process.env.REFERRAL_RELEASE_CRON_SCHEDULE ?? "0 * * * *";
+  process.env.REFERRAL_RELEASE_CRON_SCHEDULE ?? "47 * * * *";
 
 /**
  * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
@@ -1312,6 +1325,12 @@ async function main(): Promise<void> {
   // (functional index on canonical pair ordering for the lifetime-ban
   // anti-join in `buildCandidateSql`). Before the schedules, as it always was:
   // the drop query is the thing that needs it.
+  // The pool size actually in force — `DB_CONNECTION_LIMIT` unless the env URL
+  // names its own — so a deploy can be checked from the log, not inferred.
+  console.log(
+    `[startup] db pool connection_limit=${connectionLimitOf(env.DATABASE_URL) ?? "prisma default"}`,
+  );
+
   try {
     await ensureMatchPairIndex();
   } catch (err) {

@@ -1,3 +1,4 @@
+import { BoundedMap } from "../utils/bounded-map.js";
 /**
  * How many times in a row the demo has tried the same move and been refused.
  *
@@ -54,7 +55,9 @@ export function createFailureTracker(
   maxFailures: number,
   retryAfterMs: number = DEMO_RETRY_AFTER_MS,
 ): FailureTracker {
-  const streaks = new Map<string, { key: string; count: number; lastAt: number }>();
+  // Capped like the driver's own per-visitor maps: a visitor who leaves the
+  // scanned set mid-streak is never cleared.
+  const streaks = new BoundedMap<string, { key: string; count: number; lastAt: number }>(5_000);
 
   return {
     note(userId, actionKey, now = Date.now()) {

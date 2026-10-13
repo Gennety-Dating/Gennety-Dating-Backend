@@ -76,6 +76,7 @@ import {
   isStrongJwtSecret,
   JWT_SECRET_MIN_BYTES,
 } from "./jwt.js";
+import { applyProxyKeepAlive } from "../utils/http-keep-alive.js";
 
 /**
  * Public `/v1/*` HTTP API consumed by the Expo mobile app.
@@ -733,6 +734,7 @@ export function startPublicServer(api?: Api<RawApi>): Server | null {
   // the listen callback instead of throwing — which logged "listening" and
   // carried on: PM2 green, the bot answering, the whole iOS API gone. Exit so
   // PM2 restarts the process and the failure is visible.
+  applyProxyKeepAlive(server);
   server.on("error", (err) => {
     console.error(`[public] /v1/* API server error on ${env.HTTP_BIND_HOST}:${env.PUBLIC_PORT}:`, err);
     process.exit(1);

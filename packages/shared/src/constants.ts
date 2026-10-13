@@ -772,6 +772,30 @@ export const BOT_CONCURRENT_CHAT_TASKS = 16;
 export const SHUTDOWN_DRAIN_TIMEOUT_MS = 20_000;
 
 /**
+ * Idle keep-alive for the public and admin HTTP servers. Caddy reuses idle
+ * upstream connections for up to 2 minutes, Node closed them after 5 s: a
+ * request Caddy sent down a connection Node had just closed came back as a
+ * 502, and Go's transport only retries idempotent methods — so the iOS app's
+ * POST/PUTs failed sporadically. The upstream must outlive the proxy's idle
+ * window, and `headersTimeout` must exceed this value (Node's own rule).
+ */
+export const HTTP_KEEP_ALIVE_TIMEOUT_MS = 125_000;
+
+/** `Retry-After` (seconds) on a 503 answered because the DB pool was exhausted. */
+export const DB_POOL_BUSY_RETRY_AFTER_SECONDS = 2;
+
+/**
+ * Prisma pool size for the bot process, applied when `DATABASE_URL` carries no
+ * `connection_limit` of its own (an explicit one in the URL always wins — that
+ * is the rollback, no redeploy). Without it Prisma sizes the pool at
+ * `cpus × 2 + 1`, which is 3 on the 1-vCPU droplet: three connections shared by
+ * the bot, both HTTP APIs and every cron, so a couple of busy jobs queued iOS
+ * requests for up to `pool_timeout`. Must stay below the Supabase pooler's
+ * Pool Size with room for `db:deploy` and manual sessions.
+ */
+export const DB_CONNECTION_LIMIT = 10;
+
+/**
  * A `proposed` match still carrying `dispatchedAt = null` this long after it was
  * created is treated as stranded by a dead dispatch (a crash or deploy mid-run)
  * and resumed (A13-H7). Half an hour clears every live path that creates a row

@@ -59,9 +59,10 @@ function mockUsers(rows: Array<Record<string, unknown>>) {
     async (args: { where?: { status?: unknown }; take?: number }) => {
       const status = args?.where?.status;
       let matching = rows;
-      if (typeof status === "object" && status !== null && "not" in status) {
+      if (typeof status === "object" && status !== null && "in" in status) {
+        const statuses = (status as { in: unknown[] }).in;
         matching = rows.filter(
-          (row) => row.status !== "active" && row.statusMessageId !== null,
+          (row) => statuses.includes(row.status) && row.statusMessageId !== null,
         );
       }
       return args?.take === undefined ? matching : matching.slice(0, args.take);

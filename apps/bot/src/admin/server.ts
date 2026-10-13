@@ -41,6 +41,7 @@ import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchas
 import { isUuid } from "./utils/uuid.js";
 import { linkedAccountsRouter } from "./routes/linked-accounts.js";
 import { linkedAccountsOf } from "../services/linked-accounts.js";
+import { applyProxyKeepAlive } from "../utils/http-keep-alive.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -1419,6 +1420,7 @@ export function startAdminServer(api: Api<RawApi>): Server {
   // Express 5 hands a bind failure to the listen callback instead of throwing,
   // so it used to log "listening" on a process with no admin API. Exit so PM2
   // restarts it and the failure is visible.
+  applyProxyKeepAlive(server);
   server.on("error", (err) => {
     console.error(`[admin] Analytics API server error on ${env.HTTP_BIND_HOST}:${env.ADMIN_PORT}:`, err);
     process.exit(1);

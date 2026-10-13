@@ -383,5 +383,7 @@ export async function buildCollageLayer(
 
   for (const acc of spec.butterflies) if (acc.above) stampButterfly(acc);
 
-  return canvas.toBuffer("image/png");
+  // Async encode (libuv thread pool): a 1080×1350 PNG encode on the main
+  // thread stalled every request for its full duration, once per card.
+  return await canvas.encode("png");
 }

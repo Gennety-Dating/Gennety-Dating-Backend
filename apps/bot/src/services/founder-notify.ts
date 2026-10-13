@@ -82,6 +82,8 @@ export function isFounderFeedSuppressedRuntime(
  * degrades to a no-op. A bare `Api` is enough — the founder bot only ever
  * SENDS, it never polls.
  */
+const FOUNDER_API_TIMEOUT_SECONDS = 60;
+
 function getFounderApi(): Api<RawApi> | null {
   if (founderApi !== undefined) return founderApi;
   if (!env.FOUNDER_NOTIFY_ENABLED || !env.FOUNDER_BOT_TOKEN || !env.FOUNDER_TELEGRAM_ID) {
@@ -95,7 +97,12 @@ function getFounderApi(): Api<RawApi> | null {
     founderApi = null;
     return null;
   }
-  founderApi = new Api(env.FOUNDER_BOT_TOKEN);
+  // grammY's default per-call timeout is 500 s. Several callers await these
+  // sends inside cron ticks (the drop job, verification sweeps, venue flows),
+  // so a stalled Telegram held each of them for over eight minutes. Same
+  // ceiling as the main bot (`BOT_API_TIMEOUT_SECONDS`, not imported: bot.ts
+  // pulls in every handler, and this module is imported by many of them).
+  founderApi = new Api(env.FOUNDER_BOT_TOKEN, { timeoutSeconds: FOUNDER_API_TIMEOUT_SECONDS });
   // A second bot token means a second, independent set of Bot API limits, and
   // this one sends in bursts: eleven notifiers, several of which fire together
   // after the scheduled batch. It pays the same rules as the main bot.
@@ -119,15 +126,19 @@ function founderChatId(): number {
  */
 export async function notifyFounderSubsystemHealth(
   subsystem: string,
-  state: "degraded" | "recovered",
+  state: "degraded" | "recovered" | "stuck",
   consecutiveFailures: number,
 ): Promise<void> {
   const api = getFounderApi();
   if (!api) return;
+  // For "stuck" the count is ticks skipped behind a run that never finished;
+  // for "recovered" after a stuck run it is the same count.
   const text =
     state === "degraded"
       ? `⚠️ «${subsystem}» падает ${consecutiveFailures} тик(а/ов) подряд.`
-      : `✅ «${subsystem}» снова работает — после ${consecutiveFailures} упавших тиков.`;
+      : state === "stuck"
+        ? `🧊 «${subsystem}» завис: один прогон не завершается, ${consecutiveFailures} тик(а/ов) пропущено. Работа стоит до его окончания или рестарта.`
+        : `✅ «${subsystem}» снова работает — после ${consecutiveFailures} упавших/пропущенных тиков.`;
   try {
     await api.sendMessage(founderChatId(), text);
   } catch (err) {
