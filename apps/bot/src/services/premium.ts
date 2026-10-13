@@ -797,8 +797,17 @@ export async function revokePremium(input: {
   externalPaymentId: string;
   provider: PremiumProvider;
   refunded: RefundedPremiumPeriod;
+  /**
+   * The ledger key the refunded charge was CREDITED under. When given, days
+   * are taken back only if that credit exists for this user: a refund of a
+   * charge that was never applied here (a renewal the webhook missed and the
+   * app never reported) bought nothing in `premiumUntil`, so subtracting its
+   * period would cut months the user holds from a package, a referral or a
+   * promo. The refund marker is still written, so a replay stays a no-op.
+   */
+  creditExternalPaymentId?: string;
 }): Promise<void> {
-  const { userId, externalPaymentId, provider, refunded } = input;
+  const { userId, externalPaymentId, provider, refunded, creditExternalPaymentId } = input;
   if (!refunded.end) {
     // Every auto-renewable transaction carries an expiry, so this is a payload
     // we cannot price. Nothing is subtracted rather than guessed at; the line
@@ -823,13 +832,28 @@ export async function revokePremium(input: {
           periodEnd: refunded.end,
         },
       });
+      const credit = creditExternalPaymentId
+        ? await tx.subscriptionLedger.findUnique({
+            where: { externalPaymentId: creditExternalPaymentId },
+            select: { userId: true },
+          })
+        : null;
+      const wasCredited = !creditExternalPaymentId || credit?.userId === userId;
       await tx.user.update({
         where: { id: userId },
         data: {
-          premiumUntil: premiumUntilAfterRefund(head.premiumUntil, refunded, now),
+          ...(wasCredited
+            ? { premiumUntil: premiumUntilAfterRefund(head.premiumUntil, refunded, now) }
+            : {}),
           premiumAutoRenew: false,
         },
       });
+      if (!wasCredited) {
+        console.warn(
+          `[premium] refund of a charge never credited here user=${userId} ` +
+            `charge=${externalPaymentId} — no coverage removed`,
+        );
+      }
     });
   } catch (err) {
     if (isUniqueViolation(err)) return;

@@ -237,6 +237,52 @@ describe("revokePremium", () => {
     });
   });
 
+  it("takes no days back for a refunded charge that was never credited here", async () => {
+    // A renewal the webhook missed and the app never reported, refunded: it
+    // bought nothing in `premiumUntil`, so the months held from a package stay.
+    const now = Date.now();
+    const stacked = new Date(now + 200 * DAY);
+    userFindUnique.mockResolvedValueOnce({ premiumSince: null, premiumUntil: stacked });
+    userUpdate.mockResolvedValueOnce({});
+    ledgerCreate.mockResolvedValueOnce({ id: "l3" });
+    ledgerFindUnique.mockResolvedValueOnce(null);
+
+    await revokePremium({
+      userId: "u1",
+      externalPaymentId: "appstore:tx-3:refund",
+      creditExternalPaymentId: "appstore:tx-3",
+      provider: "app_store",
+      refunded: { start: new Date(now - 10 * DAY), end: new Date(now + 20 * DAY) },
+    });
+
+    const data = userUpdate.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty("premiumUntil");
+    expect(data.premiumAutoRenew).toBe(false);
+    // The marker is still written, so a replay of the refund stays a no-op.
+    expect(ledgerCreate.mock.calls[0][0].data).toMatchObject({
+      externalPaymentId: "appstore:tx-3:refund",
+    });
+  });
+
+  it("takes the days back when the refunded charge was credited to this user", async () => {
+    const now = Date.now();
+    userFindUnique.mockResolvedValueOnce({ premiumSince: null, premiumUntil: new Date(now + 200 * DAY) });
+    userUpdate.mockResolvedValueOnce({});
+    ledgerCreate.mockResolvedValueOnce({ id: "l4" });
+    ledgerFindUnique.mockResolvedValueOnce({ userId: "u1" });
+
+    await revokePremium({
+      userId: "u1",
+      externalPaymentId: "appstore:tx-4:refund",
+      creditExternalPaymentId: "appstore:tx-4",
+      provider: "app_store",
+      refunded: { start: new Date(now - 10 * DAY), end: new Date(now + 20 * DAY) },
+    });
+
+    const written = (userUpdate.mock.calls[0][0].data.premiumUntil as Date).getTime();
+    expect(written).toBeLessThan(now + 181 * DAY);
+  });
+
   it("swallows a duplicate revoke (P2002)", async () => {
     userFindUnique.mockResolvedValueOnce({ premiumSince: null, premiumUntil: FUTURE });
     ledgerCreate.mockRejectedValueOnce({ code: "P2002" });

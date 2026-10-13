@@ -93,6 +93,7 @@ describe("applyAppStorePremium", () => {
     expect(revokePremium).toHaveBeenCalledWith({
       userId: "u1",
       externalPaymentId: "appstore:tx-1:refund",
+      creditExternalPaymentId: "appstore:tx-1",
       provider: "app_store",
       refunded: { start: new Date(PURCHASED), end: new Date(EXPIRES) },
     });

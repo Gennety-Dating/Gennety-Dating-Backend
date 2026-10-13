@@ -83,6 +83,7 @@ export async function applyAppStorePremium(
     await revokePremium({
       userId,
       externalPaymentId: `appstore:${tx.transactionId}:refund`,
+      creditExternalPaymentId: `appstore:${tx.transactionId}`,
       provider: "app_store",
       refunded: refundedPeriodOf(tx),
     });
@@ -201,6 +202,7 @@ export async function handleAppStorePremiumNotification(
     await revokePremium({
       userId: owner.id,
       externalPaymentId: `appstore:${tx.transactionId}:refund`,
+      creditExternalPaymentId: `appstore:${tx.transactionId}`,
       provider: "app_store",
       refunded: refundedPeriodOf(tx),
     });
