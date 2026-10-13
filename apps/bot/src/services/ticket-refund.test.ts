@@ -255,6 +255,18 @@ describe("planMatchTicketRefunds", () => {
     expect(await planMatchTicketRefunds("m1")).toEqual([]);
   });
 
+  it("refunds only the partner's slot to a Premium holder who paid it — never his free one", async () => {
+    // A's own slot was settled by the grandfathered cover (zero-delta
+    // `premium_gate`); he then paid B's slot from the wallet.
+    seedMatch({ paidForPartnerByA: true }, { coveredByPremium: ["A"] });
+    db.ledger.push({ userId: A, matchId: "m1", delta: 0, reason: "premium_gate" });
+
+    const plan = await planMatchTicketRefunds("m1");
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]).toMatchObject({ userId: A, slots: ["B"] });
+  });
+
   it("возвращает Stars-оплату гейта: денег в строке достаточно, списания нет", async () => {
     // Stars-гейт не трогает кошелёк — он пишет нулевую строку с `amountStars`.
     // Признак оплаты обязан её узнавать, иначе честный плательщик потерял бы

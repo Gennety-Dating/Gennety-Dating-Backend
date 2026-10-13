@@ -1782,15 +1782,15 @@ async function refundPaidTicketSide(
   }
 
   // Which rail claimed the slot decides whether the wallet is owed a ticket as
-  // well (A13-M3). Only a charge in `gate_settled` / `gate_payment` can be the
-  // claim; one already `gate_refunded` or `gate_refund_pending` lost the race
-  // (or was returned by an earlier pass) and bought nothing. The mere presence
-  // of such a row used to end this function before the wallet was looked at,
-  // so a payer whose SPENT ticket held the slot lost it: the Stars came back,
-  // the ticket did not.
-  const starsClaimedSlot = stars.some(
-    (record) => record.reason === GATE_SETTLED_REASON || record.reason === GATE_PAYMENT_REASON,
-  );
+  // well (A13-M3). Only a charge in `gate_settled` can be the claim: the slot
+  // CAS and that reason commit in one transaction (`claimTicketSlots`). One in
+  // `gate_payment` has not claimed anything yet — it is in flight, or was
+  // abandoned before its claim — and one `gate_refunded` / `gate_refund_pending`
+  // lost the race or was returned by an earlier pass. Counting `gate_payment`
+  // as the claimer meant a wallet-paid slot next to an unsettled Stars charge
+  // got the Stars back and never the ticket.
+  // Read from the rows as they were BEFORE the refund loop above moved them.
+  const starsClaimedSlot = stars.some((record) => record.reason === GATE_SETTLED_REASON);
   if (starsClaimedSlot) return allRefunded;
 
   // Net of refunds, not "a spend row exists": a spend that lost the race was

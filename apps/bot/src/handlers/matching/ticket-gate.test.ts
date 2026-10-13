@@ -1077,6 +1077,38 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
     expect(mStartScheduling).toHaveBeenCalledTimes(1);
   });
 
+  it("returns the wallet ticket that held the slot next to an unsettled Stars charge", async () => {
+    // A `partner` Stars charge still in `gate_payment` (in flight, or abandoned
+    // before its claim) bought no slot: its Stars go back AND the wallet ticket
+    // that actually holds A's slot goes back too.
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "unsettled-ledger",
+          userId: "uid-A",
+          matchId: "match-1",
+          reason: "gate_payment",
+          externalPaymentId: "charge_unsettled",
+          bundleSize: 1,
+          amountStars: 425,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+      ]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(api.refundStarPayment).toHaveBeenCalledWith(1001, "charge_unsettled");
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPaymentId: "wallet-expiry-refund:match-1:uid-A" }),
+    );
+  });
+
   it("gives no wallet ticket for a spend that was already handed back", async () => {
     // A spend that lost the race is refunded on the spot; "a spend row exists"
     // is not the same fact as "a ticket is still owed".

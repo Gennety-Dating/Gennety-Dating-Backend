@@ -126,6 +126,9 @@ export function hasSettledStarsPayment(rows: readonly MatchPaymentLedgerRow[]): 
   );
 }
 
+/** The zero-delta row the Premium cover writes when it settles a slot for free. */
+const PREMIUM_GATE_REASON = "premium_gate";
+
 const MATCH_REFUND_SELECT = {
   id: true,
   ticketStatus: true,
@@ -213,7 +216,19 @@ export async function planMatchTicketRefunds(
       return netWalletSpend(rows) > 0 || hasSettledStarsPayment(rows);
     }),
   );
-  const paidSlots = bySlot.filter(({ payerId }) => actuallyPaid.has(payerId));
+  // "Paid" is decided per PERSON above, but refunded per SLOT — and one person
+  // can hold a paid slot and a free one at once: a grandfathered Premium holder
+  // whose own slot the cover settled (`premium_gate`) and who then paid his
+  // partner's. Without this, his wallet spend for her slot made his own,
+  // never-paid slot refundable too: two tickets back for one paid.
+  const premiumSettled = new Set(
+    ledger.filter((row) => row.reason === PREMIUM_GATE_REASON).map((row) => row.userId),
+  );
+  const paidSlots = bySlot.filter(({ slot, payerId }) => {
+    if (!actuallyPaid.has(payerId)) return false;
+    const owner = slot === "A" ? match.userAId : match.userBId;
+    return !(payerId === owner && premiumSettled.has(owner));
+  });
   if (paidSlots.length === 0) return [];
 
   const credits = new Map<string, TicketRefundCredit>();
