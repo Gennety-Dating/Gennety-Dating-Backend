@@ -94,6 +94,7 @@ describe("blockMatchPartner", () => {
     mMatch.findUnique.mockResolvedValue({ userAId: BLOCKER, userBId: PARTNER });
     const cancelled = {
       matchId: MATCH,
+      actorUserId: BLOCKER,
       partnerUserId: PARTNER,
       partnerTelegramId: 42n,
       partnerLanguage: "en",

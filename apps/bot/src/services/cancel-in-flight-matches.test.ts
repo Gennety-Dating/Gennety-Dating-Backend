@@ -33,6 +33,14 @@ vi.mock("./push.js", () => ({
   sendPushToUser: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock("./date-day-activity.js", () => ({
+  endCancelledDateDayActivities: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./status-banner-refresh.js", () => ({
+  refreshStatusBanners: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../utils/elo-calculator.js", () => ({
   applyEmergencyCancellationPeerBoost: vi.fn().mockResolvedValue(505),
 }));
@@ -40,6 +48,8 @@ vi.mock("../utils/elo-calculator.js", () => ({
 import { prisma } from "@gennety/db";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
 import { sendPushToUser } from "./push.js";
+import { endCancelledDateDayActivities } from "./date-day-activity.js";
+import { refreshStatusBanners } from "./status-banner-refresh.js";
 import {
   cancelInFlightMatchesForUser,
   claimMatchCancellation,
@@ -134,6 +144,7 @@ describe("cancelInFlightMatchesForUser", () => {
     expect(result).toEqual([
       {
         matchId: "m1",
+        actorUserId: LEAVING,
         partnerUserId: PARTNER,
         partnerTelegramId: 200n,
         partnerLanguage: "ru",
@@ -235,6 +246,7 @@ describe("cancelInFlightMatchesForUser", () => {
     expect(result).toEqual([
       {
         matchId: "good",
+        actorUserId: LEAVING,
         partnerUserId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
         partnerTelegramId: 300n,
         partnerLanguage: "en",
@@ -503,5 +515,29 @@ describe("claimMatchCancellation", () => {
     mMatch.updateMany.mockResolvedValue({ count: 0 });
 
     expect(await claimMatchCancellation("m1", LEAVING)).toBeNull();
+  });
+});
+
+describe("deliverCancelledPartnerEffects — surfaces counting down to the dead date", () => {
+  it("ends both sides' date-day card for that match and refreshes their banners", async () => {
+    mMatch.findMany.mockResolvedValueOnce([
+      {
+        id: "m-card",
+        userAId: LEAVING,
+        userBId: PARTNER,
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "en", platform: "telegram" },
+      },
+    ]);
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as unknown as Parameters<
+      typeof cancelInFlightMatchesForUser
+    >[1];
+
+    await cancelInFlightMatchesForUser(LEAVING, api);
+
+    // The lifecycle sweep only ends cards on `scheduled` rows; a cancelled
+    // (or, after deletion, vanished) date would keep its countdown otherwise.
+    expect(endCancelledDateDayActivities).toHaveBeenCalledWith("m-card", [PARTNER, LEAVING]);
+    expect(refreshStatusBanners).toHaveBeenCalledWith(api, [PARTNER, LEAVING]);
   });
 });

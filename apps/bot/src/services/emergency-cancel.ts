@@ -6,6 +6,7 @@ import { refundMatchTicketsInTx, type TicketRefundOutcome } from "./ticket-refun
 import { getMainBotApi } from "./main-bot-api.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import { refreshStatusBanners } from "./status-banner-refresh.js";
+import { endCancelledDateDayActivities } from "./date-day-activity.js";
 
 /**
  * Emergency cancellation of a `scheduled` date, shared by both surfaces
@@ -140,6 +141,9 @@ export async function cancelScheduledDate(input: {
   if (api) {
     await refreshStatusBanners(api, [match.userAId, match.userBId]).catch(() => {});
   }
+  // The iOS lock-screen card counts down to this date too, and its own sweep
+  // only ends cards for `scheduled` rows — this one just stopped being one.
+  await endCancelledDateDayActivities(match.id, [match.userAId, match.userBId]).catch(() => {});
 
   const peerUserId = input.actorUserId === match.userAId ? match.userBId : match.userAId;
   await applyEmergencyCancellationPeerBoost(peerUserId).catch((err: unknown) => {
