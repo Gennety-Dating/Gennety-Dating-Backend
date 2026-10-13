@@ -32,6 +32,29 @@ import { appleMusicConfigured } from "../../services/music/apple-music.js";
  */
 export const appConfigRouter: Router = Router();
 
+/**
+ * The two city lists come from compile-time constants, so they are shaped once
+ * here rather than on every request. Everything read from `env` stays inside
+ * the handler: the env object is read per request on purpose (a test, or a
+ * future reload, flips a flag between two calls).
+ */
+const SUPPORTED_CITIES = SUPPORTED_MARKETS.map((market) => ({
+  cityKey: market.cityKey,
+  city: market.city,
+  countryCode: market.countryCode,
+  latitude: market.latitude,
+  longitude: market.longitude,
+}));
+
+const CITY_CATALOG_VIEW = CITY_CATALOG.map((city) => ({
+  cityKey: city.cityKey,
+  city: city.city,
+  countryCode: city.countryCode,
+  latitude: city.latitude,
+  longitude: city.longitude,
+  status: city.status,
+}));
+
 appConfigRouter.get("/config", (_req: Request, res: Response) => {
   const primeTimePass = primeTimeAppleRailLive();
   res.json({
@@ -39,21 +62,8 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     // The build-number floor the server enforces with 426 (`MIN_IOS_BUILD`,
     // audit C-23). Additive and informational — null while the gate is off.
     minIosBuild: env.MIN_IOS_BUILD > 0 ? env.MIN_IOS_BUILD : null,
-    supportedCities: SUPPORTED_MARKETS.map((market) => ({
-      cityKey: market.cityKey,
-      city: market.city,
-      countryCode: market.countryCode,
-      latitude: market.latitude,
-      longitude: market.longitude,
-    })),
-    cityCatalog: CITY_CATALOG.map((city) => ({
-      cityKey: city.cityKey,
-      city: city.city,
-      countryCode: city.countryCode,
-      latitude: city.latitude,
-      longitude: city.longitude,
-      status: city.status,
-    })),
+    supportedCities: SUPPORTED_CITIES,
+    cityCatalog: CITY_CATALOG_VIEW,
     features: {
       phoneAuth: env.PHONE_AUTH_ENABLED,
       // The client hides "Continue with Telegram" when this is false, rather
