@@ -10,6 +10,7 @@ import {
   getStylePicks,
   type StylePicksDeps,
 } from "../../services/style-picks/service.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Vibe Check (decision journal 2026-10-08).
@@ -60,7 +61,6 @@ const CACHE_ONLY_DEPS: StylePicksDeps = {
 };
 
 const ITEM_ID = /^[a-z0-9-]{1,80}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function queryString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -85,7 +85,7 @@ export function createStyleOutRouter(): Router {
     const userId = queryString(req.query.u);
     const expiresAt = Number(queryString(req.query.e));
     const signed =
-      UUID.test(userId) && styleOutSignatureValid(userId, itemId, expiresAt, queryString(req.query.s));
+      isUuid(userId) && styleOutSignatureValid(userId, itemId, expiresAt, queryString(req.query.s));
     if (signed) {
       // Best-effort: the shopper is redirected whatever the log does.
       await prisma.styleClick

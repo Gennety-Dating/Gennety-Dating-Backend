@@ -34,6 +34,7 @@ import { recordMiniAppAction } from "../../services/chat-events.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { allowCrossOriginImage } from "../cross-origin-image.js";
 import { photoProxyLimiter } from "../rate-limit.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /** Chat-timeline shorthand — every action on this board is one surface. */
 function noteBoardAction(telegramId: number, matchId: string, what: string): void {
@@ -70,8 +71,6 @@ function noteBoardAction(telegramId: number, matchId: string, what: string): voi
  * All state transitions, payer-matrix checks, and CAS guards live in the
  * handler module — the routes are a thin HTTP boundary.
  */
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Google Places photo *resource name* shape (`places/<id>/photos/<id>`). We
@@ -555,12 +554,12 @@ function profileOf(place: ShowcasePlace | null, now: number) {
 
 function matchIdOfQuery(req: Request): string | null {
   const raw = typeof req.query.match === "string" ? req.query.match : "";
-  return UUID_REGEX.test(raw) ? raw : null;
+  return isUuid(raw) ? raw : null;
 }
 
 function matchIdOfBody(body: Record<string, unknown> | undefined): string | null {
   const raw = typeof body?.matchId === "string" ? body.matchId : "";
-  return UUID_REGEX.test(raw) ? raw : null;
+  return isUuid(raw) ? raw : null;
 }
 
 /** Like keys: up to the catalog cap, non-empty strings, sane length. */

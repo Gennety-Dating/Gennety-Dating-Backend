@@ -9,6 +9,7 @@ import {
   type FeedbackRefusal,
   type PendingFeedbackView,
 } from "../../services/post-date-feedback.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Post-date feedback for the NATIVE client (JWT) — PRODUCT_SPEC §Phase 4.3.
@@ -46,7 +47,7 @@ export function createNativeFeedbackRouter(): Router {
   router.post("/post-date", async (req: Request, res: Response): Promise<void> => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const matchId = typeof body.matchId === "string" ? body.matchId : null;
-    if (!matchId || !UUID_REGEX.test(matchId)) {
+    if (!matchId || !isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }
@@ -116,6 +117,3 @@ function answerFailure(res: Response, error: FeedbackRefusal): void {
           : 400;
   res.status(status).json({ error });
 }
-
-/** See routes/calendar.ts for why the UUID shape is pre-validated here. */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

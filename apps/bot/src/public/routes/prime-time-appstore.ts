@@ -6,6 +6,7 @@ import { requireAuth } from "../auth-middleware.js";
 import { appStoreConfigured, decodeJwsPayload } from "../../services/appstore.js";
 import { purchasePrimeTimePass } from "../../services/appstore-prime-time.js";
 import { primeTimeFeatureLive } from "../../services/prime-time.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * StoreKit 2 purchase reporting for the Prime Time pass (native app only, M7).
@@ -42,7 +43,6 @@ export function createPrimeTimeAppStoreRouter(api: Api<RawApi>): Router {
   router.use(requireAuth);
 
   const JWS_MAX_LENGTH = 20_000;
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   router.post("/transaction", async (req: Request, res: Response): Promise<void> => {
     if (!appStoreConfigured()) {
@@ -55,7 +55,7 @@ export function createPrimeTimeAppStoreRouter(api: Api<RawApi>): Router {
       return;
     }
     const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(400).json({ error: "Missing matchId" });
       return;
     }

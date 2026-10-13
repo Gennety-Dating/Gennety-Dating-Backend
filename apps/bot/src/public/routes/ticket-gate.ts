@@ -10,6 +10,7 @@ import {
 } from "../../handlers/matching/ticket-gate.js";
 import { partnerPhotoUrls } from "../partner-photos.js";
 import type { TicketScope } from "../../services/ticket-payment.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Date Ticket gate for the NATIVE client (JWT auth) — PRODUCT_SPEC §3.5b.
@@ -279,13 +280,10 @@ async function nativeState(
 
 function matchIdOf(req: Request): string | null {
   const raw = (req.params as Record<string, string | undefined>).matchId;
-  return typeof raw === "string" && UUID_REGEX.test(raw) ? raw : null;
+  return typeof raw === "string" && isUuid(raw) ? raw : null;
 }
 
 function parseScope(body: unknown): TicketScope | null {
   const scope = (body as { scope?: unknown } | undefined)?.scope;
   return scope === "self" || scope === "both" || scope === "partner" ? scope : null;
 }
-
-/** See routes/calendar.ts for why we pre-validate the UUID shape here. */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

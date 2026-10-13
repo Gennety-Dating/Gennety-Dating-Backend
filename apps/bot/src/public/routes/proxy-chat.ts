@@ -21,6 +21,7 @@ import {
 import { PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
 import { parseClientMessageId, SendDedupe } from "../../utils/send-dedupe.js";
 import { exceedsVisibleLength } from "../../utils/text-length.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * A retried send with the same `clientMessageId` answers with the first send's
@@ -201,7 +202,7 @@ export function createProxyChatRouter(
       return;
     }
     const messageId = (req.params as Record<string, string | undefined>).messageId;
-    if (typeof messageId !== "string" || !UUID_REGEX.test(messageId)) {
+    if (typeof messageId !== "string" || !isUuid(messageId)) {
       res.status(404).json({ error: "no-message" });
       return;
     }
@@ -293,8 +294,5 @@ function answerFailure(res: Response, error: ProxyChatRefusal): void {
 
 function matchIdOf(req: Request): string | null {
   const raw = (req.params as Record<string, string | undefined>).matchId;
-  return typeof raw === "string" && UUID_REGEX.test(raw) ? raw : null;
+  return typeof raw === "string" && isUuid(raw) ? raw : null;
 }
-
-/** See routes/calendar.ts for why the UUID shape is pre-validated here. */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

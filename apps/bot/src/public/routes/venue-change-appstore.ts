@@ -5,6 +5,7 @@ import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
 import { appStoreConfigured, decodeJwsPayload } from "../../services/appstore.js";
 import { purchaseVenueChange } from "../../services/appstore-venue-change.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * StoreKit 2 purchase reporting for a venue change (native app only).
@@ -45,7 +46,6 @@ export function createVenueChangeAppStoreRouter(api: Api<RawApi>): Router {
   router.use(requireAuth);
 
   const JWS_MAX_LENGTH = 20_000;
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   router.post("/transaction", async (req: Request, res: Response): Promise<void> => {
     if (!appStoreConfigured()) {
@@ -58,7 +58,7 @@ export function createVenueChangeAppStoreRouter(api: Api<RawApi>): Router {
       return;
     }
     const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(400).json({ error: "Missing matchId" });
       return;
     }

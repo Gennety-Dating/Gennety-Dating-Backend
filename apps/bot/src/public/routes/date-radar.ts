@@ -14,6 +14,7 @@ import {
 } from "../../services/date-radar.js";
 import { notifyPartnerArrived } from "../../services/date-day-activity.js";
 import { venueCoordinatesOf } from "../../services/venue-location.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * `POST /v1/dates/:matchId/proximity` — one side's position ping
@@ -167,7 +168,3 @@ dateRadarRouter.post(
     });
   },
 );
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}

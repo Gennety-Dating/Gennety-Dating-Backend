@@ -15,6 +15,7 @@ import { mutualOfferFor, type MutualOffer } from "../../services/wishlist.js";
 import { sendMutualOfferDm } from "../../handlers/date/morning-after.js";
 import { getMainBotApi } from "../../services/main-bot-api.js";
 import { createProfilePhotoSignedUrl } from "../../services/storage.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * «The Morning After» and the mutual offer for the NATIVE client (decision
@@ -30,7 +31,6 @@ import { createProfilePhotoSignedUrl } from "../../services/storage.js";
  * state, not an error.
  */
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JWS_MAX_LENGTH = 20_000;
 
 async function languageOf(userId: string): Promise<Language> {
@@ -105,7 +105,7 @@ export function createAfterDateRouter(): Router {
   router.post("/answer", async (req: Request, res: Response): Promise<void> => {
     const userId = req.userId!;
     const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
-    if (!env.MORNING_AFTER_ENABLED || !UUID_REGEX.test(matchId)) {
+    if (!env.MORNING_AFTER_ENABLED || !isUuid(matchId)) {
       res.status(404).json({ error: "not-found" });
       return;
     }
@@ -136,7 +136,7 @@ export function createAfterDateRouter(): Router {
 
   router.get("/:matchId", async (req: Request, res: Response): Promise<void> => {
     const matchId = String(req.params.matchId ?? "");
-    if (!env.MORNING_AFTER_ENABLED || !UUID_REGEX.test(matchId)) {
+    if (!env.MORNING_AFTER_ENABLED || !isUuid(matchId)) {
       res.status(404).json({ error: "not-found" });
       return;
     }
@@ -150,7 +150,7 @@ export function createAfterDateRouter(): Router {
 
   router.post("/:matchId/wishlist/appstore", async (req: Request, res: Response): Promise<void> => {
     const matchId = String(req.params.matchId ?? "");
-    if (!env.WISHLIST_APPSTORE_ENABLED || !UUID_REGEX.test(matchId)) {
+    if (!env.WISHLIST_APPSTORE_ENABLED || !isUuid(matchId)) {
       res.status(404).json({ error: "Not found" });
       return;
     }

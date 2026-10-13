@@ -19,6 +19,7 @@ import {
   waitForBumpVerification,
   type CeremonySnapshot,
 } from "../../services/bump-ceremony.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * `POST /v1/dates/:matchId/bump` — one side's shake (PRODUCT_SPEC §6.2).
@@ -283,8 +284,4 @@ export function resolveShakeTime(raw: unknown, serverNow: Date): Date {
     return serverNow;
   }
   return parsed;
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }

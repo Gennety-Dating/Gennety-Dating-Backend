@@ -10,13 +10,9 @@ import {
   submitPostDateFeedback,
 } from "../../services/post-date-feedback.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
-
-/**
- * Same UUID guard as the calendar endpoint — Prisma would otherwise throw a
- * synchronous Error on `@db.Uuid` columns when the value is malformed,
- * surfacing as a 500 in the Mini App.
- */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Same UUID guard as the calendar endpoint — Prisma would otherwise throw on a
+// malformed `@db.Uuid` value, surfacing as a 500 in the Mini App.
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Mini App post-date feedback endpoint.
@@ -64,7 +60,7 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "matchId is required" });
       return;
     }
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }

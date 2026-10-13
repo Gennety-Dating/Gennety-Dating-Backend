@@ -13,6 +13,7 @@ import {
   matchTimeZone,
   MATCH_CITY_PROFILE_SELECT,
 } from "../../services/match-time-zone.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Slot calendar for the NATIVE client (JWT auth) — PRODUCT_SPEC §3.6.
@@ -234,8 +235,5 @@ function parseSlots(body: unknown): string[] | null {
 
 function matchIdOf(req: Request): string | null {
   const raw = (req.params as Record<string, string | undefined>).matchId;
-  return typeof raw === "string" && UUID_REGEX.test(raw) ? raw : null;
+  return typeof raw === "string" && isUuid(raw) ? raw : null;
 }
-
-/** See routes/calendar.ts for why we pre-validate the UUID shape here. */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

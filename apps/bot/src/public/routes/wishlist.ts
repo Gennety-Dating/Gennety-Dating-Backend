@@ -34,6 +34,7 @@ import {
 } from "../../services/wishlist-extract.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Date Wishlist for the NATIVE client — the owner's side (decision journal
@@ -55,7 +56,6 @@ import { sniffImageMime } from "../../utils/image-sniff.js";
  * nothing rather than a screen whose every call fails.
  */
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ITEMS_PER_POST = 12;
 
 const voiceUpload = multer({
@@ -299,7 +299,7 @@ export function createWishlistRouter(): Router {
 
   router.delete("/items/:id", async (req: Request, res: Response): Promise<void> => {
     const id = String(req.params.id ?? "");
-    if (!UUID_REGEX.test(id)) {
+    if (!isUuid(id)) {
       res.status(404).json({ error: "not-found" });
       return;
     }

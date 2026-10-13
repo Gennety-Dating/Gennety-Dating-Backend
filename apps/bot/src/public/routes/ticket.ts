@@ -27,6 +27,7 @@ import {
   ticketPhotoUrl,
   type TicketPhotoSide,
 } from "../ticket-photos.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Per-scope Star (XTR) prices surfaced to the gate Mini App so it can render
@@ -79,9 +80,6 @@ function stateResponse(
     referralEnabled: env.REFERRAL_FEATURE_ENABLED,
   };
 }
-
-/** See routes/calendar.ts for why we pre-validate the UUID shape here. */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Date Ticket Mini App endpoints — REST-nested under the match for parity with
@@ -370,7 +368,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
 
 function matchIdOf(req: Request): string | null {
   const raw = (req.params as { matchId?: string }).matchId;
-  if (typeof raw !== "string" || !UUID_REGEX.test(raw)) return null;
+  if (typeof raw !== "string" || !isUuid(raw)) return null;
   return raw;
 }
 

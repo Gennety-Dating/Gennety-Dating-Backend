@@ -29,6 +29,7 @@ import {
 } from "../../services/venue-origin.js";
 import { readPlaceCache, writePlaceCache } from "../../services/place-cache.js";
 import type { Market } from "@gennety/shared";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Location Mini App endpoints (Phase 3.7 — concierge venue, map picker).
@@ -79,8 +80,6 @@ import type { Market } from "@gennety/shared";
  * trip on the tap, against several saved during the typing.
  */
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * One row the picker can show.
  *
@@ -106,7 +105,7 @@ interface PlaceSearchHit {
  * exactly like "no results" to the user — the same silent-failure shape the
  * `locationRestriction` rectangle bug had (see `searchText`).
  */
-const SESSION_TOKEN_REGEX = UUID_REGEX;
+const isSessionToken = isUuid;
 
 /** Google's ceiling for a `circle` radius in Autocomplete / Nearby requests. */
 const MAX_CIRCLE_RADIUS_M = 50_000;
@@ -118,7 +117,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     const actor = await authenticatedUser(req, res);
     if (!actor) return;
     const matchId = typeof req.query.matchId === "string" ? req.query.matchId : "";
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }
@@ -135,7 +134,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     if (!actor) return;
     const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
     const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    if (!UUID_REGEX.test(matchId) || !text || text.length > 500) {
+    if (!isUuid(matchId) || !text || text.length > 500) {
       res.status(400).json({ error: "invalid-request" });
       return;
     }
@@ -168,7 +167,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     if (!actor) return;
     const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
     const intent = req.body?.intent as ConfirmVenueIntentInput | undefined;
-    if (!UUID_REGEX.test(matchId) || !intent) {
+    if (!isUuid(matchId) || !intent) {
       res.status(400).json({ error: "invalid-request" });
       return;
     }
@@ -258,7 +257,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     const session = typeof req.query.session === "string" ? req.query.session : "";
 
     try {
-      if (session && SESSION_TOKEN_REGEX.test(session)) {
+      if (session && isSessionToken(session)) {
         const results = await autocomplete(
           apiKey,
           query,
@@ -354,7 +353,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
         hit = await fetchPlaceEssentials(
           apiKey,
           placeId,
-          session && SESSION_TOKEN_REGEX.test(session) ? session : null,
+          session && isSessionToken(session) ? session : null,
         );
       } catch (err) {
         console.warn(`[location/resolve] Place Details failed for ${placeId}:`, err);
@@ -418,7 +417,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "matchId, lat, lng are required" });
       return;
     }
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }

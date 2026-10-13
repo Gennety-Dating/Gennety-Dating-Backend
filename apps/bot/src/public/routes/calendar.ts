@@ -13,15 +13,9 @@ import type { Language } from "@gennety/shared";
 import { primeTimeFeatureLive } from "../../services/prime-time.js";
 import { createPrimeInvoiceLink } from "../../services/prime-time-purchase.js";
 import { currentMatchStatusForUser, staleActionBody } from "../match-conflict.js";
-
-/**
- * RFC 4122 UUID shape. We pre-validate `matchId` here because Prisma rejects a
- * non-UUID value on a `@db.Uuid` column with a synchronous `Error` — not a
- * structured error code we can map to a 400 / 404 cleanly. Letting that bubble
- * yields a 500, which the Mini App surfaces as a generic "try again" alert
- * even when the input is just malformed.
- */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// `matchId` is shape-checked before Prisma sees it: a non-UUID on a `@db.Uuid`
+// column is a P2023 throw, not a 404 (see `utils/uuid.ts`).
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Calendar Mini App endpoints.
@@ -66,7 +60,7 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "matchId and pickedIsos are required" });
       return;
     }
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       // 404, not 400 — same UX as a UUID that's syntactically valid but
       // unknown. The Mini App copy is "reopen from the bot" either way,
       // and emitting 404 keeps the alert text consistent for both cases.
@@ -138,7 +132,7 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "matchId is required" });
       return;
     }
-    if (!UUID_REGEX.test(matchId)) {
+    if (!isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }
@@ -201,7 +195,7 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
 
     const body = req.body as { matchId?: unknown } | undefined;
     const matchId = typeof body?.matchId === "string" ? body.matchId : null;
-    if (!matchId || !UUID_REGEX.test(matchId)) {
+    if (!matchId || !isUuid(matchId)) {
       res.status(404).json({ error: "match-not-found" });
       return;
     }

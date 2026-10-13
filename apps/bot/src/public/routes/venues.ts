@@ -18,6 +18,7 @@ import {
   SHOWCASE_LIMIT,
   showcasePhotoRef,
 } from "../../services/curated-venue.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * Curated places for the iOS standby canvas (`IDLE_EXPLORING`) — the map's
@@ -40,8 +41,6 @@ import {
  * and the server decides which photograph that is.
  */
 export const venuesRouter: Router = Router();
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Loose on purpose. The key only ever reaches a parameterised Prisma filter, so
@@ -148,7 +147,7 @@ async function servePhoto(req: Request, res: Response, slot: number): Promise<vo
   const sig = typeof req.query.sig === "string" ? req.query.sig : "";
 
   if (
-    !UUID_REGEX.test(id) ||
+    !isUuid(id) ||
     !(ALLOWED_PHOTO_WIDTHS as readonly number[]).includes(width) ||
     !Number.isFinite(expiresAt) ||
     !sig
