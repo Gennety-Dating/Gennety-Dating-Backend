@@ -1353,49 +1353,64 @@ async function execFinalizeOnboarding(
   // null. Runs for accepted AND declined users.
   const fridayVibe = user?.profile?.fridayVibeText ?? null;
   const vibeFocus = user?.profile?.vibeFocusText ?? null;
-  // Idempotent: once axes are extracted (`vibeExtractedAt` stamped), a finalize
-  // retry must NOT re-run the LLM — a transient extractor failure would return
-  // null and `saveVibeAxes` would wipe the already-persisted axes back to null.
-  if (user && !user.profile?.vibeExtractedAt) {
-    const extractAxes = deps.extractVibeAxes ?? extractVibeAxes;
-    const persistAxes = deps.saveVibeAxes ?? saveVibeAxes;
-    try {
-      const axes = await extractAxes(
-        fridayVibe,
-        vibeFocus,
-        user.language ?? "en",
-        deps.fetchFn ? { fetchFn: deps.fetchFn } : {},
-      );
-      await persistAxes(user.id, axes);
-    } catch (err) {
-      console.warn("Vibe-axis extraction failed (non-blocking):", err);
-    }
-  }
 
-  if (user?.profile) {
-    const saveFallback = deps.saveQuestionnaireProfile ?? saveQuestionnaireProfileAnalysis;
-    try {
-      await saveFallback(user.id, {
-        firstName: user.firstName!,
-        age: user.age!,
-        gender: user.gender!,
-        preference: user.preference!,
-        height: user.profile.height!,
-        hobbies: user.profile.hobbies ?? [],
-        partnerPreferences: user.profile.partnerPreferences!,
-        homeCityKey: user.profile.homeCityKey!,
-        fridayVibe,
-        vibeFocus,
-      });
-    } catch (err) {
-      console.error("Fallback profile analysis failed:", err);
-      return JSON.stringify({
-        success: false,
-        error: "Could not build the fallback profile analysis. Please try finalizing again.",
-      });
+  // The axes (an LLM call, up to 45 s) and the fallback summary below (an
+  // embedding, up to 30 s) used to run one after the other inside the user's
+  // turn. Neither reads what the other produces — the axes read only the two
+  // vibe answers, the summary only the questionnaire answers — and they write
+  // disjoint profile columns, so they run side by side. Each keeps its own
+  // failure handling, and the turn still waits for both before it goes on.
+  const vibeAxesStep = (async (): Promise<void> => {
+    // Idempotent: once axes are extracted (`vibeExtractedAt` stamped), a finalize
+    // retry must NOT re-run the LLM — a transient extractor failure would return
+    // null and `saveVibeAxes` would wipe the already-persisted axes back to null.
+    if (user && !user.profile?.vibeExtractedAt) {
+      const extractAxes = deps.extractVibeAxes ?? extractVibeAxes;
+      const persistAxes = deps.saveVibeAxes ?? saveVibeAxes;
+      try {
+        const axes = await extractAxes(
+          fridayVibe,
+          vibeFocus,
+          user.language ?? "en",
+          deps.fetchFn ? { fetchFn: deps.fetchFn } : {},
+        );
+        await persistAxes(user.id, axes);
+      } catch (err) {
+        console.warn("Vibe-axis extraction failed (non-blocking):", err);
+      }
     }
+  })();
 
-  }
+  /** The finalize failure to answer with, or null when the summary was saved. */
+  const fallbackStep = (async (): Promise<string | null> => {
+    if (user?.profile) {
+      const saveFallback = deps.saveQuestionnaireProfile ?? saveQuestionnaireProfileAnalysis;
+      try {
+        await saveFallback(user.id, {
+          firstName: user.firstName!,
+          age: user.age!,
+          gender: user.gender!,
+          preference: user.preference!,
+          height: user.profile.height!,
+          hobbies: user.profile.hobbies ?? [],
+          partnerPreferences: user.profile.partnerPreferences!,
+          homeCityKey: user.profile.homeCityKey!,
+          fridayVibe,
+          vibeFocus,
+        });
+      } catch (err) {
+        console.error("Fallback profile analysis failed:", err);
+        return JSON.stringify({
+          success: false,
+          error: "Could not build the fallback profile analysis. Please try finalizing again.",
+        });
+      }
+    }
+    return null;
+  })();
+
+  const [, fallbackFailure] = await Promise.all([vibeAxesStep, fallbackStep]);
+  if (fallbackFailure) return fallbackFailure;
 
   // Gate activation on liveness verification (Phase 6.3). The master kill
   // switch is `FACE_LIVENESS_ENABLED`; the credential check is a defensive

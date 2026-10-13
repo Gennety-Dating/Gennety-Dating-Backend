@@ -837,6 +837,131 @@ describe("onboarding-agent", () => {
     expect(saveVibeAxes).not.toHaveBeenCalled();
   });
 
+  /**
+   * Finalize runs the vibe-axis extraction (LLM) and the fallback summary
+   * (embedding) side by side. Each must still fail the way it failed when they
+   * ran one after the other, and the turn must wait for both.
+   */
+  describe("finalize — vibe axes and fallback summary together", () => {
+    const AXES = { energyAxis: 0.4, orientationAxis: -0.2, socialRole: null, anchorTags: [] };
+
+    function finalizableUser() {
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
+        .mockResolvedValueOnce({
+          id: "uuid-1",
+          firstName: "Alice",
+          age: 21,
+          gender: "female",
+          preference: "men",
+          email: "alice@stanford.edu",
+          isEmailVerified: true,
+          termsAccepted: true,
+          language: "en",
+          profile: {
+            height: 165,
+            hobbies: ["tennis"],
+            partnerPreferences: "kind and funny",
+            fridayVibeText: "quiet dinner at home",
+            vibeFocusText: "who's there",
+            photos: ["p1", "p2", "p3", "p4"],
+            homeCityKey: "ua:kyiv",
+          },
+        });
+      (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-1", profile: null });
+      return vi
+        .fn()
+        .mockResolvedValueOnce(
+          toolCallResponse([{ id: "call-1", name: "finalize_onboarding", args: {} }]),
+        )
+        .mockResolvedValueOnce(textResponse("You're all set."));
+    }
+
+    function toolResult(mockFetch: ReturnType<typeof vi.fn>) {
+      const body = JSON.parse(mockFetch.mock.calls[1]![1].body);
+      return JSON.parse(body.messages.find((m: { role: string }) => m.role === "tool").content);
+    }
+
+    it("starts the summary while the axes are still being extracted, and persists both", async () => {
+      let releaseAxes!: () => void;
+      const extract = vi.fn(
+        () => new Promise<typeof AXES>((resolve) => (releaseAxes = () => resolve(AXES))),
+      );
+      const persist = vi.fn().mockResolvedValue(undefined);
+      const saveQuestionnaireProfile = vi.fn(async () => {
+        // The extractor has not answered yet — the summary did not wait for it.
+        expect(persist).not.toHaveBeenCalled();
+        releaseAxes();
+        return { summary: "fallback", embeddingSaved: true };
+      });
+      const mockFetch = finalizableUser();
+
+      const result = await runAgentTurn(telegramId, "finish", {
+        fetchFn: mockFetch,
+        saveQuestionnaireProfile,
+        extractVibeAxes: extract,
+        saveVibeAxes: persist,
+      });
+
+      expect(result.onboardingComplete).toBe(true);
+      expect(extract).toHaveBeenCalledWith("quiet dinner at home", "who's there", "en", {
+        fetchFn: mockFetch,
+      });
+      expect(persist).toHaveBeenCalledWith("uuid-1", AXES);
+      expect(saveQuestionnaireProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it("a failed extraction is still non-blocking: the summary is saved and finalize completes", async () => {
+      const persist = vi.fn().mockResolvedValue(undefined);
+      const saveQuestionnaireProfile = vi.fn().mockResolvedValue({ summary: "fallback", embeddingSaved: true });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const mockFetch = finalizableUser();
+
+      const result = await runAgentTurn(telegramId, "finish", {
+        fetchFn: mockFetch,
+        saveQuestionnaireProfile,
+        extractVibeAxes: vi.fn().mockRejectedValue(new Error("LLM down")),
+        saveVibeAxes: persist,
+      });
+
+      expect(result.onboardingComplete).toBe(true);
+      expect(persist).not.toHaveBeenCalled();
+      expect(saveQuestionnaireProfile).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith("Vibe-axis extraction failed (non-blocking):", expect.any(Error));
+      warn.mockRestore();
+    });
+
+    it("a failed summary still answers the finalize failure — after the axes were persisted", async () => {
+      let axesWritten = false;
+      const persist = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        axesWritten = true;
+      });
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mockFetch = finalizableUser();
+
+      const result = await runAgentTurn(telegramId, "finish", {
+        fetchFn: mockFetch,
+        saveQuestionnaireProfile: vi.fn().mockRejectedValue(new Error("embedding down")),
+        extractVibeAxes: vi.fn().mockResolvedValue(AXES),
+        saveVibeAxes: persist,
+      });
+
+      expect(result.onboardingComplete).toBe(false);
+      expect(toolResult(mockFetch)).toEqual({
+        success: false,
+        error: "Could not build the fallback profile analysis. Please try finalizing again.",
+      });
+      // The turn waited for the axes write, exactly as the sequential order did.
+      expect(persist).toHaveBeenCalledWith("uuid-1", AXES);
+      expect(axesWritten).toBe(true);
+      expect(prisma.user.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ onboardingStep: "completed" }) }),
+      );
+      error.mockRestore();
+    });
+  });
+
   it("handles verify_otp with correct code and records the address as proven", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
