@@ -139,7 +139,15 @@ export type ProxyChatResult =
   | { ok: true; view: ProxyChatView }
   | { ok: false; error: ProxyChatRefusal };
 
-const matchSelect = {
+/**
+ * The match's own columns: everything the window, the gates, the presence
+ * beat and the read cursor are decided from. The people on the row are not in
+ * it — only a send or a reaction has to reach someone, and only those load
+ * them (`matchSelect`). Without relationJoins each nested user is a query of
+ * its own, so the presence beat (every 3 s) and the long-poll gate are one
+ * query here instead of three.
+ */
+const gateSelect = {
   id: true,
   status: true,
   userAId: true,
@@ -150,14 +158,30 @@ const matchSelect = {
   proxyClosedAt: true,
   proxyReadAtA: true,
   proxyReadAtB: true,
+} as const;
+
+const matchSelect = {
+  ...gateSelect,
   userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
   userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
 } as const;
 
 type ProxyMatch = NonNullable<Awaited<ReturnType<typeof loadMatch>>>;
 
+/** The match as the gates see it — see `gateSelect`. */
+export type ProxyChatGateMatch = NonNullable<Awaited<ReturnType<typeof loadGateMatch>>>;
+
 function loadMatch(matchId: string) {
   return prisma.match.findUnique({ where: { id: matchId }, select: matchSelect });
+}
+
+function loadGateMatch(matchId: string) {
+  return prisma.match.findUnique({ where: { id: matchId }, select: gateSelect });
+}
+
+/** The other participant's id — `userB` for `userA`, `userA` for anyone else, as `sidesOf` answers. */
+function partnerIdOf(match: { userAId: string; userBId: string }, callerId: string): string {
+  return callerId === match.userAId ? match.userBId : match.userAId;
 }
 
 /**
@@ -247,7 +271,7 @@ function sidesOf(match: ProxyMatch, callerId: string) {
 }
 
 /** How far the PARTNER of `callerId` has read. Null = never opened the screen. */
-function partnerReadAt(match: ProxyMatch, callerId: string): Date | null {
+function partnerReadAt(match: ProxyChatGateMatch, callerId: string): Date | null {
   return callerId === match.userAId ? match.proxyReadAtB : match.proxyReadAtA;
 }
 
@@ -294,8 +318,15 @@ function deliveryStatus(
   return row.deliveredAt ? "delivered" : "sent";
 }
 
+/** What a view shows of the partner: who to ask presence about, and the name. */
+interface ViewPartner {
+  id: string;
+  firstName: string | null;
+}
+
 async function buildView(
-  match: ProxyMatch,
+  match: ProxyChatGateMatch,
+  partner: ViewPartner,
   callerId: string,
   since: string | undefined,
   now: Date,
@@ -305,7 +336,6 @@ async function buildView(
   // next read), never a fresh one over old rows (held for nothing).
   const version = proxyChatVersion(match.id);
   const window = proxyChatWindow(match);
-  const { partner } = sidesOf(match, callerId);
 
   // An unknown cursor returns the whole window rather than nothing: a client
   // holding an id this match does not carry would otherwise be stuck with a
@@ -377,16 +407,21 @@ async function buildView(
  * is ever added it must not come through this function. The one that exists —
  * the unread badge polled with `/v1/matches/current` — is
  * `proxyChatUnreadCount`, which reads the cursor and never writes it.
+ *
+ * `match` is the row `proxyChatReader` just gated for this same request, when
+ * nothing ran between the two — the route's plain (un-held) read. A held read
+ * passes none: the wait can outlive a cancellation, so it reads the row again.
  */
 export async function readProxyChat(input: {
   matchId: string;
   userId: string;
   since?: string;
   now?: Date;
+  match?: ProxyChatGateMatch;
 }): Promise<ProxyChatResult> {
   if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
 
-  const match = await loadMatch(input.matchId);
+  const match = input.match ?? (await loadGateMatch(input.matchId));
   if (!match) return { ok: false, error: "not-found" };
   if (input.userId !== match.userAId && input.userId !== match.userBId) {
     return { ok: false, error: "forbidden" };
@@ -394,7 +429,18 @@ export async function readProxyChat(input: {
   if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
 
   const now = input.now ?? new Date();
-  const view = await buildView(match, input.userId, input.since, now);
+  // Only the partner's name is shown, so only the partner is read.
+  const partnerId = partnerIdOf(match, input.userId);
+  const partner = await prisma.user.findUnique({
+    where: { id: partnerId },
+    select: { id: true, firstName: true },
+  });
+  // `userA`/`userB` are required relations: a row whose participant is gone
+  // failed the nested read before, and fails here the same way.
+  if (!partner) {
+    throw new Error(`[proxy-chat] match ${match.id} has no partner row ${partnerId}`);
+  }
+  const view = await buildView(match, partner, input.userId, input.since, now);
   await markRead(match, input.userId, now);
   return { ok: true, view };
 }
@@ -406,21 +452,25 @@ export async function readProxyChat(input: {
  * once the wait is over — the match may have been cancelled meanwhile.
  *
  * `live` says whether the chat accepts lines right now; only then does reading
- * count as being on the chat screen (`proxy-presence.ts`).
+ * count as being on the chat screen (`proxy-presence.ts`). `match` is the row
+ * it gated, for a read that follows at once (`readProxyChat`).
  */
 export async function proxyChatReader(input: {
   matchId: string;
   userId: string;
   now?: Date;
-}): Promise<{ ok: true; live: boolean } | { ok: false; error: ProxyChatRefusal }> {
+}): Promise<
+  | { ok: true; live: boolean; match: ProxyChatGateMatch }
+  | { ok: false; error: ProxyChatRefusal }
+> {
   if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
-  const match = await loadMatch(input.matchId);
+  const match = await loadGateMatch(input.matchId);
   if (!match) return { ok: false, error: "not-found" };
   if (input.userId !== match.userAId && input.userId !== match.userBId) {
     return { ok: false, error: "forbidden" };
   }
   if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
-  return { ok: true, live: proxyChatAcceptsMessages(match, input.now ?? new Date()) };
+  return { ok: true, live: proxyChatAcceptsMessages(match, input.now ?? new Date()), match };
 }
 
 const PRESENCE_PLACES: readonly PresencePlace[] = ["app", "chat", "away"];
@@ -457,13 +507,13 @@ export async function reportProxyChatPresence(input: {
   }
   const place = input.place as PresencePlace;
 
-  const match = await loadMatch(input.matchId);
+  const match = await loadGateMatch(input.matchId);
   if (!match) return { ok: false, error: "not-found" };
   if (input.userId !== match.userAId && input.userId !== match.userBId) {
     return { ok: false, error: "forbidden" };
   }
   const now = input.now ?? new Date();
-  const { partner } = sidesOf(match, input.userId);
+  const partnerId = partnerIdOf(match, input.userId);
 
   if (place === "away") {
     markPresence({ matchId: match.id, userId: input.userId, place, now: now.getTime() });
@@ -481,7 +531,7 @@ export async function reportProxyChatPresence(input: {
   });
   return {
     ok: true,
-    partnerPresence: presenceOf(match.id, partner.id, now.getTime()),
+    partnerPresence: presenceOf(match.id, partnerId, now.getTime()),
     version: proxyChatVersion(match.id),
   };
 }
@@ -495,7 +545,7 @@ export async function reportProxyChatPresence(input: {
  * be ~2700 pointless UPDATEs per open chat, on the one table the moderation
  * trail depends on.
  */
-async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise<void> {
+async function markRead(match: ProxyChatGateMatch, callerId: string, now: Date): Promise<void> {
   const mine = callerId === match.userAId;
 
   const unread = await prisma.proxyMessage.findFirst({
@@ -507,6 +557,8 @@ async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise
   await prisma.match.update({
     where: { id: match.id },
     data: mine ? { proxyReadAtA: now } : { proxyReadAtB: now },
+    // Nothing of the row is used — without this Prisma hands back all of it.
+    select: { id: true },
   });
   // The partner's ticks just turned to "read" — wake their screen.
   bumpProxyChat(match.id);
@@ -665,7 +717,7 @@ export async function relayProxyMessage(input: {
     bumpProxyChat(match.id);
   }
 
-  return { ok: true, view: await buildView(match, input.senderUserId, undefined, now) };
+  return { ok: true, view: await buildView(match, partner, input.senderUserId, undefined, now) };
 }
 
 /**
@@ -734,7 +786,8 @@ export async function reactToProxyMessage(input: {
   // next time they open the app either way.
   await deliverReactionToAuthor(match, message.senderId, message.authorChatMessageId, input.reaction);
 
-  return { ok: true, view: await buildView(match, input.userId, undefined, now) };
+  const { partner } = sidesOf(match, input.userId);
+  return { ok: true, view: await buildView(match, partner, input.userId, undefined, now) };
 }
 
 /**

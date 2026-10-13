@@ -121,6 +121,10 @@ export function createProxyChatRouter(
       matchId,
       userId: req.userId!,
       ...(since ? { since } : {}),
+      // An un-held read follows the gate at once, so the row it just read is
+      // the row to answer from. A held one reads it again: the date may have
+      // been cancelled while it waited.
+      ...(holdUntil ? {} : { match: reader.match }),
     });
     if (!result.ok) {
       answerFailure(res, result.error);

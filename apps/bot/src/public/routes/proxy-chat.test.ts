@@ -57,6 +57,11 @@ vi.mock("@gennety/db", () => ({
       })),
       update: vi.fn(async () => ({})),
     },
+    user: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === A ? { id: A, firstName: "Anna" } : where.id === B ? { id: B, firstName: "Bohdan" } : null,
+      ),
+    },
     proxyMessage: {
       findMany: vi.fn(async () => [...rows].reverse()),
       findFirst: vi.fn(async () => null),
@@ -86,6 +91,9 @@ vi.mock("../../services/outbound-recorder.js", () => ({
 const { createProxyChatRouter } = await import("./proxy-chat.js");
 const { JWT_ISSUER, JWT_AUDIENCE } = await import("../jwt.js");
 const presence = await import("../../services/proxy-presence.js");
+const { prisma } = await import("@gennety/db");
+const matchFindUnique = vi.mocked(prisma.match.findUnique);
+const userFindUnique = vi.mocked(prisma.user.findUnique);
 
 function tokenFor(userId: string): string {
   return jwt.sign({ sub: userId, typ: "access" }, JWT_SECRET, {
@@ -154,6 +162,36 @@ describe("GET /chat — presence and version", () => {
       .set("Authorization", `Bearer ${tokenFor(stranger)}`);
     expect(res.status).toBe(403);
     expect(presence.heldReadCount(MATCH)).toBe(0);
+  });
+
+  // perf 2026-10-13: the gate reads the row once without its people, the read
+  // that follows at once answers from it, and only the partner's name is read.
+  it("a plain read reads the match once, and of the people only the partner's name", async () => {
+    matchFindUnique.mockClear();
+    userFindUnique.mockClear();
+    const res = await request(makeApp())
+      .get(`/v1/matches/${MATCH}/chat`)
+      .set("Authorization", `Bearer ${tokenFor(A)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.partnerFirstName).toBe("Bohdan");
+    expect(matchFindUnique).toHaveBeenCalledTimes(1);
+    const select = matchFindUnique.mock.calls[0]?.[0]?.select;
+    expect(select).not.toHaveProperty("userA");
+    expect(select).not.toHaveProperty("userB");
+    expect(userFindUnique).toHaveBeenCalledTimes(1);
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: B },
+      select: { id: true, firstName: true },
+    });
+  });
+
+  it("a held read reads the match again once the wait is over", async () => {
+    matchFindUnique.mockClear();
+    const res = await request(makeApp(5_000))
+      .get(`/v1/matches/${MATCH}/chat?after=stale.0`)
+      .set("Authorization", `Bearer ${tokenFor(A)}`);
+    expect(res.status).toBe(200);
+    expect(matchFindUnique).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -256,6 +294,23 @@ describe("POST /chat/presence", () => {
       .send({ place: "app" });
     expect(seen.status).toBe(200);
     expect(seen.body.partnerPresence).toEqual({ online: true, inChat: true, typing: true });
+  });
+
+  // perf 2026-10-13: the 3 s beat is decided from the match's own columns —
+  // one query, no user rows.
+  it("reads the match without its people, and no user at all", async () => {
+    matchFindUnique.mockClear();
+    userFindUnique.mockClear();
+    const res = await request(makeApp())
+      .post(`/v1/matches/${MATCH}/chat/presence`)
+      .set("Authorization", `Bearer ${tokenFor(A)}`)
+      .send({ place: "app" });
+    expect(res.status).toBe(200);
+    expect(matchFindUnique).toHaveBeenCalledTimes(1);
+    const select = matchFindUnique.mock.calls[0]?.[0]?.select;
+    expect(select).not.toHaveProperty("userA");
+    expect(select).not.toHaveProperty("userB");
+    expect(userFindUnique).not.toHaveBeenCalled();
   });
 
   it("wakes the partner's held read when typing starts", async () => {

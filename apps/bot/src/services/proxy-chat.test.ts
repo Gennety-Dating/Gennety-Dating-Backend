@@ -12,6 +12,7 @@ vi.mock("../config.js", () => ({ env: mockEnv }));
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    user: { findUnique: vi.fn() },
     proxyMessage: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -58,6 +59,7 @@ const mMatch = prisma.match as unknown as {
   update: MockFn;
   updateMany: MockFn;
 };
+const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mMsg = prisma.proxyMessage as unknown as {
   create: MockFn;
   findMany: MockFn;
@@ -108,6 +110,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockEnv.COORDINATION_FEATURE_ENABLED = true;
   mMatch.findUnique.mockResolvedValue(match());
+  // The reader's partner lookup answers from the same fixture's people.
+  mUser.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+    const { userA, userB } = match();
+    const user = [userA, userB].find((u: { id: string }) => u.id === where.id);
+    return user ? { id: user.id, firstName: user.firstName } : null;
+  });
   mMsg.findMany.mockResolvedValue([]);
   mMsg.findFirst.mockResolvedValue(null);
   mMsg.create.mockResolvedValue({ id: "pm-1" });
@@ -324,7 +332,49 @@ describe("readProxyChat", () => {
     expect(mMatch.update).toHaveBeenCalledWith({
       where: { id: "m-1" },
       data: { proxyReadAtA: DATE },
+      select: { id: true },
     });
+  });
+
+  /**
+   * The read answers from the match's own columns plus the partner's name — it
+   * never loads both people's rows (perf 2026-10-13).
+   */
+  it("reads the row without its people, then only the partner's name", async () => {
+    const res = await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+    expect(res.ok && res.view.partnerFirstName).toBe("Bob");
+    const select = (mMatch.findUnique.mock.calls[0]![0] as { select: Record<string, unknown> })
+      .select;
+    expect(select).not.toHaveProperty("userA");
+    expect(select).not.toHaveProperty("userB");
+    expect(mUser.findUnique).toHaveBeenCalledWith({
+      where: { id: "uid-B" },
+      select: { id: true, firstName: true },
+    });
+  });
+
+  it("answers from a row the gate just read, without reading it again", async () => {
+    const gated = match({ proxyReadAtB: new Date(10) });
+    const res = await readProxyChat({ matchId: "m-1", userId: "uid-B", now: DATE, match: gated });
+    expect(res.ok && res.view.partnerFirstName).toBe("Alice");
+    expect(mMatch.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("still refuses on a gated row that is no longer a scheduled date", async () => {
+    const res = await readProxyChat({
+      matchId: "m-1",
+      userId: "uid-A",
+      now: DATE,
+      match: match({ status: "cancelled" }),
+    });
+    expect(res).toEqual({ ok: false, error: "wrong-state" });
+  });
+
+  it("fails like the nested read did when the partner's row is gone", async () => {
+    mUser.findUnique.mockResolvedValue(null);
+    await expect(readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE })).rejects.toThrow(
+      /no partner row/,
+    );
   });
 
   /**
