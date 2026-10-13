@@ -431,17 +431,28 @@ export async function pendingFeedbackFor(
       feedbackByB: true,
       morningAfterA: true,
       morningAfterB: true,
-      userA: { select: { firstName: true } },
-      userB: { select: { firstName: true } },
     },
   });
   if (!match || !match.agreedTime) return null;
 
   const isA = match.userAId === userId;
   const own = isA ? match.feedbackByA : match.feedbackByB;
+  // Only the partner's name is shown, so only the partner is read — and only
+  // once there is a form to show. Nesting both users into the query above
+  // read both rows on every Today poll, for every account with a past date.
+  const partnerId = isA ? match.userBId : match.userAId;
+  const partner = await prisma.user.findUnique({
+    where: { id: partnerId },
+    select: { firstName: true },
+  });
+  // `userA`/`userB` are required relations: a row whose participant is gone
+  // failed the nested read before, and fails here the same way.
+  if (!partner) {
+    throw new Error(`[post-date-feedback] match ${match.id} has no partner row ${partnerId}`);
+  }
   return {
     matchId: match.id,
-    partnerFirstName: (isA ? match.userB.firstName : match.userA.firstName) ?? null,
+    partnerFirstName: partner.firstName ?? null,
     venueName: match.venueName,
     agreedTime: match.agreedTime,
     submitted: isFormFeedbackAnswer(own),

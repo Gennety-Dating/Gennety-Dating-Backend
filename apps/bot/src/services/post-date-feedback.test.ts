@@ -4,9 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
+const { mockUserFindUnique } = vi.hoisted(() => ({ mockUserFindUnique: vi.fn() }));
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    user: { findUnique: mockUserFindUnique },
   },
 }));
 
@@ -38,6 +40,10 @@ beforeEach(() => {
   mockRecord.mockResolvedValue({ ok: true });
   mMatch.findUnique.mockResolvedValue({ userAId: "uid-A", userBId: "uid-B" });
   mMatch.update.mockResolvedValue({});
+  const names: Record<string, string> = { "uid-A": "Ada", "uid-B": "Boris" };
+  mockUserFindUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+    where.id in names ? { firstName: names[where.id] } : null,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -369,6 +375,45 @@ describe("pendingFeedbackFor", () => {
   it("is null for a row with no agreed time rather than inventing one", async () => {
     mMatch.findFirst.mockResolvedValue({ ...row, agreedTime: null });
     expect(await pendingFeedbackFor("uid-A")).toBeNull();
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+  });
+
+  // perf 2026-10-13: the match row is read without its people; of them only
+  // the partner's first name is read, and only when there is a form to show.
+  it("reads only the partner's name, after the row", async () => {
+    mMatch.findFirst.mockResolvedValue(row);
+    const view = await pendingFeedbackFor("uid-A", new Date("2026-08-11T09:00:00.000Z"));
+    const select = (mMatch.findFirst.mock.calls[0]![0] as { select: Record<string, unknown> }).select;
+    expect(select).not.toHaveProperty("userA");
+    expect(select).not.toHaveProperty("userB");
+    expect(mockUserFindUnique).toHaveBeenCalledTimes(1);
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { id: "uid-B" },
+      select: { firstName: true },
+    });
+    expect(view).toEqual({
+      matchId: "m-1",
+      partnerFirstName: "Boris",
+      venueName: "Kavarnia",
+      agreedTime: row.agreedTime,
+      submitted: false,
+      secondDateKnown: false,
+      answered: false,
+      maxTextLength: FEEDBACK_MAX_TEXT_LEN,
+      serverNow: new Date("2026-08-11T09:00:00.000Z"),
+    });
+  });
+
+  it("a partner with no first name reads as null, as before", async () => {
+    mMatch.findFirst.mockResolvedValue(row);
+    mockUserFindUnique.mockResolvedValue({ firstName: null });
+    expect((await pendingFeedbackFor("uid-A"))?.partnerFirstName).toBeNull();
+  });
+
+  it("fails like the nested read did when the partner's row is gone", async () => {
+    mMatch.findFirst.mockResolvedValue(row);
+    mockUserFindUnique.mockResolvedValue(null);
+    await expect(pendingFeedbackFor("uid-A")).rejects.toThrow(/no partner row/);
   });
 });
 
