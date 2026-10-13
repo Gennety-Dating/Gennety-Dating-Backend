@@ -705,19 +705,44 @@ function escapeRegex(text: string): string {
 }
 
 /**
- * Match a single trait against the candidate summary using Unicode-aware
- * word boundaries. Plain `String.includes` was a footgun: `"smoker"` matched
- * `"non-smoker"`, penalising the perfect candidate. `\b` is ASCII-only so it
- * misfires on Cyrillic; we use `(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])` instead
- * to honour ru/uk/en bilingual summaries.
+ * Compile a single trait into its matcher against a candidate summary, using
+ * Unicode-aware word boundaries. Plain `String.includes` was a footgun:
+ * `"smoker"` matched `"non-smoker"`, penalising the perfect candidate. `\b` is
+ * ASCII-only so it misfires on Cyrillic; we use
+ * `(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])` instead to honour ru/uk/en bilingual
+ * summaries.
+ *
+ * Flags `iu` and no `g`/`y`, so `test()` never reads or moves `lastIndex`: one
+ * compiled matcher can be shared by every candidate the seeker is scored
+ * against. `parseNegativeTraits` never yields an empty trait.
  */
-function traitHits(summary: string, trait: string): boolean {
-  if (!trait) return false;
-  const re = new RegExp(
+function traitMatcher(trait: string): RegExp {
+  return new RegExp(
     `(?<![\\p{L}\\p{N}])${escapeRegex(trait)}(?![\\p{L}\\p{N}])`,
     "iu",
   );
-  return re.test(summary);
+}
+
+/** The seeker's dealbreaker traits, compiled — one matcher per parsed trait. */
+function compileNegativeTraits(constraints: string | null): readonly RegExp[] {
+  return parseNegativeTraits(constraints).map(traitMatcher);
+}
+
+/** `penaltyScore` over traits that are already compiled. */
+function penaltyFromMatchers(
+  matchers: readonly RegExp[],
+  candidateSummary: string | null,
+): number {
+  if (matchers.length === 0) return 0;
+  if (!candidateSummary) return 0;
+
+  let hits = 0;
+  for (const matcher of matchers) {
+    if (matcher.test(candidateSummary)) {
+      hits++;
+    }
+  }
+  return hits / matchers.length;
 }
 
 /**
@@ -729,17 +754,30 @@ export function penaltyScore(
   seekerConstraints: string | null,
   candidateSummary: string | null,
 ): number {
-  const traits = parseNegativeTraits(seekerConstraints);
-  if (traits.length === 0) return 0;
-  if (!candidateSummary) return 0;
+  return penaltyFromMatchers(compileNegativeTraits(seekerConstraints), candidateSummary);
+}
 
-  let hits = 0;
-  for (const trait of traits) {
-    if (traitHits(candidateSummary, trait)) {
-      hits++;
-    }
-  }
-  return hits / traits.length;
+/**
+ * Compiled traits per batch user, for the drop batch's pair loop.
+ *
+ * A seeker meets every same-city candidate — ~400 times in a full city — and
+ * compiling a Unicode lookbehind regex per trait per pair per direction was the
+ * largest single cost of the loop. Keyed by the batch row itself, so the memo
+ * lives exactly as long as the batch that loaded it and is collected with it;
+ * the stored source text guards against a row whose constraints were edited
+ * after compilation (the matchers are then rebuilt, never reused).
+ */
+const batchTraitMatchers = new WeakMap<
+  BatchUser,
+  { constraints: string | null; matchers: readonly RegExp[] }
+>();
+
+function traitMatchersOf(user: BatchUser): readonly RegExp[] {
+  const memo = batchTraitMatchers.get(user);
+  if (memo && memo.constraints === user.negativeConstraints) return memo.matchers;
+  const matchers = compileNegativeTraits(user.negativeConstraints);
+  batchTraitMatchers.set(user, { constraints: user.negativeConstraints, matchers });
+  return matchers;
 }
 
 // ---------------------------------------------------------------------------
@@ -865,9 +903,32 @@ function majorToCluster(): Map<string, string> {
   return _majorToCluster;
 }
 
+/**
+ * Resolved clusters by raw major text. `resolveCluster` is a pure function of
+ * its argument and the constant table above, and the pair loop asks it up to
+ * four times per pair with the same few dozen strings — each miss on the exact
+ * lookup costs a substring scan of the whole table. Bounded so a stream of
+ * distinct free-text majors cannot grow it without limit: past the bound the
+ * oldest entry is dropped, which only means one more scan later.
+ */
+const CLUSTER_MEMO_LIMIT = 1024;
+const clusterMemo = new Map<string, string | null>();
+
 /** Resolve a free-text major to its cluster, or `null` if unrecognised. */
 export function resolveCluster(major: string | null): string | null {
   if (!major) return null;
+  const memo = clusterMemo.get(major);
+  if (memo !== undefined) return memo;
+  const cluster = scanCluster(major);
+  if (clusterMemo.size >= CLUSTER_MEMO_LIMIT) {
+    const oldest = clusterMemo.keys().next();
+    if (!oldest.done) clusterMemo.delete(oldest.value);
+  }
+  clusterMemo.set(major, cluster);
+  return cluster;
+}
+
+function scanCluster(major: string): string | null {
   const norm = major.trim().toLowerCase();
   const exact = majorToCluster().get(norm);
   if (exact) return exact;
@@ -1002,6 +1063,31 @@ export function scoreCandidate(
   intentFloor: number = INTENT_FLOOR,
   rhythmWeight: number = RHYTHM_MATCH_WEIGHT,
 ): ScoredCandidate {
+  return scoreCandidateWith(
+    compileNegativeTraits(seeker.negativeConstraints),
+    seeker,
+    candidate,
+    weights,
+    typeFloor,
+    intentFloor,
+    rhythmWeight,
+  );
+}
+
+/**
+ * `scoreCandidate` with the seeker's dealbreaker traits already compiled
+ * (`compileNegativeTraits(seeker.negativeConstraints)`), so the pair loop can
+ * compile them once per user instead of once per pair.
+ */
+function scoreCandidateWith(
+  seekerTraitMatchers: readonly RegExp[],
+  seeker: SeekerProfile,
+  candidate: RichCandidateRow,
+  weights: typeof SCORING_WEIGHTS,
+  typeFloor: number,
+  intentFloor: number,
+  rhythmWeight: number,
+): ScoredCandidate {
   const vExplicit = explicitScore(candidate.distance);
   const vResearch = researchScore(
     {
@@ -1027,8 +1113,8 @@ export function scoreCandidate(
     candidate.eloScore,
     candidate.gender,
   );
-  const vPenalty = penaltyScore(
-    seeker.negativeConstraints,
+  const vPenalty = penaltyFromMatchers(
+    seekerTraitMatchers,
     candidate.psychologicalSummary,
   );
   const vAgePref = ageRangePreferenceScore(
@@ -1645,7 +1731,15 @@ export function scorePair(
     rhythm: b.rhythm ?? null,
   };
 
-  const scored = scoreCandidate(seekerA, candidateB);
+  const scored = scoreCandidateWith(
+    traitMatchersOf(a),
+    seekerA,
+    candidateB,
+    SCORING_WEIGHTS,
+    EFFECTIVE_TYPE_FLOOR,
+    INTENT_FLOOR,
+    RHYTHM_MATCH_WEIGHT,
+  );
 
   // Average with the reverse direction so the score is symmetric.
   const seekerB: SeekerProfile = {
@@ -1684,7 +1778,15 @@ export function scorePair(
     rhythm: a.rhythm ?? null,
   };
 
-  const scoredReverse = scoreCandidate(seekerB, candidateA);
+  const scoredReverse = scoreCandidateWith(
+    traitMatchersOf(b),
+    seekerB,
+    candidateA,
+    SCORING_WEIGHTS,
+    EFFECTIVE_TYPE_FLOOR,
+    INTENT_FLOOR,
+    RHYTHM_MATCH_WEIGHT,
+  );
 
   const base = (scored.score + scoredReverse.score) / 2;
   // Starvation priority: boost the pair by the MAX of each side's bonus,
@@ -2049,6 +2151,27 @@ export function isUuid(value: string): boolean {
 const PAIRWISE_YIELD_SLICE_MS = 25;
 
 /**
+ * Cooperative time-slicing for the batch's CPU-bound pair loops. `due()` turns
+ * true once the current slice has run past `PAIRWISE_YIELD_SLICE_MS`;
+ * `yield()` gives the event loop one `setImmediate` turn — pending I/O and
+ * timers of the bot, both APIs and the crons run first — then starts a new
+ * slice. The loops only read their own local data, so where they pause cannot
+ * change what they compute.
+ */
+class EventLoopSlice {
+  private startedAt = Date.now();
+
+  due(): boolean {
+    return Date.now() - this.startedAt > PAIRWISE_YIELD_SLICE_MS;
+  }
+
+  async yield(): Promise<void> {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    this.startedAt = Date.now();
+  }
+}
+
+/**
  * Parse a pgvector text literal (`[0.1,0.2,…]`) into float32 plus its norm.
  * Null when it is malformed or has zero magnitude. Exported for tests.
  */
@@ -2119,13 +2242,10 @@ export async function computePairwiseDistances(
 
   // A full 400-user city is ~120 M multiply-adds — a few hundred ms of CPU.
   // Hand the event loop back every slice so the API and bot keep answering.
-  let sliceStartedAt = Date.now();
+  const slice = new EventLoopSlice();
   for (const cityUsers of byCity.values()) {
     for (let i = 0; i < cityUsers.length; i++) {
-      if (Date.now() - sliceStartedAt > PAIRWISE_YIELD_SLICE_MS) {
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        sliceStartedAt = Date.now();
-      }
+      if (slice.due()) await slice.yield();
       for (let j = i + 1; j < cityUsers.length; j++) {
         const a = cityUsers[i]!;
         const b = cityUsers[j]!;
@@ -2199,6 +2319,52 @@ async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
   ]);
   for (const key of blocked) historical.add(key);
   return historical;
+}
+
+/**
+ * Score every pair `computePairwiseDistances` produced, in its key order.
+ *
+ * One pass over the same Map in the same order the inline loops used, so the
+ * scored list — and therefore `greedyPair`'s stable sort and tie-breaks — is
+ * unchanged. What it adds is the event-loop slice `computePairwiseDistances`
+ * already had: a full 400-user city is ~80 000 pairs scored in both
+ * directions, a few hundred ms of CPU that used to run in one block.
+ *
+ * `admit` is the synthetic fill's extra rule; it runs where that pass checked
+ * it, before the exclusion lookup.
+ */
+async function scoreDistancePairs(
+  distances: ReadonlyMap<string, number>,
+  userMap: ReadonlyMap<string, BatchUser>,
+  excludedPairs: ReadonlySet<string>,
+  admit?: (aId: string, bId: string) => boolean,
+): Promise<ScoredPair[]> {
+  const scoredPairs: ScoredPair[] = [];
+  const slice = new EventLoopSlice();
+  for (const [key, distance] of distances) {
+    if (slice.due()) await slice.yield();
+    const [aId, bId] = key.split(":");
+    if (!aId || !bId) continue;
+    if (admit && !admit(aId, bId)) continue;
+    if (excludedPairs.has(`${aId}:${bId}`)) continue;
+
+    const a = userMap.get(aId);
+    const b = userMap.get(bId);
+    if (!a || !b) continue;
+
+    const { score, breakdown } = scorePair(a, b, distance);
+    scoredPairs.push({
+      userAId: aId,
+      userBId: bId,
+      score,
+      breakdown,
+      allocationFingerprints: {
+        userA: a.allocationFingerprint ?? "",
+        userB: b.allocationFingerprint ?? "",
+      },
+    });
+  }
+  return scoredPairs;
 }
 
 /**
@@ -2469,29 +2635,7 @@ export async function previewDropBatch(
   }
 
   const distances = await computePairwiseDistances(users);
-
-  const scoredPairs: ScoredPair[] = [];
-  for (const [key, distance] of distances) {
-    const [aId, bId] = key.split(":");
-    if (!aId || !bId) continue;
-    if (excludedPairs.has(`${aId}:${bId}`)) continue;
-
-    const a = userMap.get(aId);
-    const b = userMap.get(bId);
-    if (!a || !b) continue;
-
-    const { score, breakdown } = scorePair(a, b, distance);
-    scoredPairs.push({
-      userAId: aId,
-      userBId: bId,
-      score,
-      breakdown,
-      allocationFingerprints: {
-        userA: a.allocationFingerprint ?? "",
-        userB: b.allocationFingerprint ?? "",
-      },
-    });
-  }
+  const scoredPairs = await scoreDistancePairs(distances, userMap, excludedPairs);
 
   const finalPairs = greedyPair(scoredPairs);
   const pairedIds = new Set<string>();
@@ -2564,31 +2708,13 @@ export async function previewSyntheticFill(
 
   const excludedPairs = await loadExcludedPairs(pool.map((u) => u.id));
   const distances = await computePairwiseDistances(pool);
-
-  const scoredPairs: ScoredPair[] = [];
-  for (const [key, distance] of distances) {
-    const [aId, bId] = key.split(":");
-    if (!aId || !bId) continue;
+  const scoredPairs = await scoreDistancePairs(
+    distances,
+    userMap,
+    excludedPairs,
     // Exactly one synthetic side — see the header.
-    if (syntheticIds.has(aId) === syntheticIds.has(bId)) continue;
-    if (excludedPairs.has(`${aId}:${bId}`)) continue;
-
-    const a = userMap.get(aId);
-    const b = userMap.get(bId);
-    if (!a || !b) continue;
-
-    const { score, breakdown } = scorePair(a, b, distance);
-    scoredPairs.push({
-      userAId: aId,
-      userBId: bId,
-      score,
-      breakdown,
-      allocationFingerprints: {
-        userA: a.allocationFingerprint ?? "",
-        userB: b.allocationFingerprint ?? "",
-      },
-    });
-  }
+    (aId, bId) => syntheticIds.has(aId) !== syntheticIds.has(bId),
+  );
 
   return { pairs: greedyPair(scoredPairs), syntheticIds };
 }
