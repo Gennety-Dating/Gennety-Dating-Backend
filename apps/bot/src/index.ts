@@ -65,7 +65,6 @@ import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
 import { sweepHeldReferralRewards } from "./services/referral.js";
-import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
 import { announcementFanoutTick } from "./services/announcements.js";
@@ -882,17 +881,19 @@ function registerSchedules(): void {
   console.log(`[cron] Match nudge scheduled: "${MATCH_NUDGE_CRON_SCHEDULE}"`);
 
   // Date Ticket expiry: refund stalled partial payments, open Calendar free.
-  if (env.TICKET_FEATURE_ENABLED) {
-    cron.schedule(
-      TICKET_EXPIRY_CRON_SCHEDULE,
-      guardedTick("ticket-expiry", () =>
-        ticketExpiryTick(bot.api).then((r) => {
-          if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
-        }),
-      ),
-    );
-    console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
-  }
+  // NOT gated on `TICKET_FEATURE_ENABLED`: this tick is also the only retry of
+  // a pending Stars gate refund and of a stranded `refund_pending` gate, and
+  // switching ticket sales off must not strand money already taken. With no
+  // open gates it finds nothing.
+  cron.schedule(
+    TICKET_EXPIRY_CRON_SCHEDULE,
+    guardedTick("ticket-expiry", () =>
+      ticketExpiryTick(bot.api).then((r) => {
+        if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
+      }),
+    ),
+  );
+  console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
 
   // Premium expiry reminders (§3.8): 3 days and 24 hours before a NON-renewing
   // paid period ends. Gated on the same flag as the purchase surfaces — this
@@ -930,34 +931,33 @@ function registerSchedules(): void {
   // Venue-change refunds: retry failed refunds + reverse purchases abandoned
   // mid-settle. Same discipline as the rematch sweep above — this is what
   // makes "a venue-change payment either changes the venue or comes back"
-  // durable rather than best-effort.
-  if (env.VENUE_CHANGE_FEATURE_ENABLED) {
-    cron.schedule(
-      VENUE_CHANGE_REFUND_CRON_SCHEDULE,
-      guardedTick("venue-change-refund", () =>
-        sweepVenueChangeRefunds(bot.api).then(() => undefined),
-      ),
-    );
-    console.log(
-      `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
-    );
-  }
+  // durable rather than best-effort. Unconditional for the same reason: an
+  // invoice minted while the flag was on can still be paid after it goes off,
+  // and its `processing` / `refund_failed` row needs this sweep to come back.
+  cron.schedule(
+    VENUE_CHANGE_REFUND_CRON_SCHEDULE,
+    guardedTick("venue-change-refund", () =>
+      sweepVenueChangeRefunds(bot.api).then(() => undefined),
+    ),
+  );
+  console.log(
+    `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
+  );
 
   // Prime Time refunds: retry failed refunds + reverse passes abandoned
-  // mid-settle. Registered through `primeTimeFeatureLive()` rather than the
-  // raw flag so the two conditions that make the feature real stay in one
-  // place — a cron whose purchases cannot exist is a scheduled no-op.
-  if (primeTimeFeatureLive()) {
-    cron.schedule(
-      PRIME_TIME_REFUND_CRON_SCHEDULE,
-      guardedTick("prime-time-refund", () =>
-        sweepPrimeTimeRefunds(bot.api).then(() => undefined),
-      ),
-    );
-    console.log(
-      `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
-    );
-  }
+  // mid-settle. Unconditional, like the two sweeps above: dead-match refunds
+  // are deliberately not flag-gated and rely on this sweep to retry, and a
+  // pass bought before the feature was switched off must still come back.
+  // With no purchases it finds nothing.
+  cron.schedule(
+    PRIME_TIME_REFUND_CRON_SCHEDULE,
+    guardedTick("prime-time-refund", () =>
+      sweepPrimeTimeRefunds(bot.api).then(() => undefined),
+    ),
+  );
+  console.log(
+    `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
+  );
 
   // Referral rewards held back by the velocity cap: without this pass they
   // were released only by another friend verifying, which for a referrer
