@@ -49,14 +49,13 @@ export const SEARCHERS_VISIBILITY_THRESHOLD = Math.max(
  * `status: "active"` уже несёт всю нужную семантику — `paused` (осознанная
  * пауза), `frozen` (мягкое удаление), модерационные состояния и незавершённый
  * онбординг в это значение не попадают.
+ *
+ * `homeCityKey` — из профиля пользователя, и читает его вызывающий:
+ * `/v1/countdown` берёт его тем же чтением профиля, что и статус недели.
  */
-export async function countCitySearchers(userId: string): Promise<number | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { profile: { select: { homeCityKey: true } } },
-  });
-
-  const homeCityKey = user?.profile?.homeCityKey;
+export async function countCitySearchers(
+  homeCityKey: string | null | undefined,
+): Promise<number | null> {
   if (!homeCityKey) return null;
 
   const count = await prisma.user.count({

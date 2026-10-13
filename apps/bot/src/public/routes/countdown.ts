@@ -1,13 +1,28 @@
 import { Router, type Request, type Response } from "express";
+import { prisma, type Prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { getNextBatchDate } from "../../services/next-batch.js";
-import { resolveWeeklyStatusForUser } from "../../services/weekly-status.js";
+import {
+  resolveWeeklyStatusForUser,
+  WEEKLY_STATUS_PROFILE_SELECT,
+} from "../../services/weekly-status.js";
 import { countCitySearchers } from "../../services/city-searchers.js";
-import { loadCalibration } from "../../services/first-drop-calibration.js";
+import { resolveCalibration } from "../../services/first-drop-calibration.js";
 
 export const countdownRouter: Router = Router();
 
 countdownRouter.use(requireAuth);
+
+/**
+ * Every profile column this route answers from, read once per poll. The weekly
+ * status, the city counter and the calibration window used to read the same row
+ * three times over (four queries, one of them through `users`).
+ */
+const COUNTDOWN_PROFILE_SELECT = {
+  ...WEEKLY_STATUS_PROFILE_SELECT,
+  homeCityKey: true,
+  calibrationUntil: true,
+} as const satisfies Prisma.ProfileSelect;
 
 /**
  * Next scheduled drop + server clock for skew correction. The mobile app
@@ -28,11 +43,16 @@ countdownRouter.use(requireAuth);
  */
 countdownRouter.get("/", async (req: Request, res: Response): Promise<void> => {
   const now = new Date();
-  const [weekly, searchersInCity, calibration] = await Promise.all([
-    resolveWeeklyStatusForUser(req.userId!, now),
-    countCitySearchers(req.userId!),
-    loadCalibration(req.userId!, now),
+  const userId = req.userId!;
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: COUNTDOWN_PROFILE_SELECT,
+  });
+  const [weekly, searchersInCity] = await Promise.all([
+    resolveWeeklyStatusForUser(userId, profile, now),
+    countCitySearchers(profile?.homeCityKey),
   ]);
+  const calibration = resolveCalibration(profile?.calibrationUntil, now);
   res.json({
     nextDropAt: getNextBatchDate(now).toISOString(),
     serverNow: now.toISOString(),

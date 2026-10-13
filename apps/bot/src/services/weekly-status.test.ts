@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
-    profile: {
-      findUnique: vi.fn(),
-    },
     match: {
       findFirst: vi.fn(),
     },
@@ -24,14 +21,11 @@ describe("resolveWeeklyStatusForUser", () => {
   });
 
   it("returns matched when the user has an active in-flight match", async () => {
-    mockPrisma.profile.findUnique.mockResolvedValue({
-      standbyCount: 3,
-      lastMissedAt: new Date("2026-04-24T18:00:00Z"),
-    });
     mockPrisma.match.findFirst.mockResolvedValue({ id: "match-1" });
 
     const result = await resolveWeeklyStatusForUser(
       "user-1",
+      { standbyCount: 3, lastMissedAt: new Date("2026-04-24T18:00:00Z") },
       new Date("2026-04-26T09:00:00Z"),
     );
 
@@ -41,17 +35,21 @@ describe("resolveWeeklyStatusForUser", () => {
       priorityBoosted: false,
       resolvedAt: null,
     });
+    expect(mockPrisma.match.findFirst).toHaveBeenCalledWith({
+      where: {
+        status: { in: ["proposed", "negotiating", "negotiating_venue", "scheduled"] },
+        OR: [{ userAId: "user-1" }, { userBId: "user-1" }],
+      },
+      select: { id: true },
+    });
   });
 
   it("returns standby when the user missed the current batch window", async () => {
-    mockPrisma.profile.findUnique.mockResolvedValue({
-      standbyCount: 2,
-      lastMissedAt: new Date("2026-04-23T18:30:00Z"),
-    });
     mockPrisma.match.findFirst.mockResolvedValue(null);
 
     const result = await resolveWeeklyStatusForUser(
       "user-2",
+      { standbyCount: 2, lastMissedAt: new Date("2026-04-23T18:30:00Z") },
       new Date("2026-04-26T09:00:00Z"),
     );
 
@@ -62,14 +60,28 @@ describe("resolveWeeklyStatusForUser", () => {
   });
 
   it("returns pending when the user has no active match and no current-cycle standby", async () => {
-    mockPrisma.profile.findUnique.mockResolvedValue({
-      standbyCount: 0,
-      lastMissedAt: null,
-    });
     mockPrisma.match.findFirst.mockResolvedValue(null);
 
     const result = await resolveWeeklyStatusForUser(
       "user-3",
+      { standbyCount: 0, lastMissedAt: null },
+      new Date("2026-04-26T09:00:00Z"),
+    );
+
+    expect(result).toEqual({
+      weeklyStatus: "pending",
+      standbyCount: 0,
+      priorityBoosted: false,
+      resolvedAt: null,
+    });
+  });
+
+  it("reads a missing profile as zero standby and no miss", async () => {
+    mockPrisma.match.findFirst.mockResolvedValue(null);
+
+    const result = await resolveWeeklyStatusForUser(
+      "user-4",
+      null,
       new Date("2026-04-26T09:00:00Z"),
     );
 
@@ -90,13 +102,13 @@ describe("resolveWeeklyStatusForUser", () => {
     const now = new Date("2026-04-26T09:00:00Z");
     const previousBatchAt = getPreviousBatchDate(now);
 
-    mockPrisma.profile.findUnique.mockResolvedValue({
-      standbyCount: 1,
-      lastMissedAt: previousBatchAt,
-    });
     mockPrisma.match.findFirst.mockResolvedValue(null);
 
-    const result = await resolveWeeklyStatusForUser("user-boundary-lo", now);
+    const result = await resolveWeeklyStatusForUser(
+      "user-boundary-lo",
+      { standbyCount: 1, lastMissedAt: previousBatchAt },
+      now,
+    );
     expect(result.priorityBoosted).toBe(true);
   });
 
@@ -104,13 +116,13 @@ describe("resolveWeeklyStatusForUser", () => {
     const now = new Date("2026-04-26T09:00:00Z");
     const nextBatchAt = getNextBatchDate(now);
 
-    mockPrisma.profile.findUnique.mockResolvedValue({
-      standbyCount: 1,
-      lastMissedAt: nextBatchAt,
-    });
     mockPrisma.match.findFirst.mockResolvedValue(null);
 
-    const result = await resolveWeeklyStatusForUser("user-boundary-hi", now);
+    const result = await resolveWeeklyStatusForUser(
+      "user-boundary-hi",
+      { standbyCount: 1, lastMissedAt: nextBatchAt },
+      now,
+    );
     expect(result.priorityBoosted).toBe(false);
   });
 });

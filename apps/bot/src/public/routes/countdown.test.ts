@@ -19,30 +19,38 @@ const USER_ID = "11111111-1111-4111-8111-111111111111";
 const env = { JWT_SECRET };
 vi.mock("../../config.js", () => ({ env }));
 
-const countCitySearchers = vi.fn(async (_id: string): Promise<number | null> => null);
+const profileFindUnique = vi.fn(async (_args: unknown): Promise<unknown> => null);
+vi.mock("@gennety/db", () => ({
+  prisma: { profile: { findUnique: (args: unknown) => profileFindUnique(args) } },
+}));
+
+const countCitySearchers = vi.fn(async (_key: string | null | undefined): Promise<number | null> => null);
 vi.mock("../../services/city-searchers.js", () => ({
-  countCitySearchers: (id: string) => countCitySearchers(id),
+  countCitySearchers: (key: string | null | undefined) => countCitySearchers(key),
 }));
 
 vi.mock("../../services/next-batch.js", () => ({
   getNextBatchDate: () => new Date("2026-09-10T15:00:00.000Z"),
 }));
 
+const resolveWeeklyStatusForUser = vi.fn(async (_id: string, _profile: unknown, _now: Date) => ({
+  weeklyStatus: "standby",
+  standbyCount: 2,
+  priorityBoosted: false,
+  resolvedAt: null as string | null,
+}));
 vi.mock("../../services/weekly-status.js", () => ({
-  resolveWeeklyStatusForUser: async () => ({
-    weeklyStatus: "standby",
-    standbyCount: 2,
-    priorityBoosted: false,
-    resolvedAt: null,
-  }),
+  WEEKLY_STATUS_PROFILE_SELECT: { standbyCount: true, lastMissedAt: true },
+  resolveWeeklyStatusForUser: (id: string, profile: unknown, now: Date) =>
+    resolveWeeklyStatusForUser(id, profile, now),
 }));
 
-const loadCalibration = vi.fn(async (_id: string, _now: Date) => ({
+const resolveCalibration = vi.fn((_until: Date | null | undefined, _now: Date) => ({
   calibrating: false,
   firstDropAt: null as Date | null,
 }));
 vi.mock("../../services/first-drop-calibration.js", () => ({
-  loadCalibration: (id: string, now: Date) => loadCalibration(id, now),
+  resolveCalibration: (until: Date | null | undefined, now: Date) => resolveCalibration(until, now),
 }));
 
 const { countdownRouter } = await import("./countdown.js");
@@ -60,11 +68,21 @@ function get() {
   return request(app).get("/v1/countdown").set("Authorization", `Bearer ${token}`);
 }
 
+const PROFILE = {
+  standbyCount: 2,
+  lastMissedAt: null,
+  homeCityKey: "ua:kyiv",
+  calibrationUntil: new Date("2026-09-11T10:00:00.000Z"),
+};
+
 beforeEach(() => {
+  profileFindUnique.mockReset();
+  profileFindUnique.mockResolvedValue(PROFILE);
   countCitySearchers.mockReset();
   countCitySearchers.mockResolvedValue(null);
-  loadCalibration.mockReset();
-  loadCalibration.mockResolvedValue({ calibrating: false, firstDropAt: null });
+  resolveWeeklyStatusForUser.mockClear();
+  resolveCalibration.mockReset();
+  resolveCalibration.mockReturnValue({ calibrating: false, firstDropAt: null });
 });
 
 describe("GET /v1/countdown — счётчик города", () => {
@@ -75,7 +93,17 @@ describe("GET /v1/countdown — счётчик города", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.searchersInCity).toBe(2_341);
-    expect(countCitySearchers).toHaveBeenCalledWith(USER_ID);
+    expect(countCitySearchers).toHaveBeenCalledWith("ua:kyiv");
+  });
+
+  it("город не выбран — ключ уходит пустым, и счётчик отвечает за это сам", async () => {
+    profileFindUnique.mockResolvedValue(null);
+
+    const res = await get();
+
+    expect(res.status).toBe(200);
+    expect(countCitySearchers).toHaveBeenCalledWith(undefined);
+    expect(res.body).toHaveProperty("searchersInCity", null);
   });
 
   it("ниже порога — поле ПРИСУТСТВУЕТ и равно null, а не пропадает", async () => {
@@ -99,9 +127,36 @@ describe("GET /v1/countdown — счётчик города", () => {
   });
 });
 
+describe("GET /v1/countdown — одно чтение профиля на опрос", () => {
+  it("читает профиль один раз и раздаёт строку всем трём частям ответа", async () => {
+    countCitySearchers.mockResolvedValue(2_341);
+
+    const res = await get();
+
+    expect(profileFindUnique).toHaveBeenCalledTimes(1);
+    expect(profileFindUnique).toHaveBeenCalledWith({
+      where: { userId: USER_ID },
+      select: { standbyCount: true, lastMissedAt: true, homeCityKey: true, calibrationUntil: true },
+    });
+    expect(resolveWeeklyStatusForUser).toHaveBeenCalledWith(USER_ID, PROFILE, expect.any(Date));
+    expect(resolveCalibration).toHaveBeenCalledWith(PROFILE.calibrationUntil, expect.any(Date));
+    expect(res.body).toEqual({
+      nextDropAt: "2026-09-10T15:00:00.000Z",
+      serverNow: expect.any(String),
+      weeklyStatus: "standby",
+      standbyCount: 2,
+      priorityBoosted: false,
+      resolvedAt: null,
+      searchersInCity: 2_341,
+      searchPhase: "searching",
+      firstDropAt: null,
+    });
+  });
+});
+
 describe("GET /v1/countdown — окно калибровки первой пары", () => {
   it("свежий аккаунт: фаза calibrating и время первого подбора", async () => {
-    loadCalibration.mockResolvedValue({
+    resolveCalibration.mockReturnValue({
       calibrating: true,
       firstDropAt: new Date("2026-09-11T15:00:00.000Z"),
     });
@@ -110,7 +165,6 @@ describe("GET /v1/countdown — окно калибровки первой па�
 
     expect(res.body.searchPhase).toBe("calibrating");
     expect(res.body.firstDropAt).toBe("2026-09-11T15:00:00.000Z");
-    expect(loadCalibration).toHaveBeenCalledWith(USER_ID, expect.any(Date));
   });
 
   it("обычный поиск: searching и firstDropAt = null", async () => {
