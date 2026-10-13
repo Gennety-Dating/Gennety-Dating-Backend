@@ -575,6 +575,84 @@ export async function createVoicePromptSignedUrl(
   return createSignedUrl(env.SUPABASE_VOICE_BUCKET, path, expiresInSeconds);
 }
 
+/** Lifetime of a link `reuseVoicePromptSignedUrl` signs — the same 300 s as above. */
+const VOICE_PROMPT_REUSE_TTL_S = 300;
+/** A remembered link is handed out again only while at least this much of it is left. */
+const VOICE_PROMPT_REUSE_MIN_LEFT_MS = 240_000;
+/** Links remembered at once (one per partner prompt being polled); the oldest goes first. */
+const VOICE_PROMPT_REUSE_MAX = 1_000;
+/** Deleted keys remembered, so a sign racing their deletion is never kept. */
+const VOICE_PROMPT_DELETED_MAX = 1_000;
+
+const reusableVoicePromptUrls = new Map<string, { url: string; expiresAtMs: number }>();
+const deletedVoicePromptPaths = new Set<string>();
+
+/**
+ * The partner's voice prompt link for `/v1/matches/current`, re-signed only
+ * when the last one is running out.
+ *
+ * `/current` is polled every 15–20 s, and each poll used to cost one Supabase
+ * sign request (an HTTP call with a 20 s budget) for a link that lives five
+ * minutes. Here a link signed for `path` is handed out again while at least
+ * 240 s of it is left, so a client always receives a link valid for ≥ 240 s
+ * where it used to receive ≈ 300 s. The remaining life is counted from the
+ * moment the sign request was SENT: Supabase starts the token's clock no
+ * earlier than that, so the count can only understate it.
+ *
+ * Keyed by the storage path, which names one recording for good: every upload
+ * mints a fresh `${userId}/${timestamp}…` key, so a re-record is a new key and
+ * a deleted prompt's row no longer names its old one. The one case where a row
+ * can still name an object that is gone — account deletion erases storage
+ * before the rows — is closed by `deleteStorageObject`, which forgets the key
+ * (`forgetReusableVoicePromptUrl`) before it deletes. A failed sign is never
+ * remembered, so it is asked again on the next poll exactly as before.
+ *
+ * Only `/current` uses this. The routes that exist to hand out a FRESH link
+ * (`GET /v1/matches/:id/partner-voice-prompt`, the caller's own prompt) keep
+ * `createVoicePromptSignedUrl`.
+ */
+export async function reuseVoicePromptSignedUrl(path: string): Promise<string | null> {
+  const kept = reusableVoicePromptUrls.get(path);
+  if (kept && kept.expiresAtMs - Date.now() >= VOICE_PROMPT_REUSE_MIN_LEFT_MS) return kept.url;
+  if (kept) reusableVoicePromptUrls.delete(path);
+
+  const requestedAt = Date.now();
+  const url = await createVoicePromptSignedUrl(path, VOICE_PROMPT_REUSE_TTL_S);
+  if (url && !deletedVoicePromptPaths.has(path)) {
+    if (reusableVoicePromptUrls.size >= VOICE_PROMPT_REUSE_MAX) {
+      const oldest = reusableVoicePromptUrls.keys().next();
+      if (!oldest.done) reusableVoicePromptUrls.delete(oldest.value);
+    }
+    reusableVoicePromptUrls.set(path, {
+      url,
+      expiresAtMs: requestedAt + VOICE_PROMPT_REUSE_TTL_S * 1000,
+    });
+  }
+  return url;
+}
+
+/**
+ * Drop a remembered voice prompt link for an object about to be deleted, and
+ * refuse to remember one for it afterwards. Called by `deleteStorageObject`
+ * for every voice-bucket delete — a replaced or deleted recording, a refused
+ * upload, account erasure — before the request goes out.
+ */
+function forgetReusableVoicePromptUrl(bucket: string, path: string): void {
+  if (bucket !== env.SUPABASE_VOICE_BUCKET) return;
+  reusableVoicePromptUrls.delete(path);
+  if (deletedVoicePromptPaths.size >= VOICE_PROMPT_DELETED_MAX) {
+    const oldest = deletedVoicePromptPaths.values().next();
+    if (!oldest.done) deletedVoicePromptPaths.delete(oldest.value);
+  }
+  deletedVoicePromptPaths.add(path);
+}
+
+/** Tests only. */
+export function resetReusableVoicePromptUrls(): void {
+  reusableVoicePromptUrls.clear();
+  deletedVoicePromptPaths.clear();
+}
+
 /** The container a native voice upload is stored under, by the MIME it declared. */
 function voicePromptExtension(mime: string): "m4a" | "ogg" {
   return mime === "audio/ogg" || mime === "audio/opus" ? "ogg" : "m4a";
@@ -785,6 +863,7 @@ export async function deleteStorageObject(
   bucket: string,
   path: string,
 ): Promise<boolean> {
+  forgetReusableVoicePromptUrl(bucket, path);
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
   if (!isSafeStorageObjectPath(path)) return false;
 

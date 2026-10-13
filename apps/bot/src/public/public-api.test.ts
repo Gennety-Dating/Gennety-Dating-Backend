@@ -1156,6 +1156,9 @@ vi.mock("../services/storage.js", () => ({
   createVoicePromptSignedUrl: vi.fn(
     async (path: string) => `https://signed.test/voice/${path}`,
   ),
+  reuseVoicePromptSignedUrl: vi.fn(
+    async (path: string) => `https://signed.test/voice/${path}`,
+  ),
   deleteStorageObject: vi.fn(async () => true),
   // Account deletion lists each bucket under the user's prefix (A13-M12).
   listStorageObjects: vi.fn(async () => []),
@@ -4581,6 +4584,11 @@ describe("/v1/matches/*", () => {
         audioUrl: `https://signed.test/voice/${bob.id}/1716000000000-abc.m4a`,
       });
       expect(res.body.match.partnerMusicTracks).toEqual([serializeMusicTrack(TRACK)]);
+      // The poll reuses a link while ≥ 240 s of it is left; only the
+      // partner-voice-prompt route insists on a fresh one.
+      const storage = await import("../services/storage.js");
+      expect(storage.reuseVoicePromptSignedUrl).toHaveBeenCalledWith(voice.storagePath);
+      expect(storage.createVoicePromptSignedUrl).not.toHaveBeenCalled();
       // The PARTNER's rows — never the caller's.
       expect(prismaMock.voicePrompt.findUnique).toHaveBeenCalledWith({
         where: { userId: bob.id },
@@ -4766,6 +4774,12 @@ describe("/v1/matches/*", () => {
       );
       // The transcript is never selected, so it cannot leak into the body.
       expect(JSON.stringify(res.body)).not.toContain("transcript");
+      // This route exists to hand out a FRESH link — never a remembered one.
+      const storage = await import("../services/storage.js");
+      expect(storage.createVoicePromptSignedUrl).toHaveBeenCalledWith(
+        `${bob.id}/1716000000000-abc.m4a`,
+      );
+      expect(storage.reuseVoicePromptSignedUrl).not.toHaveBeenCalled();
     });
 
     it("answers without a voicePrompt key when the partner recorded none", async () => {

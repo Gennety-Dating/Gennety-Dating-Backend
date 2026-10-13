@@ -10,7 +10,10 @@ import {
 } from "../services/geo.js";
 import { resolveVenue } from "../services/curated-venue.js";
 import { proxyChatUnreadCount, proxyChatWindow } from "../services/proxy-chat.js";
-import { createVoicePromptSignedUrl } from "../services/storage.js";
+import {
+  createVoicePromptSignedUrl,
+  reuseVoicePromptSignedUrl,
+} from "../services/storage.js";
 import { MUSIC_TRACK_SELECT, serializeMusicTrack } from "../services/music/profile-music.js";
 import type { MusicTrack } from "../services/music/track.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
@@ -564,7 +567,10 @@ export async function getCurrentMatchForUser(
     // Null exactly where the window is, so "no chat" reads the same in both.
     proxyChatUnreadCount: proxyWindow ? await proxyUnreadBestEffort(match, userId) : null,
     proposalDeadlineAt,
-    partnerVoicePrompt: await serializePartnerVoicePrompt(partnerVoicePrompt),
+    partnerVoicePrompt: await serializePartnerVoicePrompt(
+      partnerVoicePrompt,
+      reuseVoicePromptSignedUrl,
+    ),
     // Read only while PROFILE_MUSIC_ENABLED is on (above), so the key is
     // present exactly when the flag is — `[]` when nothing is pinned.
     ...(partnerMusicTracks
@@ -622,18 +628,19 @@ async function proxyUnreadBestEffort(
  *
  * Also behind `GET /v1/matches/:id/partner-voice-prompt`: the URL here lives
  * five minutes, a pitch stays open far longer, and that route is how the
- * player gets a fresh one instead of a silent tap.
+ * player gets a fresh one instead of a silent tap. It signs anew every time;
+ * the `/current` poll passes `reuseVoicePromptSignedUrl`, which hands a link
+ * out again while ≥ 240 s of it is left.
  */
 export async function serializePartnerVoicePrompt(
   prompt: { durationSec: number; waveform: number[]; storagePath: string | null } | null,
+  sign: (path: string) => Promise<string | null> = createVoicePromptSignedUrl,
 ): Promise<SerializedMatch["partnerVoicePrompt"]> {
   if (!env.VOICE_PROMPT_ENABLED || !prompt) return null;
   return {
     durationSec: prompt.durationSec,
     waveform: prompt.waveform,
-    audioUrl: prompt.storagePath
-      ? await createVoicePromptSignedUrl(prompt.storagePath)
-      : null,
+    audioUrl: prompt.storagePath ? await sign(prompt.storagePath) : null,
   };
 }
 
