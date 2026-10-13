@@ -88,6 +88,14 @@ the client is never handed a bare user id. Three effects, in order:
 3. **The proxy chat closes** as a consequence, not as a separate rule: that
    window is gated on `status = "scheduled"`.
 
+**Once the date has begun, the block does not cancel it (founder decision
+2026-10-13).** From `agreedTime` on — the same cut-off the emergency rail has
+had since A13-M20 — a block records the row and force-closes the proxy chat
+(`proxyClosedAt`), and nothing else: no ticket or Prime Time refund, no notice
+to the blocked side, no skipped did-you-meet question. The blocker's own
+date-day card ends; the blocked side's ends on its ordinary schedule, so the
+block stays invisible to them. Before the start, step 2 applies unchanged.
+
 **The blocked side is never told.** No DM, no push, no visible state change
 beyond the ordinary "your date was cancelled". That is what makes the button
 safe to press.

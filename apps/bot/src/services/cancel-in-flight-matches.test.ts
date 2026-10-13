@@ -481,7 +481,7 @@ describe("claimMatchCancellation", () => {
     const where = mMatch.findFirst.mock.calls[0]![0].where;
     expect(where.id).toBe(OTHER_MATCH);
     expect(where.status).toEqual({ in: [...IN_FLIGHT_MATCH_STATUSES] });
-    expect(where.OR).toEqual([{ userAId: LEAVING }, { userBId: LEAVING }]);
+    expect(where.AND).toEqual([{ OR: [{ userAId: LEAVING }, { userBId: LEAVING }] }, {}]);
     // Nothing matched, so nothing was cancelled.
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
@@ -500,6 +500,33 @@ describe("claimMatchCancellation", () => {
     expect(result).toMatchObject({ matchId: "m1", partnerUserId: PARTNER });
     expect(mMatch.updateMany).toHaveBeenCalledWith({
       where: { id: "m1", status: { in: [...IN_FLIGHT_MATCH_STATUSES] } },
+      data: { status: "cancelled" },
+    });
+  });
+
+  it("with a start cut-off, never claims a scheduled date already under way", async () => {
+    const cutoff = new Date("2026-10-13T21:00:00Z");
+    const notStarted = {
+      OR: [
+        { status: { not: "scheduled" } },
+        { agreedTime: null },
+        { agreedTime: { gt: cutoff } },
+      ],
+    };
+    mMatch.findFirst.mockResolvedValue({
+      id: "m1",
+      userAId: LEAVING,
+      userBId: PARTNER,
+      userA: { telegramId: 100n, language: "en", platform: "telegram" },
+      userB: { telegramId: 200n, language: "en", platform: "telegram" },
+    });
+
+    await claimMatchCancellation("m1", LEAVING, undefined, { notStartedAt: cutoff });
+
+    expect(mMatch.findFirst.mock.calls[0]![0].where.AND[1]).toEqual(notStarted);
+    // On the claiming write too, so the start cannot slip in between.
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: { in: [...IN_FLIGHT_MATCH_STATUSES] }, ...notStarted },
       data: { status: "cancelled" },
     });
   });
