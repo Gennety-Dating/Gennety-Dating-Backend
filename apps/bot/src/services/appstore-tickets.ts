@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { APPSTORE_SANDBOX_TICKET_PURCHASES_MAX } from "@gennety/shared";
 import {
   boughtByAnotherUser,
   getVerifiedTransaction,
@@ -39,7 +40,8 @@ export type AppStoreCreditResult =
         | "wrong_bundle"
         | "unknown_product"
         | "revoked"
-        | "wrong_owner";
+        | "wrong_owner"
+        | "sandbox_limit";
     }
   | { status: "unavailable" };
 
@@ -95,13 +97,21 @@ export async function creditAppStoreTransaction(
   if (!perPurchase) return { status: "invalid", reason: "unknown_product" };
 
   const credited = perPurchase * tx.quantity;
+  const sandbox = tx.environment === "Sandbox";
+  if (sandbox) {
+    const refusal = await sandboxCreditRefusal(userId, tx.transactionId);
+    if (refusal) return refusal;
+  }
   try {
     const balance = await grantTickets({
       userId,
       count: credited,
       reason: "store_purchase",
       bundleSize: perPurchase,
-      ...(tx.priceCents != null ? { amountCents: tx.priceCents } : {}),
+      // A sandbox purchase moved no money, so its row carries none: the
+      // revenue sums read `amountCents`, and Apple quotes a price even in the
+      // sandbox. The null is also what `sandboxCreditRefusal` counts.
+      ...(tx.priceCents != null && !sandbox ? { amountCents: tx.priceCents } : {}),
       externalPaymentId: `appstore:${tx.transactionId}`,
     });
     // Founder ops feed — the iOS twin of the Telegram Stars store purchase.
@@ -115,9 +125,9 @@ export async function creditAppStoreTransaction(
       currency: tx.currency,
       detail: `${credited} ticket${credited === 1 ? "" : "s"} · ${tx.productId ?? "?"} · баланс ${balance}`,
       externalPaymentId: `appstore:${tx.transactionId}`,
-      // Honoured either way (App Review buys in the sandbox), but a sandbox
-      // credit moved no money and the feed must not read as revenue.
-      sandbox: tx.environment === "Sandbox",
+      // Honoured (App Review buys in the sandbox, up to the cap above), but a
+      // sandbox credit moved no money and the feed must not read as revenue.
+      sandbox,
     });
     return { status: "credited", balance, credited };
   } catch (err) {
@@ -126,6 +136,47 @@ export async function creditAppStoreTransaction(
     }
     throw err;
   }
+}
+
+/**
+ * The per-account cap on SANDBOX ticket credits (decision 2026-10-13).
+ *
+ * Sandbox purchases are still honoured — App Review buys there against this
+ * server, and refusing them fails the review — but nobody pays for them, so a
+ * TestFlight build was a free ticket tap. `APPSTORE_SANDBOX_TICKET_PURCHASES_MAX`
+ * credits are plenty for a reviewer and bound what a tester can mint.
+ *
+ * Counted from the ledger with no new column: an App Store `store_purchase` row
+ * without `amountCents` is a sandbox credit (production rows carry Apple's
+ * price). A replay of a purchase already credited is let through to the
+ * idempotent insert, so it still answers `already_processed`, not a refusal.
+ * Two reports racing past the count can land one credit over the cap — a
+ * bounded, free-tier overshoot not worth a lock.
+ */
+async function sandboxCreditRefusal(
+  userId: string,
+  transactionId: string,
+): Promise<AppStoreCreditResult | null> {
+  const externalPaymentId = `appstore:${transactionId}`;
+  const existing = await prisma.ticketLedger.findUnique({
+    where: { externalPaymentId },
+    select: { id: true },
+  });
+  if (existing) return null;
+  const credits = await prisma.ticketLedger.count({
+    where: {
+      userId,
+      reason: "store_purchase",
+      externalPaymentId: { startsWith: "appstore:" },
+      amountCents: null,
+    },
+  });
+  if (credits < APPSTORE_SANDBOX_TICKET_PURCHASES_MAX) return null;
+  console.warn(
+    `[appstore] sandbox ticket credit refused: user=${userId} transaction=${transactionId} ` +
+      `already has ${credits} sandbox credits`,
+  );
+  return { status: "invalid", reason: "sandbox_limit" };
 }
 
 export type AppStoreRefundResult =

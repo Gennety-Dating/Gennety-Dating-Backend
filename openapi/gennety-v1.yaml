@@ -3746,7 +3746,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Transaction rejected (unknown/foreign/revoked/unknown product)
+          description: >
+            Transaction rejected (unknown/foreign/revoked/unknown product).
+            `code` `sandbox_limit`: an App Store SANDBOX purchase (TestFlight,
+            App Review, a developer build — no money moved) past the
+            per-account cap of sandbox ticket credits. Final, like every code
+            but `unknown_product`: finish the transaction.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

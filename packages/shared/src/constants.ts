@@ -735,6 +735,16 @@ export const LINKED_ACCOUNTS_MAX = 50;
 export const LINKED_ACCOUNT_GROUPS_MAX = 200;
 
 /**
+ * How many App Store SANDBOX ticket purchases one account is credited for
+ * (decision 2026-10-13). Sandbox purchases move no money — TestFlight, App
+ * Review and developer builds all buy there — and App Review must be able to
+ * buy, so they are honoured; this caps what a TestFlight tester can mint for
+ * free. A purchase past the cap is refused with 422 `sandbox_limit`, which the
+ * client finishes like any other final refusal.
+ */
+export const APPSTORE_SANDBOX_TICKET_PURCHASES_MAX = 3;
+
+/**
  * How many chats' Telegram updates (and out-of-band chat work) may run at once
  * (A13-H9). Per-chat order is kept by the chat queue; this is the ceiling ACROSS
  * chats, so a burst queues for a slot instead of starting hundreds of agent

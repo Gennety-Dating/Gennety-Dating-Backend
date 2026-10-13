@@ -3,11 +3,12 @@ import type { AppStoreTransaction } from "./appstore.js";
 
 const ledgerFindUnique = vi.fn();
 const ledgerCreate = vi.fn();
+const ledgerCount = vi.fn();
 const userUpdate = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    ticketLedger: { findUnique: ledgerFindUnique, create: ledgerCreate },
+    ticketLedger: { findUnique: ledgerFindUnique, create: ledgerCreate, count: ledgerCount },
     user: { update: userUpdate },
     $transaction: vi.fn(async (ops: unknown[]) => {
       const results = [];
@@ -61,11 +62,66 @@ const okTx: AppStoreTransaction = {
 beforeEach(() => {
   ledgerFindUnique.mockReset();
   ledgerCreate.mockReset().mockResolvedValue({});
+  ledgerCount.mockReset().mockResolvedValue(0);
   userUpdate.mockReset().mockResolvedValue({ ticketBalance: 0 });
   getVerifiedTransaction.mockReset();
   ticketCountForProduct.mockReset().mockReturnValue(3);
   grantTickets.mockReset().mockResolvedValue(5);
   getBalance.mockReset().mockResolvedValue(5);
+});
+
+describe("creditAppStoreTransaction — sandbox purchases (decision 2026-10-13)", () => {
+  const sandboxTx: AppStoreTransaction = { ...okTx, transactionId: "sb-1", environment: "Sandbox" };
+
+  it("credits a sandbox purchase under the cap, with no money on the row", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    getVerifiedTransaction.mockResolvedValue({ status: "ok", transaction: sandboxTx });
+    ledgerFindUnique.mockResolvedValue(null);
+    ledgerCount.mockResolvedValue(2);
+    await expect(creditAppStoreTransaction("u1", "sb-1")).resolves.toMatchObject({ status: "credited" });
+    const args = grantTickets.mock.calls[0]![0];
+    expect(args).not.toHaveProperty("amountCents");
+    expect(args.externalPaymentId).toBe("appstore:sb-1");
+    expect(ledgerCount).toHaveBeenCalledWith({
+      where: {
+        userId: "u1",
+        reason: "store_purchase",
+        externalPaymentId: { startsWith: "appstore:" },
+        amountCents: null,
+      },
+    });
+  });
+
+  it("refuses a sandbox purchase past the cap, as a final 422 code", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    getVerifiedTransaction.mockResolvedValue({ status: "ok", transaction: sandboxTx });
+    ledgerFindUnique.mockResolvedValue(null);
+    ledgerCount.mockResolvedValue(3);
+    await expect(creditAppStoreTransaction("u1", "sb-1")).resolves.toEqual({
+      status: "invalid",
+      reason: "sandbox_limit",
+    });
+    expect(grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("still answers a replay of an already credited sandbox purchase as already processed", async () => {
+    getVerifiedTransaction.mockResolvedValue({ status: "ok", transaction: sandboxTx });
+    ledgerFindUnique.mockResolvedValue({ id: "row-1" });
+    ledgerCount.mockResolvedValue(3);
+    grantTickets.mockRejectedValueOnce({ code: "P2002" });
+    await expect(creditAppStoreTransaction("u1", "sb-1")).resolves.toEqual({
+      status: "already_processed",
+      balance: 5,
+    });
+    expect(ledgerCount).not.toHaveBeenCalled();
+  });
+
+  it("never caps a production purchase", async () => {
+    getVerifiedTransaction.mockResolvedValue({ status: "ok", transaction: okTx });
+    ledgerCount.mockResolvedValue(99);
+    await expect(creditAppStoreTransaction("u1", "tx-1")).resolves.toMatchObject({ status: "credited" });
+    expect(ledgerCount).not.toHaveBeenCalled();
+  });
 });
 
 describe("creditAppStoreTransaction", () => {
