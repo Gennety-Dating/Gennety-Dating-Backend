@@ -23,20 +23,23 @@ export function createSingleFlight<K, V>(): SingleFlight<K, V> {
     join(key: K, load: () => Promise<V>): { result: Promise<V>; joined: boolean } {
       const current = flights.get(key);
       if (current) return { result: current, joined: true };
-      let result: Promise<V> | undefined;
+      const entry: { result?: Promise<V> } = {};
       let settled = false;
-      result = (async (): Promise<V> => {
+      const result = (async (): Promise<V> => {
         try {
           return await load();
         } finally {
           // Before the result settles, so nobody can join a finished load. A
           // `load` that throws before returning a promise lands here
-          // synchronously, while `result` is still unset — and is then simply
-          // never registered.
+          // synchronously, while `entry.result` is still unset — and is then
+          // simply never registered.
           settled = true;
-          if (result !== undefined && flights.get(key) === result) flights.delete(key);
+          if (entry.result !== undefined && flights.get(key) === entry.result) {
+            flights.delete(key);
+          }
         }
       })();
+      entry.result = result;
       if (!settled) flights.set(key, result);
       return { result, joined: false };
     },
