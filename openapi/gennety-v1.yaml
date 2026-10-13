@@ -656,9 +656,12 @@ paths:
       operationId: claimReferral
       summary: Attribute this user to a referrer by code (first-touch, guarded)
       description: >-
-        First-touch only — never overwrites an existing attribution. Rejects a
-        self-referral and an unknown code. Both rewards (tickets for the
-        referrer and for this user) are paid later, when THIS user clears
+        First-touch only — never overwrites an existing attribution. New
+        accounts only: an account that has finished onboarding (or was already
+        counted as someone's friend) gets 409 `not-eligible`, the same rule the
+        Telegram deep link keeps by attributing only at account creation.
+        Rejects a self-referral and an unknown code. Both rewards (tickets for
+        the referrer and for this user) are paid later, when THIS user clears
         verification.
       requestBody:
         required: true
@@ -686,7 +689,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Referral feature disabled }
         "409":
-          description: Not applied (self-referral, unknown code, or already attributed)
+          description: Not applied (self-referral, unknown code, already attributed, or not a new account)
           content:
             application/json:
               schema:

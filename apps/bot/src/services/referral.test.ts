@@ -397,8 +397,25 @@ describe("claimReferralCode", () => {
     h.userUpdateMany.mockResolvedValueOnce({ count: 1 }); // first-touch CAS wins
     expect(await claimReferralCode("inv", "ref")).toEqual({ applied: true });
     expect(h.userUpdateMany).toHaveBeenCalledWith({
-      where: { id: "inv", referralSource: null },
+      where: {
+        id: "inv",
+        referralSource: null,
+        onboardingStep: { not: "completed" },
+        referralCountedAt: null,
+      },
       data: { referralSource: "referral:ref" },
+    });
+  });
+
+  it("refuses an account that already finished onboarding", async () => {
+    // Otherwise a long-verified account claims a code, edits a photo to rerun
+    // verification, and both sides are paid for a "friend" who was never new.
+    h.userFindUnique.mockResolvedValueOnce({ id: "ref" });
+    h.userUpdateMany.mockResolvedValueOnce({ count: 0 });
+    h.userFindUnique.mockResolvedValueOnce({ referralSource: null });
+    expect(await claimReferralCode("inv", "ref")).toEqual({
+      applied: false,
+      reason: "not-eligible",
     });
   });
 
@@ -418,6 +435,7 @@ describe("claimReferralCode", () => {
   it("does not overwrite an existing attribution (first-touch)", async () => {
     h.userFindUnique.mockResolvedValueOnce({ id: "ref" });
     h.userUpdateMany.mockResolvedValueOnce({ count: 0 }); // already attributed
+    h.userFindUnique.mockResolvedValueOnce({ referralSource: "tg:ig_story" });
     expect(await claimReferralCode("inv", "ref")).toEqual({
       applied: false,
       reason: "already-attributed",

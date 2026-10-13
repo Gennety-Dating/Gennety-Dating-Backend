@@ -166,6 +166,20 @@ describe("adoptAccountByPhone", () => {
     expect(data.referralSource).toBe("promo:SUMMER3M");
   });
 
+  it("never hands a referral to an owner who finished onboarding long ago", async () => {
+    // The referral would pay both sides as if the owner were a new friend.
+    resolveRows(
+      { ...owner, onboardingStep: "completed" },
+      makeUser({ referralSource: "referral:someone" }),
+    );
+    update.mockResolvedValue(makeUser({ id: "owner-id" }));
+
+    await adoptAccountByPhone(params);
+
+    const data = update.mock.calls[0]![0].data as Record<string, unknown>;
+    expect(data).not.toHaveProperty("referralSource");
+  });
+
   it("keeps the owner's own attribution and platform when they already have them", async () => {
     const telegramOwner = makeUser({
       id: "owner-id",

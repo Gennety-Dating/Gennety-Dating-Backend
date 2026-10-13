@@ -152,8 +152,14 @@ export async function adoptAccountByPhone(params: {
         // activation instead.
         statusMessageId: null,
         // Keep the fresh touch's attribution when the owner has none, so a
-        // promo/referral deep link isn't lost with the deleted row.
-        ...(owner.referralSource == null && stub.referralSource != null
+        // promo/referral deep link isn't lost with the deleted row. A REFERRAL
+        // is carried only onto an owner still onboarding: a finished account
+        // adopting one would be paid (both sides) as a newly invited friend on
+        // its next verification rerun. A promo gift already refuses finished
+        // accounts where it is granted.
+        ...(owner.referralSource == null &&
+        stub.referralSource != null &&
+        (!stub.referralSource.startsWith("referral:") || owner.onboardingStep !== "completed")
           ? { referralSource: stub.referralSource }
           : {}),
         ...(owner.registrationTrack ? {} : { registrationTrack: "general" }),

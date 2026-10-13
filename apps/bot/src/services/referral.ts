@@ -173,12 +173,31 @@ export async function claimReferralCode(
   });
   if (!referrer) return { applied: false, reason: "unknown-referrer" };
 
-  // First-touch only: never overwrite an existing attribution.
+  // First-touch only: never overwrite an existing attribution. And NEW
+  // accounts only — the Telegram deep link attributes at account creation and
+  // nowhere else, and this is its iOS twin. Without the guard any finished,
+  // verified account with no attribution could claim a friend's code and then
+  // trigger a verification rerun (a photo edit is enough): the settlement runs
+  // on every `verified` outcome, so both sides were paid for a "friend" who
+  // joined long before the invite. Same new-account rule the promo claim keeps.
   const cas = await prisma.user.updateMany({
-    where: { id: inviteeUserId, referralSource: null },
+    where: {
+      id: inviteeUserId,
+      referralSource: null,
+      onboardingStep: { not: "completed" },
+      referralCountedAt: null,
+    },
     data: { referralSource: `referral:${referrerId}` },
   });
-  return cas.count > 0 ? { applied: true } : { applied: false, reason: "already-attributed" };
+  if (cas.count > 0) return { applied: true };
+  const current = await prisma.user.findUnique({
+    where: { id: inviteeUserId },
+    select: { referralSource: true },
+  });
+  return {
+    applied: false,
+    reason: current?.referralSource != null ? "already-attributed" : "not-eligible",
+  };
 }
 
 export interface ReferralRewardResult {
