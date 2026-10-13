@@ -1,5 +1,9 @@
 import { env } from "../config.js";
-import { getVerifiedTransaction, type AppStoreTransaction } from "./appstore.js";
+import {
+  boughtByAnotherUser,
+  getVerifiedTransaction,
+  type AppStoreTransaction,
+} from "./appstore.js";
 import {
   notifyFounderAppStoreUnclaimed,
   notifyFounderPurchase,
@@ -8,6 +12,7 @@ import { APPSTORE_PAYMENT_PREFIX } from "./venue-change-refund.js";
 import {
   markWishlistUnlockRefunded,
   recordWishlistUnlock,
+  reopenWishlistUnlock,
   wishlistPurchasable,
 } from "./wishlist.js";
 
@@ -50,7 +55,10 @@ export async function purchaseWishlistSheet(
   const tx = lookup.transaction;
   if (tx.bundleId !== env.APPSTORE_BUNDLE_ID) return { status: "invalid", reason: "wrong_bundle" };
   if (tx.revocationDate !== null) return { status: "invalid", reason: "revoked" };
-  if (tx.appAccountToken !== null && tx.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+  // The shared check: the client is told to send the DERIVED token
+  // (`appAccountTokenFor`), and comparing against the raw user id alone
+  // refused every purchase made the documented way — after Apple took the money.
+  if (boughtByAnotherUser(tx, userId)) {
     console.error(
       `[wishlist] transaction ${tx.transactionId} was bought by ${tx.appAccountToken} but claimed by ${userId}`,
     );
@@ -89,6 +97,23 @@ export async function purchaseWishlistSheet(
     externalPaymentId,
     amountCents,
   });
+  if (recorded === "taken" || recorded === "foreign") {
+    // A second payment for a sheet another payment already opened (two taps,
+    // two devices), or one transaction reported for a second sheet. It bought
+    // nothing: answered `unclaimed` and put in front of the founder, because
+    // Apple — not us — refunds a consumable.
+    void notifyFounderAppStoreUnclaimed({
+      userId,
+      kind: "wishlist",
+      externalPaymentId,
+      reason: recorded === "taken" ? "already-unlocked" : "transaction-used-elsewhere",
+      matchId,
+      amountCents,
+      currency: tx.currency ?? null,
+      sandbox: tx.environment === "Sandbox",
+    }).catch(() => undefined);
+    return { status: "unclaimed", reason: recorded === "taken" ? "already-unlocked" : "transaction-used-elsewhere" };
+  }
   if (recorded === "created") {
     void notifyFounderPurchase({
       userId,
@@ -114,10 +139,26 @@ async function alreadyRecorded(externalPaymentId: string): Promise<boolean> {
   return row != null;
 }
 
-/** REFUND / REVOKE from Apple: the sheet closes for that viewer. */
+/**
+ * REFUND / REVOKE from Apple: the sheet closes for that viewer — but only once
+ * Apple's re-fetched transaction actually carries a `revocationDate`, as on
+ * every other rail. The webhook is unauthenticated and also routes
+ * `CONSUMPTION_REQUEST` (a refund merely ASKED for) here, so without the check
+ * a forged notification or a declined request closed a paid sheet.
+ */
 export async function refundWishlistAppStoreTransaction(
   tx: AppStoreTransaction,
-): Promise<{ status: "refunded" | "unknown" }> {
+): Promise<{ status: "refunded" | "unknown" | "not_revoked" }> {
+  if (tx.revocationDate === null) return { status: "not_revoked" };
   const done = await markWishlistUnlockRefunded(`${APPSTORE_PAYMENT_PREFIX}${tx.transactionId}`);
   return { status: done ? "refunded" : "unknown" };
+}
+
+/** `REFUND_REVERSED`: Apple took the refund back, so the sheet opens again. */
+export async function reverseWishlistAppStoreRefund(
+  tx: AppStoreTransaction,
+): Promise<{ status: "reopened" | "unknown" | "still_revoked" }> {
+  if (tx.revocationDate !== null) return { status: "still_revoked" };
+  const done = await reopenWishlistUnlock(`${APPSTORE_PAYMENT_PREFIX}${tx.transactionId}`);
+  return { status: done ? "reopened" : "unknown" };
 }

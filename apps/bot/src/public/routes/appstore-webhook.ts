@@ -24,6 +24,7 @@ import { isPrimeTimeProduct } from "../../services/prime-time.js";
 import {
   isWishlistProduct,
   refundWishlistAppStoreTransaction,
+  reverseWishlistAppStoreRefund,
 } from "../../services/appstore-wishlist.js";
 import {
   handleAppStorePremiumNotification,
@@ -213,6 +214,11 @@ async function reverseRefund(transaction: AppStoreTransaction): Promise<string> 
   }
   if (isPrimeTimeProduct(transaction.productId)) {
     return (await reversePrimeTimeAppStoreRefund(transaction)).status;
+  }
+  // Without this branch a wishlist reversal fell through to the ticket wallet,
+  // found nothing there, and the sheet the buyer paid for stayed closed.
+  if (isWishlistProduct(transaction.productId)) {
+    return (await reverseWishlistAppStoreRefund(transaction)).status;
   }
   return (await reverseAppStoreTicketRefund(transaction)).status;
 }

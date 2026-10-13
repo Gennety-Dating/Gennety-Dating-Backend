@@ -25,6 +25,7 @@ import {
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { isPremiumActive } from "./premium.js";
+import { isUniqueViolation } from "./ticket-wallet.js";
 import { createProfilePhotoSignedUrl, createWishlistImageSignedUrls } from "./storage.js";
 import { copyWishlistImage } from "./wishlist-lookup.js";
 
@@ -648,12 +649,18 @@ export async function recordWishlistUnlock(input: {
   externalPaymentId: string;
   amountStars?: number | null;
   amountCents?: number | null;
-}): Promise<"created" | "duplicate"> {
+}): Promise<"created" | "duplicate" | "taken" | "foreign"> {
   const seen = await prisma.wishlistUnlock.findUnique({
     where: { externalPaymentId: input.externalPaymentId },
-    select: { id: true },
+    select: { matchId: true, userId: true },
   });
-  if (seen) return "duplicate";
+  if (seen) {
+    // The same payment already opened a sheet — but only THIS viewer's sheet of
+    // THIS match counts as a re-report. One payment cannot open a second sheet.
+    return seen.matchId === input.matchId && seen.userId === input.viewerId
+      ? "duplicate"
+      : "foreign";
+  }
   await prisma.wishlistUnlock.deleteMany({
     where: { matchId: input.matchId, userId: input.viewerId, refundedAt: { not: null } },
   });
@@ -670,10 +677,35 @@ export async function recordWishlistUnlock(input: {
       },
     });
     return "created";
-  } catch {
-    // The pair unique: a parallel request (or a Premium row) got there first.
-    return "duplicate";
+  } catch (error) {
+    // Only a unique conflict is an answer; anything else (a dropped connection,
+    // a timeout) must surface, or a charge would be answered "unlocked" with no
+    // row behind it.
+    if (!isUniqueViolation(error)) throw error;
+    // The same payment raced itself (a redelivered update, a double report):
+    // that one recorded it, so this is a duplicate.
+    const raced = await prisma.wishlistUnlock.findUnique({
+      where: { externalPaymentId: input.externalPaymentId },
+      select: { id: true },
+    });
+    if (raced) return "duplicate";
+    // A DIFFERENT payment (or a Premium row) holds the pair. This charge bought
+    // nothing and must go back — it is not a duplicate of anything.
+    return "taken";
   }
+}
+
+/**
+ * Apple reversed the refund of an App Store unlock (`REFUND_REVERSED`): the
+ * sheet opens again. Only a row this refund closed — the payment's own row —
+ * is reopened, so a reversal cannot open a sheet that was never bought.
+ */
+export async function reopenWishlistUnlock(externalPaymentId: string): Promise<boolean> {
+  const { count } = await prisma.wishlistUnlock.updateMany({
+    where: { externalPaymentId, refundedAt: { not: null } },
+    data: { refundedAt: null },
+  });
+  return count > 0;
 }
 
 /** An App Store REFUND / revoke for a consumable we recorded. */

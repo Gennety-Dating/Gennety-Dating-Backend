@@ -30,6 +30,7 @@ import {
   type WishlistItemView,
 } from "../../services/wishlist.js";
 import { notifyFounderPurchase } from "../../services/founder-notify.js";
+import { isAlreadyRefundedError } from "../../services/stars-refund-error.js";
 
 export const MORNING_AFTER_CALLBACK = /^ma:(g|p):([0-9a-f-]{36})$/i;
 export const WISHLIST_OPEN_CALLBACK = /^wl:open:([0-9a-f-]{36})$/i;
@@ -224,17 +225,32 @@ export async function settleWishlistStarsPayment(
   const viewer = await viewerByTelegram(telegramId);
   if (!viewer) return { ok: false, reason: "user-not-found" };
 
-  const purchasable = await wishlistPurchasable(wish.matchId, viewer.id);
-  if (!purchasable.ok) {
+  // A charge that ALREADY opened this sheet is a redelivered update (the
+  // process died before Telegram's offset advanced). It must be answered from
+  // its own row: the purchasable check below would now say `already-unlocked`
+  // — opened by this very charge — and refund the Stars of a sheet delivered.
+  const own = await prisma.wishlistUnlock.findUnique({
+    where: { externalPaymentId: chargeId },
+    select: { matchId: true, userId: true },
+  });
+  if (own && own.matchId === wish.matchId && own.userId === viewer.id) {
+    await sendSheet(api, wish.matchId, viewer);
+    return { ok: true };
+  }
+
+  const giveBack = async (reason: string) => {
     const refunded = await api
       .refundStarPayment(telegramId, chargeId)
       .then(() => true)
-      .catch(() => false);
+      .catch((error: unknown) => isAlreadyRefundedError(error));
     if (refunded) {
       await api.sendMessage(telegramId, afterDateT(viewer.language, "wishlistUnavailable")).catch(() => undefined);
     }
-    return { ok: false, reason: `wishlist:${purchasable.error}`, compensated: refunded };
-  }
+    return { ok: false as const, reason, compensated: refunded };
+  };
+
+  const purchasable = await wishlistPurchasable(wish.matchId, viewer.id);
+  if (!purchasable.ok) return giveBack(`wishlist:${purchasable.error}`);
 
   const recorded = await recordWishlistUnlock({
     matchId: wish.matchId,
@@ -244,6 +260,11 @@ export async function settleWishlistStarsPayment(
     externalPaymentId: chargeId,
     amountStars,
   });
+  // A second charge for a sheet a parallel charge just opened (two invoice
+  // links paid at once): it bought nothing, so its Stars go back.
+  if (recorded === "taken" || recorded === "foreign") {
+    return giveBack("wishlist:already-unlocked");
+  }
   if (recorded === "created") {
     void notifyFounderPurchase({
       userId: viewer.id,
@@ -255,9 +276,17 @@ export async function settleWishlistStarsPayment(
       externalPaymentId: chargeId,
     }).catch(() => undefined);
   }
-  const offer = await mutualOfferFor(wish.matchId, viewer.id, viewer.language);
+  await sendSheet(api, wish.matchId, viewer);
+  return { ok: true };
+}
+
+async function sendSheet(
+  api: Api<RawApi>,
+  matchId: string,
+  viewer: { id: string; telegramId: bigint; language: Language },
+): Promise<void> {
+  const offer = await mutualOfferFor(matchId, viewer.id, viewer.language);
   if (offer.ok) {
     await sendWishlistSheetDm(api, viewer.telegramId, offer.offer, viewer.language).catch(() => undefined);
   }
-  return { ok: true };
 }
