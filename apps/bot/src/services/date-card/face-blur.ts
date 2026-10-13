@@ -60,7 +60,8 @@ export async function blurFacesInPhoto(buffer: Buffer): Promise<Buffer | null> {
       }
     }
 
-    return canvas.toBuffer("image/png");
+    // Async encode — keeps the full-resolution PNG off the event loop.
+    return await canvas.encode("png");
   } catch {
     return null; // any drawing failure → caller aborts the share send
   }

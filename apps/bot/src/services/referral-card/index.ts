@@ -460,7 +460,8 @@ export async function referralCardImage(
     ctx.putImageData(pixels, 0, 0);
 
     const image: ReferralCardImage = {
-      jpeg: canvas.toBuffer("image/jpeg", CARD_JPEG_QUALITY),
+      // Async encode: this runs on the public request path on a cache miss.
+      jpeg: await canvas.encode("jpeg", CARD_JPEG_QUALITY),
       width,
       height,
       version,

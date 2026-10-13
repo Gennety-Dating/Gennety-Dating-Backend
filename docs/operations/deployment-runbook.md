@@ -945,7 +945,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `GET /v1/venue-change/photo`, so `PLACES_API_KEY` is needed (already required
   for the venue picker). The lapse/express-revert sweep runs on the existing
   date-lifecycle `setInterval`. **Since 2026-07-26 there is also one new hourly
-  cron** — `VENUE_CHANGE_REFUND_CRON_SCHEDULE` (default `0 * * * *`, registered
+  cron** — `VENUE_CHANGE_REFUND_CRON_SCHEDULE` (default `37 * * * *` since 2026-10-13, was `0 * * * *`; registered
   only when the flag is on) — retrying failed Stars refunds and reversing
   purchases abandoned mid-settle, the twin of `REMATCH_REFUND_CRON_SCHEDULE`.
   **Requires `db:push` of the new additive `venue_change_purchases` table
