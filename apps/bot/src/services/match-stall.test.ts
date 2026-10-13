@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => {
-  const prisma: Record<string, unknown> = {
+  const prisma = {
+    // The 48h verdict and its claim run in one row-locked transaction; the
+    // mock hands the callback the same client.
+    $transaction: vi.fn(),
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
     match: { findUnique: vi.fn(), updateMany: vi.fn() },
     profile: { update: vi.fn() },
   };
-  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
   return { prisma };
 });
 
@@ -526,6 +530,24 @@ describe("cancelStalledMatch", () => {
     expect(result.cancelled).toBe(false);
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(boostAcceptedSidePriority).not.toHaveBeenCalled();
+  });
+
+  it("judges and claims under one row lock, from the row read inside it", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({ silentIgnoreCount: 1 });
+    const lock = (prisma as unknown as { $queryRawUnsafe: ReturnType<typeof vi.fn> }).$queryRawUnsafe;
+
+    await cancelStalledMatch(mockApi(), "match-1", NOW);
+
+    // The lock precedes the read that decides who ghosted, and the claim that
+    // acts on it — so an answer cannot land between the verdict and the cancel.
+    expect(lock).toHaveBeenCalledWith(expect.stringContaining("FOR UPDATE"), "match-1");
+    const lockOrder = lock.mock.invocationCallOrder[0]!;
+    const readOrder = (prisma.match.findUnique as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const claimOrder = (prisma.match.updateMany as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(readOrder);
+    expect(readOrder).toBeLessThan(claimOrder);
   });
 
   it("ignores a match that is no longer in a planning phase", async () => {

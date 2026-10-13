@@ -1592,7 +1592,8 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       ? "provider_unavailable"
       : `no_candidates:${relaxation.key}:${relaxation.sides}`;
     const current = await prisma.match.findUnique({ where: { id: matchId }, select: { venueSelectionAttempts: true } });
-    const attempts = (current?.venueSelectionAttempts ?? 0) + 1;
+    const attemptsBefore = current?.venueSelectionAttempts ?? 0;
+    const attempts = attemptsBefore + 1;
 
     const terminal = failure.startsWith("no_candidates") || attempts >= VENUE_SELECTION_MAX_ATTEMPTS;
 
@@ -1620,8 +1621,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     // Guarded on the stage: a run that outlived it (the pair went back to the
     // calendar, or the match was cancelled, while the search ran) must not
     // plant retry state on a row that has moved on, nor tell anyone about it.
+    //
+    // Also guarded on the count it incremented, as `recordSelectionCrash` is:
+    // two failing runs that overlap must count as two attempts and notify once,
+    // not both write the same `attempts` and both tell the pair.
     const recorded = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating_venue" },
+      where: { id: matchId, status: "negotiating_venue", venueSelectionAttempts: attemptsBefore },
       data: {
         venueSelectionAttempts: attempts,
         venueSelectionError: failure,

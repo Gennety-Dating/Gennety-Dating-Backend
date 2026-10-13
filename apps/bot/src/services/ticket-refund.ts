@@ -252,6 +252,16 @@ export async function planMatchTicketRefunds(
 }
 
 /**
+ * The exactly-once key of one slot's cancellation refund. Shared by the live
+ * rail below, the in-transaction variant and the hourly recovery sweep
+ * (`dead-match-refund-sweep.ts`), so whichever of them gets there first is the
+ * only one that credits.
+ */
+export function matchRefundKey(matchId: string, userId: string, slot: TicketSlot): string {
+  return `refund:match:${matchId}:${userId}:${slot}`;
+}
+
+/**
  * Execute a plan: one wallet ticket per paid slot, exactly once.
  *
  * Idempotency is the synthetic unique `TicketLedger.externalPaymentId`
@@ -287,7 +297,7 @@ export async function applyTicketRefunds(
           count: 1,
           reason: "refund",
           matchId: credit.matchId,
-          externalPaymentId: slotRefundKey(credit.matchId, credit.userId, slot),
+          externalPaymentId: matchRefundKey(credit.matchId, credit.userId, slot),
         });
         refunded += 1;
       } catch (err) {
@@ -319,11 +329,6 @@ export async function applyTicketRefunds(
 }
 
 type RefundWriteDb = Pick<typeof prisma, "ticketLedger" | "user">;
-
-/** The exactly-once key of one slot's cancellation refund. */
-function slotRefundKey(matchId: string, userId: string, slot: TicketSlot): string {
-  return `refund:match:${matchId}:${userId}:${slot}`;
-}
 
 /**
  * Execute a plan through the CANCELLING transaction, so the ticket goes back in
@@ -368,7 +373,7 @@ export async function applyTicketRefundsInTx(
             delta: 1,
             reason: "refund",
             matchId: credit.matchId,
-            externalPaymentId: slotRefundKey(credit.matchId, credit.userId, slot),
+            externalPaymentId: matchRefundKey(credit.matchId, credit.userId, slot),
           },
         ],
         skipDuplicates: true,

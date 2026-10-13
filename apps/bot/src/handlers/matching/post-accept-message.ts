@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardMarkup, ParseMode } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type MatchStatus } from "@gennety/db";
 import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
 
@@ -71,6 +71,15 @@ export async function sendOrEditPostAcceptMessage(args: {
    * chat rather than a quiet edit the user never sees.
    */
   forceResend?: boolean;
+  /**
+   * The phase this card belongs to. When given, the new message id is recorded
+   * only while the row is still in it, and a card the row has meanwhile moved
+   * past is deleted again. The Calendar card is sent seconds after the read
+   * that decided to send it; a partner's save that locks the time in between
+   * would otherwise get a fresh "open the calendar" push after the venue
+   * prompt, and a dead id written back onto a `negotiating_venue` row.
+   */
+  onlyWhileStatus?: MatchStatus;
 }): Promise<number | null> {
   const {
     api,
@@ -82,6 +91,7 @@ export async function sendOrEditPostAcceptMessage(args: {
     text,
     options = {},
     forceResend = false,
+    onlyWhileStatus,
   } = args;
   // Reachability is a platform question, never `telegramId > 0`: a Telegram
   // Login account carries a real positive id and no bot chat. `platform` is
@@ -99,11 +109,7 @@ export async function sendOrEditPostAcceptMessage(args: {
       await api.deleteMessage(chatId, previousMessageId).catch(() => {});
     }
     const sent = await api.sendMessage(chatId, text, options);
-    await prisma.match.update({
-      where: { id: matchId },
-      data: postAcceptMessageIdUpdate(side, sent.message_id),
-    });
-    return sent.message_id;
+    return recordSentCard(api, chatId, matchId, side, sent.message_id, onlyWhileStatus);
   }
 
   if (previousMessageId !== null) {
@@ -117,9 +123,31 @@ export async function sendOrEditPostAcceptMessage(args: {
   }
 
   const sent = await api.sendMessage(chatId, text, options);
-  await prisma.match.update({
-    where: { id: matchId },
-    data: postAcceptMessageIdUpdate(side, sent.message_id),
+  return recordSentCard(api, chatId, matchId, side, sent.message_id, onlyWhileStatus);
+}
+
+/** Store the new card's id — conditionally on the phase, when one is given. */
+async function recordSentCard(
+  api: Api<RawApi>,
+  chatId: number,
+  matchId: string,
+  side: PostAcceptSide,
+  messageId: number,
+  onlyWhileStatus: MatchStatus | undefined,
+): Promise<number | null> {
+  if (!onlyWhileStatus) {
+    await prisma.match.update({
+      where: { id: matchId },
+      data: postAcceptMessageIdUpdate(side, messageId),
+    });
+    return messageId;
+  }
+  const written = await prisma.match.updateMany({
+    where: { id: matchId, status: onlyWhileStatus },
+    data: postAcceptMessageIdUpdate(side, messageId),
   });
-  return sent.message_id;
+  if (written.count > 0) return messageId;
+  // The row left this phase while the card was in flight: it is already stale.
+  await api.deleteMessage(chatId, messageId).catch(() => {});
+  return null;
 }

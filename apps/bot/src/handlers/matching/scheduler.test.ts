@@ -7,9 +7,13 @@ import { DEFAULT_SESSION, t, setVariantRng } from "@gennety/shared";
 setVariantRng(() => 0);
 afterAll(() => setVariantRng(null));
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
+vi.mock("@gennety/db", () => {
+  const prisma = {
     $executeRaw: vi.fn().mockResolvedValue(0),
+    // The calendar save runs as one row-locked transaction; the mock hands the
+    // callback the same client, so assertions read `prisma.match.*` as before.
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
+    $transaction: vi.fn(),
     user: {
       findUnique: vi.fn(),
     },
@@ -18,8 +22,10 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
-  },
-}));
+  };
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+  return { prisma };
+});
 
 vi.mock("../../config.js", () => ({
   env: {
@@ -44,6 +50,8 @@ vi.mock("../../config.js", () => ({
 
 vi.mock("./venue-negotiation.js", () => ({
   startVenueNegotiation: vi.fn().mockResolvedValue(undefined),
+  claimVenueNegotiation: vi.fn().mockResolvedValue(true),
+  announceVenueNegotiation: vi.fn().mockResolvedValue(undefined),
 }));
 
 // The actor's "saved, now we wait on them" receipt plays a ~2.5s shimmer and is
@@ -70,7 +78,7 @@ import {
   CALENDAR_TIME_SLOTS,
   CALENDAR_TIME_ZONE,
 } from "./scheduler.js";
-import { startVenueNegotiation } from "./venue-negotiation.js";
+import { announceVenueNegotiation, claimVenueNegotiation } from "./venue-negotiation.js";
 
 /**
  * Часы прибиты (фейкается только `Date`, таймеры настоящие).
@@ -97,7 +105,9 @@ import { wallToUtc } from "../../services/profiler-schedule.js";
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn; updateMany: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
-const mStartVenue = startVenueNegotiation as unknown as MockFn;
+/** The post-claim announcement — runs exactly when a time was locked. */
+const mStartVenue = announceVenueNegotiation as unknown as MockFn;
+const mClaimVenue = claimVenueNegotiation as unknown as MockFn;
 const mPeerWaitShimmer = startPeerWaitShimmer as unknown as MockFn;
 
 function createApi() {
@@ -329,12 +339,12 @@ describe("scheduler: startScheduling", () => {
     expect(updateArg.data.availableTimesA).toEqual([]);
     expect(updateArg.data.availableTimesB).toEqual([]);
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdA: 500 },
     });
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdB: 501 },
     });
     // Per-user URL carries `&lang=` so the Mini App can render in their tongue.
@@ -386,12 +396,12 @@ describe("scheduler: startScheduling", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
     // Re-pointed at the fresh cards, so the venue step's teardown deletes the
     // message the user can actually see rather than one already gone.
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdA: 500 },
     });
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdB: 501 },
     });
   });
@@ -474,8 +484,8 @@ describe("scheduler: startScheduling", () => {
     await expect(startScheduling(api, "match-1", { afterTicketGate: true })).resolves.toBeUndefined();
 
     expect(api.sendMessage).toHaveBeenCalledWith(1001, expect.any(String), expect.anything());
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdA: 700 },
     });
   });
@@ -881,10 +891,33 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
 
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0]![0]).toBe(1002);
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: "negotiating" },
       data: { calendarMessageIdB: 500 },
     });
+  });
+
+  it("withdraws a calendar card that lands after the partner's save locked the time", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [a, b],
+      availableTimesA: [],
+      availableTimesB: [],
+      calendarMessageIdB: 72,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+    // The card id may only be recorded while the row is still `negotiating`.
+    mMatch.updateMany.mockReset().mockResolvedValue({ count: 0 });
+
+    const api = createApi();
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [a.toISOString()]);
+
+    expect(res.ok).toBe(true);
+    expect(api.sendMessage.mock.calls[0]![0]).toBe(1002);
+    // The fresh card (id 500) is deleted again rather than left as a dead
+    // "open the calendar" prompt under the venue step.
+    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 500);
   });
 
   it("does NOT re-DM the peer on a redundant re-save with the same set (idempotency)", async () => {
@@ -946,7 +979,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       a.toISOString(), // duplicate
     ]);
 
-    const written = (mMatch.updateMany.mock.calls[0]![0] as { data: { availableTimesA: Date[] } })
+    const written = (mMatch.update.mock.calls[0]![0] as { data: { availableTimesA: Date[] } })
       .data.availableTimesA;
     expect(written.length).toBe(2);
     expect(written[0]!.getTime()).toBe(b.getTime()); // earliest first
@@ -974,19 +1007,143 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
   });
 
   it("rejects a save when cancellation wins after the calendar read", async () => {
-    mockMatchInState({});
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mockMatchInState({ proposedTimes: [slot] });
+    // The snapshot said `negotiating`; the row read under the lock says the
+    // match was cancelled in between.
+    mMatch.findUnique
+      .mockResolvedValueOnce({
+        id: "match-1",
+        userAId: "uid-A",
+        userBId: "uid-B",
+        status: "negotiating",
+        proposedTimes: [slot],
+        availableTimesA: [],
+        availableTimesB: [],
+        calendarMessageIdA: null,
+        calendarMessageIdB: null,
+        userA: { telegramId: 1001n, language: "en" },
+        userB: { telegramId: 1002n, language: "en" },
+      })
+      .mockResolvedValueOnce({
+        status: "cancelled",
+        agreedTime: null,
+        availableTimesA: [],
+        availableTimesB: [slot],
+        calendarMessageIdA: null,
+        calendarMessageIdB: null,
+      });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
-    mMatch.updateMany.mockReset().mockResolvedValueOnce({ count: 0 });
     const api = createApi();
 
-    const result = await processCalendarSlotsUpdate(api, 1001n, "match-1", []);
+    const result = await processCalendarSlotsUpdate(api, 1001n, "match-1", [slot.toISOString()]);
 
     expect(result).toEqual({ ok: false, reason: "wrong-state" });
-    expect(mMatch.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "match-1", status: "negotiating" },
-    }));
+    // Nothing written onto the cancelled row, nothing locked, nobody told.
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mClaimVenue).not.toHaveBeenCalled();
     expect(mStartVenue).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  describe("simultaneous saves (row-locked)", () => {
+    const x = new Date("2026-05-01T19:00:00.000Z");
+    const y = new Date("2026-05-02T19:00:00.000Z");
+
+    function snapshotThenLocked(locked: Record<string, unknown>, snapshotB: Date[]) {
+      mMatch.findUnique
+        .mockResolvedValueOnce({
+          id: "match-1",
+          userAId: "uid-A",
+          userBId: "uid-B",
+          status: "negotiating",
+          proposedTimes: [x, y],
+          availableTimesA: [],
+          availableTimesB: snapshotB,
+          calendarMessageIdA: 71,
+          calendarMessageIdB: 72,
+          userA: { telegramId: 1001n, language: "en" },
+          userB: { telegramId: 1002n, language: "en" },
+        })
+        .mockResolvedValueOnce({
+          agreedTime: null,
+          availableTimesA: [],
+          calendarMessageIdA: 71,
+          calendarMessageIdB: 72,
+          ...locked,
+        });
+      mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+    }
+
+    beforeEach(() => {
+      mClaimVenue.mockReset().mockResolvedValue(true);
+    });
+
+    it("answers with the agreed time when the partner's save locked one this request also picked", async () => {
+      snapshotThenLocked({ status: "negotiating_venue", agreedTime: x, availableTimesB: [x] }, []);
+
+      const api = createApi();
+      const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [x.toISOString()]);
+
+      // Not a 409: the date the user wanted was agreed a moment ago.
+      expect(res).toMatchObject({ ok: true, agreedTime: x.toISOString(), bothPicked: true });
+      // The winner already wrote, claimed and announced — this request does none of it.
+      expect(mMatch.update).not.toHaveBeenCalled();
+      expect(mClaimVenue).not.toHaveBeenCalled();
+      expect(mStartVenue).not.toHaveBeenCalled();
+      expect(api.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("stays a stale action when the locked time is not one this request picked", async () => {
+      snapshotThenLocked({ status: "negotiating_venue", agreedTime: y, availableTimesB: [y] }, []);
+
+      const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [x.toISOString()]);
+
+      expect(res).toEqual({ ok: false, reason: "wrong-state" });
+    });
+
+    it("never locks a time the partner withdrew after the snapshot", async () => {
+      // Snapshot: partner offered {x, y}. Under the lock: they have since
+      // narrowed it to {y}. Our pick {x} must not lock x.
+      snapshotThenLocked({ status: "negotiating", availableTimesB: [y] }, [x, y]);
+
+      const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [x.toISOString()]);
+
+      expect(res).toMatchObject({ ok: true, agreedTime: null, bothPicked: true });
+      expect(mClaimVenue).not.toHaveBeenCalled();
+      expect(mStartVenue).not.toHaveBeenCalled();
+    });
+
+    it("locks inside the same transaction as the intersection, and announces only after", async () => {
+      snapshotThenLocked({ status: "negotiating", availableTimesB: [x] }, []);
+      const prismaMock = prisma as unknown as { $queryRawUnsafe: MockFn };
+
+      const api = createApi();
+      const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [x.toISOString()]);
+
+      expect(res).toMatchObject({ ok: true, agreedTime: x.toISOString() });
+      expect(prismaMock.$queryRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining("FOR UPDATE"),
+        "match-1",
+      );
+      expect(mClaimVenue).toHaveBeenCalledWith(expect.anything(), "match-1", x);
+      expect(mStartVenue).toHaveBeenCalledOnce();
+      // Card ids come from the locked read.
+      expect(api.deleteMessage).toHaveBeenCalledWith(1001, 71);
+      expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
+    });
+
+    it("a lost claim inside the transaction is a stale action with no announcement", async () => {
+      snapshotThenLocked({ status: "negotiating", availableTimesB: [x] }, []);
+      mClaimVenue.mockResolvedValueOnce(false);
+
+      const api = createApi();
+      const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [x.toISOString()]);
+
+      expect(res).toEqual({ ok: false, reason: "wrong-state" });
+      expect(mStartVenue).not.toHaveBeenCalled();
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -1081,7 +1238,8 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
 
   it("parses the new `pickedIsos` array shape", async () => {
     const slot = new Date("2026-05-01T19:00:00.000Z");
-    mMatch.findUnique.mockResolvedValueOnce({
+    // Persistent, not once: the save reads the row again under its lock.
+    mMatch.findUnique.mockResolvedValue({
       id: "match-1",
       userAId: "uid-A",
       userBId: "uid-B",
@@ -1105,7 +1263,7 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
 
     await handleCalendarWebAppData(ctx);
 
-    expect(mMatch.updateMany).toHaveBeenCalledWith(
+    expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ availableTimesA: expect.any(Array) }),
       }),
@@ -1114,7 +1272,8 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
 
   it("still accepts the legacy single-`pickedIso` shape from older bundles", async () => {
     const slot = new Date("2026-05-01T19:00:00.000Z");
-    mMatch.findUnique.mockResolvedValueOnce({
+    // Persistent, not once: the save reads the row again under its lock.
+    mMatch.findUnique.mockResolvedValue({
       id: "match-1",
       userAId: "uid-A",
       userBId: "uid-B",
@@ -1134,7 +1293,7 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
     });
 
     await handleCalendarWebAppData(ctx);
-    expect(mMatch.updateMany).toHaveBeenCalled();
+    expect(mMatch.update).toHaveBeenCalled();
   });
 
   it("ignores malformed JSON payloads", async () => {
@@ -1171,6 +1330,8 @@ describe("scheduler: Prime Time band", () => {
   beforeEach(() => {
     mMatch.findUnique.mockReset();
     mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    // The save itself is a plain `update` inside the row-locked transaction.
+    mMatch.update.mockReset().mockResolvedValue({});
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
@@ -1215,7 +1376,7 @@ describe("scheduler: Prime Time band", () => {
     ]);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("prime-time-locked");
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 
   it("still accepts the rest of the day", async () => {
@@ -1224,7 +1385,7 @@ describe("scheduler: Prime Time band", () => {
       ORDINARY.toISOString(),
     ]);
     expect(res.ok).toBe(true);
-    expect(mMatch.updateMany).toHaveBeenCalled();
+    expect(mMatch.update).toHaveBeenCalled();
   });
 
   it("refuses a MIXED submission — one locked slot poisons the whole save", async () => {
@@ -1236,7 +1397,7 @@ describe("scheduler: Prime Time band", () => {
       PRIME.toISOString(),
     ]);
     expect(res.ok).toBe(false);
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 
   it("opens the band for the PAIR when the PARTNER subscribes, not just the subscriber", async () => {
@@ -1251,19 +1412,19 @@ describe("scheduler: Prime Time band", () => {
   it("stamps the unlock on the first premium mark, so a lapse cannot re-lock it", async () => {
     mockMatch({ userA: { premiumUntil: future } });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
-    const data = mMatch.updateMany.mock.calls[0]![0].data;
+    const data = mMatch.update.mock.calls[0]![0].data;
     expect(data.primeTimeUnlockedAt).toBeInstanceOf(Date);
   });
 
   it("does NOT stamp on an ordinary mark, or when already unlocked", async () => {
     mockMatch({ userA: { premiumUntil: future } });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [ORDINARY.toISOString()]);
-    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
 
-    mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    mMatch.update.mockReset().mockResolvedValue({});
     mockMatch({ userA: { premiumUntil: future }, primeTimeUnlockedAt: new Date() });
     await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
-    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
   });
 
   it("does NOT stamp when the pair is merely grandfathered — a condition is not a purchase", async () => {
@@ -1272,7 +1433,7 @@ describe("scheduler: Prime Time band", () => {
       PRIME.toISOString(),
     ]);
     expect(res.ok).toBe(true);
-    expect(mMatch.updateMany.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
   });
 
   it("honours a paid pass with no subscription anywhere", async () => {

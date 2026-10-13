@@ -1030,6 +1030,91 @@ export async function notifyFounderDeletionSubscriptionLive(input: {
 }
 
 /**
+ * The hourly dead-match sweep found a cancellation whose refund never ran — the
+ * process died between the cancel commit and the refund — and has now paid it.
+ *
+ * Sent after the fact, not as a request: the refund is already done, exactly
+ * once (the same keys as the live rail). The founder sees it because a
+ * recovery means a crash landed in that window, which is worth knowing about
+ * even when nobody was left out of pocket.
+ */
+export async function notifyFounderDeadMatchRefundRecovered(input: {
+  matchId: string;
+  tickets: readonly { userId: string; refunded: number }[];
+  primeTimePasses: number;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const lines = [
+    `🔁 Восстановлен потерянный возврат после отмены свидания.`,
+    `Match: ${input.matchId}`,
+    ...input.tickets.map(
+      (row) =>
+        `• билеты в кошелёк: ${row.refunded} ${plural(row.refunded, "билет", "билета", "билетов")} → ${row.userId}`,
+    ),
+  ];
+  if (input.primeTimePasses > 0) {
+    lines.push(`• вечерний пропуск (Prime Time): возвращено ${input.primeTimePasses}`);
+  }
+  lines.push("Процесс упал между отменой и возвратом; повтор уже выполнен, делать ничего не нужно.");
+  try {
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} dead-match refund recovery notify failed`, {
+      matchId: input.matchId,
+      err,
+    });
+  }
+}
+
+/**
+ * A paid Prime Time pass whose match row no longer exists — the match was
+ * erased with a deleted account — and was never refunded.
+ *
+ * Not refunded automatically, by the founder's decision (2026-10-13): with the
+ * match row gone nothing says whether the date happened before the account was
+ * deleted (the pass was used, nothing is owed) or was cancelled by the deletion
+ * (the pass must come back). The founder decides, by the charge id.
+ *
+ * Returns whether the message was delivered, so the sweep marks the row as
+ * reported only once it has actually been seen.
+ */
+export async function notifyFounderOrphanedPassReview(input: {
+  purchaseId: string;
+  matchId: string;
+  userId: string | null;
+  amountStars: number;
+  externalPaymentId: string;
+  /** Bought through StoreKit — Apple refunds it, on the buyer's request. */
+  appStore: boolean;
+  createdAt: Date;
+}): Promise<boolean> {
+  const api = getFounderApi();
+  if (!api) return false;
+  const text = [
+    `🧾 Нужно решение: оплаченный вечерний пропуск, а свидания больше нет в базе (аккаунт удалён).`,
+    `Если свидание отменилось удалением — пропуск нужно вернуть; если оно уже прошло — возвращать нечего.`,
+    `Purchase: ${input.purchaseId}`,
+    `Match: ${input.matchId}`,
+    `Плательщик: ${input.userId ?? "аккаунт удалён"}`,
+    `Куплен: ${input.createdAt.toISOString().slice(0, 10)}`,
+    input.appStore
+      ? `Покупка через App Store — возврат делает Apple по запросу покупателя.`
+      : `Сумма: ${input.amountStars} ⭐ · charge id: ${input.externalPaymentId}`,
+  ].join("\n");
+  try {
+    await api.sendMessage(founderChatId(), text);
+    return true;
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} orphaned pass review notify failed`, {
+      purchaseId: input.purchaseId,
+      err,
+    });
+    return false;
+  }
+}
+
+/**
  * Restoring a returning person's safety history failed after their identity
  * was already attached (A13-H14).
  *

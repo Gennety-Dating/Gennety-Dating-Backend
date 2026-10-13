@@ -17,7 +17,12 @@ import {
   notifyFounderPurchase,
   notifyFounderPurchaseRefunded,
 } from "../../services/founder-notify.js";
-import { spendTickets, grantTickets, isUniqueViolation } from "../../services/ticket-wallet.js";
+import {
+  spendTickets,
+  grantTickets,
+  isUniqueViolation,
+  spendRefundKey,
+} from "../../services/ticket-wallet.js";
 import { netWalletSpend } from "../../services/ticket-refund.js";
 import { isAlreadyRefundedError } from "../../services/stars-refund-error.js";
 import {
@@ -585,8 +590,17 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
   // already cancelled — to the blocker and to the person they had just blocked.
   // (`updateMany` also means a row an account deletion took is a no-op here,
   // not a thrown P2025.)
+  // It also arms only a gate nobody has touched yet: in the same gap a client
+  // polling `/v1` can already pay (`partial`/`completed`), and an unconditional
+  // write reset such a gate to `pending` with a fresh deadline.
   const armed = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating" },
+    where: {
+      id: matchId,
+      status: "negotiating",
+      ticketStatus: "pending",
+      ticketPaidA: null,
+      ticketPaidB: null,
+    },
     data: {
       ticketStatus: "pending",
       ticketPriceCents: env.TICKET_PRICE_CENTS,
@@ -597,6 +611,9 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   let match = await loadTicketMatch(matchId);
   if (!match) return;
+  // A gate already paid into still gets its cards (they re-derive the live
+  // state when opened); a match that is no longer planning gets none.
+  if (match.status !== "negotiating") return;
 
   // A grandfathered Premium ticket cover settles that side's own slot (§3.5b /
   // §3.8 — Premium alone covers no ticket since 2026-10-08). Settled BEFORE
@@ -1437,11 +1454,6 @@ export async function useTicketFromBalance(
     await returnSpent(refundCount);
   }
   return result;
-}
-
-/** The `externalPaymentId` of the refund that hands back one wallet spend. */
-function spendRefundKey(spendLedgerId: string): string {
-  return `spend-refund:${spendLedgerId}`;
 }
 
 /**

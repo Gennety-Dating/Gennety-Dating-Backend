@@ -438,6 +438,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
         userAId: true,
         userBId: true,
         status: true,
+        agreedTime: true,
       },
     });
     if (!match) {
@@ -474,12 +475,19 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    await prisma.match.update({
-      where: { id: matchId },
+    // Guarded on the round read above: the origin check awaits the database,
+    // and a stage that was scheduled, cancelled or sent back to the calendar
+    // in between must not get this pin planted for its next round.
+    const saved = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating_venue", agreedTime: match.agreedTime },
       data: isA
         ? { vibeLatA: lat, vibeLngA: lng, vibeAddressA: address }
         : { vibeLatB: lat, vibeLngB: lng, vibeAddressB: address },
     });
+    if (saved.count === 0) {
+      res.status(400).json({ error: "wrong-state" });
+      return;
+    }
 
     recordMiniAppAction(
       auth.user.id,

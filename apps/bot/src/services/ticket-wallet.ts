@@ -242,10 +242,8 @@ export async function spendTickets(args: {
   ok: boolean;
   balance: number;
   /**
-   * The `spend_match` ledger row this call wrote. A compensating refund for
-   * this spend keys its `externalPaymentId` on it (`spend-refund:<id>`), so the
-   * caller's own lost-race refund and the expiry sweep's orphan refund cannot
-   * both return the same ticket.
+   * The spend's ledger row — the anchor for any refund of THIS spend
+   * ({@link spendRefundKey}). Absent when nothing was spent.
    */
   ledgerId?: string;
 }> {
@@ -274,6 +272,20 @@ export async function spendTickets(args: {
     });
     return { ok: true, balance: user?.ticketBalance ?? 0, ledgerId: row.id };
   });
+}
+
+/**
+ * The one idempotency key for giving back (part of) one wallet spend.
+ *
+ * A spend can be compensated from two places that do not see each other: the
+ * request that made it (its slot claim lost) and the gate-expiry sweep's
+ * orphaned-spend recovery (the slot was never claimed). Racing at the deadline
+ * they each refunded it, under different keys — one ticket spent, two given
+ * back. Both now write this key to the unique `externalPaymentId`, so whichever
+ * lands second hits P2002 and changes nothing.
+ */
+export function spendRefundKey(spendLedgerId: string): string {
+  return `spend-refund:${spendLedgerId}`;
 }
 
 /**

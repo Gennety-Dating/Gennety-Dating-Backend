@@ -21,6 +21,8 @@ vi.mock("@gennety/db", () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
     },
+    // Row lock taken by the keep-original decision (`lockMatchRow`).
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
     // Interactive form, run against this same mock.
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
       callback((await import("@gennety/db")).prisma),
@@ -83,7 +85,6 @@ const mMatch = prisma.match as unknown as {
   findMany: MockFn;
   update: MockFn;
 };
-const mUpdate = mMatch.update;
 const mPurchase = (prisma as unknown as {
   venueChangePurchase: {
     create: MockFn;
@@ -380,7 +381,12 @@ describe("submitVenueLikes", () => {
 
     // Board-invite ping to the male, and its message id is remembered so the
     // next submission can replace it rather than stack a second one.
-    expect(mUpdate.mock.calls.some((c) => c[0]?.data?.venueChangePingMsgIdB === 555)).toBe(true);
+    // Taken over from the slot as it was read (no ping yet → null), so a
+    // racing submission cannot orphan a second invite.
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", venueChangePingMsgIdB: null },
+      data: expect.objectContaining({ venueChangePingMsgIdB: 555 }),
+    });
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
   });
@@ -952,6 +958,65 @@ describe("keepOriginalVenue", () => {
   });
 });
 
+describe("keepOriginalVenue — decided under the row lock", () => {
+  it("keeps the session open for a partner who hearted a place after this request's snapshot", async () => {
+    const api = fakeApi();
+    // Snapshot: only my marks → "retire the whole session". Under the lock:
+    // the partner has just hearted a place. Retiring now would strand their
+    // likes on a closed board.
+    mMatch.findUnique
+      .mockResolvedValueOnce(
+        fakeMatch({
+          venueChangeStatus: "liking",
+          venueChangeProposerId: "a",
+          venueChangeProposedAt: new Date(),
+          venueLikesA: [likeOf("p1", "New Cafe")],
+        }),
+      )
+      .mockResolvedValueOnce(
+        fakeMatch({
+          venueChangeStatus: "liking",
+          venueChangeProposerId: "a",
+          venueChangeProposedAt: new Date(),
+          venueLikesA: [likeOf("p1", "New Cafe")],
+          venueLikesB: [likeOf("p2", "Park Spot")],
+        }),
+      );
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+
+    expect(res).toEqual({ ok: true, toldPartner: true });
+    const data = updateCalls((d) => "venueLikesA" in d)[0][0].data;
+    expect(data.venueChangeStatus).toBe("liking");
+    // The session is NOT retired — the proposer stays and their ping slot too.
+    expect(data.venueChangeProposerId).toBeUndefined();
+  });
+
+  it("is a stale tap when the session moved on between the snapshot and the lock", async () => {
+    const api = fakeApi();
+    mMatch.findUnique
+      .mockResolvedValueOnce(fakeMatch({ venueChangeStatus: "liking", venueLikesA: [likeOf("p1", "New Cafe")] }))
+      .mockResolvedValueOnce(agreedMatch());
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+
+    expect(res).toEqual({ ok: false, reason: "wrong-state" });
+    expect(updateCalls((d) => "venueLikesA" in d)).toHaveLength(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitVenueLikes — clearing my marks", () => {
+  it("never writes the snapshot's session status back over a session the partner just opened", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch({ venueChangeStatus: null }));
+    await submitVenueLikes(fakeApi(), 100n, "m1", [], { loadCatalog: async () => [] });
+
+    const write = updateCalls((d) => "venueLikesA" in d)[0];
+    expect(write).toBeDefined();
+    expect("venueChangeStatus" in write![0].data).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Express mint
 // ---------------------------------------------------------------------------
@@ -1005,6 +1070,17 @@ describe("settleVenueChangeFromAppStore", () => {
     });
     // No separate unconditional write after the claim any more.
     expect(mPurchase.update).not.toHaveBeenCalled();
+    // The venue copied onto the row is the one read before the claim, so the
+    // claim is pinned to that agreement — a change re-agreed in between is not
+    // settled with the old one's place.
+    const claim = updateCalls((d) => d.venueChangeStatus === "settled")[0]!;
+    expect(claim[0].where).toMatchObject({
+      status: "scheduled",
+      venueChangeStatus: "agreed",
+      venueChangeName: "New Cafe",
+      venueChangeProposedAt: AGREED_PROPOSED_AT,
+      venueChangeExpiresAt: AGREED_EXPIRES_AT,
+    });
   });
 
   it("parks an unclaimable purchase and alerts the founder, not just the log", async () => {
@@ -1287,13 +1363,16 @@ describe("settleVenuePayment", () => {
     const res = await settleVenuePayment(api, 200n, "m1", "charge-3", AGREED_NONCE);
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
-    // Claimed off `processing` before the Stars move, then recorded.
-    expect(mPurchase.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "vp3", status: "processing" },
-        data: expect.objectContaining({ status: "refund_failed" }),
-      }),
+    // Claimed BEFORE the money moves, so a sweep (or a late settle) cannot act
+    // on the same row while the refund is in flight…
+    expect(mPurchase.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "vp3", status: "processing" },
+      data: expect.objectContaining({ status: "refund_failed", refundError: "refund in flight" }),
+    });
+    expect(mPurchase.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      api.refundStarPayment.mock.invocationCallOrder[0],
     );
+    // …and recorded from that claim once it landed.
     expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "vp3", status: "refund_failed" },
@@ -1357,6 +1436,13 @@ describe("sweepExpiredVenueChanges", () => {
 
     const lapse = updateCalls((d) => d.venueChangeStatus === "lapsed");
     expect(lapse.length).toBe(1);
+    // Pinned to the agreement that was due: a NEW agreement reached between
+    // the scan and this claim keeps its own deadline.
+    expect(lapse[0][0].where).toMatchObject({
+      venueChangeName: "New Cafe",
+      venueChangeProposedAt: AGREED_PROPOSED_AT,
+      venueChangeExpiresAt: AGREED_EXPIRES_AT,
+    });
     // The match status is never part of the write — no cancellation, ever.
     expect(lapse[0][0].data.status).toBeUndefined();
     expect(api.sendMessage).toHaveBeenCalledTimes(2);

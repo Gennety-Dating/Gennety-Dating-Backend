@@ -193,3 +193,39 @@ describe("sweepVenueChangeRefunds", () => {
     expect(res).toMatchObject({ scanned: 1, refunded: 0, stillFailing: 0 });
   });
 });
+
+describe("refund claim — the row is taken before the money moves", () => {
+  it("never refunds a processing row a late settle moved to `settled` after the scan", async () => {
+    const api = fakeApi();
+    const stale = new Date(Date.now() - VENUE_PROCESSING_STALE_MS - 60_000);
+    mPurchase.findMany.mockImplementation(
+      serveByStatus([row({ status: "processing", createdAt: stale })]),
+    );
+    // The claim `processing → refund_failed` loses: the settle committed first.
+    mPurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const res = await sweepVenueChangeRefunds(api);
+
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "vp1", status: "processing" },
+      data: expect.objectContaining({ status: "refund_failed", refundError: "refund in flight" }),
+    });
+    // The venue changed; the Stars stay paid for it.
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ refunded: 0, stillFailing: 1 });
+  });
+
+  it("leaves a refund claimed a moment ago to the request that claimed it", async () => {
+    mPurchase.findMany.mockResolvedValue([]);
+    await sweepVenueChangeRefunds(fakeApi());
+
+    const retryTier = mPurchase.findMany.mock.calls
+      .map((c) => (c[0] as { where: Record<string, unknown> }).where)
+      .find((w) => w.status === "refund_failed")!;
+    expect(retryTier.OR).toEqual([
+      { resolvedAt: null },
+      { resolvedAt: { lt: expect.any(Date) } },
+    ]);
+  });
+});

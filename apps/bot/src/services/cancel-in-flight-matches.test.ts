@@ -53,6 +53,7 @@ import { refreshStatusBanners } from "./status-banner-refresh.js";
 import {
   cancelInFlightMatchesForUser,
   claimMatchCancellation,
+  deliverCancelledPartnerEffects,
   IN_FLIGHT_MATCH_STATUSES,
 } from "./cancel-in-flight-matches.js";
 
@@ -465,6 +466,35 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
  * the narrowing: blocking somebody from a date that already happened must not
  * take down the live date the blocker has with a different person.
  */
+describe("deliverCancelledPartnerEffects — refunds the cancel already committed", () => {
+  it("tells the partner their ticket is back from the credit made in the cancelling transaction", async () => {
+    // The ticket was credited inside the cancel's own transaction; delivery
+    // only reports it and must not try to credit it again.
+    const sendMessage = vi.fn().mockResolvedValue({});
+
+    await deliverCancelledPartnerEffects(
+      [
+        {
+          matchId: "m1",
+          actorUserId: LEAVING,
+          partnerUserId: PARTNER,
+          partnerTelegramId: 200n,
+          partnerLanguage: "en",
+          partnerPlatform: "telegram",
+          ticketRefunds: [
+            { userId: PARTNER, refunded: 1, telegramId: 200n, language: "en", platform: "telegram" },
+          ],
+        },
+      ],
+      { sendMessage } as unknown as Parameters<typeof deliverCancelledPartnerEffects>[1],
+    );
+
+    expect(mTx).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0]?.[1]).toContain("wallet");
+  });
+});
+
 describe("claimMatchCancellation", () => {
   const OTHER_MATCH = "m2";
 

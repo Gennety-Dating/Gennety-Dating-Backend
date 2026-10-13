@@ -652,8 +652,14 @@ describe("finalizeVenueIntentV2 — a selection that cannot finish (A13-H6)", ()
       where: Record<string, unknown>;
       data: Record<string, unknown>;
     };
-    // Guarded on the stage, so a run that outlived it plants nothing.
-    expect(write.where).toEqual({ id: MATCH_ID, status: "negotiating_venue" });
+    // Guarded on the stage, so a run that outlived it plants nothing — and on
+    // the count it incremented, so two overlapping failures are two attempts
+    // and only one of them tells the pair.
+    expect(write.where).toEqual({
+      id: MATCH_ID,
+      status: "negotiating_venue",
+      venueSelectionAttempts: 2,
+    });
     expect(write.data).toMatchObject({
       venueSelectionAttempts: 3,
       venueSelectionError: "provider_unavailable",

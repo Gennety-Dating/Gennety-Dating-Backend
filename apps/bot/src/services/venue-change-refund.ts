@@ -73,6 +73,9 @@ export const APPSTORE_PAYMENT_PREFIX = "appstore:";
  */
 export const VENUE_PROCESSING_STALE_MS = 5 * 60 * 1000;
 
+/** How long a just-claimed refund is left to the request that claimed it. */
+const REFUND_IN_FLIGHT_GRACE_MS = 60 * 1000;
+
 /** The columns the settle path and the sweep both need. */
 export const VENUE_PURCHASE_SELECT = {
   id: true,
@@ -95,10 +98,20 @@ export type VenueChangePurchaseRecord = Prisma.VenueChangePurchaseGetPayload<{
  * case, not a failure — read as one, it parked a done refund where the sweep
  * could never move it.
  *
- * Both status writes are conditional on the row still being in the status the
- * caller read, so a refund never overwrites a state reached meanwhile (a
- * concurrent settle, another pass that already recorded this refund) — which
- * is also what keeps the founder announcement to one.
+ * The row is CLAIMED before the money moves: `processing` → `refund_failed`
+ * ("refund in flight"), conditional on the status the caller read. It used to
+ * be refunded first and recorded after, so a settle that was merely slow (a
+ * lock wait past `VENUE_PROCESSING_STALE_MS`) could still commit
+ * `processing → settled` between the sweep's refund call and its write: the
+ * venue changed AND the Stars came back. Now that settle's purchase CAS finds
+ * the row taken and rolls its swap back, and a refund whose claim loses is not
+ * attempted at all. `refund_failed` is the right parking state for the gap:
+ * a crash after the claim leaves the row exactly where the sweep retries it,
+ * and a retry of a refund that did land reads `CHARGE_ALREADY_REFUNDED`.
+ *
+ * Every later write is conditional on that claimed status, so a refund never
+ * overwrites a state reached meanwhile — which is also what keeps the founder
+ * announcement to one.
  */
 export async function refundVenueChangePurchase(
   api: Api<RawApi>,
@@ -241,6 +254,11 @@ export async function sweepVenueChangeRefunds(
     prisma.venueChangePurchase.findMany({
       where: {
         status: VENUE_PURCHASE_REFUND_FAILED,
+        // A row claimed this very moment by a live refund (the settle's lost
+        // race) is that refund's to finish; a minute's grace keeps this tick
+        // from calling Telegram for it in parallel and DMing the user twice.
+        // A row whose refund really did die is still retried on the next tick.
+        OR: [{ resolvedAt: null }, { resolvedAt: { lt: new Date(now.getTime() - REFUND_IN_FLIGHT_GRACE_MS) } }],
         NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
         // A purchase whose buyer deleted their account keeps its row for
         // accounting but has no Telegram id left to refund to (A13-H14), so it

@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => {
-  const prisma: Record<string, unknown> = {
+  const prisma = {
+    // The stall cancellation judges and claims inside one row-locked
+    // transaction; the mock hands the callback the same client.
+    $transaction: vi.fn(),
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
     match: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -10,9 +14,7 @@ vi.mock("@gennety/db", () => {
     },
     profile: { update: vi.fn() },
   };
-  // The stall cancel claims the row and credits ticket refunds in one
-  // interactive transaction.
-  prisma.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma));
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
   return { prisma };
 });
 
