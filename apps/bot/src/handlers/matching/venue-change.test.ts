@@ -1287,9 +1287,16 @@ describe("settleVenuePayment", () => {
     const res = await settleVenuePayment(api, 200n, "m1", "charge-3", AGREED_NONCE);
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
+    // Claimed off `processing` before the Stars move, then recorded.
     expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "vp3", status: "processing" },
+        data: expect.objectContaining({ status: "refund_failed" }),
+      }),
+    );
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "vp3", status: "refund_failed" },
         data: expect.objectContaining({ status: "refunded_race" }),
       }),
     );

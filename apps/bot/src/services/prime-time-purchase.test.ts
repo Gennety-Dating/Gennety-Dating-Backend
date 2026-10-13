@@ -349,6 +349,25 @@ describe("refundPrimeTimePurchase on the App Store rail", () => {
   });
 });
 
+describe("refundPrimeTimePurchase on a processing row", () => {
+  it("never moves the Stars of a row a settle took first", async () => {
+    // The stale sweep read `processing`, but the settle committed `settled`
+    // before the sweep could claim it: the pass is live, the Stars stay.
+    const api = fakeApi();
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const ok = await refundPrimeTimePurchase(
+      api,
+      { id: "p7", userId: PAYER.id, status: "processing", amountStars: 150, externalPaymentId: "charge-7" },
+      100n,
+      "refunded_stale",
+    );
+
+    expect(ok).toBe(false);
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+});
+
 describe("sweepPrimeTimeRefunds", () => {
   it("retries refund_failed and returns an abandoned processing row as stale", async () => {
     const api = fakeApi();
@@ -364,8 +383,10 @@ describe("sweepPrimeTimeRefunds", () => {
       (c) => (c[0] as { data: { status: string } }).data.status,
     );
     // Stale first: a `processing` row is a charge taken and never resolved, so
-    // it outranks a retry of one that has already failed at least once.
-    expect(statuses).toEqual(["refunded_stale", "refunded_race"]);
+    // it outranks a retry of one that has already failed at least once. It is
+    // claimed (`refund_failed`) before its Stars move, so a settle still in
+    // flight rolls back instead of delivering a pass whose Stars came back.
+    expect(statuses).toEqual(["refund_failed", "refunded_stale", "refunded_race"]);
   });
 
   // A13-L2: Telegram answers a second refund with CHARGE_ALREADY_REFUNDED. That

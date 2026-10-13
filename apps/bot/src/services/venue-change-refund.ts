@@ -106,6 +106,24 @@ export async function refundVenueChangePurchase(
   telegramId: bigint,
   targetStatus: string,
 ): Promise<boolean> {
+  // A `processing` row is claimed BEFORE the Stars move. The settle commits
+  // its CAS on `processing`, so a stale-row sweep that refunded first and
+  // claimed after could lose to a settle still in flight: the purchase
+  // delivered AND its Stars returned. Parking the row in `refund_failed` first
+  // makes that settle roll back instead; a refund that then fails simply stays
+  // there for the sweep, and one that lands moves it on below.
+  let heldStatus = purchase.status;
+  if (purchase.status === VENUE_PURCHASE_PROCESSING) {
+    const claim = await prisma.venueChangePurchase.updateMany({
+      where: { id: purchase.id, status: VENUE_PURCHASE_PROCESSING },
+      data: { status: VENUE_PURCHASE_REFUND_FAILED, refundError: "refund in flight", resolvedAt: new Date() },
+    });
+    // Someone else moved it — a settle that landed, or another pass refunding
+    // it. Either way these Stars are not ours to return.
+    if (claim.count === 0) return false;
+    heldStatus = VENUE_PURCHASE_REFUND_FAILED;
+  }
+
   try {
     await api.refundStarPayment(Number(telegramId), purchase.externalPaymentId);
   } catch (err) {
@@ -117,7 +135,7 @@ export async function refundVenueChangePurchase(
       );
       await prisma.venueChangePurchase
         .updateMany({
-          where: { id: purchase.id, status: purchase.status },
+          where: { id: purchase.id, status: heldStatus },
           data: {
             status: VENUE_PURCHASE_REFUND_FAILED,
             refundError: message.slice(0, 500),
@@ -135,7 +153,7 @@ export async function refundVenueChangePurchase(
 
   const recorded = await prisma.venueChangePurchase
     .updateMany({
-      where: { id: purchase.id, status: purchase.status },
+      where: { id: purchase.id, status: heldStatus },
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
     })
     .catch(() => ({ count: 0 }));
