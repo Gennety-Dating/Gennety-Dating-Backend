@@ -30,6 +30,9 @@ import {
 } from "./chat-queue.js";
 import { renderPoolStatus } from "./services/render/pool.js";
 import { startRuntimeMetrics } from "./workers/runtime-metrics.js";
+import { pendingOnboardingPhotoBatches } from "./handlers/onboarding/conversational.js";
+import { pendingMenuPhotoBatches } from "./handlers/menu/edit-profile.js";
+import { pendingProfilerAnswers } from "./handlers/profiler/router.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import {
   notifyFounderStatusTimerHealth,
@@ -1500,11 +1503,28 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
   if (remaining() > 0 && (chatQueueDepth() > 0 || runningGuardedTicks().length > 0)) {
     await Promise.all([waitForChatQueueIdle(remaining()), waitForGuardedTicksIdle(remaining())]);
   }
-  if (chatQueueDepth() > 0) {
-    console.warn(`[shutdown] ${chatQueueDepth()} chat task(s) still running at the deadline — abandoned`);
+  const queue = chatQueueStats();
+  if (queue.pending > 0) {
+    // `active` hold a slot and are running; the rest never started (one of them
+    // may be an awaited payment update, which runs without a slot).
+    console.warn(
+      `[shutdown] ${queue.pending} chat task(s) abandoned at the deadline: ` +
+        `${queue.active} running, ${queue.pending - queue.active} not holding a slot ` +
+        `(${queue.waitingForSlot} waiting for one)`,
+    );
   }
   if (runningGuardedTicks().length > 0) {
     console.warn(`[shutdown] tick(s) still running at the deadline: ${runningGuardedTicks().join(", ")}`);
+  }
+  // Debounced input lives in timers, not in the chat queue, so the drain never
+  // waits for it: whatever has not fired yet dies with this process.
+  const debounced = {
+    onboardingPhotoBursts: pendingOnboardingPhotoBatches(),
+    photoManagerBursts: pendingMenuPhotoBatches(),
+    profilerAnswers: pendingProfilerAnswers(),
+  };
+  if (Object.values(debounced).some((count) => count > 0)) {
+    console.warn(`[shutdown] debounced input not yet flushed, lost: ${JSON.stringify(debounced)}`);
   }
   for (const server of servers) server.closeAllConnections();
 

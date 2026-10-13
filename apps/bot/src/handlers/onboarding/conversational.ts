@@ -505,6 +505,11 @@ interface PhotoBatchAccumulator {
 const photoBatchAccumulators = new Map<number, PhotoBatchAccumulator>();
 const PHOTO_BATCH_DEBOUNCE_MS = 700;
 
+/** Photo bursts still waiting for their debounce, for the shutdown log. */
+export function pendingOnboardingPhotoBatches(): number {
+  return photoBatchAccumulators.size;
+}
+
 async function handleProfileMediaMessage(
   ctx: BotContext,
   telegramId: bigint,

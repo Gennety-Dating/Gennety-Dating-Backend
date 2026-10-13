@@ -1006,6 +1006,11 @@ interface PhotoUploadBatch {
 const photoUploadBatches = new Map<number, PhotoUploadBatch>();
 const PHOTO_UPLOAD_DEBOUNCE_MS = 900;
 
+/** Photo-manager bursts still waiting for their debounce, for the shutdown log. */
+export function pendingMenuPhotoBatches(): number {
+  return photoUploadBatches.size;
+}
+
 /**
  * Get (or open) the burst this frame belongs to, and count the frame.
  *

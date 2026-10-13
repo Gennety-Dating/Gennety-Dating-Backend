@@ -76,6 +76,11 @@ interface AnswerAccumulator {
 
 const answerAccumulators = new Map<number, AnswerAccumulator>();
 
+/** Profiler answers still waiting for their debounce, for the shutdown log. */
+export function pendingProfilerAnswers(): number {
+  return answerAccumulators.size;
+}
+
 function cancelAnswerFlush(chatId: number | undefined): void {
   if (chatId === undefined) return;
   const acc = answerAccumulators.get(chatId);
