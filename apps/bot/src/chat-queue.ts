@@ -46,12 +46,23 @@ export interface SequentializeOptions {
   onDetachedError: DetachedErrorHandler;
 }
 
+/** A point-in-time read of the queue, for logs. */
+export interface ChatQueueStats {
+  /** Tasks enqueued and not yet settled (running or waiting), across all chats. */
+  pending: number;
+  /** Tasks holding one of the `BOT_CONCURRENT_CHAT_TASKS` slots, i.e. running. */
+  active: number;
+  /** Tasks whose chat is free but which wait for a slot. */
+  waitingForSlot: number;
+}
+
 export interface ChatQueue {
   dispatchToChat<T>(chatId: number | string, task: () => Promise<T>): Promise<T>;
   sequentializeByChat(options: SequentializeOptions): MiddlewareFn<BotContext>;
   detachOnChat(ctx: BotContext, task: () => Promise<unknown>, onError: DetachedErrorHandler): void;
   /** Tasks enqueued and not yet settled (running or waiting), across all chats. */
   pendingTasks(): number;
+  stats(): ChatQueueStats;
   /** Resolves `true` once nothing is pending, or `false` when `timeoutMs` passes first. */
   waitForIdle(timeoutMs: number): Promise<boolean>;
   /** Shutdown: stop starting updates that reach the middleware from now on. */
@@ -182,6 +193,8 @@ export function createChatQueue(options: { maxConcurrent: number }): ChatQueue {
 
     pendingTasks: () => pending,
 
+    stats: () => ({ pending, active, waitingForSlot: slotWaiters.length }),
+
     waitForIdle(timeoutMs: number): Promise<boolean> {
       if (pending === 0) return Promise.resolve(true);
       return new Promise<boolean>((resolve) => {
@@ -240,6 +253,10 @@ export function detachOnChat(
 
 export function chatQueueDepth(): number {
   return chatQueue.pendingTasks();
+}
+
+export function chatQueueStats(): ChatQueueStats {
+  return chatQueue.stats();
 }
 
 export function waitForChatQueueIdle(timeoutMs: number): Promise<boolean> {

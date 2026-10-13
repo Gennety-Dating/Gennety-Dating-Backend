@@ -24,9 +24,12 @@ import { demoDriverTick } from "./demo/driver.js";
 import { createBot } from "./bot.js";
 import {
   chatQueueDepth,
+  chatQueueStats,
   closeUpdateIntake,
   waitForChatQueueIdle,
 } from "./chat-queue.js";
+import { renderPoolStatus } from "./services/render/pool.js";
+import { startRuntimeMetrics } from "./workers/runtime-metrics.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import {
   notifyFounderStatusTimerHealth,
@@ -1393,6 +1396,15 @@ async function main(): Promise<void> {
   }
 
   registerSchedules();
+
+  // Event-loop delay, chat-queue load and memory, once a minute — logging only.
+  intervals.push(
+    startRuntimeMetrics({
+      chatQueue: chatQueueStats,
+      renderPool: renderPoolStatus,
+      runningTicks: () => runningGuardedTicks().length,
+    }),
+  );
 
   // Boot is exactly when a dispatch has just died — resume its rows now rather
   // than at the next quarter hour.

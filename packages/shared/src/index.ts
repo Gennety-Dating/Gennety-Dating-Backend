@@ -402,4 +402,10 @@ export type { AfterDateKey } from "./after-date-i18n.js";
 export { WISH_INVOICE_PREFIX, buildWishInvoicePayload, parseWishInvoicePayload } from "./stars.js";
 export { WISHLIST_CATALOG, wishlistCatalogFor, wishlistCatalogItem } from "./wishlist-catalog.js";
 export type { WishlistCatalogItem, WishlistCatalogAudience } from "./wishlist-catalog.js";
-export { BOT_SESSION_SNAPSHOT_MAX_KEYS, BOT_REACHABLE_CACHE_MAX_IDS } from "./bot-runtime.js";
+export {
+  BOT_SESSION_SNAPSHOT_MAX_KEYS,
+  BOT_REACHABLE_CACHE_MAX_IDS,
+  RUNTIME_METRICS_INTERVAL_MS,
+  EVENT_LOOP_DELAY_RESOLUTION_MS,
+  EVENT_LOOP_DELAY_WARN_MS,
+} from "./bot-runtime.js";

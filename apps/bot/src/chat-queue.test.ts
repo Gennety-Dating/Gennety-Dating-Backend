@@ -257,11 +257,13 @@ describe("sequentializeByChat (detached from the polling loop)", () => {
 
     await vi.waitFor(() => expect(started).toEqual([0, 1]));
     expect(queue.pendingTasks()).toBe(5);
+    expect(queue.stats()).toEqual({ pending: 5, active: 2, waitingForSlot: 3 });
     for (const gate of gates) gate.resolve();
     await expect(queue.waitForIdle(1000)).resolves.toBe(true);
     expect(peak).toBe(2);
     // FIFO hand-off: the chats that waited start in the order they arrived.
     expect(started).toEqual([0, 1, 2, 3, 4]);
+    expect(queue.stats()).toEqual({ pending: 0, active: 0, waitingForSlot: 0 });
   });
 
   it("hands a detached update's error to the bot error handler as a BotError", async () => {

@@ -20,3 +20,16 @@ export const BOT_SESSION_SNAPSHOT_MAX_KEYS = 10_000;
  * again.
  */
 export const BOT_REACHABLE_CACHE_MAX_IDS = 20_000;
+
+/** How often the bot process logs its runtime metrics line. */
+export const RUNTIME_METRICS_INTERVAL_MS = 60_000;
+
+/** Sampling resolution of the event-loop delay histogram behind that line. */
+export const EVENT_LOOP_DELAY_RESOLUTION_MS = 20;
+
+/**
+ * Event-loop delay p99 at which the metrics line is logged as a warning rather
+ * than as information. A fifth of a second is a pause that every update and
+ * every HTTP request in the process sat through.
+ */
+export const EVENT_LOOP_DELAY_WARN_MS = 200;
