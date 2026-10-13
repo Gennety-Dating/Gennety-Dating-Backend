@@ -93,6 +93,7 @@ import {
   venueAgreementWhere,
 } from "../../services/venue-agreement-nonce.js";
 import { apnsConfigured } from "../../services/apns.js";
+import { isAlreadyRefundedError } from "../../services/stars-refund-error.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
@@ -2267,6 +2268,9 @@ export async function settleVenuePayment(
       );
       return true;
     } catch (err) {
+      // A redelivered update for a charge the first delivery already returned:
+      // the Stars are back, which is what this wanted — not a stuck payment.
+      if (isAlreadyRefundedError(err)) return true;
       console.error(
         `[venue-change] unsettleable charge could NOT be refunded match=${matchId} ` +
           `charge=${telegramChargeId}:`,

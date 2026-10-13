@@ -8,7 +8,11 @@ import {
   getVerifiedTransaction,
   type AppStoreTransaction,
 } from "./appstore.js";
-import { notifyFounderPurchaseRefunded, notifyFounderRefundReversed } from "./founder-notify.js";
+import {
+  notifyFounderAppStoreUnclaimed,
+  notifyFounderPurchaseRefunded,
+  notifyFounderRefundReversed,
+} from "./founder-notify.js";
 import {
   APPSTORE_PAYMENT_PREFIX,
   VENUE_PURCHASE_REFUND_MANUAL,
@@ -107,6 +111,20 @@ export async function purchaseVenueChange(
   // The two that mean "this purchase never became a change" are the ones the
   // client must not retry.
   if (settled.reason === "match-not-found" || settled.reason === "not-participant") {
+    // Apple has taken the money and nothing was written: the refusal happens
+    // before the purchase row. Without this notice the client finished the
+    // transaction and the charge left no trace anywhere — Prime Time parks the
+    // same case as `refund_manual` and alerts; this is that alert.
+    void notifyFounderAppStoreUnclaimed({
+      userId,
+      kind: "venue_change",
+      externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${tx.transactionId}`,
+      reason: settled.reason,
+      matchId,
+      amountCents: tx.priceCents,
+      currency: tx.currency ?? null,
+      sandbox: tx.environment === "Sandbox",
+    }).catch(() => undefined);
     return { status: "invalid", reason: "unknown_transaction" };
   }
   return { status: "unclaimed", reason: settled.reason };

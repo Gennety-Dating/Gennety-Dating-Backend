@@ -249,6 +249,9 @@ export async function settlePrimeTimePayment(
       );
       return true;
     } catch (err) {
+      // A redelivered update for a charge the first delivery already returned:
+      // the Stars are back, which is what this wanted — not a stuck payment.
+      if (isAlreadyRefundedError(err)) return true;
       console.error(
         `[prime-time] unsettleable charge could NOT be refunded match=${matchId} ` +
           `charge=${telegramChargeId}:`,
