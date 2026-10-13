@@ -416,7 +416,7 @@ function boot(): void {
 
   // Catch accidental swipe-down dismissals during capture.
   try {
-    (app as unknown as { enableClosingConfirmation?: () => void }).enableClosingConfirmation?.();
+    app.enableClosingConfirmation?.();
   } catch {
     // SDK without that helper — ignore, not all builds expose it.
   }

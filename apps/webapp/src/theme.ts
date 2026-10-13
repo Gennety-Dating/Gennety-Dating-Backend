@@ -58,11 +58,7 @@ export function setTheme(theme: Theme): void {
     /* ignore */
   }
   try {
-    const cloud = (
-      window as unknown as {
-        Telegram?: { WebApp?: { CloudStorage?: { setItem?: (k: string, v: string) => void } } };
-      }
-    ).Telegram?.WebApp?.CloudStorage;
+    const cloud = window.Telegram?.WebApp?.CloudStorage;
     cloud?.setItem?.(THEME_STORAGE_KEY, theme);
   } catch {
     /* ignore */

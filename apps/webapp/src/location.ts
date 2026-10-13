@@ -366,11 +366,8 @@ function initMap(): void {
     if (typeof window.addEventListener === "function") {
       window.addEventListener("resize", kickResize);
     }
-    const tgEvents = app as unknown as
-      | { onEvent?: (event: string, cb: () => void) => void }
-      | undefined;
-    tgEvents?.onEvent?.("viewportChanged", kickResize);
-    tgEvents?.onEvent?.("fullscreenChanged", kickResize);
+    app?.onEvent?.("viewportChanged", kickResize);
+    app?.onEvent?.("fullscreenChanged", kickResize);
     for (const ms of [120, 400, 800, 1500]) setTimeout(kickResize, ms);
   } catch {
     map = null;

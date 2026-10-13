@@ -80,15 +80,13 @@ try {
 // when the user toggles fullscreen or the keyboard appears.
 applyContentInsets();
 try {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (app as any)?.onEvent?.("contentSafeAreaChanged", applyContentInsets);
+  app?.onEvent?.("contentSafeAreaChanged", applyContentInsets);
 } catch {
   // Older clients without the event — fallback CSS value still applies.
 }
 
 function applyContentInsets(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inset = (app as any)?.contentSafeAreaInset;
+  const inset = app?.contentSafeAreaInset;
   if (!inset) return;
   if (typeof inset.top === "number" && inset.top > 0) {
     document.documentElement.style.setProperty("--tg-content-top", `${inset.top}px`);
@@ -186,8 +184,7 @@ sheetBackdropEl?.addEventListener("click", () => closeSheet(true));
 setupSheetDrag();
 // Telegram BackButton — collapses the sheet rather than killing the app.
 try {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (app as any)?.BackButton?.onClick?.(onBackButton);
+  app?.BackButton?.onClick?.(onBackButton);
 } catch {
   // Older clients ignore.
 }
@@ -805,8 +802,7 @@ function openSheet(): void {
   setSheetCtaState(canSubmitSelection());
   hideCta();
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (app as any)?.BackButton?.show?.();
+    app?.BackButton?.show?.();
   } catch {
     // ignored
   }
@@ -831,8 +827,7 @@ function closeSheet(animate: boolean): void {
   sheetEl.classList.remove("is-open");
   sheetBackdropEl.classList.remove("is-open");
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (app as any)?.BackButton?.hide?.();
+    app?.BackButton?.hide?.();
   } catch {
     // ignored
   }

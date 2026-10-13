@@ -872,7 +872,7 @@ function mapsHref(name: string, address: string, mapsUri: string | null): string
   return `https://maps.google.com/?q=${encodeURIComponent(q)}`;
 }
 function openExternal(url: string): boolean {
-  const opener = (app as unknown as { openLink?: (u: string) => void } | undefined)?.openLink;
+  const opener = app?.openLink;
   if (opener) {
     opener(url);
     return true;

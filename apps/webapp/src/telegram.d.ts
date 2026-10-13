@@ -14,6 +14,15 @@ interface TelegramWebAppDeviceStorage {
 }
 
 /**
+ * CloudStorage (Bot API 6.9+) — per-user key/value synced through Telegram's
+ * cloud. Only the write the theme picker makes is declared; optional because
+ * older clients ship without it.
+ */
+interface TelegramWebAppCloudStorage {
+  setItem?(key: string, value: string, callback?: (err: string | null, stored?: boolean) => void): void;
+}
+
+/**
  * Telegram-native bottom button. Used as the "Confirm" / "Send" CTA across
  * Mini Apps: `sendData` is silently a no-op when the Mini App is opened via
  * inline keyboard, so we POST to the bot's public API on MainButton tap.
@@ -120,6 +129,8 @@ interface TelegramWebApp {
    * Survives swipe-down dismissal of the Web App.
    */
   DeviceStorage: TelegramWebAppDeviceStorage;
+  /** Cloud key/value (Bot API 6.9+); absent on older clients. */
+  CloudStorage?: TelegramWebAppCloudStorage;
   MainButton: TelegramWebAppMainButton;
   BackButton?: TelegramWebAppBackButton;
   HapticFeedback?: TelegramHapticFeedback;
@@ -142,6 +153,11 @@ interface TelegramWebApp {
   enableVerticalSwipes?(): void;
   lockOrientation?(): void;
   unlockOrientation?(): void;
+  /**
+   * Bot API 6.2+ — ask before Telegram closes the Web App, so a swipe-down
+   * mid-capture is not an instant exit.
+   */
+  enableClosingConfirmation?(): void;
   close(): void;
   /** Send a string payload back to the bot and close the Web App. */
   sendData(data: string): void;
