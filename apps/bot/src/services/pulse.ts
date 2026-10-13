@@ -11,7 +11,7 @@ import {
   type PulseRowState,
 } from "@gennety/shared";
 import { getPreviousBatchDate } from "./next-batch.js";
-import { listChatSessions } from "./chat-sessions.js";
+import { listRecentChatSessions } from "./chat-sessions.js";
 
 /**
  * Live Pulse — the rows under the status panel on the iOS Today screen
@@ -66,7 +66,7 @@ export interface PulseRowDto {
 
 export interface PulseDeps {
   now?: Date;
-  sessions?: typeof listChatSessions;
+  sessions?: typeof listRecentChatSessions;
 }
 
 const MINUTE = 60 * 1000;
@@ -74,7 +74,7 @@ const DAY = 24 * 60 * MINUTE;
 
 export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<PulseRowDto[]> {
   const now = deps.now ?? new Date();
-  const sessions = deps.sessions ?? listChatSessions;
+  const sessions = deps.sessions ?? listRecentChatSessions;
 
   const [user, drop, venue, announcements, pastDate, chat] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { status: true } }),
@@ -82,9 +82,7 @@ export async function buildPulse(userId: string, deps: PulseDeps = {}): Promise<
     venueSearchRow(userId),
     announcementRows(userId, now),
     pastDateRow(userId, now),
-    sessions(userId, { limit: PULSE_CHAT_TOPICS_MAX })
-      .then((r) => r?.sessions ?? [])
-      .catch(() => []),
+    sessions(userId, PULSE_CHAT_TOPICS_MAX).catch(() => []),
   ]);
   if (!user) return [];
 

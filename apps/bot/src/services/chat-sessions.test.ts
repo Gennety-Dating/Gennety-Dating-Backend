@@ -31,8 +31,10 @@ const {
   toChatSessionDto,
   touchChatSession,
   listChatSessions,
+  listRecentChatSessions,
 } = await import("./chat-sessions.js");
 const { TOPIC_GAP_MS } = await import("./chat-topics.js");
+const { Prisma } = await import("@gennety/db");
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "99999999-9999-4999-8999-999999999999";
@@ -176,6 +178,60 @@ describe("toChatSessionDto", () => {
 
   it("a title wins over the opener", () => {
     expect(toChatSessionDto({ ...base, title: "Дресс-код", opener: null }).title).toBe("Дресс-код");
+  });
+});
+
+/**
+ * The list's SQL, as Postgres receives it. The pulse rows read the same query
+ * with the per-chat count capped at one message (perf 2026-10-13); the list,
+ * the rename answer and `getChatSession` keep the full count byte for byte.
+ */
+describe("the list query", () => {
+  function lastQuery(): { text: string; values: unknown[] } {
+    const [strings, ...values] = db.$queryRaw.mock.calls.at(-1)! as [
+      TemplateStringsArray,
+      ...unknown[],
+    ];
+    const sql = Prisma.sql(strings, ...values);
+    return { text: sql.text.replace(/\s+/g, " ").trim(), values: sql.values };
+  }
+
+  const LIST_SQL =
+    "SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener " +
+    "FROM chat_sessions s CROSS JOIN LATERAL ( SELECT count(*)::int AS n FROM messages m " +
+    "WHERE m.session_id = s.id AND m.role <> 'system' ) c LEFT JOIN LATERAL ( SELECT m.content " +
+    "FROM messages m WHERE m.session_id = s.id AND m.role <> 'system' AND btrim(m.content) <> '' " +
+    "ORDER BY (m.role <> 'user'), m.created_at, m.id LIMIT 1 ) o ON s.title IS NULL " +
+    "WHERE s.user_id = $1::uuid AND c.n > 0 ORDER BY s.updated_at DESC, s.id DESC LIMIT $2";
+
+  it("the list counts every message, as it always has", async () => {
+    await listChatSessions(USER, { limit: 2 });
+    expect(lastQuery()).toEqual({ text: LIST_SQL, values: [USER, 3] });
+  });
+
+  it("the pulse rows stop counting at a chat's first real message — nothing else differs", async () => {
+    await listRecentChatSessions(USER, 2);
+    expect(lastQuery()).toEqual({
+      text: LIST_SQL.replace(
+        "FROM messages m WHERE m.session_id = s.id AND m.role <> 'system' ) c",
+        "FROM ( SELECT 1 FROM messages m WHERE m.session_id = s.id AND m.role <> 'system' " +
+          "LIMIT 1 ) AS first_message ) c",
+      ),
+      values: [USER, 2],
+    });
+  });
+
+  it("the pulse rows carry the list's ids, order, titles and times", async () => {
+    db.$queryRaw.mockResolvedValue([
+      { id: "a", title: "Дресс-код", created_at: NOW, updated_at: NOW, message_count: 1, opener: null },
+      { id: "b", title: null, created_at: NOW, updated_at: NOW, message_count: 1, opener: "что  надеть" },
+    ]);
+    const recent = await listRecentChatSessions(USER, 2);
+    const page = await listChatSessions(USER, { limit: 2 });
+    expect(recent).toEqual(
+      page?.sessions.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
+    );
+    expect(recent.map((s) => s.title)).toEqual(["Дресс-код", "что надеть"]);
   });
 });
 

@@ -11,7 +11,7 @@ vi.mock("@gennety/db", () => ({ prisma: db }));
 
 const previousBatch = vi.fn();
 vi.mock("./next-batch.js", () => ({ getPreviousBatchDate: (now: Date) => previousBatch(now) }));
-vi.mock("./chat-sessions.js", () => ({ listChatSessions: async () => ({ sessions: [], hasMore: false }) }));
+vi.mock("./chat-sessions.js", () => ({ listRecentChatSessions: async () => [] }));
 
 const { announcementRows, buildPulse, dropBatchRow } = await import("./pulse.js");
 
@@ -97,29 +97,14 @@ describe("buildPulse", () => {
    */
   it("lists the recent chats as past rows keyed by the session", async () => {
     db.user.findUnique.mockResolvedValue({ status: "paused" });
-    const sessions = vi.fn(async () => ({
-      sessions: [
-        {
-          id: "s-2",
-          title: "Дресс-код на свидание",
-          createdAt: "2026-09-12T10:00:00.000Z",
-          updatedAt: "2026-09-13T09:00:00.000Z",
-          messageCount: 4,
-        },
-        {
-          id: "s-1",
-          title: "Почему нет пары",
-          createdAt: "2026-09-10T10:00:00.000Z",
-          updatedAt: "2026-09-10T11:00:00.000Z",
-          messageCount: 2,
-        },
-      ],
-      hasMore: true,
-    }));
+    const sessions = vi.fn(async (_userId: string, _limit: number) => [
+      { id: "s-2", title: "Дресс-код на свидание", updatedAt: "2026-09-13T09:00:00.000Z" },
+      { id: "s-1", title: "Почему нет пары", updatedAt: "2026-09-10T11:00:00.000Z" },
+    ]);
 
     const rows = await buildPulse(USER, { now: minutesAfter(30), sessions });
 
-    expect(sessions).toHaveBeenCalledWith(USER, { limit: 2 });
+    expect(sessions).toHaveBeenCalledWith(USER, 2);
     expect(rows).toEqual([
       expect.objectContaining({
         id: "chat_topic:s-2",
@@ -135,7 +120,7 @@ describe("buildPulse", () => {
 
   it("a failing chat list costs the pulse its chat rows, not the pulse", async () => {
     db.user.findUnique.mockResolvedValue({ status: "paused" });
-    const sessions = vi.fn(async () => {
+    const sessions = vi.fn(async (_userId: string, _limit: number) => {
       throw new Error("db down");
     });
     const rows = await buildPulse(USER, { now: minutesAfter(30), sessions });

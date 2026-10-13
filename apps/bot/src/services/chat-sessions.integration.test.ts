@@ -26,6 +26,7 @@ import {
   continueOrOpenChatSession,
   getChatSession,
   listChatSessions,
+  listRecentChatSessions,
   renameChatSession,
   touchChatSession,
 } from "./chat-sessions.js";
@@ -95,6 +96,30 @@ async function setEmbedding(sessionId: string, vec: number[], summary: string): 
 }
 
 describe("listChatSessions", () => {
+  // The Today pulse rows: the list's first page minus the count (perf 2026-10-13).
+  it("listRecentChatSessions answers the list's first page — same chats, order, titles, times", async () => {
+    const me = await seedUser();
+    await chat(me.id, [
+      { role: "assistant", content: "Привет! Я Gennety.", at: minutes(0) },
+      { role: "user", content: "  что   надеть\nв пятницу?", at: minutes(1) },
+      { role: "system", content: "sys", at: minutes(2) },
+    ]);
+    await chat(me.id, [{ role: "user", content: "второй", at: minutes(30) }], { title: "Второй" });
+    await chat(me.id, [{ role: "system", content: "only system", at: minutes(90) }]);
+    await claimChatSession(me.id, "55555555-5555-4555-8555-555555555555");
+    for (let i = 0; i < 3; i++) {
+      await chat(me.id, [{ role: "user", content: `tie ${i}`, at: minutes(60) }]);
+    }
+
+    for (const limit of [1, 2, 3, 30]) {
+      const page = await listChatSessions(me.id, { limit });
+      const recent = await listRecentChatSessions(me.id, limit);
+      expect(recent, `limit ${limit}`).toEqual(
+        page?.sessions.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
+      );
+    }
+  });
+
   it("most recent first, only chats with a real message, counts without system rows", async () => {
     const me = await seedUser();
     const other = await seedUser();

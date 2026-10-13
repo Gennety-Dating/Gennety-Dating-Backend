@@ -144,18 +144,32 @@ interface SessionRow {
  * chat, its non-system message count, and — only for an untitled chat — the
  * line its fallback title is cut from (the person's first non-empty line, else
  * the assistant's).
+ *
+ * `countUpTo: 1` caps the count at one message (an EXISTS in count's clothes)
+ * for a caller that shows no count and only needs "has a real message": the
+ * pulse rows. Every row, its order and its title stay what the full count
+ * gives; only `message_count` reads 0/1, which is why such rows never become a
+ * `ChatSessionDto`.
  */
 async function selectSessions(
   where: Prisma.Sql,
-  opts: { withMessagesOnly: boolean; limit: number },
+  opts: { withMessagesOnly: boolean; limit: number; countUpTo?: 1 },
 ): Promise<SessionRow[]> {
+  const counted =
+    opts.countUpTo === 1
+      ? Prisma.sql`(
+          SELECT 1 FROM messages m
+          WHERE m.session_id = s.id AND m.role <> 'system'
+          LIMIT 1
+        ) AS first_message`
+      : Prisma.sql`messages m
+      WHERE m.session_id = s.id AND m.role <> 'system'`;
   return prisma.$queryRaw<SessionRow[]>`
     SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener
     FROM chat_sessions s
     CROSS JOIN LATERAL (
       SELECT count(*)::int AS n
-      FROM messages m
-      WHERE m.session_id = s.id AND m.role <> 'system'
+      FROM ${counted}
     ) c
     LEFT JOIN LATERAL (
       SELECT m.content
@@ -170,14 +184,51 @@ async function selectSessions(
   `;
 }
 
+/** The shown title: the stored one, else the opening line condensed. */
+function sessionTitle(row: Pick<SessionRow, "title" | "opener">): string {
+  return row.title ?? condense(row.opener ?? "", CHAT_SESSION_FALLBACK_TITLE_MAX);
+}
+
 export function toChatSessionDto(row: SessionRow): ChatSessionDto {
   return {
     id: row.id,
-    title: row.title ?? condense(row.opener ?? "", CHAT_SESSION_FALLBACK_TITLE_MAX),
+    title: sessionTitle(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     messageCount: row.message_count,
   };
+}
+
+/** What a Today pulse row shows of a chat. */
+export interface RecentChatSessionDto {
+  id: string;
+  title: string;
+  /** The newest message's time. */
+  updatedAt: string;
+}
+
+/**
+ * The person's most recent chats for the Today pulse rows (polled with every
+ * Today refresh): the same chats, in the same order, with the same titles as
+ * the first page of `listChatSessions` — without the per-chat message count
+ * the pulse never shows, which made Postgres count every message of every chat
+ * the person ever had on each poll. Here a chat stops being counted at its
+ * first real message (`countUpTo: 1`).
+ */
+export async function listRecentChatSessions(
+  userId: string,
+  limit: number,
+): Promise<RecentChatSessionDto[]> {
+  const rows = await selectSessions(Prisma.sql`s.user_id = ${userId}::uuid`, {
+    withMessagesOnly: true,
+    limit,
+    countUpTo: 1,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    title: sessionTitle(row),
+    updatedAt: row.updated_at.toISOString(),
+  }));
 }
 
 export interface ListChatSessionsResult {
