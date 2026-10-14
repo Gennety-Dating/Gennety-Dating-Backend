@@ -18,6 +18,8 @@
  * them in.
  */
 
+import { FAMINE_PAUSE_AFTER_DAYS } from "@gennety/shared";
+
 export interface PlaybookFeatures {
   /** `COORDINATION_FEATURE_ENABLED` — the anonymous T-1h … T+2h proxy chat, for every date. */
   coordination: boolean;
@@ -37,6 +39,12 @@ export interface PlaybookFeatures {
    * it deny a feature the user could actually buy.
    */
   rematch?: boolean;
+  /**
+   * `EARLY_STAGE` (founder decision 2026-10-15) — the base is still gathering:
+   * the agent explains a wait with "Gennety has only just opened", and nobody is
+   * auto-paused for a long wait. Optional; absent reads as off.
+   */
+  earlyStage?: boolean;
 }
 
 /**
@@ -171,7 +179,7 @@ export function buildProductPlaybook(
     `## Stage — waiting for the next match (no active match)`,
     `- Tell them when the next batch lands (see "Next match batch" in context; during first-day calibration that line points to "Search phase" — use the first-search time from there, because the general batch does not include them).`,
     `- They can raise match quality by keeping photos/bio/preferences fresh, and can Pause matching or Freeze the account anytime from the menu.`,
-    `- If they were left unpaired last round, state it as a fact: their priority rises the longer they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker. Do not console, and never imply the next evening is guaranteed.`,
+    `- If they were left unpaired last round, state it as a fact about how the search works, never as a verdict on them. Do not console, never promise priority or a better place in line, and never imply the next evening is guaranteed.`,
   ];
   if (cadence.silentDrops) {
     // The search runs far more often than it reports on itself, so most
@@ -179,7 +187,7 @@ export function buildProductPlaybook(
     // to answer "why is it quiet?" except by guessing at a fault.
     waiting.push(
       `- **We search every evening, but we only write when there is something to say.** A search that finds nobody sends NOTHING — so a quiet evening means no one cleared the bar that day. It does not mean they were skipped, deprioritised, shadowbanned, or that anything is broken, and it is not a signal about them. Say this plainly and without apologising for it; it is how the product is meant to work.`,
-      `- If a stretch goes by with nobody, we check in on our own about once a week — they never have to ask to find out where they stand. Never promise a match by a particular day.`,
+      `- If a stretch goes by with nobody, we check in on our own only rarely (see "Waiting without a pair" below) — a long quiet stretch is normal, not a fault. Never promise a match by a particular day.`,
     );
   }
   if ((cadence.firstDropCalibrationHours ?? 0) > 0) {
@@ -198,6 +206,25 @@ export function buildProductPlaybook(
     `- If they call it a scam or demand their money back: stay level, one bubble of facts — what they have actually paid for (tickets / Premium in context; if nothing, say nothing was charged), how the search works, then the next useful step. No apology, no defending, no arguing.`,
   );
   sections.push(waiting.join("\n"));
+
+  // Founder decision 2026-10-15: silence by default, a short waiting ladder,
+  // and one clear answer to "why no pair?" that holds the position.
+  const pauseLine = features.earlyStage
+    ? `- Nobody is paused for a long wait right now — the search keeps running every evening however long it takes. Don't tell them they will be paused.`
+    : `- After ${FAMINE_PAUSE_AFTER_DAYS} days with nobody at all, the search is paused automatically and they get a message about it; it resumes by itself the moment someone who fits appears — they don't need to do anything. If their account is paused for that reason, explain exactly that, plainly.`;
+  sections.push(
+    [
+      `## Waiting without a pair — "why no match?"`,
+      features.earlyStage
+        ? `- Answer clearly and briefly, in your own words: Gennety has only just opened, so the circle is still small, and you don't suggest just anyone. The search runs every evening, and the moment you find the right person, you write first. It is not about them.`
+        : `- Answer clearly and briefly, in your own words: the search runs every evening and you only suggest someone you're sure of. The moment you find the right person, you write first. It is not about them.`,
+      `- At most ONE concrete tip, and only if it is true: a real gap that get_my_standing or the context actually shows (too few photos, not verified, profile still syncing). No real gap → no tip; never invent homework.`,
+      `- Never: apologise, give a date or time frame for a match, promise priority or a place in line, quote or guess how many people are in their city or the pool, or suggest it is their fault.`,
+      `- If they want to leave over the wait, don't talk them out of it. Name the options plainly (Pause, Freeze, Delete) as their choice, and say they can come back any time.`,
+      `- We write on our own only rarely: a few messages over the first five months without a pair (about a week in, three weeks in, then roughly monthly), each saying something new, and after that nothing until there is a match. So a long silence is normal, not a fault.`,
+      pauseLine,
+    ].join("\n"),
+  );
 
   sections.push(`## Stage — match proposed (deciding)
 - The proposal they received shows the partner's photos, name, age, and the pitch — the decision is made looking at a real person, not blind.

@@ -339,3 +339,52 @@ describe("first-drop calibration (founder decision 2026-10-11)", () => {
     expect(text).toContain("If they call it a scam or demand their money back");
   });
 });
+
+describe("waiting without a pair (founder decision 2026-10-15)", () => {
+  const EARLY: PlaybookFeatures = { ...ALL_OFF, earlyStage: true };
+
+  it("answers 'why no match?' with the early-stage line while EARLY_STAGE is on", () => {
+    const text = buildProductPlaybook(EARLY);
+    expect(text).toContain('## Waiting without a pair — "why no match?"');
+    expect(text).toContain("Gennety has only just opened, so the circle is still small");
+    expect(text).toContain("you don't suggest just anyone");
+    expect(text).toContain("you write first");
+    expect(text).toContain("It is not about them.");
+  });
+
+  it("drops the 'just opened' line once the early stage is over", () => {
+    const text = buildProductPlaybook(ALL_OFF);
+    expect(text).toContain('## Waiting without a pair — "why no match?"');
+    expect(text).not.toContain("only just opened");
+    expect(text).toContain("you only suggest someone you're sure of");
+  });
+
+  it("allows one real tip at most, and forbids apologies, ETAs, priority, pool numbers and persuading", () => {
+    const text = buildProductPlaybook(EARLY);
+    expect(text).toContain("At most ONE concrete tip, and only if it is true");
+    expect(text).toContain("No real gap → no tip");
+    expect(text).toContain("Never: apologise, give a date or time frame for a match, promise priority");
+    expect(text).toContain("quote or guess how many people are in their city or the pool");
+    expect(text).toContain("don't talk them out of it");
+    expect(text).toContain("they can come back any time");
+    // The old starvation-boost promise is gone.
+    expect(text).not.toContain("priority rises the longer they wait");
+  });
+
+  it("describes the rare check-ins instead of a weekly one", () => {
+    const text = buildProductPlaybook(EARLY);
+    expect(text).toContain("a few messages over the first five months without a pair");
+    expect(text).not.toContain("about once a week");
+  });
+
+  it("says nobody is auto-paused during the early stage, and explains the pause after it", () => {
+    const early = buildProductPlaybook(EARLY);
+    expect(early).toContain("Nobody is paused for a long wait right now");
+    expect(early).not.toContain("the search is paused automatically");
+
+    const later = buildProductPlaybook(ALL_OFF);
+    expect(later).toContain("After 28 days with nobody at all, the search is paused automatically");
+    expect(later).toContain("it resumes by itself the moment someone who fits appears");
+    expect(later).not.toContain("Nobody is paused for a long wait right now");
+  });
+});

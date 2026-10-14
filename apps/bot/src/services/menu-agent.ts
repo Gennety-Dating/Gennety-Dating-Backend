@@ -921,6 +921,11 @@ async function execGetMyStanding(telegramId: bigint): Promise<string> {
       "If they are asking why it has been quiet: a search that finds nobody sends nothing at all — silence means no one cleared the bar, not that anything is broken or that they were skipped. " +
       "`calibrating` true means a new account in its first-day calibration: it sits out the nearest evening search while you study the profile and the city pool, and `firstSearchAt` is when its first search runs — that is the whole answer to 'why nothing yet?', say it briefly in plain words (never 'calibration' or an hour count) and name that day and time as when the search starts, not as a promised match; it cannot be skipped or bought. " +
       "Hold the position: no apologising, no 'unfortunately', no thanking them for patience — explain how it works, calmly, and move on to what helps. " +
+      (env.EARLY_STAGE
+        ? "If they are simply waiting without a pair, the core answer is: Gennety has only just opened, so the circle is still small, and you don't suggest just anyone; the search runs every evening and you'll write first the moment you find the right person; it's not about them. Nobody is paused for a long wait right now. "
+        : "If they are simply waiting without a pair, the core answer is: the search runs every evening and you only suggest someone you're sure of; you'll write first the moment you find the right person; it's not about them. If their account was paused after a long stretch with nobody, say so plainly — it resumes by itself the moment someone who fits appears. ") +
+      "Add at most ONE concrete tip, and only for a real gap shown here (too few photos, not verified, profile syncing) — no gap, no tip. " +
+      "Never quote or estimate how many people are in their city or the pool, never promise priority, and if they want to leave over the wait, don't argue: name the options and say they can come back any time. " +
       "Never invent a reason that isn't in this data, and never promise a match by any particular date.",
   });
 }

@@ -87,6 +87,7 @@ function playbookFeatures(): PlaybookFeatures {
     tickets: env.TICKET_FEATURE_ENABLED === true,
     premium: env.PREMIUM_FEATURE_ENABLED === true,
     rematch: env.REMATCH_FEATURE_ENABLED === true,
+    earlyStage: env.EARLY_STAGE === true,
   };
 }
 
