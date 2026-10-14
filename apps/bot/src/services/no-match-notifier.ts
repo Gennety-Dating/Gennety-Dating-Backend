@@ -5,10 +5,12 @@ import { calibrationOverWhere } from "./first-drop-calibration.js";
 import {
   CADENCE,
   FAMINE_PAUSE_AFTER_DAYS,
+  WAITING_NOTICE_MILESTONE_DAYS,
   t,
   type Language,
   type TranslationKey,
 } from "@gennety/shared";
+import { env } from "../config.js";
 import { streamDraftsToChat } from "./ai-stream.js";
 
 import { AI_EMOJI } from "./ai-emoji.js";
@@ -44,13 +46,20 @@ export function leadBoldEntity(text: string): { text: string; entities?: Message
 }
 
 /**
- * Empathetic "no match" DM.
+ * The "still looking" notice — the waiting ladder (founder decision 2026-10-15).
  *
- * Fires on its own cron (`CADENCE.noMatchNoticeCron` — 15 min after the
- * Thursday batch under `weekly`, daily under `daily`) for every `active`
- * user that the matcher couldn't pair. Replaces the old `notifyStarved` flow
- * — we send one well-crafted message instead of the curt "10/10 not found"
- * ping. Tone escalates with consecutive famine cycles (tier 1 → 2 → 3+).
+ * Runs after every drop (and on its fallback cron) over the `active` users the
+ * matcher couldn't pair, but **silence is the default**: a person hears from us
+ * only when they cross a step of `WAITING_NOTICE_MILESTONE_DAYS` (7, 21, 45,
+ * 75, 110, 150 days without a pair), once per step, each step with its own
+ * copy that says something new. Someone who skipped steps (paused, unreachable)
+ * gets one notice for the latest step, never a catch-up burst; past day 150
+ * nothing is sent automatically — the next message is a match. The tone holds
+ * the position: no apology, no promised date or priority.
+ *
+ * It replaced a weekly tier ladder (tier = weeks since the last match) whose
+ * first notice landed on the very first unpaired evening and whose tier-1 copy
+ * repeated word for word a week later.
  *
  * **The notice cadence is deliberately decoupled from the batch cadence
  * (D4).** `CADENCE.famineNoticeIntervalMs` is 7 days in BOTH profiles: match
@@ -61,18 +70,16 @@ export function leadBoldEntity(text: string): { text: string; entities?: Message
  * nothing at all**. That silence is the product: at small pool sizes most
  * evenings genuinely have nothing to report, and a nightly "sorry, no one
  * again" would turn a background search into a daily reminder of failure.
- * Under `weekly` this collapses back to exactly today's behavior: the interval
- * (7 days) and the cron's own weekly firing agree, so every drop that leaves
- * someone unpaired sends exactly one notice.
+ * The waiting ladder narrows this further: the 7-day throttle is now only the
+ * query's prefilter, and the steps themselves are 7–40 days apart.
  *
  * The user-visible consequence of that silence — a pinned banner counting down
  * to a drop that will not announce itself — is handled separately by
  * `dropOutpacesNotices` (`@gennety/shared`), which the status banner reads to
  * drop its timer rather than let it reach zero into nothing.
  *
- * `computeTier` is denominated in that same notice interval, so a tier is
- * "which message in the streak is this" under any cadence — see the function
- * for why counting batches instead breaks the tier copy outright.
+ * Steps are calendar days (`daysWaiting`), never batches, so the ladder reads
+ * the same under any drop cadence.
  *
  * The query intentionally re-derives "who has no match this drop" from
  * the DB instead of being handed a list from `runDropBatch` — this keeps the
@@ -108,14 +115,48 @@ export const DEFAULT_NOTIFY_DELAY_MS = 100;
 /**
  * Candidates read per query, and how many such reads one invocation may make.
  *
- * The query is its own cursor: claiming a `NoMatchNotice` row excludes that
- * person from the next read, so re-reading walks forward on its own. The one
- * thing it cannot exclude is a person on no rail at all — no row is written for
- * them, deliberately — so the loop also stops as soon as a read returns nobody
- * it has not already seen.
+ * Reads are keyset-paged by id (`candidateStream`): most people read are owed
+ * no notice and get no claim, so the claim cannot be what moves the walk
+ * forward. The loop also stops as soon as a read returns nobody it has not
+ * already seen.
  */
 const NOTICE_BATCH = 500;
 const MAX_NOTICE_BATCHES = 40;
+
+/**
+ * DM copy per waiting-ladder step, in step order. Step 1 has an early-stage
+ * variant (`waitingNotice1Early`, chosen while `EARLY_STAGE` is on) that says
+ * plainly that Gennety has only just opened. Push copy is per step too — the
+ * title is the DM's bold heading.
+ */
+const WAITING_NOTICE_KEYS = [
+  "waitingNotice1",
+  "waitingNotice2",
+  "waitingNotice3",
+  "waitingNotice4",
+  "waitingNotice5",
+  "waitingNotice6",
+] as const satisfies readonly TranslationKey[];
+const WAITING_PUSH_KEYS = [
+  ["waitingPush1Title", "waitingPush1Body"],
+  ["waitingPush2Title", "waitingPush2Body"],
+  ["waitingPush3Title", "waitingPush3Body"],
+  ["waitingPush4Title", "waitingPush4Body"],
+  ["waitingPush5Title", "waitingPush5Body"],
+  ["waitingPush6Title", "waitingPush6Body"],
+] as const satisfies ReadonlyArray<readonly [TranslationKey, TranslationKey]>;
+
+/** DM copy key for a 1-based waiting-ladder step. */
+export function waitingNoticeKey(step: number, earlyStage: boolean): TranslationKey {
+  if (step <= 1) return earlyStage ? "waitingNotice1Early" : "waitingNotice1";
+  return WAITING_NOTICE_KEYS[Math.min(step, WAITING_NOTICE_KEYS.length) - 1]!;
+}
+
+/** Push title/body keys for a 1-based waiting-ladder step. */
+export function waitingPushKeys(step: number): readonly [TranslationKey, TranslationKey] {
+  const i = Math.min(Math.max(step, 1), WAITING_PUSH_KEYS.length) - 1;
+  return WAITING_PUSH_KEYS[i]!;
+}
 
 /**
  * Window (ms) used to decide whether a user "got matched in this drop" when the
@@ -129,9 +170,14 @@ export interface NoMatchNotifyResult {
   notified: number;
   skipped: number;
   failed: number;
+  /** Waiting-ladder step 1 / step 2 / steps 3–6 sent this run. For a
+   *  market-pending account the bucket is weeks waiting, as before. */
   tier1: number;
   tier2: number;
   tier3plus: number;
+  /** Unpaired, reachable, and deliberately told nothing: no ladder step is due.
+   *  Not claimed — silence is the default. */
+  waiting: number;
   /** D10: users auto-paused this run because no candidate has existed for
    *  FAMINE_PAUSE_AFTER_DAYS days running. Counted separately from the tier
    *  buckets — a paused user gets a distinct message, not another tier DM. */
@@ -181,20 +227,34 @@ export function getDropDate(now: Date): Date {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
+/** What `resolveWaitingAnchor` needs from the candidate row. */
+interface AnchorSource {
+  id: string;
+  createdAt?: Date | null;
+  profile?: { calibrationUntil?: Date | null } | null;
+}
 
 /**
- * The anchor every famine calculation (tier, and D10's pause threshold)
- * measures elapsed time from: the user's most recent dispatched match. For a
- * user who has NEVER been dispatched a match, anchoring to the Unix epoch
- * would produce an absurd result on their very first check (tens of
- * thousands of elapsed days) — so that case anchors to their EARLIEST
- * `NoMatchNotice` instead (the start of their very first famine streak),
- * falling back to `dropDate` itself when even that doesn't exist yet.
+ * The moment a person's wait started — every waiting calculation (the ladder
+ * step, D10's pause threshold) measures from here:
+ *
+ *   1. their most recent dispatched match;
+ *   2. never matched → when they finished onboarding. There is no completion
+ *      timestamp column, but the first-drop calibration window is armed at
+ *      exactly that moment (`armFirstDropCalibration`), so it is
+ *      `calibrationUntil − FIRST_DROP_CALIBRATION_HOURS`;
+ *   3. a legacy account with no window → `createdAt`.
+ *
+ * It used to fall back to the person's FIRST `NoMatchNotice`, which made the
+ * first notice its own anchor: it fired on the very first unpaired evening and
+ * the streak was counted from there. Never anchored to a notice any more.
  */
-async function resolveSinceDate(userId: string, dropDate: Date): Promise<Date> {
+export async function resolveWaitingAnchor(user: AnchorSource, fallback: Date): Promise<Date> {
   const lastMatch = await prisma.match.findFirst({
     where: {
-      OR: [{ userAId: userId }, { userBId: userId }],
+      OR: [{ userAId: user.id }, { userBId: user.id }],
       dispatchedAt: { not: null },
     },
     orderBy: { dispatchedAt: "desc" },
@@ -202,51 +262,64 @@ async function resolveSinceDate(userId: string, dropDate: Date): Promise<Date> {
   });
   if (lastMatch?.dispatchedAt) return lastMatch.dispatchedAt;
 
-  const firstNotice = await prisma.noMatchNotice.findFirst({
-    where: { userId },
-    orderBy: { dropDate: "asc" },
-    select: { dropDate: true },
+  const calibrationUntil = user.profile?.calibrationUntil;
+  if (calibrationUntil) {
+    return new Date(calibrationUntil.getTime() - env.FIRST_DROP_CALIBRATION_HOURS * HOUR_MS);
+  }
+  return user.createdAt ?? fallback;
+}
+
+/**
+ * Whole calendar days (UTC dates, the same day key `NoMatchNotice.dropDate`
+ * uses) from the anchor to the drop. Calendar days rather than elapsed hours
+ * so a pitch dispatched at 18:40 a week ago still counts as seven days on an
+ * 18:20 run.
+ */
+export function daysWaiting(anchor: Date, dropDate: Date): number {
+  return Math.round((dropDate.getTime() - getDropDate(anchor).getTime()) / DAY_MS);
+}
+
+/**
+ * The waiting-ladder step reached after `days` days: the 1-based index of the
+ * largest `WAITING_NOTICE_MILESTONE_DAYS` entry ≤ `days`, or 0 before the first.
+ */
+export function waitingStepFor(days: number): number {
+  let step = 0;
+  WAITING_NOTICE_MILESTONE_DAYS.forEach((milestone, i) => {
+    if (days >= milestone) step = i + 1;
   });
-  return firstNotice?.dropDate ?? dropDate;
+  return step;
 }
 
 /**
- * Tier = which notice in this famine streak is being sent, starting at 1.
+ * The step a notice is owed for right now, or 0 for silence.
  *
- * **Denominated in `CADENCE.famineNoticeIntervalMs`, not `intervalMs`.** The
- * tier only ever selects the tone of a message and the discount threshold, and
- * both of those are claims about the CONVERSATION ("second time in a row"), not
- * about how many batches happened to run in between. Under `weekly` the two
- * intervals are equal so this is byte-for-byte today's behavior; under `daily`
- * using `intervalMs` would have counted days, so the second notice a user ever
- * received — sent a week after the first — would arrive as tier 7 and select
- * the most apologetic tier-3 copy, skipping tier 2 entirely, while the copy
- * itself was describing exactly the second message.
- *
- * The knock-on benefit is that `famineDiscountMinTier` becomes cadence-
- * independent: `2` means "the second notice" under any cadence, which is what
- * PRODUCT_SPEC §3.5b says it means.
+ * Owed iff a step has been reached AND no notice has gone out since that step
+ * began (`lastNoticeAt` is the person's latest `NoMatchNotice.dropDate`). Only
+ * the LATEST reached step is ever owed, so a person who skipped steps gets one
+ * notice, not a burst; after the last step was told, nothing is owed ever again
+ * within this wait. A new match moves the anchor and starts a new ladder.
  */
-function computeTier(sinceDate: Date, dropDate: Date): number {
-  const elapsedMs = dropDate.getTime() - sinceDate.getTime();
-  return Math.max(1, Math.floor(elapsedMs / CADENCE.famineNoticeIntervalMs));
+export function dueWaitingStep(
+  anchor: Date,
+  dropDate: Date,
+  lastNoticeAt: Date | null | undefined,
+): number {
+  const step = waitingStepFor(daysWaiting(anchor, dropDate));
+  if (step === 0) return 0;
+  const stepBegan = getDropDate(anchor).getTime() + WAITING_NOTICE_MILESTONE_DAYS[step - 1]! * DAY_MS;
+  if (lastNoticeAt && lastNoticeAt.getTime() >= stepBegan) return 0;
+  return step;
 }
 
 /**
- * D10: raw elapsed CALENDAR DAYS without a match — deliberately NOT the same
- * unit as `computeTier` (which is cadence-relative: weeks under `weekly`).
- * `FAMINE_PAUSE_AFTER_DAYS` means 28 actual days regardless of how often the
- * batch runs, so the pause decision needs its own, cadence-independent
- * day-count rather than reusing `tier`.
+ * Weeks waiting, minimum 1 — the bucket a market-pending account's notice is
+ * recorded under. Those accounts are outside the ladder (their notice is "we're
+ * not in your city yet", on the plain `famineNoticeIntervalMs` throttle), so
+ * this is analytics only.
  */
-function daysWithoutMatch(sinceDate: Date, dropDate: Date): number {
-  return Math.floor((dropDate.getTime() - sinceDate.getTime()) / DAY_MS);
-}
-
-function templateKeyForTier(tier: number): TranslationKey {
-  if (tier <= 1) return "noMatchThisWeekTier1";
-  if (tier === 2) return "noMatchThisWeekTier2";
-  return "noMatchThisWeekTier3";
+function weeksWaiting(anchor: Date, dropDate: Date): number {
+  return Math.max(1, Math.floor(daysWaiting(anchor, dropDate) / 7));
 }
 
 /**
@@ -276,10 +349,10 @@ function templateKeyForTier(tier: number): TranslationKey {
  * `skipped` — collapsing the two questions into one id test is the defect
  * §5.4 fixed and this is its tenth site.
  *
- * The push is a single frozen empathetic line, identical across all four DM
- * branches (tier / market-pending / pause / discount). It names no partner,
- * quotes no discount percentage and carries no city-switch button: those
- * belong to the DM, where their conditions are actually checked.
+ * The push follows the DM it stands for — the ladder step's own title and
+ * line, the pause's own, or the frozen market-pending line — but never names a
+ * partner, quotes the discount or carries the city-switch button: those belong
+ * to the DM, where their conditions are actually checked.
  */
 export async function sendNoMatchNotices(
   api: Api<RawApi>,
@@ -315,13 +388,21 @@ export async function sendNoMatchNotices(
   // than a same-day check, so it safely subsumes the old exact-`dropDate`
   // idempotency filter; the `@@unique([userId, dropDate])` constraint (via
   // `isUniqueViolation` below) remains the actual DB-level guarantee.
+  //
+  // Since the waiting ladder this is the cheap prefilter only — every step is
+  // at least this far apart, so nobody it hides could be owed a notice. Who is
+  // actually told is decided per person (`dueWaitingStep`).
   const notifyCutoff = new Date(now.getTime() - CADENCE.famineNoticeIntervalMs);
 
-  const readCandidates = () =>
+  const readCandidates = (afterId: string | null) =>
     prisma.user.findMany({
       take: NOTICE_BATCH,
       orderBy: { id: "asc" },
       where: {
+        // Keyset cursor. Most candidates are now owed nothing and are passed over
+        // WITHOUT a claim, so the claim alone can no longer move the read
+        // forward — re-reading from the start would return the same page.
+        ...(afterId ? { id: { gt: afterId } } : {}),
         status: "active",
         onboardingStep: "completed",
         // An account created after the drop was not in it, and must not be told
@@ -352,7 +433,11 @@ export async function sendNoMatchNotices(
         // addressed to a chat the user will never open.
         platform: true,
         language: true,
-        profile: { select: { homeCityKey: true, homeCity: true } },
+        createdAt: true,
+        profile: { select: { homeCityKey: true, homeCity: true, calibrationUntil: true } },
+        // The latest notice: what decides whether the current ladder step was
+        // already told.
+        noMatchNotices: { select: { dropDate: true }, orderBy: { dropDate: "desc" }, take: 1 },
       },
     });
 
@@ -363,6 +448,7 @@ export async function sendNoMatchNotices(
     tier1: 0,
     tier2: 0,
     tier3plus: 0,
+    waiting: 0,
     paused: 0,
     heldForQuietHours: false,
     errors: [],
@@ -372,20 +458,21 @@ export async function sendNoMatchNotices(
    * Walk the candidates a page at a time instead of holding the whole active
    * base in memory.
    *
-   * The read is its own cursor: claiming a `NoMatchNotice` excludes that person
-   * from the next page, so re-reading moves forward without one. What it cannot
-   * exclude is somebody on no rail at all — no row is written for them by
-   * design — so `seen` is what stops the walk from handing the same unreachable
-   * person back forever.
+   * Keyset-paged by id: most people read are owed nothing this evening and
+   * are passed over without a claim, as is anyone on no rail at all, so the
+   * claim cannot be what moves the walk forward. `seen` stays as the backstop
+   * against a page that hands the same person back.
    */
   async function* candidateStream() {
     const seen = new Set<string>();
+    let afterId: string | null = null;
     for (let batch = 0; batch < MAX_NOTICE_BATCHES; batch += 1) {
       if (inQuietHours()) {
         result.heldForQuietHours = true;
         return;
       }
-      const page = await readCandidates();
+      const page = await readCandidates(afterId);
+      if (page.length > 0) afterId = page[page.length - 1]!.id;
       // Filtered and recorded in the same pass, so a page that somehow repeats
       // a row cannot process the same person twice either.
       const fresh = page.filter((candidate) => {
@@ -423,13 +510,43 @@ export async function sendNoMatchNotices(
     // the only one it counts as `skipped`.
     //
     // Deliberately BEFORE the claim, so no `NoMatchNotice` row is written for
-    // them. That row is both the analytics record of a notice and the anchor
-    // `resolveSinceDate` falls back to for a never-matched user, so claiming
-    // one for a notice nobody received would age a famine streak on silence —
-    // and could hand them tier 2 (and its discount line) as the first thing
-    // they ever hear from us if they later join a rail.
+    // them. That row is both the analytics record of a notice and what marks a
+    // ladder step as told, so claiming one for a notice nobody received would
+    // silently use up a step they never heard.
     if (!viaTelegram && !viaPush) {
       result.skipped++;
+      continue;
+    }
+
+    const anchor = await resolveWaitingAnchor(u, dropDate);
+    const lang: Language = u.language ?? "en";
+    const earlyStage = env.EARLY_STAGE;
+
+    // An account registered in a city we haven't launched (PRODUCT_SPEC §1.1).
+    // Matching is same-city, so the honest answer isn't "still looking" —
+    // it's "we're not in your city yet", plus the one-tap move to a launched
+    // market. The waiting ladder, a discount, or a paid Rematch would all sell
+    // a drop they cannot be in. Outside the ladder: they keep the plain
+    // `famineNoticeIntervalMs` throttle the candidate query applies.
+    const marketPending = isMarketPending(u.profile?.homeCityKey);
+
+    // D10: the pool has genuinely had nothing for this user for
+    // FAMINE_PAUSE_AFTER_DAYS running — pause instead of another notice. Never
+    // during the early stage (founder decision 2026-10-15): the base is still
+    // gathering, so a long wait says nothing about the person, and the ladder
+    // simply goes quiet after its last step. Not applicable to a market-pending
+    // user either: their city switch, not a pause, is the honest fix.
+    const days = daysWaiting(anchor, dropDate);
+    const isPoolExhaustionPause =
+      !earlyStage && !marketPending && days >= FAMINE_PAUSE_AFTER_DAYS;
+
+    // The ladder step this notice is for. Silence is the default: no step owed
+    // (and no pause to announce) means nothing is sent and nothing is claimed.
+    const dueStep = marketPending
+      ? 0
+      : dueWaitingStep(anchor, dropDate, u.noMatchNotices?.[0]?.dropDate);
+    if (!marketPending && !isPoolExhaustionPause && dueStep === 0) {
+      result.waiting++;
       continue;
     }
 
@@ -440,24 +557,9 @@ export async function sendNoMatchNotices(
       continue;
     }
 
-    const sinceDate = await resolveSinceDate(u.id, dropDate);
-    const tier = computeTier(sinceDate, dropDate);
-    const lang: Language = u.language ?? "en";
-
-    // An account registered in a city we haven't launched (PRODUCT_SPEC §1.1).
-    // Matching is same-city, so the honest answer isn't "no match this week" —
-    // it's "we're not in your city yet", plus the one-tap move to a launched
-    // market. Escalating famine tiers, granting a discount, or offering a paid
-    // Rematch would all sell a drop they cannot be in.
-    const marketPending = isMarketPending(u.profile?.homeCityKey);
-
-    // D10: the pool has genuinely had nothing for this user for
-    // FAMINE_PAUSE_AFTER_DAYS running — pause instead of another famine tier.
-    // Not applicable to a market-pending user: their city switch, not a
-    // pause, is the honest fix (and days-without-a-match there measures
-    // nothing meaningful — they were never in a pool to begin with).
-    const daysStarved = daysWithoutMatch(sinceDate, dropDate);
-    const isPoolExhaustionPause = !marketPending && daysStarved >= FAMINE_PAUSE_AFTER_DAYS;
+    // `NoMatchNotice.tier`: the ladder step (1–6) — for a pause, the step the
+    // wait has reached — or weeks waiting for a market-pending account.
+    const tier = marketPending ? weeksWaiting(anchor, dropDate) : Math.max(1, waitingStepFor(days));
 
     let body = marketPending
       ? t(lang, "noMatchCityNotLaunched", {
@@ -465,16 +567,21 @@ export async function sendNoMatchNotices(
         })
       : isPoolExhaustionPause
         ? t(lang, "poolExhaustedPauseNotice", {})
-        : t(lang, templateKeyForTier(tier), {});
+        : t(lang, waitingNoticeKey(dueStep, earlyStage), {});
+    let pushKeys: readonly [TranslationKey, TranslationKey] = marketPending
+      ? ["noMatchPushTitle", "noMatchPushBody"]
+      : isPoolExhaustionPause
+        ? ["poolExhaustedPausePushTitle", "poolExhaustedPausePushBody"]
+        : waitingPushKeys(dueStep);
 
-    // 2nd consecutive famine week+ → grant the one-time single-ticket discount
+    // Ladder step 2+ (day 21 on) → grant the one-time single-ticket discount
     // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
-    // grant self-gates), so the flag-off path keeps the plain tier template.
+    // grant self-gates), so the flag-off path keeps the plain step copy.
     // Skipped for a pause: that DM is a different message entirely, and
     // grafting a discount offer onto "we're pausing your search" reads oddly
-    // — the discount (if already earned from an earlier tier) is unaffected
+    // — the discount (if already earned from an earlier step) is unaffected
     // and stays available for when they resume.
-    if (!marketPending && !isPoolExhaustionPause && tier >= CADENCE.famineDiscountMinTier) {
+    if (!marketPending && !isPoolExhaustionPause && dueStep >= CADENCE.famineDiscountMinTier) {
       const grant = await grantFamineDiscountIfEligible(u.id);
       if (grant.granted && grant.pct) {
         body += `\n\n${t(lang, "noMatchDiscountOffer", { pct: grant.pct })}`;
@@ -513,8 +620,8 @@ export async function sendNoMatchNotices(
       // Attempt the pause CAS FIRST when applicable — its outcome decides
       // which message actually goes out. A lost race (already not `active`
       // for some other reason — moderation, a manual pause/freeze between
-      // candidate selection and here) falls back to the ordinary tier DM
-      // rather than sending nothing.
+      // candidate selection and here) falls back to the ladder step's DM when
+      // one is owed, and to silence when not.
       //
       // NOMATCH-2: the status flip and the `starvationPausedAt` marker commit
       // TOGETHER. They are not two independent facts — the marker is the only
@@ -547,8 +654,15 @@ export async function sendNoMatchNotices(
         }
         if (transition.kind === "changed") {
           pausedNow = true;
+        } else if (dueStep > 0) {
+          body = t(lang, waitingNoticeKey(dueStep, earlyStage), {});
+          pushKeys = waitingPushKeys(dueStep);
         } else {
-          body = t(lang, templateKeyForTier(tier), {});
+          // No pause, and no ladder step owed either: silence, as for anyone
+          // else on an evening with nothing to say. Release the claim.
+          await prisma.noMatchNotice.deleteMany({ where: { userId: u.id, dropDate } });
+          result.waiting++;
+          continue;
         }
       }
 
@@ -606,8 +720,8 @@ export async function sendNoMatchNotices(
       }
 
       if (viaPush) {
-        // One line, identical under every branch above — including the two
-        // that read differently in the DM. It cannot mention the city switch
+        // The ladder step's own title and line (or the pause's, or the frozen
+        // market-pending line) — never more than the DM. It cannot mention the city switch
         // (there is no button on a notification, §5.2) and it cannot quote the
         // famine discount, whose eligibility is decided per-user above and
         // whose offer lives in the DM. `sendPushToUser` resolves `false`
@@ -615,8 +729,8 @@ export async function sendNoMatchNotices(
         // APNs refused, so `false` here is a genuine "was not told" rather
         // than a swallowed exception.
         const pushed = await sendPushToUser(u.id, {
-          title: t(lang, "noMatchPushTitle"),
-          body: t(lang, "noMatchPushBody"),
+          title: t(lang, pushKeys[0]),
+          body: t(lang, pushKeys[1]),
           data: { type: NO_MATCH_PUSH_TYPE },
         }).catch((err: unknown) => {
           console.warn(
@@ -708,7 +822,7 @@ export async function sendNoMatchNotices(
   }
 
   console.log(
-    `[no-match-notify] ${result.heldForQuietHours ? "held for quiet hours" : "done"}: notified=${result.notified} tier1=${result.tier1} tier2=${result.tier2} tier3plus=${result.tier3plus} skipped=${result.skipped} failed=${result.failed}`,
+    `[no-match-notify] ${result.heldForQuietHours ? "held for quiet hours" : "done"}: notified=${result.notified} tier1=${result.tier1} tier2=${result.tier2} tier3plus=${result.tier3plus} waiting=${result.waiting} skipped=${result.skipped} failed=${result.failed}`,
   );
 
   return result;

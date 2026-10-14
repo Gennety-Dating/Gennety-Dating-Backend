@@ -128,7 +128,7 @@ export function createNoMatchNoticeJob(
       if (r.notified > 0 || r.failed > 0 || r.heldForQuietHours) {
         console.log(
           `[no-match-notice] (${trigger}) notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} ` +
-            `tier3plus=${r.tier3plus} paused=${r.paused} skipped=${r.skipped} failed=${r.failed}` +
+            `tier3plus=${r.tier3plus} waiting=${r.waiting} paused=${r.paused} skipped=${r.skipped} failed=${r.failed}` +
             (r.heldForQuietHours ? " heldForQuietHours" : ""),
         );
       }

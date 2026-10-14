@@ -259,18 +259,32 @@ export const FAMINE_DISCOUNT_TTL_DAYS = 30;
  * the reasoning (an honest "the pool is empty right now" message plus a real
  * pause, not an indefinite escalating famine tier with no way out).
  *
- * 28, not the "e.g. 14" originally floated in planning, because `computeTier`
- * is denominated in `CADENCE.famineNoticeIntervalMs` — 7 days under BOTH the
- * `weekly` and the `daily` profile (match daily, apologise weekly) — so tier 2
- * (the discount threshold) sits at day 14 and tier 3 at day 21 whatever the
- * drop cadence. A pause threshold at 14 would fire at the exact same instant as
- * the discount and make tier 3 structurally unreachable (the pause would
- * always win the race, since it's checked first). 28 days lets every user
- * see the full existing ladder — tier 1 (day 7) -> tier 2 + discount (day
- * 14) -> tier 3 (day 21) — before the pause takes over where an unbounded
- * tier-3-forever loop used to be.
+ * Applies only while the bot's `EARLY_STAGE` flag is off (founder decision
+ * 2026-10-15): during the early stage the base is still gathering, so a long
+ * wait says nothing about the person and nobody is paused — the waiting ladder
+ * below simply goes quiet after its last step. 28 sits after the second step
+ * (day 21, which carries the famine discount), so with the flag off a person
+ * still sees the 7- and 21-day notices before the pause takes over.
  */
 export const FAMINE_PAUSE_AFTER_DAYS = 28;
+
+/**
+ * The waiting ladder (founder decision 2026-10-15): days without a pair after
+ * which the bot writes on its own, once per step. Silence is the default —
+ * a drop that finds nobody sends nothing — and these are the only exceptions,
+ * spread over roughly five months, each with copy that says something new
+ * (`waitingNotice{N}` / `waitingPush{N}Title|Body`, N = step index + 1).
+ *
+ * Days are counted from the most recent dispatched match, or for someone who
+ * was never matched, from when they finished onboarding. A person who skipped
+ * steps (paused, unreachable, freshly resumed) gets ONE notice for the latest
+ * step they have reached, never a catch-up burst; past the last step nothing
+ * is sent automatically any more — the next message is a match.
+ *
+ * The step's 1-based index is what `NoMatchNotice.tier` stores, so
+ * `CADENCE.famineDiscountMinTier` (2) lands on the day-21 notice.
+ */
+export const WAITING_NOTICE_MILESTONE_DAYS = [7, 21, 45, 75, 110, 150] as const;
 
 /**
  * Version of the user-facing legal documents in force, stamped onto

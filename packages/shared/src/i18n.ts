@@ -623,12 +623,20 @@ const translations = {
     expiryCaptionSilentPenalty:
       "It's the second time, so your rating has been lowered. Next time, answer at least “no” — someone is waiting.",
     expiryCaptionPeerIgnored: "See you in the next round.",
-    noMatchThisWeekTier1:
-      "*No match this week*\n\nI didn't find anyone who truly fits, and I won't offer just anyone. You'll have priority in the next round ✨",
-    noMatchThisWeekTier2:
-      "*No match again*\n\nNo one who truly fits yet — and a random person is not what you came for. Your priority in the next round is higher still 🤍",
-    noMatchThisWeekTier3:
-      "*Still no match*\n\nThere's still no one who truly fits, and I won't offer just anyone. I'm watching your queue — you're among the first in the next round 🤍",
+    waitingNotice1Early:
+      "*Still looking*\n\nGennety has only just opened, so the circle is still small, and I don't suggest just anyone. I match every evening — the moment I find the right person, I'll write first.",
+    waitingNotice1:
+      "*Still looking*\n\nI match every evening and only suggest someone when I'm sure. The moment I find the right person, I'll write first.",
+    waitingNotice2:
+      "*Matching is on*\n\nEvery evening I look at who's new and weigh them against you. Silence means I'm searching, not that I forgot.",
+    waitingNotice3:
+      "*I'm here*\n\nYou don't need to do anything: matching runs on its own, every evening. When I find someone, I'll write.",
+    waitingNotice4:
+      "*Still searching*\n\nGennety is growing, and I look at every new person with you in mind too. I'll suggest someone when there's someone worth suggesting.",
+    waitingNotice5:
+      "*All set*\n\nYou're in the matching every evening. If you want to change something in your profile or take a break, it's in settings.",
+    waitingNotice6:
+      "*From now on, only news*\n\nI won't check in like this again: my next message will be a match. Matching runs every evening, as before.",
     noMatchDiscountOffer:
       "🎟️ Your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
@@ -1006,6 +1014,20 @@ const translations = {
     // the DM that grants it, so a push promising it could promise wrongly.
     noMatchPushTitle: "No match this time",
     noMatchPushBody: "No one right turned up yet. The search stays on.",
+    waitingPush1Title: "Still looking",
+    waitingPush1Body: "Matching every evening — I'll write first when I find someone.",
+    waitingPush2Title: "Matching is on",
+    waitingPush2Body: "Silence means I'm searching.",
+    waitingPush3Title: "I'm here",
+    waitingPush3Body: "Matching runs on its own, every evening.",
+    waitingPush4Title: "Still searching",
+    waitingPush4Body: "I look at every new person with you in mind.",
+    waitingPush5Title: "All set",
+    waitingPush5Body: "You're in the matching every evening.",
+    waitingPush6Title: "From now on, only news",
+    waitingPush6Body: "My next message will be a match.",
+    poolExhaustedPausePushTitle: "Pausing your search",
+    poolExhaustedPausePushBody: "As soon as someone who fits shows up, I'll bring you back into the search myself.",
     matchNudgePushTitle: "Your match is still waiting",
     matchNudgePushBody: "Yes or no — both are fine. The window's still open.",
     planningNudgePushTitle: "Your date still needs a time",
@@ -1821,12 +1843,20 @@ const translations = {
     expiryCaptionSilentPenalty:
       "Это уже второй раз, поэтому рейтинг снижен. В следующий раз ответь хотя бы «нет» — человек ждёт.",
     expiryCaptionPeerIgnored: "Увидимся в следующем подборе.",
-    noMatchThisWeekTier1:
-      "*На этой неделе без мэтча*\n\nНе нашёл того, кто правда подходит, а предлагать кого попало не хочу. В следующем подборе у тебя приоритет ✨",
-    noMatchThisWeekTier2:
-      "*Снова без мэтча*\n\nПока нет того, кто правда подходит, — а случайный человек тебе не нужен. В следующем подборе твой приоритет ещё выше 🤍",
-    noMatchThisWeekTier3:
-      "*Пока без мэтча*\n\nПодходящего человека всё ещё нет, а предлагать кого попало я не буду. Слежу за твоей очередью — в следующем подборе ты среди первых 🤍",
+    waitingNotice1Early:
+      "*Ищу дальше*\n\nGennety только открылся, людей пока немного, а кого попало я не предлагаю. Подбираю каждый вечер — как найду подходящего человека, напишу первым.",
+    waitingNotice1:
+      "*Ищу дальше*\n\nПодбираю каждый вечер и предлагаю пару, только когда в ней уверен. Как найду подходящего человека — напишу первым.",
+    waitingNotice2:
+      "*Подбор идёт*\n\nКаждый вечер смотрю, кто появился, и примеряю к тебе. Тишина значит, что я ищу, а не что забыл.",
+    waitingNotice3:
+      "*Я на связи*\n\nТебе ничего не нужно делать: подбор идёт сам, каждый вечер. Как найду — напишу.",
+    waitingNotice4:
+      "*Поиск продолжается*\n\nGennety растёт, и каждого нового человека я смотрю и под тебя. Предложу, когда будет кто-то, кого не стыдно предложить.",
+    waitingNotice5:
+      "*Всё в силе*\n\nТы в подборе каждый вечер. Захочешь что-то поменять в профиле или взять паузу — это в настройках.",
+    waitingNotice6:
+      "*Дальше — только по делу*\n\nБольше не буду напоминать о себе: следующее сообщение от меня будет с парой. Подбор идёт каждый вечер, как и раньше.",
     noMatchDiscountOffer:
       "🎟️ Твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
@@ -2129,6 +2159,20 @@ const translations = {
     safetyBriefPushBody: "Памятка безопасности на сегодня уже в приложении.",
     noMatchPushTitle: "В этот раз без мэтча",
     noMatchPushBody: "Пока никого подходящего не нашлось. Поиск продолжается.",
+    waitingPush1Title: "Ищу дальше",
+    waitingPush1Body: "Подбираю каждый вечер — напишу первым, как найду.",
+    waitingPush2Title: "Подбор идёт",
+    waitingPush2Body: "Тишина значит, что я ищу.",
+    waitingPush3Title: "Я на связи",
+    waitingPush3Body: "Подбор идёт сам, каждый вечер.",
+    waitingPush4Title: "Поиск продолжается",
+    waitingPush4Body: "Смотрю каждого нового человека и под тебя.",
+    waitingPush5Title: "Всё в силе",
+    waitingPush5Body: "Ты в подборе каждый вечер.",
+    waitingPush6Title: "Дальше — только по делу",
+    waitingPush6Body: "Следующее сообщение — с парой.",
+    poolExhaustedPausePushTitle: "Ставлю поиск на паузу",
+    poolExhaustedPausePushBody: "Как появится подходящий человек, сам верну тебя в поиск.",
     matchNudgePushTitle: "Мэтч всё ещё ждёт",
     matchNudgePushBody: "Да или нет — оба варианта в порядке. Окно ещё открыто.",
     planningNudgePushTitle: "Свиданию всё ещё нужно время",
@@ -2906,12 +2950,20 @@ const translations = {
     expiryCaptionSilentPenalty:
       "Це вже вдруге, тому рейтинг знижено. Наступного разу відповідай хоча б «ні» — людина чекає.",
     expiryCaptionPeerIgnored: "Побачимось у наступному підборі.",
-    noMatchThisWeekTier1:
-      "*Цього тижня без метчу*\n\nНе знайшов того, хто справді підходить, а пропонувати будь-кого не хочу. У наступному підборі в тебе пріоритет ✨",
-    noMatchThisWeekTier2:
-      "*Знову без метчу*\n\nПоки немає того, хто справді підходить, — а випадкова людина тобі не потрібна. У наступному підборі твій пріоритет ще вищий 🤍",
-    noMatchThisWeekTier3:
-      "*Поки без метчу*\n\nЛюдини, яка підходить, досі немає, а пропонувати будь-кого я не буду. Стежу за твоєю чергою — у наступному підборі ти серед перших 🤍",
+    waitingNotice1Early:
+      "*Шукаю далі*\n\nGennety тільки відкрився, людей поки небагато, а кого завгодно я не пропоную. Підбираю щовечора — щойно знайду відповідну людину, напишу першим.",
+    waitingNotice1:
+      "*Шукаю далі*\n\nПідбираю щовечора і пропоную пару, лише коли в ній упевнений. Щойно знайду відповідну людину — напишу першим.",
+    waitingNotice2:
+      "*Підбір триває*\n\nЩовечора дивлюся, хто з'явився, і приміряю до тебе. Тиша означає, що я шукаю, а не що забув.",
+    waitingNotice3:
+      "*Я на зв'язку*\n\nТобі нічого не треба робити: підбір іде сам, щовечора. Щойно знайду — напишу.",
+    waitingNotice4:
+      "*Пошук триває*\n\nGennety росте, і кожну нову людину я дивлюся й під тебе. Запропоную, коли буде хтось, кого не соромно запропонувати.",
+    waitingNotice5:
+      "*Усе в силі*\n\nТи в підборі щовечора. Захочеш щось змінити в профілі чи взяти паузу — це в налаштуваннях.",
+    waitingNotice6:
+      "*Далі — тільки по ділу*\n\nБільше не нагадуватиму про себе: наступне повідомлення від мене буде з парою. Підбір іде щовечора, як і раніше.",
     noMatchDiscountOffer:
       "🎟️ Твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
@@ -3215,6 +3267,20 @@ const translations = {
     safetyBriefPushBody: "Пам'ятка безпеки на сьогодні вже в застосунку.",
     noMatchPushTitle: "Цього разу без метчу",
     noMatchPushBody: "Поки нікого відповідного не знайшлося. Пошук триває.",
+    waitingPush1Title: "Шукаю далі",
+    waitingPush1Body: "Підбираю щовечора — напишу першим, щойно знайду.",
+    waitingPush2Title: "Підбір триває",
+    waitingPush2Body: "Тиша означає, що я шукаю.",
+    waitingPush3Title: "Я на зв'язку",
+    waitingPush3Body: "Підбір іде сам, щовечора.",
+    waitingPush4Title: "Пошук триває",
+    waitingPush4Body: "Дивлюся кожну нову людину й під тебе.",
+    waitingPush5Title: "Усе в силі",
+    waitingPush5Body: "Ти в підборі щовечора.",
+    waitingPush6Title: "Далі — тільки по ділу",
+    waitingPush6Body: "Наступне повідомлення — з парою.",
+    poolExhaustedPausePushTitle: "Ставлю пошук на паузу",
+    poolExhaustedPausePushBody: "Щойно з'явиться людина, яка підходить, сам поверну тебе в пошук.",
     matchNudgePushTitle: "Метч усе ще чекає",
     matchNudgePushBody: "Так чи ні — обидва варіанти нормальні. Вікно ще відкрите.",
     planningNudgePushTitle: "Побаченню все ще потрібен час",
@@ -3980,12 +4046,20 @@ const deTranslations: TranslationTable = {
   expiryCaptionSilentPenalty:
     "Es ist schon das zweite Mal, deshalb wurde dein Rating gesenkt. Antworte nächstes Mal wenigstens mit „Nein“ — jemand wartet.",
   expiryCaptionPeerIgnored: "Wir sehen uns in der nächsten Runde.",
-  noMatchThisWeekTier1:
-    "*Diese Woche kein Match*\n\nIch habe niemanden gefunden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. In der nächsten Runde hast du Priorität ✨",
-  noMatchThisWeekTier2:
-    "*Wieder kein Match*\n\nNoch niemand, der wirklich passt — und irgendwer ist nicht das, wofür du hier bist. In der nächsten Runde ist deine Priorität noch höher 🤍",
-  noMatchThisWeekTier3:
-    "*Noch kein Match*\n\nEs gibt immer noch niemanden, der wirklich passt, und ich schlage nicht einfach irgendwen vor. Ich behalte deine Warteschlange im Blick — in der nächsten Runde bist du unter den Ersten 🤍",
+  waitingNotice1Early:
+    "*Ich suche weiter*\n\nGennety ist gerade erst gestartet, der Kreis ist noch klein, und ich schlage nicht einfach irgendwen vor. Ich suche jeden Abend — sobald ich die passende Person finde, melde ich mich zuerst.",
+  waitingNotice1:
+    "*Ich suche weiter*\n\nIch suche jeden Abend und schlage jemanden erst vor, wenn ich mir sicher bin. Sobald ich die passende Person finde, melde ich mich zuerst.",
+  waitingNotice2:
+    "*Die Suche läuft*\n\nJeden Abend schaue ich, wer neu dazugekommen ist, und halte es gegen dich. Stille heißt, dass ich suche — nicht, dass ich dich vergessen habe.",
+  waitingNotice3:
+    "*Ich bin da*\n\nDu musst nichts tun: Die Suche läuft von selbst, jeden Abend. Sobald ich jemanden finde, melde ich mich.",
+  waitingNotice4:
+    "*Weiter auf der Suche*\n\nGennety wächst, und jede neue Person sehe ich mir auch mit Blick auf dich an. Ich schlage jemanden vor, wenn es jemanden gibt, der es wert ist.",
+  waitingNotice5:
+    "*Alles wie gehabt*\n\nDu bist jeden Abend mit dabei. Wenn du etwas an deinem Profil ändern oder eine Pause machen willst — das geht in den Einstellungen.",
+  waitingNotice6:
+    "*Ab jetzt nur mit Neuigkeiten*\n\nIch melde mich nicht mehr einfach so: Meine nächste Nachricht kommt mit einem Match. Die Suche läuft jeden Abend, wie bisher.",
   noMatchDiscountOffer:
     "🎟️ Dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
@@ -4266,6 +4340,20 @@ const deTranslations: TranslationTable = {
   safetyBriefPushBody: "Deine Sicherheits-Checkliste für heute Abend liegt in der App.",
   noMatchPushTitle: "Diesmal kein Match",
   noMatchPushBody: "Noch niemand Passendes gefunden. Die Suche läuft weiter.",
+  waitingPush1Title: "Ich suche weiter",
+  waitingPush1Body: "Ich suche jeden Abend — ich melde mich zuerst, sobald ich jemanden finde.",
+  waitingPush2Title: "Die Suche läuft",
+  waitingPush2Body: "Stille heißt, dass ich suche.",
+  waitingPush3Title: "Ich bin da",
+  waitingPush3Body: "Die Suche läuft von selbst, jeden Abend.",
+  waitingPush4Title: "Weiter auf der Suche",
+  waitingPush4Body: "Ich sehe mir jede neue Person auch mit Blick auf dich an.",
+  waitingPush5Title: "Alles wie gehabt",
+  waitingPush5Body: "Du bist jeden Abend mit dabei.",
+  waitingPush6Title: "Ab jetzt nur mit Neuigkeiten",
+  waitingPush6Body: "Meine nächste Nachricht kommt mit einem Match.",
+  poolExhaustedPausePushTitle: "Ich pausiere deine Suche",
+  poolExhaustedPausePushBody: "Sobald jemand Passendes auftaucht, hole ich dich selbst zurück in die Suche.",
   matchNudgePushTitle: "Dein Match wartet noch",
   matchNudgePushBody: "Ja oder nein — beides ist okay. Das Fenster ist noch offen.",
   planningNudgePushTitle: "Deinem Date fehlt noch die Zeit",
@@ -5042,12 +5130,20 @@ const plTranslations: TranslationTable = {
   expiryCaptionSilentPenalty:
     "To już drugi raz, więc ocena została obniżona. Następnym razem odpowiedz chociaż „nie” — ktoś czeka.",
   expiryCaptionPeerIgnored: "Widzimy się przy następnym doborze.",
-  noMatchThisWeekTier1:
-    "*W tym tygodniu bez matcha*\n\nNie znalazłem nikogo, kto naprawdę pasuje, a nie chcę proponować byle kogo. Przy następnym doborze masz priorytet ✨",
-  noMatchThisWeekTier2:
-    "*Znowu bez matcha*\n\nNadal nikt naprawdę nie pasuje — a przypadkowa osoba to nie to, po co tu jesteś. Przy następnym doborze twój priorytet jest jeszcze wyższy 🤍",
-  noMatchThisWeekTier3:
-    "*Na razie bez matcha*\n\nNadal nie ma nikogo, kto naprawdę pasuje, a nie będę proponować byle kogo. Pilnuję twojej kolejki — przy następnym doborze jesteś wśród pierwszych 🤍",
+  waitingNotice1Early:
+    "*Szukam dalej*\n\nGennety dopiero wystartowało, osób jest na razie niewiele, a nie proponuję byle kogo. Dobieram co wieczór — gdy tylko znajdę odpowiednią osobę, napiszę pierwszy.",
+  waitingNotice1:
+    "*Szukam dalej*\n\nDobieram co wieczór i proponuję parę dopiero, gdy jestem jej pewien. Gdy tylko znajdę odpowiednią osobę — napiszę pierwszy.",
+  waitingNotice2:
+    "*Dobór trwa*\n\nCo wieczór sprawdzam, kto się pojawił, i przymierzam do ciebie. Cisza znaczy, że szukam, a nie że zapomniałem.",
+  waitingNotice3:
+    "*Jestem w kontakcie*\n\nNie musisz nic robić: dobór idzie sam, co wieczór. Gdy znajdę — napiszę.",
+  waitingNotice4:
+    "*Wciąż szukam*\n\nGennety rośnie, a każdą nową osobę oglądam też pod kątem ciebie. Zaproponuję, gdy pojawi się ktoś, kogo warto zaproponować.",
+  waitingNotice5:
+    "*Wszystko aktualne*\n\nJesteś w doborze co wieczór. Jeśli zechcesz coś zmienić w profilu albo zrobić przerwę — to w ustawieniach.",
+  waitingNotice6:
+    "*Od teraz tylko konkretnie*\n\nNie będę się już przypominać: następna wiadomość ode mnie będzie z parą. Dobór trwa co wieczór, jak dotąd.",
   noMatchDiscountOffer:
     "🎟️ Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
@@ -5326,6 +5422,20 @@ const plTranslations: TranslationTable = {
   safetyBriefPushBody: "Twoja lista bezpieczeństwa na dziś jest już w aplikacji.",
   noMatchPushTitle: "Tym razem bez matcha",
   noMatchPushBody: "Na razie nie znalazł się nikt odpowiedni. Poszukiwania trwają.",
+  waitingPush1Title: "Szukam dalej",
+  waitingPush1Body: "Dobieram co wieczór — napiszę pierwszy, gdy znajdę.",
+  waitingPush2Title: "Dobór trwa",
+  waitingPush2Body: "Cisza znaczy, że szukam.",
+  waitingPush3Title: "Jestem w kontakcie",
+  waitingPush3Body: "Dobór idzie sam, co wieczór.",
+  waitingPush4Title: "Wciąż szukam",
+  waitingPush4Body: "Oglądam każdą nową osobę też pod kątem ciebie.",
+  waitingPush5Title: "Wszystko aktualne",
+  waitingPush5Body: "Jesteś w doborze co wieczór.",
+  waitingPush6Title: "Od teraz tylko konkretnie",
+  waitingPush6Body: "Następna wiadomość — z parą.",
+  poolExhaustedPausePushTitle: "Wstrzymuję wyszukiwanie",
+  poolExhaustedPausePushBody: "Gdy tylko pojawi się ktoś pasujący, sam przywrócę cię do wyszukiwania.",
   matchNudgePushTitle: "Twój match wciąż czeka",
   matchNudgePushBody: "Tak lub nie — obie opcje są w porządku. Okno jest wciąż otwarte.",
   planningNudgePushTitle: "Randce wciąż brakuje godziny",

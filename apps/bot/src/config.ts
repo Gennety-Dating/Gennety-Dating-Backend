@@ -544,6 +544,13 @@ export const env = {
     0,
     Number(process.env.FIRST_DROP_CALIBRATION_HOURS ?? "24") || 0,
   ),
+  /// Early stage (founder decision 2026-10-15): the base is still gathering, so a
+  /// long wait without a pair says nothing about the person. While on, nobody is
+  /// auto-paused for pool exhaustion (`FAMINE_PAUSE_AFTER_DAYS`), the first
+  /// waiting-ladder notice says plainly that Gennety has only just opened, and
+  /// the agent explains a wait the same way. Default ON; set `false` once the
+  /// pool is big enough that a month with nobody means something.
+  EARLY_STAGE: process.env.EARLY_STAGE !== "false",
   /// Telegram Stars (XTR) — the ONLY payment rail for Date Tickets in the
   /// Telegram product. When true, "My Tickets" shows native in-chat Star
   /// invoice buttons (1/3/6 bundles) that credit the wallet on

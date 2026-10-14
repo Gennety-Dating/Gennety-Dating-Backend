@@ -20,6 +20,7 @@ function notifyResult(overrides: Partial<NoMatchNotifyResult> = {}): NoMatchNoti
     tier1: 0,
     tier2: 0,
     tier3plus: 0,
+    waiting: 0,
     paused: 0,
     heldForQuietHours: false,
     errors: [],

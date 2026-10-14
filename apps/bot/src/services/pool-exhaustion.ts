@@ -17,6 +17,11 @@
  * `Profile.starvationPausedAt` is the marker that makes this distinguishable
  * from an ordinary user-initiated pause (see the schema comment) — only a
  * row with that marker set is ever touched by `autoResumeStarvedUsers`.
+ *
+ * Since 2026-10-15 the pause is taken only while `EARLY_STAGE` is off: during
+ * the early stage nobody is paused (the waiting ladder goes quiet instead).
+ * This resume sweep runs either way, so accounts paused before the flag
+ * existed still come back the moment a candidate exists.
  */
 
 import type { Api, RawApi } from "grammy";

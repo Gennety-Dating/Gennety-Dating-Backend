@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { dateTicketsPhrase, t, TRANSLATION_KEYS, venuePlacesPhrase } from "./i18n.js";
+import {
+  dateTicketsPhrase,
+  t,
+  TRANSLATION_KEYS,
+  venuePlacesPhrase,
+  type TranslationKey,
+} from "./i18n.js";
+import { WAITING_NOTICE_MILESTONE_DAYS } from "./constants.js";
 import { SUPPORTED_LANGUAGES } from "./types.js";
 
 /**
@@ -327,5 +334,72 @@ describe("t (translation)", () => {
     expect(body).toContain("21");
     expect(body).toContain("stanford.edu");
     expect(body.toLowerCase()).toContain("can't be changed");
+  });
+});
+
+/**
+ * The waiting ladder (founder decision 2026-10-15): one DM + one push per step
+ * of WAITING_NOTICE_MILESTONE_DAYS. Each DM opens with a `*bold*` heading line
+ * (lifted into an entity by the notifier), the push title IS that heading, and
+ * the tone holds the position — no apology, no thanks for waiting, no promised
+ * priority.
+ */
+describe("waiting ladder copy", () => {
+  const steps = WAITING_NOTICE_MILESTONE_DAYS.map((_, i) => i + 1);
+  const dmKeys = (step: number) =>
+    (step === 1 ? ["waitingNotice1", "waitingNotice1Early"] : [`waitingNotice${step}`]) as TranslationKey[];
+
+  it("has a DM, a push title and a push body for every step in every language", () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      for (const step of steps) {
+        for (const key of [
+          ...dmKeys(step),
+          `waitingPush${step}Title`,
+          `waitingPush${step}Body`,
+        ] as TranslationKey[]) {
+          expect(TRANSLATION_KEYS).toContain(key);
+          expect(t(lang, key).trim().length, `${lang}.${key}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("opens every DM with a bold heading that is also the push title", () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      for (const step of steps) {
+        for (const key of dmKeys(step)) {
+          const m = /^\*([^*\n]+)\*\n\n\S/.exec(t(lang, key));
+          expect(m, `${lang}.${key}`).not.toBeNull();
+          expect(m![1]).toBe(t(lang, `waitingPush${step}Title` as TranslationKey));
+        }
+      }
+    }
+  });
+
+  it("says something new at every step — no two DMs or push lines repeat", () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const bodies = steps.flatMap((step) => dmKeys(step).map((k) => t(lang, k)));
+      expect(new Set(bodies).size).toBe(bodies.length);
+      const pushes = steps.map((step) => t(lang, `waitingPush${step}Body` as TranslationKey));
+      expect(new Set(pushes).size).toBe(pushes.length);
+    }
+  });
+
+  it("holds the position: no apology, no thanks for waiting, no promised priority", () => {
+    const banned = /sorry|unfortunately|thanks for (waiting|your patience)|priority|извин|к сожалению|спасибо|приоритет|вибач|на жаль|дякую|пріоритет|leider|tut mir leid|entschuldig|danke|priorität|przepraszam|niestety|dziękuj|priorytet/i;
+    for (const lang of SUPPORTED_LANGUAGES) {
+      for (const step of steps) {
+        for (const key of [...dmKeys(step), `waitingPush${step}Body` as TranslationKey]) {
+          expect(t(lang, key), `${lang}.${key}`).not.toMatch(banned);
+        }
+      }
+    }
+  });
+
+  it("the early-stage step-1 variant is the only one that says Gennety has just opened", () => {
+    expect(t("en", "waitingNotice1Early")).toMatch(/only just opened/);
+    expect(t("ru", "waitingNotice1Early")).toMatch(/только открылся/);
+    expect(t("en", "waitingNotice1")).not.toMatch(/opened/);
+    expect(t("ru", "waitingNotice1")).not.toMatch(/открылся/);
   });
 });
