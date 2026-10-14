@@ -1631,20 +1631,17 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   stay grandfathered.)* The implementation remains available only for explicit
   local/test configurations so historical callbacks and fixtures can be tested.
   Its old behavior was a *two-step soft skip*. The first tap did **not** apply
-  any penalty: the bot plays a short personal **voice note** (native Telegram
-  `sendVoice`, OGG/Opus, language-aware across all five onboarding languages
-  `en`/`ru`/`uk`/`de`/`pl`) explaining why skipping
-  hurts the user's rating, and offers a fork — **reconsider** (re-opens the
+  any penalty: the bot sends a short "sure you want to skip?" text
+  (`verifySkipNudgeCaption` — fewer matches without verification, ~1 minute to
+  do it; the founder voice note it once captioned was retired 2026-10-15), and
+  offers a fork — **reconsider** (re-opens the
   Verification Mini App / hosted flow) or **Skip anyway**. Only **Skip anyway**
   flips `verificationSkippedAt`, drops `Profile.eloScore` by
   `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default), and activates the user as
   `unverified`. Telegram's native inline-button styles
   render the reconsider action as `success` (green) and the final skip action as
   `danger` (red), with emoji labels retained for older clients. Reversible by
-  later passing the liveness check. The voice assets are
-  bundled in the bot (`apps/bot/src/assets/verify-skip/`) and sent with an
-  in-memory `file_id` cache; a missing asset or send failure degrades
-  gracefully to a text message carrying the same fork.
+  later passing the liveness check.
 
 **The 3-minute rule — the constraint the whole flow is shaped around.** An AWS
 Face Liveness `SessionId` **expires 3 minutes after it is created, and all

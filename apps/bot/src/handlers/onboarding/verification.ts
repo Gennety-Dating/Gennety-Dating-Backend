@@ -1,5 +1,4 @@
-import { fileURLToPath } from "node:url";
-import { InlineKeyboard, InputFile, type Api } from "grammy";
+import { InlineKeyboard, type Api } from "grammy";
 import { prisma } from "@gennety/db";
 import { MIN_PHOTOS, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
@@ -22,13 +21,13 @@ import { isModerationLockedStatus } from "../../services/user-status.js";
 
 /**
  * Callback data for the "Skip verification" button on the CTA card. This is now
- * a *soft* skip: it does NOT apply the Elo penalty. Instead it plays a short
- * personal voice nudge and offers a fork — reconsider (verify) or confirm the
+ * a *soft* skip: it does NOT apply the Elo penalty. Instead it sends a short
+ * "are you sure?" nudge and offers a fork — reconsider (verify) or confirm the
  * skip via {@link VERIFY_SKIP_CONFIRM_CALLBACK}.
  */
 export const VERIFY_SKIP_CALLBACK = "verify:skip";
 /**
- * Callback data for the "Skip anyway" button shown under the voice nudge. This
+ * Callback data for the "Skip anyway" button shown under the skip nudge. This
  * is the hard skip that actually applies {@link UNVERIFIED_ELO_PENALTY} and
  * activates the user as `unverified`.
  */
@@ -138,42 +137,9 @@ export async function sendVerificationCTABare(
 }
 
 /**
- * Languages with a recorded skip-nudge voice asset. The onboarding Mini App
- * language picker offers all five (en/ru/uk/de/pl), each with a dubbed voice
- * note in `assets/verify-skip/<lang>.ogg`. A language outside this set (should
- * never happen) falls back to the text caption.
- */
-const SKIP_NUDGE_VOICE_LANGS = new Set<Language>([
-  "en",
-  "ru",
-  "uk",
-  "de",
-  "pl",
-]);
-
-/**
- * In-memory cache of Telegram `file_id`s for the skip-nudge voice notes, keyed
- * by language. The first send uploads the local OGG/Opus asset; Telegram
- * returns a `file_id` we reuse for every subsequent send so we never re-upload.
- * Process-local (resets on restart), which is fine — it self-heals on the next
- * upload.
- */
-const skipNudgeVoiceFileIds = new Map<Language, string>();
-
-/** Absolute path to the bundled OGG/Opus skip-nudge voice for a language. */
-function skipNudgeVoicePath(lang: Language): string {
-  return fileURLToPath(
-    new URL(`../../assets/verify-skip/${lang}.ogg`, import.meta.url),
-  );
-}
-
-/**
- * Send the personal "please don't skip" voice note as a NATIVE Telegram voice
- * message (`sendVoice` → OGG/Opus renders with a waveform + inline one-tap
- * player, not a file attachment), with the reconsider/skip-anyway fork attached
- * directly to it. Caches the resulting `file_id`. If the asset is missing or
- * the send fails, falls back to a plain text message carrying the same fork so
- * the user is never stranded without a way to proceed.
+ * Send the "are you sure?" nudge as a plain text message with the
+ * reconsider/skip-anyway fork attached. (A recorded founder voice note used to
+ * carry this nudge; retired 2026-10-15 — founder decision.)
  */
 async function sendSkipNudge(
   api: Api,
@@ -181,28 +147,9 @@ async function sendSkipNudge(
   lang: Language,
   keyboard: InlineKeyboard,
 ): Promise<void> {
-  const caption = t(lang, "verifySkipNudgeCaption", {
-    penalty: UNVERIFIED_ELO_PENALTY,
+  await api.sendMessage(chatId, t(lang, "verifySkipNudgeCaption"), {
+    reply_markup: keyboard,
   });
-  if (SKIP_NUDGE_VOICE_LANGS.has(lang)) {
-    try {
-      const cached = skipNudgeVoiceFileIds.get(lang);
-      const voice = cached ?? new InputFile(skipNudgeVoicePath(lang));
-      const msg = await api.sendVoice(chatId, voice, {
-        caption,
-        reply_markup: keyboard,
-      });
-      const fileId = msg.voice?.file_id;
-      if (fileId && !cached) skipNudgeVoiceFileIds.set(lang, fileId);
-      return;
-    } catch (err) {
-      // A stale cached file_id, a missing asset, or a transient Bot API error
-      // must never block the skip flow — fall through to the text fork.
-      skipNudgeVoiceFileIds.delete(lang);
-      console.error("[verification] skip-nudge voice failed:", err);
-    }
-  }
-  await api.sendMessage(chatId, caption, { reply_markup: keyboard });
 }
 
 /**

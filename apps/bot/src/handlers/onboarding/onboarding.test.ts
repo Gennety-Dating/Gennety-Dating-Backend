@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION, MIN_PHOTOS } from "@gennety/shared";
+import { DEFAULT_SESSION, MIN_PHOTOS, t } from "@gennety/shared";
 
 // Mock prisma before importing handlers
 vi.mock("@gennety/db", () => ({
@@ -1284,7 +1284,7 @@ describe("sendVerificationCTABare", () => {
 // Verification skip — idempotency
 // ---------------------------------------------------------------------------
 
-describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
+describe("handleVerificationSkip — soft skip (text nudge + fork)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -1305,7 +1305,7 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
     } as any;
   }
 
-  it("plays a native voice note with the reconsider/skip-anyway fork and applies NO penalty", async () => {
+  it("sends a text nudge with the reconsider/skip-anyway fork and applies NO penalty", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "uid-1",
       verificationSkippedAt: null,
@@ -1315,10 +1315,11 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
     await handleVerificationSkip(ctx);
 
     expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
-    // Native voice message (not a file/document, not plain text).
-    expect(ctx.api.sendVoice).toHaveBeenCalledTimes(1);
-    const [, , voiceOpts] = ctx.api.sendVoice.mock.calls[0]!;
-    const keyboard = voiceOpts.reply_markup.inline_keyboard;
+    // Plain text — the founder voice note was retired.
+    expect(ctx.api.sendVoice).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    const [, nudgeText, nudgeOpts] = ctx.api.sendMessage.mock.calls[0]!;
+    const keyboard = nudgeOpts.reply_markup.inline_keyboard;
     // Fork: row 0 = reconsider/verify, row 1 = "Skip anyway" confirm callback.
     expect(keyboard[0]?.[0]?.style).toBe("success");
     expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CONFIRM_CALLBACK);
@@ -1326,7 +1327,7 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
     // The verification-bonus free ticket was retired: the skip fork no longer
     // frames a forfeited bonus, just the plain "skip anyway" confirm.
     expect(keyboard[1]?.[0]?.text).toContain("Skip anyway");
-    expect(voiceOpts.caption).not.toContain("ticket");
+    expect(nudgeText).not.toContain("ticket");
     // No penalty, no activation — the soft skip only nudges.
     expect(prisma.profile.updateMany).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -1334,7 +1335,7 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
     expect(pinStatusBanner).not.toHaveBeenCalled();
   });
 
-  it("plays a native voice note in every onboarding language (en/ru/uk/de/pl)", async () => {
+  it("sends the localized text nudge in every onboarding language (en/ru/uk/de/pl)", async () => {
     for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
       (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         id: "uid-1",
@@ -1343,9 +1344,12 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
       const ctx = createSoftSkipCtx();
       ctx.session.language = lang;
       await handleVerificationSkip(ctx);
-      // Voice (not text fallback) for all five — each has a bundled asset.
-      expect(ctx.api.sendVoice).toHaveBeenCalledTimes(1);
-      expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+      expect(ctx.api.sendVoice).not.toHaveBeenCalled();
+      expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+      const nudgeText = ctx.api.sendMessage.mock.calls[0]![1];
+      expect(nudgeText).toBe(t(lang, "verifySkipNudgeCaption"));
+      // Standalone copy — must not point at a (no longer sent) recording.
+      expect(nudgeText).not.toContain("👆");
     }
   });
 

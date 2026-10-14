@@ -112,8 +112,8 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
     expect(mGrant).toHaveBeenCalledWith("ua");
     expect(mGrant).toHaveBeenCalledWith("ub");
     expect(mPreroll).toHaveBeenCalledTimes(2);
-    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en", "female");
-    expect(mPreroll).toHaveBeenCalledWith(api, 1002, "en", "male");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1002, "en");
   });
 
   it("does not deliver the pre-roll when the grant reports already-gifted", async () => {
@@ -140,7 +140,7 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
     expect(mGrant).toHaveBeenCalledTimes(1);
     expect(mGrant).toHaveBeenCalledWith("ua");
     expect(mPreroll).toHaveBeenCalledTimes(1);
-    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en", "female");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en");
     // The single telegram side gifts before its pitch streams.
     expect(mPreroll.mock.invocationCallOrder[0]).toBeLessThan(
       stream.mock.invocationCallOrder[0],
@@ -156,8 +156,8 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
 
     expect(result).toEqual({ sent: 2, sentA: true, sentB: true });
     expect(mGrant).toHaveBeenCalledTimes(2);
-    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en", "female");
-    expect(mPreroll).toHaveBeenCalledWith(api, 1002, "en", "male");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1002, "en");
   });
 
   it("skips inline welcome gift delivery after a staged pre-roll", async () => {

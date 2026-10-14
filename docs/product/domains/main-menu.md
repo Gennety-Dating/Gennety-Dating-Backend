@@ -437,9 +437,9 @@ boundary. Without this, a partner's text sat inside this user's prompt next to
 tools that write to this user's profile.
 
 **Account deletion → Freeze fork (Telegram-only).** Tapping **Delete Account**
-no longer goes straight to a destructive confirm. The bot first plays a
-per-language founder **video note** (кружок) explaining why freezing beats
-deleting, then offers a two-button fork with native styles so the destructive
+no longer goes straight to a destructive confirm. The bot first sends the
+`deleteFreezeIntro` text explaining why freezing beats deleting, with a
+two-button fork with native styles so the destructive
 path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a red
 (`danger`) **Delete anyway**.
 - **Freeze** sets `User.status = frozen` — a soft-delete that keeps the User,
@@ -485,9 +485,8 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   They are one-use: Back, another menu action, free text, a wrong/replayed tap,
   or expiry burns the token and strips the old keyboard. GDPR delete itself
   remains available regardless of the current account status.
-- The кружок assets live at `apps/bot/src/assets/delete-freeze/<lang>.mp4`
-  (square, ≤60 s, same mechanics as the welcome-gift video note); a missing
-  language degrades gracefully to the text + buttons. Mobile keeps the plain
+- No founder video note: the кружок that once preceded the fork was retired
+  and its MP4s deleted (2026-10-15). Mobile keeps the plain
   `DELETE /v1/me` entry point (no freeze) but uses the same deletion service.
 
 A pinned **status banner** is created on activation

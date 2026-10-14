@@ -11,6 +11,16 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — Founder video/voice notes retired (code only: no migration, no env, no contract change).**
+The bot no longer sends any recorded founder media: the welcome-gift кружок (`ru.mp4`, before the first pitch) is
+gone — the gift DM alone remains; the verification soft-skip voice note is replaced by a standalone text
+(`verifySkipNudgeCaption` rewritten in all five languages, no longer says "listen to this 👆"). The already-dead
+delete-freeze MP4s are deleted too. Assets removed: `apps/bot/src/assets/{welcome-gift,verify-skip,delete-freeze}/`.
+Demo: unchanged. iOS/Mini App: no impact.
+- **Проверка:** `pnpm --filter @gennety/bot test` green; on prod a new user's first pitch is preceded by the gift DM
+  only (no кружок). Leftover asset files on the server (if the rsync doesn't `--delete`) are harmless — no code reads them.
+- **Откат:** `git revert` of the commit.
+
 **PENDING 2026-10-13 — Performance wave «только безопасное» (code only: no migration, no env, no contract change).**
 Commits `5d935472..278b6e83` + the lead's follow-up (37 agent commits: `/v1` read path, bot runtime/workers, compute and
 external I/O, admin + Mini App). A plain restart ships it, but `main` also carries the PENDING blocks below with

@@ -27,10 +27,7 @@ import { sendPartnerMatchCards } from "../../services/match-card/send.js";
 import { sendMatchDropPush } from "../../services/match-drop-push.js";
 import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
 import { getGiftFramingForMatch } from "../../services/rematch.js";
-import {
-  sendWelcomeGiftPreroll,
-  type WelcomeGiftGender,
-} from "../../services/welcome-gift.js";
+import { sendWelcomeGiftPreroll } from "../../services/welcome-gift.js";
 
 /**
  * Telegram media group caps at 10 items per request — we slice down to this
@@ -395,7 +392,7 @@ async function sendTrustCardOverflow(
  * idempotent (a `welcome_gift` ledger row is the claim marker) and a no-op when
  * `TICKET_FEATURE_ENABLED` is off, so the FIRST qualifying pitch becomes the
  * gift moment automatically — no separate "first match" detection. The
- * кружок/DM only fires when the grant actually credited the ticket
+ * gift DM only fires when the grant actually credited the ticket
  * (`granted === true`). Best-effort: a failure here is purely cosmetic and must
  * never block pitch dispatch.
  */
@@ -404,12 +401,11 @@ async function deliverWelcomeGiftPreroll(
   userId: string,
   chatId: number,
   lang: Language,
-  gender: WelcomeGiftGender | null,
 ): Promise<boolean> {
   try {
     const { granted } = await grantWelcomeGiftIfEligible(userId);
     if (granted) {
-      await sendWelcomeGiftPreroll(api, chatId, lang, gender);
+      await sendWelcomeGiftPreroll(api, chatId, lang);
       return true;
     }
   } catch (err) {
@@ -451,7 +447,6 @@ export async function sendMatchWelcomeGiftPreroll(
           id: true,
           telegramId: true,
           platform: true,
-          gender: true,
           language: true,
         },
       },
@@ -460,7 +455,6 @@ export async function sendMatchWelcomeGiftPreroll(
           id: true,
           telegramId: true,
           platform: true,
-          gender: true,
           language: true,
         },
       },
@@ -480,7 +474,6 @@ export async function sendMatchWelcomeGiftPreroll(
       match.userA.id,
       Number(match.userA.telegramId),
       langA,
-      match.userA.gender,
     );
     if (didSend) {
       sent++;
@@ -494,7 +487,6 @@ export async function sendMatchWelcomeGiftPreroll(
       match.userB.id,
       Number(match.userB.telegramId),
       langB,
-      match.userB.gender,
     );
     if (didSend) {
       sent++;
@@ -809,7 +801,7 @@ export async function sendMatchProposal(
     }
     const chatA = Number(match.userA.telegramId);
     if (!shouldSkipWelcomeGiftPreroll(options, "A")) {
-      await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
+      await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA);
     }
     // Collage card set first (feature-flagged); `{ sent: false }` → classic
     // photo album. On success the partner's motion rides INSIDE that album, so
@@ -870,7 +862,7 @@ export async function sendMatchProposal(
     }
     const chatB = Number(match.userB.telegramId);
     if (!shouldSkipWelcomeGiftPreroll(options, "B")) {
-      await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
+      await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB);
     }
     const deliverableForB = await prepareProfileMediaForTelegram(
       normalizeProfileMedia(mediaForB, photosForB),

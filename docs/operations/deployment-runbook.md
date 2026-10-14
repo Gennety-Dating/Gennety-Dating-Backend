@@ -888,16 +888,11 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
     new `ticket_ledger` table first, and `tickets.html` deployed with the Mini
     App bundle.
   - **Welcome gift (same flag).** Every new user is gifted 1 free Date Ticket as
-    a pre-roll before their first match pitch — an optional founder **video
-    note** (кружок) + a gift DM. `MATCH_PREROLL_DELAY_MS` controls the pause
-    between a delivered gift pre-roll and the match card reveal (default 2 min).
-    `MESSAGE_EFFECT_GIFT_ID` is optional — Bot API 7.6 effect on the gift DM;
-    empty = no effect; pick a celebratory id like 🎉/❤️. Video assets are bundled
-    at `apps/bot/src/assets/welcome-gift/<gender>-<lang>.mp4` (square video-note
-    MP4, ≤60s, e.g. `male-ru.mp4`, `female-en.mp4`); they ride the standard code
-    rsync, no ffmpeg needed (the bot just sends a ready
-    file). A missing asset for a (gender, language) pair degrades gracefully to
-    the gift DM only, so partial coverage is safe — drop in more MP4s over time.
+    a pre-roll before their first match pitch — a gift DM (the founder video
+    note that once preceded it was retired 2026-10-15). `MATCH_PREROLL_DELAY_MS`
+    controls the pause between a delivered gift pre-roll and the match card
+    reveal (default 2 min). `MESSAGE_EFFECT_GIFT_ID` is optional — Bot API 7.6
+    effect on the gift DM; empty = no effect; pick a celebratory id like 🎉/❤️.
     Idempotent via a `welcome_gift` `ticket_ledger` row (no extra schema beyond
     the wallet columns above).
   - **Famine discount (same flag).** On the 2nd consecutive no-match week

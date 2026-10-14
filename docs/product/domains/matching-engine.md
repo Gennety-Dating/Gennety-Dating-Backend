@@ -1068,19 +1068,16 @@ unaffected, and iOS never touched any of this (StoreKit →
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
   personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
-  `services/welcome-gift.ts`): an optional gender-specific Telegram **video
-  note** (кружок, founder message) followed by the gift DM (the
-  `welcomeGiftTicket` copy, $8.49 value anchor + optional
-  `MESSAGE_EFFECT_GIFT_ID` effect). The `sendVideoNote` API carries no caption,
-  so the text is a separate message; a missing video asset degrades gracefully
-  to the DM only. The weekly dispatch queue intentionally waits before sending
+  `services/welcome-gift.ts`): the gift DM (the `welcomeGiftTicket` copy,
+  $8.49 value anchor + optional `MESSAGE_EFFECT_GIFT_ID` effect). The founder
+  video note (кружок) that used to precede it was retired 2026-10-15. The weekly dispatch queue intentionally waits before sending
   the match card after a delivered gift so the confetti/effect moment stays
   visually separate from the pitch stream. The grant is one-time/idempotent — a
   `welcome_gift`
   `TicketLedger` row is the claim marker, so the FIRST qualifying pitch becomes
   the gift moment automatically (no separate "first match" detection) and
   retries/subsequent pitches never re-gift. Telegram-only in v1 — the gift is a
-  video note plus a DM, neither of which has a mobile surface — and inert unless
+  bot DM, which has no mobile surface — and inert unless
   `TICKET_FEATURE_ENABLED`. (The gate itself is NOT Telegram-only; see the head
   of this section.)
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`

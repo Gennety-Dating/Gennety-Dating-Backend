@@ -201,7 +201,7 @@ const translations = {
     verifyBtnGo: "🟢 Verify now",
     verifyBtnSkip: "⚪️ Skip for now",
     verifySkipNudgeCaption:
-      "One sec — listen to this before you skip 👆",
+      "Sure you want to skip? Without verification you'll get fewer matches — and it only takes about a minute.",
     verifyBtnReconsider: "🟢 OK, I'll verify",
     verifyBtnSkipConfirm: "🔴 Skip anyway",
     // --- Photo re-upload path (a way back before/after verification) ---
@@ -1448,7 +1448,7 @@ const translations = {
     verifyBtnGo: "🟢 Пройти верификацию",
     verifyBtnSkip: "⚪️ Пропустить пока",
     verifySkipNudgeCaption:
-      "Секунду — послушай это, прежде чем пропустить 👆",
+      "Точно пропустить? Без верификации пар будет меньше — а займёт она всего около минуты.",
     verifyBtnReconsider: "🟢 Всё-таки пройти верификацию",
     verifyBtnSkipConfirm: "🔴 Всё равно пропустить",
     // --- Photo re-upload path (a way back before/after verification) ---
@@ -2533,7 +2533,7 @@ const translations = {
     verifyBtnGo: "🟢 Пройти верифікацію",
     verifyBtnSkip: "⚪️ Пропустити поки",
     verifySkipNudgeCaption:
-      "Секунду — послухай це, перш ніж пропустити 👆",
+      "Точно пропустити? Без верифікації пар буде менше — а займе вона лише близько хвилини.",
     verifyBtnReconsider: "🟢 Все ж таки пройти верифікацію",
     verifyBtnSkipConfirm: "🔴 Все одно пропустити",
     // --- Photo re-upload path (a way back before/after verification) ---
@@ -3555,7 +3555,7 @@ const deTranslations: TranslationTable = {
   verifyBtnGo: "🟢 Jetzt verifizieren",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
   verifySkipNudgeCaption:
-    "Kurz — hör dir das an, bevor du überspringst 👆",
+    "Wirklich überspringen? Ohne Verifizierung bekommst du weniger Matches — und es dauert nur etwa eine Minute.",
   verifyBtnReconsider: "🟢 OK, ich verifiziere mich",
   verifyBtnSkipConfirm: "🔴 Trotzdem überspringen",
   // --- Photo re-upload path (a way back before/after verification) ---
@@ -4612,7 +4612,7 @@ const plTranslations: TranslationTable = {
   verifyBtnGo: "🟢 Zweryfikuj teraz",
   verifyBtnSkip: "⚪️ Pomiń na razie",
   verifySkipNudgeCaption:
-    "Chwila — posłuchaj tego, zanim pominiesz 👆",
+    "Na pewno pominąć? Bez weryfikacji dostaniesz mniej dopasowań — a zajmie to tylko około minuty.",
   verifyBtnReconsider: "🟢 Dobra, zweryfikuję się",
   verifyBtnSkipConfirm: "🔴 Pomiń mimo to",
   // --- Photo re-upload path (a way back before/after verification) ---
