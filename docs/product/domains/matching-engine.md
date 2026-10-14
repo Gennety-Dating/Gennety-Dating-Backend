@@ -129,7 +129,24 @@ the campus drop too), is never counted as missed, gets no famine notice and no "
 breach F2 or the honest-timer rule above: clients get the time of the first search, never a promised match, and
 the iOS Today countdown capsule and widget count to `firstDropAt` instead of tonight's batch (a real event the account takes part in; a timer to tonight would promise an evening it is not in). Code: `services/first-drop-calibration.ts`.
 
+### 3.1a′ Waiting ladder: silence by default (2026-10-15)
+
+A drop that finds nobody sends nothing. An unpaired person hears from us on our own only on the steps of
+`WAITING_NOTICE_MILESTONE_DAYS` = 7, 21, 45, 75, 110, 150 days without a pair (`packages/shared/src/constants.ts`),
+counted in UTC calendar days from the last dispatched match, or for a never-matched account from onboarding
+completion (`calibration_until − FIRST_DROP_CALIBRATION_HOURS`, falling back to `users.created_at`). A step is told
+once (`NoMatchNotice.tier` = step 1–6); someone who skipped steps gets one notice for the latest step, never a
+catch-up burst; after day 150 nothing is sent automatically. Copy: `waitingNotice1Early` (while `EARLY_STAGE`) /
+`waitingNotice1`…`waitingNotice6`, push `waitingPush{N}Title|Body`. The famine discount rides step 2 (day 21,
+`famineDiscountMinTier`). The 7-day `famineNoticeIntervalMs` throttle stays as the query prefilter;
+market-pending accounts keep the plain weekly `noMatchCityNotLaunched` notice outside the ladder. `EARLY_STAGE`
+(env, default on) also switches the §3.1b pause off. Code: `apps/bot/src/services/no-match-notifier.ts`.
+
 ### 3.1b Pool exhaustion: honest pause + auto-resume (2026-08-01, code shipped, inert under `weekly`)
+
+**Only while `EARLY_STAGE` is off (2026-10-15).** During the early stage nobody is paused; the resume sweep
+below still runs for accounts paused earlier.
+
 
 A famine-tier DM is honest about "no match yet" but says nothing once the
 pool has genuinely run dry — under `weekly` cadence that's rare enough not to

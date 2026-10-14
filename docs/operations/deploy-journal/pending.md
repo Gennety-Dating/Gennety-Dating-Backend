@@ -11,6 +11,23 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
+Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 7/21/45/75/110/150
+without a pair (anchor: last dispatched match, else onboarding completion), one notice per step, nothing after
+day 150; new copy `waitingNotice*` / `waitingPush*` in 5 locales (`noMatchThisWeekTier1/2/3` removed). New env
+`EARLY_STAGE` — optional, **default ON when unset**: no pool-exhaustion auto-pause, early-stage wording on step 1
+and in the agent's "why no match?" answer. Leave it unset for launch; set `EARLY_STAGE=false` later to bring the
+28-day pause back. Existing `NoMatchNotice` rows count as "told", so nobody gets a burst on the first evening after
+the deploy. Demo: unchanged (the demo bot does not schedule the no-match notice). iOS/Mini App: no contract change —
+`match.none` push type, `/v1/countdown`, banner and `dropOutpacesNotices` untouched; only push title/body text
+changes.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/no-match-notifier.test.ts
+  src/services/product-playbook.test.ts` and `pnpm --filter @gennety/shared exec vitest run src/i18n.test.ts`; after
+  the first evening drop `pm2 logs gennety-bot --lines 300 | grep "no-match-notify"` shows `waiting=` (most of the
+  unpaired base) and only a few `notified`; no `[pool-exhaustion]` pauses while `EARLY_STAGE` is unset.
+- **Откат:** `git revert` of the branch commits + restart (no data to undo; rows written carry `tier` 1–6 instead
+  of weeks, read only by analytics).
+
 **PENDING 2026-10-15 — Founder video/voice notes retired (code only: no migration, no env, no contract change).**
 The bot no longer sends any recorded founder media: the welcome-gift кружок (`ru.mp4`, before the first pitch) is
 gone — the gift DM alone remains; the verification soft-skip voice note is replaced by a standalone text
