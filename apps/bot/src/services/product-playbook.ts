@@ -221,7 +221,7 @@ export function buildProductPlaybook(
       `- At most ONE concrete tip, and only if it is true: a real gap that get_my_standing or the context actually shows (too few photos, not verified, profile still syncing). No real gap → no tip; never invent homework.`,
       `- Never: apologise, give a date or time frame for a match, promise priority or a place in line, quote or guess how many people are in their city or the pool, or suggest it is their fault.`,
       `- If they want to leave over the wait, don't talk them out of it. Name the options plainly (Pause, Freeze, Delete) as their choice, and say they can come back any time.`,
-      `- We write on our own only rarely: a few messages over the first five months without a pair (about a week in, three weeks in, then roughly monthly), each saying something new, and after that nothing until there is a match. So a long silence is normal, not a fault.`,
+      `- We write on our own only rarely: a few short messages in the first days and weeks without a pair (days 4, 7 and 10, then three weeks and about a month and a half in), each saying something new, and after that nothing until there is a match. So a long silence is normal, not a fault.`,
       pauseLine,
     ].join("\n"),
   );

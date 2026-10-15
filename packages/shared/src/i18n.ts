@@ -634,8 +634,6 @@ const translations = {
     waitingNotice4:
       "*Still searching*\n\nGennety is growing, and I look at every new person with you in mind too. I'll suggest someone when there's someone worth suggesting.",
     waitingNotice5:
-      "*All set*\n\nYou're in the matching every evening. If you want to change something in your profile or take a break, it's in settings.",
-    waitingNotice6:
       "*From now on, only news*\n\nI won't check in like this again: my next message will be a match. Matching runs every evening, as before.",
     noMatchDiscountOffer:
       "🎟️ Your next first date is {pct}% off — one Date Ticket, almost on us. " +
@@ -1022,10 +1020,8 @@ const translations = {
     waitingPush3Body: "Matching runs on its own, every evening.",
     waitingPush4Title: "Still searching",
     waitingPush4Body: "I look at every new person with you in mind.",
-    waitingPush5Title: "All set",
-    waitingPush5Body: "You're in the matching every evening.",
-    waitingPush6Title: "From now on, only news",
-    waitingPush6Body: "My next message will be a match.",
+    waitingPush5Title: "From now on, only news",
+    waitingPush5Body: "My next message will be a match.",
     poolExhaustedPausePushTitle: "Pausing your search",
     poolExhaustedPausePushBody: "As soon as someone who fits shows up, I'll bring you back into the search myself.",
     matchNudgePushTitle: "Your match is still waiting",
@@ -1854,8 +1850,6 @@ const translations = {
     waitingNotice4:
       "*Поиск продолжается*\n\nGennety растёт, и каждого нового человека я смотрю и под тебя. Предложу, когда будет кто-то, кого не стыдно предложить.",
     waitingNotice5:
-      "*Всё в силе*\n\nТы в подборе каждый вечер. Захочешь что-то поменять в профиле или взять паузу — это в настройках.",
-    waitingNotice6:
       "*Дальше — только по делу*\n\nБольше не буду напоминать о себе: следующее сообщение от меня будет с парой. Подбор идёт каждый вечер, как и раньше.",
     noMatchDiscountOffer:
       "🎟️ Твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
@@ -2167,10 +2161,8 @@ const translations = {
     waitingPush3Body: "Подбор идёт сам, каждый вечер.",
     waitingPush4Title: "Поиск продолжается",
     waitingPush4Body: "Смотрю каждого нового человека и под тебя.",
-    waitingPush5Title: "Всё в силе",
-    waitingPush5Body: "Ты в подборе каждый вечер.",
-    waitingPush6Title: "Дальше — только по делу",
-    waitingPush6Body: "Следующее сообщение — с парой.",
+    waitingPush5Title: "Дальше — только по делу",
+    waitingPush5Body: "Следующее сообщение — с парой.",
     poolExhaustedPausePushTitle: "Ставлю поиск на паузу",
     poolExhaustedPausePushBody: "Как появится подходящий человек, сам верну тебя в поиск.",
     matchNudgePushTitle: "Мэтч всё ещё ждёт",
@@ -2961,8 +2953,6 @@ const translations = {
     waitingNotice4:
       "*Пошук триває*\n\nGennety росте, і кожну нову людину я дивлюся й під тебе. Запропоную, коли буде хтось, кого не соромно запропонувати.",
     waitingNotice5:
-      "*Усе в силі*\n\nТи в підборі щовечора. Захочеш щось змінити в профілі чи взяти паузу — це в налаштуваннях.",
-    waitingNotice6:
       "*Далі — тільки по ділу*\n\nБільше не нагадуватиму про себе: наступне повідомлення від мене буде з парою. Підбір іде щовечора, як і раніше.",
     noMatchDiscountOffer:
       "🎟️ Твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
@@ -3275,10 +3265,8 @@ const translations = {
     waitingPush3Body: "Підбір іде сам, щовечора.",
     waitingPush4Title: "Пошук триває",
     waitingPush4Body: "Дивлюся кожну нову людину й під тебе.",
-    waitingPush5Title: "Усе в силі",
-    waitingPush5Body: "Ти в підборі щовечора.",
-    waitingPush6Title: "Далі — тільки по ділу",
-    waitingPush6Body: "Наступне повідомлення — з парою.",
+    waitingPush5Title: "Далі — тільки по ділу",
+    waitingPush5Body: "Наступне повідомлення — з парою.",
     poolExhaustedPausePushTitle: "Ставлю пошук на паузу",
     poolExhaustedPausePushBody: "Щойно з'явиться людина, яка підходить, сам поверну тебе в пошук.",
     matchNudgePushTitle: "Метч усе ще чекає",
@@ -4057,8 +4045,6 @@ const deTranslations: TranslationTable = {
   waitingNotice4:
     "*Weiter auf der Suche*\n\nGennety wächst, und jede neue Person sehe ich mir auch mit Blick auf dich an. Ich schlage jemanden vor, wenn es jemanden gibt, der es wert ist.",
   waitingNotice5:
-    "*Alles wie gehabt*\n\nDu bist jeden Abend mit dabei. Wenn du etwas an deinem Profil ändern oder eine Pause machen willst — das geht in den Einstellungen.",
-  waitingNotice6:
     "*Ab jetzt nur mit Neuigkeiten*\n\nIch melde mich nicht mehr einfach so: Meine nächste Nachricht kommt mit einem Match. Die Suche läuft jeden Abend, wie bisher.",
   noMatchDiscountOffer:
     "🎟️ Dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
@@ -4348,10 +4334,8 @@ const deTranslations: TranslationTable = {
   waitingPush3Body: "Die Suche läuft von selbst, jeden Abend.",
   waitingPush4Title: "Weiter auf der Suche",
   waitingPush4Body: "Ich sehe mir jede neue Person auch mit Blick auf dich an.",
-  waitingPush5Title: "Alles wie gehabt",
-  waitingPush5Body: "Du bist jeden Abend mit dabei.",
-  waitingPush6Title: "Ab jetzt nur mit Neuigkeiten",
-  waitingPush6Body: "Meine nächste Nachricht kommt mit einem Match.",
+  waitingPush5Title: "Ab jetzt nur mit Neuigkeiten",
+  waitingPush5Body: "Meine nächste Nachricht kommt mit einem Match.",
   poolExhaustedPausePushTitle: "Ich pausiere deine Suche",
   poolExhaustedPausePushBody: "Sobald jemand Passendes auftaucht, hole ich dich selbst zurück in die Suche.",
   matchNudgePushTitle: "Dein Match wartet noch",
@@ -5141,8 +5125,6 @@ const plTranslations: TranslationTable = {
   waitingNotice4:
     "*Wciąż szukam*\n\nGennety rośnie, a każdą nową osobę oglądam też pod kątem ciebie. Zaproponuję, gdy pojawi się ktoś, kogo warto zaproponować.",
   waitingNotice5:
-    "*Wszystko aktualne*\n\nJesteś w doborze co wieczór. Jeśli zechcesz coś zmienić w profilu albo zrobić przerwę — to w ustawieniach.",
-  waitingNotice6:
     "*Od teraz tylko konkretnie*\n\nNie będę się już przypominać: następna wiadomość ode mnie będzie z parą. Dobór trwa co wieczór, jak dotąd.",
   noMatchDiscountOffer:
     "🎟️ Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
@@ -5430,10 +5412,8 @@ const plTranslations: TranslationTable = {
   waitingPush3Body: "Dobór idzie sam, co wieczór.",
   waitingPush4Title: "Wciąż szukam",
   waitingPush4Body: "Oglądam każdą nową osobę też pod kątem ciebie.",
-  waitingPush5Title: "Wszystko aktualne",
-  waitingPush5Body: "Jesteś w doborze co wieczór.",
-  waitingPush6Title: "Od teraz tylko konkretnie",
-  waitingPush6Body: "Następna wiadomość — z parą.",
+  waitingPush5Title: "Od teraz tylko konkretnie",
+  waitingPush5Body: "Następna wiadomość — z parą.",
   poolExhaustedPausePushTitle: "Wstrzymuję wyszukiwanie",
   poolExhaustedPausePushBody: "Gdy tylko pojawi się ktoś pasujący, sam przywrócę cię do wyszukiwania.",
   matchNudgePushTitle: "Twój match wciąż czeka",

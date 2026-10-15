@@ -373,7 +373,7 @@ describe("waiting without a pair (founder decision 2026-10-15)", () => {
 
   it("describes the rare check-ins instead of a weekly one", () => {
     const text = buildProductPlaybook(EARLY);
-    expect(text).toContain("a few messages over the first five months without a pair");
+    expect(text).toContain("a few short messages in the first days and weeks without a pair");
     expect(text).not.toContain("about once a week");
   });
 

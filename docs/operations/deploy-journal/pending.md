@@ -12,9 +12,9 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 # Gennety Dating Deploy
 
 **PENDING 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
-Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 7/21/45/75/110/150
+Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 4/7/10/21/45
 without a pair (anchor: last dispatched match, else onboarding completion), one notice per step, nothing after
-day 150; new copy `waitingNotice*` / `waitingPush*` in 5 locales (`noMatchThisWeekTier1/2/3` removed). New env
+day 45 (ladder shortened the same day, founder); new copy `waitingNotice*` / `waitingPush*` in 5 locales (`noMatchThisWeekTier1/2/3` removed). New env
 `EARLY_STAGE` — optional, **default ON when unset**: no pool-exhaustion auto-pause, early-stage wording on step 1
 and in the agent's "why no match?" answer. Leave it unset for launch; set `EARLY_STAGE=false` later to bring the
 28-day pause back. Existing `NoMatchNotice` rows count as "told", so nobody gets a burst on the first evening after

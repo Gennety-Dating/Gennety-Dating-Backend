@@ -67,14 +67,14 @@ export interface DropCadence {
    *  Since the waiting ladder (founder decision 2026-10-15) this is only the
    *  floor and the candidate query's cheap prefilter: WHEN an unpaired person
    *  actually hears from us is decided by `WAITING_NOTICE_MILESTONE_DAYS`, whose
-   *  steps are all at least this far apart. Market-pending accounts still run
-   *  on this interval directly. */
+   *  steps can be closer (3 days). Market-pending accounts still run on this
+   *  interval, checked per person in the notifier. */
   famineNoticeIntervalMs: number;
   /**
    * Tier threshold at which the famine ticket discount is granted, compared
    * against the waiting-ladder step (`WAITING_NOTICE_MILESTONE_DAYS`, 1-based)
    * the notice is for. Steps are calendar days, not batches, so the threshold
-   * is cadence-independent: `2` is the day-21 notice under any drop cadence.
+   * is cadence-independent: `2` is the day-7 notice under any drop cadence.
    * See `no-match-notifier.ts`.
    */
   famineDiscountMinTier: number;

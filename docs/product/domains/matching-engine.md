@@ -132,14 +132,14 @@ the iOS Today countdown capsule and widget count to `firstDropAt` instead of ton
 ### 3.1a′ Waiting ladder: silence by default (2026-10-15)
 
 A drop that finds nobody sends nothing. An unpaired person hears from us on our own only on the steps of
-`WAITING_NOTICE_MILESTONE_DAYS` = 7, 21, 45, 75, 110, 150 days without a pair (`packages/shared/src/constants.ts`),
+`WAITING_NOTICE_MILESTONE_DAYS` = 4, 7, 10, 21, 45 days without a pair (`packages/shared/src/constants.ts`),
 counted in UTC calendar days from the last dispatched match, or for a never-matched account from onboarding
 completion (`calibration_until − FIRST_DROP_CALIBRATION_HOURS`, falling back to `users.created_at`). A step is told
-once (`NoMatchNotice.tier` = step 1–6); someone who skipped steps gets one notice for the latest step, never a
-catch-up burst; after day 150 nothing is sent automatically. Copy: `waitingNotice1Early` (while `EARLY_STAGE`) /
-`waitingNotice1`…`waitingNotice6`, push `waitingPush{N}Title|Body`. The famine discount rides step 2 (day 21,
-`famineDiscountMinTier`). The 7-day `famineNoticeIntervalMs` throttle stays as the query prefilter;
-market-pending accounts keep the plain weekly `noMatchCityNotLaunched` notice outside the ladder. `EARLY_STAGE`
+once (`NoMatchNotice.tier` = step 1–5); someone who skipped steps gets one notice for the latest step, never a
+catch-up burst; after day 45 nothing is sent automatically. Copy: `waitingNotice1Early` (while `EARLY_STAGE`) /
+`waitingNotice1`…`waitingNotice5`, push `waitingPush{N}Title|Body`. The famine discount rides step 2 (day 7,
+`famineDiscountMinTier`). The query prefilter is the ladder's smallest gap (`WAITING_NOTICE_MIN_GAP_MS`, 3 days);
+market-pending accounts keep the plain weekly `noMatchCityNotLaunched` notice outside the ladder (7-day check per person). `EARLY_STAGE`
 (env, default on) also switches the §3.1b pause off. Code: `apps/bot/src/services/no-match-notifier.ts`.
 
 ### 3.1b Pool exhaustion: honest pause + auto-resume (2026-08-01, code shipped, inert under `weekly`)

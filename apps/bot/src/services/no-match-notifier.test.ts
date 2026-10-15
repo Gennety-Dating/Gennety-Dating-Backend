@@ -58,6 +58,7 @@ import {
   waitingNoticeKey,
   waitingPushKeys,
   dueWaitingStep,
+  WAITING_NOTICE_MIN_GAP_MS,
   NO_MATCH_PUSH_TYPE,
   leadBoldEntity,
 } from "./no-match-notifier.js";
@@ -120,10 +121,11 @@ function dispatchedForStep(step: number, now: Date = NOW): Date {
 
 /**
  * Default fixture anchor for a never-matched account with no calibration
- * window: `createdAt` exactly at step 1 (day 7), so the plain fixtures below
- * are owed the first notice.
+ * window: `createdAt` exactly at step 1 (day 4), so the plain fixtures below
+ * are owed the first notice — and nothing past it (day 7 is step 2, which
+ * carries the famine discount).
  */
-const WAITED_A_WEEK = daysAgo(7);
+const WAITED_TO_STEP_1 = dispatchedForStep(1);
 
 describe("getDropDate", () => {
   it("floors to UTC midnight of the same day", () => {
@@ -145,14 +147,21 @@ describe("waiting ladder helpers", () => {
   it("owes exactly the latest reached step, once", () => {
     const anchor = daysAgo(0, new Date("2026-01-01T15:00:00Z"));
     const at = (days: number) => new Date(anchor.getTime() + days * DAY_MS);
-    expect(dueWaitingStep(anchor, at(6), null)).toBe(0);
-    expect(dueWaitingStep(anchor, at(7), null)).toBe(1);
-    expect(dueWaitingStep(anchor, at(20), at(7))).toBe(0);
-    expect(dueWaitingStep(anchor, at(21), at(7))).toBe(2);
-    expect(dueWaitingStep(anchor, at(100), at(7))).toBe(4);
-    expect(dueWaitingStep(anchor, at(149), at(110))).toBe(0);
-    expect(dueWaitingStep(anchor, at(150), at(110))).toBe(6);
-    expect(dueWaitingStep(anchor, at(400), at(150))).toBe(0);
+    expect(WAITING_NOTICE_MILESTONE_DAYS).toEqual([4, 7, 10, 21, 45]);
+    expect(dueWaitingStep(anchor, at(3), null)).toBe(0);
+    expect(dueWaitingStep(anchor, at(4), null)).toBe(1);
+    expect(dueWaitingStep(anchor, at(6), at(4))).toBe(0);
+    expect(dueWaitingStep(anchor, at(7), at(4))).toBe(2);
+    expect(dueWaitingStep(anchor, at(9), at(7))).toBe(0);
+    expect(dueWaitingStep(anchor, at(10), at(7))).toBe(3);
+    expect(dueWaitingStep(anchor, at(30), at(4))).toBe(4);
+    expect(dueWaitingStep(anchor, at(44), at(21))).toBe(0);
+    expect(dueWaitingStep(anchor, at(45), at(21))).toBe(5);
+    expect(dueWaitingStep(anchor, at(400), at(45))).toBe(0);
+  });
+
+  it("prefilters on the ladder's smallest gap (3 days)", () => {
+    expect(WAITING_NOTICE_MIN_GAP_MS).toBe(3 * DAY_MS);
   });
 });
 
@@ -219,7 +228,7 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("(A13-H10) skips a candidate who was handed a match after the page was read, without claiming", async () => {
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchCount.mockResolvedValueOnce(1);
     const api = makeApi();
     const stream = makeStream();
@@ -235,7 +244,7 @@ describe("sendNoMatchNotices", () => {
 
   it("(A13-H10) never pauses someone whose match landed between the check and the pause", async () => {
     mutableEnv.EARLY_STAGE = false;
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchFindFirst.mockResolvedValueOnce({
       dispatchedAt: new Date(getDropDate(NOW).getTime() - (FAMINE_PAUSE_AFTER_DAYS + 3) * DAY_MS),
     });
@@ -269,8 +278,8 @@ describe("sendNoMatchNotices", () => {
 
   it("(A13-M22) stops at 23:00 mid-run and leaves the rest unclaimed for the next run", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
-      { id: "u2", telegramId: 222n, createdAt: WAITED_A_WEEK, language: "en" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
+      { id: "u2", telegramId: 222n, createdAt: WAITED_TO_STEP_1, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValue(null);
     // The run starts at 18:15 Kyiv; the first notice takes it past 23:00.
@@ -296,12 +305,12 @@ describe("sendNoMatchNotices", () => {
     }
   });
 
-  it("(D4) throttles candidate selection to famineNoticeIntervalMs, not the exact drop day", async () => {
+  it("(D4) prefilters candidate selection to the ladder's smallest gap (3 days), not the exact drop day", async () => {
     // The candidate query must exclude anyone notified more recently than
-    // CADENCE.famineNoticeIntervalMs — this is what decouples "how often the
-    // batch/cron fires" from "how often a starved user actually gets a DM"
-    // (D4). Asserting on the query shape directly since the mocked Prisma
-    // client doesn't evaluate `where` itself.
+    // WAITING_NOTICE_MIN_GAP_MS (3 days: no two ladder steps are closer) —
+    // this is what decouples "how often the batch/cron fires" from "how often
+    // a starved user actually gets a DM" (D4). Asserting on the query shape
+    // directly since the mocked Prisma client doesn't evaluate `where` itself.
     mUserFindMany.mockResolvedValueOnce([]);
 
     await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
@@ -314,8 +323,11 @@ describe("sendNoMatchNotices", () => {
     ) as { noMatchNotices: { none: { dropDate: { gte: Date } } } };
     expect(throttleClause).toBeDefined();
     const cutoff = throttleClause.noMatchNotices.none.dropDate.gte;
-    const expectedCutoff = NOW.getTime() - CADENCE.famineNoticeIntervalMs;
+    const expectedCutoff = NOW.getTime() - 3 * DAY_MS;
     expect(Math.abs(cutoff.getTime() - expectedCutoff)).toBeLessThan(1000);
+    // Narrower than the market-pending weekly throttle, which is therefore
+    // enforced per person (see the market-pending throttle test below).
+    expect(NOW.getTime() - cutoff.getTime()).toBeLessThan(CADENCE.famineNoticeIntervalMs);
   });
 
   it("returns zero counts when no candidates are eligible", async () => {
@@ -342,12 +354,12 @@ describe("sendNoMatchNotices", () => {
   it("keeps reading while a page comes back full", async () => {
     const page = Array.from({ length: 500 }, (_, index) => ({
       id: `full-${index}`,
-      telegramId: BigInt(1000 + index), createdAt: WAITED_A_WEEK,
+      telegramId: BigInt(1000 + index), createdAt: WAITED_TO_STEP_1,
       language: "en",
     }));
     mUserFindMany
       .mockResolvedValueOnce(page)
-      .mockResolvedValueOnce([{ id: "tail", telegramId: 999n, createdAt: WAITED_A_WEEK, language: "en" }]);
+      .mockResolvedValueOnce([{ id: "tail", telegramId: 999n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchFindFirst.mockResolvedValue(null);
 
     const result = await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
@@ -370,7 +382,7 @@ describe("sendNoMatchNotices", () => {
     }));
     mUserFindMany
       .mockResolvedValueOnce(quiet)
-      .mockResolvedValueOnce([{ id: "r-tail", telegramId: 999n, createdAt: WAITED_A_WEEK, language: "en" }]);
+      .mockResolvedValueOnce([{ id: "r-tail", telegramId: 999n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchFindFirst.mockResolvedValue(null);
 
     const result = await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
@@ -388,7 +400,7 @@ describe("sendNoMatchNotices", () => {
     // person forty times.
     const unreachable = Array.from({ length: 500 }, (_, index) => ({
       id: `ghost-${index}`,
-      telegramId: BigInt(-7 - index), createdAt: WAITED_A_WEEK,
+      telegramId: BigInt(-7 - index), createdAt: WAITED_TO_STEP_1,
       platform: "ios",
       language: "en",
     }));
@@ -407,11 +419,11 @@ describe("sendNoMatchNotices", () => {
   // ── The waiting ladder (founder decision 2026-10-15) ───────────────────
   //
   // Silence by default; one notice per step of WAITING_NOTICE_MILESTONE_DAYS
-  // (7, 21, 45, 75, 110, 150 days without a pair), each with its own copy.
+  // (4, 7, 10, 21, 45 days without a pair), each with its own copy.
 
-  it("sends step 1 at day 7 for a never-matched user, with the early-stage copy", async () => {
+  it("sends step 1 at day 4 for a never-matched user, with the early-stage copy", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValueOnce(null);
     const api = makeApi();
@@ -446,7 +458,7 @@ describe("sendNoMatchNotices", () => {
   it("uses the neutral step-1 copy once EARLY_STAGE is off", async () => {
     mutableEnv.EARLY_STAGE = false;
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "ru" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "ru" },
     ]);
     mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(1) });
     const api = makeApi();
@@ -458,8 +470,8 @@ describe("sendNoMatchNotices", () => {
     expect(body).not.toMatch(/только открылся/);
   });
 
-  it("says nothing on days 1–6 — silence is the default, and nothing is claimed", async () => {
-    for (const days of [1, 2, 3, 4, 5, 6]) {
+  it("says nothing on days 1–3 — silence is the default, and nothing is claimed", async () => {
+    for (const days of [1, 2, 3]) {
       mUserFindMany.mockResolvedValueOnce([
         { id: `d${days}`, telegramId: 111n, createdAt: daysAgo(days), language: "en" },
       ]);
@@ -480,10 +492,10 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("anchors a never-matched user to onboarding completion (calibration window start), not to a notice", async () => {
-    // Onboarded 6 days ago: the window was armed then and ended 5 days ago.
+    // Onboarded 3 days ago: the window was armed then and ended 2 days ago.
     // createdAt is much older (an account that sat in onboarding) — it must
     // not be what the wait is counted from.
-    const onboardedAt = daysAgo(6);
+    const onboardedAt = daysAgo(3);
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
@@ -502,14 +514,14 @@ describe("sendNoMatchNotices", () => {
     expect(result.waiting).toBe(1);
     expect(result.notified).toBe(0);
 
-    // One day later, the same account reaches day 7 and hears from us.
+    // One day later, the same account reaches day 4 and hears from us.
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
         telegramId: 111n,
         createdAt: daysAgo(60),
         language: "en",
-        profile: { calibrationUntil: new Date(daysAgo(7).getTime() + 24 * 60 * 60 * 1000) },
+        profile: { calibrationUntil: new Date(daysAgo(4).getTime() + 24 * 60 * 60 * 1000) },
       },
     ]);
     mMatchFindFirst.mockResolvedValueOnce(null);
@@ -519,14 +531,14 @@ describe("sendNoMatchNotices", () => {
     expect(next.tier1).toBe(1);
   });
 
-  it("sends step 2 at day 21 with the famine discount", async () => {
+  it("sends step 2 at day 7 with the famine discount", async () => {
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
         telegramId: 111n,
-        createdAt: WAITED_A_WEEK,
+        createdAt: WAITED_TO_STEP_1,
         language: "ru",
-        noMatchNotices: [{ dropDate: daysAgo(14) }], // the day-7 notice
+        noMatchNotices: [{ dropDate: daysAgo(3) }], // the day-4 notice
       },
     ]);
     mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) });
@@ -551,12 +563,12 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("does not repeat a step that was already told", async () => {
-    // Day 30: step 2 began on day 21, and a notice went out on day 22.
+    // Day 30: step 4 began on day 21, and a notice went out on day 22.
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
         telegramId: 111n,
-        createdAt: WAITED_A_WEEK,
+        createdAt: WAITED_TO_STEP_1,
         language: "en",
         noMatchNotices: [{ dropDate: daysAgo(8) }],
       },
@@ -571,18 +583,18 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("collapses skipped steps into ONE notice for the latest step", async () => {
-    // Day 80, last heard from us on day 7: steps 2 and 3 were missed (paused,
+    // Day 30, last heard from us on day 4: steps 2 and 3 were missed (paused,
     // unreachable). They get step 4 only — not a back-to-back catch-up.
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
         telegramId: 111n,
-        createdAt: WAITED_A_WEEK,
+        createdAt: WAITED_TO_STEP_1,
         language: "en",
-        noMatchNotices: [{ dropDate: daysAgo(73) }],
+        noMatchNotices: [{ dropDate: daysAgo(26) }],
       },
     ]);
-    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(80) });
+    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(30) });
     const api = makeApi();
     const stream = makeStream();
 
@@ -598,17 +610,17 @@ describe("sendNoMatchNotices", () => {
     });
   });
 
-  it("sends the last step at day 150 and then never again", async () => {
+  it("sends the last step at day 45 and then never again", async () => {
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
         telegramId: 111n,
-        createdAt: WAITED_A_WEEK,
+        createdAt: WAITED_TO_STEP_1,
         language: "en",
-        noMatchNotices: [{ dropDate: daysAgo(40) }], // the day-110 notice
+        noMatchNotices: [{ dropDate: daysAgo(24) }], // the day-21 notice
       },
     ]);
-    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(150) });
+    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(45) });
     const api = makeApi();
 
     const last = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
@@ -617,18 +629,18 @@ describe("sendNoMatchNotices", () => {
     const [, body] = api.sendMessage.mock.calls[0]!;
     expect(body).toMatch(/^From now on, only news\n\n/);
     expect(mNoticeCreate).toHaveBeenCalledWith({
-      data: { userId: "u1", tier: 6, dropDate: getDropDate(NOW) },
+      data: { userId: "u1", tier: 5, dropDate: getDropDate(NOW) },
     });
 
     // Every later evening, however long the wait: silence.
-    for (const days of [157, 200, 365]) {
+    for (const days of [52, 100, 365]) {
       mUserFindMany.mockResolvedValueOnce([
         {
           id: "u1",
           telegramId: 111n,
-          createdAt: WAITED_A_WEEK,
+          createdAt: WAITED_TO_STEP_1,
           language: "en",
-          noMatchNotices: [{ dropDate: daysAgo(days - 150) }],
+          noMatchNotices: [{ dropDate: daysAgo(days - 45) }],
         },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(days) });
@@ -641,7 +653,7 @@ describe("sendNoMatchNotices", () => {
 
   it("pushes the step's own title and line to the app", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+      { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(3) });
 
@@ -656,7 +668,7 @@ describe("sendNoMatchNotices", () => {
 
   it("never pauses during the early stage, however long the wait", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: daysAgo(FAMINE_PAUSE_AFTER_DAYS + 20) });
     const api = makeApi();
@@ -667,12 +679,12 @@ describe("sendNoMatchNotices", () => {
     expect(result.paused).toBe(0);
     expect(mTransition).not.toHaveBeenCalled();
     expect(mTransaction).not.toHaveBeenCalled();
-    // Day 48 → step 3, told on the ordinary stream.
+    // Day 48 → step 5 (the last), told on the ordinary stream.
     expect(stream).toHaveBeenCalledTimes(1);
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/^I'm here\n\n/);
+    expect(body).toMatch(/^From now on, only news\n\n/);
     expect(mNoticeCreate).toHaveBeenCalledWith({
-      data: { userId: "u1", tier: 3, dropDate: getDropDate(NOW) },
+      data: { userId: "u1", tier: 5, dropDate: getDropDate(NOW) },
     });
   });
 
@@ -688,7 +700,7 @@ describe("sendNoMatchNotices", () => {
 
     it("pauses instead of sending another tier DM once FAMINE_PAUSE_AFTER_DAYS is reached", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+        { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -724,7 +736,7 @@ describe("sendNoMatchNotices", () => {
 
     it("does not grant the famine discount or offer Rematch on a pause", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+        { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS + 5),
@@ -740,7 +752,7 @@ describe("sendNoMatchNotices", () => {
       // Simulates the candidate having moved off `active` (moderation, a
       // manual pause/freeze) between candidate selection and this point.
       mUserFindMany.mockResolvedValueOnce([
-        { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+        { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -752,12 +764,15 @@ describe("sendNoMatchNotices", () => {
       const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
 
       expect(result.paused).toBe(0);
-      // Day 28 → step 2 (day 21) is owed.
-      expect(result.tier2).toBe(1);
+      // Day 28 → step 4 (day 21) is owed.
+      expect(result.tier3plus).toBe(1);
+      expect(mNoticeCreate).toHaveBeenCalledWith({
+        data: { userId: "u1", tier: 4, dropDate: getDropDate(NOW) },
+      });
       expect(mProfileUpdateMany).not.toHaveBeenCalled();
       // Falls through to the ordinary rich stream, not the plain pause send.
       expect(stream).toHaveBeenCalled();
-      expect(api.sendMessage.mock.calls[0]![1]).toMatch(/^Matching is on\n\n/);
+      expect(api.sendMessage.mock.calls[0]![1]).toMatch(/^Still searching\n\n/);
     });
 
     it("stays silent when the pause CAS loses a race and no step is owed", async () => {
@@ -765,7 +780,7 @@ describe("sendNoMatchNotices", () => {
         {
           id: "u1",
           telegramId: 111n,
-          createdAt: WAITED_A_WEEK,
+          createdAt: WAITED_TO_STEP_1,
           language: "en",
           noMatchNotices: [{ dropDate: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS - 22) }],
         },
@@ -789,7 +804,7 @@ describe("sendNoMatchNotices", () => {
 
     it("pushes the pause's own title and line, not 'the search stays on'", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -809,7 +824,7 @@ describe("sendNoMatchNotices", () => {
     describe("NOMATCH-2: the pause is always reversible", () => {
       it("does not leave the account paused when the marker stamp fails", async () => {
         mUserFindMany.mockResolvedValueOnce([
-          { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+          { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
         ]);
         mMatchFindFirst.mockResolvedValueOnce({
           dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -848,7 +863,7 @@ describe("sendNoMatchNotices", () => {
 
       it("resumes the account when the pause committed but the DM never landed", async () => {
         mUserFindMany.mockResolvedValueOnce([
-          { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+          { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
         ]);
         mMatchFindFirst.mockResolvedValueOnce({
           dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -874,9 +889,9 @@ describe("sendNoMatchNotices", () => {
 
       it("does not attempt a resume when no pause was taken", async () => {
         mUserFindMany.mockResolvedValueOnce([
-          { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
+          { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
         ]);
-        // Tier 3, comfortably short of the pause threshold.
+        // Step 2 (day 7), comfortably short of the pause threshold.
         mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) });
         const api = makeApi();
         const stream = makeStream();
@@ -893,7 +908,7 @@ describe("sendNoMatchNotices", () => {
       mUserFindMany.mockResolvedValueOnce([
         {
           id: "u1",
-          telegramId: 111n, createdAt: WAITED_A_WEEK,
+          telegramId: 111n, createdAt: WAITED_TO_STEP_1,
           language: "en",
           profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
         },
@@ -920,8 +935,8 @@ describe("sendNoMatchNotices", () => {
   // famine streak.
   it("skips a user reachable on neither rail, without a DB write or a push", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "tg", telegramId: 555n, createdAt: WAITED_A_WEEK, language: "en" },
-      { id: "nowhere", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: null, language: "en" },
+      { id: "tg", telegramId: 555n, createdAt: WAITED_TO_STEP_1, language: "en" },
+      { id: "nowhere", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: null, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValue(null);
     const api = makeApi();
@@ -942,8 +957,8 @@ describe("sendNoMatchNotices", () => {
 
   it("continues on send failure and reports the error", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
-      { id: "u2", telegramId: 222n, createdAt: WAITED_A_WEEK, language: "en" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
+      { id: "u2", telegramId: 222n, createdAt: WAITED_TO_STEP_1, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValue(null);
     const api = makeApi();
@@ -974,7 +989,7 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("(NOMATCH-1) does not roll back the claim when the send succeeds", async () => {
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchFindFirst.mockResolvedValueOnce(null);
     const api = makeApi();
 
@@ -986,8 +1001,8 @@ describe("sendNoMatchNotices", () => {
 
   it("(NOMATCH-1) skips (not fails) a user whose claim races another invocation", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" },
-      { id: "u2", telegramId: 222n, createdAt: WAITED_A_WEEK, language: "en" },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" },
+      { id: "u2", telegramId: 222n, createdAt: WAITED_TO_STEP_1, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValue(null);
     const raceError = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
@@ -1006,7 +1021,7 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("tier 1 never attempts the famine discount grant", async () => {
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
     mMatchFindFirst.mockResolvedValueOnce(null);
     const api = makeApi();
 
@@ -1016,8 +1031,8 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("tier 2 grants the discount and appends the offer line to the DM", async () => {
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
-    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) }); // step 2 (day 21)
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
+    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) }); // step 2 (day 7)
     mGrant.mockResolvedValueOnce({ granted: true, pct: 77, expiresAt: new Date() });
     const api = makeApi();
 
@@ -1029,8 +1044,8 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("tier 2 with the feature off (grant returns granted:false) appends nothing", async () => {
-    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: "en" }]);
-    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) }); // step 2 (day 21)
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: "en" }]);
+    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) }); // step 2 (day 7)
     // default mGrant → { granted: false }
     const api = makeApi();
 
@@ -1046,12 +1061,12 @@ describe("sendNoMatchNotices", () => {
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
-        telegramId: 111n, createdAt: WAITED_A_WEEK,
+        telegramId: 111n, createdAt: WAITED_TO_STEP_1,
         language: "en",
         profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
       },
     ]);
-    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(2) }); // 21 days: would be step 2 + a famine discount
+    mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForStep(4) }); // 21 days: would be step 4 + a famine discount
     const api = makeApi();
     const stream = makeStream();
 
@@ -1073,11 +1088,53 @@ describe("sendNoMatchNotices", () => {
     });
   });
 
+  it("keeps a market-pending account on the weekly throttle, not the ladder's 3-day prefilter", async () => {
+    // The query only hides people notified within the last 3 days, so a
+    // market-pending account told 5 days ago comes back as a candidate — and
+    // must still be held until famineNoticeIntervalMs (7 days) has passed.
+    expect(CADENCE.famineNoticeIntervalMs).toBe(7 * DAY_MS);
+    const berlin = { homeCityKey: "de:berlin", homeCity: "Berlin" };
+    mUserFindMany.mockResolvedValueOnce([
+      {
+        id: "recent",
+        telegramId: 111n,
+        createdAt: WAITED_TO_STEP_1,
+        language: "en",
+        profile: berlin,
+        noMatchNotices: [{ dropDate: daysAgo(5) }],
+      },
+      {
+        id: "due",
+        telegramId: 222n,
+        createdAt: WAITED_TO_STEP_1,
+        language: "en",
+        profile: berlin,
+        noMatchNotices: [{ dropDate: daysAgo(8) }],
+      },
+    ]);
+    mMatchFindFirst.mockResolvedValue({ dispatchedAt: daysAgo(30) });
+    const api = makeApi();
+
+    const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+    expect(result.waiting).toBe(1);
+    expect(result.notified).toBe(1);
+    expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+    expect(mNoticeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: "due" }) }),
+    );
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, body] = api.sendMessage.mock.calls[0]!;
+    expect(chatId).toBe(222);
+    expect(body).toMatch(/Berlin/);
+    expect(mGrant).not.toHaveBeenCalled();
+  });
+
   it("keeps the ordinary famine copy for a user in a launched city", async () => {
     mUserFindMany.mockResolvedValueOnce([
       {
         id: "u1",
-        telegramId: 111n, createdAt: WAITED_A_WEEK,
+        telegramId: 111n, createdAt: WAITED_TO_STEP_1,
         language: "en",
         profile: { homeCityKey: "ua:kyiv", homeCity: "Kyiv" },
       },
@@ -1095,7 +1152,7 @@ describe("sendNoMatchNotices", () => {
 
   it("defaults to English when the user has no language set", async () => {
     mUserFindMany.mockResolvedValueOnce([
-      { id: "u1", telegramId: 111n, createdAt: WAITED_A_WEEK, language: null },
+      { id: "u1", telegramId: 111n, createdAt: WAITED_TO_STEP_1, language: null },
     ]);
     mMatchFindFirst.mockResolvedValueOnce(null);
     const api = makeApi();
@@ -1123,7 +1180,7 @@ describe("sendNoMatchNotices", () => {
 
     it("pushes to a user on the app and sends them no DM", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       const api = makeApi();
@@ -1148,7 +1205,7 @@ describe("sendNoMatchNotices", () => {
 
     it("DMs a Telegram user and sends them no push", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "tg", telegramId: 555n, createdAt: WAITED_A_WEEK, platform: "telegram", language: "en" },
+        { id: "tg", telegramId: 555n, createdAt: WAITED_TO_STEP_1, platform: "telegram", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       const api = makeApi();
@@ -1163,7 +1220,7 @@ describe("sendNoMatchNotices", () => {
 
     it("carries both rails for a user on Telegram AND the app", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "both", telegramId: 777n, createdAt: WAITED_A_WEEK, platform: "both", language: "en" },
+        { id: "both", telegramId: 777n, createdAt: WAITED_TO_STEP_1, platform: "both", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       const api = makeApi();
@@ -1180,7 +1237,7 @@ describe("sendNoMatchNotices", () => {
 
     it("keeps DMing a row older than the platform column", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "legacy", telegramId: 111n, createdAt: WAITED_A_WEEK, platform: null, language: "en" },
+        { id: "legacy", telegramId: 111n, createdAt: WAITED_TO_STEP_1, platform: null, language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       const api = makeApi();
@@ -1213,7 +1270,7 @@ describe("sendNoMatchNotices", () => {
     // no `matchId` to carry.
     it("sends the type the client routes on, with no matchId", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
 
@@ -1229,7 +1286,7 @@ describe("sendNoMatchNotices", () => {
     // allowed to cost the other rail, the claim, or the pause.
     it("survives a push failure without losing the DM or the claim", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "both", telegramId: 777n, createdAt: WAITED_A_WEEK, platform: "both", language: "en" },
+        { id: "both", telegramId: 777n, createdAt: WAITED_TO_STEP_1, platform: "both", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       mPush.mockRejectedValueOnce(new Error("apns down"));
@@ -1249,7 +1306,7 @@ describe("sendNoMatchNotices", () => {
       // rather than throwing. The person still heard it on Telegram, so the
       // notice is not rolled back and they are not re-notified next run.
       mUserFindMany.mockResolvedValueOnce([
-        { id: "both", telegramId: 777n, createdAt: WAITED_A_WEEK, platform: "both", language: "en" },
+        { id: "both", telegramId: 777n, createdAt: WAITED_TO_STEP_1, platform: "both", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       mPush.mockResolvedValueOnce(false);
@@ -1264,7 +1321,7 @@ describe("sendNoMatchNotices", () => {
 
     it("counts a user as notified when the DM fails but the push lands", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "both", telegramId: 777n, createdAt: WAITED_A_WEEK, platform: "both", language: "en" },
+        { id: "both", telegramId: 777n, createdAt: WAITED_TO_STEP_1, platform: "both", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       const api = makeApi();
@@ -1283,7 +1340,7 @@ describe("sendNoMatchNotices", () => {
     // the same event the single-rail version called a failed send.
     it("rolls the claim back when the only rail the user has does not deliver", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce(null);
       mPush.mockResolvedValueOnce(false);
@@ -1305,7 +1362,7 @@ describe("sendNoMatchNotices", () => {
     it("resumes an app-side account paused by a push that never landed", async () => {
       mutableEnv.EARLY_STAGE = false;
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -1328,7 +1385,7 @@ describe("sendNoMatchNotices", () => {
     it("pauses an app-side account when the push does land", async () => {
       mutableEnv.EARLY_STAGE = false;
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValueOnce({
         dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
@@ -1352,7 +1409,7 @@ describe("sendNoMatchNotices", () => {
       mUserFindMany.mockResolvedValueOnce([
         {
           id: "app",
-          telegramId: -42n, createdAt: WAITED_A_WEEK,
+          telegramId: -42n, createdAt: WAITED_TO_STEP_1,
           platform: "mobile",
           language: "en",
           profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
@@ -1378,8 +1435,8 @@ describe("sendNoMatchNotices", () => {
     // Rematch is a Telegram DM with a Stars button and has no app rail in v1.
     it("does not attempt the Rematch offer on the push-only rail", async () => {
       mUserFindMany.mockResolvedValueOnce([
-        { id: "app", telegramId: -42n, createdAt: WAITED_A_WEEK, platform: "mobile", language: "en" },
-        { id: "tg", telegramId: 555n, createdAt: WAITED_A_WEEK, platform: "telegram", language: "en" },
+        { id: "app", telegramId: -42n, createdAt: WAITED_TO_STEP_1, platform: "mobile", language: "en" },
+        { id: "tg", telegramId: 555n, createdAt: WAITED_TO_STEP_1, platform: "telegram", language: "en" },
       ]);
       mMatchFindFirst.mockResolvedValue(null);
 

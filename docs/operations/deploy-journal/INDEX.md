@@ -7,7 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING | 2026-10-15 | Waiting ladder: no-match notice silent by default, only on days 7/21/45/75/110/150 without a pair (one per step, nothing after 150), new copy in 5 locales; env `EARLY_STAGE` optional, default ON (no auto-pause); restart only, no migration, no contract change | [pending.md](./pending.md) |
+| PENDING | 2026-10-15 | Waiting ladder: no-match notice silent by default, only on days 4/7/10/21/45 without a pair (one per step, nothing after 45), new copy in 5 locales; env `EARLY_STAGE` optional, default ON (no auto-pause); restart only, no migration, no contract change | [pending.md](./pending.md) |
 | PENDING | 2026-10-13 | Performance wave «только безопасное» (`5d935472..278b6e83` + lead follow-up): fewer SQL per iOS poll, no unchanged bot_sessions UPSERT, admin DB gate, referral card in the render worker, drop scoring 4× cheaper; code only — ship with the migration blocks above in their order; new `[runtime]` log line, four lifecycle jobs alert under their own names | [pending.md](./pending.md) |
 | PENDING | 2026-10-13 | Dead-match refund recovery: hourly `dead-match-refund` sweep re-runs lost post-cancel refunds, partner ticket refund inside account deletion, orphaned Prime Time pass to the founder bot; code only | [pending](./pending.md) |
 | PENDING | 2026-10-13 | Simultaneous actions on one match: row-locked calendar save / stall cancel / keep-original, venue finalization rerun, agreement-pinned venue-change claims, gate-expiry and ticket-offer guards, per-spend refund key, refund claimed before Stars move; code only (no migration, no env) | [pending](./pending.md) |

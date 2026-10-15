@@ -262,9 +262,9 @@ export const FAMINE_DISCOUNT_TTL_DAYS = 30;
  * Applies only while the bot's `EARLY_STAGE` flag is off (founder decision
  * 2026-10-15): during the early stage the base is still gathering, so a long
  * wait says nothing about the person and nobody is paused — the waiting ladder
- * below simply goes quiet after its last step. 28 sits after the second step
- * (day 21, which carries the famine discount), so with the flag off a person
- * still sees the 7- and 21-day notices before the pause takes over.
+ * below simply goes quiet after its last step. With the flag off, 28 sits after
+ * the day-21 step, so a person still hears the 4/7/10/21-day notices before the
+ * pause takes over (the day-45 step is then never reached).
  */
 export const FAMINE_PAUSE_AFTER_DAYS = 28;
 
@@ -272,7 +272,9 @@ export const FAMINE_PAUSE_AFTER_DAYS = 28;
  * The waiting ladder (founder decision 2026-10-15): days without a pair after
  * which the bot writes on its own, once per step. Silence is the default —
  * a drop that finds nobody sends nothing — and these are the only exceptions,
- * spread over roughly five months, each with copy that says something new
+ * dense in the first days — when a person decides whether to keep the app —
+ * and done by day 45 (founder, 2026-10-15: a person still here after a month
+ * is not kept by more messages). Each says something new
  * (`waitingNotice{N}` / `waitingPush{N}Title|Body`, N = step index + 1).
  *
  * Days are counted from the most recent dispatched match, or for someone who
@@ -282,9 +284,9 @@ export const FAMINE_PAUSE_AFTER_DAYS = 28;
  * is sent automatically any more — the next message is a match.
  *
  * The step's 1-based index is what `NoMatchNotice.tier` stores, so
- * `CADENCE.famineDiscountMinTier` (2) lands on the day-21 notice.
+ * `CADENCE.famineDiscountMinTier` (2) lands on the day-7 notice.
  */
-export const WAITING_NOTICE_MILESTONE_DAYS = [7, 21, 45, 75, 110, 150] as const;
+export const WAITING_NOTICE_MILESTONE_DAYS = [4, 7, 10, 21, 45] as const;
 
 /**
  * Version of the user-facing legal documents in force, stamped onto

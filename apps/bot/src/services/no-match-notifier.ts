@@ -50,10 +50,11 @@ export function leadBoldEntity(text: string): { text: string; entities?: Message
  *
  * Runs after every drop (and on its fallback cron) over the `active` users the
  * matcher couldn't pair, but **silence is the default**: a person hears from us
- * only when they cross a step of `WAITING_NOTICE_MILESTONE_DAYS` (7, 21, 45,
- * 75, 110, 150 days without a pair), once per step, each step with its own
+ * only when they cross a step of `WAITING_NOTICE_MILESTONE_DAYS` (4, 7, 10,
+ * 21, 45 days without a pair — dense in the first days, when a person decides
+ * whether to stay; founder 2026-10-15), once per step, each step with its own
  * copy that says something new. Someone who skipped steps (paused, unreachable)
- * gets one notice for the latest step, never a catch-up burst; past day 150
+ * gets one notice for the latest step, never a catch-up burst; past day 45
  * nothing is sent automatically — the next message is a match. The tone holds
  * the position: no apology, no promised date or priority.
  *
@@ -70,8 +71,9 @@ export function leadBoldEntity(text: string): { text: string; entities?: Message
  * nothing at all**. That silence is the product: at small pool sizes most
  * evenings genuinely have nothing to report, and a nightly "sorry, no one
  * again" would turn a background search into a daily reminder of failure.
- * The waiting ladder narrows this further: the 7-day throttle is now only the
- * query's prefilter, and the steps themselves are 7–40 days apart.
+ * The waiting ladder replaces it: the query prefilter is the ladder's smallest
+ * gap (`WAITING_NOTICE_MIN_GAP_MS`, 3 days); the 7-day throttle now applies
+ * only to market-pending accounts, per person.
  *
  * The user-visible consequence of that silence — a pinned banner counting down
  * to a drop that will not announce itself — is handled separately by
@@ -135,7 +137,6 @@ const WAITING_NOTICE_KEYS = [
   "waitingNotice3",
   "waitingNotice4",
   "waitingNotice5",
-  "waitingNotice6",
 ] as const satisfies readonly TranslationKey[];
 const WAITING_PUSH_KEYS = [
   ["waitingPush1Title", "waitingPush1Body"],
@@ -143,7 +144,6 @@ const WAITING_PUSH_KEYS = [
   ["waitingPush3Title", "waitingPush3Body"],
   ["waitingPush4Title", "waitingPush4Body"],
   ["waitingPush5Title", "waitingPush5Body"],
-  ["waitingPush6Title", "waitingPush6Body"],
 ] as const satisfies ReadonlyArray<readonly [TranslationKey, TranslationKey]>;
 
 /** DM copy key for a 1-based waiting-ladder step. */
@@ -227,6 +227,12 @@ export function getDropDate(now: Date): Date {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Smallest gap between two waiting-ladder steps — the candidate prefilter. */
+export const WAITING_NOTICE_MIN_GAP_MS =
+  Math.min(
+    ...WAITING_NOTICE_MILESTONE_DAYS.slice(1).map((d, i) => d - WAITING_NOTICE_MILESTONE_DAYS[i]!),
+  ) * DAY_MS;
 const HOUR_MS = 60 * 60 * 1000;
 
 /** What `resolveWaitingAnchor` needs from the candidate row. */
@@ -389,10 +395,11 @@ export async function sendNoMatchNotices(
   // idempotency filter; the `@@unique([userId, dropDate])` constraint (via
   // `isUniqueViolation` below) remains the actual DB-level guarantee.
   //
-  // Since the waiting ladder this is the cheap prefilter only — every step is
-  // at least this far apart, so nobody it hides could be owed a notice. Who is
-  // actually told is decided per person (`dueWaitingStep`).
-  const notifyCutoff = new Date(now.getTime() - CADENCE.famineNoticeIntervalMs);
+  // Since the waiting ladder this is the cheap prefilter only, set to the
+  // ladder's smallest gap — no two steps are closer, so nobody it hides could be
+  // owed a notice. Who is actually told is decided per person (`dueWaitingStep`);
+  // market-pending accounts keep `famineNoticeIntervalMs`, checked per person.
+  const notifyCutoff = new Date(now.getTime() - WAITING_NOTICE_MIN_GAP_MS);
 
   const readCandidates = (afterId: string | null) =>
     prisma.user.findMany({
@@ -415,7 +422,7 @@ export async function sendNoMatchNotices(
         AND: [
           { matchesAsA: noLiveOrRecentMatch },
           { matchesAsB: noLiveOrRecentMatch },
-          // Throttle: skip anyone notified within the last famineNoticeIntervalMs.
+          // Prefilter: skip anyone notified within the ladder's smallest gap.
           {
             noMatchNotices: {
               none: { dropDate: { gte: notifyCutoff } },
@@ -542,9 +549,18 @@ export async function sendNoMatchNotices(
 
     // The ladder step this notice is for. Silence is the default: no step owed
     // (and no pause to announce) means nothing is sent and nothing is claimed.
-    const dueStep = marketPending
-      ? 0
-      : dueWaitingStep(anchor, dropDate, u.noMatchNotices?.[0]?.dropDate);
+    const lastNoticeAt = u.noMatchNotices?.[0]?.dropDate;
+    // Market-pending accounts stay on the plain weekly throttle (the query's
+    // prefilter is now the ladder's 3-day gap, too short for them).
+    if (
+      marketPending &&
+      lastNoticeAt &&
+      lastNoticeAt.getTime() > now.getTime() - CADENCE.famineNoticeIntervalMs
+    ) {
+      result.waiting++;
+      continue;
+    }
+    const dueStep = marketPending ? 0 : dueWaitingStep(anchor, dropDate, lastNoticeAt);
     if (!marketPending && !isPoolExhaustionPause && dueStep === 0) {
       result.waiting++;
       continue;
@@ -557,7 +573,7 @@ export async function sendNoMatchNotices(
       continue;
     }
 
-    // `NoMatchNotice.tier`: the ladder step (1–6) — for a pause, the step the
+    // `NoMatchNotice.tier`: the ladder step (1–5) — for a pause, the step the
     // wait has reached — or weeks waiting for a market-pending account.
     const tier = marketPending ? weeksWaiting(anchor, dropDate) : Math.max(1, waitingStepFor(days));
 
@@ -574,7 +590,7 @@ export async function sendNoMatchNotices(
         ? ["poolExhaustedPausePushTitle", "poolExhaustedPausePushBody"]
         : waitingPushKeys(dueStep);
 
-    // Ladder step 2+ (day 21 on) → grant the one-time single-ticket discount
+    // Ladder step 2+ (day 7 on) → grant the one-time single-ticket discount
     // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
     // grant self-gates), so the flag-off path keeps the plain step copy.
     // Skipped for a pause: that DM is a different message entirely, and
