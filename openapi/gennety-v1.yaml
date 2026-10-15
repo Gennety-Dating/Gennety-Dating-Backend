@@ -2189,8 +2189,8 @@ paths:
           the rest of the batch to the caller's next local window →
           `outcome: paused`.
         - Anything else is stored as the answer (trimmed, capped at 1000
-          characters), exactly as a Telegram answer is. Text only — the humour
-          question's meme reading is a Telegram-only extra.
+          characters), exactly as a Telegram answer is. Text only — a voice
+          note or photos go to `POST /v1/me/profiler/answer/media`.
 
         Then the batch advances: `next` carries the following question;
         `done` means the batch is over (or nothing is left this cycle, or a
@@ -2226,6 +2226,123 @@ paths:
             question whose moment is gone (removed now). `later_full` —
             «На потом» already holds 3. Nothing else was recorded; re-read
             `GET /v1/me/profiler`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/profiler/answer/media:
+    post:
+      tags: [me]
+      operationId: answerProfilerQuestionWithMedia
+      summary: Answer the live (or «На потом») Profiler question with a voice note and/or photos
+      description: |
+        The `/v1/me/profiler/answer` answer, carrying media — the «+» and the
+        microphone the app shows on EVERY question. Same claim (exactly one
+        answer counts across Telegram and the app), same `ProfilerAnswerResult`,
+        same 409s. No `skip` / `later` here: those stay on `/answer`.
+
+        - `voice` is transcribed; the transcript is the person's own words.
+        - Each photo is described by a vision pass: on the meme questions
+          (humour) exactly as the Telegram meme path reads them, on any other
+          question as an answer to that question. A refused or unreadable photo
+          is skipped and never kept.
+        - Stored `answerText`: typed `text`, then the transcript, then the
+          photo descriptions (a photo-only answer stores the bare description;
+          beside words each is labelled «Photo: …» in the caller's language),
+          capped at 1000 characters. `answerSource` is `text` (or `both` /
+          `tap` with options), as on `/answer`.
+        - Photos that were read are kept privately under the caller's prefix
+          in the chat attachments bucket; nothing in the response points at
+          them.
+
+        Order of checks: fields and file types (400/413/415, nothing spent) →
+        the question is live (409, nothing spent) → transcription (503/422) →
+        photos (422 only when nothing else is left) → the claim (409).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [questionId]
+              properties:
+                questionId: { type: string }
+                text:
+                  type: string
+                  description: The person's own words, trimmed, capped at 1000.
+                optionIds:
+                  description: |
+                    Tapped quick-answer ids — a repeated field, or one field
+                    holding a JSON array string (`["a","b"]`). Same rules as
+                    `/answer`.
+                  oneOf:
+                    - type: array
+                      items: { type: string }
+                    - type: string
+                source:
+                  type: string
+                  enum: [tap, text, both]
+                voice:
+                  type: string
+                  format: binary
+                  description: One voice note (m4a / AAC, ogg, wav…), ≤ 25 MB.
+                images:
+                  type: array
+                  maxItems: 4
+                  items:
+                    type: string
+                    format: binary
+                  description: JPEG / PNG / WebP (sniffed from the bytes), ≤ 6 MB each. HEIC is refused — send JPEG.
+            encoding:
+              voice: { contentType: "audio/mp4, audio/m4a, audio/aac, audio/ogg, audio/wav, application/octet-stream" }
+              images: { contentType: "image/jpeg, image/png, image/webp, application/octet-stream" }
+      responses:
+        "200":
+          description: Recorded; what the batch does next
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfilerAnswerResult" }
+        "400":
+          description: |
+            `missing_question_id`; `missing_media` — neither `voice` nor
+            `images`; `unknown_option` / `too_many_options` as on `/answer`;
+            a multer code (`LIMIT_UNEXPECTED_FILE` — more than 4 images or
+            2 voice notes, or an unknown file field). Nothing was recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `question_not_active` / `later_full`, exactly as on `/answer`.
+            Nothing was recorded or kept; re-read `GET /v1/me/profiler`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: |
+            `image_too_large` — a photo over 6 MB; `LIMIT_FILE_SIZE` — any
+            part over 25 MB.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "415":
+          description: "`unsupported_image` — a photo that is not JPEG / PNG / WebP (HEIC, GIF, anything else)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: |
+            `not_heard` — the voice note transcribed to nothing (or the
+            recording itself is unusable); `image_unreadable` — no photo could
+            be read (or every one was refused) and there is no text, voice or
+            option beside them. Nothing was recorded; the question stays live.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: "`transcription_unavailable` — our speech-to-text is down; keep the note and offer a retry."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

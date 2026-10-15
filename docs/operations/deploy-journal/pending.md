@@ -56,6 +56,26 @@ iOS: every build already treats a non-2xx as "not delivered" with retry — no a
   in `apps/bot/evals/out/`.
 - **Откат:** previous release; no data written in a new shape.
 
+**PENDING 2026-10-15 — Profiler answers with voice and photos from the app (restart only: no migration, no env; new endpoint `POST /v1/me/profiler/answer/media`).**
+Branch `profiler-media-answer`. Multipart: `questionId`, optional `text` / `optionIds` (repeated or JSON array) /
+`source`, files `voice` (0..1, ≤ 25 MB) and `images` (0..4, JPEG/PNG/WebP ≤ 6 MB, HEIC → 415). Voice → Whisper
+(503 `transcription_unavailable`, 422 `not_heard`); photos → vision description (`readMemeImage` on the humour
+questions, new `vision/read-answer-photo.ts` on every other one; refused/unreadable photos skipped, all of them with
+nothing else → 422 `image_unreadable`). Stored `answerText` = typed words → transcript → photo descriptions, through the
+same claim/upsert as `/answer` (same 409s, same `ProfilerAnswerResult`). Photos that were read go to the chat bucket
+under `{userId}/` (swept by account deletion's bucket listing); no DB column points at them and `meme_*` stay
+Telegram-only, so an app meme is NOT re-sent by the §3.12 meme reveal. Rate limit: `voiceLimiter` (30/h, shared with
+chat voice). Demo: unchanged. iOS: the «+» and the microphone on Profiler questions call this route; until the deploy
+it answers 404 — the app must keep the typed `/answer` path working and only offer media once the route exists.
+- **Порядок:** merge → build → restart. Nothing else.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/public/routes/profiler-native-media.test.ts
+  src/public/routes/profiler-native.test.ts`; on prod `curl -s -o /dev/null -w '%{http_code}' -X POST
+  https://<api>/v1/me/profiler/answer/media` → 401 (not 404); then answer a live question from the app with one photo
+  and `pm2 logs gennety-bot --lines 200 | grep profiler-media` shows the stored path, and the row's `answer_text`
+  holds the description.
+- **Откат:** `git revert` of the branch commit + restart (rows written stay ordinary text answers; uploaded photos stay
+  under the user's prefix and are erased with the account).
+
 **PENDING 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
 Spec `docs/product/domains/pulse-analytics.md`, decision journal 2026-10-15. Analytics consent `users.analytics_opt_in`
 (default false) set from the consent screens and `PUT /v1/me/analytics-consent`; `/v1/client/events` takes screen /

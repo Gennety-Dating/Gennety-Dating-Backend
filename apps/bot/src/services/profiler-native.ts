@@ -125,7 +125,18 @@ export interface NativeProfilerBatch {
 export type NativeProfilerReply =
   | { kind: "skip" }
   | { kind: "later" }
-  | { kind: "text"; text: string; optionIds?: string[]; source?: ProfilerAnswerSource };
+  | {
+      kind: "text";
+      text: string;
+      optionIds?: string[];
+      source?: ProfilerAnswerSource;
+      /**
+       * The text carries a description of a photo the person attached
+       * (`POST /v1/me/profiler/answer/media`). A photo is an answer, never a
+       * refusal — even when the words beside it say "later".
+       */
+      withPhoto?: boolean;
+    };
 
 export type NativeProfilerAnswerError =
   | "question_not_active"
@@ -474,7 +485,7 @@ export async function answerNativeProfilerQuestion(
     );
     if (!composed.ok) return { ok: false, error: composed.error };
     quick = composed;
-    refusal = composed.optionIds.length === 0 && isProfilerRefusal(reply.text);
+    refusal = composed.optionIds.length === 0 && !reply.withPhoto && isProfilerRefusal(reply.text);
   }
 
   if (await isPostponed(userId, questionId)) {
@@ -512,7 +523,24 @@ export async function answerNativeProfilerQuestion(
   return advance(state, now);
 }
 
-async function userLanguage(userId: string): Promise<Language> {
+/**
+ * Whether `questionId` can be answered right now — the live question, or one
+ * waiting in «На потом». A cheap read the media route makes BEFORE paying for
+ * a transcription or a vision pass; the claim inside
+ * `answerNativeProfilerQuestion` stays the authority (a race between this read
+ * and the claim still ends in `question_not_active`).
+ */
+export async function nativeProfilerQuestionOpen(userId: string, questionId: string): Promise<boolean> {
+  if (!profilerQuestionById(questionId)) return false;
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { profilerActiveQuestionId: true },
+  });
+  if (profile?.profilerActiveQuestionId === questionId) return true;
+  return isPostponed(userId, questionId);
+}
+
+export async function userLanguage(userId: string): Promise<Language> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { language: true } });
   return (user?.language ?? "en") as Language;
 }
