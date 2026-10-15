@@ -35,6 +35,7 @@ import {
   readWishlistCard,
   wishlistCardNote,
   wishlistCardViews,
+  wishlistIdentity,
   type WishlistCard,
   type WishlistCardView,
 } from "./chat-wishlist.js";
@@ -233,8 +234,11 @@ const WISHLIST_ADDENDUM = `### Their Date Wishlist (a card with a button)
 - \`image\`: "photo" for a clear shot of the thing itself; "find" for a
   screenshot, a collage, a photo with a face or people, or no photo — a clean
   picture is found online.
+- After the card, ask in a few words («добавить в вишлист?») — don't describe
+  the card or the screen, and don't list every item: the card shows them.
 - They answer with the button, not in words. If they say «да» in text, the
-  card is still there — point them to it.
+  card is still there — point them to its button. Nothing is saved until the
+  tap: never «запомнил», «сохранил», «учту» about wishlist items.
 - Under your earlier replies, a bracketed note says what happened to each
   card. Trust it; never claim something is in their wishlist otherwise.
 - Use their wishlist ("About this person") to make talk and date prep
@@ -463,7 +467,7 @@ async function runTurnInner(
 
   const wishlistCards = env.WISHLIST_FEATURE_ENABLED && (input.chatCards?.has(WISHLIST_CARD_CLIENT_TOKEN) ?? false);
   const tools: ToolList = wishlistCards ? ALL_TOOLS_WITH_WISHLIST : ALL_TOOLS;
-  const { messages, openedNewSession, visiblePhotos } = await buildChatMessages(
+  const { messages, openedNewSession, visiblePhotos, openCardItems } = await buildChatMessages(
     userId,
     telegramId,
     sessionId,
@@ -583,6 +587,8 @@ async function runTurnInner(
           language,
           cityKey: account.profile?.homeCityKey ?? null,
           visiblePhotos,
+          openCardItems,
+          buttonLabel: t(language, "agentWishlistCardButton"),
         }).catch((err: unknown) => {
           console.warn("[chat] wishlist card failed:", err);
           return { result: JSON.stringify({ success: false, error: "tool_failed", detail: "Tell them it did not work this time." }), card: null, openWishlist: false };
@@ -747,7 +753,12 @@ async function buildChatMessages(
   telegramId: bigint,
   sessionId: string,
   options: { wishlistCards: boolean },
-): Promise<{ messages: OpenAIChatMessage[]; openedNewSession: boolean; visiblePhotos: Set<string> }> {
+): Promise<{
+  messages: OpenAIChatMessage[];
+  openedNewSession: boolean;
+  visiblePhotos: Set<string>;
+  openCardItems: Set<string>;
+}> {
   const rows = await prisma.message.findMany({
     where: { userId, sessionId },
     orderBy: { createdAt: "desc" },
@@ -780,6 +791,8 @@ async function buildChatMessages(
   const earlierPhotos = await signEarlierPhotos(rows);
   // Every photo the model is shown with a token — what a wishlist card may use.
   const visiblePhotos = new Set<string>();
+  // Items of cards still waiting for their tap — not to be proposed twice.
+  const openCardItems = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -851,12 +864,15 @@ async function buildChatMessages(
         : row.content ?? "";
       // The card under this reply and what they did with it.
       const rowCard = readWishlistCard((row as { attachment?: unknown }).attachment);
+      if (rowCard?.state === "open") {
+        for (const item of rowCard.items) openCardItems.add(wishlistIdentity(item.title, item.brand));
+      }
       out.push({ role: "assistant", content: rowCard ? `${content}\n${wishlistCardNote(rowCard)}` : content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
 
-  return { messages: out, openedNewSession, visiblePhotos };
+  return { messages: out, openedNewSession, visiblePhotos, openCardItems };
 }
 
 type HistoryRow = { role: string; imageUrl: string | null; imageUrls: string[] };

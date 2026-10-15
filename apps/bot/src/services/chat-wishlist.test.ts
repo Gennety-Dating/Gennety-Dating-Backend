@@ -42,6 +42,7 @@ const ctx = {
   language: "ru" as const,
   cityKey: "ua:kyiv",
   visiblePhotos: new Set([PHOTO_1, PHOTO_2]),
+  buttonLabel: "Добавить",
 };
 
 function candidate(over: Record<string, unknown> = {}) {
@@ -211,6 +212,24 @@ describe("proposeWishlistItems", () => {
     );
     expect(out.card?.items).toHaveLength(1);
     expect(parsedResult(out.result)).toMatchObject({ leftOutNoRoom: 1 });
+  });
+
+  // Live evals 2026-10-15: «да, добавь» in words made a second copy of the card.
+  it("items still on an unanswered card get no second card, but a pointer to its button", async () => {
+    const out = await proposeWishlistItems(
+      { items: [{ title: "Пионы", category: "flowers", image: "find" }] },
+      { ...ctx, openCardItems: new Set([wishlistIdentity("Пионы", null)]) },
+      deps(),
+    );
+    expect(out.card).toBeNull();
+    const result = parsedResult(out.result);
+    expect(result).toMatchObject({ success: false, error: "card_already_open" });
+    expect(String(result.instruction)).toContain("«Добавить»");
+  });
+
+  it("names the button in their language", async () => {
+    const out = await proposeWishlistItems({ items: [{ title: "Пионы", category: "flowers", image: "none" }] }, ctx, deps());
+    expect(String(parsedResult(out.result).instruction)).toContain("«Добавить» button");
   });
 
   it("refuses arguments without a single titled item", async () => {

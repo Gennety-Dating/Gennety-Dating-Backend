@@ -196,6 +196,20 @@ describe("a turn with a card", () => {
   });
 });
 
+describe("an unanswered card", () => {
+  it("is handed to the next card's builder, so the same items are not proposed twice", async () => {
+    historyRows = [
+      { role: "user", content: "да, добавь", imageUrl: null, imageUrls: [], context: null },
+      { role: "assistant", content: "добавить в вишлист?", imageUrl: null, imageUrls: [], context: null, attachment: card },
+    ];
+    queue = [calls([propose]), plain];
+    await runChatTurn({ userId: USER, text: "да, добавь", imageUrls: [], chatCards: WISHLIST }, { fetchFn });
+    const ctx = proposeWishlistItems.mock.calls[0]![1] as { openCardItems: Set<string>; buttonLabel: string };
+    expect([...ctx.openCardItems]).toEqual(["tom ford lost cherry"]);
+    expect(ctx.buttonLabel).toBe("Добавить");
+  });
+});
+
 describe("the next turn", () => {
   it("reads what happened to the card under the earlier reply", async () => {
     historyRows = [

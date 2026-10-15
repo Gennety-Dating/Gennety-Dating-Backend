@@ -360,6 +360,8 @@ const translations = {
     agentFallbackError: "Something went wrong. Please say that again.",
     /** The chat wishlist card's line when the model wrote none (chat-wishlist.ts). */
     agentWishlistCardLine: "Add these to your wishlist?",
+    /** The card's button as the app labels it — the agent names it this way. */
+    agentWishlistCardButton: "Add",
     /** Button into «My wishlist» under a chat reply. */
     agentEntryWishlist: "My wishlist",
     agentBlockedVerification: "Finish verification first — everything else opens up after that.",
@@ -1613,6 +1615,7 @@ const translations = {
     agentEntryPrompt: "Держи:",
     agentFallbackError: "Что-то пошло не так. Повтори, пожалуйста.",
     agentWishlistCardLine: "Добавить в твой вишлист?",
+    agentWishlistCardButton: "Добавить",
     agentEntryWishlist: "Мой вишлист",
     agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
     agentBlockedSuspended:
@@ -2718,6 +2721,7 @@ const translations = {
     agentEntryPrompt: "Тримай:",
     agentFallbackError: "Щось пішло не так. Повтори, будь ласка.",
     agentWishlistCardLine: "Додати у твій вішліст?",
+    agentWishlistCardButton: "Додати",
     agentEntryWishlist: "Мій вішліст",
     agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
     agentBlockedSuspended:
@@ -3822,6 +3826,7 @@ const deTranslations: TranslationTable = {
   agentEntryPrompt: "Hier, bitte:",
   agentFallbackError: "Da ist etwas schiefgelaufen. Sag das bitte noch einmal.",
   agentWishlistCardLine: "Auf deine Wunschliste setzen?",
+  agentWishlistCardButton: "Hinzufügen",
   agentEntryWishlist: "Meine Wunschliste",
   agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
   agentBlockedSuspended:
@@ -4899,6 +4904,7 @@ const plTranslations: TranslationTable = {
   agentEntryPrompt: "Proszę:",
   agentFallbackError: "Coś poszło nie tak. Powtórz, proszę.",
   agentWishlistCardLine: "Dodać do twojej listy życzeń?",
+  agentWishlistCardButton: "Dodaj",
   agentEntryWishlist: "Moja lista życzeń",
   agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",
   agentBlockedSuspended:

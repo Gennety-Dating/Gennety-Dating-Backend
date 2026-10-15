@@ -115,7 +115,7 @@ export const PROPOSE_WISHLIST_TOOL = {
   function: {
     name: PROPOSE_WISHLIST_TOOL_NAME,
     description:
-      "Show a native card under your reply that proposes items for their Date Wishlist — concrete things they would love to get, try or go to (a perfume, flowers, a drink or dish, a place, jewellery, clothes, a gift, an experience). The card has an «Add» button and NOTHING is saved until they tap it, so call it in the same reply whenever they share such things — photos, a shop screenshot, a link, «хочу / мечтаю / обожаю X» — or ask to add something. One call per reply with every item. Never for portraits, people, memes or hobbies in general.",
+      "Show a native card under your reply that proposes items for their Date Wishlist — concrete things they would love to get, try or go to (a perfume, flowers, a drink or dish, a place, jewellery, clothes, a gift, an experience). The card has a button and NOTHING is saved until they tap it, so call it in the same reply whenever they share such things — photos, a shop screenshot, a link, «хочу / мечтаю / обожаю X» — or ask to add something. One call per reply with every item. Never for portraits, people, memes or hobbies in general, and never again for items already on a card they have not answered.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -239,6 +239,14 @@ export interface ProposeContext {
   cityKey: string | null;
   /** Chat photo paths the model was shown this turn (current and earlier rows). */
   visiblePhotos: ReadonlySet<string>;
+  /**
+   * Items of a card in this chat that is still open (not answered) —
+   * `wishlistIdentity` of each. «да, добавь» in words after a card must lead to
+   * its button, not to a second copy of it (live evals 2026-10-15).
+   */
+  openCardItems?: ReadonlySet<string>;
+  /** The card's button as the app labels it in their language («Добавить»). */
+  buttonLabel: string;
 }
 
 export interface ProposeOutcome {
@@ -270,6 +278,7 @@ export async function proposeWishlistItems(
   const existing = await deps.existingItems(ctx.userId);
   const known = new Set(existing.map((row) => wishlistIdentity(row.title, row.brand)));
   const already: string[] = [];
+  const onOpenCard: string[] = [];
   const fresh: ParsedItem[] = [];
   for (const item of parsed) {
     const id = wishlistIdentity(item.title, item.brand);
@@ -277,8 +286,23 @@ export async function proposeWishlistItems(
       already.push(item.title);
       continue;
     }
+    if (ctx.openCardItems?.has(id)) {
+      onOpenCard.push(item.title);
+      continue;
+    }
     known.add(id);
     fresh.push(item);
+  }
+  if (fresh.length === 0 && onOpenCard.length > 0) {
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: "card_already_open",
+        instruction: `These are already on the card under your earlier reply, not answered yet — no new card. In a few words tell them to tap «${ctx.buttonLabel}» there. Saying yes in words saves nothing: never say «запомнил», «сохранил», «учту» about them.`,
+      }),
+      card: null,
+      openWishlist: false,
+    };
   }
 
   const room = Math.max(0, WISHLIST_MAX_ITEMS - existing.length);
@@ -382,8 +406,7 @@ export async function proposeWishlistItems(
       items: items.map((item) => [item.brand, item.title].filter(Boolean).join(" ")),
       ...(already.length > 0 ? { alreadyInWishlist: already } : {}),
       ...(fresh.length > taken.length ? { leftOutNoRoom: fresh.length - taken.length } : {}),
-      instruction:
-        "A card with these items and an «Add» button is now under your reply; nothing is saved until they tap it. Your reply: a real reaction to what they shared (one or two sentences, name a thing or two), then one short line pointing at the card, like «добавить в вишлист?». Don't list every item, don't say anything is saved, no second offer in this reply.",
+      instruction: `A card with these items and a «${ctx.buttonLabel}» button is now under your reply; nothing is saved until they tap it. Your reply: a real reaction to what they shared (one or two sentences — your take, naming at most two of them; the card already lists them all), then ONE short question like «добавить в вишлист?». Don't describe the card or the screen («карточка ниже», «нажми кнопку») — it is right there. Never say «запомнил», «сохранил», «учту»: nothing is saved yet. No second offer in this reply.`,
     }),
     card,
     openWishlist: false,

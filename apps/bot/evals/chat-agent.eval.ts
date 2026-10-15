@@ -22,7 +22,9 @@ import { t } from "@gennety/shared";
  * between runs — read the report, not just the exit code.
  *
  * Deterministic checks (`expect`) guard what must never regress: the canned
- * failure line, the third photo, interests wiped by "add". The judge's
+ * failure line, the third photo, interests wiped by "add", and (2026-10-15)
+ * the wishlist card: shown for things, never for hobbies, nothing saved
+ * without the tap. The judge's
  * verdicts fail the run too, but a single borderline "fail" is a reason to
  * read the transcript, not proof of a regression.
  */
@@ -40,6 +42,7 @@ const store = vi.hoisted(() => {
   const state = {
     messages: [] as Row[],
     user: {} as Record<string, unknown>,
+    wishlist: [] as Row[],
     seq: 0,
   };
 
@@ -71,6 +74,26 @@ const store = vi.hoisted(() => {
         const id = (args.where as { id: string }).id;
         state.messages = state.messages.filter((m) => m.id !== id);
         return {};
+      },
+      findFirst: (args) => {
+        const where = (args.where ?? {}) as { id?: string; role?: string };
+        return state.messages.find((m) => (!where.id || m.id === where.id) && (!where.role || m.role === where.role)) ?? null;
+      },
+      update: (args) => {
+        const id = (args.where as { id: string }).id;
+        const row = state.messages.find((m) => m.id === id);
+        if (row) Object.assign(row, args.data as object);
+        return row ?? null;
+      },
+    },
+    wishlistItem: {
+      findMany: () => [...state.wishlist].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+      count: () => state.wishlist.length,
+      createMany: (args) => {
+        for (const data of args.data as Array<Record<string, unknown>>) {
+          state.wishlist.push({ ...data, id: `w-${state.seq}`, createdAt: now() });
+        }
+        return { count: (args.data as unknown[]).length };
       },
     },
     user: {
@@ -135,10 +158,20 @@ vi.mock("../src/services/storage.js", async (importOriginal) => ({
     const file = path.split("/").pop()!;
     return `data:image/png;base64,${readFileSync(resolve(FIXTURES, file)).toString("base64")}`;
   },
+  // The card's view signs photos for the app; here it only has to exist.
+  createChatImageSignedUrls: async (paths: readonly string[]) =>
+    paths.map((path) => (path ? `https://eval.invalid/${path}` : null)),
+  downloadChatImage: async () => null,
 }));
 
 const { runChatTurn } = await import("../src/services/chat-agent.js");
+const { resolveWishlistCard } = await import("../src/services/chat-wishlist.js");
 const { openaiFetch } = await import("../src/services/openai-fetch.js");
+const { env } = await import("../src/config.js");
+// The wishlist ships dark in production's env; the evals judge it switched on.
+(env as { WISHLIST_FEATURE_ENABLED: boolean }).WISHLIST_FEATURE_ENABLED = true;
+/** What an app build that draws the wishlist card sends (`X-Gennety-Chat-Cards`). */
+const CARD_BUILD = new Set(["wishlist"]);
 
 /** A first-day account like the founder's on 2026-10-15. */
 function freshAccount() {
@@ -186,6 +219,8 @@ interface Turn {
   photos?: string[];
   /** What a good reply does here — read by the judge. */
   expect: string;
+  /** After this reply, the person taps «Добавить» on its card (every item). */
+  tapAdd?: boolean;
 }
 
 interface Exchange {
@@ -194,6 +229,8 @@ interface Exchange {
   reply: string;
   receipts: string[];
   action: string | null;
+  /** The wishlist card under the reply, as the app shows it. */
+  card: { state: string; items: string[] } | null;
   error: string | null;
   expect: string;
 }
@@ -212,21 +249,35 @@ const recordingFetch: typeof fetch = async (input, init) => {
   return openaiFetch(input, init);
 };
 
-async function talk(turns: Turn[], sessionId: string): Promise<Exchange[]> {
+async function talk(turns: Turn[], sessionId: string, chatCards?: ReadonlySet<string>): Promise<Exchange[]> {
   const out: Exchange[] = [];
   for (const turn of turns) {
     const photos = (turn.photos ?? []).map((file) => `${USER}/${file}`);
     try {
       const result = await runChatTurn(
-        { userId: USER, text: turn.text, imageUrls: photos, sessionId },
+        { userId: USER, text: turn.text, imageUrls: photos, sessionId, ...(chatCards ? { chatCards } : {}) },
         { fetchFn: recordingFetch },
       );
+      let card: Exchange["card"] = result.attachment
+        ? {
+            state: result.attachment.state,
+            items: result.attachment.items.map((item) => [item.brand, item.title].filter(Boolean).join(" ")),
+          }
+        : null;
+      if (turn.tapAdd && result.attachment) {
+        const tapped = await resolveWishlistCard(USER, result.id, {
+          action: "save",
+          keys: result.attachment.items.map((item) => item.key),
+        });
+        if (card) card = { ...card, state: tapped.ok ? "saved (the person tapped «Добавить»)" : `tap failed: ${tapped.error}` };
+      }
       out.push({
         user: turn.text,
         photos: turn.photos ?? [],
         reply: result.content,
         receipts: result.receipts ?? [],
         action: result.action ? JSON.stringify(result.action) : null,
+        card,
         error: null,
         expect: turn.expect,
       });
@@ -237,6 +288,7 @@ async function talk(turns: Turn[], sessionId: string): Promise<Exchange[]> {
         reply: "",
         receipts: [],
         action: null,
+        card: null,
         error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
         expect: turn.expect,
       });
@@ -269,6 +321,9 @@ help desk. Score every agent reply 1–5 on:
   a real question gets a real answer.
 - voice: natural casual Russian on "ты" (never "вы"/"вам" to the person; plural "вам" about the pair is fine), no
   markdown symbols, no corporate tone, at most one emoji.
+A "WISHLIST CARD UNDER THE REPLY" is real native UI the app draws: the items with photos, all ticked, and one
+«Добавить» button — nothing is saved until the person taps it. A reply that reacts to what they shared and points to
+the card in a short line is exactly right; listing every item again in prose is redundant (length/voice ≤ 3).
 verdict "fail" when any score is ≤ 2 or the turn's expectation is clearly missed. Lowercase sentence openings are the
 brand's style, not a flaw. Answer as JSON: {"grades":[{"turn":1,"intent":n,"proactivity":n,"honesty":n,"length":n,
 "voice":n,"verdict":"pass"|"fail","note":"one sentence, Russian"}]}`;
@@ -281,6 +336,7 @@ async function judge(title: string, exchanges: Exchange[]): Promise<Grade[]> {
         `AGENT: ${e.error ? `(no reply — ${e.error})` : e.reply}\n` +
         (e.receipts.length ? `RECEIPTS (code-confirmed edits): ${e.receipts.join(" | ")}\n` : "") +
         (e.action ? `BUTTON SHOWN UNDER THE REPLY (real, rendered by the app): ${e.action}\n` : "") +
+        (e.card ? `WISHLIST CARD UNDER THE REPLY (real, rendered by the app; ${e.card.state}): ${e.card.items.join(" | ")}\n` : "") +
         `EXPECTED: ${e.expect}`,
     )
     .join("\n\n");
@@ -310,8 +366,12 @@ async function judge(title: string, exchanges: Exchange[]): Promise<Grade[]> {
 const report: string[] = [];
 const allGrades: Grade[] = [];
 
-async function scenario(title: string, turns: Turn[]): Promise<{ exchanges: Exchange[]; grades: Grade[] }> {
-  const exchanges = await talk(turns, SESSION);
+async function scenario(
+  title: string,
+  turns: Turn[],
+  chatCards?: ReadonlySet<string>,
+): Promise<{ exchanges: Exchange[]; grades: Grade[] }> {
+  const exchanges = await talk(turns, SESSION, chatCards);
   const grades = await judge(title, exchanges);
   allGrades.push(...grades);
   report.push(
@@ -324,6 +384,7 @@ async function scenario(title: string, turns: Turn[]): Promise<{ exchanges: Exch
             `**Агент:** ${e.error ? `_нет ответа — ${e.error}_` : e.reply.replace(/\n/g, "  \n")}\n\n` +
             (e.receipts.length ? `_Чеки:_ ${e.receipts.join(" · ")}\n\n` : "") +
             (e.action ? `_Кнопка:_ \`${e.action}\`\n\n` : "") +
+            (e.card ? `_Карточка вишлиста (${e.card.state}):_ ${e.card.items.join(" · ")}\n\n` : "") +
             (g
               ? `> ${g.verdict === "pass" ? "✅" : "❌"} понял ${g.intent} · шаг ${g.proactivity} · честность ${g.honesty} · длина ${g.length} · голос ${g.voice} — ${g.note}\n`
               : "> (без оценки)\n")
@@ -348,6 +409,7 @@ function averages(grades: Grade[]): Record<(typeof AXES)[number], number> {
 
 beforeEach(() => {
   store.state.messages = [];
+  store.state.wishlist = [];
   store.state.user = freshAccount();
 });
 
@@ -385,7 +447,8 @@ describe("chat agent — live evals", () => {
   });
 
   it("духи: фото, вопрос про уже присланный флакон, любимый, согласие на запись", async () => {
-    const { exchanges } = await scenario("Духи", [
+    // A build WITHOUT the wishlist card: the interests path, as before 2026-10-15.
+    const { exchanges } = await scenario("Духи (сборка без карточки вишлиста)", [
       {
         text: "Вот мои любимые духи кстати",
         photos: ["le-beau.png", "russian-tea.png", "tobacco-memories.png"],
@@ -461,6 +524,74 @@ describe("chat agent — live evals", () => {
       },
     ]);
     expect(exchanges[0]!.reply).not.toContain(CANNED);
+  });
+
+  it("вишлист: фото духов → карточка, «Добавить», агент знает, что сохранено", async () => {
+    const { exchanges } = await scenario(
+      "Духи → вишлист (сборка с карточкой)",
+      [
+        {
+          text: "Вот мои любимые духи кстати",
+          photos: ["le-beau.png", "russian-tea.png", "tobacco-memories.png"],
+          tapAdd: true,
+          expect:
+            "Живая реакция на ароматы (называет пару, есть мнение) и короткая строка к карточке вишлиста под ответом; все три флакона в карточке; ничего не записано в профиль; не перечисляет все позиции заново.",
+        },
+        {
+          text: "а что у меня теперь в вишлисте?",
+          expect: "Называет сохранённые три аромата (они в вишлисте после нажатия), коротко; новой карточки нет; можно один лёгкий шаг.",
+        },
+      ],
+      CARD_BUILD,
+    );
+    for (const e of exchanges) expect(e.reply).not.toContain(CANNED);
+    expect(exchanges[0]!.card?.items).toHaveLength(3);
+    expect(exchanges[0]!.receipts).toEqual([]);
+    expect(store.state.wishlist).toHaveLength(3);
+    expect(exchanges[1]!.card).toBeNull();
+    expect(exchanges[1]!.reply).toMatch(/tobacco|табак/i);
+  });
+
+  it("вишлист: ссылка на товар → карточка", async () => {
+    const { exchanges } = await scenario(
+      "Ссылка в вишлист",
+      [
+        {
+          text: "хочу вот это https://www.lelabofragrances.com/santal-33.html",
+          expect: "Короткая реакция и строка к карточке с этой вещью (Santal 33); без длинного описания товара.",
+        },
+      ],
+      CARD_BUILD,
+    );
+    expect(exchanges[0]!.reply).not.toContain(CANNED);
+    expect(exchanges[0]!.card?.items.length).toBe(1);
+    expect(store.state.wishlist).toHaveLength(0);
+  });
+
+  it("вишлист: увлечение — не вещь, «да» словами — не нажатие", async () => {
+    const { exchanges } = await scenario(
+      "Интерес или вещь",
+      [
+        {
+          text: "обожаю джаз и бегать по утрам",
+          expect: "Это увлечения, а не вещи: без карточки вишлиста; живая реакция и, если уместно, ОДНО предложение сохранить в интересы вопросом.",
+        },
+        {
+          text: "а ещё мечтаю о пионах на свидание",
+          expect: "Конкретная вещь — карточка вишлиста с пионами и короткая строка к ней.",
+        },
+        {
+          text: "да, добавь",
+          expect: "Карточка уже под прошлым ответом: коротко направляет нажать «Добавить» на ней; не утверждает, что сохранил.",
+        },
+      ],
+      CARD_BUILD,
+    );
+    for (const e of exchanges) expect(e.reply).not.toContain(CANNED);
+    expect(exchanges[0]!.card).toBeNull();
+    expect(exchanges[1]!.card?.items.join(" ")).toMatch(/пион|peon/i);
+    // Words are not the tap: nothing reaches the wishlist without it.
+    expect(store.state.wishlist).toHaveLength(0);
   });
 
   /**
