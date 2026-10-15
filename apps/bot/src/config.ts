@@ -684,10 +684,13 @@ export const env = {
   /// reveal, and the offer that follows it. Off by default: nothing is sent
   /// and `/v1/me/after-date` answers empty.
   MORNING_AFTER_ENABLED: process.env.MORNING_AFTER_ENABLED === "true",
-  /// Building a wishlist with the agent on «Сегодня» (the Profiler slot, the
-  /// look-ups, the items) and the cheat sheet in the mutual offer. Off: the
-  /// Profiler never hands a slot to the wishlist, every `/v1/me/wishlist*`
-  /// route answers `feature-disabled`, and the offer shows no sheet.
+  /// The person's own wishlist: «Мой вишлист» (Settings, Profile), the
+  /// «Сегодня» session (a Profiler slot), the look-ups, the chat card that
+  /// saves what they send. Off: the Profiler never hands a slot to the
+  /// wishlist, every `/v1/me/wishlist*` route answers `feature-disabled`, and
+  /// the chat agent has no wishlist tool. The partner's cheat sheet needs
+  /// `MORNING_AFTER_ENABLED` as well (`wishlistSheetLive`, 2026-10-15), so this
+  /// flag alone turns on collecting, not showing.
   WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.

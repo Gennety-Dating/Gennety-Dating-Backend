@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 432 entries
+# Decision index — all 433 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-15 | вишлист: свой список отдельно от шпаргалки — шпаргалка и её покупка требуют `WISHLIST_FEATURE_ENABLED` И `MORNING_AFTER_ENABLED` (`wishlistSheetLive`); один флаг вишлиста = только сбор | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | чат-агент приложения: видит фото прошлых сообщений; без ответа → 503 `agent_unavailable` (повтор в iOS), не шаблон в истории; 1000 токенов, 5 раундов + закрывающий вызов; персона «не меняй без согласия, но предлагай шаг»; карточка человека (время, профиль, пробелы); `update_hobbies.add`; шлюз согласия на запись в профиль; живые сценарии `eval:chat` с судьёй; рассуждение (Responses API) — не сделано, к основателю | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | Pulse: поведенческая аналитика без токенов — экраны/касания в `/v1/client/events` (контракт v2), отдельное согласие `analytics_opt_in` (галочка на экране согласия + Настройки), ночной SQL → `metric_days`/`insights`, агент читает `/admin/pulse/*` ключом только на чтение; взгляда и повтора сессий нет | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | лестница ожидания короче: 4/7/10/21/45 (плотно в первые дни, после 45-го молчим), «Всё в силе» снят, префильтр 3 дня, скидка на 7-й день | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |

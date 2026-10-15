@@ -126,9 +126,13 @@ built earlier, with the agent, on «Сегодня».
 ## Flags, demo, rollout
 
 1. `MORNING_AFTER_ENABLED` (check, reveal, offer), `WISHLIST_FEATURE_ENABLED`
-   (session, routes, sheet), `WISHLIST_APPSTORE_ENABLED` (StoreKit till). All
+   (the person's own list: session, routes, «Мой вишлист» in Settings and
+   Profile, the chat card), `WISHLIST_APPSTORE_ENABLED` (StoreKit till). All
    off by default; `GET /v1/app/config` serves `features.morningAfter`,
-   `features.wishlist` and `wishlistProduct`.
+   `features.wishlist` and `wishlistProduct`. The cheat sheet and its purchase
+   need the wishlist AND the morning flag (`wishlistSheetLive`, 2026-10-15), so
+   `WISHLIST_FEATURE_ENABLED` alone is a supported setting: people collect,
+   nobody is shown or sold anything.
 2. **Demo mode** behaves the same as production with the flags it is given;
    the demo bot has no Stars rail, so the cheat sheet there opens only with
    Premium.

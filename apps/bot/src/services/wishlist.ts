@@ -52,6 +52,18 @@ import { copyWishlistImage } from "./wishlist-lookup.js";
  */
 
 const IMAGE_URL_TTL_S = 24 * 60 * 60;
+
+/**
+ * The partner-facing half — the cheat sheet in the mutual offer and its
+ * purchase — needs BOTH flags (decision journal 2026-10-15). The sheet only
+ * ever existed behind a mutual morning, so this was already true in effect;
+ * spelled out, `WISHLIST_FEATURE_ENABLED` alone is a supported setting of its
+ * own: people build their list (chat card, «Мой вишлист», the «Сегодня»
+ * session) while «The Morning After» and the paid sheet stay off.
+ */
+export function wishlistSheetLive(): boolean {
+  return env.WISHLIST_FEATURE_ENABLED && env.MORNING_AFTER_ENABLED;
+}
 const FLOWERS_QUESTION_ID = "f_flowers";
 const FLOWERS_FREE_TEXT_MAX = 80;
 
@@ -548,7 +560,7 @@ async function buildSheet(
   language: Language,
   now: Date,
 ): Promise<WishlistSheet | null> {
-  if (!env.WISHLIST_FEATURE_ENABLED || partner.wishlistHiddenAt) return null;
+  if (!wishlistSheetLive() || partner.wishlistHiddenAt) return null;
   const rows = await loadItems(partner.id);
   if (rows.length === 0) return null;
   const { unlocked, premium } = await sheetUnlocked(matchId, viewerId, partner.id, now);
@@ -622,7 +634,7 @@ export async function wishlistPurchasable(
   matchId: string,
   viewerId: string,
 ): Promise<{ ok: true; ownerId: string } | { ok: false; error: UnlockRefusal }> {
-  if (!env.WISHLIST_FEATURE_ENABLED) return { ok: false, error: "no-sheet" };
+  if (!wishlistSheetLive()) return { ok: false, error: "no-sheet" };
   const pair = await loadMutualPair(matchId, viewerId);
   if (!pair.ok) return pair;
   if (pair.partner.wishlistHiddenAt) return { ok: false, error: "no-sheet" };
