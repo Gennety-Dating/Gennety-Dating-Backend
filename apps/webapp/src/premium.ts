@@ -10,6 +10,9 @@ import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton } from "./return-to.js";
 import { invoiceOutcomeFor, premiumScreenFor, type InvoiceOutcome } from "./premium-load.js";
 import { playPremiumReveal, prepareRevealField } from "./premium-reveal/reveal.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_premium");
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that

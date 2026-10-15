@@ -76,19 +76,21 @@ export const PULSE_SCREENS = {
   feedback: { platform: "ios", title: "Отзыв о свидании", codeHint: `${IOS}Features/Feedback/FeedbackView.swift` },
   date_mode: { platform: "ios", title: "Режим свидания", codeHint: `${IOS}Features/DateMode/DateModeView.swift` },
 
-  // Mini App — onboarding phases (src/onboarding-route.ts)
-  mini_onb_visual: { platform: "miniapp", title: "Mini: вступление", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 1 },
-  mini_onb_detail: { platform: "miniapp", title: "Mini: подробности", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 2 },
+  // Mini App — onboarding phases (src/onboarding-route.ts). Real order:
+  // language → consent → path → email|phone → otp → city → theme → visual →
+  // detail → basics → done (gift phases are side branches, not funnel steps).
+  mini_onb_visual: { platform: "miniapp", title: "Mini: вступление", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 8 },
+  mini_onb_detail: { platform: "miniapp", title: "Mini: подробности", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 9 },
   mini_onb_syncing: { platform: "miniapp", title: "Mini: синхронизация", codeHint: `${MINI}onboarding.tsx` },
-  mini_onb_consent: { platform: "miniapp", title: "Mini: согласие", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 3 },
-  mini_onb_language: { platform: "miniapp", title: "Mini: язык", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 4 },
-  mini_onb_path: { platform: "miniapp", title: "Mini: путь входа", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 5 },
-  mini_onb_email: { platform: "miniapp", title: "Mini: почта", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 6 },
-  mini_onb_otp: { platform: "miniapp", title: "Mini: код", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 7 },
-  mini_onb_phone: { platform: "miniapp", title: "Mini: телефон", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 6 },
-  mini_onb_city: { platform: "miniapp", title: "Mini: город", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 8 },
+  mini_onb_consent: { platform: "miniapp", title: "Mini: согласие", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 2 },
+  mini_onb_language: { platform: "miniapp", title: "Mini: язык", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 1 },
+  mini_onb_path: { platform: "miniapp", title: "Mini: путь входа", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 3 },
+  mini_onb_email: { platform: "miniapp", title: "Mini: почта", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 4 },
+  mini_onb_otp: { platform: "miniapp", title: "Mini: код", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 5 },
+  mini_onb_phone: { platform: "miniapp", title: "Mini: телефон", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 4 },
+  mini_onb_city: { platform: "miniapp", title: "Mini: город", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 6 },
   mini_onb_waitlist: { platform: "miniapp", title: "Mini: лист ожидания", codeHint: `${MINI}onboarding.tsx` },
-  mini_onb_theme: { platform: "miniapp", title: "Mini: тема", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 9 },
+  mini_onb_theme: { platform: "miniapp", title: "Mini: тема", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 7 },
   mini_onb_promo_gift: { platform: "miniapp", title: "Mini: промо-подарок", codeHint: `${MINI}onboarding.tsx` },
   mini_onb_referral_gift: { platform: "miniapp", title: "Mini: подарок друга", codeHint: `${MINI}onboarding.tsx` },
   mini_onb_basics: { platform: "miniapp", title: "Mini: анкета", codeHint: `${MINI}onboarding.tsx`, tracksTaps: true, onboardingOrder: 10 },

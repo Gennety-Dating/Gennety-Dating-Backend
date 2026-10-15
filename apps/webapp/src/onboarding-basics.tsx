@@ -382,6 +382,7 @@ function IntentTile(props: {
 
   return (
     <button
+      data-pulse="intent_option"
       type="button"
       className={`ob-intent${selected ? " is-on" : ""}`}
       disabled={props.disabled}
@@ -496,6 +497,7 @@ function ContinuePill(props: {
 }): ReactElement {
   return (
     <button
+      data-pulse="continue"
       type="button"
       className={`ob-basics-pill${props.busy ? " is-busy" : ""}`}
       disabled={props.disabled}
@@ -598,6 +600,7 @@ function NameScreen(props: {
     >
       <input
         ref={inputRef}
+        data-pulse="name_input"
         className="ob-basics-input"
         type="text"
         autoCapitalize="words"
@@ -662,6 +665,7 @@ function AgeScreen(props: {
           same look, but touch inertia, keyboard control and the screen reader
           come for free. `--filled` drives the burgundy portion of the track. */}
       <input
+        data-pulse="age_slider"
         className="ob-slider"
         type="range"
         min={minAge}
@@ -766,6 +770,7 @@ function ChoiceScreen(props: {
           const avatar = option.tone === "neutral" ? null : GENDER_AVATARS[option.tone];
           return (
             <button
+              data-pulse={`gender_${option.value}`}
               key={option.value}
               type="button"
               className={`ob-choice ob-gender ob-choice--${option.tone} ${
@@ -872,6 +877,7 @@ function PreferenceScreen(props: {
         {column("women", art.women, strings.basicsPreferenceWomen, "female")}
       </div>
       <button
+        data-pulse="preference_both"
         type="button"
         className={`ob-pref-both ${props.selected === "both" ? "is-selected" : ""} ${
           firing === "both" ? "is-firing" : ""
@@ -977,6 +983,7 @@ function PreferenceColumn(props: {
 }): ReactElement {
   return (
     <button
+      data-pulse={`preference_${props.tone}`}
       type="button"
       className={`ob-pref-col ob-pref-col--${props.tone} ${
         props.selected ? "is-selected" : ""
@@ -1178,6 +1185,7 @@ function Wheel(props: {
       </div>
       <div
         ref={listRef}
+        data-pulse="height_wheel"
         className="ob-wheel-list"
         role="listbox"
         aria-label={props.label}

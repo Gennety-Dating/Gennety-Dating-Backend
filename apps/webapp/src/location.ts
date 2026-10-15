@@ -26,6 +26,9 @@ import { boundaryEvent } from "./haptics.js";
 import { AttributionControl, MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyle } from "./map-style.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_location");
 
 /**
  * Location Mini App entry point (Phase 3.7 — concierge venue, map picker).

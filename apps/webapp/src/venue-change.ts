@@ -52,6 +52,9 @@ import { returnParams } from "./return-to.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
 import { createIntervalPoller } from "./poller.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_venue_change");
 
 const app = window.Telegram?.WebApp;
 app?.ready();

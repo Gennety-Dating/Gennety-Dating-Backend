@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import pkg from "./package.json";
 
 /**
  * Multi-entry Vite config — calendar, feedback, location, onboarding, and
@@ -8,6 +9,15 @@ import { resolve } from "node:path";
  * later is a one-line `input` addition.
  */
 export default defineConfig({
+  /// Stamped into every Pulse batch as `app.version` / `app.build`
+  /// (src/pulse.ts), so the admin panel can split a screen's numbers by the
+  /// bundle that produced them (docs/product/domains/pulse-analytics.md §6.1).
+  /// The build is the UTC minute of `vite build` — the Mini App has no other
+  /// release number.
+  define: {
+    __WEBAPP_VERSION__: JSON.stringify(pkg.version),
+    __WEBAPP_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace(/\D/g, "")),
+  },
   /// MapLibre spawns its worker with `{ type: "module" }`, so the worker Vite
   /// emits for it has to be a real ES module. Vite's default worker format is
   /// `iife`, which is not one.

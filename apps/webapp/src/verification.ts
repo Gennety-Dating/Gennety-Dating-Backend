@@ -15,6 +15,9 @@ import {
 } from "./butterfly-success.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_verification");
 
 /**
  * Verification Mini App — AWS Rekognition Face Liveness.
