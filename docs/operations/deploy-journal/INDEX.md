@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-15 | Chat wishlist card: agent proposes wishlist items from photos/screenshots/links, «Добавить» saves (`POST /v1/chat/messages/{id}/wishlist`); MIGRATION `20261015180000_message_attachment` (additive) BEFORE restart; header `X-Gennety-Chat-Cards`; album photo → profile fix; cheat sheet needs both wishlist + morning flags; no env | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Pulse: analytics consent + `/v1/client/events` v2 (screens, dwell, taps; Mini App via `tma`), nightly `pulse-rollup` → `metric_days`/`insights`, `/admin/pulse/*`, `ADMIN_READ_KEY`; MIGRATION `20261015120000_pulse_analytics` (additive) before restart; env `CLIENT_EVENTS_ENABLED=true`, `ADMIN_READ_KEY`; webapp rebuild | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Waiting ladder: no-match notice silent by default, only on days 4/7/10/21/45 without a pair (one per step, nothing after 45), new copy in 5 locales; env `EARLY_STAGE` optional, default ON (no auto-pause); restart only, no migration, no contract change | [pending.md](./pending.md) |
 | PENDING | 2026-10-13 | Performance wave «только безопасное» (`5d935472..278b6e83` + lead follow-up): fewer SQL per iOS poll, no unchanged bot_sessions UPSERT, admin DB gate, referral card in the render worker, drop scoring 4× cheaper; code only — ship with the migration blocks above in their order; new `[runtime]` log line, four lifecycle jobs alert under their own names | [pending.md](./pending.md) |

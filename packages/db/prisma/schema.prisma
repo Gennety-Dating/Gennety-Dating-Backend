@@ -3089,6 +3089,13 @@ model Message {
   /// without `sessionId` still pages the whole stream across chats — what
   /// older app builds read.
   sessionId String?     @map("session_id") @db.Uuid
+  /// A native card under an `assistant` row (decision 2026-10-15): today only
+  /// the chat agent's wishlist proposal —
+  /// `{ kind: "wishlist_proposal", state, items[], savedKeys[] }`, shape and
+  /// transitions in `apps/bot/src/services/chat-wishlist.ts`. Stored so the
+  /// card and its answer survive a reload, and so the next turn's model knows
+  /// what the person saved. Null on every other row.
+  attachment Json?
   createdAt DateTime    @default(now()) @map("created_at")
 
   user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)

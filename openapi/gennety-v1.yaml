@@ -3209,6 +3209,14 @@ paths:
       tags: [chat]
       operationId: sendChatMessage
       summary: Send a chat turn (text and/or previously uploaded image)
+      description: |
+        **Cards a build draws (2026-10-15).** A build that renders native cards
+        under a reply lists them in the `X-Gennety-Chat-Cards` header on this
+        route and on `/v1/chat/voice` — comma-separated, today only `wishlist`
+        (`ChatWishlistCard`). Sent like `X-Gennety-Build`, by the client's
+        middleware, so it is not an operation parameter. A build that sends
+        nothing never gets a card, and the agent gets no tool that would make
+        one.
       requestBody:
         required: true
         content:
@@ -3300,6 +3308,13 @@ paths:
                       itself. Absent on an ordinary turn. Nothing here mutates
                       anything: every irreversible action stays behind a control
                       the person still has to tap.
+                  attachment:
+                    $ref: "#/components/schemas/ChatWishlistCard"
+                    description: >-
+                      A card under the reply — only for a build that listed it
+                      in `X-Gennety-Chat-Cards`. Absent (never null) otherwise.
+                      Stored with the reply, so `/v1/chat/history` returns it
+                      on the same message with its current state.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3400,6 +3415,7 @@ paths:
                     type: array
                     items: { type: string }
                   action: { $ref: "#/components/schemas/AgentAction" }
+                  attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3428,6 +3444,80 @@ paths:
             2026-10-11 #6). Only a recording that yields no speech is 422.
             `agent_unavailable` — transcribed, but the agent produced no reply
             and nothing changed; same handling (2026-10-15).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/messages/{id}/wishlist:
+    post:
+      tags: [chat]
+      operationId: answerChatWishlistCard
+      summary: «Add» or «Not now» on a wishlist card under an agent reply
+      description: |
+        The person's answer to a `ChatWishlistCard` (decision 2026-10-15). The
+        card's tool writes nothing; this tap is what saves — the consent.
+        `save` saves the items whose keys are sent (the ones left ticked),
+        copying the person's own chat photo into the wishlist; `dismiss`
+        closes the card. Answers the card as it now is — redraw from it.
+
+        Idempotent: `save` on a saved card answers the saved card without
+        writing; `dismiss` on a saved card changes nothing; `save` after
+        `dismiss` is a change of mind and saves. An item already in the list
+        counts as saved and is stored once.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The assistant message the card is under (`message.id` of the turn)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [save, dismiss] }
+                keys:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: { type: string, maxLength: 8 }
+                  description: Required with `save` — `ChatWishlistCardItem.key` of each ticked item
+      responses:
+        "200":
+          description: The card after the answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attachment]
+                properties:
+                  attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            Not a uuid, not the caller's message, a reply without a card, or
+            the wishlist feature off — one answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >-
+            `{ "error": "too-many", "room": N }` — the list (30) has room for
+            only N of the ticked items; nothing was saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Saving failed for a reason of ours; nothing was saved — offer a retry
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -7641,7 +7731,10 @@ components:
               description: Already localised server-side; never model-authored
             callbackData:
               type: string
-              description: An EXISTING product callback; the agent cannot invent one
+              description: >-
+                An EXISTING product callback; the agent cannot invent one.
+                `menu:wishlist` (2026-10-15) opens «Мой вишлист» — sent when a
+                card could not be shown because the list is full.
             url:
               type: string
               description: >-
@@ -8073,6 +8166,12 @@ components:
         brand: { type: string, maxLength: 60 }
         note: { type: string, maxLength: 200 }
         imageUrl: { type: string, description: The candidate's remote https image; copied server-side }
+        imagePath:
+          type: string
+          description: >-
+            A photo already in the caller's own wishlist storage key
+            (`{userId}/w….jpg`); anything else is ignored. Wins over
+            `imageUrl` (2026-10-15).
         productUrl: { type: string }
         priceBand: { $ref: "#/components/schemas/WishlistPriceBand" }
         source: { type: string, enum: [catalog, search, link, text] }
@@ -9133,6 +9232,56 @@ components:
               description: >-
                 5-min TTL render URLs for `imageUrls`, same order. An entry is
                 an empty string when that one could not be signed.
+            attachment:
+              $ref: "#/components/schemas/ChatWishlistCard"
+              description: >-
+                The card under this assistant reply, with its current state.
+                Absent on every other row, and on every row while the wishlist
+                feature is off.
+
+    ChatWishlistCard:
+      description: |
+        The chat agent's wishlist card (decision 2026-10-15): things the person
+        shared — a photo of the thing, a shop screenshot, a link, "I want X" —
+        recognised and proposed for their Date Wishlist. Every item starts
+        ticked; one «Add» button saves the ticked ones through
+        `POST /v1/chat/messages/{id}/wishlist`, «Not now» dismisses. Nothing is
+        saved before that tap.
+      type: object
+      required: [kind, state, items, savedCount]
+      properties:
+        kind:
+          type: string
+          description: Always `wishlist_proposal` today; a client draws nothing for a kind it does not know
+        state:
+          type: string
+          enum: [open, saved, dismissed]
+          description: >-
+            `open` — not answered yet; `saved` — «Add» was tapped (`saved` marks
+            which items); `dismissed` — «Not now»
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChatWishlistCardItem" }
+        savedCount: { type: integer, description: Items saved by the tap; 0 until then }
+
+    ChatWishlistCardItem:
+      type: object
+      required: [key, title, brand, category, imageUrl, productUrl, saved]
+      properties:
+        key: { type: string, description: "`i1`, `i2`… — sent back to save this item" }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        imageUrl:
+          type: [string, "null"]
+          description: >-
+            https to draw: the person's own photo (signed, 1 h) or the shop
+            page's photo. Null — draw the category glyph.
+        productUrl: { type: [string, "null"] }
+        priceBand:
+          # Optional rather than `oneOf: [$ref, null]`, as on WishlistCandidate.
+          $ref: "#/components/schemas/WishlistPriceBand"
+        saved: { type: boolean, description: Saved by the tap (only in state `saved`) }
 
     ChatSession:
       type: object

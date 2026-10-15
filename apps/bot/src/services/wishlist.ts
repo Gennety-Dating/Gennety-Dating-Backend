@@ -26,7 +26,11 @@ import {
 import { env } from "../config.js";
 import { isPremiumActive } from "./premium.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
-import { createProfilePhotoSignedUrl, createWishlistImageSignedUrls } from "./storage.js";
+import {
+  createProfilePhotoSignedUrl,
+  createWishlistImageSignedUrls,
+  deleteStorageObject,
+} from "./storage.js";
 import { copyWishlistImage } from "./wishlist-lookup.js";
 
 /**
@@ -193,6 +197,13 @@ export interface WishlistItemInput {
   priceBand?: unknown;
   source: unknown;
   catalogKey?: unknown;
+  /**
+   * A photo ALREADY in our storage — the owner's own wishlist key
+   * (`{userId}/w….ext`, see `ownWishlistImagePath`). The chat card copies the
+   * person's chat photo there before saving; anything else is ignored. Wins
+   * over `imageUrl`, which is a remote photo still to be copied.
+   */
+  imagePath?: unknown;
 }
 
 export type WishlistItemRefusal = "bad-item" | "too-many";
@@ -212,6 +223,16 @@ function cleanHttpsUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The owner's own wishlist photo key, exactly as `uploadWishlistImage` mints
+ * it — anything else (another person's key, a chat key, a traversal) is null.
+ */
+export function ownWishlistImagePath(userId: string, value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^([0-9a-f-]{36})\/w\d{1,20}-[0-9a-f]{6}\.(jpg|png|webp)$/i.exec(value);
+  return match?.[1]?.toLowerCase() === userId.toLowerCase() ? value : null;
 }
 
 /** Validate one item; null when it is not something we will store. */
@@ -262,10 +283,15 @@ export async function addWishlistItems(
   if (existing + items.length > WISHLIST_MAX_ITEMS) return { ok: false, error: "too-many" };
 
   const stored = await Promise.all(
-    items.map(async (item) => ({
-      ...item!,
-      imageUrl: item!.imageUrl ? await copyWishlistImage(userId, item!.imageUrl).catch(() => null) : null,
-    })),
+    items.map(async (item, index) => {
+      const ownPath = ownWishlistImagePath(userId, inputs[index]!.imagePath);
+      return {
+        ...item!,
+        imageUrl:
+          ownPath ??
+          (item!.imageUrl ? await copyWishlistImage(userId, item!.imageUrl).catch(() => null) : null),
+      };
+    }),
   );
   await prisma.wishlistItem.createMany({
     data: stored.map((item, index) => ({
@@ -286,10 +312,25 @@ export async function addWishlistItems(
   return { ok: true, items: await viewItems(await loadItems(userId)) };
 }
 
+/**
+ * Remove one item and its stored photo. The photo used to stay in Storage
+ * until the account was deleted; since the chat card saves the person's OWN
+ * photos (2026-10-15), "remove it from my list" must remove the copy too. A
+ * photo that fails to delete does not undo the removal — it is swept with the
+ * account, as before.
+ */
 export async function deleteWishlistItem(userId: string, itemId: string, now: Date = new Date()): Promise<boolean> {
+  const row = await prisma.wishlistItem.findFirst({ where: { id: itemId, userId }, select: { imageUrl: true } });
   const { count } = await prisma.wishlistItem.deleteMany({ where: { id: itemId, userId } });
-  if (count > 0) await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
-  return count > 0;
+  if (count === 0) return false;
+  await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
+  const path = ownWishlistImagePath(userId, row?.imageUrl);
+  if (path) {
+    void deleteStorageObject(env.SUPABASE_CHAT_BUCKET, path).catch((err: unknown) => {
+      console.warn("[wishlist] photo of a removed item not deleted:", err);
+    });
+  }
+  return true;
 }
 
 /** Every stored image path of a user — for account deletion's storage sweep. */

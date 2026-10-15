@@ -1222,6 +1222,11 @@ export async function lookupWishlistEntry(input: {
   cityKey?: string | null | undefined;
   now?: Date | undefined;
   fetchFn?: typeof fetch | undefined;
+  /**
+   * A tighter budget than `WISHLIST_LOOKUP_TIMEOUT_MS` — the chat card runs
+   * look-ups inside a reply (`CHAT_WISHLIST_LOOKUP_TIMEOUT_MS`). Never looser.
+   */
+  timeoutMs?: number | undefined;
 }): Promise<WishlistLookupResult> {
   const now = input.now ?? new Date();
 
@@ -1251,7 +1256,7 @@ export async function lookupWishlistEntry(input: {
     return { ok: false, error: "rate_limited" };
   }
 
-  const budgetMs = env.WISHLIST_LOOKUP_TIMEOUT_MS;
+  const budgetMs = Math.min(env.WISHLIST_LOOKUP_TIMEOUT_MS, input.timeoutMs ?? Number.POSITIVE_INFINITY);
   const controller = new AbortController();
   const ctx: LookupContext = {
     value,

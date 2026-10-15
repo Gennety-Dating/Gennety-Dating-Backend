@@ -290,7 +290,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: [] }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: ["u1/a.jpg"] }, { fetchFn });
 
     expect(attachChatProfilePhoto).toHaveBeenCalledOnce();
     expect(applyChatProfilePatch).not.toHaveBeenCalled();
@@ -311,7 +311,7 @@ describe("чатовые записи под бюджетом хода", () => {
       plain,
     ];
 
-    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: [] }, { fetchFn });
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrls: ["u1/a.jpg"] }, { fetchFn });
 
     expect(applyChatProfilePatch).not.toHaveBeenCalled();
     expect(turn.receipts).toBeUndefined();
@@ -319,6 +319,18 @@ describe("чатовые записи под бюджетом хода", () => {
       success: true,
       photo: { consensus: "pending", total: 1 },
     });
+  });
+
+  // С 2026-10-15 у фото прошлых сообщений тоже есть метки (для карточки
+  // вишлиста), поэтому «только фото этого хода» держит код, а не промпт.
+  it("фото из прошлого сообщения в профиль не уходит", async () => {
+    queue = [completion([{ name: "attach_profile_photo", args: '{"imageUrl":"u1/old.jpg"}' }]), plain];
+
+    const turn = await runChatTurn({ userId: "u1", text: "добавь то фото в профиль", imageUrls: [] }, { fetchFn });
+
+    expect(attachChatProfilePhoto).not.toHaveBeenCalled();
+    expect(turn.receipts).toBeUndefined();
+    expect(toolResultSeen("c0")).toMatchObject({ success: false, error: "not_this_turn" });
   });
 
   it("отклонённая чатовая запись бюджет не тратит и чека не даёт", async () => {

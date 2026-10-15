@@ -228,7 +228,7 @@ describe("chat agent with no reply", () => {
     expect(messageCreate).toHaveBeenCalledTimes(1);
     expect(userFindUnique).toHaveBeenCalledWith({
       where: { id: USER },
-      select: { telegramId: true, language: true },
+      select: { telegramId: true, language: true, profile: { select: { homeCityKey: true } } },
     });
   });
 
@@ -501,7 +501,9 @@ describe("chat agent after the perfume chat", () => {
       ],
     });
 
-  it("still shows the photos of an earlier message — without attach tokens", async () => {
+  // Since 2026-10-15 earlier photos carry their tokens — a wishlist card may
+  // name "the third one". The profile stays limited to this turn in code.
+  it("still shows the photos of an earlier message, each with its token", async () => {
     userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
     messageFindMany.mockResolvedValue([
       // newest first, as the query returns them
@@ -518,7 +520,11 @@ describe("chat agent after the perfume chat", () => {
     );
     const parts = earlier!.content as Array<{ type: string; text?: string }>;
     expect(parts.filter((p) => p.type === "image_url")).toHaveLength(3);
-    expect(parts.some((p) => p.text?.startsWith("[imageUrl="))).toBe(false);
+    expect(parts.filter((p) => p.text?.startsWith("[imageUrl=")).map((p) => p.text)).toEqual([
+      `[imageUrl=${USER}/1.jpg]`,
+      `[imageUrl=${USER}/2.jpg]`,
+      `[imageUrl=${USER}/3.jpg]`,
+    ]);
   });
 
   it("an earlier photo Storage lost is reported missing instead of failing the turn", async () => {

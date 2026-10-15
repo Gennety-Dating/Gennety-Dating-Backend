@@ -98,6 +98,25 @@ export const WISHLIST_SCREENSHOTS_MAX = 6;
 export const WISHLIST_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
+ * The chat agent's wishlist card (decision journal 2026-10-15): the most items
+ * one card proposes — a set of photos is one card, not one per photo, and a
+ * row of eight already scrolls.
+ */
+export const CHAT_WISHLIST_CARD_MAX_ITEMS = 8;
+/**
+ * Web look-ups one card may run (a link to read, a screenshot to find the
+ * product of). The rest keep the person's own photo or none — the person is
+ * waiting for the reply while they run.
+ */
+export const CHAT_WISHLIST_CARD_MAX_LOOKUPS = 4;
+/**
+ * One look-up's budget inside a chat turn — shorter than the session's
+ * `WISHLIST_LOOKUP_TIMEOUT_MS`: there is no search animation here, only the
+ * typing dots of a reply.
+ */
+export const CHAT_WISHLIST_LOOKUP_TIMEOUT_MS = 12_000;
+
+/**
  * The wishlist session takes a Profiler batch slot only after the person has
  * answered at least this many Profiler questions — never the first batch, so
  * the first days are about them, not their shopping.

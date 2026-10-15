@@ -33,6 +33,28 @@ import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper
 import { parseClientMessageId, SendDedupe } from "../../utils/send-dedupe.js";
 import { exceedsVisibleLength } from "../../utils/text-length.js";
 import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/shared";
+import { env } from "../../config.js";
+import {
+  readWishlistCard,
+  resolveWishlistCard,
+  wishlistCardViews,
+  type WishlistCard,
+} from "../../services/chat-wishlist.js";
+
+/**
+ * Native cards this build draws under a reply (decision 2026-10-15): the
+ * comma-separated `X-Gennety-Chat-Cards` header, e.g. `wishlist`. A build that
+ * sends nothing gets no card — and the agent no tool that would make one.
+ */
+function chatCardsOf(req: Request): Set<string> {
+  const raw = req.get("x-gennety-chat-cards") ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
 
 /**
  * Gennety chat agent — multimodal AI chat for the mobile app.
@@ -44,6 +66,7 @@ import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/sha
  *   GET   /v1/chat/history        newest page, `before` pages backwards, `sessionId` = one chat
  *   GET   /v1/chat/sessions       the person's chats, most recently active first
  *   PATCH /v1/chat/sessions/:id   rename a chat
+ *   POST  /v1/chat/messages/:id/wishlist  «Add» / «Not now» on a wishlist card
  *   GET   /v1/chat/topics         the pre-sessions index, kept for older builds
  *
  * Chats (decision journal 2026-09-30): every turn lands in one chat — the one
@@ -212,6 +235,7 @@ chatRouter.post(
         imageUrls,
         context,
         sessionId,
+        chatCards: chatCardsOf(req),
       });
       return {
         message: {
@@ -233,6 +257,9 @@ chatRouter.post(
         // исключительно из прозы модели.
         ...(turn.receipts ? { receipts: turn.receipts } : {}),
         ...(turn.action ? { action: turn.action } : {}),
+        // The card under the reply. Omitted — not null — when there is none,
+        // like `context`: the generated Swift client drops a nullable object.
+        ...(turn.attachment ? { attachment: turn.attachment } : {}),
       };
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
@@ -309,6 +336,7 @@ chatRouter.post(
       imageUrls: [],
       context,
       sessionId,
+      chatCards: chatCardsOf(req),
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
       throw err;
@@ -333,6 +361,7 @@ chatRouter.post(
       transcript,
       ...(turn.receipts ? { receipts: turn.receipts } : {}),
       ...(turn.action ? { action: turn.action } : {}),
+      ...(turn.attachment ? { attachment: turn.attachment } : {}),
     });
   },
 );
@@ -419,6 +448,17 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   const signed = await createChatImageSignedUrls(paths, SIGNED_URL_TTL_S);
   const signMs = Date.now() - signStartedAt;
 
+  // Cards under replies, every photo of every card signed in one request. A
+  // card is shown only while the feature is on: switched off, the reply reads
+  // as plain text, like on a build that does not draw cards.
+  const cardRows = env.WISHLIST_FEATURE_ENABLED
+    ? page
+        .map((row) => ({ id: row.id, card: readWishlistCard(row.attachment) }))
+        .filter((entry): entry is { id: string; card: WishlistCard } => entry.card !== null)
+    : [];
+  const cardViews = await wishlistCardViews(cardRows.map((entry) => entry.card)).catch(() => []);
+  const cardById = new Map(cardRows.map((entry, i) => [entry.id, cardViews[i]] as const));
+
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
@@ -435,6 +475,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       // The chip the message was sent with. Omitted — not null — when there is
       // none: the generated Swift client drops a nullable object silently.
       ...contextField(readChatContextSnapshot(row.context)),
+      ...(cardById.get(row.id) ? { attachment: cardById.get(row.id) } : {}),
     };
   });
   console.log(
@@ -442,6 +483,58 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   );
   res.json({ messages, hasMore });
 });
+
+/**
+ * POST /v1/chat/messages/:id/wishlist — the person's answer to a wishlist card
+ * under an agent reply (decision journal 2026-10-15).
+ *
+ *   { "action": "save", "keys": ["i1", "i3"] }  — save the items left ticked
+ *   { "action": "dismiss" }                     — «Не надо»
+ *
+ * Answers the card as it now is (`{ attachment }`), so the app redraws it from
+ * the server's truth. Idempotent: «Add» on a saved card answers the saved
+ * card. Someone else's message, a reply without a card, or the feature off —
+ * 404. A full list — 409 `too-many` with the `room` left.
+ *
+ * Writes the wishlist, so it asks what a turn asks (`requireAgentAccess`) —
+ * but spends no tokens, so no `usageGuard`.
+ */
+chatRouter.post(
+  "/messages/:id/wishlist",
+  requireAgentAccess,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = String(req.params.id ?? "").toLowerCase();
+    if (!env.WISHLIST_FEATURE_ENABLED || !isUuid(id)) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const action = req.body?.action;
+    const rawKeys: unknown = req.body?.keys;
+    let input: { action: "save"; keys: string[] } | { action: "dismiss" };
+    if (action === "dismiss") {
+      input = { action: "dismiss" };
+    } else if (
+      action === "save" &&
+      Array.isArray(rawKeys) &&
+      rawKeys.length > 0 &&
+      rawKeys.length <= 20 &&
+      rawKeys.every((key) => typeof key === "string" && key.length <= 8)
+    ) {
+      input = { action: "save", keys: rawKeys as string[] };
+    } else {
+      res.status(400).json({ error: "bad-request" });
+      return;
+    }
+    const result = await resolveWishlistCard(req.userId!, id, input);
+    if (!result.ok) {
+      const status = result.error === "not-found" ? 404 : result.error === "too-many" ? 409 : result.error === "bad-request" ? 400 : 503;
+      res.status(status).json({ error: result.error, ...(result.room !== undefined ? { room: result.room } : {}) });
+      return;
+    }
+    const [attachment] = await wishlistCardViews([result.card]);
+    res.json({ attachment });
+  },
+);
 
 /**
  * GET /v1/chat/sessions — the person's chats, most recently active first

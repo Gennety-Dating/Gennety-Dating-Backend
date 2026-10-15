@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
-import { MAX_PHOTOS } from "@gennety/shared";
+import { MAX_PHOTOS, WISHLIST_MAX_ITEMS } from "@gennety/shared";
+import { env } from "../config.js";
 import { RENDER_TZ } from "./datetime-entity.js";
 
 /**
@@ -20,6 +21,8 @@ import { RENDER_TZ } from "./datetime-entity.js";
  */
 
 const BIO_MAX_CHARS = 400;
+/** Newest wishlist items named on the card — enough to talk about, not a dump. */
+const WISHLIST_NAMED = 6;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -45,7 +48,21 @@ export async function buildPersonCard(userId: string, now: Date = new Date()): P
     },
   });
   if (!user) return null;
-  return renderPersonCard(user, now);
+  // Their own list, read for talking to THEM (decision 2026-10-15) — only
+  // while the feature is on.
+  const wishlist = env.WISHLIST_FEATURE_ENABLED
+    ? await prisma.wishlistItem
+        .findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+          select: { title: true, brand: true },
+        })
+        .then((rows) => ({
+          count: rows.length,
+          named: rows.slice(0, WISHLIST_NAMED).map((row) => [row.brand, row.title].filter(Boolean).join(" ")),
+        }))
+    : null;
+  return renderPersonCard({ ...user, wishlist }, now);
 }
 
 export interface PersonCardInput {
@@ -62,6 +79,8 @@ export interface PersonCardInput {
     photos: string[];
     timeZone: string | null;
   } | null;
+  /** Null while the wishlist feature is off — then the card says nothing about it. */
+  wishlist?: { count: number; named: string[] } | null;
 }
 
 export function renderPersonCard(user: PersonCardInput, now: Date): string {
@@ -89,6 +108,9 @@ export function renderPersonCard(user: PersonCardInput, now: Date): string {
     `- Partner preferences: ${partnerPreferences ? quote(truncate(partnerPreferences, BIO_MAX_CHARS)) : "(none yet)"}`,
     profile?.ageRangeMin ? `- Age range they want: ${profile.ageRangeMin}–${profile.ageRangeMax ?? "?"}` : null,
     `- Profile photos: ${photos} of ${MAX_PHOTOS}`,
+    user.wishlist
+      ? `- Date Wishlist: ${user.wishlist.count} of ${WISHLIST_MAX_ITEMS}${user.wishlist.named.length > 0 ? ` — newest: ${user.wishlist.named.join("; ")}` : " (empty)"}`
+      : null,
     missing.length > 0 ? `- Profile gaps: ${missing.join(", ")}` : `- Profile gaps: none`,
   ].filter(Boolean);
 

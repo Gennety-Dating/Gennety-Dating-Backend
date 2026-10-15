@@ -35,6 +35,16 @@ describe("person card", () => {
     expect(card).toContain("first day, brand-new account");
   });
 
+  // Decision 2026-10-15: their own wishlist, so the agent can talk about it
+  // and not propose what is already there.
+  it("names their newest wishlist items, and says nothing while the feature is off", () => {
+    expect(renderPersonCard({ ...base, wishlist: { count: 7, named: ["Tom Ford Lost Cherry", "пионы"] } }, now)).toContain(
+      "- Date Wishlist: 7 of 30 — newest: Tom Ford Lost Cherry; пионы",
+    );
+    expect(renderPersonCard({ ...base, wishlist: { count: 0, named: [] } }, now)).toContain("- Date Wishlist: 0 of 30 (empty)");
+    expect(renderPersonCard({ ...base, wishlist: null }, now)).not.toContain("Wishlist");
+  });
+
   it("names the gaps a new profile has", () => {
     const card = renderPersonCard(base, now);
 

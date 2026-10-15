@@ -11,6 +11,24 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — Chat wishlist card (MIGRATION `20261015180000_message_attachment`, additive; contract: `attachment`, `POST /v1/chat/messages/{id}/wishlist`, header `X-Gennety-Chat-Cards`).**
+Decision journal 2026-10-15 «Вишлист из чата». The app's chat agent proposes wishlist items from photos, screenshots,
+links and words as a card with one «Добавить» button; nothing is saved before the tap. Also in this block: a photo
+from an album (not only its first) can go to the profile; photos of earlier messages carry `[imageUrl=…]` tokens (the
+profile still takes only the current turn's, enforced in code); removing a wishlist item removes its stored photo;
+the cheat sheet needs `WISHLIST_FEATURE_ENABLED` AND `MORNING_AFTER_ENABLED`.
+Demo: same as production with the flags it is given — the demo is Telegram, which has no card.
+iOS: a build that sends `X-Gennety-Chat-Cards: wishlist` draws the card; older builds see plain replies.
+- **Порядок:** `db:deploy` BEFORE the restart — the new code selects `messages.attachment` in `/v1/chat/history`
+  (rows read without `select`); nothing else. Rides on top of the 2026-10-08 wishlist block (its migration first).
+- **Флаги:** nothing new. The card exists only with `WISHLIST_FEATURE_ENABLED=true`; with it alone (morning flag off)
+  people collect and nobody is shown or sold anything. Switch on only after privacy v4.3 / terms v3.1 are on the site.
+- **Проверка:** with the flag on and a build that sends the header: send 3 photos of perfume bottles → one reply plus a
+  card with three ticked items; «Добавить» → «В вишлисте ✓»; Settings → «Мой вишлист» shows them with the photos;
+  reload the chat → the card is still «В вишлисте»; next message «что у меня в вишлисте?» → the agent names them.
+  Without the header (`curl` to `/v1/chat/message`) → no `attachment`.
+- **Откат:** previous release; the column stays (nullable, nothing else reads it).
+
 **PENDING 2026-10-15 — App chat agent quality (no migration, no env; contract: new 503 `agent_unavailable` on `/v1/chat/message` + `/v1/chat/voice`).**
 Decision journal 2026-10-15 «Чат-агент приложения». Earlier photos stay visible to the model; a turn with no reply is
 a 503 (the person's row is removed, the app retries with the same `clientMessageId`) instead of a stored canned line;
