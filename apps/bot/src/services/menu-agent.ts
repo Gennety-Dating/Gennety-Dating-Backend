@@ -46,6 +46,7 @@ import { latestReportableFormerMatch } from "./former-match.js";
 import { emergencyCancelOpen } from "./emergency-cancel.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
+import { stripMarkdownEmphasis } from "./reply-text.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,17 +173,6 @@ function autoSplitSingleBlock(text: string): [string, string] | null {
   return [head, tail];
 }
 
-/**
- * The menu agent's replies are sent WITHOUT a parse_mode, so any markdown the
- * model sneaks in ("**bold**", "__underline__", "`code`") shows up as literal
- * symbols in the chat. BASE_PERSONA forbids it; this is the safety net.
- */
-function stripMarkdownEmphasis(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/gs, "$1")
-    .replace(/__(.+?)__/gs, "$1")
-    .replace(/`([^`\n]+)`/g, "$1");
-}
 
 /**
  * Split a model reply into chat bubbles on blank lines (BASE_PERSONA asks the
@@ -443,18 +433,23 @@ export const AGENT_TOOLS = [
     function: {
       name: "update_hobbies",
       description:
-        "Replace the user's hobbies/interests list. Call when the user tells you what they're into and wants it on their profile. Send the COMPLETE list you want them to end up with, not just the new additions.",
+        "Change the user's hobbies/interests list when they want something on their profile. To ADD interests, pass only the new ones in `add` — they are merged with what is already there, nothing is lost. Pass `hobbies` only to REPLACE the whole list (e.g. to remove something), and then send the complete list they should end up with.",
       parameters: {
         type: "object",
         properties: {
+          add: {
+            type: "array",
+            items: { type: "string", maxLength: 48 },
+            maxItems: 12,
+            description: "Interests to add to the existing list, short phrases.",
+          },
           hobbies: {
             type: "array",
             items: { type: "string", maxLength: 48 },
             maxItems: 12,
-            description: "Complete hobby list, short phrases (max 12).",
+            description: "Complete replacement list, short phrases (max 12).",
           },
         },
-        required: ["hobbies"],
       },
     },
   },
@@ -803,28 +798,53 @@ async function execUpdateMajor(
 
 async function execUpdateHobbies(
   telegramId: bigint,
-  args: { hobbies: unknown },
+  args: { hobbies?: unknown; add?: unknown },
 ): Promise<string> {
-  if (!Array.isArray(args.hobbies)) {
-    return JSON.stringify({ success: false, error: "Hobbies must be a list." });
+  const clean = (list: unknown[]): string[] =>
+    list
+      .filter((h): h is string => typeof h === "string")
+      .map((h) => h.trim().slice(0, 48))
+      .filter((h) => h.length > 0);
+  const replacing = Array.isArray(args.hobbies);
+  if (!replacing && !Array.isArray(args.add)) {
+    return JSON.stringify({ success: false, error: "Pass `add` (new interests) or `hobbies` (full list)." });
   }
-  const hobbies = args.hobbies
-    .filter((h): h is string => typeof h === "string")
-    .map((h) => h.trim().slice(0, 48))
-    .filter((h) => h.length > 0)
-    .slice(0, 12);
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, profile: { select: { hobbies: true } } },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  // `add` merges (2026-10-15): "add my perfume" used to be sent as a one-item
+  // REPLACEMENT by a model that had not read the profile first, silently
+  // wiping every interest the person had.
+  let hobbies: string[];
+  if (replacing) {
+    hobbies = clean(args.hobbies as unknown[]).slice(0, 12);
+  } else {
+    const existing = user.profile?.hobbies ?? [];
+    const seen = new Set(existing.map((h) => h.toLowerCase()));
+    const added = clean(args.add as unknown[]).filter((h) => {
+      const key = h.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (existing.length + added.length > 12) {
+      return JSON.stringify({
+        success: false,
+        error: `The list holds 12 interests and already has ${existing.length}: ${existing.join(", ")}. Ask which to drop, then send the full list in \`hobbies\`.`,
+      });
+    }
+    hobbies = [...existing, ...added];
+  }
   if (hobbies.length === 0) {
     return JSON.stringify({
       success: false,
       error: "Hobby list cannot be empty. Ask what they're into before calling again.",
     });
   }
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true },
-  });
-  if (!user) return JSON.stringify({ success: false, error: "User not found." });
 
   await prisma.profile.update({
     where: { userId: user.id },
@@ -1822,7 +1842,7 @@ export async function executeAgentTool(
       receiptKey = "editPrefsDescriptionSaved";
       break;
     case "update_hobbies":
-      result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
+      result = await execUpdateHobbies(telegramId, args as { hobbies?: unknown; add?: unknown });
       receiptKey = "editHobbiesSaved";
       break;
     case "set_language":

@@ -1,6 +1,6 @@
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
-import { t, type Language } from "@gennety/shared";
+import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
@@ -24,6 +24,8 @@ import {
   type ChatContextSnapshot,
 } from "./chat-context.js";
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
+import { buildPersonCard } from "./chat-person-card.js";
+import { stripMarkdownEmphasis } from "./reply-text.js";
 import { afterChatTurn } from "./chat-session-digest.js";
 import {
   PAST_CHAT_TOOLS,
@@ -51,12 +53,50 @@ const MODEL = MODELS.agent;
 /** Rows of the CURRENT chat fed to the model (and read by the context chip). */
 const HISTORY_LIMIT = 30;
 /**
- * Model calls per turn. Three still covers the longest path the past-chat
- * tools add — search, read, reply — so it was not raised; a turn that also
- * wants a write after reading an old chat asks for it in the next message.
+ * Model calls per turn that may still call tools. Five, not three (founder's
+ * chat 2026-10-15): "look at the profile → change it → answer" and
+ * "search → read → answer" each used the whole old budget, and a turn that
+ * ran out of rounds answered with the fallback line. A turn that is still
+ * calling tools after these rounds gets one more call with tools switched off
+ * (`tool_choice: "none"`), so it always ends in words, never in the fallback.
  */
-const MAX_TOOL_ITERATIONS = 3;
+const MAX_TOOL_ITERATIONS = 5;
 const TIMEOUT_MS = 45_000;
+/**
+ * Visible-output ceiling. 512 cut three-bubble Russian replies mid-word — the
+ * Telegram twin was raised to 900 for exactly that; the app allows slightly
+ * fuller bubbles (see `CHAT_ADDENDUM`), hence a little more.
+ */
+const MAX_COMPLETION_TOKENS = 1000;
+/**
+ * Photos of EARLIER turns the model still sees. Before 2026-10-15 only the
+ * last turn's photos reached it and everything older was the bare string
+ * "[3 images attached earlier]" — so "there's a third one" answered with
+ * "I can't see it", and the person had to send the same photo again. Ten is
+ * one album; the lookback keeps a photo from twenty messages ago from riding
+ * along forever.
+ */
+const MAX_CONTEXT_IMAGES = 10;
+const IMAGE_LOOKBACK_ROWS = 8;
+
+/**
+ * Thrown when no model call produced a reply and nothing was written: the
+ * route answers 503, the app marks the person's bubble "not delivered" with
+ * its retry, and the retry (same `clientMessageId`) runs the turn anew.
+ *
+ * It replaces a canned "Что-то пошло не так. Повтори" stored as if the agent
+ * had said it: the next turn's model read that line as its own and invented
+ * what it had "meant" (founder's chat 2026-10-15).
+ */
+export class ChatAgentUnavailableError extends Error {
+  constructor(readonly reason: string) {
+    super(`chat agent produced no reply: ${reason}`);
+    this.name = "ChatAgentUnavailableError";
+  }
+}
+
+/** Every language's fallback line — rows written before 2026-10-15 carry one. */
+const LEGACY_FALLBACK_LINES = new Set(SUPPORTED_LANGUAGES.map((lang) => t(lang, "agentFallbackError")));
 
 /**
  * Чатовая надстройка над общим системным промптом.
@@ -68,21 +108,63 @@ const TIMEOUT_MS = 45_000;
  * второго агента с тем же именем и другим характером — ровно то расхождение,
  * которое эта задача закрывает.
  */
-const CHAT_ADDENDUM = `## This surface: chat with images
+const CHAT_ADDENDUM = `## This surface: the app's Chat tab
 
-The person is in the app's Chat tab, not in Telegram. Two things follow.
+The person is in the Gennety app's Chat tab, not in Telegram. Where the rules
+below differ from the bubble and length rules above, these win here.
 
-1. **They can attach photos.** A turn may carry several — each image is
-   followed by its own \`[imageUrl=…]\` token, in the order the person picked
-   them. When an image is clearly a head-and-shoulders portrait of the user
-   themselves, call \`attach_profile_photo\` with THAT image's token from their
-   most recent turn; call it once per photo worth attaching. Never attach group
-   photos, screenshots, memes, or photos that are not of them. If unsure, ask
-   first — and when several photos arrive together, answer about them as one
-   set, not one reply per photo.
-2. **A few profile fields live only here.** \`update_profile\` covers what the
-   other tools do not — \`preference\` and \`height\`. Everything else has its
-   own tool; use that one instead, and never both for the same fact.
+### How replies look here
+- The app splits your reply into bubbles at blank lines, at most three — the
+  same habit as Telegram. Nothing renders markdown here either: plain
+  sentences, no bullet symbols.
+- Bubbles may be fuller than in Telegram: up to three sentences each. A real
+  question gets a real answer — what, why, and what it means for THEM next —
+  not a one-liner they have to pull the rest out of. Small talk stays small.
+- "What can you do?" / "how does this work?": answer in their situation — two
+  or three things that matter for them right now, one per line, then the one
+  you'd start with. Never a generic menu.
+- Russian: always "ты" (and ти / du / ty) — never "вы" or "вам".
+
+### Be their matchmaker, not a help desk
+- Every reply should move them a step closer to a good date. When they share
+  something about themselves — a taste, a habit, a photo of a thing they love,
+  a plan — connect it: what it says about them, how it helps you match them,
+  and offer ONE concrete next step (save it to their interests, keep it as a
+  topic for the date, tune who they're matched with). Offer it as one short
+  question; change nothing until they say yes.
+- "Nothing for now", "hi", "ok": don't just sign off. Say in one line what is
+  coming for them (from the context), then one light question that helps you
+  know them — unless they are clearly busy or annoyed.
+- Use "About this person" below: their interests, what their profile is
+  missing, how long they have been here. A new account gains the most — an
+  empty bio, no interests or a single photo is worth one gentle offer when the
+  moment fits, not a lecture and not every turn.
+- At most one suggestion per reply. If they decline, drop it.
+
+### Photos
+- A turn may carry several photos. Each photo of the turn you are answering is
+  followed by its own \`[imageUrl=…]\` token, in the order they were picked;
+  photos from their last few earlier messages stay visible to you without
+  tokens. Answer a set of photos as one set, not one reply per photo.
+- Look at what is actually in each photo and react to THAT, the way a friend
+  would — read the label, name the thing, have a take.
+- Only a clear head-and-shoulders portrait of the user themselves goes to the
+  profile: call \`attach_profile_photo\` with THAT image's token from the turn
+  you are answering, once per photo worth attaching. Never group photos,
+  screenshots, memes or photos of things — and don't bring up profile photos
+  when they send a photo of something else.
+- If they mention a photo you do not see, say exactly that and ask them to send
+  it again. Never claim you "can't read" something you were never shown.
+
+### Honesty about yourself
+- Never invent a reason for your own glitch or a limit you don't have. If the
+  conversation shows a reply of yours failed, own it in a few words and answer
+  what they actually asked.
+
+### A few profile fields live only here
+\`update_profile\` covers what the other tools do not — \`preference\` and
+\`height\`. Everything else has its own tool; use that one instead, and never
+both for the same fact.
 
 Age and gender are fixed after onboarding and this tab opens only afterwards,
 so treat them as read-only: if someone says one of them is wrong, say support
@@ -295,7 +377,7 @@ async function runTurnInner(
   const language = (account.language ?? "en") as Language;
   const sessionId = input.sessionId ?? (await continueOrOpenChatSession(userId));
 
-  await prisma.message.create({
+  const userRow = await prisma.message.create({
     data: {
       userId,
       sessionId,
@@ -311,20 +393,17 @@ async function runTurnInner(
 
   let iteration = 0;
   let lastReply = "";
+  let failure = "";
   let writesUsed = 0;
   const receipts: string[] = [];
   let pendingAction: MenuAgentAction | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
-    const completion = await callOpenAI(messages, fetchFn);
-    if (!completion) {
-      lastReply = fallbackReply(language);
+    const called = await completeWithRetry(messages, fetchFn, {});
+    if (!called.ok) {
+      failure = called.reason;
       break;
     }
-    const choice = completion.choices[0];
-    if (!choice) {
-      lastReply = fallbackReply(language);
-      break;
-    }
+    const choice = called.choice;
 
     const assistantMsg: OpenAIChatMessage = {
       role: "assistant",
@@ -336,7 +415,7 @@ async function runTurnInner(
     messages.push(assistantMsg);
 
     if (!choice.message.tool_calls?.length) {
-      lastReply = (choice.message.content ?? "").trim();
+      lastReply = finishReply(choice);
       break;
     }
 
@@ -360,7 +439,16 @@ async function runTurnInner(
         continue;
       }
 
-      const outcome = await executeTool(userId, telegramId, sessionId, tc);
+      // A tool that throws costs that tool, not the turn: the model hears it
+      // failed and says so, instead of the person getting a 500.
+      const outcome = await executeTool(userId, telegramId, sessionId, tc).catch((err: unknown) => {
+        console.warn(`[chat] tool ${name} threw:`, err);
+        return {
+          result: JSON.stringify({ success: false, error: "tool_failed", detail: "Internal error — tell the user it did not work this time." }),
+          receiptKey: null,
+          action: null,
+        };
+      });
       if (outcome.action) pendingAction = outcome.action;
 
       // Считается и подтверждается только запись, отчитавшаяся об успехе:
@@ -380,7 +468,33 @@ async function runTurnInner(
     iteration++;
   }
 
-  if (!lastReply) lastReply = fallbackReply(language);
+  // Out of tool rounds while the model still wants tools: one last call with
+  // tools off, so the turn ends in words about what was done, not a fallback.
+  if (!lastReply && !failure && iteration >= MAX_TOOL_ITERATIONS) {
+    const closing = await completeWithRetry(messages, fetchFn, { toolChoice: "none" });
+    if (closing.ok) lastReply = finishReply(closing.choice);
+    else failure = `closing call: ${closing.reason}`;
+  }
+
+  if (!lastReply) {
+    failure ||= "empty reply";
+    console.warn(
+      `[chat] turn without a reply (user ${userId}, ${imageUrls.length} photo(s), ${iteration} round(s), writes ${writesUsed}): ${failure}`,
+    );
+    // Something DID change this turn — the receipts are the truthful reply,
+    // and the person must see them rather than a retry that would apply the
+    // change a second time.
+    if (receipts.length > 0) {
+      lastReply = receipts.join("\n\n");
+    } else if (pendingAction) {
+      lastReply = fallbackReply(language);
+    } else {
+      // Nothing happened: take the person's row back so the app's retry (same
+      // `clientMessageId`) replays the turn instead of stacking a duplicate.
+      await prisma.message.delete({ where: { id: userRow.id } }).catch(() => undefined);
+      throw new ChatAgentUnavailableError(failure);
+    }
+  }
 
   const persisted = await prisma.message.create({
     data: { userId, sessionId, role: "assistant", content: lastReply },
@@ -406,8 +520,10 @@ async function runTurnInner(
 }
 
 /**
- * The line the user gets when the model gives us nothing usable — no
- * completion, no choice, or a tool loop that ran out of rounds.
+ * The line for the one failure that cannot become a 503: the model gave
+ * nothing usable, but a native action (a screen to open, a button to tap) was
+ * already produced and would be lost with the turn. Every other failure is
+ * `ChatAgentUnavailableError` since 2026-10-15.
  *
  * Localized, and for the reason the menu agent already wrote down when it fixed
  * the same defect: an English sentence appearing out of nowhere reads exactly
@@ -451,19 +567,40 @@ async function buildChatMessages(
   // having said it. Resolved from live rows each turn, so an announcement edited
   // after the chip was sent grounds on what it says now.
   const context = activeChatContext(rows);
-  const contextBlock = context ? await buildChatContextBlock(userId, context) : null;
-  const system = contextBlock
-    ? `${base}\n\n${CHAT_ADDENDUM}\n\n${contextBlock}`
-    : `${base}\n\n${CHAT_ADDENDUM}`;
+  const [contextBlock, personCard] = await Promise.all([
+    context ? buildChatContextBlock(userId, context) : Promise.resolve(null),
+    // The card must never cost the turn: without it the agent is as it was.
+    buildPersonCard(userId).catch((err: unknown) => {
+      console.warn("[chat] person card unavailable:", err);
+      return null;
+    }),
+  ]);
+  const system = [base, CHAT_ADDENDUM, personCard, contextBlock].filter(Boolean).join("\n\n");
   const out: OpenAIChatMessage[] = [{ role: "system", content: system }];
+  const earlierPhotos = await signEarlierPhotos(rows);
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
     const isLast = i === rows.length - 1;
 
     if (row.role === "user") {
-      // Строки до 2026-09-21 несут один путь в `imageUrl`, новые — список.
-      const images = row.imageUrls.length > 0 ? row.imageUrls : row.imageUrl ? [row.imageUrl] : [];
+      const images = rowImages(row);
+      const earlier = earlierPhotos.get(i);
+      if (!isLast && earlier) {
+        // An earlier turn whose photos still ride along: the model sees them
+        // again, but without `[imageUrl=…]` tokens — attaching to the profile
+        // stays limited to the photos of the turn being answered.
+        const parts: Array<TextPart | ImagePart> = [];
+        if (row.content) parts.push({ type: "text", text: row.content });
+        for (const url of earlier.signed) {
+          parts.push({ type: "image_url", image_url: { url } });
+        }
+        if (earlier.missing > 0) {
+          parts.push({ type: "text", text: `[${earlier.missing} more photo(s) from this message are no longer shown to you]` });
+        }
+        out.push({ role: "user", content: parts });
+        continue;
+      }
       if (isLast && images.length > 0) {
         const parts: Array<TextPart | ImagePart> = [];
         const txt = row.content ?? "";
@@ -500,7 +637,13 @@ async function buildChatMessages(
         out.push({ role: "user", content: (row.content ?? "") + suffix });
       }
     } else if (row.role === "assistant") {
-      out.push({ role: "assistant", content: row.content ?? "" });
+      // A fallback line stored before 2026-10-15 is not something the agent
+      // said: shown verbatim, the model took it as its own and invented what
+      // it had "meant" when asked "repeat what?".
+      const content = LEGACY_FALLBACK_LINES.has((row.content ?? "").trim())
+        ? "[Technical failure, not your words: your reply to the message above did not go through, and the person saw an automatic line asking them to repeat. You never saw or answered that message. If they ask what to repeat, own the glitch in a few words and answer that message now.]"
+        : row.content ?? "";
+      out.push({ role: "assistant", content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
@@ -508,12 +651,69 @@ async function buildChatMessages(
   return { messages: out, openedNewSession };
 }
 
+type HistoryRow = { role: string; imageUrl: string | null; imageUrls: string[] };
+
+/** Строки до 2026-09-21 несут один путь в `imageUrl`, новые — список. */
+function rowImages(row: HistoryRow): string[] {
+  return row.imageUrls.length > 0 ? row.imageUrls : row.imageUrl ? [row.imageUrl] : [];
+}
+
+/**
+ * Signed URLs for the photos of EARLIER turns that still fit in the context,
+ * keyed by row index. Newest turns first, within `IMAGE_LOOKBACK_ROWS`, up to
+ * `MAX_CONTEXT_IMAGES` together with the photos of the turn being answered.
+ *
+ * Unlike the current turn's photos, a signing failure here never fails the
+ * turn: an old photo Storage no longer has is counted as missing and the
+ * model is told so.
+ */
+async function signEarlierPhotos(
+  rows: HistoryRow[],
+): Promise<Map<number, { signed: string[]; missing: number }>> {
+  const result = new Map<number, { signed: string[]; missing: number }>();
+  const last = rows.length - 1;
+  if (last < 0) return result;
+  let budget = MAX_CONTEXT_IMAGES - (rows[last]!.role === "user" ? rowImages(rows[last]!).length : 0);
+  const picked: Array<{ index: number; paths: string[]; dropped: number }> = [];
+  for (let i = last - 1; i >= Math.max(0, rows.length - IMAGE_LOOKBACK_ROWS); i--) {
+    const row = rows[i]!;
+    if (row.role !== "user") continue;
+    const images = rowImages(row);
+    if (images.length === 0) continue;
+    const take = Math.max(0, Math.min(budget, images.length));
+    picked.push({ index: i, paths: images.slice(0, take), dropped: images.length - take });
+    budget -= take;
+  }
+  await Promise.all(
+    picked.map(async ({ index, paths, dropped }) => {
+      const signed = await Promise.all(
+        paths.map((path) => createChatImageSignedUrl(path).catch(() => null)),
+      );
+      const ok = signed.filter((url): url is string => typeof url === "string" && url.length > 0);
+      result.set(index, { signed: ok, missing: dropped + (paths.length - ok.length) });
+    }),
+  );
+  return result;
+}
+
+type Choice = ChatCompletionResponse["choices"][number];
+
+type CallResult =
+  | { ok: true; choice: Choice }
+  | { ok: false; reason: string; status?: number };
+
+interface CallOptions {
+  /** `"none"` — the closing call after the tool rounds ran out. */
+  toolChoice?: "none";
+}
+
 async function callOpenAI(
   messages: OpenAIChatMessage[],
   fetchFn: typeof fetch,
-): Promise<ChatCompletionResponse | null> {
+  options: CallOptions,
+): Promise<CallResult> {
   const apiKey = env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return { ok: false, reason: "no OPENAI_API_KEY" };
   try {
     const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -523,23 +723,96 @@ async function callOpenAI(
       },
       body: JSON.stringify({
         model: MODEL,
-        max_completion_tokens: 512,
+        max_completion_tokens: MAX_COMPLETION_TOKENS,
         temperature: 0.7,
         tools: ALL_TOOLS,
+        ...(options.toolChoice ? { tool_choice: options.toolChoice } : {}),
         messages,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`[chat] OpenAI call failed: ${res.status} ${body}`);
-      return null;
+      console.warn(`[chat] OpenAI call failed: ${res.status} ${body.slice(0, 500)}`);
+      return { ok: false, reason: `HTTP ${res.status}`, status: res.status };
     }
-    return (await res.json()) as ChatCompletionResponse;
+    const completion = (await res.json()) as ChatCompletionResponse;
+    const choice = completion.choices?.[0];
+    if (!choice) return { ok: false, reason: "no choices" };
+    const hasTools = (choice.message.tool_calls?.length ?? 0) > 0;
+    if (!hasTools && !(choice.message.content ?? "").trim()) {
+      return { ok: false, reason: `empty content (finish_reason ${choice.finish_reason ?? "?"})` };
+    }
+    return { ok: true, choice };
   } catch (err) {
     console.warn("[chat] OpenAI call error:", err);
-    return null;
+    return { ok: false, reason: err instanceof Error ? err.name : "network error" };
   }
+}
+
+/**
+ * One model call that does not give up on the first hiccup.
+ *
+ * A failed call is tried again once as is — most failures are transient. A
+ * call refused as malformed (400) while the context carries photos is tried
+ * a third time with every photo replaced by a note saying it could not be
+ * shown: a photo the provider cannot fetch or decode must cost the person
+ * that photo, not the whole reply. The replacement happens in place, so the
+ * rest of the turn runs on the context that worked.
+ */
+async function completeWithRetry(
+  messages: OpenAIChatMessage[],
+  fetchFn: typeof fetch,
+  options: CallOptions,
+): Promise<CallResult> {
+  let result = await callOpenAI(messages, fetchFn, options);
+  if (result.ok) return result;
+  const first = result;
+  result = await callOpenAI(messages, fetchFn, options);
+  if (result.ok) return result;
+  if ((first.status === 400 || result.status === 400) && dropImagesInPlace(messages)) {
+    result = await callOpenAI(messages, fetchFn, options);
+  }
+  return result;
+}
+
+/** Replace every image part with a note; true when there was one to replace. */
+function dropImagesInPlace(messages: OpenAIChatMessage[]): boolean {
+  let dropped = false;
+  for (const message of messages) {
+    if (!Array.isArray(message.content)) continue;
+    message.content = message.content.map((part) => {
+      if (part.type !== "image_url") return part;
+      dropped = true;
+      return { type: "text" as const, text: "[a photo here could not be shown to you — if it matters, say so plainly and ask them to resend it]" };
+    });
+  }
+  return dropped;
+}
+
+/**
+ * The reply as the person will see it. Markdown is stripped — the app's
+ * bubbles do not render it either (`ChatReplySplitter`). A reply cut by the
+ * token ceiling is trimmed back to its last whole sentence instead of ending
+ * mid-word, and logged: hitting the ceiling means the ceiling is wrong.
+ */
+function finishReply(choice: Choice): string {
+  let reply = stripMarkdownEmphasis((choice.message.content ?? "").trim());
+  if (choice.finish_reason === "length") {
+    console.warn(`[chat] reply hit max_completion_tokens (${MAX_COMPLETION_TOKENS}); trimmed to a whole sentence`);
+    reply = trimToLastSentence(reply);
+  }
+  return reply;
+}
+
+function trimToLastSentence(text: string): string {
+  const ends = [...text.matchAll(/[.!?…](?=\s|$)/g)];
+  const last = ends.at(-1);
+  if (!last || last.index === undefined) return text;
+  const cut = text.slice(0, last.index + 1).trim();
+  // Keep the cut only when it keeps most of the reply — a lone first sentence
+  // of a long answer is worse than the answer ending abruptly.
+  return cut.length >= text.length * 0.5 ? cut : text;
 }
 
 async function executeTool(

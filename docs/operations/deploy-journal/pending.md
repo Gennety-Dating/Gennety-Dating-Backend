@@ -11,6 +11,19 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — App chat agent quality (no migration, no env; contract: new 503 `agent_unavailable` on `/v1/chat/message` + `/v1/chat/voice`).**
+Decision journal 2026-10-15 «Чат-агент приложения». Earlier photos stay visible to the model; a turn with no reply is
+a 503 (the person's row is removed, the app retries with the same `clientMessageId`) instead of a stored canned line;
+1000-token replies, 5 tool rounds + a closing `tool_choice: "none"` call; person card in the prompt; shared persona now
+offers one next step; `update_hobbies` accepts `add`. Demo: no change beyond the shared persona line (offers only).
+iOS: every build already treats a non-2xx as "not delivered" with retry — no app release needed.
+- **Порядок:** ordinary code deploy + restart; nothing before it.
+- **Проверка:** send «👋» in the app chat → a reply that says what is coming and asks one light question; send 3 photos,
+  then «там ещё третий» → the agent names the third without a resend; `pm2 logs gennety-bot --lines 300 | grep
+  "\[chat\] turn without a reply"` → reasons for any 503. Live-model check before deploy: `pnpm --filter @gennety/bot
+  exec tsx scripts/chat-agent-eval.ts` (see the script header).
+- **Откат:** previous release; no data written in a new shape.
+
 **PENDING 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
 Spec `docs/product/domains/pulse-analytics.md`, decision journal 2026-10-15. Analytics consent `users.analytics_opt_in`
 (default false) set from the consent screens and `PUT /v1/me/analytics-consent`; `/v1/client/events` takes screen /

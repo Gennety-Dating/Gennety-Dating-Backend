@@ -68,6 +68,7 @@ vi.mock("./chat-sessions.js", () => ({
   touchChatSession: async () => undefined,
 }));
 vi.mock("./chat-session-digest.js", () => ({ afterChatTurn: () => undefined }));
+vi.mock("./chat-person-card.js", () => ({ buildPersonCard: async () => null }));
 // Прошлые чаты: настоящие описания и классы инструментов, подменён только
 // исполнитель — здесь проверяется проводка, а не поиск.
 const executePastChatTool = vi.fn(

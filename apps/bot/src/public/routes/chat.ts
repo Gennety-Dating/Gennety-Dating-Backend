@@ -70,6 +70,16 @@ import { CHAT_SESSIONS_PAGE_DEFAULT, CHAT_SESSIONS_PAGE_MAX } from "@gennety/sha
  * enforcement. `/upload` only stores a picture, so it has no budget either.
  */
 
+/**
+ * The agent produced no reply and nothing changed (`ChatAgentUnavailableError`
+ * in `services/chat-agent.ts`, 2026-10-15). Matched by name, not `instanceof`:
+ * route tests mock that module whole, and a class missing from the mock would
+ * turn every error check into a TypeError.
+ */
+function isAgentUnavailable(err: unknown): boolean {
+  return err instanceof Error && err.name === "ChatAgentUnavailableError";
+}
+
 export const chatRouter: Router = Router();
 
 chatRouter.use(requireAuth);
@@ -224,7 +234,14 @@ chatRouter.post(
         ...(turn.receipts ? { receipts: turn.receipts } : {}),
         ...(turn.action ? { action: turn.action } : {}),
       };
+    }).catch((err: unknown) => {
+      if (isAgentUnavailable(err)) return null;
+      throw err;
     });
+    if (!reply) {
+      res.status(503).json({ error: "agent_unavailable" });
+      return;
+    }
     res.json(reply);
   },
 );
@@ -292,7 +309,16 @@ chatRouter.post(
       imageUrls: [],
       context,
       sessionId,
+    }).catch((err: unknown) => {
+      if (isAgentUnavailable(err)) return null;
+      throw err;
     });
+    // Same contract as the transcription outage above: 503 keeps the note in
+    // the app with its retry.
+    if (!turn) {
+      res.status(503).json({ error: "agent_unavailable" });
+      return;
+    }
 
     res.json({
       message: {

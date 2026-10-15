@@ -3326,6 +3326,16 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: |
+            `agent_unavailable` — the agent produced no reply even after its
+            own retry, and nothing was changed. Nothing of the turn is stored:
+            mark the person's bubble "not delivered" and offer a retry with the
+            same `clientMessageId` (2026-10-15; replaces a canned "something
+            went wrong" stored as the agent's reply).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/chat/voice:
     post:
@@ -3416,6 +3426,8 @@ paths:
             OpenAI unreachable, 5xx or quota). The recording itself is fine:
             keep it and offer a retry (audit C-06, contract decision
             2026-10-11 #6). Only a recording that yields no speech is 422.
+            `agent_unavailable` — transcribed, but the agent produced no reply
+            and nothing changed; same handling (2026-10-15).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

@@ -157,3 +157,37 @@ describe("GET /v1/chat/history", () => {
     expect(res.body.messages[1]).not.toHaveProperty("context");
   });
 });
+
+/**
+ * No reply from the agent (2026-10-15): 503, not a canned line stored as the
+ * agent's words — the app marks the bubble "not delivered" and its retry,
+ * with the same `clientMessageId`, runs the turn anew.
+ */
+describe("POST /v1/chat when the agent has no reply", () => {
+  const unavailable = () => Object.assign(new Error("no reply"), { name: "ChatAgentUnavailableError" });
+
+  it("answers 503 and lets the retry with the same id run again", async () => {
+    runChatTurn.mockRejectedValueOnce(unavailable());
+    const body = { text: "привет", clientMessageId: "pending-6b3f1c2e-1111-4111-8111-111111111111" };
+
+    const first = await request(app()).post("/v1/chat/message").set(auth()).send(body);
+    expect(first.status).toBe(503);
+    expect(first.body).toEqual({ error: "agent_unavailable" });
+
+    const retry = await request(app()).post("/v1/chat/message").set(auth()).send(body);
+    expect(retry.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalledTimes(2);
+  });
+
+  it("a voice turn keeps the same contract", async () => {
+    runChatTurn.mockRejectedValueOnce(unavailable());
+
+    const res = await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .attach("file", Buffer.from("fake-audio"), { filename: "note.m4a", contentType: "audio/m4a" });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: "agent_unavailable" });
+  });
+});
