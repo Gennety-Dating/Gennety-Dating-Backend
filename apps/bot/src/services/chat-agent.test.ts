@@ -57,6 +57,10 @@ const buildPersonCard = vi.fn(async (_userId: string): Promise<string | null> =>
 vi.mock("./chat-person-card.js", () => ({
   buildPersonCard: (userId: string) => buildPersonCard(userId),
 }));
+vi.mock("./chat-consent.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./chat-consent.js")>()),
+  personConsented: async () => true,
+}));
 const afterChatTurn = vi.fn();
 vi.mock("./chat-session-digest.js", () => ({
   afterChatTurn: (input: unknown) => afterChatTurn(input),

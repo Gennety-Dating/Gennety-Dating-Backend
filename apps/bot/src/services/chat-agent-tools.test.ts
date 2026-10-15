@@ -69,6 +69,11 @@ vi.mock("./chat-sessions.js", () => ({
 }));
 vi.mock("./chat-session-digest.js", () => ({ afterChatTurn: () => undefined }));
 vi.mock("./chat-person-card.js", () => ({ buildPersonCard: async () => null }));
+// The consent gate has its own tests in chat-agent.test.ts; here every write is consented.
+vi.mock("./chat-consent.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./chat-consent.js")>()),
+  personConsented: async () => true,
+}));
 // Прошлые чаты: настоящие описания и классы инструментов, подменён только
 // исполнитель — здесь проверяется проводка, а не поиск.
 const executePastChatTool = vi.fn(

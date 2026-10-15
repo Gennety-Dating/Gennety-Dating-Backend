@@ -25,6 +25,7 @@ import {
 } from "./chat-context.js";
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
 import { buildPersonCard } from "./chat-person-card.js";
+import { CONSENT_GATED_TOOLS, personConsented, type ConsentQuestion } from "./chat-consent.js";
 import { stripMarkdownEmphasis } from "./reply-text.js";
 import { afterChatTurn } from "./chat-session-digest.js";
 import {
@@ -122,7 +123,13 @@ below differ from the bubble and length rules above, these win here.
   not a one-liner they have to pull the rest out of. Small talk stays small.
 - "What can you do?" / "how does this work?": answer in their situation — two
   or three things that matter for them right now, one per line, then the one
-  you'd start with. Never a generic menu.
+  you'd start with. Never a generic menu. For a first-day account, roughly:
+  «я твой сват: ищу тебе человека и сам договариваюсь о свидании.
+  могу разобраться, почему пока нет пары, и что подкрутить в профиле
+  могу подготовить к свиданию — место, темы, что надеть
+  начал бы с «О себе» — оно пустое. набросаем вместе?»
+- After a save, name exactly what the tool result says was saved — nothing
+  more.
 - Russian: always "ты" (and ти / du / ty) — never "вы" or "вам".
 
 ### Be their matchmaker, not a help desk
@@ -131,10 +138,20 @@ below differ from the bubble and length rules above, these win here.
   a plan — connect it: what it says about them, how it helps you match them,
   and offer ONE concrete next step (save it to their interests, keep it as a
   topic for the date, tune who they're matched with). Offer it as one short
-  question; change nothing until they say yes.
+  question; change nothing until they say yes. A personal share never gets
+  just "понял" plus an offer: first a real reaction with substance (a take,
+  what it says about them, how it could play on a date), then the offer.
+- **Consent is the gate for every change.** Call a tool that changes their
+  profile or settings ONLY when their LAST message asks for that change or
+  says yes to the offer you just made. Sharing a fact — "these are my
+  favourite perfumes", "the last one is my favourite", "I love jazz" — is NOT a
+  request to save it: react, then offer. Opening a screen counts too: do it
+  when they ask to go there or agree, never as a surprise.
 - "Nothing for now", "hi", "ok": don't just sign off. Say in one line what is
-  coming for them (from the context), then one light question that helps you
-  know them — unless they are clearly busy or annoyed.
+  coming for them (from the context), then one light question about THEM —
+  their kind of evening, what they're into — unless they are clearly busy or
+  annoyed. Small talk is for getting to know them, not a cue for profile
+  chores.
 - Use "About this person" below: their interests, what their profile is
   missing, how long they have been here. A new account gains the most — an
   empty bio, no interests or a single photo is worth one gentle offer when the
@@ -331,6 +348,8 @@ export interface ChatTurnResult {
 
 export interface ChatDeps {
   fetchFn?: typeof fetch;
+  /** Consent check before a profile write (`chat-consent.ts`); tests replace it. */
+  consent?: (question: ConsentQuestion) => Promise<boolean>;
 }
 
 const userLocks = new Map<string, Promise<ChatTurnResult>>();
@@ -390,6 +409,14 @@ async function runTurnInner(
   });
 
   const { messages, openedNewSession } = await buildChatMessages(userId, telegramId, sessionId);
+  const consent = deps.consent ?? personConsented;
+  // The offer a "да" would be answering: the assistant's message right before
+  // this turn, as the model saw it.
+  const previousAssistant = [...messages]
+    .slice(0, -1)
+    .reverse()
+    .find((m) => m.role === "assistant" && typeof m.content === "string");
+  const previous = typeof previousAssistant?.content === "string" ? previousAssistant.content : "";
 
   let iteration = 0;
   let lastReply = "";
@@ -405,21 +432,27 @@ async function runTurnInner(
     }
     const choice = called.choice;
 
+    // Text written next to a tool call never reaches the person — only the
+    // closing reply does. Kept in the context, it came back in that closing
+    // reply as a near-verbatim second copy (live evals 2026-10-15), so the
+    // model sees exactly what the person will see: the call, not the draft.
+    const toolCalls = choice.message.tool_calls ?? [];
+    const callsTools = toolCalls.length > 0;
     const assistantMsg: OpenAIChatMessage = {
       role: "assistant",
-      content: choice.message.content,
+      content: callsTools ? null : choice.message.content,
     };
-    if (choice.message.tool_calls?.length) {
-      assistantMsg.tool_calls = choice.message.tool_calls;
+    if (callsTools) {
+      assistantMsg.tool_calls = toolCalls;
     }
     messages.push(assistantMsg);
 
-    if (!choice.message.tool_calls?.length) {
+    if (!callsTools) {
       lastReply = finishReply(choice);
       break;
     }
 
-    for (const tc of choice.message.tool_calls) {
+    for (const tc of toolCalls) {
       const name = tc.function.name;
 
       // Бюджет проверяется ДО запуска: вторая запись за ход отвергается, а не
@@ -437,6 +470,30 @@ async function runTurnInner(
           }),
         });
         continue;
+      }
+
+      // Sharing is not asking: a profile write the person neither requested
+      // nor agreed to is turned back into an offer (`chat-consent.ts`).
+      if (CONSENT_GATED_TOOLS.has(name)) {
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // malformed arguments are the executor's to refuse
+        }
+        if (!(await consent({ previous, message: text, tool: name, args }))) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({
+              success: false,
+              error: "no_consent",
+              instruction:
+                "NOT saved: they shared this but did not ask to save it. Write your reply ONCE: react to what they said like a person would, and if it fits, offer this change as one short question. Do not say you saved anything.",
+            }),
+          });
+          continue;
+        }
       }
 
       // A tool that throws costs that tool, not the turn: the model hears it
@@ -641,7 +698,7 @@ async function buildChatMessages(
       // said: shown verbatim, the model took it as its own and invented what
       // it had "meant" when asked "repeat what?".
       const content = LEGACY_FALLBACK_LINES.has((row.content ?? "").trim())
-        ? "[Technical failure, not your words: your reply to the message above did not go through, and the person saw an automatic line asking them to repeat. You never saw or answered that message. If they ask what to repeat, own the glitch in a few words and answer that message now.]"
+        ? "[Technical failure, not your words: your reply to the message above did not go through, and the person saw an automatic line asking them to repeat. You never saw or answered that message. Next reply: open by owning it in a few words (e.g. «сорри, у меня был сбой» — no need to repeat anything), then answer that message now.]"
         : row.content ?? "";
       out.push({ role: "assistant", content });
     }
@@ -797,12 +854,55 @@ function dropImagesInPlace(messages: OpenAIChatMessage[]): boolean {
  * mid-word, and logged: hitting the ceiling means the ceiling is wrong.
  */
 function finishReply(choice: Choice): string {
-  let reply = stripMarkdownEmphasis((choice.message.content ?? "").trim());
+  let reply = collapseRepeat(stripMarkdownEmphasis((choice.message.content ?? "").trim()));
   if (choice.finish_reason === "length") {
     console.warn(`[chat] reply hit max_completion_tokens (${MAX_COMPLETION_TOKENS}); trimmed to a whole sentence`);
     reply = trimToLastSentence(reply);
   }
   return reply;
+}
+
+/**
+ * A reply that is the same text twice becomes that text once. Seen in the
+ * live evals: the model wrote its answer next to a tool call, the tool said
+ * no, and the closing reply repeated the whole answer verbatim — four bubbles
+ * where two were meant.
+ */
+export function collapseRepeat(text: string): string {
+  const middle = Math.floor(text.length / 2);
+  for (let offset = 0; offset <= 4; offset++) {
+    for (const at of [middle - offset, middle + offset]) {
+      if (at <= 0 || at >= text.length || !/\s/.test(text[at]!)) continue;
+      const left = text.slice(0, at).trim();
+      // Short echoes ("да да", "ок ок") are speech, not a duplicated answer.
+      if (left.length >= 20 && left === text.slice(at).trim()) return left;
+    }
+  }
+  // The same answer twice, the second lightly reworded: the lines split into
+  // two halves that match line by line. The second copy is kept — it is the
+  // model's revision of the first.
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length >= 2 && lines.length % 2 === 0) {
+    const half = lines.length / 2;
+    const first = lines.slice(0, half);
+    const second = lines.slice(half);
+    if (first.join(" ").length >= 40 && first.every((line, i) => similarity(line, second[i]!) >= 0.6)) {
+      // One bubble per line, as the app splits them.
+      return second.join("\n\n");
+    }
+  }
+  return text;
+}
+
+/** Share of distinct words two lines have in common (Jaccard), case-folded. */
+function similarity(a: string, b: string): number {
+  const words = (s: string) => new Set(s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+  const x = words(a);
+  const y = words(b);
+  if (x.size === 0 || y.size === 0) return 0;
+  let common = 0;
+  for (const w of x) if (y.has(w)) common++;
+  return common / (x.size + y.size - common);
 }
 
 function trimToLastSentence(text: string): string {

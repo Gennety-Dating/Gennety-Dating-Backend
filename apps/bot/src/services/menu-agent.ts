@@ -433,7 +433,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "update_hobbies",
       description:
-        "Change the user's hobbies/interests list when they want something on their profile. To ADD interests, pass only the new ones in `add` — they are merged with what is already there, nothing is lost. Pass `hobbies` only to REPLACE the whole list (e.g. to remove something), and then send the complete list they should end up with.",
+        "Change the user's hobbies/interests list — only when they asked for it or just said yes to your offer; mentioning that they like something is not a request to save it. To ADD interests, pass only the new ones in `add` — they are merged with what is already there, nothing is lost. Pass `hobbies` only to REPLACE the whole list (e.g. to remove something), and then send the complete list they should end up with.",
       parameters: {
         type: "object",
         properties: {
