@@ -118,14 +118,13 @@ describe("looksLikeIsoMedia", () => {
 describe("saveNativeProfileVideo — the poster (A13-M11)", () => {
   // The poster reaches partners as `thumbUrl` and the client chooses it, so it
   // is not "a frame of a moderated video" — it has to be moderated itself.
-  it("refuses an unsafe poster with the photo error shape, before the video is validated or stored", async () => {
+  it("refuses an unsafe poster with the photo error shape, before anything is stored", async () => {
     h.posterSafety.mockResolvedValueOnce({ ok: false, reason: "unsafe_content", retryable: false });
 
     const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
 
     expect(result).toEqual({ ok: false, error: "unsafe_content", retryable: false });
     expect(h.posterSafety).toHaveBeenCalledWith(JPEG);
-    expect(h.validate).not.toHaveBeenCalled();
     expect(h.upload).not.toHaveBeenCalled();
     expect(h.row!.profileMedia).toEqual(photoItems);
     expect(h.logRejection).toHaveBeenCalledWith({
@@ -147,6 +146,47 @@ describe("saveNativeProfileVideo — the poster (A13-M11)", () => {
     expect(result).toEqual({ ok: false, error: "processing_unavailable", retryable: true });
     expect(h.upload).not.toHaveBeenCalled();
     expect(h.logRejection).not.toHaveBeenCalled();
+  });
+
+  it("checks the poster and the clip at the same time, not one after the other", async () => {
+    let releasePoster!: () => void;
+    h.posterSafety.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releasePoster = () => resolve({ ok: true, value: undefined });
+      }),
+    );
+
+    const pending = saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+    // The poster has not answered yet, and the clip's validation is already running.
+    await vi.waitFor(() => expect(h.validate).toHaveBeenCalledOnce());
+    expect(h.upload).not.toHaveBeenCalled();
+    releasePoster();
+
+    expect((await pending).ok).toBe(true);
+  });
+
+  it("an unsafe poster beats a retryable clip outage — no 'try again' for refused content", async () => {
+    h.posterSafety.mockResolvedValueOnce({ ok: false, reason: "unsafe_content", retryable: false });
+    h.validate.mockResolvedValue({ ok: false, reason: "processing_unavailable", retryable: true });
+
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+
+    expect(result).toEqual({ ok: false, error: "unsafe_content", retryable: false });
+    expect(h.logRejection).toHaveBeenCalledOnce();
+  });
+
+  it("an unsafe clip beats a poster outage", async () => {
+    h.posterSafety.mockResolvedValueOnce({
+      ok: false,
+      reason: "processing_unavailable",
+      retryable: true,
+    });
+    h.validate.mockResolvedValue({ ok: false, reason: "unsafe_content", retryable: false });
+
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+
+    expect(result).toEqual({ ok: false, error: "unsafe_content", retryable: false });
+    expect(h.upload).not.toHaveBeenCalled();
   });
 
   it("moderates nothing while validation is switched off (local dev)", async () => {
@@ -255,6 +295,39 @@ describe("saveNativeProfileVideo", () => {
     h.upload
       .mockResolvedValueOnce({ path: `${USER}/video-1.mp4` })
       .mockRejectedValueOnce(new Error("503"));
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+    expect(result).toEqual({ ok: false, error: "storage_unavailable", retryable: true });
+    expect(h.deleteObjects).toHaveBeenCalledWith([`${USER}/video-1.mp4`, undefined]);
+    expect(h.row!.profileMedia).toEqual(photoItems);
+  });
+
+  it("uploads the clip and the poster at the same time", async () => {
+    const releases: Array<() => void> = [];
+    h.upload.mockImplementation(
+      (userId: string, role: string) =>
+        new Promise((resolve) => {
+          releases.push(() =>
+            resolve({ path: `${userId}/${role === "video" ? "video-1.mp4" : "video-thumb-2.jpg"}` }),
+          );
+        }),
+    );
+
+    const pending = saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+    // Both uploads are in flight before either has finished.
+    await vi.waitFor(() => expect(h.upload).toHaveBeenCalledTimes(2));
+    releases.forEach((release) => release());
+
+    expect((await pending).ok).toBe(true);
+  });
+
+  it("deletes the landed clip when only the poster upload fails, whatever the order", async () => {
+    h.upload.mockImplementation(async (userId: string, role: string) => {
+      if (role === "video") {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { path: `${userId}/video-1.mp4` };
+      }
+      throw new Error("503");
+    });
     const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
     expect(result).toEqual({ ok: false, error: "storage_unavailable", retryable: true });
     expect(h.deleteObjects).toHaveBeenCalledWith([`${USER}/video-1.mp4`, undefined]);
