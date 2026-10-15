@@ -61,6 +61,7 @@ import {
   resolvePromoCode,
 } from "../../services/promo.js";
 import { parseOnboardingBasicsPatch } from "../onboarding-basics.js";
+import { analyticsConsentPatch } from "../../services/analytics-consent.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -83,6 +84,7 @@ type MiniUser = {
   onboardingStep: "consent" | "language" | "conversational" | "completed";
   termsAccepted: boolean;
   researchOptIn: boolean;
+  analyticsOptIn: boolean;
   isEmailVerified: boolean;
   phone: string | null;
   phoneVerifiedAt: Date | null;
@@ -147,6 +149,11 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "invalid-research-opt-in" });
       return;
     }
+    // Pulse (pulse-analytics.md §2.1): the analytics tick on the consent phase.
+    if (body.analyticsOptIn !== undefined && typeof body.analyticsOptIn !== "boolean") {
+      res.status(400).json({ error: "invalid-analytics-opt-in" });
+      return;
+    }
 
     const current = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
     const user = await prisma.user.update({
@@ -159,6 +166,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         // Art. 7(1): record WHAT was accepted, not just when.
         policyVersion: LEGAL_DOCS_VERSION,
         researchOptIn: Boolean(body.researchOptIn),
+        ...analyticsConsentPatch(body.analyticsOptIn as boolean | undefined),
         ...(current.onboardingStep === "consent" ? { onboardingStep: "language" as const } : {}),
         ...onboardingActivityPatch(),
       },
@@ -845,6 +853,7 @@ const miniUserSelect = {
   onboardingStep: true,
   termsAccepted: true,
   researchOptIn: true,
+  analyticsOptIn: true,
   isEmailVerified: true,
   phone: true,
   phoneVerifiedAt: true,
@@ -990,6 +999,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       onboardingStep: user.onboardingStep,
       termsAccepted: user.termsAccepted,
       researchOptIn: user.researchOptIn,
+      analyticsOptIn: user.analyticsOptIn,
       language: user.language,
       theme: user.theme,
       themeChosen: user.themeChosenAt != null,
@@ -1085,6 +1095,7 @@ interface TelegramOnboardingStateDto {
 
     termsAccepted: boolean;
     researchOptIn: boolean;
+    analyticsOptIn: boolean;
     language: Language | null;
     theme: Theme;
     /** True once the user has explicitly picked a theme (onboarding/Settings). */

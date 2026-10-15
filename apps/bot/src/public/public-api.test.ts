@@ -1748,6 +1748,7 @@ describe("GET /v1/me", () => {
       theme: "dark",
       themeMode: "system",
       researchOptIn: true,
+      analyticsOptIn: true,
       ticketBalance: 3,
       premiumUntil,
       premiumProvider: "appstore",
@@ -1804,6 +1805,7 @@ describe("GET /v1/me", () => {
         onboardingStep: "completed",
         termsAccepted: true,
         researchOptIn: true,
+        analyticsOptIn: true,
         ticketBalance: 3,
         appAccountToken: expect.any(String),
         premium: { active: true, expiresAt: premiumUntil.toISOString(), source: "appstore" },
@@ -3226,6 +3228,58 @@ describe("GET /v1/me/verification", () => {
     await run;
     const done = await request(app).get("/v1/me/verification").set("Authorization", auth);
     expect(done.body.checking).toBe(false);
+  });
+});
+
+describe("PUT /v1/me/analytics-consent", () => {
+  beforeEach(() => {
+    resetDb();
+    (prismaMock as unknown as Record<string, unknown>).clientEvent = {
+      deleteMany: vi.fn(async () => ({ count: 2 })),
+    };
+  });
+
+  it("401 without auth", async () => {
+    const res = await request(app).put("/v1/me/analytics-consent").send({ optIn: true });
+    expect(res.status).toBe(401);
+  });
+
+  it("gives consent and stamps when it changed", async () => {
+    const user = await seedUser();
+    const res = await request(app)
+      .put("/v1/me/analytics-consent")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ optIn: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ analyticsOptIn: true });
+    const row = userById(user.id) as unknown as Record<string, unknown>;
+    expect(row.analyticsOptIn).toBe(true);
+    expect(row.analyticsOptInAt).toBeInstanceOf(Date);
+  });
+
+  it("withdrawal deletes this user's collected events in the same transaction", async () => {
+    const user = await seedUser({ analyticsOptIn: true } as Partial<UserRow>);
+    const res = await request(app)
+      .put("/v1/me/analytics-consent")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ optIn: false });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ analyticsOptIn: false });
+    const clientEvent = (prismaMock as unknown as { clientEvent: { deleteMany: ReturnType<typeof vi.fn> } })
+      .clientEvent;
+    expect(clientEvent.deleteMany).toHaveBeenCalledWith({ where: { userId: user.id } });
+    expect((userById(user.id) as unknown as Record<string, unknown>).analyticsOptIn).toBe(false);
+  });
+
+  it("400 for anything but a boolean", async () => {
+    const user = await seedUser();
+    for (const optIn of ["yes", 1, null, undefined]) {
+      const res = await request(app)
+        .put("/v1/me/analytics-consent")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send({ optIn });
+      expect(res.status).toBe(400);
+    }
   });
 });
 

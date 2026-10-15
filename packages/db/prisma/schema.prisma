@@ -179,6 +179,15 @@ model User {
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
   researchOptIn            Boolean            @default(false) @map("research_opt_in")
+  /// Pulse (docs/product/domains/pulse-analytics.md §2): consent to COLLECT
+  /// product analytics — screens, time on screen, taps. Its own column, not a
+  /// fold into `researchOptIn`, by the same rule as `biometricConsentAt`: a
+  /// consent that authorises a new class of collection is never inferred from
+  /// a broader tick. Default false (opt-in, §25 TDDDG). With it false the
+  /// server stores none of this user's `client_events`.
+  analyticsOptIn           Boolean            @default(false) @map("analytics_opt_in")
+  /// When `analyticsOptIn` last changed (given or withdrawn). Null = never asked.
+  analyticsOptInAt         DateTime?          @map("analytics_opt_in_at")
   /// RETIRED 2026-10-02 with the Scratch Map fog — no longer read or written;
   /// dropping the column waits for the founder (living-canvas.md §6.5).
   ///
@@ -3459,13 +3468,68 @@ model ClientEvent {
   appBuild   String?  @map("app_build")
   osVersion  String?  @map("os_version")
   locale     String?
+  /// Pulse contract v2: `ios` | `miniapp`. Forced to `miniapp` under `tma` auth.
+  platform   String   @default("ios")
+  /// Foreground session from the client (new one after 30 min in background).
+  sessionId  String?  @map("session_id") @db.Uuid
+  /// Copy of `props.screen` for Pulse events, so per-screen scans use an index.
+  screen     String?
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([type, occurredAt])
   @@index([installId, occurredAt])
   @@index([receivedAt])
+  @@index([screen, occurredAt])
+  @@index([userId, occurredAt])
   @@map("client_events")
+}
+
+/// Pulse nightly rollup (`workers/pulse-rollup.ts`): one value of one catalog
+/// metric for one UTC day and one dimension (`dim` = screen key, step,
+/// platform, … or "" when the metric has none). Recomputed over a trailing
+/// window, so a row is a cache of SQL over the event tables, never a source of
+/// truth. Definitions live in `services/pulse/metrics-catalog.ts`.
+model MetricDay {
+  day        DateTime @db.Date
+  metric     String
+  dim        String   @default("")
+  value      Float
+  /// Sample size behind `value` (people, views or events — per catalog).
+  n          Int
+  computedAt DateTime @default(now()) @map("computed_at")
+
+  @@id([day, metric, dim])
+  @@index([metric, day])
+  @@map("metric_days")
+}
+
+/// Pulse finding: what a deterministic detector concluded on the last rollup
+/// (spec §5.4). `key` = `kind:scope` and is unique, so a finding that keeps
+/// recurring is one row with a moving `lastSeenAt`; one that stopped recurring
+/// gets `resolvedAt`. `title` is a template-rendered Russian sentence — no LLM.
+/// `evidence` holds numbers and user ids only, never names or message text.
+model Insight {
+  id          String    @id @default(uuid()) @db.Uuid
+  key         String    @unique
+  kind        String
+  /// 1 = info, 2 = attention, 3 = act now.
+  severity    Int
+  scope       String
+  title       String
+  value       Float?
+  baseline    Float?
+  n           Int
+  smallSample Boolean   @default(false) @map("small_sample")
+  evidence    Json      @default("{}")
+  codeHint    String?   @map("code_hint")
+  firstSeenAt DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@index([resolvedAt, severity])
+  @@index([kind, lastSeenAt])
+  @@map("insights")
 }
 
 /// Snapshot of a weekly founder matches report (gated by `FOUNDER_NOTIFY_ENABLED`).

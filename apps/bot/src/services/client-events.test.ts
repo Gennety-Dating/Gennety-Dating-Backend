@@ -11,12 +11,15 @@ type WrittenRow = {
   userId: string | null;
   installId: string;
   type: string;
-  props: Record<string, string>;
+  props: Record<string, string | number>;
   occurredAt: Date;
   appVersion: string | null;
   appBuild: string | null;
   osVersion: string | null;
   locale: string | null;
+  platform: string;
+  sessionId: string | null;
+  screen: string | null;
 };
 
 const createMany = vi.fn(async (_args: { data: WrittenRow[]; skipDuplicates?: boolean }) => ({
@@ -172,7 +175,12 @@ describe("ingestClientEvents — что отбрасывается, не рон�
       ticket_gate_dismissed: { surface: "tickets_tab" },
       fatal_client_error: { domain: "store_kit" },
       tempo_sync: { step: "row_tapped" },
-    };
+      screen_view: { screen: "today_pitch" },
+      screen_left: { screen: "today_pitch", exit: "next", dwell_ms: 4200 },
+      tap: { screen: "today_pitch", element: "accept", x: 0.5, y: 0.8 },
+      dead_tap: { screen: "today_pitch", x: 0.1, y: 0.2 },
+      seen: { screen: "today", item: "vibe_questions", visible_ms: 1500 },
+    } as unknown as Record<string, Record<string, string>>;
     // Перечень закрыт с обеих сторон: новый тип на клиенте без записи здесь
     // будет молча отброшен, поэтому список проверяется целиком.
     expect(Object.keys(byType).sort()).toEqual([...CLIENT_EVENT_TYPES].sort());
@@ -226,5 +234,80 @@ describe("ingestClientEvents — когда виноват батч целико
     expect(out).toMatchObject({ status: "ok", accepted: 1 });
     const [{ data }] = createMany.mock.calls[0];
     expect(data[0]).toMatchObject({ appVersion: null, appBuild: null, osVersion: null });
+  });
+});
+
+describe("ingestClientEvents — контракт v2 (Pulse)", () => {
+  it("пишет платформу, сессию и копию экрана для индекса", async () => {
+    const out = await ingestClientEvents(
+      batch(
+        [
+          event({
+            type: "screen_left",
+            session: uuid(9),
+            props: { screen: "photos", exit: "back", dwell_ms: 1234.6, first_action_ms: 800 },
+          }),
+        ],
+        { platform: "miniapp" },
+      ),
+      "user-1",
+    );
+
+    expect(out).toEqual({ status: "ok", accepted: 1, dropped: 0 });
+    const [{ data }] = createMany.mock.calls[0];
+    expect(data[0]).toMatchObject({
+      platform: "miniapp",
+      sessionId: uuid(9),
+      screen: "photos",
+      props: { screen: "photos", exit: "back", dwell_ms: 1235, first_action_ms: 800 },
+    });
+  });
+
+  it("платформа из опций сильнее тела — под tma она всегда miniapp", async () => {
+    await ingestClientEvents(batch([event()], { platform: "ios" }), "user-1", { platform: "miniapp" });
+    expect(createMany.mock.calls[0][0].data[0].platform).toBe("miniapp");
+  });
+
+  it("неизвестная платформа и её отсутствие — ios, старые события без экрана", async () => {
+    await ingestClientEvents(batch([event()], { platform: "android" }), "user-1");
+    const row = createMany.mock.calls[0][0].data[0];
+    expect(row.platform).toBe("ios");
+    expect(row.screen).toBeNull();
+    expect(row.sessionId).toBeNull();
+  });
+
+  it("координаты касания округляются до тысячных", async () => {
+    await ingestClientEvents(
+      batch([event({ type: "tap", props: { screen: "paywall", element: "buy", x: 0.123456, y: 1 } })]),
+      "user-1",
+    );
+    expect(createMany.mock.calls[0][0].data[0].props).toEqual({
+      screen: "paywall",
+      element: "buy",
+      x: 0.123,
+      y: 1,
+    });
+  });
+
+  it.each([
+    ["нет обязательного экрана", "screen_view", {}],
+    ["выход не из перечня", "screen_left", { screen: "a", exit: "swipe", dwell_ms: 1 }],
+    ["нет времени на экране", "screen_left", { screen: "a", exit: "next" }],
+    ["время отрицательное", "screen_left", { screen: "a", exit: "next", dwell_ms: -1 }],
+    ["время больше суток", "screen_left", { screen: "a", exit: "next", dwell_ms: 86_400_001 }],
+    ["координата за экраном", "tap", { screen: "a", element: "b", x: 1.2, y: 0.5 }],
+    ["координата строкой", "tap", { screen: "a", element: "b", x: "0.5", y: 0.5 }],
+    ["координата NaN", "dead_tap", { screen: "a", x: Number.NaN, y: 0.5 }],
+    ["текст вместо ключа элемента", "tap", { screen: "a", element: "Купить билет", x: 0.5, y: 0.5 }],
+    ["число там, где строка", "seen", { screen: 5, item: "b", visible_ms: 1 }],
+    ["лишний ключ", "seen", { screen: "a", item: "b", visible_ms: 1, name: "olya" }],
+  ])("отбрасывает событие Pulse, если %s", async (_name, type, props) => {
+    const out = await ingestClientEvents(batch([event({ type, props })]), "user-1");
+    expect(out).toEqual({ status: "ok", accepted: 0, dropped: 1 });
+  });
+
+  it("битая сессия не стоит события — пишется без неё", async () => {
+    await ingestClientEvents(batch([event({ session: "nope" })]), "user-1");
+    expect(createMany.mock.calls[0][0].data[0].sessionId).toBeNull();
   });
 });

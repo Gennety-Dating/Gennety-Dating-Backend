@@ -24,6 +24,7 @@ export const SERIALIZED_USER_SELECT = {
   onboardingStep: true,
   termsAccepted: true,
   researchOptIn: true,
+  analyticsOptIn: true,
   ticketBalance: true,
 } as const satisfies Prisma.UserSelect;
 
@@ -91,6 +92,8 @@ export interface SerializedUser {
   onboardingStep: User["onboardingStep"];
   termsAccepted: boolean;
   researchOptIn: boolean;
+  /** Pulse: consent to product analytics (pulse-analytics.md §2). */
+  analyticsOptIn: boolean;
   /**
    * Date Ticket wallet balance (§3.5b). Lives on the user rather than behind a
    * wallet route because the native store and the gate both need it and the
@@ -136,6 +139,7 @@ export function serializeUser(user: SerializableUser): SerializedUser {
     onboardingStep: user.onboardingStep,
     termsAccepted: user.termsAccepted,
     researchOptIn: user.researchOptIn,
+    analyticsOptIn: user.analyticsOptIn,
     ticketBalance: user.ticketBalance,
   };
 }

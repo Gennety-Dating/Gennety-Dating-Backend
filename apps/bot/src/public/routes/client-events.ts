@@ -3,6 +3,8 @@ import { env } from "../../config.js";
 import { optionalAuth } from "../auth-middleware.js";
 import { clientEventsIpLimiter, clientEventsLimiter } from "../rate-limit.js";
 import { ingestClientEvents, CLIENT_EVENTS_MAX_BATCH } from "../../services/client-events.js";
+import { analyticsConsentOf, userIdByTelegramId } from "../../services/analytics-consent.js";
+import { validateInitData } from "../init-data.js";
 
 /**
  * `POST /v1/client/events` — приём клиентской воронки нативного приложения
@@ -16,8 +18,9 @@ import { ingestClientEvents, CLIENT_EVENTS_MAX_BATCH } from "../../services/clie
  *
  * **404 при выключенной фиче**, как у Premium-маршрутов, и гейт стоит ДО
  * авторизации: выключенный сбор не должен даже намекать, что тут что-то есть.
- * Дефолт флага — выключено, потому что privacy manifest приложения сейчас
- * заявляет, что аналитических данных мы не собираем.
+ * Дефолт флага — выключено; включается на выкате Pulse вместе с миграцией
+ * `20261015120000_pulse_analytics` (согласие `analytics_opt_in` должно
+ * существовать раньше, чем первый батч до него дойдёт).
  */
 export const clientEventsRouter: Router = Router();
 
@@ -30,6 +33,21 @@ clientEventsRouter.use((_req: Request, res: Response, next): void => {
 });
 clientEventsRouter.use(optionalAuth);
 
+/**
+ * Mini App (Pulse, контракт v2) шлёт сюда же, но подписью Telegram:
+ * `Authorization: tma <initData>`. Битая подпись — не 401, а аноним, по той же
+ * причине, что у протухшего JWT в `optionalAuth`: ронять сбор незачем, а
+ * анонимный батч ни к кому не привяжется. Сама платформа батча под `tma`
+ * назначается принудительно — заявление тела тут ничего не решает.
+ */
+async function miniAppUserId(req: Request): Promise<string | null | undefined> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("tma ")) return undefined;
+  const validation = validateInitData(header.slice(4).trim(), env.BOT_TOKEN);
+  if (!validation.valid) return null;
+  return userIdByTelegramId(validation.user.id);
+}
+
 clientEventsRouter.post(
   "/events",
   // Адресный потолок стоит ПЕРВЫМ: ключ следующего лимитера читается из тела,
@@ -37,7 +55,28 @@ clientEventsRouter.post(
   clientEventsIpLimiter,
   clientEventsLimiter,
   async (req: Request, res: Response): Promise<void> => {
-    const result = await ingestClientEvents(req.body ?? {}, req.userId ?? null);
+    const miniApp = await miniAppUserId(req);
+    const userId = miniApp === undefined ? (req.userId ?? null) : miniApp;
+
+    // Согласие проверяет сервер, а не только клиент (спека §2.4): опознанный
+    // человек без галочки не оставляет здесь ни строки, какой бы клиент ни
+    // прислал батч. Неопознанный батч — ответственность клиента, который до
+    // решения держит события только в памяти.
+    if (userId) {
+      const consent = await analyticsConsentOf(userId);
+      if (consent !== true) {
+        const events = (req.body as { events?: unknown } | undefined)?.events;
+        const dropped = Array.isArray(events) ? events.length : 0;
+        res.json({ ok: true, accepted: 0, dropped, consent: false });
+        return;
+      }
+    }
+
+    const result = await ingestClientEvents(
+      req.body ?? {},
+      userId,
+      miniApp === undefined ? {} : { platform: "miniapp" },
+    );
 
     if (result.status === "invalid") {
       res.status(400).json(

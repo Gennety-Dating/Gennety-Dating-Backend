@@ -89,6 +89,7 @@ import { claimDeferredPromoForUser, grantPromoRewardsForUser } from "../../servi
 import { fingerprint, matchAttribution } from "../../services/promo-attribution.js";
 import { appAccountTokenFor } from "../../services/appstore.js";
 import { serializePremiumSummary } from "../../services/premium.js";
+import { setAnalyticsConsent } from "../../services/analytics-consent.js";
 
 export const meRouter: Router = Router();
 
@@ -1266,6 +1267,25 @@ meRouter.post(
       photos.flatMap((path, i) => (wanted.has(path) ? [i] : [])),
     );
     await respondToPhotoRemoval(res, req.userId!, removal, "[POST /v1/me/photos/remove]");
+  },
+);
+
+/**
+ * PUT /v1/me/analytics-consent — give or withdraw the Pulse analytics consent
+ * from Settings (docs/product/domains/pulse-analytics.md §2.2). Body
+ * `{ optIn: boolean }`, reply `{ analyticsOptIn }`. Withdrawing deletes every
+ * `client_events` row of this user in the same transaction.
+ */
+meRouter.put(
+  "/analytics-consent",
+  async (req: Request, res: Response): Promise<void> => {
+    const optIn = (req.body as { optIn?: unknown } | undefined)?.optIn;
+    if (typeof optIn !== "boolean") {
+      res.status(400).json({ error: "invalid-opt-in" });
+      return;
+    }
+    const analyticsOptIn = await setAnalyticsConsent(req.userId!, optIn);
+    res.json({ analyticsOptIn });
   },
 );
 
