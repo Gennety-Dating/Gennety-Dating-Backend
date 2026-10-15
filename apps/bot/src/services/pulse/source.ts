@@ -1,6 +1,6 @@
 import { Prisma, prisma } from "@gennety/db";
 import { PULSE_ANALYTICS } from "@gennety/shared";
-import { realUserFilter } from "../../admin/utils/activity-source.js";
+import { realUserFilter } from "../real-users.js";
 import type { InsightDraft, StuckPerson } from "./detectors.js";
 import type {
   ActivityDayRow,
