@@ -138,8 +138,8 @@ function videoOf(media: readonly ProfileMedia[]): ProfileVideoMedia | null {
 
 /**
  * Validate, store and attach a native profile video, replacing any previous
- * one (from either surface). Cheap gates first, providers last, storage only
- * for a clip that passed; the row swap runs under the same user-row lock as
+ * one (from either surface). Cheap gates first, then the poster and clip
+ * checks side by side, storage only for a clip that passed; the row swap runs under the same user-row lock as
  * photo deletes, so a concurrent photo edit cannot resurrect or drop the video.
  */
 export async function saveNativeProfileVideo(
@@ -160,7 +160,7 @@ export async function saveNativeProfileVideo(
   // shown before a single frame of the video plays — and the client makes it,
   // so nothing ties it to the video at all. It used to be checked for being an
   // image and nothing else (audit A13-M11). It now passes the same safety
-  // check as a profile photo, before the far costlier video validation runs.
+  // check as a profile photo.
   //
   // Not replaced by a frame the video validator already moderated, although
   // one exists: those frames are sampled from inside the clip (the first sits
@@ -168,34 +168,54 @@ export async function saveNativeProfileVideo(
   // the contract promises the FIRST frame — and HEVC/HDR decoded by ffmpeg
   // comes out washed-out where the device's own render does not. Moderating
   // the client's poster costs the same two provider calls and keeps both.
-  if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
-    const poster = await checkProfileImageSafety(thumb);
-    if (!poster.ok) {
-      if (poster.reason === "unsafe_content") {
-        await logMediaValidationRejection({
-          userId,
-          mediaType: "video",
-          reason: poster.reason,
-        }).catch(() => {});
-      }
-      return fail(poster.reason, poster.retryable);
-    }
-  }
+  //
+  // It runs alongside the video validation rather than before it: the two are
+  // independent, and in series the poster's provider round-trip sat in front
+  // of the clip's on every upload while the app showed "100%". Nothing is
+  // stored until both have passed.
+  const posterCheck: Promise<
+    { ok: true } | { ok: false; reason: string; retryable: boolean }
+  > = env.PROFILE_MEDIA_VALIDATION_ENABLED
+    ? checkProfileImageSafety(thumb)
+    : Promise.resolve({ ok: true });
+  const [poster, measured] = await Promise.all([posterCheck, measure(userId, video)]);
 
-  const measured = await measure(userId, video);
+  // Precedence when both fail: a final verdict (unsafe poster first, then the
+  // clip's own non-retryable refusal) beats a retryable outage, so "try again"
+  // is never offered for content that will be refused again anyway.
+  if (!poster.ok && !poster.retryable) {
+    if (poster.reason === "unsafe_content") {
+      await logMediaValidationRejection({
+        userId,
+        mediaType: "video",
+        reason: poster.reason,
+      }).catch(() => {});
+    }
+    return fail(poster.reason, poster.retryable);
+  }
+  if (!measured.ok && !measured.retryable) return fail(measured.error, measured.retryable);
+  if (!poster.ok) return fail(poster.reason, poster.retryable);
   if (!measured.ok) return fail(measured.error, measured.retryable);
   if (measured.durationSeconds < PROFILE_VIDEO_NATIVE_MIN_DURATION_SECONDS) {
     return fail("video_too_short", false);
   }
   const duration = Math.round(measured.durationSeconds * 10) / 10;
 
-  let videoPath: string | undefined;
-  let thumbPath: string | undefined;
-  try {
-    videoPath = (await uploadProfileVideoAsset(userId, "video", video, "video/mp4")).path;
-    thumbPath = (await uploadProfileVideoAsset(userId, "thumb", thumb, thumbMime)).path;
-  } catch (err) {
-    console.warn("[native-profile-video] storage upload failed:", err);
+  // Both objects go up at once — they are independent writes, and a 50 MB clip
+  // plus its poster in series was another wait the user saw at "100%". If
+  // either fails, whichever did land is deleted so no orphan stays behind.
+  const [videoUpload, thumbUpload] = await Promise.allSettled([
+    uploadProfileVideoAsset(userId, "video", video, "video/mp4"),
+    uploadProfileVideoAsset(userId, "thumb", thumb, thumbMime),
+  ]);
+  const videoPath = videoUpload.status === "fulfilled" ? videoUpload.value.path : undefined;
+  const thumbPath = thumbUpload.status === "fulfilled" ? thumbUpload.value.path : undefined;
+  if (!videoPath || !thumbPath) {
+    const failed = videoUpload.status === "rejected" ? videoUpload : thumbUpload;
+    console.warn(
+      "[native-profile-video] storage upload failed:",
+      failed.status === "rejected" ? failed.reason : "empty path",
+    );
     await deleteProfileVideoObjects([videoPath, thumbPath]);
     return fail("storage_unavailable", true);
   }
