@@ -8,6 +8,47 @@ export const retentionRouter: Router = Router();
 const WEEK_MS = 7 * 86_400_000;
 const COHORT_OFFSETS = [1, 2, 4, 8] as const;
 
+/**
+ * W+offset retention of one weekly cohort: the share of members still active
+ * `offset` weeks after their OWN registration.
+ *
+ * A cell is only reported once `offset` weeks have elapsed since the LATEST
+ * member registered — before that the newest members cannot have reached the
+ * mark yet, are counted as "not retained", and the cell reads as a drop that is
+ * really an incomplete denominator. Until 2026-10-15 this gate used the
+ * EARLIEST member (the comment said "latest"), so the current week's W+1 cell
+ * appeared on day 8 of the week's first sign-up with its late joiners counted
+ * as churned.
+ */
+export function cohortRetained(
+  members: ReadonlyArray<{ created: Date; last: Date }>,
+  now: Date,
+): Record<number, number | null> {
+  const retained: Record<number, number | null> = {};
+  if (members.length === 0) {
+    for (const offset of COHORT_OFFSETS) retained[offset] = null;
+    return retained;
+  }
+  const latestJoin = members.reduce(
+    (latest, u) => (u.created > latest ? u.created : latest),
+    members[0]!.created,
+  );
+  for (const offset of COHORT_OFFSETS) {
+    const minAgeMs = offset * WEEK_MS;
+    if (now.getTime() - latestJoin.getTime() < minAgeMs) {
+      retained[offset] = null;
+      continue;
+    }
+    let n = 0;
+    for (const u of members) {
+      const cutoff = new Date(u.created.getTime() + minAgeMs);
+      if (u.last >= cutoff) n++;
+    }
+    retained[offset] = +(n / members.length).toFixed(4);
+  }
+  return retained;
+}
+
 retentionRouter.get(
   "/admin/analytics/retention",
   async (req: Request, res: Response) => {
@@ -66,30 +107,11 @@ retentionRouter.get(
           bucket.users.push({ created: u.createdAt, last: lastActivity(u) });
         }
         const cohorts: CohortRow[] = Array.from(cohortMap.entries())
-          .map(([cohort, { size, users: us }]) => {
-            const retained: Record<number, number | null> = {};
-            for (const offset of COHORT_OFFSETS) {
-              // Only meaningful if `offset` weeks have elapsed since the
-              // *latest* cohort member registered. Otherwise we'd be
-              // dividing by an incomplete denominator.
-              const minAgeMs = offset * WEEK_MS;
-              const cohortStart = us.reduce(
-                (earliest, u) => (u.created < earliest ? u.created : earliest),
-                us[0]!.created,
-              );
-              if (now.getTime() - cohortStart.getTime() < minAgeMs) {
-                retained[offset] = null;
-                continue;
-              }
-              let n = 0;
-              for (const u of us) {
-                const cutoff = new Date(u.created.getTime() + minAgeMs);
-                if (u.last >= cutoff) n++;
-              }
-              retained[offset] = +(n / size).toFixed(4);
-            }
-            return { cohort, size, retained };
-          })
+          .map(([cohort, { size, users: us }]) => ({
+            cohort,
+            size,
+            retained: cohortRetained(us, now),
+          }))
           .sort((a, b) => a.cohort.localeCompare(b.cohort));
 
         // ── 2. Status breakdown

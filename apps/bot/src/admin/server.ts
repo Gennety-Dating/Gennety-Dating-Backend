@@ -6,7 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { Server } from "node:http";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { SUPPORTED_CITY_KEYS, findMarketByCityKey } from "@gennety/shared";
+import { PULSE_ANALYTICS, SUPPORTED_CITY_KEYS, findMarketByCityKey } from "@gennety/shared";
 import { env } from "../config.js";
 import { runFaceMatchVerificationDefault } from "../services/verification-pipeline.js";
 import { buildWeeklyMatchesReport } from "../services/weekly-matches-report.js";
@@ -35,6 +35,7 @@ import { announcementsRouter } from "./routes/announcements.js";
 import { userHealthRouter } from "./routes/user-health.js";
 import { activityRouter } from "./routes/activity.js";
 import { viralityRouter } from "./routes/virality.js";
+import { pulseRouter } from "./routes/pulse.js";
 import { classifyAllUsers } from "./utils/user-health-source.js";
 import { USER_HEALTH_CLASSES, type UserHealthClass } from "./utils/user-health.js";
 import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
@@ -83,12 +84,68 @@ function requireApiKey(req: Request, res: Response, next: NextFunction): void {
   }
 
   const token = header.slice(7);
-  if (!constantTimeEqual(token, env.ADMIN_API_KEY)) {
-    res.status(401).json({ error: "Invalid API key" });
+  // Both comparisons always run, so the response time does not tell a caller
+  // which of the two keys their guess was closer to.
+  const isFullKey = constantTimeEqual(token, env.ADMIN_API_KEY);
+  const readKey = readOnlyKey();
+  const isReadKey = readKey !== null && constantTimeEqual(token, readKey);
+  if (isFullKey) {
+    next();
+    return;
+  }
+  if (isReadKey) {
+    if (readKeyAllows(req.method, req.path)) {
+      next();
+      return;
+    }
+    res.status(403).json({
+      error: "Read-only key: only GET /admin/pulse/* and GET /admin/analytics/*",
+    });
     return;
   }
 
-  next();
+  res.status(401).json({ error: "Invalid API key" });
+}
+
+/**
+ * `ADMIN_READ_KEY` (pulse-analytics spec §6.2), or null when unset or too short
+ * to be a secret — boot refuses a short one in production
+ * (`runtimeConfigurationErrors`), and this keeps a dev/test process from
+ * honouring it either. A key equal to the full key is never "read-only".
+ */
+function readOnlyKey(): string | null {
+  const key = env.ADMIN_READ_KEY;
+  if (!key || key.length < PULSE_ANALYTICS.readKeyMinLength) return null;
+  if (key === env.ADMIN_API_KEY) return null;
+  return key;
+}
+
+/** Path prefixes the read-only key may GET. Everything else is 403. */
+const READ_KEY_PREFIXES = ["/admin/pulse/", "/admin/analytics/"] as const;
+
+/**
+ * Analytics routes the read key may NOT read although they sit under the
+ * prefix: the weekly matches report carries names and photo refs of real
+ * pairs. The read key is for aggregates and ids (spec §6.2), never people.
+ */
+const READ_KEY_DENIED = ["/admin/analytics/weekly-matches", "/admin/analytics/founder-weekly"] as const;
+
+/**
+ * What the read key may do: `GET` under the two read surfaces, nothing else.
+ *
+ * Checked on the raw `req.path`, conservatively: Express matches routes
+ * case-insensitively and tolerates oddities a reverse proxy may normalise, so
+ * anything that is not a plain lower-case path under a prefix — a `..`
+ * segment, an encoded dot or slash, a double slash — is refused rather than
+ * reasoned about. A refusal costs the agent nothing; a pass-through to a write
+ * route would cost everything.
+ */
+export function readKeyAllows(method: string, path: string): boolean {
+  if (method !== "GET") return false;
+  if (!READ_KEY_PREFIXES.some((p) => path.startsWith(p))) return false;
+  if (/\/\.\.?(\/|$)|%2e|%2f|%5c|\/\/|\\/i.test(path)) return false;
+  if (READ_KEY_DENIED.some((p) => path.toLowerCase().startsWith(p))) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +279,10 @@ app.use(activityRouter);
 // кластерный срез и аномалии. Читает предагрегат `virality_days` /
 // `virality_cohorts`, который наполняет `workers/virality-rollup.ts`.
 app.use(viralityRouter);
+// Pulse: behaviour analytics without tokens — the nightly rollup's metrics and
+// findings, screens, stuck journeys (docs/product/domains/pulse-analytics.md §6).
+// GET-only, readable with `ADMIN_READ_KEY`.
+app.use(pulseRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;

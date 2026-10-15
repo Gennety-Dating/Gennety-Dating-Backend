@@ -78,6 +78,7 @@ import { announcementFanoutTick } from "./services/announcements.js";
 import { verificationStuckSweep } from "./services/verification-stuck.js";
 import { activityRollupTick } from "./workers/activity-rollup.js";
 import { viralityRollupTick } from "./workers/virality-rollup.js";
+import { formatPulseRollupLog, pulseRollupTick } from "./workers/pulse-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { prunePlaceCache } from "./services/place-cache.js";
@@ -685,6 +686,7 @@ function validateSchedules(): void {
       SYNTHETIC_PARTNER_CRON_SCHEDULE: env.SYNTHETIC_PARTNER_CRON_SCHEDULE,
       CAMPUS_DROP_CRON_SCHEDULE: env.CAMPUS_DROP_CRON_SCHEDULE,
       VIRALITY_ROLLUP_CRON_SCHEDULE: env.VIRALITY_ROLLUP_CRON_SCHEDULE,
+      PULSE_ROLLUP_CRON_SCHEDULE: env.PULSE_ROLLUP_CRON_SCHEDULE,
     },
     cron.validate,
   );
@@ -1243,6 +1245,24 @@ function registerSchedules(): void {
   console.log(
     `[cron] Virality rollup scheduled: "${env.VIRALITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
   );
+
+  // Pulse: `metric_days` + `insights` for the trailing 35 UTC days
+  // (docs/product/domains/pulse-analytics.md §5). UTC for the same reason as
+  // the two rollups above; idempotent, rewrites its window whole. Registered
+  // even while `CLIENT_EVENTS_ENABLED` is off — the server-side funnels and
+  // stuck-people detection need no client events.
+  if (env.PULSE_ROLLUP_ENABLED) {
+    cron.schedule(
+      env.PULSE_ROLLUP_CRON_SCHEDULE,
+      guardedTick("pulse-rollup", async () => {
+        console.log(formatPulseRollupLog(await pulseRollupTick()));
+      }),
+      { timezone: "UTC" },
+    );
+    console.log(`[cron] Pulse rollup scheduled: "${env.PULSE_ROLLUP_CRON_SCHEDULE}" (UTC)`);
+  } else {
+    console.log("[cron] Pulse rollup disabled (PULSE_ROLLUP_ENABLED=false)");
+  }
 
   // Weekly venue-concentration alarm. Registered only when the alert is on:
   // the engine's failure mode is silent (dates keep being scheduled), so

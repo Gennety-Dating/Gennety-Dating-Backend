@@ -11,6 +11,27 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
+Spec `docs/product/domains/pulse-analytics.md`, decision journal 2026-10-15. Analytics consent `users.analytics_opt_in`
+(default false) set from the consent screens and `PUT /v1/me/analytics-consent`; `/v1/client/events` takes screen /
+dwell / tap / seen events from iOS and the Mini App (`tma` auth) and stores nothing for a signed-in person without
+consent. Nightly `pulse-rollup` (UTC `10 1 * * *`) fills `metric_days` / `insights`; `/admin/pulse/*` serves them;
+`ADMIN_READ_KEY` reads GET `/admin/pulse/*` + `/admin/analytics/*` only (not weekly-matches). Admin retention cohort
+maturity now uses the latest member (was the earliest — under-reported retention). Mini App build changes (consent
+checkbox + tracker) — rebuild and upload the webapp. Demo: the demo bundle hides the checkbox and sends no events;
+synthetic/test accounts are excluded from every metric. iOS: needs the Pulse iOS build for screen events; older
+builds keep working (their ten event types are still accepted, but now only with consent).
+- **Порядок:** `pnpm --filter @gennety/db db:deploy` (additive, before the restart — new code writes the new columns)
+  → `pnpm db:drift-check` exit 0 → env: `CLIENT_EVENTS_ENABLED=true`, `ADMIN_READ_KEY=<openssl rand -hex 32>` (≥ 32
+  chars, never equal to `ADMIN_API_KEY`), optional `PULSE_ROLLUP_CRON_SCHEDULE` / `PULSE_ROLLUP_ENABLED` → restart →
+  webapp build + upload.
+- **Проверка:** `curl -s -H "Authorization: Bearer $ADMIN_READ_KEY" https://api-admin.gennety.com/admin/pulse/brief`
+  → 200 with `dataFreshness`; the same key on `/admin/users` → 403; after 01:10 UTC
+  `pm2 logs gennety-bot --lines 300 | grep pulse-rollup` shows one run with `metricRows`. Pre-verified on PGlite
+  (Postgres 17 + pgvector): trunk schema + `migration.sql` → `migrate diff --from-url` = empty; seeded events →
+  rollup, brief, screens, journeys, funnels, consent withdrawal all ran on real SQL.
+- **Откат:** `git revert` of the Pulse commits + restart; the tables and columns are additive and can stay.
+
 **PENDING 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
 Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 4/7/10/21/45
 without a pair (anchor: last dispatched match, else onboarding completion), one notice per step, nothing after

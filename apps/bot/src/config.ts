@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { DB_CONNECTION_LIMIT, ticketBundleFor } from "@gennety/shared";
+import { DB_CONNECTION_LIMIT, PULSE_ANALYTICS, ticketBundleFor } from "@gennety/shared";
 import { withConnectionLimit } from "./utils/db-pool-url.js";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
@@ -208,6 +208,11 @@ export const env = {
     process.env.WEBAPP_FEEDBACK_URL?.trim() ||
     `${process.env.WEBAPP_URL?.trim() || "https://example.invalid/calendar"}/feedback.html`,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
+  /// Read-only admin key (docs/product/domains/pulse-analytics.md §6.2): passes
+  /// the admin gate ONLY for `GET /admin/pulse/*` and `GET /admin/analytics/*`,
+  /// 403 everywhere else. Optional; unset = only `ADMIN_API_KEY` works. At least
+  /// 32 characters and different from `ADMIN_API_KEY` (checked at boot).
+  ADMIN_READ_KEY: process.env.ADMIN_READ_KEY?.trim() ?? "",
   ADMIN_PORT: Number(process.env.ADMIN_PORT ?? "3100"),
   /// Interface the admin AND public Express servers listen on (A13-L17).
   /// Loopback by default: Caddy reaches both on `localhost`, and both trust
@@ -833,6 +838,12 @@ export const env = {
   /// По умолчанию 03:40 — после ночных задач и заведомо после полуночи UTC, на
   /// которой закрывается дневной бакет регистраций.
   VIRALITY_ROLLUP_CRON_SCHEDULE: process.env.VIRALITY_ROLLUP_CRON_SCHEDULE ?? "40 3 * * *",
+  /// Pulse nightly rollup (`workers/pulse-rollup.ts`), UTC. 01:10 — after the
+  /// UTC day closes and after the DAU reconcile (00:20) repaired it.
+  PULSE_ROLLUP_CRON_SCHEDULE: process.env.PULSE_ROLLUP_CRON_SCHEDULE ?? "10 1 * * *",
+  /// Kill switch for the Pulse rollup. Default ON: with no client events it
+  /// still rolls up the server-side funnels and detects stuck people.
+  PULSE_ROLLUP_ENABLED: process.env.PULSE_ROLLUP_ENABLED !== "false",
   /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
   /// (`subscription_period` is fixed at 30 days by Telegram). 750⭐ is what
   /// Telegram's own Star store charges for $17.99, which is why the two values
@@ -1316,7 +1327,13 @@ export interface RuntimeConfiguration {
   APPLE_MUSIC_KEY_PATH: string;
   APPLE_MUSIC_KEY_ID: string;
   APPLE_MUSIC_TEAM_ID: string;
+  /** Optional — absent from older test fixtures that build this object by hand. */
+  ADMIN_READ_KEY?: string;
+  ADMIN_API_KEY?: string;
 }
+
+/** A read key shorter than this is ignored by the admin gate (and fails boot). */
+const ADMIN_READ_KEY_MIN_LENGTH = PULSE_ANALYTICS.readKeyMinLength;
 
 export function runtimeConfigurationErrors(
   config: RuntimeConfiguration = env,
@@ -1413,6 +1430,18 @@ export function runtimeConfigurationErrors(
   if (appleMusicSet.length > 0 && appleMusicSet.length < appleMusic.length) {
     const missing = appleMusic.filter(([, value]) => !value).map(([name]) => name);
     errors.push(`Apple Music is half-configured — missing ${missing.join(", ")}`);
+  }
+
+  // The read-only admin key is handed to agents and dashboards that must not
+  // write; a short one is guessable, and one equal to the full key silently
+  // grants writes to whoever holds "the read key".
+  if (config.ADMIN_READ_KEY) {
+    if (config.ADMIN_READ_KEY.length < ADMIN_READ_KEY_MIN_LENGTH) {
+      errors.push(`ADMIN_READ_KEY must be at least ${ADMIN_READ_KEY_MIN_LENGTH} characters`);
+    }
+    if (config.ADMIN_API_KEY && config.ADMIN_READ_KEY === config.ADMIN_API_KEY) {
+      errors.push("ADMIN_READ_KEY must differ from ADMIN_API_KEY");
+    }
   }
 
   return errors;
