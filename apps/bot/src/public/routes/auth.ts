@@ -13,6 +13,11 @@ import { requireAuth } from "../auth-middleware.js";
 import { signOutDevice } from "../../services/device-tokens.js";
 import { serializeUser } from "./serializers.js";
 import { refuseBannedLogin } from "../login-gate.js";
+import {
+  checkAppReviewCode,
+  ensureAppReviewReviewer,
+  isAppReviewEmail,
+} from "../../services/app-review.js";
 
 export const authRouter: Router = Router();
 
@@ -21,6 +26,13 @@ authRouter.post(
   otpRequestLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    // App Store review account (`services/app-review.ts`): its code is fixed,
+    // so there is nothing to send. Checked before the university-domain rule
+    // because the review address is deliberately not a university one.
+    if (email && isAppReviewEmail(email)) {
+      res.json({ ok: true });
+      return;
+    }
     if (!email || !isUniversityEmail(email)) {
       res.status(400).json({ error: "Invalid university email" });
       return;
@@ -58,6 +70,25 @@ authRouter.post(
   async (req: Request, res: Response): Promise<void> => {
     const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
     const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+
+    if (email && isAppReviewEmail(email)) {
+      const verdict = checkAppReviewCode(otp);
+      if (verdict !== "ok") {
+        res.status(verdict === "locked" ? 429 : 401).json({
+          error: verdict === "locked" ? "otp_locked" : "mismatch",
+        });
+        return;
+      }
+      const reviewer = await ensureAppReviewReviewer();
+      if (refuseBannedLogin(reviewer, res)) return;
+      res.json({
+        accessToken: signAccessToken(reviewer.id),
+        refreshToken: await createRefreshToken(reviewer.id, req.headers["user-agent"] ?? null),
+        expiresIn: accessTokenTtlSeconds(),
+        user: serializeUser(reviewer),
+      });
+      return;
+    }
 
     if (!email || !isUniversityEmail(email) || !/^\d{4,8}$/.test(otp)) {
       res.status(400).json({ error: "Invalid payload" });

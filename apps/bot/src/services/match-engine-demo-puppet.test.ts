@@ -19,7 +19,7 @@ const PUPPET = "bbbb";
 const mocks = vi.hoisted(() => {
   const tx = {
     $queryRawUnsafe: vi.fn(),
-    user: { findMany: vi.fn() },
+    user: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
     match: { findFirst: vi.fn(), create: vi.fn() },
     profile: { updateMany: vi.fn() },
     matchScoreLog: { create: vi.fn() },
@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    user: { findMany: vi.fn() },
+    user: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
     match: { findFirst: vi.fn() },
     $queryRawUnsafe: vi.fn(),
     $transaction: mocks.transaction,

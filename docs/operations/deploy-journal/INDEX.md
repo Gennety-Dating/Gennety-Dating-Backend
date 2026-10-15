@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 240 entries
+# Deploy journal index — 241 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-15 | App Store review account: fixed address + 6-digit code (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), verified reviewer "Alex" + stand-in partner "Emma" (20 s cron), reserved `telegramId` band out of the pool; restart only, off until both vars are set; Emma's photos by hand | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Waiting ladder: no-match notice silent by default, only on days 4/7/10/21/45 without a pair (one per step, nothing after 45), new copy in 5 locales; env `EARLY_STAGE` optional, default ON (no auto-pause); restart only, no migration, no contract change | [pending.md](./pending.md) |
 | PENDING | 2026-10-13 | Performance wave «только безопасное» (`5d935472..278b6e83` + lead follow-up): fewer SQL per iOS poll, no unchanged bot_sessions UPSERT, admin DB gate, referral card in the render worker, drop scoring 4× cheaper; code only — ship with the migration blocks above in their order; new `[runtime]` log line, four lifecycle jobs alert under their own names | [pending.md](./pending.md) |
 | PENDING | 2026-10-13 | Dead-match refund recovery: hourly `dead-match-refund` sweep re-runs lost post-cancel refunds, partner ticket refund inside account deletion, orphaned Prime Time pass to the founder bot; code only | [pending](./pending.md) |

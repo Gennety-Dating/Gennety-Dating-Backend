@@ -551,6 +551,14 @@ export const env = {
   /// the agent explains a wait the same way. Default ON; set `false` once the
   /// pool is big enough that a month with nobody means something.
   EARLY_STAGE: process.env.EARLY_STAGE !== "false",
+  /// App Store review account (founder decision 2026-10-15,
+  /// `docs/operations/app-review-account.md`). Both set → one fixed address
+  /// signs in with one fixed 6-digit code, lands on a verified profile, and is
+  /// paired with a stand-in partner who always says yes. Both empty → the whole
+  /// feature is off and nothing below changes behaviour. Boot refuses a half
+  /// configuration or a guessable code (`appReviewConfigurationErrors`).
+  APP_REVIEW_EMAIL: (process.env.APP_REVIEW_EMAIL ?? "").trim().toLowerCase(),
+  APP_REVIEW_CODE: (process.env.APP_REVIEW_CODE ?? "").trim(),
   /// Telegram Stars (XTR) — the ONLY payment rail for Date Tickets in the
   /// Telegram product. When true, "My Tickets" shows native in-chat Star
   /// invoice buttons (1/3/6 bundles) that credit the wallet on

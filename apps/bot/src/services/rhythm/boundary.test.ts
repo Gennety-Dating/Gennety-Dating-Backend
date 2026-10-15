@@ -31,6 +31,7 @@ const READERS: Record<string, string> = {
   "workers/retention.ts": "deletes profiles stale for 35 days",
   "admin/routes/rhythm-outcomes.ts": "pair aggregates, cells < 20 suppressed",
   "demo/driver.ts": "writes a neutral breakdown (rhythmSimilarity: null), reads nothing",
+  "workers/app-review-partner.ts": "App Store review pair: neutral breakdown (rhythmSimilarity: null), reads nothing",
 };
 
 /** Anything that reads the table, the store, or the logged pair similarity. */

@@ -66,6 +66,8 @@ import { chatSessionDigestTick } from "./workers/chat-session-digest.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
+import { APP_REVIEW_TICK_SCHEDULE, appReviewPartnerTick } from "./workers/app-review-partner.js";
+import { appReviewConfigurationErrors, isAppReviewEnabled } from "./services/app-review.js";
 import { campusDropTick } from "./workers/campus-drop.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
@@ -134,6 +136,15 @@ assertPaymentTrustConfiguration();
 // Без `JWT_SECRET` публичный сервер печатает одну строку и просто выходит —
 // PM2 зелёный, `/admin/health` отвечает, а весь нативный iOS-API мёртв.
 assertRuntimeConfiguration();
+
+// App Store review account (services/app-review.ts): a half-set pair or a
+// guessable code must be a boot failure, not a quiet open door.
+{
+  const appReviewErrors = appReviewConfigurationErrors(env);
+  if (appReviewErrors.length > 0) {
+    throw new Error(`Invalid App Store review configuration:\n- ${appReviewErrors.join("\n- ")}`);
+  }
+}
 
 const bot = createBot(env.BOT_TOKEN);
 // Publish the main bot Api so context-less services (founder-notify) can act
@@ -1067,6 +1078,16 @@ function registerSchedules(): void {
     console.log(
       `[cron] Synthetic test partner scheduled: "${env.SYNTHETIC_PARTNER_CRON_SCHEDULE}"`,
     );
+  }
+
+  // App Store review stand-in partner (services/app-review.ts). Off unless
+  // APP_REVIEW_EMAIL + APP_REVIEW_CODE are both set.
+  if (isAppReviewEnabled()) {
+    cron.schedule(
+      APP_REVIEW_TICK_SCHEDULE,
+      guardedTick("app-review-partner", () => appReviewPartnerTick(bot.api)),
+    );
+    console.log(`[cron] App Store review partner scheduled: "${APP_REVIEW_TICK_SCHEDULE}"`);
   }
 
   // Bonus Campus Drop (PRODUCT_SPEC §Campus Radar): an out-of-cycle drop for

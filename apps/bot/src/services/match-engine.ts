@@ -22,6 +22,12 @@ import { env } from "../config.js";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { DEMO_MODE_ENABLED } from "../demo/config.js";
 import { demoPuppetIdsAmong } from "../demo/partners.js";
+import {
+  APP_REVIEW_TELEGRAM_ID_MAX,
+  APP_REVIEW_TELEGRAM_ID_MIN,
+  NOT_APP_REVIEW_ACCOUNT_SQL,
+  NOT_APP_REVIEW_ACCOUNT_WHERE,
+} from "./app-review.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
 import { loadBlockedPairKeys } from "./user-block.js";
@@ -572,6 +578,8 @@ export function buildCandidateSql(): string {
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
       AND u.synthetic_at IS NULL
+      -- App Store review accounts are never anyone's candidate (services/app-review.ts).
+      AND ${NOT_APP_REVIEW_ACCOUNT_SQL}
       -- Same rule as BOT_CHAT_OPEN_WHERE: a shut Telegram chat excludes a
       -- Telegram user, never an app-only one (reached by push, A13-H3).
       AND (u.bot_blocked_at IS NULL OR u.platform = 'mobile')
@@ -1455,10 +1463,19 @@ export async function createProposedMatch(
     // participants, so the real/synthetic split (a pool-admission question,
     // decided by whichever planner produced the pair) does not apply here.
     // Filtering synthetics out would make every fill pair refuse itself.
+    // App Store review pair (services/app-review.ts): admitted only when BOTH
+    // sides are review accounts; any mixed pair fails the re-check below.
+    const reviewRows = await tx.user.count({
+      where: {
+        id: { in: participantIds },
+        telegramId: { gte: APP_REVIEW_TELEGRAM_ID_MIN, lte: APP_REVIEW_TELEGRAM_ID_MAX },
+      },
+    });
     const currentParticipants = await loadEligibleUsersForIds(tx, participantIds, {
       synthetic: "any",
       ignoreLiveMatchesFor: puppetIds,
       rhythm: false,
+      appReview: reviewRows === participantIds.length ? "only" : "exclude",
     });
     if (currentParticipants.length !== participantIds.length) return null;
     if (expectedAllocationFingerprints) {
@@ -1904,6 +1921,18 @@ interface LoadEligibleOptions {
    * which includes rhythm, and ranking already happened in the preview.
    */
   rhythm?: boolean;
+  /**
+   * App Store review accounts (`services/app-review.ts`). `exclude` (default)
+   * keeps them out of every scan; `only` is passed solely by
+   * `createProposedMatch` for a pair where BOTH sides are review accounts, so a
+   * mixed pair can never pass the locked re-check.
+   */
+  appReview?: "exclude" | "only";
+}
+
+function appReviewWhere(scope: "exclude" | "only"): Prisma.UserWhereInput {
+  if (scope === "exclude") return NOT_APP_REVIEW_ACCOUNT_WHERE;
+  return { telegramId: { gte: APP_REVIEW_TELEGRAM_ID_MIN, lte: APP_REVIEW_TELEGRAM_ID_MAX } };
 }
 
 /**
@@ -2014,6 +2043,7 @@ async function loadEligibleRows(
       AND: [
         BOT_CHAT_OPEN_WHERE,
         TRACK_VERIFIED_CONTACT_WHERE,
+        appReviewWhere(options.appReview ?? "exclude"),
         // Mandatory identity gate with an explicit persisted legacy cohort.
         {
           OR: [
@@ -2069,6 +2099,7 @@ async function loadEligibleRows(
       AND: [
         BOT_CHAT_OPEN_WHERE,
         TRACK_VERIFIED_CONTACT_WHERE,
+        appReviewWhere(options.appReview ?? "exclude"),
         {
           OR: [
             { verificationStatus: "verified" },

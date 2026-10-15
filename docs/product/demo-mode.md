@@ -850,6 +850,14 @@ and because the demo seeder's `resolveUploadChat` looks for a **positive**
 `telegramId` to find a real visitor — a rule that would quietly break if the
 two kinds of stand-in ever shared a range and one leaked across.
 
+A third kind lives in production since 2026-10-15: the **App Store review
+pair** ("Alex", the reviewer, and "Emma", the stand-in partner, reserved band
+`-779_000_0xx`; `docs/operations/app-review-account.md`). It is closest to the
+demo puppet in behaviour (accepts and walks the flow) but runs in production,
+only between those two accounts, and only while `APP_REVIEW_EMAIL` and
+`APP_REVIEW_CODE` are set. **Demo mode needs no branch for it**: the demo
+database never sets those vars, and the match pool excludes the band either way.
+
 ## Deploying
 
 `./scripts/deploy-demo.sh` (or `pnpm demo:deploy`), **after** the production

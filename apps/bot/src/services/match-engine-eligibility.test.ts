@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const tx = {
     $queryRawUnsafe: vi.fn(),
-    user: { findMany: vi.fn() },
+    user: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
     match: { findFirst: vi.fn(), create: vi.fn() },
     profile: { updateMany: vi.fn() },
     matchScoreLog: { create: vi.fn() },
@@ -32,6 +32,7 @@ import {
   loadEligibleUsers,
 } from "./match-engine.js";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
+import { NOT_APP_REVIEW_ACCOUNT_SQL, NOT_APP_REVIEW_ACCOUNT_WHERE } from "./app-review.js";
 
 describe("match allocation active-slot guard", () => {
   beforeEach(() => {
@@ -80,6 +81,35 @@ describe("match allocation active-slot guard", () => {
         none: { status: { in: [...ACTIVE_MATCH_STATUSES] } },
       });
       expect(args.where.profile.embeddingDirty).toBe(false);
+    }
+  });
+
+  it("keeps App Store review accounts out of both pool scans and the candidate SQL", async () => {
+    await loadEligibleUsers();
+
+    expect(mocks.userFindMany).toHaveBeenCalledTimes(2);
+    for (const [args] of mocks.userFindMany.mock.calls) {
+      expect(args.where.AND).toContainEqual(NOT_APP_REVIEW_ACCOUNT_WHERE);
+    }
+    expect(buildCandidateSql()).toContain(NOT_APP_REVIEW_ACCOUNT_SQL);
+  });
+
+  it("admits review accounts to the locked re-check only when BOTH sides are review accounts", async () => {
+    mocks.tx.user.count.mockResolvedValueOnce(1);
+    await createProposedMatch("aaaa", "bbbb");
+    for (const [args] of mocks.tx.user.findMany.mock.calls) {
+      expect(args.where.AND).toContainEqual(NOT_APP_REVIEW_ACCOUNT_WHERE);
+    }
+
+    mocks.tx.user.findMany.mockClear();
+    mocks.tx.user.count.mockResolvedValueOnce(2);
+    await createProposedMatch("aaaa", "bbbb");
+    expect(mocks.tx.user.findMany).toHaveBeenCalledTimes(2);
+    for (const [args] of mocks.tx.user.findMany.mock.calls) {
+      expect(args.where.AND).not.toContainEqual(NOT_APP_REVIEW_ACCOUNT_WHERE);
+      expect(args.where.AND).toContainEqual({
+        telegramId: { gte: -779_000_099n, lte: -779_000_001n },
+      });
     }
   });
 
