@@ -11,6 +11,18 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
+Decision journal 2026-10-15 «Вишлист как подсказка места». Place / drink / experience items of each side (list not
+hidden) become an in-band draw weight in venue selection, next to Tempo Sync Tier 2. Off by default; a new purpose
+of the list — privacy v4.4 (§7), ROPA 2.5/2.5f, DPIA R12 updated in `legal/`, NOT yet on the site.
+Demo: no-op (no wishlist on the demo's Telegram visitor or partner).
+- **Порядок:** rides with any deploy; nothing to run.
+- **Включение:** after the site shows the updated privacy text AND `WISHLIST_FEATURE_ENABLED=true`:
+  `WISHLIST_VENUE_HINT_WEIGHT=0.3` in the bot env + restart.
+- **Проверка:** none user-visible by design (a near-tie breaker). `grep -c wishlist` in `venue_selection_logs` raw
+  rows must stay 0.
+- **Откат:** `WISHLIST_VENUE_HINT_WEIGHT=0` + restart.
+
 **PENDING 2026-10-15 — Chat wishlist card (MIGRATION `20261015180000_message_attachment`, additive; contract: `attachment`, `POST /v1/chat/messages/{id}/wishlist`, header `X-Gennety-Chat-Cards`).**
 Decision journal 2026-10-15 «Вишлист из чата». The app's chat agent proposes wishlist items from photos, screenshots,
 links and words as a card with one «Добавить» button; nothing is saved before the tap. Also in this block: a photo

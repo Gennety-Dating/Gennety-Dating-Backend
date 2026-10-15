@@ -695,6 +695,11 @@ export const env = {
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),
+  /// The wishlist as a soft hint for the first venue (decision 2026-10-15):
+  /// the in-band draw weight of `wishlistVenueMultiplier`, 0 = off (default).
+  /// A NEW purpose of the list — keep 0 until privacy v4.3 / ROPA §2.5f with
+  /// this purpose are on the site. 0.3 is the intended value; capped at 0.5.
+  WISHLIST_VENUE_HINT_WEIGHT: Math.max(0, Number(process.env.WISHLIST_VENUE_HINT_WEIGHT ?? "0") || 0),
   /// The app's till for the sheet: a StoreKit CONSUMABLE ($2.99 tier) reported
   /// to `POST /v1/me/after-date/:matchId/wishlist/appstore`. Off until the
   /// product is approved in App Store Connect AND a build carrying the sheet is

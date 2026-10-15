@@ -21,6 +21,9 @@ import {
   pairLeadActivity,
   venueTier2Fit,
   venueTier2Multiplier,
+  wishlistVenueFit,
+  wishlistVenueMultiplier,
+  type WishlistVenueTaste,
   type RhythmTags,
   normalizeVenueIntent,
   rankVenueCandidates,
@@ -83,6 +86,7 @@ import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from ".
 import { runStatusSequence } from "./ai-stream.js";
 import { applyVenueDiversity, loadVenueUsage } from "./venue-diversity.js";
 import { loadRhythmTags } from "./rhythm/store.js";
+import { loadWishlistVenueTastes } from "./wishlist.js";
 import { afterDatePlaceWrite, findAfterDatePlace } from "./venue-after-date.js";
 import { venueSearchSteps } from "./analysis-status.js";
 import {
@@ -1407,6 +1411,25 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     );
     return venueTier2Multiplier(fit, env.VENUE_TIER2_WEIGHT);
   };
+  // The wishlist as a soft hint (decision 2026-10-15): what each side put on
+  // their list about places, as one more in-band draw weight — the same rules
+  // as Tier 2 above: never logged, never stored, never in the blurb or the
+  // reason. Empty while the hint is off (`WISHLIST_VENUE_HINT_WEIGHT` 0).
+  const tastes = await loadWishlistVenueTastes([match.userA.id, match.userB.id]).catch(
+    () => new Map<string, WishlistVenueTaste>(),
+  );
+  const tasteA = tastes.get(match.userA.id) ?? null;
+  const tasteB = tastes.get(match.userB.id) ?? null;
+  const tasteWeightFor = (candidate: VenueRankCandidate): number => {
+    if (!tasteA && !tasteB) return 1;
+    const record = recordByPlaceId.get(candidate.placeId);
+    const target = { name: record?.name ?? "", facets: candidate.facets };
+    return wishlistVenueMultiplier(
+      wishlistVenueFit(tasteA, target),
+      wishlistVenueFit(tasteB, target),
+      env.WISHLIST_VENUE_HINT_WEIGHT,
+    );
+  };
   if (contextRanked.length > 0) {
     try {
       const usage = await loadVenueUsage({
@@ -1423,7 +1446,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
           // adjusted: it gates the vibe floor, and weather has no bearing on
           // whether a venue matches what the pair asked for.
           pairFit: row.score.pairFit,
-          tier2Weight: tier2WeightFor(row.candidate),
+          tier2Weight: tier2WeightFor(row.candidate) * tasteWeightFor(row.candidate),
           row,
         })),
         usage,

@@ -226,6 +226,7 @@ export type {
 } from "./types.js";
 export { DEFAULT_SESSION, SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from "./types.js";
 export * from "./venue-intent.js";
+export * from "./wishlist-venue.js";
 export * from "./life-rhythm.js";
 export * from "./style-picks.js";
 export {

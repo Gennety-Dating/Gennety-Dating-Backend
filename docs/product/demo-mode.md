@@ -774,6 +774,14 @@ The driver asks production's own predicate (`primeTimeUnlockReason`) rather
 than keeping a demo copy of the question, so "the feature is off", "either side
 is premium" and "already paid" are all answered once, in one place.
 
+### The wishlist venue hint is a no-op in the demo (2026-10-15)
+
+`WISHLIST_VENUE_HINT_WEIGHT` makes the pair's wishlist a draw weight in venue
+selection. The demo runs the same selection code, but its visitor is a Telegram
+user and the wishlist is built only in the app, and the synthetic partner has
+none — so there is nothing to read and the choice is exactly what it was. No
+demo branch.
+
 ### Known deviation: the venue-change price screen
 
 The Date Ticket gate uses the **no-charge settle** (2026-09-11 — it replaced the

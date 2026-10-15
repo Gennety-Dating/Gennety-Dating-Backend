@@ -18,7 +18,9 @@ import {
   wishlistCatalogItem,
   wishlistMoreLabel,
   wishlistTeaserIds,
+  wishlistVenueTaste,
   type Language,
+  type WishlistVenueTaste,
   type WishlistCategory,
   type WishlistPriceBand,
   type WishlistSource,
@@ -331,6 +333,30 @@ export async function deleteWishlistItem(userId: string, itemId: string, now: Da
     });
   }
   return true;
+}
+
+/**
+ * What each person's list says about places, for the first venue's soft hint
+ * (`wishlistVenueTaste`, decision 2026-10-15). Nobody whose list is hidden,
+ * and nothing at all while the feature or the hint is off. One query for both
+ * sides of a pair.
+ */
+export async function loadWishlistVenueTastes(userIds: string[]): Promise<Map<string, WishlistVenueTaste>> {
+  const out = new Map<string, WishlistVenueTaste>();
+  if (!env.WISHLIST_FEATURE_ENABLED || env.WISHLIST_VENUE_HINT_WEIGHT <= 0 || userIds.length === 0) return out;
+  const rows = await prisma.wishlistItem.findMany({
+    where: {
+      userId: { in: userIds },
+      category: { in: ["place", "drink", "experience"] },
+      user: { wishlistHiddenAt: null },
+    },
+    select: { userId: true, category: true, title: true, brand: true, catalogKey: true },
+  });
+  for (const userId of userIds) {
+    const taste = wishlistVenueTaste(rows.filter((row) => row.userId === userId));
+    if (taste) out.set(userId, taste);
+  }
+  return out;
 }
 
 /** Every stored image path of a user — for account deletion's storage sweep. */

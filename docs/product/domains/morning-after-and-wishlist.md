@@ -146,6 +146,20 @@ built earlier, with the agent, on «Сегодня».
      build gets neither the card nor the tool. App only — Telegram keeps the
      «Сегодня» session as the way in.
 
+7. **A soft hint for the first venue** (founder, 2026-10-15: «подсказывать
+   место свидания по вишлисту»). The `place` / `drink` / `experience` items of
+   each side whose list is not hidden become one more draw weight inside the
+   venue diversity band, next to Tempo Sync Tier 2
+   (`wishlistVenueTaste` / `wishlistVenueFit` / `wishlistVenueMultiplier` in
+   `packages/shared/src/wishlist-venue.ts`, `loadWishlistVenueTastes`): catalog
+   ideas by their tags, free text by a short multilingual keyword map, a typed
+   place by its name. It can only pick between venues the ranker already rates
+   near-equal; never logged, stored on the match, or put into the reason or the
+   blurb. `WISHLIST_VENUE_HINT_WEIGHT` (0 = off, the default; 0.3 intended,
+   capped at 0.5) — a NEW purpose of the list: privacy v4.4 (§7 table), ROPA
+   2.5 / 2.5f and DPIA R12 carry it; switch on only once that text is on the
+   site.
+
 ## Flags, demo, rollout
 
 1. `MORNING_AFTER_ENABLED` (check, reveal, offer), `WISHLIST_FEATURE_ENABLED`
