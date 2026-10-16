@@ -194,16 +194,7 @@ chatRouter.post(
     const rawImageUrls = req.body?.imageUrls;
 
     const text = typeof rawText === "string" ? rawText.trim() : "";
-    const imageUrl = typeof rawImageUrl === "string" ? rawImageUrl.trim() : "";
-    // Оба поля принимаются вместе: старая сборка шлёт одно, новая — список.
-    // Порядок списка — порядок, в котором человек отмечал снимки; дубли
-    // снимаются, пустые строки отбрасываются.
-    const listed = Array.isArray(rawImageUrls)
-      ? rawImageUrls
-          .filter((value: unknown): value is string => typeof value === "string")
-          .map((value) => value.trim())
-      : [];
-    const imageUrls = [...new Set([...(imageUrl ? [imageUrl] : []), ...listed])].filter(Boolean);
+    const imageUrls = turnImageUrls(rawImageUrl, rawImageUrls);
 
     if (!text && imageUrls.length === 0) {
       res.status(400).json({ error: "Provide text or imageUrl" });
@@ -215,16 +206,7 @@ chatRouter.post(
       res.status(413).json({ error: "message_too_long", maxLength: CHAT_TEXT_MAX_LENGTH });
       return;
     }
-    if (imageUrls.length > CHAT_IMAGES_MAX) {
-      res.status(413).json({ error: `At most ${CHAT_IMAGES_MAX} images per message` });
-      return;
-    }
-    // Владение проверяется у КАЖДОГО пути: один чужой в списке — отказ всему
-    // ходу, а не тихая отправка остальных.
-    if (imageUrls.some((path) => !isOwnChatImagePath(path, req.userId!))) {
-      res.status(403).json({ error: "Image not owned by caller" });
-      return;
-    }
+    if (!imagesAllowed(imageUrls, req.userId!, res)) return;
     const context = await contextFromRequest(req.body?.context, req.userId!, res);
     if (context === false) return;
     const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
@@ -287,7 +269,12 @@ chatRouter.post(
  * видеть, что именно услышал агент, иначе неверно понятая фраза выглядит как
  * его собственная ошибка.
  *
- * Картинку голосом не приложить: запись и вложение — разные ходы.
+ * Снимки к голосу (2026-10-16): `imageUrls` — пути из `/upload`, каждый
+ * своим полем формы (multipart не знает списков, повтор поля multer собирает
+ * в массив, одно поле — в строку). Запись становится подписью к альбому, как
+ * текст у `/message`; те же предел и проверка владения — ДО расшифровки, чтобы
+ * отказ не стоил вызова Whisper. До этого дня «запись и вложение — разные
+ * ходы», и снимки, выбранные перед записью, молча терялись.
  */
 chatRouter.post(
   "/voice",
@@ -313,6 +300,8 @@ chatRouter.post(
     if (context === false) return;
     const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
     if (sessionId === false) return;
+    const imageUrls = turnImageUrls(undefined, req.body?.imageUrls);
+    if (!imagesAllowed(imageUrls, req.userId!, res)) return;
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
@@ -338,7 +327,7 @@ chatRouter.post(
     const turn = await runChatTurn({
       userId: req.userId!,
       text: transcript,
-      imageUrls: [],
+      imageUrls,
       context,
       sessionId,
       chatCards: chatCardsOf(req),
@@ -730,6 +719,38 @@ function contextField(snapshot: ChatContextSnapshot | null): { context?: ChatCon
  * traversing key a second time at the URL, which is the layer that covers any
  * future caller; this is the layer that gives the honest 403.
  */
+/**
+ * Снимки хода из тела запроса. Оба поля принимаются вместе: старая сборка
+ * шлёт одно `imageUrl`, новая — список. Список — массив (JSON или повтор поля
+ * формы) или строка (одно поле формы). Порядок — порядок, в котором человек
+ * отмечал снимки; дубли снимаются, пустые строки отбрасываются.
+ */
+function turnImageUrls(rawImageUrl: unknown, rawImageUrls: unknown): string[] {
+  const imageUrl = typeof rawImageUrl === "string" ? rawImageUrl.trim() : "";
+  const raw: unknown[] = Array.isArray(rawImageUrls) ? rawImageUrls : rawImageUrls === undefined ? [] : [rawImageUrls];
+  const listed = raw
+    .filter((value: unknown): value is string => typeof value === "string")
+    .map((value) => value.trim());
+  return [...new Set([...(imageUrl ? [imageUrl] : []), ...listed])].filter(Boolean);
+}
+
+/**
+ * Предел и владение снимков хода; отказ уже записан в `res`. Владение
+ * проверяется у КАЖДОГО пути: один чужой в списке — отказ всему ходу, а не
+ * тихая отправка остальных.
+ */
+function imagesAllowed(imageUrls: string[], userId: string, res: Response): boolean {
+  if (imageUrls.length > CHAT_IMAGES_MAX) {
+    res.status(413).json({ error: `At most ${CHAT_IMAGES_MAX} images per message` });
+    return false;
+  }
+  if (imageUrls.some((path) => !isOwnChatImagePath(path, userId))) {
+    res.status(403).json({ error: "Image not owned by caller" });
+    return false;
+  }
+  return true;
+}
+
 function isOwnChatImagePath(path: string, userId: string): boolean {
   const match = /^([0-9a-f-]{36})\/(\d{1,20})\.(jpg|png|webp)$/i.exec(path);
   return match?.[1]?.toLowerCase() === userId.toLowerCase();

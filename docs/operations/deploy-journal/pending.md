@@ -140,6 +140,17 @@ an exclusion of the reserved `telegramId` band `-779000099…-779000001` from th
 - **Demo:** unchanged (separate DB and puppets; branch inert without the vars).
 - **iOS:** no client change. The reviewer uses the existing university-email screen. The ASC Notes text lives in
   the iOS repo `docs/operations/appstore-review-notes.md` §2.
+**PENDING 2026-10-16 — Voice note with photos (code only; contract: `imageUrls` form fields on `POST /v1/chat/voice`).**
+The founder's ask: photos picked before a voice note now go with it as one turn (the recording is the album's
+caption), instead of being silently dropped. Same limit (10 → 413) and ownership check (403) as `/message`, both
+before Whisper. Demo: no-op (Telegram has its own voice path).
+iOS: branch `voice-with-media` sends the fields; until this ships the prod server ignores them and the photos are lost
+exactly as before — no error, so the iOS build can land first.
+- **Порядок:** rides with any deploy; nothing to run.
+- **Проверка:** in the app pick 2 photos, record a voice note, send → one bubble: album + the note under it; the
+  agent's reply refers to the photos; reload the chat → the album and the note are still one bubble.
+- **Откат:** code revert only.
+
 **Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
 - **Итог 2026-10-26:** code live; `WISHLIST_VENUE_HINT_WEIGHT` NOT set (0 = off). Privacy v4.4 is on the site now; turning it on is the founder's call.
 Decision journal 2026-10-15 «Вишлист как подсказка места». Place / drink / experience items of each side (list not

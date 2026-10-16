@@ -3615,8 +3615,11 @@ paths:
         see what the agent actually heard, otherwise a misheard sentence reads
         as their own mistake rather than the machine's.
 
-        No image can ride along: a recording and an attachment are separate
-        turns.
+        Photos can ride along (2026-10-16): `imageUrls`, paths from
+        `/v1/chat/upload`, one form field per path in the order picked. The
+        recording becomes the album's caption, as text does on
+        `/v1/chat/message`; the same limit (413) and ownership check (403) run
+        before the audio is transcribed.
       requestBody:
         required: true
         content:
@@ -3643,6 +3646,13 @@ paths:
                   description: >-
                     The chat this turn belongs to — same rules as `sessionId` on
                     `/v1/chat/message`, checked before the audio is transcribed.
+                imageUrls:
+                  type: array
+                  maxItems: 10
+                  items: { type: string }
+                  description: >-
+                    Photos of this turn — storage paths from `/v1/chat/upload`,
+                    repeated as one form field each, in the order picked.
       responses:
         "200":
           description: Assistant reply plus what was heard
@@ -3669,7 +3679,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: Account not allowed to talk to the agent
+          description: Account not allowed to talk to the agent, or an `imageUrls` path is not the caller's
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3677,6 +3687,11 @@ paths:
           description: >-
             `contextId` names an unknown inbox item, or `sessionId` belongs to
             another user (the same answer for both)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: More than 10 `imageUrls`
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
