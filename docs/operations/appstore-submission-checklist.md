@@ -9,10 +9,10 @@
 ## 0. Слить и выкатить (до всего остального)
 
 1. **Бэкенд, ветка `worktree-app-review-demo`** → main. В ней демо-аккаунт ревьюера и этот чек-лист.
-2. **Сайт, ветка `legal-v44-support`** (PR в `gennetydating-website`) → main. Публикует Privacy v4.4, Terms v3.2
+2. **Сайт, ветка `legal-v44-support`** ([PR #1](https://github.com/Gennety-Dating/gennetydating-website/pull/1)) → main. Публикует Privacy v4.4, Terms v3.2
    и страницу `/support`. Слияние в main = выкат на Vercel.
-3. **iOS, ветка `appstore-review-risks`** (PR в `gennety-ios`) → main. Манифест приватности, условия автопродления
-   у кнопки покупки, переводы разрешений, ключ экспорта, заметки для ревью.
+3. **iOS, ветка `appstore-review-risks`** ([PR #2](https://github.com/Gennety-Dating/gennety-ios/pull/2)) → main. Манифест приватности, условия автопродления
+   у кнопки покупки (отменяет решение 07.10 убрать строку под кнопкой — требование правила 3.1.2), переводы разрешений, ключ экспорта, скрытие входа по телефону по флагу `phoneAuth`, заметки для ревью. Не собиралось — перед слиянием собрать и посмотреть экран оплаты и вход.
 4. **Выкат бэкенда** по `deploy-journal/pending.md`: прод `3edf3b15` отстаёт от main на 122 коммита, 7 миграций
    (`db:deploy` до перезапуска).
 
