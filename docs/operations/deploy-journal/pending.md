@@ -11,6 +11,17 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-16 — Voice note with photos (code only; contract: `imageUrls` form fields on `POST /v1/chat/voice`).**
+The founder's ask: photos picked before a voice note now go with it as one turn (the recording is the album's
+caption), instead of being silently dropped. Same limit (10 → 413) and ownership check (403) as `/message`, both
+before Whisper. Demo: no-op (Telegram has its own voice path).
+iOS: branch `voice-with-media` sends the fields; until this ships the prod server ignores them and the photos are lost
+exactly as before — no error, so the iOS build can land first.
+- **Порядок:** rides with any deploy; nothing to run.
+- **Проверка:** in the app pick 2 photos, record a voice note, send → one bubble: album + the note under it; the
+  agent's reply refers to the photos; reload the chat → the album and the note are still one bubble.
+- **Откат:** code revert only.
+
 **PENDING 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
 Decision journal 2026-10-15 «Вишлист как подсказка места». Place / drink / experience items of each side (list not
 hidden) become an in-band draw weight in venue selection, next to Tempo Sync Tier 2. Off by default; a new purpose

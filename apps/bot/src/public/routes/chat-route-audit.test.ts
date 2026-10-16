@@ -212,3 +212,43 @@ describe("B-09: clientMessageId", () => {
     expect(runChatTurn).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("voice with photos (2026-10-16)", () => {
+  const own = (n: number) => `${USER_ID}/${1_000 + n}.jpg`;
+  const send = (paths: string[]) => {
+    let req = request(app()).post("/v1/chat/voice").set(auth());
+    for (const path of paths) req = req.field("imageUrls", path);
+    return req.attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+  };
+  const turnImages = () => (runChatTurn.mock.calls[0]?.[0] as { imageUrls?: string[] }).imageUrls;
+
+  it("the photos ride with the transcript into one turn, in the order picked", async () => {
+    const res = await send([own(2), own(1)]);
+    expect(res.status).toBe(200);
+    expect(res.body.transcript).toBe("что надеть?");
+    expect(turnImages()).toEqual([own(2), own(1)]);
+  });
+
+  it("a single field is a list of one", async () => {
+    expect((await send([own(1)])).status).toBe(200);
+    expect(turnImages()).toEqual([own(1)]);
+  });
+
+  it("without photos the turn carries none, as before", async () => {
+    expect((await send([])).status).toBe(200);
+    expect(turnImages()).toEqual([]);
+  });
+
+  it("someone else's photo is 403 before Whisper is asked", async () => {
+    const res = await send([own(1), "99999999-9999-4999-8999-999999999999/1.jpg"]);
+    expect(res.status).toBe(403);
+    expect(transcription).not.toHaveBeenCalled();
+    expect(runChatTurn).not.toHaveBeenCalled();
+  });
+
+  it("more than 10 photos is 413 before Whisper is asked", async () => {
+    const res = await send(Array.from({ length: 11 }, (_, i) => own(i)));
+    expect(res.status).toBe(413);
+    expect(transcription).not.toHaveBeenCalled();
+  });
+});
