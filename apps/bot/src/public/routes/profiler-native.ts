@@ -15,10 +15,13 @@ import {
 import {
   answerProfilerQuestionWithMedia,
   PROFILER_MEDIA_IMAGES_MAX,
+  PROFILER_MEDIA_VIDEO_FRAMES_MAX,
   type ProfilerMediaAnswerDeps,
+  type ProfilerMediaAnswerRequest,
 } from "../../services/profiler-media-answer.js";
 import { uploadChatImage } from "../../services/storage.js";
 import { readAnswerPhoto } from "../../services/vision/read-answer-photo.js";
+import { readAnswerVideo } from "../../services/vision/read-answer-video.js";
 import { readMemeImage } from "../../services/vision/read-meme.js";
 import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { MULTIPART_FIELD_LIMITS, multerErrorResponse } from "../../utils/upload-limits.js";
@@ -87,10 +90,13 @@ export function createNativeProfilerRouter(
   });
 
   /**
-   * The answer with a voice note (`voice`, 0..1) and/or photos (`images`,
-   * 0..`PROFILER_MEDIA_IMAGES_MAX`), beside the same `questionId` / `text` /
-   * `optionIds` / `source` as `/answer` as form fields. Same response, same
-   * 409. Rate-limited with the chat voice notes: both buy a paid model call.
+   * The answer with a voice note (`voice`, 0..1), photos (`images`,
+   * 0..`PROFILER_MEDIA_IMAGES_MAX`) and/or one video the app has cut into
+   * frames (`videoFrames`, 0..`PROFILER_MEDIA_VIDEO_FRAMES_MAX`, in order) with
+   * its soundtrack (`videoAudio`, 0..1) and length (`videoDuration`, seconds),
+   * beside the same `questionId` / `text` / `optionIds` / `source` as `/answer`
+   * as form fields. Same response, same 409. Rate-limited with the chat voice
+   * notes: both buy a paid model call.
    */
   router.post(
     "/answer/media",
@@ -114,6 +120,7 @@ export function createNativeProfilerRouter(
           ...(sourceOf(body.source) ? { source: sourceOf(body.source)! } : {}),
           ...(voice ? { voice: { buffer: voice.buffer, mime: voice.mimetype } } : {}),
           images: (files.images ?? []).map((file) => ({ buffer: file.buffer })),
+          ...videoOf(files, body.videoDuration),
         },
         deps,
       );
@@ -156,6 +163,7 @@ const DEFAULT_MEDIA_DEPS: ProfilerMediaAnswerDeps = {
   transcribe: (buffer, options) => transcribeVoiceResult(buffer, options),
   readMeme: (image, options) => readMemeImage(image, options),
   readPhoto: (image, options) => readAnswerPhoto(image, options),
+  readVideo: (frames, options) => readAnswerVideo(frames, options),
   record: (userId, questionId, reply) => answerNativeProfilerQuestion(userId, questionId, reply),
   storeImage: uploadChatImage,
 };
@@ -167,11 +175,38 @@ const DEFAULT_MEDIA_DEPS: ProfilerMediaAnswerDeps = {
  */
 const mediaUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { ...MULTIPART_FIELD_LIMITS, fileSize: WHISPER_MAX_BYTES, files: 1 + PROFILER_MEDIA_IMAGES_MAX },
+  limits: {
+    ...MULTIPART_FIELD_LIMITS,
+    fileSize: WHISPER_MAX_BYTES,
+    files: 1 + PROFILER_MEDIA_IMAGES_MAX + PROFILER_MEDIA_VIDEO_FRAMES_MAX + 1,
+  },
 }).fields([
   { name: "voice", maxCount: 1 },
   { name: "images", maxCount: PROFILER_MEDIA_IMAGES_MAX },
+  { name: "videoFrames", maxCount: PROFILER_MEDIA_VIDEO_FRAMES_MAX },
+  { name: "videoAudio", maxCount: 1 },
 ]);
+
+/**
+ * The video parts of the form, if any — frames in the order the app sent
+ * them (multer keeps it), the soundtrack, and a sane length.
+ */
+function videoOf(
+  files: Record<string, Express.Multer.File[] | undefined>,
+  rawDuration: unknown,
+): { video?: NonNullable<ProfilerMediaAnswerRequest["video"]> } {
+  const frames = files.videoFrames ?? [];
+  const audio = files.videoAudio?.[0];
+  if (frames.length === 0 && !audio) return {};
+  const duration = typeof rawDuration === "string" ? Number.parseFloat(rawDuration) : Number.NaN;
+  return {
+    video: {
+      frames: frames.map((file) => ({ buffer: file.buffer })),
+      ...(audio ? { audio: { buffer: audio.buffer, mime: audio.mimetype } } : {}),
+      ...(Number.isFinite(duration) && duration > 0 && duration < 24 * 3600 ? { durationSeconds: duration } : {}),
+    },
+  };
+}
 
 function mediaUploadWithErrors(req: Request, res: Response, next: NextFunction): void {
   mediaUpload(req, res, (err: unknown) => {

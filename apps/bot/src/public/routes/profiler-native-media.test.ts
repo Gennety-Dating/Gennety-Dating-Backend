@@ -83,8 +83,10 @@ const deps = {
   transcribe: vi.fn(),
   readMeme: vi.fn(),
   readPhoto: vi.fn(),
+  readVideo: vi.fn(),
   storeImage: vi.fn(),
 };
+const GIF = Buffer.concat([Buffer.from("GIF89a", "latin1"), Buffer.alloc(64, 3)]);
 
 function buildApp() {
   const app = express();
@@ -132,6 +134,7 @@ beforeEach(() => {
   deps.transcribe.mockReset().mockResolvedValue({ ok: true, text: "a rooftop bar at sunset" });
   deps.readMeme.mockReset().mockResolvedValue({ ok: true, description: "Drake meme about Mondays, dry humour.", model: "m" });
   deps.readPhoto.mockReset().mockResolvedValue({ ok: true, description: "A candle-lit wine bar with a view.", model: "m" });
+  deps.readVideo.mockReset().mockResolvedValue({ ok: true, description: "A dog skateboarding down a pier.", model: "m" });
   deps.storeImage.mockReset().mockResolvedValue({ path: `${USER_ID}/1.jpg` });
 });
 
@@ -324,5 +327,148 @@ describe("POST /v1/me/profiler/answer/media", () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "unknown_option" });
     expect(answerUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /v1/me/profiler/answer/media — video", () => {
+  it("reads all frames as one video, with what is said in it, and stores the bare description", async () => {
+    live(PLAIN);
+    deps.transcribe.mockResolvedValue({ ok: true, text: "  look at him go  " });
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .field("videoDuration", "12.4")
+      .attach("videoFrames", JPEG, { filename: "f1.jpg" })
+      .attach("videoFrames", PNG, { filename: "f2.png" })
+      .attach("videoFrames", JPEG, { filename: "f3.jpg" })
+      .attach("videoAudio", M4A, { filename: "sound.m4a", contentType: "audio/mp4" });
+
+    expect(res.status).toBe(200);
+    expect(deps.transcribe).toHaveBeenCalledWith(expect.any(Buffer), { mime: "audio/mp4", language: "en" });
+    expect(deps.readVideo).toHaveBeenCalledTimes(1);
+    const [frames, options] = deps.readVideo.mock.calls[0]!;
+    expect((frames as Array<{ mime: string }>).map((f) => f.mime)).toEqual(["image/jpeg", "image/png", "image/jpeg"]);
+    expect(options).toEqual({
+      language: "en",
+      questionText: profilerQuestionText(profilerQuestionById(PLAIN)!, "en"),
+      meme: false,
+      caption: undefined,
+      soundTranscript: "look at him go",
+      durationSeconds: 12.4,
+    });
+    expect(deps.readPhoto).not.toHaveBeenCalled();
+    expect(storedText()).toBe("A dog skateboarding down a pier.");
+    // Frames are never kept — only read photos are.
+    expect(deps.storeImage).not.toHaveBeenCalled();
+  });
+
+  it("reads a video on the meme question as a meme", async () => {
+    live(MEME);
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", MEME)
+      .attach("videoFrames", JPEG, { filename: "f1.jpg" });
+
+    expect(res.status).toBe(200);
+    expect(deps.readVideo.mock.calls[0]![1]).toMatchObject({ meme: true, soundTranscript: undefined });
+    expect(deps.readMeme).not.toHaveBeenCalled();
+  });
+
+  it("keeps a clip whose soundtrack has no words — or whose transcription is down — as a video answer", async () => {
+    for (const heard of [
+      { ok: true, text: "   " },
+      { ok: false, reason: "unusable" },
+      { ok: false, reason: "unavailable" },
+    ]) {
+      answerUpsert.mockClear();
+      live(PLAIN);
+      deps.transcribe.mockResolvedValue(heard);
+      const res = await request(buildApp())
+        .post("/v1/me/profiler/answer/media")
+        .field("questionId", PLAIN)
+        .attach("videoFrames", JPEG, { filename: "f1.jpg" })
+        .attach("videoAudio", M4A, { filename: "sound.m4a" });
+
+      expect(res.status).toBe(200);
+      expect(deps.readVideo.mock.lastCall![1]).toMatchObject({ soundTranscript: undefined });
+      expect(storedText()).toBe("A dog skateboarding down a pier.");
+    }
+  });
+
+  it("labels the video beside words and photos, after the photos", async () => {
+    live(PLAIN);
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .field("text", "weekends")
+      .attach("images", JPEG, { filename: "p.jpg" })
+      .attach("videoFrames", JPEG, { filename: "f1.jpg" });
+
+    expect(res.status).toBe(200);
+    expect(deps.readVideo.mock.calls[0]![1]).toMatchObject({ caption: "weekends" });
+    expect(storedText()).toBe(
+      "weekends\n\nPhoto: A candle-lit wine bar with a view.\nVideo: A dog skateboarding down a pier.",
+    );
+  });
+
+  it("labels a photo and a video apart even without words", async () => {
+    live(PLAIN);
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .attach("images", JPEG, { filename: "p.jpg" })
+      .attach("videoFrames", JPEG, { filename: "f1.jpg" });
+
+    expect(res.status).toBe(200);
+    expect(storedText()).toBe("Photo: A candle-lit wine bar with a view.\nVideo: A dog skateboarding down a pier.");
+  });
+
+  it("422s a refused video with nothing else said, keeping the question live", async () => {
+    live(PLAIN);
+    deps.readVideo.mockResolvedValue({ ok: false, error: "unsafe" });
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .attach("videoFrames", JPEG, { filename: "f1.jpg" });
+
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: "image_unreadable" });
+    expect(answerUpsert).not.toHaveBeenCalled();
+  });
+
+  it("400s a soundtrack without frames", async () => {
+    live(PLAIN);
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .attach("videoAudio", M4A, { filename: "sound.m4a" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "missing_video_frames" });
+    expect(deps.transcribe).not.toHaveBeenCalled();
+  });
+
+  it("415s a GIF frame before any paid call — the app sends frames as JPEG", async () => {
+    live(PLAIN);
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer/media")
+      .field("questionId", PLAIN)
+      .attach("videoFrames", GIF, { filename: "f1.gif" })
+      .attach("videoAudio", M4A, { filename: "sound.m4a" });
+
+    expect(res.status).toBe(415);
+    expect(res.body).toEqual({ error: "unsupported_image" });
+    expect(deps.transcribe).not.toHaveBeenCalled();
+    expect(deps.readVideo).not.toHaveBeenCalled();
+  });
+
+  it("refuses more frames than one video may carry", async () => {
+    live(PLAIN);
+    let req = request(buildApp()).post("/v1/me/profiler/answer/media").field("questionId", PLAIN);
+    for (let i = 0; i < 7; i += 1) req = req.attach("videoFrames", JPEG, { filename: `f${i}.jpg` });
+    const res = await req;
+
+    expect(res.status).toBe(400);
+    expect(deps.readVideo).not.toHaveBeenCalled();
   });
 });

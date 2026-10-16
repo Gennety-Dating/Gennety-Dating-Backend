@@ -67,12 +67,18 @@ under `{userId}/` (swept by account deletion's bucket listing); no DB column poi
 Telegram-only, so an app meme is NOT re-sent by the §3.12 meme reveal. Rate limit: `voiceLimiter` (30/h, shared with
 chat voice). Demo: unchanged. iOS: the «+» and the microphone on Profiler questions call this route; until the deploy
 it answers 404 — the app must keep the typed `/answer` path working and only offer media once the route exists.
+**+ 2026-10-16 video (same block, same restart, no env):** parts `videoFrames` (0..6, cut by the app evenly across the
+clip, same formats/cap as `images`), `videoAudio` (0..1 m4a) and field `videoDuration`; one `visionFast` call over all
+frames (`vision/read-answer-video.ts`), soundtrack transcript as context — no speech or Whisper down is NOT an error.
+Stored as «Video: …» after photos; frames are not kept. New 400 `missing_video_frames`. Decision journal 2026-10-16.
 - **Порядок:** merge → build → restart. Nothing else.
 - **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/public/routes/profiler-native-media.test.ts
   src/public/routes/profiler-native.test.ts`; on prod `curl -s -o /dev/null -w '%{http_code}' -X POST
-  https://<api>/v1/me/profiler/answer/media` → 401 (not 404); then answer a live question from the app with one photo
+  https://<api>/v1/me/profiler/answer/media` → 401 (not 404) — NB 2026-10-16: every `/v1/me/*` path answers 401
+  before routing (even a made-up one), so this curl proves nothing; check the built `dist` for `answer/media` instead;
+  then answer a live question from the app with one photo
   and `pm2 logs gennety-bot --lines 200 | grep profiler-media` shows the stored path, and the row's `answer_text`
-  holds the description.
+  holds the description. Video: answer with a short clip → the row's `answer_text` holds one «Видео…»/clip description.
 - **Откат:** `git revert` of the branch commit + restart (rows written stay ordinary text answers; uploaded photos stay
   under the user's prefix and are erased with the account).
 

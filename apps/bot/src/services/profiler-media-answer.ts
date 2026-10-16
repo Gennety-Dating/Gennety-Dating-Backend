@@ -12,6 +12,7 @@ import type {
   NativeProfilerAnswerResult,
   NativeProfilerReply,
 } from "./profiler-native.js";
+import type { ReadAnswerVideoOptions } from "./vision/read-answer-video.js";
 import type { ReadMemeResult } from "./vision/read-meme.js";
 import type { TranscriptionResult } from "./whisper.js";
 
@@ -48,6 +49,13 @@ import type { TranscriptionResult } from "./whisper.js";
 /** Photos one answer may carry. */
 export const PROFILER_MEDIA_IMAGES_MAX = 4;
 
+/**
+ * Frames of the one video an answer may carry. The app cuts them evenly
+ * across the clip (the server has no ffmpeg); six is enough to tell what
+ * happens in a short clip and keeps one vision call cheap.
+ */
+export const PROFILER_MEDIA_VIDEO_FRAMES_MAX = 6;
+
 /** What the vision endpoint takes; GIF and HEIC sniff fine but are refused. */
 const ACCEPTED_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -59,6 +67,20 @@ const PHOTO_LABEL: Record<Language, string> = {
   pl: "Zdjęcie",
 };
 
+const VIDEO_LABEL: Record<Language, string> = {
+  en: "Video",
+  ru: "Видео",
+  uk: "Відео",
+  de: "Video",
+  pl: "Wideo",
+};
+
+/** One read piece of media, as it goes into the stored text. */
+export interface MediaDescription {
+  kind: "photo" | "video";
+  text: string;
+}
+
 export interface ProfilerMediaAnswerRequest {
   questionId: string;
   text: string;
@@ -66,6 +88,12 @@ export interface ProfilerMediaAnswerRequest {
   source?: ProfilerAnswerSource;
   voice?: { buffer: Buffer; mime: string };
   images: Array<{ buffer: Buffer }>;
+  /** A video, cut by the app: frames in order, its soundtrack, its length. */
+  video?: {
+    frames: Array<{ buffer: Buffer }>;
+    audio?: { buffer: Buffer; mime: string };
+    durationSeconds?: number;
+  };
 }
 
 export interface ProfilerMediaAnswerDeps {
@@ -81,6 +109,10 @@ export interface ProfilerMediaAnswerDeps {
     image: { buffer: Buffer; mime: string },
     options: { language: Language; questionText: string; caption?: string | undefined },
   ) => Promise<ReadMemeResult>;
+  readVideo: (
+    frames: Array<{ buffer: Buffer; mime: string }>,
+    options: ReadAnswerVideoOptions,
+  ) => Promise<ReadMemeResult>;
   record: (userId: string, questionId: string, reply: NativeProfilerReply) => Promise<NativeProfilerAnswerResult>;
   storeImage: (userId: string, buffer: Buffer, mime: string) => Promise<{ path: string }>;
 }
@@ -94,24 +126,33 @@ export async function answerProfilerQuestionWithMedia(
   request: ProfilerMediaAnswerRequest,
   deps: ProfilerMediaAnswerDeps,
 ): Promise<ProfilerMediaAnswerOutcome> {
-  if (!request.voice && request.images.length === 0) {
+  const videoFrames = request.video?.frames ?? [];
+  // A soundtrack without a picture is a voice note sent the wrong way.
+  if (request.video?.audio && videoFrames.length === 0) {
+    return { ok: false, status: 400, error: "missing_video_frames" };
+  }
+  if (!request.voice && request.images.length === 0 && videoFrames.length === 0) {
     return { ok: false, status: 400, error: "missing_media" };
   }
   if (request.images.length > PROFILER_MEDIA_IMAGES_MAX) {
     return { ok: false, status: 400, error: "too_many_images" };
   }
+  if (videoFrames.length > PROFILER_MEDIA_VIDEO_FRAMES_MAX) {
+    return { ok: false, status: 400, error: "too_many_video_frames" };
+  }
 
   // The bytes, not the declared type, decide — before anything is spent.
   const images: Array<{ buffer: Buffer; mime: string }> = [];
   for (const image of request.images) {
-    if (image.buffer.length > PROFILER_IMAGE_MAX_BYTES) {
-      return { ok: false, status: 413, error: "image_too_large" };
-    }
-    const mime = sniffImageMime(image.buffer);
-    if (!mime || !ACCEPTED_IMAGE_MIME.has(mime)) {
-      return { ok: false, status: 415, error: "unsupported_image" };
-    }
-    images.push({ buffer: image.buffer, mime });
+    const checked = checkedImage(image.buffer);
+    if (!checked.ok) return checked;
+    images.push(checked.image);
+  }
+  const frames: Array<{ buffer: Buffer; mime: string }> = [];
+  for (const frame of videoFrames) {
+    const checked = checkedImage(frame.buffer);
+    if (!checked.ok) return checked;
+    frames.push(checked.image);
   }
 
   const question = profilerQuestionById(request.questionId);
@@ -146,14 +187,41 @@ export async function answerProfilerQuestionWithMedia(
     if (read.ok) described.push({ description: read.description, image });
   }
 
+  // The video's soundtrack is what is said IN the clip, not the person's
+  // words: a clip of music or silence is still an answer, so a failed or
+  // empty transcript only means the picture speaks alone — never a 422/503.
+  let video: string | undefined;
+  if (frames.length > 0) {
+    let soundTranscript: string | undefined;
+    if (request.video?.audio) {
+      const heard = await deps.transcribe(request.video.audio.buffer, {
+        mime: request.video.audio.mime,
+        language,
+      });
+      soundTranscript = heard.ok ? heard.text.trim() || undefined : undefined;
+    }
+    const read = await deps.readVideo(frames, {
+      language,
+      questionText,
+      meme,
+      caption,
+      soundTranscript,
+      durationSeconds: request.video?.durationSeconds,
+    });
+    if (read.ok) video = read.description;
+  }
+
   const words = [typed, transcript].filter(Boolean).join("\n\n");
-  if (!words && request.optionIds.length === 0 && described.length === 0) {
+  if (!words && request.optionIds.length === 0 && described.length === 0 && !video) {
     return { ok: false, status: 422, error: "image_unreadable" };
   }
 
   const text = composeMediaAnswerText(
     words,
-    described.map((d) => d.description),
+    [
+      ...described.map((d): MediaDescription => ({ kind: "photo", text: d.description })),
+      ...(video ? [{ kind: "video", text: video } satisfies MediaDescription] : []),
+    ],
     language,
     request.optionIds.length > 0,
   );
@@ -162,7 +230,7 @@ export async function answerProfilerQuestionWithMedia(
     text,
     optionIds: request.optionIds,
     ...(request.source ? { source: request.source } : {}),
-    ...(described.length > 0 ? { withPhoto: true } : {}),
+    ...(described.length > 0 || video ? { withPhoto: true } : {}),
   });
 
   // Only a recorded answer keeps its photos: a refused claim stores nothing.
@@ -186,25 +254,50 @@ export async function answerProfilerQuestionWithMedia(
 }
 
 /**
- * Words first, then the photos. A photo-only answer is the bare description
- * (one per line), the form the Telegram meme path stores; beside words — or
- * beside tapped options, which `composeProfilerAnswerText` puts in front — each
- * description is labelled so a reader knows it is a picture, not a quote.
+ * The bytes of one photo or video frame, sniffed — what the vision endpoint
+ * takes, under the profiler image cap. GIF and HEIC are refused: the app
+ * converts both to JPEG (an animated GIF arrives as video frames).
+ */
+function checkedImage(
+  buffer: Buffer,
+):
+  | { ok: true; image: { buffer: Buffer; mime: string } }
+  | { ok: false; status: 413 | 415; error: string } {
+  if (buffer.length > PROFILER_IMAGE_MAX_BYTES) {
+    return { ok: false, status: 413, error: "image_too_large" };
+  }
+  const mime = sniffImageMime(buffer);
+  if (!mime || !ACCEPTED_IMAGE_MIME.has(mime)) {
+    return { ok: false, status: 415, error: "unsupported_image" };
+  }
+  return { ok: true, image: { buffer, mime } };
+}
+
+/**
+ * Words first, then the photos, then the video. A media-only answer is the
+ * bare description (one per line), the form the Telegram meme path stores;
+ * beside words — or beside tapped options, which `composeProfilerAnswerText`
+ * puts in front — each description is labelled («Photo: …», «Video: …») so a
+ * reader knows it is a picture, not a quote. A video beside photos is labelled
+ * even without words: two kinds of media must stay apart.
  *
  * Fits `PROFILER_MAX_ANSWER_LEN` without silently dropping every photo: the
  * words give way first, but keep at least half the budget.
  */
 export function composeMediaAnswerText(
   words: string,
-  descriptions: readonly string[],
+  descriptions: readonly MediaDescription[],
   language: Language,
   withOptions: boolean,
   maxLength: number = PROFILER_MAX_ANSWER_LEN,
 ): string {
   if (descriptions.length === 0) return words.slice(0, maxLength);
-  const labelled = !words && !withOptions
-    ? descriptions.join("\n")
-    : descriptions.map((d) => `${PHOTO_LABEL[language]}: ${d}`).join("\n");
+  const mixed = new Set(descriptions.map((d) => d.kind)).size > 1;
+  const labelled = !words && !withOptions && !mixed
+    ? descriptions.map((d) => d.text).join("\n")
+    : descriptions
+        .map((d) => `${(d.kind === "video" ? VIDEO_LABEL : PHOTO_LABEL)[language]}: ${d.text}`)
+        .join("\n");
   if (!words) return labelled.slice(0, maxLength);
   const separator = "\n\n";
   const room = Math.max(maxLength - labelled.length - separator.length, Math.floor(maxLength / 2));

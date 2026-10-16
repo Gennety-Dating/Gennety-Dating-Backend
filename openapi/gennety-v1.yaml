@@ -2234,7 +2234,7 @@ paths:
     post:
       tags: [me]
       operationId: answerProfilerQuestionWithMedia
-      summary: Answer the live (or «На потом») Profiler question with a voice note and/or photos
+      summary: Answer the live (or «На потом») Profiler question with a voice note, photos and/or a video
       description: |
         The `/v1/me/profiler/answer` answer, carrying media — the «+» and the
         microphone the app shows on EVERY question. Same claim (exactly one
@@ -2246,10 +2246,19 @@ paths:
           (humour) exactly as the Telegram meme path reads them, on any other
           question as an answer to that question. A refused or unreadable photo
           is skipped and never kept.
+        - A video (or an animated GIF) is cut BY THE APP — the server has no
+          ffmpeg: up to 6 frames evenly across the clip, in order
+          (`videoFrames`), its soundtrack (`videoAudio`) and its length
+          (`videoDuration`). One vision pass reads all frames as one clip,
+          with the soundtrack's transcript as what is said IN it (not the
+          person's words). A soundtrack with no speech, or transcription
+          being down, is not an error — the picture answers alone. Frames
+          are never kept.
         - Stored `answerText`: typed `text`, then the transcript, then the
-          photo descriptions (a photo-only answer stores the bare description;
-          beside words each is labelled «Photo: …» in the caller's language),
-          capped at 1000 characters. `answerSource` is `text` (or `both` /
+          photo descriptions, then the video's (a single-kind media-only
+          answer stores the bare description; beside words, or photo beside
+          video, each is labelled «Photo: …» / «Video: …» in the caller's
+          language), capped at 1000 characters. `answerSource` is `text` (or `both` /
           `tap` with options), as on `/answer`.
         - Photos that were read are kept privately under the caller's prefix
           in the chat attachments bucket; nothing in the response points at
@@ -2293,9 +2302,27 @@ paths:
                     type: string
                     format: binary
                   description: JPEG / PNG / WebP (sniffed from the bytes), ≤ 6 MB each. HEIC is refused — send JPEG.
+                videoFrames:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Frames of ONE video, evenly across it, in playback order —
+                    same formats and cap as `images`.
+                videoAudio:
+                  type: string
+                  format: binary
+                  description: The video's soundtrack (m4a / AAC), ≤ 25 MB. Only beside `videoFrames`.
+                videoDuration:
+                  type: string
+                  description: The video's length in seconds (a decimal number), as the app measured it.
             encoding:
               voice: { contentType: "audio/mp4, audio/m4a, audio/aac, audio/ogg, audio/wav, application/octet-stream" }
               images: { contentType: "image/jpeg, image/png, image/webp, application/octet-stream" }
+              videoFrames: { contentType: "image/jpeg, image/png, image/webp, application/octet-stream" }
+              videoAudio: { contentType: "audio/mp4, audio/m4a, audio/aac, application/octet-stream" }
       responses:
         "200":
           description: Recorded; what the batch does next
@@ -2304,10 +2331,12 @@ paths:
               schema: { $ref: "#/components/schemas/ProfilerAnswerResult" }
         "400":
           description: |
-            `missing_question_id`; `missing_media` — neither `voice` nor
-            `images`; `unknown_option` / `too_many_options` as on `/answer`;
-            a multer code (`LIMIT_UNEXPECTED_FILE` — more than 4 images or
-            2 voice notes, or an unknown file field). Nothing was recorded.
+            `missing_question_id`; `missing_media` — none of `voice`,
+            `images`, `videoFrames`; `missing_video_frames` — `videoAudio`
+            without frames; `unknown_option` / `too_many_options` as on
+            `/answer`; a multer code (`LIMIT_UNEXPECTED_FILE` — more than 4
+            images, 6 video frames, 2 voice notes or 2 soundtracks, or an
+            unknown file field). Nothing was recorded.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2334,9 +2363,9 @@ paths:
         "422":
           description: |
             `not_heard` — the voice note transcribed to nothing (or the
-            recording itself is unusable); `image_unreadable` — no photo could
-            be read (or every one was refused) and there is no text, voice or
-            option beside them. Nothing was recorded; the question stays live.
+            recording itself is unusable); `image_unreadable` — no photo or
+            video could be read (or every one was refused) and there is no
+            text, voice or option beside them. Nothing was recorded; the question stays live.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
