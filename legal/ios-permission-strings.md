@@ -52,6 +52,13 @@ meaning changes.
 
 ## 2. Purpose strings (InfoPlist.strings)
 
+> **2026-10-16:** the shipped English in the iOS `project.yml` has moved past the
+> camera and microphone texts below (it also names chat photos, the shared
+> photo taken on a date, and promises that concierge voice notes are never shown
+> to the match). The iOS translations were made from the shipped English, not
+> from this section. Bring this section up to the shipped text before the next
+> edit here.
+
 ### en (Base)
 
 ```
@@ -159,27 +166,36 @@ localisation; the shared i18n in this repository does not carry iOS-only screens
 ## 4. App Store Connect — App Privacy answers that match this text
 
 The App Privacy "nutrition label" must agree with the policy, or the review
-fails on 5.1.2. The answers implied by the code as audited on 2026-10-13:
+fails on 5.1.2. **Since 2026-10-16 the exact table lives in the iOS repo**
+(`docs/operations/appstore-review-notes.md` §7), generated from
+`App/PrivacyInfo.xcprivacy` — fill App Store Connect from there. Summary of the
+answers, audited against the iOS code on 2026-10-16:
 
 1. Tracking: **No** — no data is used to track across other companies' apps or
    websites, no IDFA, no ATT prompt.
 2. Data linked to the user (none used for tracking):
-   - Contact info: email address, phone number, name — App Functionality.
+   - Contact info: email address (university-email sign-in), phone number,
+     name — App Functionality; name also Product Personalization.
    - Health & Fitness: fitness (two derived Tempo Sync labels) — App
-     Functionality. Declare it even though only labels leave the device.
+     Functionality, Product Personalization. Declared even though only labels
+     leave the device.
    - Financial info: purchase history — App Functionality.
    - Location: precise location (date logistics, frequent places) and coarse
      location (city) — App Functionality.
-   - Sensitive info: none declared by type, but biometric verification is
-     covered under "User Content → Photos or Videos" and the policy's §10.
-   - User content: photos or videos, audio data (voice notes, voice answer),
-     customer support, other user content (answers, wishlist) — App
-     Functionality.
-   - Identifiers: user ID (Telegram ID, account ID), device ID only if
-     `CLIENT_EVENTS_ENABLED` is switched on (random install id) — App
-     Functionality / Analytics.
+   - Sensitive info: orientation and liveness biometrics (policy §10) — App
+     Functionality, Product Personalization.
+   - User content: photos or videos, audio data (voice notes to the concierge,
+     profile voice answer, profile-video sound), customer support, other user
+     content (answers, wishlist) — App Functionality; photos/videos and other
+     user content also Product Personalization.
+   - Identifiers: user ID (account ID, Telegram ID); device ID — always, since
+     the push token is always sent (App Functionality), plus the random install
+     id when `CLIENT_EVENTS_ENABLED` is on (Analytics).
    - Usage data: product interaction — App Functionality, and Analytics if
      client events are on.
-   - Diagnostics: none collected by an SDK; server logs only.
+   - Diagnostics: other diagnostic data — the opt-in `fatal_client_error`
+     client event (Analytics). No crash SDK; MetricKit stays on the device.
+   - Other data types: age, height, hobbies and similar profile fields — App
+     Functionality, Product Personalization.
 3. Account deletion (Guideline 5.1.1(v)): Settings → Delete account in the app,
    `DELETE /v1/me`; state the path in the App Review notes.
