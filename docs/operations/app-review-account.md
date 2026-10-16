@@ -43,6 +43,9 @@ switchable exception.
 
 ## Turning it on (before submitting)
 
+The full submission list (other env values, Apple portals) is in
+[appstore-submission-checklist.md](appstore-submission-checklist.md).
+
 1. **Production `.env`.** Set a dedicated address and a random code. A repeated or
    sequential code is refused at boot.
    ```

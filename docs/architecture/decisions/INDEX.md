@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 433 entries
+# Decision index — all 434 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-16 | риски отказа App Review закрыты до первой подачи тремя ветками (сайт: legal v4.4/v3.2 + `/support`; iOS: манифест, автопродление у кнопки, переводы разрешений, экспорт-ключ, заметки ревью); ручные шаги основателя — `operations/appstore-submission-checklist.md`; вход по телефону на ревью рекомендовано выключить | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | партнёр ревьюера App Store — «Gleb» с четырьмя фото основателя (его согласие, кадры альбома свидания, прод-бакет `app-review/partner-1..4.jpg`), ревьюер «Alex» стал девушкой; чужие фото из сети отклонены | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | демо-аккаунт ревьюера App Store на проде: один адрес + постоянный код (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), готовый проверенный «Alex», партнёр-заглушка «Emma» отвечает за вторую сторону, оба вне пула, выключается пустыми переменными | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | лестница ожидания короче: 4/7/10/21/45 (плотно в первые дни, после 45-го молчим), «Всё в силе» снят, префильтр 3 дня, скидка на 7-й день | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
