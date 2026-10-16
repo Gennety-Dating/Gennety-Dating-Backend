@@ -13,18 +13,18 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 **PENDING 2026-10-15 — App Store review account (restart only: no migration, no contract change; feature off until env is set).**
 This adds the `APP_REVIEW_EMAIL` + `APP_REVIEW_CODE` sign-in branch on `/v1/auth/otp/*`, the reviewer "Alex" and the
-stand-in partner "Emma" (`workers/app-review-partner.ts`, cron every 20 s, scheduled only when both vars are set), and
+stand-in partner "Gleb" (`workers/app-review-partner.ts`, cron every 20 s, scheduled only when both vars are set), and
 an exclusion of the reserved `telegramId` band `-779000099…-779000001` from the match pool.
 
 1. **Deploy as-is.** Deploying without the vars changes nothing for users: the exclusion filter matches no rows.
 2. **Turn it on for submission.** Set both vars (random 6 digits; boot refuses a guessable code), restart, sign in
-   once from the iOS app, and upload Emma's photos by hand. Full steps: `docs/operations/app-review-account.md`.
+   once from the iOS app. Gleb's photos are already in storage (uploaded 2026-10-16). Full steps: `docs/operations/app-review-account.md`.
 
 - **Проверка:**
   - `pnpm --filter @gennety/bot exec vitest run src/services/app-review.test.ts src/workers/app-review-partner.test.ts
     src/public/auth-app-review.test.ts src/services/match-engine-eligibility.test.ts`.
   - With the vars set, the boot log shows `[cron] App Store review partner scheduled`.
-  - Within ~20 s of the first review sign-in, Today shows Emma's pitch.
+  - Within ~20 s of the first review sign-in, Today shows Gleb's pitch, with four photos.
   - `pm2 logs gennety-bot | grep app-review` stays quiet. Failures are logged at most once per 10 min per kind.
 - **Откат:** empty both vars + restart (feature off). Code: `git revert` + restart. The two accounts may be left in
   place or removed via admin account deletion.

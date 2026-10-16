@@ -16,7 +16,7 @@ import { getBalance, grantTickets } from "./ticket-wallet.js";
  *   1. That one address signs in with that one 6-digit code — no mail is sent,
  *      and every other address goes through the ordinary OTP rail untouched.
  *   2. It lands on a finished, verified profile ("Alex").
- *   3. It is paired with a stand-in partner ("Emma") whom
+ *   3. It is paired with a stand-in partner ("Gleb") whom
  *      `workers/app-review-partner.ts` walks through every step a real partner
  *      would take, so the reviewer sees the whole flow in minutes.
  *
@@ -151,20 +151,35 @@ interface Persona {
   energyAxis: number;
   orientationAxis: number;
   anchorTags: string[];
+  /** Storage paths in the profile-photo bucket; empty = leave photos alone. */
+  photos: string[];
 }
+
+/**
+ * The stand-in partner's pictures: the founder's own photos (his consent,
+ * 2026-10-16), uploaded once by hand to these fixed paths in the profile-photo
+ * bucket — see `docs/operations/app-review-account.md`. Fixed paths, not
+ * `<userId>/…`, so the row can be recreated without re-uploading.
+ */
+export const APP_REVIEW_PARTNER_PHOTOS = [
+  "app-review/partner-1.jpg",
+  "app-review/partner-2.jpg",
+  "app-review/partner-3.jpg",
+  "app-review/partner-4.jpg",
+];
 
 const REVIEWER: Persona = {
   telegramId: APP_REVIEW_REVIEWER_TELEGRAM_ID,
   firstName: "Alex",
-  age: 24,
-  gender: "male",
-  preference: "women",
-  height: 181,
+  age: 21,
+  gender: "female",
+  preference: "men",
+  height: 168,
   hobbies: ["coffee", "running", "photography", "board games"],
   partnerPreferences: "Someone curious and easy to talk to, who likes a slow evening out.",
   psychologicalSummary:
     "Calm and curious, a good listener with a dry sense of humour. Studies " +
-    "computer science and spends weekends running along the river or taking " +
+    "architecture and spends weekends running along the river or taking " +
     "film photos around the old town. Prefers small quiet places to loud ones " +
     "and long conversations to small talk.",
   fridayVibeText: "A quiet café, good coffee and a conversation that runs late.",
@@ -172,29 +187,31 @@ const REVIEWER: Persona = {
   energyAxis: -0.2,
   orientationAxis: 0.5,
   anchorTags: ["coffee", "photography", "city walks"],
+  photos: [],
 };
 
 const PARTNER: Persona = {
   telegramId: APP_REVIEW_PARTNER_TELEGRAM_ID,
-  firstName: "Emma",
-  age: 24,
-  gender: "female",
-  preference: "men",
-  height: 168,
-  hobbies: ["illustration", "yoga", "ceramics", "documentaries"],
+  firstName: "Gleb",
+  age: 18,
+  gender: "male",
+  preference: "women",
+  height: 181,
+  hobbies: ["building apps", "design", "city walks", "documentaries"],
   partnerPreferences:
     "Someone with their own passion and opinions — interesting to listen to, " +
     "and fine to disagree with.",
   psychologicalSummary:
-    "Warm and attentive with a clear inner compass. Works as a freelance " +
-    "illustrator, so she notices details others skip, in pictures and in " +
-    "people. Opens up slowly, values honesty over small talk, and recharges " +
-    "with quiet, hands-on things like ceramics and long walks.",
+    "Energetic and curious with a clear inner compass. Builds apps and cares " +
+    "about small details others skip, on screens and in people. Quick to " +
+    "laugh, values honesty over small talk, and recharges with long walks " +
+    "through the city.",
   fridayVibeText: "A small place where nobody rushes us, and a conversation that wanders.",
   vibeFocusText: "Mostly the person, but the atmosphere should not get in the way.",
-  energyAxis: -0.15,
+  energyAxis: 0.2,
   orientationAxis: 0.7,
-  anchorTags: ["art", "ceramics", "films", "slow evenings"],
+  anchorTags: ["tech", "design", "films", "slow evenings"],
+  photos: APP_REVIEW_PARTNER_PHOTOS,
 };
 
 /**
@@ -283,8 +300,13 @@ async function upsertPersona(
   // before it pitches (matching requires one even for a named pair).
   const profile = await prisma.profile.findUnique({
     where: { userId: user.id },
-    select: { userId: true },
+    select: { userId: true, photos: true },
   });
+  if (profile && persona.photos.length > 0 && !samePaths(profile.photos, persona.photos)) {
+    // Only the partner carries photos; nobody edits its profile, so the code
+    // stays the source of truth (an older row without pictures catches up).
+    await prisma.profile.update({ where: { userId: user.id }, data: { photos: persona.photos } });
+  }
   if (!profile) {
     await prisma.profile.create({
       data: {
@@ -298,6 +320,7 @@ async function upsertPersona(
         energyAxis: persona.energyAxis,
         orientationAxis: persona.orientationAxis,
         anchorTags: persona.anchorTags,
+        photos: persona.photos,
         vibeExtractedAt: now,
         relationshipIntents: ["open", "falling"],
         eloScore: 520,
@@ -314,6 +337,10 @@ async function upsertPersona(
     });
   }
   return user;
+}
+
+function samePaths(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((p, i) => p === b[i]);
 }
 
 /** Keep the reviewer able to pay the date ticket without buying anything. */

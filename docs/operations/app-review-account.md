@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are preparing an App Store submission, setting up or turning off the reviewer demo account, or debugging the "Alex"/"Emma" accounts on production. -->
+<!-- WHEN_TO_READ: You are preparing an App Store submission, setting up or turning off the reviewer demo account, or debugging the "Alex"/"Gleb" accounts on production. -->
 
 # App Store review account
 
@@ -13,19 +13,19 @@ switchable exception.
    rail with one fixed 6-digit code (`APP_REVIEW_CODE`). No mail is sent. Every other
    address is untouched. All callers share a lockout: 20 wrong codes in an hour lock the
    address for the rest of that hour. The usual per-email+IP limiter (10/h) also applies.
-2. **Reviewer account "Alex".** The account is created on the first sign-in, already
+2. **Reviewer account "Alex"** (a woman, 21, looking for men). The account is created on the first sign-in, already
    finished and verified, so the app skips onboarding and liveness and opens on Today.
    - Every later sign-in resets only the gates (status, onboarding, verification,
      consent); profile edits are kept.
    - A deleted account comes back on the next sign-in.
    - The wallet is kept at 2 tickets or more. These are `welcome_gift` grants, not revenue.
-3. **Stand-in partner "Emma".** She lives in `workers/app-review-partner.ts`, which ticks
-   every 20 s. She acts only after the reviewer's own step, through the same production
-   functions a real partner's tap reaches:
-   - she accepts the pitch;
-   - she pays her half of the date ticket;
-   - she takes the reviewer's first time slot;
-   - she sends a departure point at Golden Gate, Kyiv.
+3. **Stand-in partner "Gleb"** (a man, 18, the founder's own photos). He lives in
+   `workers/app-review-partner.ts`, which ticks every 20 s. He acts only after the
+   reviewer's own step, through the same production functions a real partner's tap reaches:
+   - he accepts the pitch;
+   - he pays his half of the date ticket;
+   - he takes the reviewer's first time slot;
+   - he sends a departure point at Golden Gate, Kyiv.
 4. **Replacement pair.** When a pair ends (decline, expiry, cancelled date), the old rows
    are deleted and a fresh pair is pitched about 2 minutes later.
 
@@ -52,23 +52,25 @@ switchable exception.
 2. **Restart.** Restart the bot; see the deployment runbook. The log shows
    `[cron] App Store review partner scheduled`.
 3. **Sign in once yourself.** Use the iOS app with that address and code. Within about
-   20 s Today shows Emma's pitch. Walk through it once.
+   20 s Today shows Gleb's pitch. Walk through it once.
 4. **Fill in App Store Connect.** Under *App Review Information* → *Sign-in required*,
    enter the address and code. In *Notes*, paste the text from the iOS repo
    (`docs/operations/appstore-review-notes.md` §2). Tell the reviewer to pick a
    departure point **in Kyiv**: an origin outside the market is refused.
 
-## Emma's photos
+## Gleb's photos
 
-Without photos the pitch shows Emma with no pictures.
+The partner shows four photos of the founder, used with his consent (2026-10-16). They
+are cut from his date-album shots and were uploaded once, on 2026-10-16, to fixed paths
+in the production `profile-photos` bucket: `app-review/partner-1.jpg` … `partner-4.jpg`.
 
-1. Upload 3–4 images of a **fictitious** person, generated or licensed for this use, to
-   Supabase Storage under her user id.
-2. Write the storage paths into `profiles.photos` for her row. Her row has
-   `telegram_id = -779000002`.
-
-A helper script was drafted but not committed: writing to the production database from
-an agent session needs the founder's explicit go-ahead.
+1. `APP_REVIEW_PARTNER_PHOTOS` in `services/app-review.ts` lists those paths. The partner
+   row is created with them, and an existing row whose photos differ is brought back to
+   them on the next tick. The reviewer's own photos are never touched.
+2. The paths sit outside any user's `<userId>/` folder, so account deletion of the
+   partner leaves the files in place and a recreated row shows them again.
+3. To change a picture, upload over the same path (`x-upsert`). Never put photos of
+   another real person there without their consent.
 
 ## Turning it off (after approval)
 
