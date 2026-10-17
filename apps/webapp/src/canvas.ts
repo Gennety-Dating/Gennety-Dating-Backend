@@ -47,6 +47,9 @@ import type { DockPresence } from "./canvas/transit.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { apiBase } from "./api.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_canvas");
 
 const KYIV: [number, number] = [50.4501, 30.5234];
 const MAP_ZOOM = 13;

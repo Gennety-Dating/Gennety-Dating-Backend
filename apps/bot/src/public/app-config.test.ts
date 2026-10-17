@@ -74,6 +74,33 @@ describe("GET /v1/app/config", () => {
     expect(res.body.wishlistProduct).toBeNull();
   });
 
+  // The wishlist flag alone is the person's own list (2026-10-15): the app
+  // shows «Мой вишлист», but there is no sheet — so no product to sell — until
+  // «The Morning After» is on as well.
+  it("sells no sheet while only the wishlist flag is on", async () => {
+    const saved = {
+      wishlist: env.WISHLIST_FEATURE_ENABLED,
+      morning: env.MORNING_AFTER_ENABLED,
+      appstore: env.WISHLIST_APPSTORE_ENABLED,
+    };
+    const mutable = env as { -readonly [K in keyof typeof env]: (typeof env)[K] };
+    try {
+      mutable.WISHLIST_FEATURE_ENABLED = true;
+      mutable.WISHLIST_APPSTORE_ENABLED = true;
+      mutable.MORNING_AFTER_ENABLED = false;
+      let res = await request(buildApp()).get("/v1/app/config");
+      expect(res.body.features.wishlist).toBe(true);
+      expect(res.body.wishlistProduct).toBeNull();
+      mutable.MORNING_AFTER_ENABLED = true;
+      res = await request(buildApp()).get("/v1/app/config");
+      expect(res.body.wishlistProduct).toBe(env.WISHLIST_APPSTORE_PRODUCT_ID);
+    } finally {
+      mutable.WISHLIST_FEATURE_ENABLED = saved.wishlist;
+      mutable.MORNING_AFTER_ENABLED = saved.morning;
+      mutable.WISHLIST_APPSTORE_ENABLED = saved.appstore;
+    }
+  });
+
   // With the rail off (the default) an app must see no pass to sell — the same
   // Premium-only sheet it showed before the pass existed.
   it("offers no Prime Time pass while its rail is off", async () => {

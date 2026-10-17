@@ -12,6 +12,7 @@ import { t } from "@gennety/shared";
  */
 
 const messageCreate = vi.fn();
+const messageDelete = vi.fn(async (_args: unknown) => ({}));
 const userFindUnique = vi.fn();
 const messageFindMany = vi.fn(async () => [] as unknown[]);
 
@@ -19,6 +20,7 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     message: {
       create: messageCreate,
+      delete: messageDelete,
       findMany: messageFindMany,
     },
     user: { findUnique: userFindUnique },
@@ -51,6 +53,14 @@ vi.mock("./chat-sessions.js", () => ({
   continueOrOpenChatSession: (userId: string) => continueOrOpenChatSession(userId),
   touchChatSession: (id: string, at: Date) => touchChatSession(id, at),
 }));
+const buildPersonCard = vi.fn(async (_userId: string): Promise<string | null> => null);
+vi.mock("./chat-person-card.js", () => ({
+  buildPersonCard: (userId: string) => buildPersonCard(userId),
+}));
+vi.mock("./chat-consent.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./chat-consent.js")>()),
+  personConsented: async () => true,
+}));
 const afterChatTurn = vi.fn();
 vi.mock("./chat-session-digest.js", () => ({
   afterChatTurn: (input: unknown) => afterChatTurn(input),
@@ -76,6 +86,8 @@ beforeEach(() => {
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
   }));
   userFindUnique.mockReset();
+  messageDelete.mockClear();
+  buildPersonCard.mockReset().mockResolvedValue(null);
   messageFindMany.mockReset().mockResolvedValue([]);
   signedUrl.mockClear();
   continueOrOpenChatSession.mockClear();
@@ -185,7 +197,7 @@ describe("chat agent sessions", () => {
     await runChatTurn(
       { userId: USER, text: "помнишь?", imageUrls: [], sessionId: CHAT },
       { fetchFn: fetchFn as unknown as typeof fetch },
-    );
+    ).catch(() => undefined);
 
     const system = seen[0]!.messages[0]!.content;
     expect(system).toContain("## Earlier chats");
@@ -196,31 +208,46 @@ describe("chat agent sessions", () => {
   });
 });
 
-describe("chat agent fallback", () => {
-  it("answers in the user's language when the model returns nothing", async () => {
+/**
+ * Since 2026-10-15 a turn the model answered with nothing is NOT stored as a
+ * canned "something went wrong" from the agent: the person's row is taken back
+ * and the turn fails as unavailable (503 → the app's retry). A canned line in
+ * the history was read by the next turn's model as its own words.
+ */
+describe("chat agent with no reply", () => {
+  it("retries once, then takes the person's row back and fails as unavailable", async () => {
     userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    const fetchFn = vi.fn(emptyCompletion);
 
-    const result = await runChatTurn(
-      { userId: USER, text: "привет", imageUrls: [] },
-      { fetchFn: emptyCompletion },
-    );
+    await expect(
+      runChatTurn({ userId: USER, text: "привет", imageUrls: [] }, { fetchFn: fetchFn as unknown as typeof fetch }),
+    ).rejects.toMatchObject({ name: "ChatAgentUnavailableError" });
 
-    expect(result.content).toBe(t("ru", "agentFallbackError"));
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(messageDelete).toHaveBeenCalledWith({ where: { id: "m1" } });
+    expect(messageCreate).toHaveBeenCalledTimes(1);
     expect(userFindUnique).toHaveBeenCalledWith({
       where: { id: USER },
-      select: { telegramId: true, language: true },
+      select: { telegramId: true, language: true, profile: { select: { homeCityKey: true } } },
     });
   });
 
-  it("falls back to English when the account has no language yet", async () => {
-    userFindUnique.mockResolvedValue({ telegramId: 1n, language: null });
+  it("a transient failure followed by an answer is an ordinary turn", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls += 1;
+      if (calls === 1) return new Response("upstream", { status: 502 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "привет" }, finish_reason: "stop" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
 
-    const result = await runChatTurn(
-      { userId: USER, text: "hi", imageUrls: [] },
-      { fetchFn: emptyCompletion },
-    );
+    const result = await runChatTurn({ userId: USER, text: "привет", imageUrls: [] }, { fetchFn });
 
-    expect(result.content).toBe(t("en", "agentFallbackError"));
+    expect(result.content).toBe("привет");
+    expect(messageDelete).not.toHaveBeenCalled();
   });
 
   /**
@@ -280,7 +307,7 @@ describe("chat agent images", () => {
     await runChatTurn(
       { userId: USER, text: "какое лучше?", imageUrls: [`${USER}/1.jpg`, `${USER}/2.jpg`] },
       { fetchFn: fetchOf(fetchFn) },
-    );
+    ).catch(() => undefined);
 
     const messages = seen[0] as Array<{ role: string; content: unknown }>;
     const turn = messages.at(-1)!;
@@ -316,7 +343,7 @@ describe("chat agent images", () => {
       });
     });
 
-    await runChatTurn({ userId: USER, text: "вот", imageUrls: [] }, { fetchFn: fetchOf(fetchFn) });
+    await runChatTurn({ userId: USER, text: "вот", imageUrls: [] }, { fetchFn: fetchOf(fetchFn) }).catch(() => undefined);
 
     const messages = seen[0] as Array<{ role: string; content: unknown }>;
     const parts = messages.at(-1)!.content as Array<{ type: string }>;
@@ -328,7 +355,7 @@ describe("chat agent images", () => {
     await runChatTurn(
       { userId: USER, text: "вот", imageUrls: [`${USER}/1.jpg`, `${USER}/2.jpg`] },
       { fetchFn: emptyCompletion },
-    );
+    ).catch(() => undefined);
     expect(messageCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -395,7 +422,7 @@ describe("chat agent album signing", () => {
     release[2]!();
     release[0]!();
     release[1]!();
-    await turn;
+    await turn.catch(() => undefined);
 
     expect(signedUrl.mock.calls.map(([path]) => path)).toEqual(ALBUM);
     expect(lastTurnParts().map((part) => part.image_url?.url ?? part.text)).toEqual([
@@ -414,7 +441,7 @@ describe("chat agent album signing", () => {
       path === ALBUM[1] ? null : `https://signed.example/${path}`,
     );
     const { run, lastTurnParts } = albumTurn();
-    await run();
+    await run().catch(() => undefined);
 
     expect(lastTurnParts().filter((part) => part.type === "text").map((part) => part.text)).toEqual([
       "вот",
@@ -437,5 +464,184 @@ describe("chat agent album signing", () => {
 
     await expect(run()).rejects.toBe(first);
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Founder's chat 2026-10-15 ("perfume"): what went wrong there, pinned down.
+ */
+describe("chat agent after the perfume chat", () => {
+  beforeEach(() => {
+    signedUrl.mockReset().mockImplementation(async (path: string) => `https://signed.example/${path}`);
+  });
+
+  type Sent = { messages: Array<{ role: string; content: unknown }>; tool_choice?: string };
+
+  function recorder(answers: Array<() => Response>) {
+    const seen: Sent[] = [];
+    const fetchFn = vi.fn(async (_url: string, init: { body: string }) => {
+      seen.push(JSON.parse(init.body));
+      const next = answers.shift();
+      return next ? next() : json({ choices: [{ message: { content: "ок" }, finish_reason: "stop" }] });
+    });
+    return { seen, fetchFn: fetchFn as unknown as typeof fetch, calls: fetchFn };
+  }
+
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  }
+
+  const toolCall = (name: string) => () =>
+    json({
+      choices: [
+        {
+          message: { content: null, tool_calls: [{ id: `c-${Math.random()}`, type: "function", function: { name, arguments: "{}" } }] },
+          finish_reason: "tool_calls",
+        },
+      ],
+    });
+
+  // Since 2026-10-15 earlier photos carry their tokens — a wishlist card may
+  // name "the third one". The profile stays limited to this turn in code.
+  it("still shows the photos of an earlier message, each with its token", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      // newest first, as the query returns them
+      { role: "user", content: "там ещё третий", imageUrl: null, imageUrls: [], context: null },
+      { role: "assistant", content: "Le Beau и Russian Tea", imageUrl: null, imageUrls: [], context: null },
+      { role: "user", content: "вот духи", imageUrl: `${USER}/1.jpg`, imageUrls: [`${USER}/1.jpg`, `${USER}/2.jpg`, `${USER}/3.jpg`], context: null },
+    ]);
+    const { seen, fetchFn } = recorder([]);
+
+    await runChatTurn({ userId: USER, text: "там ещё третий", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    const earlier = seen[0]!.messages.find(
+      (m) => m.role === "user" && Array.isArray(m.content) && (m.content as Array<{ text?: string }>)[0]?.text === "вот духи",
+    );
+    const parts = earlier!.content as Array<{ type: string; text?: string }>;
+    expect(parts.filter((p) => p.type === "image_url")).toHaveLength(3);
+    expect(parts.filter((p) => p.text?.startsWith("[imageUrl=")).map((p) => p.text)).toEqual([
+      `[imageUrl=${USER}/1.jpg]`,
+      `[imageUrl=${USER}/2.jpg]`,
+      `[imageUrl=${USER}/3.jpg]`,
+    ]);
+  });
+
+  it("an earlier photo Storage lost is reported missing instead of failing the turn", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "и?", imageUrl: null, imageUrls: [], context: null },
+      { role: "user", content: "вот", imageUrl: `${USER}/1.jpg`, imageUrls: [`${USER}/1.jpg`], context: null },
+    ]);
+    signedUrl.mockImplementationOnce(async () => {
+      throw new Error("gone");
+    });
+    const { seen, fetchFn } = recorder([]);
+
+    const result = await runChatTurn({ userId: USER, text: "и?", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    expect(result.content).toBe("ок");
+    const earlier = seen[0]!.messages[1]!.content as Array<{ type: string; text?: string }>;
+    expect(earlier.some((p) => p.text?.includes("no longer shown"))).toBe(true);
+  });
+
+  it("an old canned fallback line reaches the model as a failure note, not as its own words", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "Что повторить?", imageUrl: null, imageUrls: [], context: null },
+      { role: "assistant", content: t("ru", "agentFallbackError"), imageUrl: null, imageUrls: [], context: null },
+    ]);
+    const { seen, fetchFn } = recorder([]);
+
+    await runChatTurn({ userId: USER, text: "Что повторить?", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    const assistant = seen[0]!.messages.find((m) => m.role === "assistant")!;
+    expect(assistant.content).not.toBe(t("ru", "agentFallbackError"));
+    expect(String(assistant.content)).toContain("Technical failure");
+  });
+
+  it("a turn still calling tools after every round ends with a closing call, tools off", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    const menu = await import("./menu-agent.js");
+    vi.mocked(menu.executeAgentTool).mockResolvedValue({
+      result: JSON.stringify({ success: true }),
+      receiptKey: null,
+      action: null,
+    } as Awaited<ReturnType<typeof menu.executeAgentTool>>);
+    const { seen, fetchFn } = recorder([
+      toolCall("get_my_profile"),
+      toolCall("get_my_profile"),
+      toolCall("get_my_profile"),
+      toolCall("get_my_profile"),
+      toolCall("get_my_profile"),
+      () => json({ choices: [{ message: { content: "посмотрел твой профиль" }, finish_reason: "stop" }] }),
+    ]);
+
+    const result = await runChatTurn({ userId: USER, text: "глянь профиль", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    expect(result.content).toBe("посмотрел твой профиль");
+    expect(seen).toHaveLength(6);
+    expect(seen[5]!.tool_choice).toBe("none");
+    expect(seen[0]!.tool_choice).toBeUndefined();
+  });
+
+  it("a photo the provider refuses costs the photo, not the reply", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    messageFindMany.mockResolvedValue([
+      { role: "user", content: "мои духи", imageUrl: `${USER}/1.jpg`, imageUrls: [`${USER}/1.jpg`], context: null },
+    ]);
+    const { seen, fetchFn } = recorder([
+      () => new Response("invalid image", { status: 400 }),
+      () => new Response("invalid image", { status: 400 }),
+    ]);
+
+    const result = await runChatTurn(
+      { userId: USER, text: "мои духи", imageUrls: [`${USER}/1.jpg`], sessionId: CHAT },
+      { fetchFn },
+    );
+
+    expect(result.content).toBe("ок");
+    const last = seen[2]!.messages.at(-1)!.content as Array<{ type: string; text?: string }>;
+    expect(last.some((p) => p.type === "image_url")).toBe(false);
+    expect(last.some((p) => p.text?.includes("could not be shown"))).toBe(true);
+  });
+
+  it("strips markdown and trims a reply cut by the token ceiling to a whole sentence", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    const { fetchFn } = recorder([
+      () =>
+        json({
+          choices: [
+            {
+              message: { content: "**Tobacco Memories** — тёплый выбор. Он про вечер у камина. А ещё он хорошо сочета" },
+              finish_reason: "length",
+            },
+          ],
+        }),
+    ]);
+
+    const result = await runChatTurn({ userId: USER, text: "какой лучше", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    expect(result.content).toBe("Tobacco Memories — тёплый выбор. Он про вечер у камина.");
+  });
+
+  it("puts the person card into the system prompt", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    buildPersonCard.mockResolvedValue("## About this person (live — read before you answer)\n- Interests: perfume");
+    const { seen, fetchFn } = recorder([]);
+
+    await runChatTurn({ userId: USER, text: "привет", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    expect(String(seen[0]!.messages[0]!.content)).toContain("- Interests: perfume");
+  });
+
+  it("a card that cannot be built does not cost the turn", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
+    buildPersonCard.mockRejectedValue(new Error("db down"));
+    const { fetchFn } = recorder([]);
+
+    const result = await runChatTurn({ userId: USER, text: "привет", imageUrls: [], sessionId: CHAT }, { fetchFn });
+
+    expect(result.content).toBe("ок");
   });
 });

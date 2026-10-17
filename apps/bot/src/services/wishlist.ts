@@ -18,7 +18,9 @@ import {
   wishlistCatalogItem,
   wishlistMoreLabel,
   wishlistTeaserIds,
+  wishlistVenueTaste,
   type Language,
+  type WishlistVenueTaste,
   type WishlistCategory,
   type WishlistPriceBand,
   type WishlistSource,
@@ -26,7 +28,11 @@ import {
 import { env } from "../config.js";
 import { isPremiumActive } from "./premium.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
-import { createProfilePhotoSignedUrl, createWishlistImageSignedUrls } from "./storage.js";
+import {
+  createProfilePhotoSignedUrl,
+  createWishlistImageSignedUrls,
+  deleteStorageObject,
+} from "./storage.js";
 import { copyWishlistImage } from "./wishlist-lookup.js";
 
 /**
@@ -52,6 +58,18 @@ import { copyWishlistImage } from "./wishlist-lookup.js";
  */
 
 const IMAGE_URL_TTL_S = 24 * 60 * 60;
+
+/**
+ * The partner-facing half — the cheat sheet in the mutual offer and its
+ * purchase — needs BOTH flags (decision journal 2026-10-15). The sheet only
+ * ever existed behind a mutual morning, so this was already true in effect;
+ * spelled out, `WISHLIST_FEATURE_ENABLED` alone is a supported setting of its
+ * own: people build their list (chat card, «Мой вишлист», the «Сегодня»
+ * session) while «The Morning After» and the paid sheet stay off.
+ */
+export function wishlistSheetLive(): boolean {
+  return env.WISHLIST_FEATURE_ENABLED && env.MORNING_AFTER_ENABLED;
+}
 const FLOWERS_QUESTION_ID = "f_flowers";
 const FLOWERS_FREE_TEXT_MAX = 80;
 
@@ -181,6 +199,13 @@ export interface WishlistItemInput {
   priceBand?: unknown;
   source: unknown;
   catalogKey?: unknown;
+  /**
+   * A photo ALREADY in our storage — the owner's own wishlist key
+   * (`{userId}/w….ext`, see `ownWishlistImagePath`). The chat card copies the
+   * person's chat photo there before saving; anything else is ignored. Wins
+   * over `imageUrl`, which is a remote photo still to be copied.
+   */
+  imagePath?: unknown;
 }
 
 export type WishlistItemRefusal = "bad-item" | "too-many";
@@ -200,6 +225,16 @@ function cleanHttpsUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The owner's own wishlist photo key, exactly as `uploadWishlistImage` mints
+ * it — anything else (another person's key, a chat key, a traversal) is null.
+ */
+export function ownWishlistImagePath(userId: string, value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^([0-9a-f-]{36})\/w\d{1,20}-[0-9a-f]{6}\.(jpg|png|webp)$/i.exec(value);
+  return match?.[1]?.toLowerCase() === userId.toLowerCase() ? value : null;
 }
 
 /** Validate one item; null when it is not something we will store. */
@@ -250,10 +285,15 @@ export async function addWishlistItems(
   if (existing + items.length > WISHLIST_MAX_ITEMS) return { ok: false, error: "too-many" };
 
   const stored = await Promise.all(
-    items.map(async (item) => ({
-      ...item!,
-      imageUrl: item!.imageUrl ? await copyWishlistImage(userId, item!.imageUrl).catch(() => null) : null,
-    })),
+    items.map(async (item, index) => {
+      const ownPath = ownWishlistImagePath(userId, inputs[index]!.imagePath);
+      return {
+        ...item!,
+        imageUrl:
+          ownPath ??
+          (item!.imageUrl ? await copyWishlistImage(userId, item!.imageUrl).catch(() => null) : null),
+      };
+    }),
   );
   await prisma.wishlistItem.createMany({
     data: stored.map((item, index) => ({
@@ -274,10 +314,49 @@ export async function addWishlistItems(
   return { ok: true, items: await viewItems(await loadItems(userId)) };
 }
 
+/**
+ * Remove one item and its stored photo. The photo used to stay in Storage
+ * until the account was deleted; since the chat card saves the person's OWN
+ * photos (2026-10-15), "remove it from my list" must remove the copy too. A
+ * photo that fails to delete does not undo the removal — it is swept with the
+ * account, as before.
+ */
 export async function deleteWishlistItem(userId: string, itemId: string, now: Date = new Date()): Promise<boolean> {
+  const row = await prisma.wishlistItem.findFirst({ where: { id: itemId, userId }, select: { imageUrl: true } });
   const { count } = await prisma.wishlistItem.deleteMany({ where: { id: itemId, userId } });
-  if (count > 0) await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
-  return count > 0;
+  if (count === 0) return false;
+  await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
+  const path = ownWishlistImagePath(userId, row?.imageUrl);
+  if (path) {
+    void deleteStorageObject(env.SUPABASE_CHAT_BUCKET, path).catch((err: unknown) => {
+      console.warn("[wishlist] photo of a removed item not deleted:", err);
+    });
+  }
+  return true;
+}
+
+/**
+ * What each person's list says about places, for the first venue's soft hint
+ * (`wishlistVenueTaste`, decision 2026-10-15). Nobody whose list is hidden,
+ * and nothing at all while the feature or the hint is off. One query for both
+ * sides of a pair.
+ */
+export async function loadWishlistVenueTastes(userIds: string[]): Promise<Map<string, WishlistVenueTaste>> {
+  const out = new Map<string, WishlistVenueTaste>();
+  if (!env.WISHLIST_FEATURE_ENABLED || env.WISHLIST_VENUE_HINT_WEIGHT <= 0 || userIds.length === 0) return out;
+  const rows = await prisma.wishlistItem.findMany({
+    where: {
+      userId: { in: userIds },
+      category: { in: ["place", "drink", "experience"] },
+      user: { wishlistHiddenAt: null },
+    },
+    select: { userId: true, category: true, title: true, brand: true, catalogKey: true },
+  });
+  for (const userId of userIds) {
+    const taste = wishlistVenueTaste(rows.filter((row) => row.userId === userId));
+    if (taste) out.set(userId, taste);
+  }
+  return out;
 }
 
 /** Every stored image path of a user — for account deletion's storage sweep. */
@@ -548,7 +627,7 @@ async function buildSheet(
   language: Language,
   now: Date,
 ): Promise<WishlistSheet | null> {
-  if (!env.WISHLIST_FEATURE_ENABLED || partner.wishlistHiddenAt) return null;
+  if (!wishlistSheetLive() || partner.wishlistHiddenAt) return null;
   const rows = await loadItems(partner.id);
   if (rows.length === 0) return null;
   const { unlocked, premium } = await sheetUnlocked(matchId, viewerId, partner.id, now);
@@ -622,7 +701,7 @@ export async function wishlistPurchasable(
   matchId: string,
   viewerId: string,
 ): Promise<{ ok: true; ownerId: string } | { ok: false; error: UnlockRefusal }> {
-  if (!env.WISHLIST_FEATURE_ENABLED) return { ok: false, error: "no-sheet" };
+  if (!wishlistSheetLive()) return { ok: false, error: "no-sheet" };
   const pair = await loadMutualPair(matchId, viewerId);
   if (!pair.ok) return pair;
   if (pair.partner.wishlistHiddenAt) return { ok: false, error: "no-sheet" };

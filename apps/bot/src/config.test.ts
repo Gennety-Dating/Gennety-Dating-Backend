@@ -271,6 +271,19 @@ describe("runtime configuration", () => {
     expect(runtimeConfigurationErrors(complete(), "production")).toEqual([]);
   });
 
+  it("refuses a short read-only admin key, or one equal to the full key", () => {
+    expect(runtimeConfigurationErrors(complete({ ADMIN_READ_KEY: "short" }), "production")).toEqual([
+      expect.stringContaining("ADMIN_READ_KEY"),
+    ]);
+    const key = "k".repeat(40);
+    expect(
+      runtimeConfigurationErrors(complete({ ADMIN_READ_KEY: key, ADMIN_API_KEY: key }), "production"),
+    ).toEqual([expect.stringContaining("differ")]);
+    expect(
+      runtimeConfigurationErrors(complete({ ADMIN_READ_KEY: key, ADMIN_API_KEY: "other" }), "production"),
+    ).toEqual([]);
+  });
+
   it("refuses to start with the native API silently disabled", () => {
     expect(runtimeConfigurationErrors(complete({ JWT_SECRET: "" }), "production")).toEqual([
       expect.stringContaining("JWT_SECRET"),

@@ -3,6 +3,9 @@ import { App } from "./App.js";
 import { wireContentInsets } from "../telegram-insets.js";
 import { keepOpenOnVerticalSwipe } from "../telegram-swipes.js";
 import "./radar.css";
+import { startPulse } from "../pulse.js";
+
+startPulse("mini_radar");
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();

@@ -10,6 +10,7 @@
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "eval:chat": "vitest run --config vitest.eval.config.ts",
     "re-engage": "tsx src/workers/run-re-engagement.ts"
   },
   "dependencies": {

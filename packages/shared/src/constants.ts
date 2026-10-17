@@ -909,3 +909,90 @@ export const STRANDED_HANDOFF_GRACE_MS = 10 * 60 * 1000;
  * than the full reply window the other side would otherwise sit through.
  */
 export const UNREACHABLE_SILENT_SIDE_GRACE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Pulse product analytics (docs/product/domains/pulse-analytics.md §5–§6):
+ * every threshold the nightly rollup, its detectors and the `/admin/pulse/*`
+ * reads use. One object rather than a dozen top-level names because the inbox
+ * already owns a `PULSE_*` family (`inbox.ts`) with an unrelated meaning.
+ *
+ * The values are tuned for a base of tens of people, not thousands — which is
+ * why the small-sample rule exists at all: below `smallSampleN` a finding is
+ * stated in absolute numbers ("6 из 11"), never as a percentage.
+ */
+export const PULSE_ANALYTICS = {
+  /** Trailing UTC days the rollup recomputes on every run (spec §5.1). */
+  rollupWindowDays: 35,
+  /** Hard cap on client events one rollup loads — a runaway client, not a plan. */
+  rollupMaxEvents: 500_000,
+  /** Below this n a finding is "история, не статистика" (spec §5.5). */
+  smallSampleN: 30,
+  /** `screen_left` with `exit = back` faster than this is a quick back (spec §5.4). */
+  quickBackMs: 2_000,
+  /** Rage: at least this many taps … */
+  rageMinTaps: 3,
+  /** … within this window … */
+  rageWindowMs: 1_000,
+  /** … whose normalized coordinates are this close to the first one. */
+  rageRadius: 0.06,
+  /** `screen_friction` weights, each term counted per 100 views (spec §5.4). */
+  frictionWeights: { rage: 0.35, dead: 0.25, quickBack: 0.2, exit: 0.2 },
+  /** Friction score (per 100 views) at which a screen becomes a finding. */
+  frictionThreshold: 12,
+  /** … and at which it is severity 3. */
+  frictionSevereThreshold: 25,
+  /** A screen needs this many views in the week before friction is judged. */
+  frictionMinViews: 5,
+  /** Screens reported by `screen_friction` per run. */
+  frictionTopN: 5,
+  /** No movement for this long = stuck (spec §5.4). */
+  stuckAfterMs: 48 * 60 * 60 * 1000,
+  /** A stuck group of this many people is severity 3. */
+  stuckSevereCount: 5,
+  /** Ids per finding's evidence — enough to open journeys, not a user list. */
+  evidenceMaxUserIds: 20,
+  /** `slow_decision`: median time to first action above baseline × this. */
+  slowDecisionFactor: 2,
+  /** `slow_decision` needs at least this many timed exits in the week. */
+  slowDecisionMinN: 5,
+  /** Recent window every "this week" detector reads, days. */
+  recentDays: 7,
+  /** Baseline window detectors compare the recent week against, days. */
+  baselineDays: 28,
+  /** `anomaly`: median ± k · MAD. */
+  anomalyMadK: 3,
+  /** `anomaly`: baseline points needed at all … */
+  anomalyMinPoints: 7,
+  /** … and same-weekday points needed before those are preferred. */
+  anomalyMinSameWeekday: 3,
+  /** `funnel_drop`: the step needs this many people entering it in the week. */
+  funnelMinEntered: 5,
+  /** `funnel_drop`: loss worse than baseline by this much (absolute share) is severity 3. */
+  funnelWorsenedBy: 0.15,
+  /** `unseen`: seen ≥1 s by at most this share of viewers (= >70% saw it <1 s). */
+  unseenMaxSeenShare: 0.3,
+  /** `unseen`: viewers needed in the week before an item is judged. */
+  unseenMinViewers: 5,
+  /** `/admin/pulse/screens/:screen` tap points returned at most. */
+  tapPointsMax: 2_000,
+  /** Journey items returned for one person at most (`/journeys/:userId`). */
+  journeyMaxItems: 200,
+  /** Journey items per person in the list endpoint (the latest ones). */
+  journeyListItems: 40,
+  /** `/admin/pulse/journeys?limit=` ceiling and default. */
+  journeysMaxLimit: 50,
+  journeysDefaultLimit: 20,
+  /** Days of raw events a journey reads. */
+  journeyDays: 35,
+  /** Cache TTL of every `/admin/pulse/*` read, seconds. */
+  adminCacheTtlSeconds: 300,
+  /** A rollup older than this is reported stale in `dataFreshness`, hours. */
+  staleAfterHours: 36,
+  /** Insights shown in `/brief` at most (the rest: `/insights`). */
+  briefMaxInsights: 12,
+  /**
+   * `ADMIN_READ_KEY` shorter than this fails boot and is ignored by the admin
+   * gate (spec §6.2) — the key is handed to agents, so it must not be guessable.
+   */
+  readKeyMinLength: 32,
+} as const;

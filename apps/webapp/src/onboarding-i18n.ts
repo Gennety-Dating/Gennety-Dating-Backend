@@ -25,6 +25,9 @@ export interface OnboardingStrings {
   consentAnd: string;
   consentPrivacy: string;
   consentResearch: string;
+  // Pulse analytics opt-in (pulse-analytics.md §2.1). Same wording as the iOS
+  // ConsentView checkbox; never shown in the demo bundle.
+  consentAnalytics: string;
   continue: string;
   saving: string;
   languageTitle: string;
@@ -184,6 +187,7 @@ const en: OnboardingStrings = {
   consentAnd: "and",
   consentPrivacy: "privacy policy",
   consentResearch: "I allow my anonymized data to be used to improve matching",
+  consentAnalytics: "Help improve Gennety: stats on screens and taps, no chats or photos",
   continue: "Continue",
   saving: "Saving...",
   languageTitle: "Choose your language",
@@ -350,6 +354,7 @@ const ru: OnboardingStrings = {
   consentAnd: "и",
   consentPrivacy: "политику конфиденциальности",
   consentResearch: "Разрешаю использовать мои обезличенные данные, чтобы улучшать подбор",
+  consentAnalytics: "Помогать улучшать Gennety: статистика экранов и нажатий, без переписок и фото",
   continue: "Продолжить",
   saving: "Сохраняю...",
   languageTitle: "Выбери язык",
@@ -515,6 +520,7 @@ const uk: OnboardingStrings = {
   consentAnd: "та",
   consentPrivacy: "політику конфіденційності",
   consentResearch: "Дозволяю використовувати мої знеособлені дані, щоб покращувати підбір",
+  consentAnalytics: "Допомагати покращувати Gennety: статистика екранів і натискань, без листування й фото",
   continue: "Продовжити",
   saving: "Зберігаю...",
   languageTitle: "Обери мову",
@@ -681,6 +687,7 @@ const de: OnboardingStrings = {
   consentAnd: "und die",
   consentPrivacy: "Datenschutzerklärung",
   consentResearch: "Ich erlaube, meine anonymisierten Daten zur Verbesserung der Partnersuche zu verwenden",
+  consentAnalytics: "Gennety verbessern helfen: Statistik zu Screens und Tippen, ohne Chats und Fotos",
   continue: "Weiter",
   saving: "Speichern...",
   languageTitle: "Wähle deine Sprache",
@@ -848,6 +855,7 @@ const pl: OnboardingStrings = {
   consentAnd: "i",
   consentPrivacy: "politykę prywatności",
   consentResearch: "Zgadzam się na wykorzystanie moich zanonimizowanych danych do ulepszania dopasowań",
+  consentAnalytics: "Pomagać ulepszać Gennety: statystyki ekranów i kliknięć, bez czatów i zdjęć",
   continue: "Dalej",
   saving: "Zapisywanie...",
   languageTitle: "Wybierz język",

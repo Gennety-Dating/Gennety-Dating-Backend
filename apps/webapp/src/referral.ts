@@ -6,6 +6,9 @@ import { butterflyLoaderMarkup } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { wireReturnBackButton, type ReturnPage } from "./return-to.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_referral");
 
 /**
  * Referral Mini App (§Referral) — "Invite friends, earn Date Tickets". A small

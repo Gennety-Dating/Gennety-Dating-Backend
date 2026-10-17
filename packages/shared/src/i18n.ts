@@ -358,6 +358,12 @@ const translations = {
     editHobbiesSaved: "Interests updated",
     agentEntryPrompt: "Here you go:",
     agentFallbackError: "Something went wrong. Please say that again.",
+    /** The chat wishlist card's line when the model wrote none (chat-wishlist.ts). */
+    agentWishlistCardLine: "Add these to your wishlist?",
+    /** The card's button as the app labels it — the agent names it this way. */
+    agentWishlistCardButton: "Add",
+    /** Button into «My wishlist» under a chat reply. */
+    agentEntryWishlist: "My wishlist",
     agentBlockedVerification: "Finish verification first — everything else opens up after that.",
     agentBlockedSuspended:
       "Your account is on hold right now, so I can't help with this. Questions go to @gennetysupport.",
@@ -1608,6 +1614,9 @@ const translations = {
     editHobbiesSaved: "Интересы обновлены",
     agentEntryPrompt: "Держи:",
     agentFallbackError: "Что-то пошло не так. Повтори, пожалуйста.",
+    agentWishlistCardLine: "Добавить в твой вишлист?",
+    agentWishlistCardButton: "Добавить",
+    agentEntryWishlist: "Мой вишлист",
     agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
     agentBlockedSuspended:
       "Аккаунт сейчас на паузе с нашей стороны, так что тут не помогу. Вопросы — в @gennetysupport.",
@@ -2711,6 +2720,9 @@ const translations = {
     editHobbiesSaved: "Інтереси оновлено",
     agentEntryPrompt: "Тримай:",
     agentFallbackError: "Щось пішло не так. Повтори, будь ласка.",
+    agentWishlistCardLine: "Додати у твій вішліст?",
+    agentWishlistCardButton: "Додати",
+    agentEntryWishlist: "Мій вішліст",
     agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
     agentBlockedSuspended:
       "Акаунт зараз на паузі з нашого боку, тож тут не допоможу. Питання — у @gennetysupport.",
@@ -3813,6 +3825,9 @@ const deTranslations: TranslationTable = {
   editHobbiesSaved: "Interessen aktualisiert",
   agentEntryPrompt: "Hier, bitte:",
   agentFallbackError: "Da ist etwas schiefgelaufen. Sag das bitte noch einmal.",
+  agentWishlistCardLine: "Auf deine Wunschliste setzen?",
+  agentWishlistCardButton: "Hinzufügen",
+  agentEntryWishlist: "Meine Wunschliste",
   agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
   agentBlockedSuspended:
     "Dein Konto ist gerade von unserer Seite pausiert, da kann ich hier nicht helfen. Fragen an @gennetysupport.",
@@ -4888,6 +4903,9 @@ const plTranslations: TranslationTable = {
   editHobbiesSaved: "Zainteresowania zaktualizowane",
   agentEntryPrompt: "Proszę:",
   agentFallbackError: "Coś poszło nie tak. Powtórz, proszę.",
+  agentWishlistCardLine: "Dodać do twojej listy życzeń?",
+  agentWishlistCardButton: "Dodaj",
+  agentEntryWishlist: "Moja lista życzeń",
   agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",
   agentBlockedSuspended:
     "Twoje konto jest teraz wstrzymane po naszej stronie, więc tu nie pomogę. Pytania na @gennetysupport.",

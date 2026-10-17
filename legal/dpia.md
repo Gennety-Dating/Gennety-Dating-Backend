@@ -317,6 +317,18 @@ show someone else's notification or name contributes nothing to the list: the
 vision prompt names only the wanted products and ignores anything personal,
 and what reaches the list is only what the owner confirms afterwards, from the
 web look-up's product cards.
+Since 2026-10-15 items can also come from the **app's chat**: the agent
+proposes what the owner shows it on a card and nothing is saved before the
+owner taps Add — the card shows the exact picture that will be kept, so an
+own photo with a face or a room in it is a visible choice, and the agent is
+told to look such items up online instead. Removing an item removes its
+stored photo. The list's place, drink and experience items may also act as a
+**soft venue hint** (`WISHLIST_VENUE_HINT_WEIGHT`, off by default): only a
+draw weight between venues the ranker already rates near-equal, never while
+the list is hidden, never logged, stored on the match or put into the
+selection reason — so the other person cannot read the list off the choice
+("how did you know?" — the R13 worry) beyond what any good venue choice
+reveals.
 **Honest limits:** what the viewer has already read cannot be unseen, a
 screenshot cannot be blocked, and an unlocked sheet stays openable with no end
 date. **Residual: moderate** until action 12 (a report without a block, and a

@@ -1,5 +1,5 @@
 import { prisma } from "@gennety/db";
-import { env } from "../../config.js";
+import { TEST_TELEGRAM_IDS } from "../../services/real-users.js";
 import type { ActivityRow } from "./activity.js";
 import { toDayKey } from "./activity.js";
 
@@ -9,48 +9,9 @@ import { toDayKey } from "./activity.js";
  * `user-health.ts` / `user-health-source.ts`).
  */
 
-/**
- * Test accounts, from env rather than code — the list is per-operator (the
- * founder's own account, QA, demo) and adding one must not be a deploy. Read
- * once at module load; env does not change during a process.
- *
- * The same variable `admin/utils/user-health-source.ts` uses, deliberately: two
- * lists of "who is a test account" would eventually disagree, and then two
- * dashboards would show two different DAUs.
- */
-const TEST_TELEGRAM_IDS = (env.ADMIN_TEST_TELEGRAM_IDS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean)
-  .map((s) => {
-    try {
-      return BigInt(s);
-    } catch {
-      return null;
-    }
-  })
-  .filter((v): v is bigint => v !== null);
-
-/**
- * The `where` fragment that means "a real account", ready to spread into any
- * query whose subject is a `User` row.
- *
- * Exported because `virality-source.ts` needs exactly this population and
- * nothing else: a K-factor whose denominator counts the founder's own test
- * account and whose numerator does not is not a smaller number, it is a wrong
- * one. The comment on `TEST_TELEGRAM_IDS` above says why there must be one
- * list; this says why there must be one FILTER.
- */
-export function realUserFilter(includeTest = false): {
-  syntheticAt?: null;
-  telegramId?: { notIn: bigint[] };
-} {
-  if (includeTest) return {};
-  return {
-    syntheticAt: null,
-    ...(TEST_TELEGRAM_IDS.length > 0 ? { telegramId: { notIn: TEST_TELEGRAM_IDS } } : {}),
-  };
-}
+// One list and one filter of real accounts, shared with the Pulse rollup —
+// see `services/real-users.ts`. Re-exported so existing importers keep working.
+export { realUserFilter } from "../../services/real-users.js";
 
 export interface LoadActivityOptions {
   /**

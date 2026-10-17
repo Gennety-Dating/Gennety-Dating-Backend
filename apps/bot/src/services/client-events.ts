@@ -38,6 +38,14 @@ export const CLIENT_EVENT_TYPES = [
   // `sheet_continued`, `uploaded`, `insufficient`, `disconnected`. The funnel
   // only: never an activity level, a chronotype or a step count.
   "tempo_sync",
+  // Pulse, contract v2 (docs/product/domains/pulse-analytics.md §3): screens,
+  // foreground time on them, taps on key screens, card visibility. None of it
+  // is observable on the server, so the 2026-08-20 rule holds.
+  "screen_view",
+  "screen_left",
+  "tap",
+  "dead_tap",
+  "seen",
 ] as const;
 
 export type ClientEventType = (typeof CLIENT_EVENT_TYPES)[number];
@@ -45,30 +53,60 @@ export type ClientEventType = (typeof CLIENT_EVENT_TYPES)[number];
 const TYPES = new Set<string>(CLIENT_EVENT_TYPES);
 
 /**
- * Разрешённый ключ `props` у каждого типа. Ключ ровно один — так устроен
- * клиентский перечень, и лишний ключ означает либо ошибку, либо чужие данные.
+ * Форма `props` каждого типа: какие строковые и какие числовые ключи
+ * допустимы и какие из них обязательны. Лишний ключ отбрасывает событие —
+ * он означает либо ошибку, либо чужие данные.
+ *
+ * У десяти исходных типов ключ ровно один и необязательный — так устроен
+ * клиентский перечень с 2026-08-21. Типы Pulse несут несколько ключей, и
+ * часть из них числовая: время на экране и координаты касания.
  */
-const PROP_KEY: Record<ClientEventType, string> = {
-  onboarding_step_left: "step",
-  permission_prompted: "permission",
-  permission_denied: "permission",
-  liveness_finished: "outcome",
-  paywall_shown: "surface",
-  paywall_dismissed: "surface",
-  ticket_gate_shown: "surface",
-  ticket_gate_dismissed: "surface",
-  fatal_client_error: "domain",
-  tempo_sync: "step",
+type PropSpec = {
+  strings: Record<string, "required" | "optional">;
+  numbers?: Record<string, { min: number; max: number; round: "int" | "coord"; required: boolean }>;
 };
 
+const DWELL = { min: 0, max: 86_400_000, round: "int", required: true } as const;
+const COORD = { min: 0, max: 1, round: "coord", required: true } as const;
+
+function single(key: string): PropSpec {
+  return { strings: { [key]: "optional" } };
+}
+
+const PROP_SPEC: Record<ClientEventType, PropSpec> = {
+  onboarding_step_left: single("step"),
+  permission_prompted: single("permission"),
+  permission_denied: single("permission"),
+  liveness_finished: single("outcome"),
+  paywall_shown: single("surface"),
+  paywall_dismissed: single("surface"),
+  ticket_gate_shown: single("surface"),
+  ticket_gate_dismissed: single("surface"),
+  fatal_client_error: single("domain"),
+  tempo_sync: single("step"),
+  screen_view: { strings: { screen: "required", from: "optional" } },
+  screen_left: {
+    strings: { screen: "required", exit: "required" },
+    numbers: { dwell_ms: DWELL, first_action_ms: { ...DWELL, required: false } },
+  },
+  tap: { strings: { screen: "required", element: "required" }, numbers: { x: COORD, y: COORD } },
+  dead_tap: { strings: { screen: "required" }, numbers: { x: COORD, y: COORD } },
+  seen: { strings: { screen: "required", item: "required" }, numbers: { visible_ms: DWELL } },
+};
+
+/** `screen_left.exit` — закрытый перечень, в отличие от остальных строк. */
+const EXITS = new Set(["next", "back", "background", "dismiss"]);
+
 /**
- * Значения `props` проверяются по ФОРМЕ, а не по списку.
+ * Строковые значения `props` проверяются по ФОРМЕ, а не по списку.
  *
- * Список значений (`venue_lock`, `camera_denied`, …) живёт в клиентских
- * перечнях и будет расти; сверять его здесь значило бы отбрасывать события
- * нового приложения до ближайшего деплоя сервера. Форма же гарантирует ровно
- * тот инвариант, ради которого проверка существует: короткий `snake_case` не
- * вмещает ни свободного текста, ни имени, ни телефона, ни координаты.
+ * Список значений (`venue_lock`, `camera_denied`, ключи экранов…) живёт в
+ * клиентских перечнях и будет расти; сверять его здесь значило бы отбрасывать
+ * события нового приложения до ближайшего деплоя сервера. Форма же гарантирует
+ * ровно тот инвариант, ради которого проверка существует: короткий
+ * `snake_case` не вмещает ни свободного текста, ни имени, ни телефона.
+ * Числа допускаются только там, где их объявляет `PROP_SPEC`, и только в его
+ * границах — координата касания нормирована к экрану, а не к миру.
  */
 const PROP_VALUE = /^[a-z0-9_]{1,32}$/;
 
@@ -90,13 +128,27 @@ type IncomingEvent = {
   type?: unknown;
   at?: unknown;
   props?: unknown;
+  session?: unknown;
 };
 
 export type ClientEventBatch = {
   installId?: unknown;
+  platform?: unknown;
   app?: unknown;
   events?: unknown;
 };
+
+export type ClientPlatform = "ios" | "miniapp";
+
+/**
+ * Платформа батча. Под `tma`-авторизацией вызывающий передаёт `miniapp`
+ * принудительно — подписанный Telegram initData не бывает у нативного
+ * приложения, и заявление тела тут ничего не решает.
+ */
+function readPlatform(raw: unknown, forced: ClientPlatform | undefined): ClientPlatform {
+  if (forced) return forced;
+  return raw === "miniapp" ? "miniapp" : "ios";
+}
 
 export type IngestResult =
   | { status: "ok"; accepted: number; dropped: number }
@@ -135,9 +187,13 @@ function readAppInfo(raw: unknown): AppInfo {
  * отчитается о доставке по коду ответа, так что 400 на весь батч стоил бы
  * остальных событий в нём.
  */
-function normalise(
-  raw: IncomingEvent,
-): { id: string; type: ClientEventType; occurredAt: Date; props: Record<string, string> } | null {
+function normalise(raw: IncomingEvent): {
+  id: string;
+  type: ClientEventType;
+  occurredAt: Date;
+  sessionId: string | null;
+  props: Record<string, string | number>;
+} | null {
   const id = typeof raw.id === "string" && UUID.test(raw.id) ? raw.id : null;
   if (!id) return null;
 
@@ -148,22 +204,41 @@ function normalise(
   const occurredAt = new Date(raw.at);
   if (Number.isNaN(occurredAt.getTime())) return null;
 
-  const key = PROP_KEY[type];
+  // Битая сессия не стоит события: это служебная склейка, не данные.
+  const sessionId = typeof raw.session === "string" && UUID.test(raw.session) ? raw.session : null;
+
   const incoming = (raw.props ?? {}) as Record<string, unknown>;
   if (typeof incoming !== "object" || incoming === null || Array.isArray(incoming)) return null;
-  // Ключей больше одного быть не может: у каждого типа он ровно один.
-  const keys = Object.keys(incoming);
-  if (keys.length > 1) return null;
-  if (keys.length === 1 && keys[0] !== key) return null;
 
-  const props: Record<string, string> = {};
-  const value = incoming[key];
-  if (value !== undefined) {
+  const spec = PROP_SPEC[type];
+  const numbers = spec.numbers ?? {};
+  for (const key of Object.keys(incoming)) {
+    if (!(key in spec.strings) && !(key in numbers)) return null;
+  }
+
+  const props: Record<string, string | number> = {};
+  for (const [key, need] of Object.entries(spec.strings)) {
+    const value = incoming[key];
+    if (value === undefined) {
+      if (need === "required") return null;
+      continue;
+    }
     if (typeof value !== "string" || !PROP_VALUE.test(value)) return null;
     props[key] = value;
   }
+  for (const [key, rule] of Object.entries(numbers)) {
+    const value = incoming[key];
+    if (value === undefined) {
+      if (rule.required) return null;
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    if (value < rule.min || value > rule.max) return null;
+    props[key] = rule.round === "int" ? Math.round(value) : Math.round(value * 1000) / 1000;
+  }
+  if (type === "screen_left" && !EXITS.has(props.exit as string)) return null;
 
-  return { id, type, occurredAt, props };
+  return { id, type, occurredAt, sessionId, props };
 }
 
 /**
@@ -177,6 +252,7 @@ function normalise(
 export async function ingestClientEvents(
   batch: ClientEventBatch,
   userId: string | null,
+  options: { platform?: ClientPlatform } = {},
 ): Promise<IngestResult> {
   const installId = shortString(batch.installId, INSTALL_ID_MAX);
   if (!installId || !Array.isArray(batch.events)) {
@@ -187,6 +263,7 @@ export async function ingestClientEvents(
   }
 
   const app = readAppInfo(batch.app);
+  const platform = readPlatform(batch.platform, options.platform);
   const rows = [];
   let dropped = 0;
   const seen = new Set<string>();
@@ -213,6 +290,9 @@ export async function ingestClientEvents(
       appBuild: app.build,
       osVersion: app.os,
       locale: app.locale,
+      platform,
+      sessionId: event.sessionId,
+      screen: typeof event.props.screen === "string" ? event.props.screen : null,
     });
   }
 

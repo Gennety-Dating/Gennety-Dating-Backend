@@ -123,12 +123,53 @@ built earlier, with the agent, on «Сегодня».
    a daily model pick from the catalog against their Profiler answers and
    interests. Shown to the owner only.
 
+6. **In the app's chat — a card with a button** (founder, 2026-10-15: the
+   agent got five photos of his favourite perfumes and had nowhere to put
+   them). The chat agent recognises what a person shares — a photo of the
+   thing, a shop screenshot, a link, «хочу / обожаю X» — and calls
+   `propose_wishlist_items`, which writes NOTHING: it builds a card stored on
+   the reply (`messages.attachment`) — the items with pictures, all ticked, one
+   «Добавить» and a quiet «Не надо». The tap is the consent:
+   `POST /v1/chat/messages/:id/wishlist` saves the ticked keys
+   (`services/chat-wishlist.ts`).
+   - Pictures: a clear photo of the thing is the person's own (copied into the
+     wishlist key on save; removing the item removes the copy); a link is read
+     for its page photo; a screenshot or a messy photo is looked up for a clean
+     product shot (at most four look-ups per card, 12 s each, from the same
+     daily budget), the person's photo being the fallback.
+   - Items already in the list are left out; a full list (30) gets no card but
+     a «Мой вишлист» button (`menu:wishlist`).
+   - The card and its answer survive a reload (`/v1/chat/history` carries
+     `attachment`), and the next turn's model reads under its reply what was
+     saved or dismissed. The agent's person card names the newest items.
+   - Only for a build that sends `X-Gennety-Chat-Cards: wishlist`; an older
+     build gets neither the card nor the tool. App only — Telegram keeps the
+     «Сегодня» session as the way in.
+
+7. **A soft hint for the first venue** (founder, 2026-10-15: «подсказывать
+   место свидания по вишлисту»). The `place` / `drink` / `experience` items of
+   each side whose list is not hidden become one more draw weight inside the
+   venue diversity band, next to Tempo Sync Tier 2
+   (`wishlistVenueTaste` / `wishlistVenueFit` / `wishlistVenueMultiplier` in
+   `packages/shared/src/wishlist-venue.ts`, `loadWishlistVenueTastes`): catalog
+   ideas by their tags, free text by a short multilingual keyword map, a typed
+   place by its name. It can only pick between venues the ranker already rates
+   near-equal; never logged, stored on the match, or put into the reason or the
+   blurb. `WISHLIST_VENUE_HINT_WEIGHT` (0 = off, the default; 0.3 intended,
+   capped at 0.5) — a NEW purpose of the list: privacy v4.4 (§7 table), ROPA
+   2.5 / 2.5f and DPIA R12 carry it; switch on only once that text is on the
+   site.
+
 ## Flags, demo, rollout
 
 1. `MORNING_AFTER_ENABLED` (check, reveal, offer), `WISHLIST_FEATURE_ENABLED`
-   (session, routes, sheet), `WISHLIST_APPSTORE_ENABLED` (StoreKit till). All
+   (the person's own list: session, routes, «Мой вишлист» in Settings and
+   Profile, the chat card), `WISHLIST_APPSTORE_ENABLED` (StoreKit till). All
    off by default; `GET /v1/app/config` serves `features.morningAfter`,
-   `features.wishlist` and `wishlistProduct`.
+   `features.wishlist` and `wishlistProduct`. The cheat sheet and its purchase
+   need the wishlist AND the morning flag (`wishlistSheetLive`, 2026-10-15), so
+   `WISHLIST_FEATURE_ENABLED` alone is a supported setting: people collect,
+   nobody is shown or sold anything.
 2. **Demo mode** behaves the same as production with the flags it is given;
    the demo bot has no Stars rail, so the cheat sheet there opens only with
    Premium.

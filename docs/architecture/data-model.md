@@ -675,6 +675,17 @@ recorded as the event, not the digits.
 `occurredAt`, `receivedAt`, `appVersion`/`appBuild`/`osVersion`/`locale`.
 Индексы `(type, occurredAt)`, `(installId, occurredAt)`, `(receivedAt)`.
 
+**Pulse, контракт v2 (2026-10-15, `docs/product/domains/pulse-analytics.md`).**
+Добавлены `platform` (`ios` | `miniapp`), `sessionId`, `screen` (копия
+`props.screen`) и индексы `(screen, occurredAt)`, `(userId, occurredAt)`. Пять
+новых типов (`screen_view`, `screen_left`, `tap`, `dead_tap`, `seen`) несут по
+несколько ключей, часть — числа в объявленных границах (время на экране,
+нормированные координаты касания); форма задаётся `PROP_SPEC`. Абзац ниже про
+«один ключ на тип» описывает десять исходных типов. Любая строка пишется только
+при `users.analytics_opt_in = true` у опознанного человека; отзыв согласия
+стирает его строки. Рядом — свёртки `metric_days` (метрика × день × измерение)
+и находки `insights` ночной работы `pulse-rollup`.
+
 **Правило, из которого следует всё остальное: сюда попадает только то, чего
 сервер не видит в принципе.** Уход с шага онбординга ДО отправки, отказ в
 системном разрешении, исход нативной проверки живости, показ пейволла и

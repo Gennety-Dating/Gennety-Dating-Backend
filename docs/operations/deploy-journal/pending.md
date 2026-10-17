@@ -31,6 +31,97 @@ an exclusion of the reserved `telegramId` band `-779000099…-779000001` from th
 - **Demo:** unchanged (separate DB and puppets; branch inert without the vars).
 - **iOS:** no client change. The reviewer uses the existing university-email screen. The ASC Notes text lives in
   the iOS repo `docs/operations/appstore-review-notes.md` §2.
+**PENDING 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
+Decision journal 2026-10-15 «Вишлист как подсказка места». Place / drink / experience items of each side (list not
+hidden) become an in-band draw weight in venue selection, next to Tempo Sync Tier 2. Off by default; a new purpose
+of the list — privacy v4.4 (§7), ROPA 2.5/2.5f, DPIA R12 updated in `legal/`, NOT yet on the site.
+Demo: no-op (no wishlist on the demo's Telegram visitor or partner).
+- **Порядок:** rides with any deploy; nothing to run.
+- **Включение:** after the site shows the updated privacy text AND `WISHLIST_FEATURE_ENABLED=true`:
+  `WISHLIST_VENUE_HINT_WEIGHT=0.3` in the bot env + restart.
+- **Проверка:** none user-visible by design (a near-tie breaker). `grep -c wishlist` in `venue_selection_logs` raw
+  rows must stay 0.
+- **Откат:** `WISHLIST_VENUE_HINT_WEIGHT=0` + restart.
+
+**PENDING 2026-10-15 — Chat wishlist card (MIGRATION `20261015180000_message_attachment`, additive; contract: `attachment`, `POST /v1/chat/messages/{id}/wishlist`, header `X-Gennety-Chat-Cards`).**
+Decision journal 2026-10-15 «Вишлист из чата». The app's chat agent proposes wishlist items from photos, screenshots,
+links and words as a card with one «Добавить» button; nothing is saved before the tap. Also in this block: a photo
+from an album (not only its first) can go to the profile; photos of earlier messages carry `[imageUrl=…]` tokens (the
+profile still takes only the current turn's, enforced in code); removing a wishlist item removes its stored photo;
+the cheat sheet needs `WISHLIST_FEATURE_ENABLED` AND `MORNING_AFTER_ENABLED`.
+Demo: same as production with the flags it is given — the demo is Telegram, which has no card.
+iOS: a build that sends `X-Gennety-Chat-Cards: wishlist` draws the card; older builds see plain replies.
+- **Порядок:** `db:deploy` BEFORE the restart — the new code selects `messages.attachment` in `/v1/chat/history`
+  (rows read without `select`); nothing else. Rides on top of the 2026-10-08 wishlist block (its migration first).
+- **Флаги:** nothing new. The card exists only with `WISHLIST_FEATURE_ENABLED=true`; with it alone (morning flag off)
+  people collect and nobody is shown or sold anything. Switch on only after privacy v4.3 / terms v3.1 are on the site.
+- **Проверка:** with the flag on and a build that sends the header: send 3 photos of perfume bottles → one reply plus a
+  card with three ticked items; «Добавить» → «В вишлисте ✓»; Settings → «Мой вишлист» shows them with the photos;
+  reload the chat → the card is still «В вишлисте»; next message «что у меня в вишлисте?» → the agent names them.
+  Without the header (`curl` to `/v1/chat/message`) → no `attachment`.
+- **Откат:** previous release; the column stays (nullable, nothing else reads it).
+
+**PENDING 2026-10-15 — App chat agent quality (no migration, no env; contract: new 503 `agent_unavailable` on `/v1/chat/message` + `/v1/chat/voice`).**
+Decision journal 2026-10-15 «Чат-агент приложения». Earlier photos stay visible to the model; a turn with no reply is
+a 503 (the person's row is removed, the app retries with the same `clientMessageId`) instead of a stored canned line;
+1000-token replies, 5 tool rounds + a closing `tool_choice: "none"` call; person card in the prompt; shared persona now
+offers one next step; `update_hobbies` accepts `add`; a consent gate (one short `MODELS.fast` call per profile write)
+holds writes the person did not ask for. Demo: no change beyond the shared persona line (offers only).
+iOS: every build already treats a non-2xx as "not delivered" with retry — no app release needed.
+- **Порядок:** ordinary code deploy + restart; nothing before it.
+- **Проверка:** send «👋» in the app chat → a reply that says what is coming and asks one light question; send 3 photos,
+  then «там ещё третий» → the agent names the third without a resend; `pm2 logs gennety-bot --lines 300 | grep
+  "\[chat\] turn without a reply"` → reasons for any 503. Live-model check before deploy (from a checkout whose root
+  `.env` has the OpenAI key, or with `EVAL_ENV_FILE=<path>`): `pnpm --filter @gennety/bot eval:chat` → exit 0, report
+  in `apps/bot/evals/out/`.
+- **Откат:** previous release; no data written in a new shape.
+
+**PENDING 2026-10-15 — Profiler answers with voice and photos from the app (restart only: no migration, no env; new endpoint `POST /v1/me/profiler/answer/media`).**
+Branch `profiler-media-answer`. Multipart: `questionId`, optional `text` / `optionIds` (repeated or JSON array) /
+`source`, files `voice` (0..1, ≤ 25 MB) and `images` (0..4, JPEG/PNG/WebP ≤ 6 MB, HEIC → 415). Voice → Whisper
+(503 `transcription_unavailable`, 422 `not_heard`); photos → vision description (`readMemeImage` on the humour
+questions, new `vision/read-answer-photo.ts` on every other one; refused/unreadable photos skipped, all of them with
+nothing else → 422 `image_unreadable`). Stored `answerText` = typed words → transcript → photo descriptions, through the
+same claim/upsert as `/answer` (same 409s, same `ProfilerAnswerResult`). Photos that were read go to the chat bucket
+under `{userId}/` (swept by account deletion's bucket listing); no DB column points at them and `meme_*` stay
+Telegram-only, so an app meme is NOT re-sent by the §3.12 meme reveal. Rate limit: `voiceLimiter` (30/h, shared with
+chat voice). Demo: unchanged. iOS: the «+» and the microphone on Profiler questions call this route; until the deploy
+it answers 404 — the app must keep the typed `/answer` path working and only offer media once the route exists.
+**+ 2026-10-16 video (same block, same restart, no env):** parts `videoFrames` (0..6, cut by the app evenly across the
+clip, same formats/cap as `images`), `videoAudio` (0..1 m4a) and field `videoDuration`; one `visionFast` call over all
+frames (`vision/read-answer-video.ts`), soundtrack transcript as context — no speech or Whisper down is NOT an error.
+Stored as «Video: …» after photos; frames are not kept. New 400 `missing_video_frames`. Decision journal 2026-10-16.
+- **Порядок:** merge → build → restart. Nothing else.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/public/routes/profiler-native-media.test.ts
+  src/public/routes/profiler-native.test.ts`; on prod `curl -s -o /dev/null -w '%{http_code}' -X POST
+  https://<api>/v1/me/profiler/answer/media` → 401 (not 404) — NB 2026-10-16: every `/v1/me/*` path answers 401
+  before routing (even a made-up one), so this curl proves nothing; check the built `dist` for `answer/media` instead;
+  then answer a live question from the app with one photo
+  and `pm2 logs gennety-bot --lines 200 | grep profiler-media` shows the stored path, and the row's `answer_text`
+  holds the description. Video: answer with a short clip → the row's `answer_text` holds one «Видео…»/clip description.
+- **Откат:** `git revert` of the branch commit + restart (rows written stay ordinary text answers; uploaded photos stay
+  under the user's prefix and are erased with the account).
+
+**PENDING 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
+Spec `docs/product/domains/pulse-analytics.md`, decision journal 2026-10-15. Analytics consent `users.analytics_opt_in`
+(default false) set from the consent screens and `PUT /v1/me/analytics-consent`; `/v1/client/events` takes screen /
+dwell / tap / seen events from iOS and the Mini App (`tma` auth) and stores nothing for a signed-in person without
+consent. Nightly `pulse-rollup` (UTC `10 1 * * *`) fills `metric_days` / `insights`; `/admin/pulse/*` serves them;
+`ADMIN_READ_KEY` reads GET `/admin/pulse/*` + `/admin/analytics/*` only (not weekly-matches). Admin retention cohort
+maturity now uses the latest member (was the earliest — under-reported retention). Mini App build changes (consent
+checkbox + tracker) — rebuild and upload the webapp. Demo: the demo bundle hides the checkbox and sends no events;
+synthetic/test accounts are excluded from every metric. iOS: needs the Pulse iOS build for screen events; older
+builds keep working (their ten event types are still accepted, but now only with consent).
+- **Порядок:** `pnpm --filter @gennety/db db:deploy` (additive, before the restart — new code writes the new columns)
+  → `pnpm db:drift-check` exit 0 → env: `CLIENT_EVENTS_ENABLED=true`, `ADMIN_READ_KEY=<openssl rand -hex 32>` (≥ 32
+  chars, never equal to `ADMIN_API_KEY`), optional `PULSE_ROLLUP_CRON_SCHEDULE` / `PULSE_ROLLUP_ENABLED` → restart →
+  webapp build + upload.
+- **Проверка:** `curl -s -H "Authorization: Bearer $ADMIN_READ_KEY" https://api-admin.gennety.com/admin/pulse/brief`
+  → 200 with `dataFreshness`; the same key on `/admin/users` → 403; after 01:10 UTC
+  `pm2 logs gennety-bot --lines 300 | grep pulse-rollup` shows one run with `metricRows`. Pre-verified on PGlite
+  (Postgres 17 + pgvector): trunk schema + `migration.sql` → `migrate diff --from-url` = empty; seeded events →
+  rollup, brief, screens, journeys, funnels, consent withdrawal all ran on real SQL.
+- **Откат:** `git revert` of the Pulse commits + restart; the tables and columns are additive and can stay.
 
 **PENDING 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
 Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 4/7/10/21/45

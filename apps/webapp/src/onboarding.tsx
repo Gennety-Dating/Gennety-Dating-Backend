@@ -45,6 +45,13 @@ import {
 } from "./onboarding-route.js";
 import { BasicsGate } from "./onboarding-basics.js";
 import {
+  isDemoBuild,
+  pulseNavigate,
+  setPulseConsent,
+  startOnboardingPulse,
+  type PulseExit,
+} from "./pulse.js";
+import {
   KEYBOARD_MOTION_MS,
   isWorthWriting,
   keyboardInset,
@@ -132,6 +139,58 @@ const PREVIEW_INTRO =
  */
 const PREVIEW_WELCOME =
   import.meta.env.DEV && (params.get("preview") ?? "").startsWith("welcome");
+
+/**
+ * Pulse analytics (pulse-analytics.md). Started `pending`: every phase this
+ * page shows is held in memory until the consent screen — or /state, for
+ * someone who answered it on an earlier visit — says whether it may be sent.
+ * A design preview is not a real visit and is never recorded.
+ */
+const PULSE_DEMO = isDemoBuild();
+if (!PREVIEW_REFERRAL_GIFT && !PREVIEW_BASICS && !PREVIEW_INTRO && !PREVIEW_WELCOME) {
+  startOnboardingPulse();
+}
+
+/**
+ * Where each phase sits in the real flow (`onboarding-route.ts`: language →
+ * consent → contact → city → theme → intro → gifts → basics → handoff). Used
+ * only to tell a backwards jump that did not go through `goBack` — "change
+ * email" from the code screen, "another city" from the waitlist — from a step
+ * forward.
+ *
+ * Deliberately NOT `onboardingOrder` from `packages/shared/src/pulse-screens.ts`:
+ * that table puts the intro first and language after consent, which would read
+ * the ordinary language → consent step as a step back.
+ */
+const PULSE_PHASE_ORDER: Record<OnboardingPhase["kind"], number> = {
+  syncing: 0,
+  language: 1,
+  consent: 2,
+  path: 3,
+  email: 4,
+  phone: 4,
+  otp: 5,
+  city: 6,
+  waitlist: 7,
+  theme: 8,
+  visual: 9,
+  detail: 10,
+  promoGift: 11,
+  referralGift: 12,
+  basics: 13,
+  loading: 14,
+  done: 15,
+};
+
+/** `mini_onb_<phase kind in snake_case>` — the keys of pulse-screens.ts §4.5. */
+function pulseScreenOf(phase: OnboardingPhase): string {
+  return `mini_onb_${phase.kind.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`;
+}
+
+/** Stored choice from /state; only meaningful once the consent screen is answered. */
+function syncPulseConsent(user: RemoteUser): void {
+  if (user.termsAccepted) setPulseConsent(user.analyticsOptIn === true);
+}
 
 // Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
 // original cinematic pacing while keeping the human cadence and beats.
@@ -280,7 +339,7 @@ function App(): ReactElement {
   // left (see `Scene`): back from the path chooser to consent, "change email"
   // from the code screen, or back from the theme to the city search, should
   // find what the user already entered.
-  const consentDraft = useRef<ConsentDraft>({ terms: false, research: false });
+  const consentDraft = useRef<ConsentDraft>({ terms: false, research: false, analytics: false });
   const emailDraft = useRef<string | null>(null);
   const cityDraft = useRef<string>("");
   // Stable per language: the typewriter scenes key their run on the `lines`
@@ -365,6 +424,7 @@ function App(): ReactElement {
         reconcileTheme(state.user.theme);
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
+        syncPulseConsent(state.user);
         if (state.user.language) setLang(state.user.language);
         // Dev-QA override: `?preview=referral-gift` jumps straight to the
         // referral welcome-gift screen for visual review (harmless in prod — the
@@ -600,8 +660,24 @@ function App(): ReactElement {
     }
   }, [phase]);
 
-  const goBack = useCallback(() => {
-    setPhase((current) => {
+  // Pulse: one screen_left for the phase being left and one screen_view for
+  // the new one, per change of phase KIND — a next intro scene or basics
+  // sub-step is the same screen key and records nothing (see `navigate`).
+  const pulseBackRef = useRef(false);
+  const pulsePrevKindRef = useRef<OnboardingPhase["kind"] | null>(null);
+  useEffect(() => {
+    const previous = pulsePrevKindRef.current;
+    const wentBack =
+      pulseBackRef.current ||
+      (previous !== null && PULSE_PHASE_ORDER[phase.kind] < PULSE_PHASE_ORDER[previous]);
+    const exit: PulseExit = wentBack ? "back" : "next";
+    pulseBackRef.current = false;
+    pulsePrevKindRef.current = phase.kind;
+    pulseNavigate(pulseScreenOf(phase), exit);
+  }, [phase]);
+
+  const previousPhase = useCallback(
+    (current: OnboardingPhase): OnboardingPhase => {
       if (current.kind === "visual" && current.index > 0) {
         return { kind: "visual", index: current.index - 1 };
       }
@@ -639,8 +715,19 @@ function App(): ReactElement {
           : { kind: "visual", index: VISUAL_LAST_INDEX };
       }
       return current;
+    },
+    [remoteUser],
+  );
+
+  const goBack = useCallback(() => {
+    setPhase((current) => {
+      const previous = previousPhase(current);
+      // Only a real move is a Pulse "back" — a no-op must not mislabel the
+      // next forward step.
+      pulseBackRef.current = previous !== current;
+      return previous;
     });
-  }, [remoteUser]);
+  }, [previousPhase]);
 
   const canGoBack =
     phase.kind === "visual"
@@ -727,6 +814,9 @@ function App(): ReactElement {
       reconcileTheme(state.user.theme);
       setRemoteUser(state.user);
       setFlowToken(state.flowToken);
+      // The consent screen's answer arrives here too: its POST returns the
+      // fresh state, so this is where a held queue is sent or wiped.
+      syncPulseConsent(state.user);
       if (state.user.language) setLang(state.user.language);
       routeFromRemote(state.user);
     },
@@ -991,6 +1081,7 @@ function MascotWelcomeOverlay(props: {
   return (
     <div
       ref={hostRef}
+      data-pulse="skip_greeting"
       className="mw-host"
       // A tap skips the greeting. During the loop it is deliberately inert:
       // we are still loading, and there is nothing to skip to.
@@ -1050,7 +1141,7 @@ function TopChrome(props: { onBack: () => void }): ReactElement {
   const s = useOnboardingStrings();
   return (
     <header className="top-app-bar bg-transparent text-zinc-100 font-inter text-sm tracking-widest uppercase docked full-width top-0 border-none flat no shadows">
-      <button aria-label={s.back} className="chrome-button flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant transition-colors group" onClick={props.onBack}>
+      <button data-pulse="back" aria-label={s.back} className="chrome-button flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant transition-colors group" onClick={props.onBack}>
         <span className="material-symbols-outlined text-zinc-100 group-hover:text-purple-400 transition-colors duration-300">arrow_back</span>
       </button>
       <div className="text-xl font-bold text-white tracking-tighter" />
@@ -1215,7 +1306,7 @@ function TypewriterScene(props: {
   }, [done, reveal, revealDelayMs, revealViewMs, onNext, onReveal]);
 
   return (
-    <main className={`hook-main intro-main ${props.mainClassName ?? ""}`} onClick={skip}>
+    <main data-pulse="skip_intro" className={`hook-main intro-main ${props.mainClassName ?? ""}`} onClick={skip}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
         <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
       </div>
@@ -1362,6 +1453,7 @@ function HowItWorksScene(props: {
         <div className="howitworks-actions">
           {hasBack ? (
             <button
+              data-pulse="back"
               type="button"
               className="howitworks-back"
               onClick={handleBack}
@@ -1373,6 +1465,7 @@ function HowItWorksScene(props: {
             </button>
           ) : null}
           <button
+            data-pulse={isLast ? "more" : "next"}
             type="button"
             className={`pill-cta howitworks-next ${hasBack ? "is-compact" : ""}`}
             onClick={isLast ? props.onMore : handleStep}
@@ -1437,6 +1530,7 @@ function DateFlowScene(props: {
         <CycleDots total={total} active={index} complete={isLast} />
         <div className="howitworks-actions">
           <button
+            data-pulse="back"
             type="button"
             className="howitworks-back"
             onClick={handleBack}
@@ -1447,6 +1541,7 @@ function DateFlowScene(props: {
             </span>
           </button>
           <button
+            data-pulse={isLast ? "continue" : "next"}
             type="button"
             className="pill-cta howitworks-next is-compact"
             onClick={handleForward}
@@ -1473,6 +1568,7 @@ function CycleDots(props: { total: number; active: number; complete: boolean }):
 interface ConsentDraft {
   terms: boolean;
   research: boolean;
+  analytics: boolean;
 }
 
 function ConsentGate(props: {
@@ -1483,6 +1579,10 @@ function ConsentGate(props: {
   const { draft } = props;
   const [terms, setTerms] = useState(draft.current.terms);
   const [research, setResearch] = useState(draft.current.research);
+  // Unticked by default (pulse-analytics.md §2.1): collection needs an
+  // explicit yes. Not shown in the demo, which never collects (§1.7) — and
+  // then not sent at all, so the server leaves the stored value alone.
+  const [analytics, setAnalytics] = useState(draft.current.analytics);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1491,7 +1591,11 @@ function ConsentGate(props: {
     setBusy(true);
     setError(null);
     try {
-      const state = await acceptTelegramOnboardingConsent(app.initData, research);
+      const state = await acceptTelegramOnboardingConsent(
+        app.initData,
+        research,
+        PULSE_DEMO ? undefined : analytics,
+      );
       app.HapticFeedback?.notificationOccurred("success");
       props.onState(state);
     } catch (err) {
@@ -1507,7 +1611,7 @@ function ConsentGate(props: {
       <h1>{s.consentTitle}</h1>
       <p>{s.consentLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
-      <label className="check-row">
+      <label className="check-row" data-pulse="terms">
         <input
           type="checkbox"
           checked={terms}
@@ -1519,17 +1623,17 @@ function ConsentGate(props: {
         />
         <span>
           {s.consentTermsPrefix}{" "}
-          <a className="gate-link" href={TERMS_OF_SERVICE_URL} rel="noreferrer" target="_blank">
+          <a className="gate-link" data-pulse="terms_link" href={TERMS_OF_SERVICE_URL} rel="noreferrer" target="_blank">
             {s.consentTerms}
           </a>{" "}
           {s.consentAnd}{" "}
-          <a className="gate-link" href={PRIVACY_POLICY_URL} rel="noreferrer" target="_blank">
+          <a className="gate-link" data-pulse="privacy_link" href={PRIVACY_POLICY_URL} rel="noreferrer" target="_blank">
             {s.consentPrivacy}
           </a>
           .
         </span>
       </label>
-      <label className="check-row">
+      <label className="check-row" data-pulse="research_opt_in">
         <input
           type="checkbox"
           checked={research}
@@ -1541,7 +1645,26 @@ function ConsentGate(props: {
         />
         <span>{s.consentResearch}</span>
       </label>
-      <button className="gate-button" disabled={!terms || busy || !app?.initData} onClick={() => void submit()}>
+      {PULSE_DEMO ? null : (
+        <label className="check-row" data-pulse="analytics_opt_in">
+          <input
+            type="checkbox"
+            checked={analytics}
+            onChange={(event) => {
+              const checked = event.currentTarget.checked;
+              draft.current = { ...draft.current, analytics: checked };
+              setAnalytics(checked);
+            }}
+          />
+          <span>{s.consentAnalytics}</span>
+        </label>
+      )}
+      <button
+        className="gate-button"
+        data-pulse="continue"
+        disabled={!terms || busy || !app?.initData}
+        onClick={() => void submit()}
+      >
         {busy ? s.saving : s.continue}
       </button>
     </GateShell>
@@ -1579,6 +1702,7 @@ function LanguageGate(props: {
       <div className="choice-row">
         {LANGUAGE_OPTIONS.map((option) => (
           <button
+            data-pulse={`lang_${option.value}`}
             key={option.value}
             className={`choice-button ${props.selected === option.value ? "is-selected" : ""}`}
             disabled={busy !== null || !app?.initData}
@@ -1660,6 +1784,7 @@ function ThemeGate(props: {
           const label = value === "dark" ? s.themeDark : s.themeLight;
           return (
             <button
+              data-pulse={`theme_${value}`}
               key={value}
               type="button"
               className={`theme-tile theme-tile--${value} ${props.selected === value ? "is-selected" : ""}`}
@@ -1728,6 +1853,7 @@ function PathGate(props: {
       <div className="choice-row">
         {options.map((option) => (
           <button
+            data-pulse={`path_${option.value}`}
             key={option.value}
             className={`choice-button ${option.recommended ? "is-priority" : ""} ${props.selected === option.value ? "is-selected" : ""}`}
             disabled={busy !== null || !app?.initData}
@@ -1795,6 +1921,7 @@ function PhoneGate(props: {
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="gate-stack">
         <button
+          data-pulse="share_phone"
           className="gate-button"
           disabled={busy || !requestContact || !initData}
           onClick={share}
@@ -1877,7 +2004,7 @@ function EmailGate(props: {
             }
           }}
         />
-        <button className="gate-button" disabled={!email.trim() || busy || !app?.initData} onClick={() => void submit()}>
+        <button data-pulse="send_code" className="gate-button" disabled={!email.trim() || busy || !app?.initData} onClick={() => void submit()}>
           {busy ? s.emailSending : s.emailSend}
         </button>
       </div>
@@ -1996,11 +2123,12 @@ function OtpGate(props: {
           />
         ))}
       </div>
-      <button className="gate-button" disabled={code.length !== 6 || busy || !app?.initData} onClick={() => void submit()}>
+      <button data-pulse="confirm_code" className="gate-button" disabled={code.length !== 6 || busy || !app?.initData} onClick={() => void submit()}>
         {busy ? s.otpChecking : s.otpConfirm}
       </button>
       <div className="otp-actions">
         <button
+          data-pulse="resend_code"
           className="gate-link"
           disabled={resendBusy || resendSeconds > 0 || !app?.initData}
           onClick={() => void resend()}
@@ -2011,7 +2139,7 @@ function OtpGate(props: {
               ? s.otpResendIn(resendSeconds)
               : s.otpResend}
         </button>
-        <button className="gate-link" disabled={busy || resendBusy} onClick={props.onChangeEmail}>
+        <button data-pulse="change_email" className="gate-link" disabled={busy || resendBusy} onClick={props.onChangeEmail}>
           {s.otpChangeEmail}
         </button>
       </div>
@@ -2205,7 +2333,7 @@ function CityGate(props: {
         <div className="gate-note">{note ?? s.cityOutsideMarket}</div>
       ) : null}
       <div className="gate-stack">
-        <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
+        <button data-pulse="use_location" className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
           <span>
             <strong>{geoBusy ? s.cityDetecting : s.cityDetect}</strong>
           </span>
@@ -2228,6 +2356,7 @@ function CityGate(props: {
             <div className="choice-row">
               {group.cities.map((city) => (
                 <button
+                  data-pulse="city_option"
                   key={`${city.homeCityKey}:${city.homePlaceId ?? city.label}`}
                   className="choice-button"
                   disabled={busy || geoBusy || !app?.initData}
@@ -2314,6 +2443,7 @@ function WaitlistGate(props: {
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="gate-stack">
         <button
+          data-pulse="change_city"
           className="choice-button"
           disabled={busy || !app?.initData}
           onClick={() => void changeCity()}
@@ -2387,6 +2517,7 @@ function PromoGiftGate(props: {
       </div>
       <div className="promo-gift-actions">
         <button
+          data-pulse="claim_gift"
           className="promo-gift-primary"
           disabled={busy || !app?.initData}
           onClick={() => void claim()}
@@ -2471,6 +2602,7 @@ function ReferralGiftGate(props: {
       </div>
       <div className="referral-gift-actions">
         <button
+          data-pulse="continue"
           className="referral-gift-primary"
           disabled={busy || (!app?.initData && !PREVIEW_REFERRAL_GIFT)}
           onClick={() => void markSeen()}
@@ -2532,6 +2664,7 @@ function HandoffLoading(props: {
         {error ? <p>{error}</p> : null}
         {error ? (
           <button
+            data-pulse="retry"
             className="gate-button"
             style={{ marginTop: 20 }}
             onClick={() => {
@@ -2575,7 +2708,7 @@ function DoneScene(props: { active: boolean }): ReactElement {
         {active ? <ButterflySuccess /> : null}
         <h1>{s.doneTitle}</h1>
         <p>{s.doneLead}</p>
-        <button className="gate-button done-close-button" onClick={() => app?.close()}>
+        <button data-pulse="back_to_chat" className="gate-button done-close-button" onClick={() => app?.close()}>
           {s.backToChat}
         </button>
       </div>

@@ -29,6 +29,9 @@ import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from ".
 import { icon } from "./icons.js";
 import { returnParams } from "./return-to.js";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_calendar");
 
 /**
  * Calendar Mini App entry point.

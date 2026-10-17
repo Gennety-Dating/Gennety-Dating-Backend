@@ -23,6 +23,9 @@ import { apiFetch } from "./api.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { keepOpenOnVerticalSwipe } from "./telegram-swipes.js";
 import { rheostatStyle, shouldTickScale } from "./haptics.js";
+import { startPulse } from "./pulse.js";
+
+startPulse("mini_feedback");
 
 const app = window.Telegram?.WebApp;
 app?.ready();

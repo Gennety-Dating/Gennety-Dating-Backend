@@ -23,6 +23,7 @@ import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoiceResult, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { parseOnboardingBasicsPatch } from "../onboarding-basics.js";
+import { analyticsConsentPatch } from "../../services/analytics-consent.js";
 import { serializeUser } from "./serializers.js";
 import {
   buildInterviewState,
@@ -418,6 +419,7 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
   const body = (req.body ?? {}) as Record<string, unknown>;
   const termsAccepted = body.termsAccepted;
   const researchOptIn = body.researchOptIn;
+  const analyticsOptIn = body.analyticsOptIn;
   const language = body.language;
 
   if (termsAccepted !== true) {
@@ -426,6 +428,12 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
   }
   if (researchOptIn !== undefined && typeof researchOptIn !== "boolean") {
     res.status(400).json({ error: "Invalid researchOptIn" });
+    return;
+  }
+  // Pulse (pulse-analytics.md §2): the analytics tick on the same screen.
+  // Absent = no decision in this body, so nothing changes.
+  if (analyticsOptIn !== undefined && typeof analyticsOptIn !== "boolean") {
+    res.status(400).json({ error: "Invalid analyticsOptIn" });
     return;
   }
   if (
@@ -469,6 +477,7 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
       // Art. 7(1): record WHAT was accepted, not just when.
       policyVersion: LEGAL_DOCS_VERSION,
       researchOptIn: researchOptIn ?? false,
+      ...analyticsConsentPatch(analyticsOptIn as boolean | undefined),
       ...(language !== undefined ? { language: language as Language } : {}),
       ...(nextStep !== current.onboardingStep ? { onboardingStep: nextStep } : {}),
     },

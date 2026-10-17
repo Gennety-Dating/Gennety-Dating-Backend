@@ -250,11 +250,7 @@ interface ChatPhotoDeps {
 }
 
 const photoDeps: ChatPhotoDeps = {
-  findOwnedMessageImage: (userId, imageUrl) =>
-    prisma.message.findFirst({
-      where: { userId, imageUrl },
-      select: { imageUrl: true },
-    }),
+  findOwnedMessageImage: findOwnedChatImage,
   downloadChatImage,
   validateSingleFace: validateSingleFaceFromBuffer,
   gateProfilePhoto,
@@ -292,6 +288,20 @@ const photoDeps: ChatPhotoDeps = {
     });
   },
 };
+
+/**
+ * The person's own chat photo, by its storage path — any photo of an album,
+ * not just its first. `image_url` holds the first only, so the second to tenth
+ * photo of a turn used to read as "not found" (founder chat 2026-10-15: «не
+ * могу добавить его фото в профиль»).
+ */
+export async function findOwnedChatImage(userId: string, imageUrl: string): Promise<{ imageUrl: string } | null> {
+  const row = await prisma.message.findFirst({
+    where: { userId, OR: [{ imageUrl }, { imageUrls: { has: imageUrl } }] },
+    select: { id: true },
+  });
+  return row ? { imageUrl } : null;
+}
 
 export async function attachChatProfilePhoto(
   userId: string,

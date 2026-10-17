@@ -2189,8 +2189,8 @@ paths:
           the rest of the batch to the caller's next local window →
           `outcome: paused`.
         - Anything else is stored as the answer (trimmed, capped at 1000
-          characters), exactly as a Telegram answer is. Text only — the humour
-          question's meme reading is a Telegram-only extra.
+          characters), exactly as a Telegram answer is. Text only — a voice
+          note or photos go to `POST /v1/me/profiler/answer/media`.
 
         Then the batch advances: `next` carries the following question;
         `done` means the batch is over (or nothing is left this cycle, or a
@@ -2226,6 +2226,152 @@ paths:
             question whose moment is gone (removed now). `later_full` —
             «На потом» already holds 3. Nothing else was recorded; re-read
             `GET /v1/me/profiler`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/profiler/answer/media:
+    post:
+      tags: [me]
+      operationId: answerProfilerQuestionWithMedia
+      summary: Answer the live (or «На потом») Profiler question with a voice note, photos and/or a video
+      description: |
+        The `/v1/me/profiler/answer` answer, carrying media — the «+» and the
+        microphone the app shows on EVERY question. Same claim (exactly one
+        answer counts across Telegram and the app), same `ProfilerAnswerResult`,
+        same 409s. No `skip` / `later` here: those stay on `/answer`.
+
+        - `voice` is transcribed; the transcript is the person's own words.
+        - Each photo is described by a vision pass: on the meme questions
+          (humour) exactly as the Telegram meme path reads them, on any other
+          question as an answer to that question. A refused or unreadable photo
+          is skipped and never kept.
+        - A video (or an animated GIF) is cut BY THE APP — the server has no
+          ffmpeg: up to 6 frames evenly across the clip, in order
+          (`videoFrames`), its soundtrack (`videoAudio`) and its length
+          (`videoDuration`). One vision pass reads all frames as one clip,
+          with the soundtrack's transcript as what is said IN it (not the
+          person's words). A soundtrack with no speech, or transcription
+          being down, is not an error — the picture answers alone. Frames
+          are never kept.
+        - Stored `answerText`: typed `text`, then the transcript, then the
+          photo descriptions, then the video's (a single-kind media-only
+          answer stores the bare description; beside words, or photo beside
+          video, each is labelled «Photo: …» / «Video: …» in the caller's
+          language), capped at 1000 characters. `answerSource` is `text` (or `both` /
+          `tap` with options), as on `/answer`.
+        - Photos that were read are kept privately under the caller's prefix
+          in the chat attachments bucket; nothing in the response points at
+          them.
+
+        Order of checks: fields and file types (400/413/415, nothing spent) →
+        the question is live (409, nothing spent) → transcription (503/422) →
+        photos (422 only when nothing else is left) → the claim (409).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [questionId]
+              properties:
+                questionId: { type: string }
+                text:
+                  type: string
+                  description: The person's own words, trimmed, capped at 1000.
+                optionIds:
+                  description: |
+                    Tapped quick-answer ids — a repeated field, or one field
+                    holding a JSON array string (`["a","b"]`). Same rules as
+                    `/answer`.
+                  oneOf:
+                    - type: array
+                      items: { type: string }
+                    - type: string
+                source:
+                  type: string
+                  enum: [tap, text, both]
+                voice:
+                  type: string
+                  format: binary
+                  description: One voice note (m4a / AAC, ogg, wav…), ≤ 25 MB.
+                images:
+                  type: array
+                  maxItems: 4
+                  items:
+                    type: string
+                    format: binary
+                  description: JPEG / PNG / WebP (sniffed from the bytes), ≤ 6 MB each. HEIC is refused — send JPEG.
+                videoFrames:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Frames of ONE video, evenly across it, in playback order —
+                    same formats and cap as `images`.
+                videoAudio:
+                  type: string
+                  format: binary
+                  description: The video's soundtrack (m4a / AAC), ≤ 25 MB. Only beside `videoFrames`.
+                videoDuration:
+                  type: string
+                  description: The video's length in seconds (a decimal number), as the app measured it.
+            encoding:
+              voice: { contentType: "audio/mp4, audio/m4a, audio/aac, audio/ogg, audio/wav, application/octet-stream" }
+              images: { contentType: "image/jpeg, image/png, image/webp, application/octet-stream" }
+              videoFrames: { contentType: "image/jpeg, image/png, image/webp, application/octet-stream" }
+              videoAudio: { contentType: "audio/mp4, audio/m4a, audio/aac, application/octet-stream" }
+      responses:
+        "200":
+          description: Recorded; what the batch does next
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfilerAnswerResult" }
+        "400":
+          description: |
+            `missing_question_id`; `missing_media` — none of `voice`,
+            `images`, `videoFrames`; `missing_video_frames` — `videoAudio`
+            without frames; `unknown_option` / `too_many_options` as on
+            `/answer`; a multer code (`LIMIT_UNEXPECTED_FILE` — more than 4
+            images, 6 video frames, 2 voice notes or 2 soundtracks, or an
+            unknown file field). Nothing was recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `question_not_active` / `later_full`, exactly as on `/answer`.
+            Nothing was recorded or kept; re-read `GET /v1/me/profiler`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: |
+            `image_too_large` — a photo over 6 MB; `LIMIT_FILE_SIZE` — any
+            part over 25 MB.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "415":
+          description: "`unsupported_image` — a photo that is not JPEG / PNG / WebP (HEIC, GIF, anything else)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: |
+            `not_heard` — the voice note transcribed to nothing (or the
+            recording itself is unusable); `image_unreadable` — no photo or
+            video could be read (or every one was refused) and there is no
+            text, voice or option beside them. Nothing was recorded; the question stays live.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: "`transcription_unavailable` — our speech-to-text is down; keep the note and offer a retry."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2747,6 +2893,36 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/analytics-consent:
+    put:
+      tags: [me]
+      operationId: setAnalyticsConsent
+      summary: Give or withdraw the Pulse analytics consent (Settings)
+      description: |
+        docs/product/domains/pulse-analytics.md §2.2. Withdrawing deletes every
+        `client_events` row of this person in the same transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [optIn]
+              properties:
+                optIn: { type: boolean }
+      responses:
+        "200":
+          description: The stored value
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analyticsOptIn]
+                properties:
+                  analyticsOptIn: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /v1/me/photos/order:
     put:
       tags: [me]
@@ -2904,6 +3080,12 @@ paths:
               properties:
                 termsAccepted: { type: boolean, const: true }
                 researchOptIn: { type: boolean, default: false }
+                analyticsOptIn:
+                  type: boolean
+                  description: |
+                    Pulse analytics consent (pulse-analytics.md §2): the tick on
+                    the same screen, unchecked by default. Absent = no decision
+                    in this body, the stored value is left as is.
                 language:
                   $ref: "#/components/schemas/Language"
                   description: >
@@ -3173,6 +3355,14 @@ paths:
       tags: [chat]
       operationId: sendChatMessage
       summary: Send a chat turn (text and/or previously uploaded image)
+      description: |
+        **Cards a build draws (2026-10-15).** A build that renders native cards
+        under a reply lists them in the `X-Gennety-Chat-Cards` header on this
+        route and on `/v1/chat/voice` — comma-separated, today only `wishlist`
+        (`ChatWishlistCard`). Sent like `X-Gennety-Build`, by the client's
+        middleware, so it is not an operation parameter. A build that sends
+        nothing never gets a card, and the agent gets no tool that would make
+        one.
       requestBody:
         required: true
         content:
@@ -3264,6 +3454,13 @@ paths:
                       itself. Absent on an ordinary turn. Nothing here mutates
                       anything: every irreversible action stays behind a control
                       the person still has to tap.
+                  attachment:
+                    $ref: "#/components/schemas/ChatWishlistCard"
+                    description: >-
+                      A card under the reply — only for a build that listed it
+                      in `X-Gennety-Chat-Cards`. Absent (never null) otherwise.
+                      Stored with the reply, so `/v1/chat/history` returns it
+                      on the same message with its current state.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3290,6 +3487,16 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: |
+            `agent_unavailable` — the agent produced no reply even after its
+            own retry, and nothing was changed. Nothing of the turn is stored:
+            mark the person's bubble "not delivered" and offer a retry with the
+            same `clientMessageId` (2026-10-15; replaces a canned "something
+            went wrong" stored as the agent's reply).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/chat/voice:
     post:
@@ -3354,6 +3561,7 @@ paths:
                     type: array
                     items: { type: string }
                   action: { $ref: "#/components/schemas/AgentAction" }
+                  attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3380,6 +3588,82 @@ paths:
             OpenAI unreachable, 5xx or quota). The recording itself is fine:
             keep it and offer a retry (audit C-06, contract decision
             2026-10-11 #6). Only a recording that yields no speech is 422.
+            `agent_unavailable` — transcribed, but the agent produced no reply
+            and nothing changed; same handling (2026-10-15).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/messages/{id}/wishlist:
+    post:
+      tags: [chat]
+      operationId: answerChatWishlistCard
+      summary: «Add» or «Not now» on a wishlist card under an agent reply
+      description: |
+        The person's answer to a `ChatWishlistCard` (decision 2026-10-15). The
+        card's tool writes nothing; this tap is what saves — the consent.
+        `save` saves the items whose keys are sent (the ones left ticked),
+        copying the person's own chat photo into the wishlist; `dismiss`
+        closes the card. Answers the card as it now is — redraw from it.
+
+        Idempotent: `save` on a saved card answers the saved card without
+        writing; `dismiss` on a saved card changes nothing; `save` after
+        `dismiss` is a change of mind and saves. An item already in the list
+        counts as saved and is stored once.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The assistant message the card is under (`message.id` of the turn)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [save, dismiss] }
+                keys:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: { type: string, maxLength: 8 }
+                  description: Required with `save` — `ChatWishlistCardItem.key` of each ticked item
+      responses:
+        "200":
+          description: The card after the answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attachment]
+                properties:
+                  attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            Not a uuid, not the caller's message, a reply without a card, or
+            the wishlist feature off — one answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >-
+            `{ "error": "too-many", "room": N }` — the list (30) has room for
+            only N of the ticked items; nothing was saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Saving failed for a reason of ours; nothing was saved — offer a retry
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3855,6 +4139,14 @@ paths:
         receive time; analysis that trusts `at` alone is misled by a skewed
         phone. Rows are erased after 90 days, and sooner for a signed-in person
         whose account is deleted. 404 while the sink is feature-disabled.
+
+        **Pulse, contract v2 (2026-10-15, docs/product/domains/pulse-analytics.md §3)**:
+        five more types — `screen_view`, `screen_left`, `tap`, `dead_tap`,
+        `seen` — carry several keys and some numeric ones (time on screen,
+        tap coordinates normalized to 0…1 of the screen). Every event now
+        requires the person's analytics consent: a signed-in batch of a person
+        without it is answered `consent: false` and nothing is stored. The
+        Telegram Mini App posts here too, with `Authorization: tma <initData>`.
       security: []
       requestBody:
         required: true
@@ -3868,6 +4160,11 @@ paths:
                   type: string
                   maxLength: 64
                   description: Anonymous per-install UUID generated by the client.
+                platform:
+                  type: string
+                  enum: [ios, miniapp]
+                  default: ios
+                  description: Forced to `miniapp` under `tma` auth.
                 app:
                   type: object
                   properties:
@@ -3899,16 +4196,51 @@ paths:
                           - ticket_gate_dismissed
                           - fatal_client_error
                           - tempo_sync
+                          - screen_view
+                          - screen_left
+                          - tap
+                          - dead_tap
+                          - seen
                       at:
                         type: string
                         format: date-time
                         description: Device clock at the moment of the event.
+                      session:
+                        type: string
+                        format: uuid
+                        description: |
+                          Foreground session (a new one after 30 min in the
+                          background). Optional; a malformed one is ignored.
                       props:
                         type: object
                         description: |
-                          At most one key, fixed per type: `step`,
-                          `permission`, `outcome`, `surface` or `domain`.
-                          Values are closed client enums.
+                          The ten original types: at most one string key, fixed
+                          per type (`step`, `permission`, `outcome`, `surface`,
+                          `domain`). Pulse types (spec §3.4):
+                          `screen_view {screen, from?}`,
+                          `screen_left {screen, exit, dwell_ms, first_action_ms?}`,
+                          `tap {screen, element, x, y}`, `dead_tap {screen, x, y}`,
+                          `seen {screen, item, visible_ms}`. Any other key drops
+                          the event. String values are closed client enums
+                          matching `^[a-z0-9_]{1,32}$`; screen keys come from
+                          `packages/shared/src/pulse-screens.ts`.
+                        properties:
+                          screen: { type: string, maxLength: 32 }
+                          from: { type: string, maxLength: 32 }
+                          exit:
+                            type: string
+                            enum: [next, back, background, dismiss]
+                          element: { type: string, maxLength: 32 }
+                          item: { type: string, maxLength: 32 }
+                          dwell_ms:
+                            type: integer
+                            minimum: 0
+                            maximum: 86400000
+                            description: Foreground time only.
+                          first_action_ms: { type: integer, minimum: 0, maximum: 86400000 }
+                          visible_ms: { type: integer, minimum: 0, maximum: 86400000 }
+                          x: { type: number, minimum: 0, maximum: 1 }
+                          y: { type: number, minimum: 0, maximum: 1 }
                         additionalProperties:
                           type: string
                           maxLength: 32
@@ -3928,6 +4260,12 @@ paths:
                   dropped:
                     type: integer
                     description: Events rejected as unknown or malformed.
+                  consent:
+                    type: boolean
+                    description: |
+                      Present and `false` when the signed-in person has no
+                      analytics consent — nothing was stored; the client stops
+                      sending and clears its queue.
         "400": { $ref: "#/components/responses/BadRequest" }
         "404":
           description: Event sink feature-disabled
@@ -7539,7 +7877,10 @@ components:
               description: Already localised server-side; never model-authored
             callbackData:
               type: string
-              description: An EXISTING product callback; the agent cannot invent one
+              description: >-
+                An EXISTING product callback; the agent cannot invent one.
+                `menu:wishlist` (2026-10-15) opens «Мой вишлист» — sent when a
+                card could not be shown because the list is full.
             url:
               type: string
               description: >-
@@ -7617,7 +7958,7 @@ components:
       required:
         [id, email, universityDomain, firstName, surname, age, gender, preference,
          major, language, theme, themeMode, status, onboardingStep, termsAccepted,
-         researchOptIn, ticketBalance]
+         researchOptIn, analyticsOptIn, ticketBalance]
       properties:
         id: { type: string, format: uuid }
         email: { type: [string, "null"] }
@@ -7658,6 +7999,12 @@ components:
         onboardingStep: { $ref: "#/components/schemas/OnboardingStep" }
         termsAccepted: { type: boolean }
         researchOptIn: { type: boolean }
+        analyticsOptIn:
+          type: boolean
+          description: |
+            Pulse analytics consent (pulse-analytics.md §2). The client sends
+            `/v1/client/events` only while this is true; the server drops a
+            signed-in batch of a person without it regardless.
         ticketBalance:
           type: integer
           description: |
@@ -7965,6 +8312,12 @@ components:
         brand: { type: string, maxLength: 60 }
         note: { type: string, maxLength: 200 }
         imageUrl: { type: string, description: The candidate's remote https image; copied server-side }
+        imagePath:
+          type: string
+          description: >-
+            A photo already in the caller's own wishlist storage key
+            (`{userId}/w….jpg`); anything else is ignored. Wins over
+            `imageUrl` (2026-10-15).
         productUrl: { type: string }
         priceBand: { $ref: "#/components/schemas/WishlistPriceBand" }
         source: { type: string, enum: [catalog, search, link, text] }
@@ -9025,6 +9378,56 @@ components:
               description: >-
                 5-min TTL render URLs for `imageUrls`, same order. An entry is
                 an empty string when that one could not be signed.
+            attachment:
+              $ref: "#/components/schemas/ChatWishlistCard"
+              description: >-
+                The card under this assistant reply, with its current state.
+                Absent on every other row, and on every row while the wishlist
+                feature is off.
+
+    ChatWishlistCard:
+      description: |
+        The chat agent's wishlist card (decision 2026-10-15): things the person
+        shared — a photo of the thing, a shop screenshot, a link, "I want X" —
+        recognised and proposed for their Date Wishlist. Every item starts
+        ticked; one «Add» button saves the ticked ones through
+        `POST /v1/chat/messages/{id}/wishlist`, «Not now» dismisses. Nothing is
+        saved before that tap.
+      type: object
+      required: [kind, state, items, savedCount]
+      properties:
+        kind:
+          type: string
+          description: Always `wishlist_proposal` today; a client draws nothing for a kind it does not know
+        state:
+          type: string
+          enum: [open, saved, dismissed]
+          description: >-
+            `open` — not answered yet; `saved` — «Add» was tapped (`saved` marks
+            which items); `dismissed` — «Not now»
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChatWishlistCardItem" }
+        savedCount: { type: integer, description: Items saved by the tap; 0 until then }
+
+    ChatWishlistCardItem:
+      type: object
+      required: [key, title, brand, category, imageUrl, productUrl, saved]
+      properties:
+        key: { type: string, description: "`i1`, `i2`… — sent back to save this item" }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        imageUrl:
+          type: [string, "null"]
+          description: >-
+            https to draw: the person's own photo (signed, 1 h) or the shop
+            page's photo. Null — draw the category glyph.
+        productUrl: { type: [string, "null"] }
+        priceBand:
+          # Optional rather than `oneOf: [$ref, null]`, as on WishlistCandidate.
+          $ref: "#/components/schemas/WishlistPriceBand"
+        saved: { type: boolean, description: Saved by the tap (only in state `saved`) }
 
     ChatSession:
       type: object

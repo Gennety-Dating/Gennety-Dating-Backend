@@ -371,6 +371,12 @@ export interface TelegramOnboardingState {
     onboardingStep: TelegramOnboardingStep;
     termsAccepted: boolean;
     researchOptIn: boolean;
+    /**
+     * Pulse analytics consent (pulse-analytics.md §2.2). Optional so a server
+     * that predates the field reads as "not given" — the tracker then drops
+     * everything, which is the only safe reading of silence.
+     */
+    analyticsOptIn?: boolean;
     language: OnboardingLanguage | null;
     theme: OnboardingTheme;
     themeChosen: boolean;
@@ -519,6 +525,12 @@ export async function fetchTelegramOnboardingState(
 export async function acceptTelegramOnboardingConsent(
   initData: string,
   researchOptIn: boolean,
+  /**
+   * Pulse analytics consent (pulse-analytics.md §2). Omitted — never sent as
+   * `false` — when the checkbox was not shown (the demo bundle), because the
+   * server reads an absent value as "unchanged".
+   */
+  analyticsOptIn?: boolean,
 ): Promise<TelegramOnboardingState> {
   const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/consent`, {
     method: "POST",
@@ -526,7 +538,11 @@ export async function acceptTelegramOnboardingConsent(
       "Content-Type": "application/json",
       Authorization: `tma ${initData}`,
     },
-    body: JSON.stringify({ termsAccepted: true, researchOptIn }),
+    body: JSON.stringify(
+      analyticsOptIn === undefined
+        ? { termsAccepted: true, researchOptIn }
+        : { termsAccepted: true, researchOptIn, analyticsOptIn },
+    ),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

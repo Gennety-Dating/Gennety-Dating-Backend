@@ -4,6 +4,9 @@ import { wireContentInsets } from "../telegram-insets.js";
 import { keepOpenOnVerticalSwipe } from "../telegram-swipes.js";
 import "../ticket/ticket.css";
 import "./terminal.css";
+import { startPulse } from "../pulse.js";
+
+startPulse("mini_date_terminal");
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();

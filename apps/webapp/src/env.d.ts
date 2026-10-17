@@ -20,3 +20,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** `package.json` version, injected by `vite.config.ts` `define` (Pulse batches). */
+declare const __WEBAPP_VERSION__: string;
+/** UTC minute of the build, `YYYYMMDDHHmm`, injected the same way. */
+declare const __WEBAPP_BUILD__: string;

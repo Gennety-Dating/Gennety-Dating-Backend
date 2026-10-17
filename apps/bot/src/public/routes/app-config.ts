@@ -98,8 +98,9 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // shows no "Vibe Check" button; `/v1/me/style-picks` answers 204 anyway.
       stylePicks: env.STYLE_PICKS_ENABLED,
       // «The Morning After» + Date Wishlist (decision journal 2026-10-08): the
-      // morning check / mutual offer only with `morningAfter`, the wishlist
-      // session and the cheat sheet only with `wishlist`.
+      // morning check / mutual offer only with `morningAfter`; `wishlist` alone
+      // is the person's own list (Settings and Profile row, chat card, the
+      // «Сегодня» session) — the cheat sheet needs both (2026-10-15).
       morningAfter: env.MORNING_AFTER_ENABLED,
       wishlist: env.WISHLIST_FEATURE_ENABLED,
     },
@@ -122,7 +123,9 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     // The StoreKit consumable that opens one Date Wishlist cheat sheet
     // (2026-10-08); null while its rail is off — then only Premium opens it.
     wishlistProduct:
-      env.WISHLIST_FEATURE_ENABLED && env.WISHLIST_APPSTORE_ENABLED
+      // Same condition as `wishlistSheetLive()` (services/wishlist.ts), inlined
+      // to keep this route free of the wishlist service's imports.
+      env.WISHLIST_FEATURE_ENABLED && env.MORNING_AFTER_ENABLED && env.WISHLIST_APPSTORE_ENABLED
         ? env.WISHLIST_APPSTORE_PRODUCT_ID
         : null,
     serverNow: new Date().toISOString(),
