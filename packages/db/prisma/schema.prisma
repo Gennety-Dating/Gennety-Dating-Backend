@@ -1624,7 +1624,7 @@ model VoicePrompt {
   @@map("voice_prompts")
 }
 
-/// A track the person pinned to their profile — up to three, ordered by
+/// A track the person pinned to their profile — up to five, ordered by
 /// `position`. Two providers (decision 2026-10-08): Apple Music — the person's
 /// own recent listening, read on the iPhone through MusicKit — and Spotify
 /// catalogue search (decision 2026-09-11). A set may mix them.
@@ -1644,7 +1644,7 @@ model VoicePrompt {
 model ProfileMusicTrack {
   id       String @id @default(uuid()) @db.Uuid
   userId   String @map("user_id") @db.Uuid
-  /// 0..2 — display order.
+  /// 0..4 — display order (cap `MAX_PROFILE_TRACKS`, five since 2026-10-19).
   position Int
 
   /// `spotify` | `apple_music` — checked in code (`services/music/track.ts`).

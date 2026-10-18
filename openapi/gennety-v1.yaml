@@ -2382,8 +2382,8 @@ paths:
       operationId: getMyMusic
       summary: The caller's pinned tracks, in display order
       description: |
-        Up to three tracks, Apple Music and Spotify mixed freely (decisions
-        2026-09-11, 2026-10-08). 404 while `PROFILE_MUSIC_ENABLED` is off —
+        Up to five tracks, Apple Music and Spotify mixed freely (decisions
+        2026-09-11, 2026-10-08; the cap was three until 2026-10-19). 404 while `PROFILE_MUSIC_ENABLED` is off —
         which is also how a client learns to hide the section. Display-only:
         the tracks never feed matching or any AI (Spotify Developer Policy;
         the same rule holds for Apple Music).
@@ -2422,7 +2422,7 @@ paths:
               properties:
                 tracks:
                   type: array
-                  maxItems: 3
+                  maxItems: 5
                   items: { $ref: "#/components/schemas/MusicTrackRef" }
       responses:
         "200":

@@ -11,6 +11,19 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-19 — музыка в профиле: до пяти треков вместо трёх (только код: без миграции, без env).**
+`MAX_PROFILE_TRACKS` 3 → 5 в `services/music/profile-music.ts`; `PUT /v1/me/music` — `maxItems: 5` в OpenAPI. У
+`profile_music_tracks.position` нет проверки в БД — схема не меняется.
+- **Срочность:** пока не выкачено, прод отвечает `400 too_many_tracks` на 4–5 треков. Новая сборка iOS
+  (`Limits.tracks = 5`) при сохранении четвёртого трека получит ошибку — выкатывать до или вместе с ней.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флаг `PROFILE_MUSIC_ENABLED` не трогается.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/music/profile-music.test.ts
+  src/public/routes/music.test.ts`; на проде из iOS сохранить 5 треков → 200 и все пять в ответе; шестой (через API) →
+  400 `too_many_tracks`.
+- **Откат:** `git revert`. Кто уже сохранил 4–5 треков, их увидит (чтение без ограничения), но следующий `PUT`
+  с более чем тремя получит 400.
+- **Демо:** без изменений. **iOS:** см. срочность.
+
 **PENDING 2026-10-18 — CLAVE в premium-каталог Киева: БАЗА ПРОДА ГОТОВА, витрина ждёт выката кода.**
 `ChIJnZmXMgDP1EARp8do-YWl_ww`, бульв. Тараса Шевченка 5-7, 5 строк в `approved.json` (по одной на вуз) и пункт
 premium-части `SHOWCASE_PICKS`.
