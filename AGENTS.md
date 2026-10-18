@@ -4,15 +4,10 @@ Telegram-first AI matchmaking: the bot runs onboarding, matches a pair blind,
 negotiates a real venue, and hands the date off to a Mini App (plus a native
 iOS client on the same `/v1/*` API).
 
-**This is the single entry point for every coding agent** — the cross-tool
-`AGENTS.md` standard, deliberately not duplicated as `CLAUDE.md`. It is the only
-always-loaded document; everything else is read on demand from `docs/`.
-
-> **Do not create a `CLAUDE.md`.** Claude Code discovers `AGENTS.md` natively, and
-> a second root instruction file is exactly the drift this layout removes. If a
-> tool ever needs the Claude-specific name, make it a one-line `@AGENTS.md`
-> pointer — never a copy. Same rule for `@imports`: do not add any here. Six of
-> them are what pulled 923k tokens into every session before 2026-09-01.
+**The single always-loaded entry point for every agent**; everything else is
+read on demand from `docs/`. **No `CLAUDE.md`** (Claude Code reads `AGENTS.md`;
+if a tool needs that name, a one-line `@AGENTS.md` pointer, never a copy) and
+no `@imports` here (they once flooded every session).
 
 ## Stack
 
@@ -35,117 +30,103 @@ pnpm --filter @gennety/db db:push
 
 ## Repository map
 
-```
-apps/bot/       grammY bot, Express public + admin APIs, cron workers
-apps/webapp/    Vite Telegram Mini App
-apps/video/     Remotion Studio (not part of the production runtime)
-packages/db/    Prisma schema + client            packages/shared/  i18n, types, prompts, constants
-scripts/        local + deploy helpers            openapi/          /v1 contract for the iOS repo
-docs/           ALL project documentation (see routing below)
-```
+`apps/bot/` grammY bot, Express public + admin APIs, cron workers ·
+`apps/webapp/` Vite Telegram Mini App · `apps/video/` Remotion Studio (not
+production) · `packages/db/` Prisma schema + client · `packages/shared/` i18n,
+types, prompts, constants · `scripts/` local + deploy helpers · `openapi/` /v1
+contract for the iOS repo · `docs/` ALL documentation (routing below).
 
 ## Non-negotiable rules
 
-1. **Blind decision invariant** — a user never learns the partner's decision
-   before making their own.
-2. **No user-to-user in-app chat.** Proxy chat only, within its derived window.
+1. **Blind decision** — a user never learns the partner's decision before
+   making their own.
+2. **No user-to-user in-app chat.** Anonymous proxy chat is the sole
+   person-to-person channel, derived from `agreedTime` (T-1h…T+2h) for every
+   scheduled pair.
 3. **Verification is mandatory and track-aware** (university-email OTP or
-   trusted-contact phone). Never waive the gate or let one track bypass the
-   other's rail. A liveness check that does not clearly pass is *retryable*,
-   never `rejected`.
-4. **Demo mode owes an answer.** Any change to a product flow, Mini App screen,
-   gate, or paid step must state its demo-mode behaviour. If it isn't obvious,
-   **ask** — see `docs/product/demo-mode.md`.
-5. **Ask first** before changing user flow or product rules, adding an external
-   API or dependency, changing the Prisma schema / vector indexes / anything
-   destructive to the DB, or touching production secrets or irreversible deploy
-   steps.
-6. **Secrets never land in the repo.** No `.env`, keys, tokens, or raw logs
-   containing user data — not in code, not in `docs/`.
+   trusted-contact phone): never waive the gate or let one track bypass the
+   other's rail. A liveness check not clearly passed is *retryable*, never
+   `rejected`.
+4. **Demo mode owes an answer.** Every change to a product flow, Mini App
+   screen, gate or paid step states its demo-mode behaviour; if not obvious,
+   **ask** (`docs/product/demo-mode.md`).
+5. **Ask first** before changing user flow or product rules, adding an
+   external API or dependency, changing the Prisma schema / vector indexes /
+   anything destructive to the DB, or touching prod secrets or irreversible
+   deploy steps.
+6. **No secrets in the repo** — no `.env`, keys, tokens or raw logs with user
+   data, in code or `docs/`.
 7. **Respect dirty working trees.** Never revert unrelated user changes.
 8. Strict TypeScript (no `any` without cause); user-facing strings live in
    shared i18n; limits/timings/thresholds live in shared constants.
-9. **State names come from code.** `packages/db/prisma/schema.prisma` is the
-   authority for stored `MatchStatus` values and column types; ticket payment
-   is a string substate, and `packages/shared/src/date-lifecycle.ts` defines
-   derived date-view states. Do not invent stored states from business labels.
-10. **Date contact and cancellation.** Anonymous proxy chat is the sole
-    person-to-person channel and is derived from `agreedTime` (T-1h…T+2h) for
-    every scheduled pair. Cancellation is available from booking until
-    `agreedTime`; T-5h sends a reminder rather than opening a gate.
-11. **Specification format.** Write new agent-generated specifications as
-    declarative prose, numbered phases, and indented lists. Do not use markdown
-    tables in those specifications.
+9. **State names come from code.** `packages/db/prisma/schema.prisma` owns
+   stored `MatchStatus` values and column types; ticket payment is a string
+   substate; `packages/shared/src/date-lifecycle.ts` defines derived date-view
+   states. Never invent stored states from business labels.
+10. **Date cancellation** is available from booking until `agreedTime`; T-5h
+    sends a reminder rather than opening a gate. (Contact window: rule 2.)
+11. **Spec format.** New agent-written specs: declarative prose, numbered
+    phases, indented lists — no markdown tables.
 
-## Git journal workflow (single-branch)
+## Git journal workflow
 
-Solo repo, no reviewers. CI (`.github/workflows/ci.yml`) runs on pushes to `main`
-but gates nothing — a red run is a signal to look. Work on `main`; commit and push after **every**
-change, however small — `git add -A`, scoped `git commit`, `git push origin HEAD`.
-This is pre-authorised: do not ask. Only a turn that changed no file skips it.
-Never create branches; roll back with `git revert`. Full mechanics:
+Solo repo, no reviewers; CI (`.github/workflows/ci.yml`) runs on pushes to
+`main`, gates nothing — red means look. Trunk = `main`; a short branch only in
+your own worktree when sessions run in parallel, merged right away. Commit and
+push after **every** change (`git add -A`, scoped `git commit`,
+`git push origin HEAD`) — pre-authorised; only a turn that changed no file
+skips it. Roll back with `git revert`. Details:
 `docs/operations/agent-operating-manual.md` → "Post-Implementation Git Workflow".
 
 ## Documentation routing — read on demand, never up front
 
-Every file under `docs/` opens with a `<!-- WHEN_TO_READ: … -->` line. Trust it.
+Paths are under `docs/`. Every file opens with a `WHEN_TO_READ` line — trust
+it. Full tree: `README.md`.
 
-| When you are… | Read |
-|---|---|
-| **Starting any task** | `docs/architecture/decisions/INDEX.md` — grep it for your topic. It holds decisions that exist nowhere in the code. |
-| Changing product behaviour | `docs/product/product-spec.md` (Core Principles) → then the one file in `docs/product/domains/` |
-| Onboarding / profiler | `docs/product/domains/onboarding.md` |
-| Bot menu / mobile API | `docs/product/domains/main-menu.md` |
-| Matching, scoring, pitch, ticket gate | `docs/product/domains/matching-engine.md` |
-| Scheduling, venue, Premium, referral, promo, rematch | `docs/product/domains/scheduling-and-monetization.md` |
-| The date itself, feedback, emergency | `docs/product/domains/date-lifecycle.md` |
-| Reports, strikes, blocking | `docs/product/domains/trust-and-safety.md` |
-| Living Canvas, Date Bump / Date Terminal, Radar, date map | `docs/product/domains/living-canvas.md` |
-| Quiet hours, GDPR, languages, loading marks | `docs/product/domains/cross-cutting.md` |
-| A single feature (events, voice, type radar, ads…) | `docs/product/domains/<feature>.md` |
-| Writing any user-facing copy | `docs/product/voice-and-tone.md` |
-| Anything touching the demo bot | `docs/product/demo-mode.md` |
-| System shape, endpoints, topology | `docs/architecture/overview.md` |
-| Any table, enum, or column | `docs/architecture/data-model.md` |
-| Adding a route, cron, or worker | `docs/architecture/api-surface.md` |
-| External providers, proxies, rate limits | `docs/architecture/integrations.md` |
-| Venue-intent / market / purchase ownership | `docs/architecture/ownership.md` |
-| **Deploying or rolling back** | `docs/operations/deployment-runbook.md` (canonical — do not ask for hostnames/paths/service names) |
-| Hosts, paths, PM2, env + credential locations | `docs/operations/environments.md` |
-| "Is X deployed yet?" | `docs/operations/deploy-journal/INDEX.md`, backlog in `pending.md` |
-| Testing a release | `docs/operations/runbooks/` |
-| The full agent workflow (this file is the short version) | `docs/operations/agent-operating-manual.md` |
-| Something historical/superseded | `docs/archive/` |
+- **Starting any task** → grep `architecture/decisions/INDEX.md` for your topic
+  (decisions that exist nowhere in code). **Recording a decision** (product
+  call in chat, change of mind, deviation, deliberate non-work) is mandatory:
+  append to the newest file in `architecture/decisions/` (a new dated file once
+it passes 1 MB) + a row in `INDEX.md`,
+  or the next session rebuilds what we rejected.
+- Product behaviour → `product/product-spec.md` (Core Principles), then one
+  file in `product/domains/`: `onboarding.md` (profiler) · `main-menu.md` (bot
+  menu, mobile API) · `matching-engine.md` (scoring, pitch, ticket gate) ·
+  `scheduling-and-monetization.md` (venue, Premium, referral, promo, rematch) ·
+  `date-lifecycle.md` (the date, feedback, emergency) · `trust-and-safety.md`
+  (reports, strikes, blocking) · `living-canvas.md` (Date Bump / Terminal,
+  Radar, date map) · `cross-cutting.md` (quiet hours, GDPR, languages, loading
+  marks) · `<feature>.md` (events, voice, type radar, ads…)
+- Copy → `product/voice-and-tone.md`; demo bot → `product/demo-mode.md`
+- `architecture/`: `overview.md` (shape, endpoints, topology) · `data-model.md`
+  (any table, enum, column) · `api-surface.md` (new route, cron, worker) ·
+  `integrations.md` (providers, proxies, rate limits) · `ownership.md`
+  (venue-intent / market / purchase ownership)
+- **Deploy or rollback** → `operations/deployment-runbook.md` (canonical — do
+  not ask for hostnames/paths/service names); hosts, paths, PM2, env +
+  credential locations → `operations/environments.md`; "is X deployed?" →
+  `operations/deploy-journal/INDEX.md` (backlog `pending.md`); testing a
+  release → `operations/runbooks/`
+- Full agent workflow → `operations/agent-operating-manual.md`; superseded →
+  `archive/`
 
-Full tree with descriptions: `docs/README.md`.
+## Old document names in source comments
 
-**Recording a decision** (product call in chat, change of mind, deviation,
-deliberate non-work): append to the newest file in
-`docs/architecture/decisions/` and add a row to its `INDEX.md`. Mandatory —
-this is the rule that keeps the next session from rebuilding what we rejected.
-
-## Stale references in source comments
-
-Source comments and `.env.example` still name the pre-2026-09-01 documents.
-Resolve them here (the root stubs also redirect):
-
-`deploy.md` → `docs/operations/` · `PRODUCT_SPEC.md §X` → `docs/product/` ·
-`ARCHITECTURE.md` → `docs/architecture/` · `DECISIONS.md` →
-`docs/architecture/decisions/` · `DEMO_MODE.md` → `docs/product/demo-mode.md` ·
-`AGENTS.md` → this file for the rules, `docs/operations/agent-operating-manual.md`
-for the full procedure ·
-`*_PRODUCT_SPEC.md` / `AD_SPEND_TRACKING_DESIGN.md` → `docs/product/domains/` ·
-`VOICE.md` → `docs/product/voice-and-tone.md` ·
-`PROD_TEST_PLAN.md` / `E2E_TEST_PLAN.md` → `docs/operations/runbooks/`.
+Code and `.env.example` cite pre-2026-09-01 names (root stubs redirect too):
+`PRODUCT_SPEC.md §X`, `*_PRODUCT_SPEC.md`, `AD_SPEND_TRACKING_DESIGN.md` →
+`product/` (`domains/`) · `DEMO_MODE.md` → `product/demo-mode.md` · `VOICE.md`
+→ `product/voice-and-tone.md` · `ARCHITECTURE.md` → `architecture/` ·
+`DECISIONS.md` → `architecture/decisions/` · `deploy.md` → `operations/` ·
+`PROD_TEST_PLAN.md` → `operations/runbooks/` · `AGENTS.md` → this file (rules)
++ `operations/agent-operating-manual.md` (procedure).
 
 ## Context discipline
 
-- **Never read a `docs/` file whole "to see what's in it."** Use the
-  `WHEN_TO_READ` line, then grep, then read the matching section.
-- The two index files (`decisions/INDEX.md`, `deploy-journal/INDEX.md`) exist so
-  you can find one entry instead of loading a journal. Use them first.
-- Read in slices of ≤300 lines; prefer `grep -n` over opening a large file.
-- Never paste deploy logs, `pm2 logs`, SQL dumps, or full test output into a
-  document — link to the command that reproduces it.
-- Plan first for complex behaviour changes; confirm the plan before editing.
-  (Claude Code: Plan Mode. Other tools: say the plan, then wait.)
+- **Never read a `docs/` file whole "to see what's in it"**: `WHEN_TO_READ`,
+  then grep, then the matching section. Journals: find one entry via
+  `decisions/INDEX.md` / `deploy-journal/INDEX.md`.
+- Read in slices of ≤300 lines; prefer `grep -n` to opening a large file.
+- Never paste deploy logs, `pm2 logs`, SQL dumps or full test output into a
+  doc — link the command that reproduces it.
+- Complex behaviour change: plan first, confirm before editing (Claude Code:
+  Plan Mode; others: state the plan, wait).

@@ -68,3 +68,9 @@ then open only the dated file it points to. Never read the dated files top to bo
 
 **Adding a new entry:** append to the newest dated file above using the entry format
 described in this document, and add one row to `INDEX.md`.
+
+**Rotation (size limit):** never append to a dated file that is already over
+1 MB. Start a new file named after the date of its first entry
+(`YYYY-MM-DD.md`), add it at the top of the table above, and point the root
+`DECISIONS.md` stub at it. `2026-08-27_2026-09-01.md` (~1.04 MB, entries through
+2026-10-02) is past the limit — the next entry opens a new file.
