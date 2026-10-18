@@ -283,8 +283,9 @@ Client-side decisions go in the iOS repo's DECISIONS.md, under its rules.
 
 **Standing rule (single-branch journal — see the root AGENTS.md): commit and push after
 EVERY change, no matter how small, before ending your turn.** This is durable,
-pre-authorized — do not ask first. Work directly on `main`; never create
-branches. The GitHub remote is a transparent, rollback-able log of each step, so
+pre-authorized — do not ask first. The trunk is `main`; a short-lived branch
+only in your own worktree when sessions run in parallel, merged into `main`
+right away. The GitHub remote is a transparent, rollback-able log of each step, so
 the working tree must not accumulate mixed, hard-to-attribute changes between
 sessions.
 
