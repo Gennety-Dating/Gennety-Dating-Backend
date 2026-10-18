@@ -7,7 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING | 2026-10-18 | CLAVE (бульв. Шевченка 5-7) в premium-каталог Киева: 5 строк `approved.json` + витрина; в базы — ограниченным импортом одного `placeId` после выката кода, по слову основателя | [pending.md](./pending.md) |
+| PENDING | 2026-10-18 | CLAVE (бульв. Шевченка 5-7) в premium-каталог Киева: 5 строк `approved.json` + витрина; прод-база ГОТОВА 2026-10-18 (ограниченный импорт одного `placeId`, 5 строк); витрина ждёт выката кода; демо не тронуто | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | App Store review account: fixed address + 6-digit code (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), verified reviewer "Alex" + stand-in partner "Emma" (20 s cron), reserved `telegramId` band out of the pool; restart only, off until both vars are set; Emma's photos by hand | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Wishlist as a soft venue hint: in-band draw weight from place/drink/experience items; env `WISHLIST_VENUE_HINT_WEIGHT` default 0 (off) — on only after the updated privacy text is on the site; code only | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Chat wishlist card: agent proposes wishlist items from photos/screenshots/links, «Добавить» saves (`POST /v1/chat/messages/{id}/wishlist`); MIGRATION `20261015180000_message_attachment` (additive) BEFORE restart; header `X-Gennety-Chat-Cards`; album photo → profile fix; cheat sheet needs both wishlist + morning flags; no env | [pending.md](./pending.md) |

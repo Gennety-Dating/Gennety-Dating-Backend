@@ -11,14 +11,17 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
-**PENDING 2026-10-18 — CLAVE в premium-каталог Киева (данные каталога + витрина; без миграций и env).**
+**PENDING 2026-10-18 — CLAVE в premium-каталог Киева: БАЗА ПРОДА ГОТОВА, витрина ждёт выката кода.**
 `ChIJnZmXMgDP1EARp8do-YWl_ww`, бульв. Тараса Шевченка 5-7, 5 строк в `approved.json` (по одной на вуз) и пункт
-premium-части `SHOWCASE_PICKS`. В базы попадёт только импортом каталога после выката кода (на дроплете нужен новый
-`approved.json`), тем же ограниченным способом, что ALTO 2026-10-04: импорт только этого `placeId`, остальной каталог
-не трогать. Только по слову основателя. Пункт витрины без строк в базе просто выпадает — ошибки нет.
-- **Проверка:** `select count(*) from curated_venues where place_id = 'ChIJnZmXMgDP1EARp8do-YWl_ww' and active and tier = 'premium'` → 5.
+premium-части `SHOWCASE_PICKS`.
+- **Прод-база — сделано 2026-10-18 по слову основателя.** Ограниченный импорт одного `placeId`, как ALTO 2026-10-04:
+  одноразовый скрипт с полями `seed-venues.mjs` importVenues, `cityKey = ua:kyiv`, одна транзакция, без удалений
+  (не `seed-venues:import` — тот чистит стоп-лист по всей таблице). Создано 5 строк; активный premium Киева 210 → 215.
+  Бот не перезапускался: доска смены места читает таблицу на лету, CLAVE там сразу как premium.
+- **Осталось:** пункт витрины `SHOWCASE_PICKS` уедет с общим выкатом кода. До него пункта просто нет — ошибки нет.
+- **Проверка:** `select count(*) from curated_venues where place_id = 'ChIJnZmXMgDP1EARp8do-YWl_ww' and active and tier = 'premium'` → 5 (проверено 2026-10-18).
 - **Откат:** `deleteMany` по этому `place_id` (внешних ключей на таблицу нет) + `git revert`.
-- **Демо:** то же импортом в `/opt/gennety-demo`, если основатель скажет.
+- **Демо:** в `/opt/gennety-demo` не импортировано — только если основатель скажет.
 
 **PENDING 2026-10-15 — App Store review account (restart only: no migration, no contract change; feature off until env is set).**
 This adds the `APP_REVIEW_EMAIL` + `APP_REVIEW_CODE` sign-in branch on `/v1/auth/otp/*`, the reviewer "Alex" and the
