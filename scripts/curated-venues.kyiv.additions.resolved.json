@@ -6189,5 +6189,33 @@
       }
     ],
     "alternates": []
+  },
+  {
+    "input": {
+      "name": "Clave",
+      "tier": "premium"
+    },
+    "query": "Clave Київ",
+    "matches": [
+      {
+        "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+        "name": "CLAVE",
+        "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+        "lat": 50.4422171,
+        "lng": 30.5181289,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.3,
+        "reviews": 61,
+        "priceLevel": null,
+        "primaryType": "european_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 1,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": []
+      }
+    ],
+    "alternates": []
   }
 ]

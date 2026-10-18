@@ -588,6 +588,10 @@
       "name": "ALTO",
       "query": "ALTO вулиця Петра Сагайдачного 19 Київ",
       "tier": "premium"
+    },
+    {
+      "name": "Clave",
+      "tier": "premium"
     }
   ],
   "qualityOverrides": [
