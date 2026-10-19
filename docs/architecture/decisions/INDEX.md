@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-20 | Native login restored against pre-Pulse production: required `analyticsOptIn` always serialized, missing value defaults false; response-only backport, no migration or auth bypass | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-19 | Vibe-вопросы Profiler: одна интерактивная карточка на партию в Telegram; закрытый ответ касанием, открытый с подтверждением/текстом, общий формат iOS; текстовые кнопки первым выпуском, флаг выключен, демо тем же кодом | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | риски отказа App Review закрыты до первой подачи тремя ветками (сайт: legal v4.4/v3.2 + `/support`; iOS: манифест, автопродление у кнопки, переводы разрешений, экспорт-ключ, заметки ревью); ручные шаги основателя — `operations/appstore-submission-checklist.md`; вход по телефону на ревью рекомендовано выключить | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | партнёр ревьюера App Store — «Gleb» с четырьмя фото основателя (его согласие, кадры альбома свидания, прод-бакет `app-review/partner-1..4.jpg`), ревьюер «Alex» стал девушкой; чужие фото из сети отклонены | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
