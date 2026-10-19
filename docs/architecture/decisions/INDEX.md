@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-20 | Native login restored against pre-Pulse production: required `analyticsOptIn` always serialized, missing value defaults false; response-only backport, no migration or auth bypass | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-19 | музыка в профиле: до пяти треков вместо трёх (`MAX_PROFILE_TRACKS` 3 → 5, `PUT /v1/me/music` maxItems 5) по просьбе основателя «хотя бы пять»; заменяет «до трёх» 2026-09-11/2026-10-08; без миграции; юр. тексты «up to three» не тронуты | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-18 | CLAVE (бульв. Шевченка 5-7) добавлен в premium-каталог Киева и витрину; без полного платного sync и без `merge --apply` (вернул бы 2 убранных места); фото — порядок Google | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | риски отказа App Review закрыты до первой подачи тремя ветками (сайт: legal v4.4/v3.2 + `/support`; iOS: манифест, автопродление у кнопки, переводы разрешений, экспорт-ключ, заметки ревью); ручные шаги основателя — `operations/appstore-submission-checklist.md`; вход по телефону на ревью рекомендовано выключить | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |

@@ -139,7 +139,9 @@ export function serializeUser(user: SerializableUser): SerializedUser {
     onboardingStep: user.onboardingStep,
     termsAccepted: user.termsAccepted,
     researchOptIn: user.researchOptIn,
-    analyticsOptIn: user.analyticsOptIn,
+    // Older deployed Prisma clients do not expose the Pulse column yet.
+    // Keep the native auth contract complete without inventing consent.
+    analyticsOptIn: user.analyticsOptIn ?? false,
     ticketBalance: user.ticketBalance,
   };
 }

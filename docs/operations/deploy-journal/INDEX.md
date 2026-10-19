@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed (hotfix only) | 2026-10-20 | Native Telegram login: backport required `analyticsOptIn: false` to pre-Pulse user serializer; `gennety-bot` restart only, no migration, dependencies, or full main deployment | [2026-10-20-auth-compatibility.md](./2026-10-20-auth-compatibility.md) |
 | PENDING | 2026-10-19 | Музыка в профиле: до пяти треков вместо трёх (`MAX_PROFILE_TRACKS` 3 → 5, OpenAPI `maxItems: 5`); code only, no migration, no env; until deployed prod rejects 4–5 tracks with 400 `too_many_tracks` — ship before/with the iOS build | [pending.md](./pending.md) |
 | PENDING | 2026-10-18 | CLAVE (бульв. Шевченка 5-7) в premium-каталог Киева: 5 строк `approved.json` + витрина; прод-база ГОТОВА 2026-10-18 (ограниченный импорт одного `placeId`, 5 строк); витрина ждёт выката кода; демо не тронуто | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | App Store review account: fixed address + 6-digit code (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), verified reviewer "Alex" + stand-in partner "Emma" (20 s cron), reserved `telegramId` band out of the pool; restart only, off until both vars are set; Emma's photos by hand | [pending.md](./pending.md) |
