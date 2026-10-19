@@ -66,8 +66,16 @@ export interface SendRichMessageParams {
   reply_markup?: InlineKeyboardMarkup;
 }
 
+export interface EditRichMessageParams {
+  chat_id: number | string;
+  message_id: number;
+  rich_message: InputRichMessage;
+  reply_markup?: InlineKeyboardMarkup;
+}
+
 /** The subset of Bot API 10.1 methods we layer onto grammY's `api.raw`. */
 interface RichRawApi {
+  editMessageText(params: EditRichMessageParams): Promise<Message | true>;
   sendRichMessageDraft(params: SendRichMessageDraftParams): Promise<true>;
   sendRichMessage(params: SendRichMessageParams): Promise<Message>;
 }
@@ -123,4 +131,9 @@ export function thinkingHtml(label: string, emojiId?: string): string {
     return `<tg-thinking><tg-emoji emoji-id="${emojiId}">${escapeRichHtml(glyph!)}</tg-emoji> ${escapeRichHtml(rest!)}</tg-thinking>`;
   }
   return `<tg-thinking>${escapeRichHtml(label)}</tg-thinking>`;
+}
+
+/** Edit rich content through the same grammY transport and throttling as sends. */
+export function editRichMessage(api: Api<RawApi>, params: EditRichMessageParams): Promise<Message | true> {
+  return richRaw(api).editMessageText(params);
 }

@@ -1089,3 +1089,17 @@ attention are:
 If the answer is not obvious from the change itself, **ask** rather than assume.
 The same rule AGENTS.md already applies to the iOS client under "Two Clients,
 One Backend".
+
+
+## Telegram Profiler cards (2026-10-19)
+
+`PROFILER_CARDS_ENABLED` defaults off in both environments. When enabled on the
+isolated demo process, the visitor receives the same interactive Profiler card
+as production: closed answers save on tap, open choices wait for confirmation
+or text, and the same batch card advances in place. The draft uses demo's own
+`bot_sessions`; answers use demo's own `profiler_answers`. No puppet response,
+new provider, identity bypass or payment exception is introduced. Existing
+Profiler eligibility, quiet hours and planning deferral still apply, so a short
+walkthrough may finish before its first batch becomes due. Demo QA must include
+an eligible visitor with a due batch; this change does not force questions into
+active date planning to make them visible sooner.

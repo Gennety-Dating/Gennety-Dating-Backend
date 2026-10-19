@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-19 | Telegram Profiler interactive batch cards: `PROFILER_CARDS_ENABLED` default off, demo first + real-client iOS/Android/Desktop QA; restart only, no migration or API contract change | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | App Store review account: fixed address + 6-digit code (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), verified reviewer "Alex" + stand-in partner "Emma" (20 s cron), reserved `telegramId` band out of the pool; restart only, off until both vars are set; Emma's photos by hand | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Wishlist as a soft venue hint: in-band draw weight from place/drink/experience items; env `WISHLIST_VENUE_HINT_WEIGHT` default 0 (off) — on only after the updated privacy text is on the site; code only | [pending.md](./pending.md) |
 | PENDING | 2026-10-15 | Chat wishlist card: agent proposes wishlist items from photos/screenshots/links, «Добавить» saves (`POST /v1/chat/messages/{id}/wishlist`); MIGRATION `20261015180000_message_attachment` (additive) BEFORE restart; header `X-Gennety-Chat-Cards`; album photo → profile fix; cheat sheet needs both wishlist + morning flags; no env | [pending.md](./pending.md) |

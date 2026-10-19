@@ -51,6 +51,8 @@ function optionalNumber(raw: string | undefined): number | null {
 }
 
 export const env = {
+  /// Interactive Telegram Profiler cards. Ship dark; demo uses the same flag.
+  PROFILER_CARDS_ENABLED: process.env.PROFILER_CARDS_ENABLED === "true",
   BOT_TOKEN: required("BOT_TOKEN"),
   /// Telegram username of the bot (without @). Used to build `t.me/<username>`
   /// deep links (referral invites, coordination contact exchange).

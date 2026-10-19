@@ -102,6 +102,14 @@ Columns (≈ 25):
 | Vibe (matching) | `fridayVibeText`, `vibeFocusText` (raw onboarding §1.3 answers), `energyAxis` / `orientationAxis` (`Float?` `[-1,1]`, scored by `V_research` quadrant proximity), `socialRole` (`String?` initiator/participant/observer — whitelist-validated in app code, **stored but not scored** in v1), `anchorTags` (`String[]`), `vibeExtractedAt`. Written at finalize by `services/vibe-axes.ts`; the raw Friday text is also folded into `psychologicalSummary`. See [PRODUCT_SPEC.md](../product/product-spec.md) §1.3 / §3.2. |
 | Audit | `createdAt`, `updatedAt` |
 
+With `PROFILER_CARDS_ENABLED` (2026-10-19), the existing Profiler fields also
+carry an interrupted Telegram continuation: null `profilerActiveQuestionId`, a
+retained `profilerQuestionMessageId`, a due `profilerNextAt` and the remaining
+batch budget. The worker resumes it; iOS does not open another batch over it.
+The claim and answer/skip write commit together. Unsubmitted selections are
+`SessionData.profilerCardDraft` inside the existing `bot_sessions` JSON, bound
+to question, message and revision; they are not `ProfilerAnswer` rows.
+
 ### `city_waitlist_entries` (1:1 with `users`)
 
 One person waiting for Gennety to open in their city. Written by the waitlist

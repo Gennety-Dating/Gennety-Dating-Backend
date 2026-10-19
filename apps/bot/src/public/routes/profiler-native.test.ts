@@ -1,3 +1,4 @@
+import { env } from "../../config.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -771,5 +772,33 @@ describe("quick answers and «На потом»", () => {
 
     expect(res.body).toEqual({});
     expect(upsertOf().update).toEqual(expect.objectContaining({ skipped: true, postponedAt: null }));
+  });
+});
+
+
+describe("Telegram card / iOS handoff", () => {
+  const originalFlag = env.PROFILER_CARDS_ENABLED;
+  afterEach(() => { Object.assign(env, { PROFILER_CARDS_ENABLED: originalFlag }); });
+
+  it("does not open a new batch while Telegram has a committed continuation", async () => {
+    Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+    userFindUnique.mockResolvedValue(getUser({ profilerActiveQuestionId: null, profilerQuestionMessageId: 77, profilerNextAt: NOW }));
+    const response = await request(buildApp()).get("/v1/me/profiler");
+    expect(response.status).toBe(200);
+    expect(response.body.question).toBeUndefined();
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("an iOS answer removes embedded rich controls from the Telegram copy", async () => {
+    Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+    const editRich = vi.fn().mockResolvedValue({});
+    botApi.current = { raw: { editMessageText: editRich } };
+    userFindUnique.mockResolvedValue({ ...getUser(), id: USER_ID, telegramId: 123n, profilerAnswers: [],
+      profile: { ...getUser().profile, profilerActiveQuestionId: FEMALE[0], profilerBatchRemaining: 0 } });
+    profileFindUnique.mockResolvedValue({ profilerQuestionMessageId: 77 });
+    const response = await request(buildApp()).post("/v1/me/profiler/answer").send({ questionId: FEMALE[0], text: "coffee" });
+    expect(response.status).toBe(200);
+    expect(editRich).toHaveBeenCalledWith(expect.objectContaining({ message_id: 77,
+      reply_markup: { inline_keyboard: [] }, rich_message: expect.objectContaining({ html: expect.not.stringContaining("tg-button") }) }));
   });
 });

@@ -1,3 +1,4 @@
+import { env } from "../config.js";
 import { prisma } from "@gennety/db";
 import {
   PROFILER_LATER_MAX,
@@ -308,6 +309,7 @@ async function resumeOrOpenBatch(
           profilerNextAt: true,
           profilerActiveQuestionId: true,
           profilerBatchRemaining: true,
+          profilerQuestionMessageId: true,
         },
       },
     },
@@ -333,6 +335,12 @@ async function resumeOrOpenBatch(
     // An id the bank no longer has (a question retired while it was live), or a
     // contextual question about a date that was cancelled or has passed.
     await releaseDeadQuestion(userId, activeId, active, now);
+    return { batch: {}, language };
+  }
+
+  // Telegram has committed an answer and is attaching the next card. Its worker
+  // owns this durable continuation; opening a fresh iOS batch would reset the budget.
+  if (env.PROFILER_CARDS_ENABLED && profile.profilerQuestionMessageId) {
     return { batch: {}, language };
   }
 

@@ -113,6 +113,14 @@ export type WeeklyMatchStatus = "pending" | "matched" | "standby";
 
 /** Session data persisted per-user across messages */
 export interface SessionData {
+  /** Unsubmitted Telegram Profiler selection; persisted in bot_sessions. */
+  profilerCardDraft?: {
+    questionId: string;
+    messageId: number;
+    revision: number;
+    optionIds: string[];
+    writing?: boolean;
+  };
   onboardingStep: OnboardingStep;
   language: Language;
   /** Whether the agent is currently expecting a photo upload */

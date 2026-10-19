@@ -1,8 +1,9 @@
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
-import { prisma, type MatchStatus } from "@gennety/db";
+import { prisma, type Prisma, type MatchStatus } from "@gennety/db";
 import {
   t,
+  composeProfilerAnswerText,
   type Language,
   PROFILER_MAX_ANSWER_LEN,
   profilerQuestionById,
@@ -10,6 +11,8 @@ import {
   type ProfilerAnswerSource,
   type ProfilerQuestion,
 } from "@gennety/shared";
+import { env } from "../config.js";
+import { closeProfilerCard, deliverProfilerCard } from "./profiler-card.js";
 import { dispatchToChat } from "../chat-queue.js";
 import { getNextBatchDate } from "./next-batch.js";
 import { runStatusSequence, streamComposedRich } from "./ai-stream.js";
@@ -118,6 +121,7 @@ export interface ProfilerUserState {
   timeZone: string | null;
   profilerBatchRemaining: number;
   activeQuestionId: string | null;
+  questionMessageId?: number | null;
   answers: ProfilerAnswerRow[];
 }
 
@@ -135,6 +139,7 @@ export async function loadProfilerState(userId: string): Promise<ProfilerUserSta
           timeZone: true,
           profilerBatchRemaining: true,
           profilerActiveQuestionId: true,
+          profilerQuestionMessageId: true,
         },
       },
       profilerAnswers: {
@@ -158,6 +163,7 @@ export async function loadProfilerState(userId: string): Promise<ProfilerUserSta
     timeZone: user.profile.timeZone,
     profilerBatchRemaining: user.profile.profilerBatchRemaining,
     activeQuestionId: user.profile.profilerActiveQuestionId ?? null,
+    questionMessageId: user.profile.profilerQuestionMessageId,
     answers: user.profilerAnswers,
   };
 }
@@ -230,7 +236,8 @@ async function sendQuestion(
 
 /**
  * Best-effort removal of the Skip keyboard from a question that was **resolved**
- * (answered, or explicitly skipped). Leaves the question text in place — it is
+ * (answered, or explicitly skipped). Card mode also replaces embedded controls
+ * with the closing text. Legacy mode leaves the question text in place — it is
  * the context for the answer sitting right below it, and the user knows they
  * dealt with it. Never throws. Also used by the native path when the app
  * resolves a question the bot had sent to Telegram.
@@ -242,6 +249,11 @@ export async function stripQuestionKeyboard(
 ): Promise<void> {
   if (!messageId || telegramId <= 0n) return;
   try {
+    if (env.PROFILER_CARDS_ENABLED) {
+      const user = await prisma.user.findUnique({ where: { telegramId }, select: { language: true } });
+      await closeProfilerCard(api, Number(telegramId), messageId, (user?.language ?? "en") as Language);
+      return;
+    }
     await api.editMessageReplyMarkup(Number(telegramId), messageId);
   } catch {
     // Message deleted, too old to edit, or already without a keyboard.
@@ -313,6 +325,7 @@ async function sendOneFromBatch(
   now: Date,
   mode: "open" | "advance" = "open",
   wait?: Wait,
+  previousMessageId?: number | null,
 ): Promise<"sent" | "paused" | "done"> {
   const cycleId = profilerCycleId(now);
   const contextual = mode === "open" ? await contextualQuestionFor(state, now) : null;
@@ -345,23 +358,55 @@ async function sendOneFromBatch(
   if (step.kind === "exhausted") {
     // All questions exhausted — completion is SILENT per spec §Phase 1b
     // (no "profile complete" ping). Do NOT play a status here.
+    if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
+      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+    }
     await awaitNextProfilerWindow(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
   if (step.kind === "boundary") {
+    if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
+      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+      await pauseBatchUntilNextWindow(state.userId, now, state.timeZone);
+      return "paused";
+    }
     return pauseAtBatchBoundary(api, state, now, wait);
   }
   const question = step.question;
-  // Every question — first of a batch ("open") or a follow-up ("advance") —
-  // goes through the same native AI-compose beat; only the status differs.
+  // Card mode replaces a single message; legacy mode keeps its AI-compose beats.
+  if (env.PROFILER_CARDS_ENABLED) {
+    const previous = previousMessageId ?? null;
+    // Reserve before IO, so iOS sees the next question rather than opening a second batch.
+    const reserved = await prisma.profile.updateMany({
+      where: { userId: state.userId, profilerActiveQuestionId: null, profilerQuestionMessageId: previous },
+      data: profilerActiveQuestionPatch(question.id, state.profilerBatchRemaining - 1, now, previous),
+    });
+    if (reserved.count !== 1) return "paused";
+    let delivered: number;
+    try {
+      delivered = await deliverProfilerCard(api, Number(state.telegramId), question, state.language, previous, undefined, contextMarkdown);
+    } catch {
+      // Restore a due continuation, without consuming another question on each retry.
+      await prisma.profile.updateMany({
+        where: { userId: state.userId, profilerActiveQuestionId: question.id, profilerQuestionMessageId: previous },
+        data: { profilerActiveQuestionId: null, profilerAnswerWindowUntil: null,
+          profilerBatchRemaining: state.profilerBatchRemaining,
+          profilerNextAt: previous ? now : nextWindowAt(now, resolveZone(state.timeZone)) },
+      });
+      return "paused";
+    }
+    const attached = await prisma.profile.updateMany({
+      where: { userId: state.userId, profilerActiveQuestionId: question.id, profilerQuestionMessageId: previous },
+      data: { profilerQuestionMessageId: delivered },
+    });
+    // The question may already have been answered in iOS during Telegram's request.
+    if (attached.count !== 1) {
+      await closeProfilerCard(api, Number(state.telegramId), delivered, state.language).catch(() => {});
+    }
+    return "sent";
+  }
   const messageId = await sendQuestion(
-    api,
-    state.telegramId,
-    question,
-    state.language,
-    mode,
-    contextMarkdown,
-    wait,
+    api, state.telegramId, question, state.language, mode, contextMarkdown, wait,
   );
   if (messageId === null) {
     // Couldn't deliver (e.g. blocked) — retry at the next window rather than
@@ -475,7 +520,7 @@ export async function resolveProfilerCapture(
      */
     looksLikeQuestion?: boolean | undefined;
   } = {},
-): Promise<{ userId: string; questionId: string; language: Language } | null> {
+): Promise<{ userId: string; questionId: string; language: Language; messageId: number | null } | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
@@ -508,6 +553,7 @@ export async function resolveProfilerCapture(
   return {
     userId: user.id,
     questionId: profile.profilerActiveQuestionId,
+    messageId: profile.profilerQuestionMessageId,
     language: (user.language ?? "en") as Language,
   };
 }
@@ -694,6 +740,10 @@ export async function startProfilerBatch(
     const fresh = await loadProfilerState(userId);
     if (!fresh) return "done";
     if (fresh.activeQuestionId) return "paused";
+    // A committed card answer retains its message id until the next question is delivered.
+    if (env.PROFILER_CARDS_ENABLED && fresh.questionMessageId) {
+      return sendOneFromBatch(api, fresh, now, "advance", wait, fresh.questionMessageId);
+    }
     const rush = isRushMode(now, getNextBatchDate(now));
     fresh.profilerBatchRemaining = batchSizeFor(rush);
     await prisma.profile.update({
@@ -725,6 +775,8 @@ export async function recordProfilerAnswer(
     now?: Date;
     reactionTarget?: MessageReactionTarget;
     wait?: Wait;
+    quick?: { optionIds: string[]; source: ProfilerAnswerSource };
+    expectedMessageId?: number;
     media?: {
       fileId: string;
       kind: "photo" | "sticker";
@@ -739,6 +791,9 @@ export async function recordProfilerAnswer(
   if (!answerText) return false;
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
+  if (env.PROFILER_CARDS_ENABLED) {
+    return recordCardReply(api, userId, question, { text: answerText, ...(options.media ? { media: options.media } : {}), ...(options.quick ? { quick: options.quick } : {}) }, now, options.expectedMessageId);
+  }
 
   // Only the reply that actually owns the active question may record + advance.
   const claim = await claimActiveQuestion(userId, questionId);
@@ -768,12 +823,16 @@ export async function recordProfilerSkip(
   api: Api<RawApi>,
   userId: string,
   questionId: string,
-  options: { now?: Date; wait?: Wait } = {},
+  options: { now?: Date; wait?: Wait; expectedMessageId?: number } = {},
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
+
+  if (env.PROFILER_CARDS_ENABLED) {
+    return recordCardReply(api, userId, question, { skip: true }, now, options.expectedMessageId);
+  }
 
   // A stale Skip button must not record a second skip or push out another
   // question (the router strips the tapped message's keyboard, but an older
@@ -814,6 +873,10 @@ export async function recordProfilerRefusal(
   if (!question) return false;
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
+
+  if (env.PROFILER_CARDS_ENABLED) {
+    return recordCardReply(api, userId, question, { skip: true, refusal: true }, now);
+  }
 
   const claim = await claimActiveQuestion(userId, questionId);
   if (!claim.claimed) return false;
@@ -863,6 +926,7 @@ export async function upsertProfilerAnswer(
   cycleId: string,
   media?: { fileId: string; kind: "photo" | "sticker"; sourceUrl?: string },
   quick?: { optionIds: string[]; source: ProfilerAnswerSource },
+  db: Pick<Prisma.TransactionClient, "profilerAnswer"> = prisma,
 ): Promise<void> {
   const mediaFields = {
     memeFileId: media?.fileId ?? null,
@@ -876,7 +940,7 @@ export async function upsertProfilerAnswer(
     answerSource: quick?.source ?? ("text" as const),
     postponedAt: null,
   };
-  await prisma.profilerAnswer.upsert({
+  await db.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId: question.id } },
     create: {
       userId,
@@ -906,7 +970,7 @@ export async function upsertProfilerAnswer(
   // the tip about this person is rewritten while it is still unrevealed. Off
   // the reply path: an LLM call must not hold up the next question, and a
   // failed rewrite leaves the earlier tip, which is still a valid tip.
-  if (question.context?.family === "topic") {
+  if (db === prisma && question.context?.family === "topic") {
     const matchId = question.context.key;
     void refreshWingmanHintAbout(matchId, userId, now).catch((err: unknown) => {
       console.warn(
@@ -922,8 +986,9 @@ export async function upsertProfilerSkip(
   userId: string,
   question: ProfilerQuestion,
   cycleId: string,
+  db: Pick<Prisma.TransactionClient, "profilerAnswer"> = prisma,
 ): Promise<void> {
-  const existing = await prisma.profilerAnswer.findUnique({
+  const existing = await db.profilerAnswer.findUnique({
     where: { userId_questionId: { userId, questionId: question.id } },
     select: {
       questionId: true,
@@ -935,7 +1000,7 @@ export async function upsertProfilerSkip(
   });
   const { skipped, skipReturned } = skipTransition(existing ?? undefined, cycleId);
 
-  await prisma.profilerAnswer.upsert({
+  await db.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId: question.id } },
     create: {
       userId,
@@ -1006,6 +1071,7 @@ async function advanceAfterReply(
   userId: string,
   now: Date,
   wait?: Wait,
+  previousMessageId?: number | null,
 ): Promise<boolean> {
   // Re-read state AFTER the upsert so selection sees the just-recorded row.
   const state = await loadProfilerState(userId);
@@ -1014,9 +1080,63 @@ async function advanceAfterReply(
   // the next question into the planning flow — the answer just given is saved,
   // and the rest of the batch pauses to the next local window.
   if (await hasActiveDatePlanning(userId)) {
+    if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
+      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+    }
     await pauseBatchUntilNextWindow(userId, now, state.timeZone);
     return true;
   }
-  await sendOneFromBatch(api, state, now, "advance", wait);
+  await sendOneFromBatch(api, state, now, "advance", wait, previousMessageId);
   return true;
+}
+
+/** Card writes and the active-question claim commit together; failed writes leave the question open. */
+async function recordCardReply(
+  api: Api<RawApi>, userId: string, question: ProfilerQuestion,
+  reply: { skip?: boolean; refusal?: boolean; text?: string; quick?: { optionIds: string[]; source: ProfilerAnswerSource };
+    media?: { fileId: string; kind: "photo" | "sticker"; sourceUrl?: string } },
+  now: Date, expectedMessageId?: number,
+): Promise<boolean> {
+  const messageId = await prisma.$transaction(async (tx) => {
+    const profile = await tx.profile.findUnique({ where: { userId }, select: { profilerQuestionMessageId: true } });
+    const claimed = await tx.profile.updateMany({
+      where: { userId, profilerActiveQuestionId: question.id,
+        ...(expectedMessageId !== undefined ? { profilerQuestionMessageId: expectedMessageId } : {}) },
+      // Keep message id + remaining count as a durable continuation marker for the worker.
+      data: { profilerActiveQuestionId: null, profilerAnswerWindowUntil: null, profilerNextAt: now },
+    });
+    if (claimed.count !== 1) return undefined;
+    if (reply.skip) await upsertProfilerSkip(userId, question, profilerCycleId(now), tx);
+    else await upsertProfilerAnswer(userId, question, reply.text!, now, profilerCycleId(now), reply.media, reply.quick, tx);
+    return profile?.profilerQuestionMessageId ?? null;
+  });
+  if (messageId === undefined) return false;
+  if (reply.refusal) {
+    const state = await loadProfilerState(userId);
+    if (state) {
+      await pauseBatchUntilNextWindow(userId, now, state.timeZone);
+      if (messageId) await closeProfilerCard(api, Number(state.telegramId), messageId, state.language, t(state.language, "profilerRefusalAck")).catch(() => {});
+    }
+    return true;
+  }
+  if (!reply.skip && question.context?.family === "topic") {
+    void refreshWingmanHintAbout(question.context.key, userId, now).catch(() => {});
+  }
+  // Delivery is recoverable: the committed continuation remains due if Telegram is unavailable.
+  await advanceAfterReply(api, userId, now, undefined, messageId);
+  return true;
+}
+
+/** Quick answers use exactly the same validation and text composition as iOS. */
+export async function recordProfilerCardAnswer(
+  api: Api<RawApi>, userId: string, questionId: string, language: Language,
+  optionIds: string[], text: string, expectedMessageId: number,
+): Promise<boolean> {
+  const question = profilerQuestionById(questionId);
+  if (!question) return false;
+  const answer = composeProfilerAnswerText(question, optionIds, text, language, PROFILER_MAX_ANSWER_LEN);
+  if (!answer.ok) return false;
+  return recordProfilerAnswer(api, userId, questionId, answer.answerText, {
+    quick: { optionIds: answer.optionIds, source: answer.source }, expectedMessageId,
+  });
 }

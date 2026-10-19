@@ -1,3 +1,5 @@
+import { handleProfilerCard } from "./card.js";
+import { PROFILER_CARD_PREFIX } from "../../services/profiler-card.js";
 import { Composer } from "grammy";
 import type { Api } from "grammy";
 import { prisma } from "@gennety/db";
@@ -13,6 +15,7 @@ import {
   PROFILER_SKIP_PREFIX,
   closeProfilerAnswerWindow,
   recordProfilerAnswer,
+  recordProfilerCardAnswer,
   recordProfilerRefusal,
   recordProfilerSkip,
   resolveProfilerCapture,
@@ -71,6 +74,7 @@ interface AnswerAccumulator {
   lines: string[];
   /** Message id of the LAST buffered line — the reaction target. */
   messageId: number | undefined;
+  quick?: { optionIds: string[]; language: import("@gennety/shared").Language; messageId: number };
   timer: NodeJS.Timeout;
 }
 
@@ -96,8 +100,13 @@ async function flushAnswer(acc: AnswerAccumulator): Promise<void> {
   // A refusal is not an answer. Classified on the COALESCED text rather than
   // per line, so "не хочу" split across two messages is still read once and as
   // a whole — the same reason the buffer exists at all.
-  if (isProfilerRefusal(text)) {
+  if (isProfilerRefusal(text) && !acc.quick?.optionIds.length) {
     await recordProfilerRefusal(acc.api, acc.userId, acc.questionId);
+    return;
+  }
+
+  if (acc.quick) {
+    await recordProfilerCardAnswer(acc.api, acc.userId, acc.questionId, acc.quick.language, acc.quick.optionIds, text, acc.quick.messageId);
     return;
   }
 
@@ -118,6 +127,7 @@ function bufferAnswerLine(
   api: Api,
   text: string,
   messageId: number | undefined,
+  quick?: AnswerAccumulator["quick"],
 ): void {
   const existing = answerAccumulators.get(chatId);
   // A different active question means the previous buffer belongs to a run that
@@ -132,12 +142,16 @@ function bufferAnswerLine(
     api,
     lines: [...lines, text],
     messageId,
+    ...(quick ? { quick } : {}),
     timer: setTimeout(() => {
       if (answerAccumulators.get(chatId) !== acc) return;
       answerAccumulators.delete(chatId);
-      dispatchToChat(chatId, () => flushAnswer(acc)).catch((err) =>
-        console.error("[profiler] answer auto-flush failed:", err),
-      );
+      dispatchToChat(chatId, () => flushAnswer(acc)).catch(async (err: unknown) => {
+        console.error("[profiler] answer auto-flush failed:", err);
+        if (env.PROFILER_CARDS_ENABLED) {
+          await acc.api.sendMessage(chatId, t(acc.quick?.language ?? "en", "profilerCardRetry")).catch(() => {});
+        }
+      });
     }, PROFILER_ANSWER_DEBOUNCE_MS),
   };
   answerAccumulators.set(chatId, acc);
@@ -150,6 +164,12 @@ profilerRouter.use(async (ctx, next) => {
   }
 
   const data = ctx.callbackQuery?.data;
+
+  if (data?.startsWith(PROFILER_CARD_PREFIX)) {
+    cancelAnswerFlush(ctx.chat?.id);
+    await handleProfilerCard(ctx);
+    return;
+  }
 
   // Skip button — resolve the user and skip the named question.
   if (data?.startsWith(PROFILER_SKIP_PREFIX)) {
@@ -237,6 +257,10 @@ profilerRouter.use(async (ctx, next) => {
         ctx.api,
         text,
         ctx.message?.message_id,
+        env.PROFILER_CARDS_ENABLED && ctx.session.profilerCardDraft?.questionId === capture.questionId
+          && ctx.session.profilerCardDraft.messageId === capture.messageId
+          ? { optionIds: [...ctx.session.profilerCardDraft.optionIds], language: capture.language, messageId: ctx.session.profilerCardDraft.messageId }
+          : undefined,
       );
       return;
     }

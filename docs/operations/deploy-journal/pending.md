@@ -11,6 +11,25 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-19 — Telegram Profiler interactive cards (restart only; no migration or webapp build).**
+
+1. `PROFILER_CARDS_ENABLED` defaults false. Enable on the isolated demo deployment first;
+   production remains on legacy delivery until the real-client check is complete.
+2. Validate one eligible due batch on Telegram iOS, Android and Desktop: open/closed
+   choices, typed addition, skip/refusal, completion, restart with a draft, old buttons,
+   and an iOS answer while the Telegram card is visible. Rich API rejection has an
+   inline-keyboard fallback; successful API delivery does not prove old-client rendering.
+3. Automated checks: `pnpm --filter @gennety/bot exec vitest run src/services/profiler-card.test.ts
+   src/services/profiler-card-flow.test.ts src/handlers/profiler/card.test.ts
+   src/handlers/profiler/router.test.ts src/services/profiler.test.ts
+   src/public/routes/profiler-native.test.ts src/workers/profiler.test.ts`;
+   bot/shared typecheck and lint of changed TypeScript files. No live bot messages were
+   sent by this implementation task. No migration, external dependency or API contract change.
+4. Rollback: unset the flag and restart. Future delivery uses the previous path;
+   old card callbacks are refused and retire embedded controls. The active question
+   remains answerable by text. Demo has the same behaviour and separate data.
+
+
 **PENDING 2026-10-15 — App Store review account (restart only: no migration, no contract change; feature off until env is set).**
 This adds the `APP_REVIEW_EMAIL` + `APP_REVIEW_CODE` sign-in branch on `/v1/auth/otp/*`, the reviewer "Alex" and the
 stand-in partner "Gleb" (`workers/app-review-partner.ts`, cron every 20 s, scheduled only when both vars are set), and

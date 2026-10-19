@@ -2058,7 +2058,42 @@ questions too — see **Native app** at the end of this list.
   that test alone would promise questions that never arrive. The heads-up is
   Telegram-only; the native client owns its own onboarding shell (and shows the
   questions on its Today screen, below).
-- **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
+- **Telegram interactive cards (2026-10-19).** `PROFILER_CARDS_ENABLED=true`
+  replaces the Telegram delivery described below with one editable Rich Message
+  per batch. The flag defaults off; the legacy delivery remains available.
+  1. The existing bank, contextual triggers, batch size, quiet hours and
+     date-planning gate determine the questions as before. The opening question
+     and each subsequent question appear whole, without repeated thinking beats.
+  2. Closed contextual options answer immediately. Open options create an
+     unsubmitted selection, confirmed by “Send answer” or completed with the
+     person's own text. Multiple selection follows the shared input definition.
+     Questions without an input remain free text; supported image/link answers
+     continue through their existing readers. Option images are deferred: this
+     release uses text labels even for photo/pair inputs.
+  3. Answer text, option ids and source (`tap` / `text` / `both`) use the same
+     composition rules as iOS. In Telegram card mode the active-question claim
+     and answer/skip write share one transaction. Callback checks include the
+     owner, question token, message id and persisted draft revision. A failed
+     save leaves the active question available for retry.
+  4. Unsubmitted option ids and draft revision live in the existing PostgreSQL
+     bot session. No schema change is required. A draft is used for a typed
+     answer only when both question id and current Telegram message id match.
+     The existing capture window and other flows' ownership still apply.
+  5. After a committed answer, the retained `profilerQuestionMessageId`, null
+     active question and due `profilerNextAt` identify a recoverable continuation.
+     The worker resumes the remaining budget rather than starting another batch;
+     iOS waits for that continuation. Before delivery the next question is
+     reserved with a compare-and-set. A delivery failure restores the due
+     continuation. An iOS answer during delivery retires the Telegram controls.
+  6. Completion, refusal and a planning interruption retire the card's embedded
+     buttons as well as its fallback keyboard. Old callbacks cannot submit a
+     different question. Back-editing saved answers is outside this release.
+  7. Rich-format API rejection falls back to ordinary inline buttons. Transport
+     failures are not blindly resent. Real-client rendering on Telegram iOS,
+     Android and Desktop is a release check, not implied by API success.
+  8. Demo uses the same flag, renderer and answer path in its existing isolated
+     environment. Matching consumes no new signals as part of this change.
+- **Legacy delivery (flag off).** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
   **Every** question — the first of a batch and every follow-up — is delivered
   through the same **native Telegram AI-compose** path (Bot API 10.1 rich
   messages, `streamComposedRich`), so the experience is uniform. Each question is

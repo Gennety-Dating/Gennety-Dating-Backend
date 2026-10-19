@@ -1,3 +1,4 @@
+import { env } from "../../config.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
@@ -11,6 +12,7 @@ vi.mock("../../services/profiler.js", async () => {
   return {
     PROFILER_SKIP_PREFIX: actual.PROFILER_SKIP_PREFIX,
     recordProfilerAnswer: vi.fn().mockResolvedValue(true),
+    recordProfilerCardAnswer: vi.fn().mockResolvedValue(true),
     recordProfilerRefusal: vi.fn().mockResolvedValue(true),
     recordProfilerSkip: vi.fn().mockResolvedValue(true),
     resolveProfilerCapture: vi.fn(),
@@ -24,6 +26,7 @@ import { profilerRouter } from "./router.js";
 import {
   closeProfilerAnswerWindow,
   recordProfilerAnswer,
+  recordProfilerCardAnswer,
   recordProfilerRefusal,
   recordProfilerSkip,
   resolveProfilerCapture,
@@ -113,6 +116,8 @@ async function elapseDebounce(): Promise<void> {
 }
 
 beforeEach(() => {
+  Object.assign(env, { PROFILER_CARDS_ENABLED: false });
+  vi.mocked(recordProfilerCardAnswer).mockClear();
   vi.useFakeTimers();
   mUserFind.mockReset().mockResolvedValue({
     id: "u1",
@@ -423,4 +428,43 @@ describe("profiler router — stale menu claim (bot.ts ordering)", () => {
     expect(mAnswer).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
+});
+
+
+describe("Profiler card free-text completion", () => {
+  it("coalesces text while retaining the restored draft's selected options", async () => {
+    Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+    mCapture.mockResolvedValue({ userId: "u1", questionId: "f_chronotype", language: "ru", messageId: 7 });
+    const context = textCtx("люблю раннее утро", 1);
+    context.session.profilerCardDraft = { questionId: "f_chronotype", messageId: 7, revision: 1, optionIds: ["from_3"] };
+    await run(context);
+    const second = textCtx("и кофе", 2);
+    second.session.profilerCardDraft = context.session.profilerCardDraft;
+    await run(second);
+    await elapseDebounce();
+    expect(recordProfilerCardAnswer).toHaveBeenCalledWith(expect.anything(), "u1", "f_chronotype", "ru", ["from_3"], "люблю раннее утро\nи кофе", 7);
+    expect(mAnswer).not.toHaveBeenCalled();
+  });
+  it("text beside a selected option is not misclassified as a refusal", async () => {
+    Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+    mCapture.mockResolvedValue({ userId: "u1", questionId: "f_chronotype", language: "ru", messageId: 7 });
+    const context = textCtx("не хочу", 1);
+    context.session.profilerCardDraft = { questionId: "f_chronotype", messageId: 7, revision: 1, optionIds: ["from_3"] };
+    await run(context);
+    await elapseDebounce();
+    expect(recordProfilerCardAnswer).toHaveBeenCalled();
+    expect(mRefusal).not.toHaveBeenCalled();
+  });
+});
+
+
+it("a draft from an earlier card of the same question does not contaminate a new text answer", async () => {
+  Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+  mCapture.mockResolvedValue({ userId: "u1", questionId: "f_chronotype", language: "ru", messageId: 99 });
+  const context = textCtx("теперь сова", 1);
+  context.session.profilerCardDraft = { questionId: "f_chronotype", messageId: 7, revision: 1, optionIds: ["from_3"] };
+  await run(context);
+  await elapseDebounce();
+  expect(recordProfilerCardAnswer).not.toHaveBeenCalled();
+  expect(mAnswer).toHaveBeenCalledWith(expect.anything(), "u1", "f_chronotype", "теперь сова", expect.anything());
 });
