@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-22 | Profiler series finish: short shimmer, one receipt with confetti, last question preserved; same demo path, no per-question effects | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-22 | Profiler: selected options blue, confirmation green; rich and inline fallback, same demo renderer | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-21 | Единый фото-выбор места iOS/Telegram, одна отправка без экрана тегов; анимация поиска отложена | [2026-10-21-venue-chooser.md](./2026-10-21-venue-chooser.md) |
 | 2026-10-21 | Approved mixed Telegram Profiler: 11 choice cards, 14 free-text questions; date spots added, travel/topic free; separate messages at format changes, native unchanged, same demo flag | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |

@@ -1120,3 +1120,12 @@ Selected options use Telegram `primary` (blue) with the existing checkmark;
 confirmation uses `success` (green). Unselected options and secondary actions
 keep the default style. Rich messages and inline fallback share the styles.
 Demo uses the same renderer and flag; eligibility and answer handling are unchanged.
+
+### Profiler series finish (2026-10-22)
+
+With cards enabled, the demo shows the same brief thinking shimmer and single
+receipt with a confetti effect after a resolved series, including bank exhaustion.
+The last question keeps its text without controls. Refusal, planning deferral and
+empty background checks stay quiet. No identity, payment or eligibility gate
+changes. Client settings may suppress effects; unsupported drafts fall back to
+plain status text. Manual Telegram playback QA remains required.

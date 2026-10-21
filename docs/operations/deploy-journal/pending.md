@@ -11,6 +11,17 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-22 — Profiler series finish and button colours (restart only).**
+
+1. Selected options use primary blue and confirmation uses success green.
+   With cards enabled, a completed series shows one short shimmer and one receipt
+   with confetti, including the final bank series. Question text is retained.
+2. `MESSAGE_EFFECT_PROFILER_ID` defaults to confetti; empty disables the effect.
+   Demo uses the same policy. No schema, native or webapp changes are required.
+3. Verify targeted Profiler and ai-stream tests, typecheck, then manually answer
+   a development series and observe the shimmer and effect. Production remains
+   pending; rollback the commits and restart the bot.
+
 **PENDING 2026-10-21 — Mixed Telegram Profiler (supersedes delivery policy in the Oct 19 entry; restart only).**
 
 1. With `PROFILER_CARDS_ENABLED=true`, Telegram has 11 choice cards and 14

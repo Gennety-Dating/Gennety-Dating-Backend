@@ -2273,8 +2273,9 @@ questions too — see **Native app** at the end of this list.
   "ні" answer a large part of the question bank ("do you play any sport?") and
   must stay answers.
 - **Cross-cycle persistence.** Unanswered questions carry into the next drop
-  cycle in priority order; the Profiler never resets. Completion is **silent**
-  (no "profile complete" ping). No progress indicator, no "why we ask" copy.
+  cycle in priority order; the Profiler never resets. Completion does not announce a "profile complete" milestone. With Telegram cards
+  enabled, the final answered series receives the same short receipt as any
+  other series (2026-10-22); background exhaustion checks remain silent. No progress indicator, no "why we ask" copy.
 - **Questions.** Women are asked from the "what you want in a partner/date"
   angle (fuels the man's *hints*); men from the "who you are" angle (fuels the
   woman's *icebreakers*). The bank lives in `packages/shared/profiler-questions.ts`
@@ -2578,3 +2579,19 @@ questions too — see **Native app** at the end of this list.
   push ever points at «На потом».
   Demo mode: no separate behaviour — the demo bot is Telegram-only, and the
   endpoints run the same code for any JWT the demo API issues.
+
+### Telegram Profiler series finish (2026-10-22, approved)
+
+1. With the mixed Telegram policy enabled, a resolved series ends with a brief
+   native thinking draft, followed by one localized receipt: “I know you a little
+   better now ✨”. The receipt carries Telegram's confetti message effect.
+2. The last card retains its question text and loses controls. Plain questions
+   remain in history. No separate “That’s it for now” message is added.
+3. The same finish applies to the last resolved series when the bank is exhausted.
+   Empty scheduler checks, refusal and planning deferrals do not celebrate.
+4. Unsupported thinking drafts use the existing plain status fallback. An explicit
+   effect rejection retries the receipt without an effect; ambiguous failures are
+   never resent. Presentation failures do not undo saved answers or scheduling.
+5. `MESSAGE_EFFECT_PROFILER_ID` defaults to confetti and can be set empty to disable
+   the effect. Demo uses the same renderer and policy. Native and flag-off flows
+   retain their current behavior. Real-client animation playback needs manual QA.

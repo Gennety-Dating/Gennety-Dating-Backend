@@ -618,6 +618,8 @@ export const REFERRAL_RELEASE_SWEEP_BATCH = 200;
 export const PROFILER_ENTRY_DELAY_MS = 10 * 60 * 1000;
 /** Normal-mode batch size (spec allows 3–4; we send up to this many per window). */
 export const PROFILER_BATCH_SIZE_NORMAL = 3;
+/** Brief closing shimmer at the end of a Telegram question series. */
+export const PROFILER_FINISH_SHIMMER_MS = 1250;
 /** Rush-mode batch size when a drop is inside `CADENCE.profilerRushWindowMs` (spec 1–2). */
 export const PROFILER_BATCH_SIZE_RUSH = 2;
 /** Local wall-clock hour of the morning batch window. */

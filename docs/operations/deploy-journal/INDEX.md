@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-22 | Profiler series finish: shimmer, receipt with confetti and button colours; restart only, same demo policy | [pending.md](./pending.md) |
 | Deployed (hotfix only) | 2026-10-20 | Native Telegram login: backport required `analyticsOptIn: false` to pre-Pulse user serializer; `gennety-bot` restart only, no migration, dependencies, or full main deployment | [2026-10-20-auth-compatibility.md](./2026-10-20-auth-compatibility.md) |
 | PENDING | 2026-10-21 | Mixed Telegram Profiler: 11 cards / 14 text prompts; travel/topic free, date spots choices; native unchanged; same flag, restart only, demo first | [pending.md](./pending.md) |
 | PENDING | 2026-10-19 | Telegram Profiler interactive batch cards: `PROFILER_CARDS_ENABLED` default off, demo first + real-client iOS/Android/Desktop QA; restart only, no migration or API contract change | [pending.md](./pending.md) |

@@ -184,6 +184,8 @@ export const env = {
   /// Date Ticket" reward DM (4+ photos / added a profile video). Empty falls
   /// through to no effect — the reward still sends, just without the animation.
   MESSAGE_EFFECT_TICKET_ID: process.env.MESSAGE_EFFECT_TICKET_ID ?? "",
+  /// Confetti at the end of a Telegram Profiler series; empty disables it.
+  MESSAGE_EFFECT_PROFILER_ID: process.env.MESSAGE_EFFECT_PROFILER_ID ?? "5046509860389126442",
   /// Optional Bot API 7.6+ message effect played on the welcome-gift DM (the
   /// "your first ticket is on me" message sent as a pre-roll before a new
   /// user's first match pitch). Defaults to the 🎉 confetti effect; override

@@ -7,6 +7,7 @@ import {
   profilerTelegramQuestionInput,
   type Language,
   PROFILER_MAX_ANSWER_LEN,
+  PROFILER_FINISH_SHIMMER_MS,
   profilerQuestionById,
   profilerQuestionText,
   type ProfilerAnswerSource,
@@ -248,13 +249,16 @@ export async function stripQuestionKeyboard(
   telegramId: bigint,
   messageId: number | null,
   questionId?: string | null,
+  preserveQuestion = false,
 ): Promise<void> {
   if (!messageId || telegramId <= 0n) return;
   try {
     const question = questionId ? profilerQuestionById(questionId) : null;
     if (env.PROFILER_CARDS_ENABLED && question && profilerTelegramQuestionInput(question)) {
       const user = await prisma.user.findUnique({ where: { telegramId }, select: { language: true } });
-      await closeProfilerCard(api, Number(telegramId), messageId, (user?.language ?? "en") as Language);
+      const language = (user?.language ?? "en") as Language;
+      if (preserveQuestion) await closeProfilerCard(api, Number(telegramId), messageId, language, profilerQuestionText(question, language));
+      else await closeProfilerCard(api, Number(telegramId), messageId, language);
       return;
     }
     await api.editMessageReplyMarkup(Number(telegramId), messageId);
@@ -360,18 +364,20 @@ async function sendOneFromBatch(
     }
   }
   if (step.kind === "exhausted") {
-    // All questions exhausted — completion is SILENT per spec §Phase 1b
-    // (no "profile complete" ping). Do NOT play a status here.
+    // A resolved Telegram series gets the same receipt even at bank exhaustion.
+    // A scheduler check with no delivered question remains silent.
     if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
-      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId);
+      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId, true);
     }
     await awaitNextProfilerWindow(state.userId, state.gender, now, state.timeZone);
+    if (env.PROFILER_CARDS_ENABLED && previousQuestionId) await finishProfilerSeries(api, state, wait);
     return "done";
   }
   if (step.kind === "boundary") {
     if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
-      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId);
+      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId, true);
       await pauseBatchUntilNextWindow(state.userId, now, state.timeZone);
+      if (previousQuestionId) await finishProfilerSeries(api, state, wait);
       return "paused";
     }
     return pauseAtBatchBoundary(api, state, now, wait);
@@ -452,6 +458,27 @@ async function sendOneFromBatch(
     ),
   });
   return "sent";
+}
+
+/** One closing shimmer and receipt; presentation errors never undo saved answers. */
+async function finishProfilerSeries(api: Api<RawApi>, state: ProfilerUserState, wait?: Wait): Promise<void> {
+  if (state.telegramId <= 0n) return;
+  const chatId = Number(state.telegramId);
+  try {
+    await runStatusSequence(api, chatId, [{ text: t(state.language, "profilerSeriesThinking"), holdMs: PROFILER_FINISH_SHIMMER_MS }], {
+      rich: true, ...(wait ? { wait } : {}),
+    });
+  } catch { /* The receipt can still land without the cosmetic shimmer. */ }
+  const text = t(state.language, "profilerSeriesDone");
+  const effect = env.MESSAGE_EFFECT_PROFILER_ID;
+  try {
+    await api.sendMessage(chatId, text, effect ? { message_effect_id: effect } : {});
+  } catch (error) {
+    // Retry only an explicit rejection, never an ambiguous transport failure.
+    if (effect && error && typeof error === "object" && "error_code" in error && error.error_code === 400) {
+      await api.sendMessage(chatId, text).catch(() => {});
+    }
+  }
 }
 
 /**
