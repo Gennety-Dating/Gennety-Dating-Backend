@@ -268,6 +268,33 @@ describe("requestPhoneCode", () => {
     expect(created.providerRequestId).toBe("VE123");
   });
 
+  it("logs only the numeric Twilio error code, never the echoed phone or provider text", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      stubProviders({
+        twilioStart: () => jsonResponse({ code: 60238, message: "Blocked +380631234567", more_info: "private" }, 403),
+      });
+      await expect(requestPhoneCode("+380631234567", { forceSms: true })).resolves.toEqual({ ok: false, reason: "unavailable" });
+      expect(warn.mock.calls).toEqual([["[phone-verification] twilio start returned 403; code=60238"]]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it.each(["not json", JSON.stringify({ code: "+380631234567" }), "null"])(
+    "handles untrusted Twilio error bodies without logging their contents: %s",
+    async (body) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        stubProviders({ twilioStart: () => new Response(body, { status: 403 }) });
+        await expect(requestPhoneCode("+380631234567", { forceSms: true })).resolves.toEqual({ ok: false, reason: "unavailable" });
+        expect(warn.mock.calls).toEqual([["[phone-verification] twilio start returned 403; code=unknown"]]);
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
   it("forceSms never falls back to the Gateway even when Twilio fails", async () => {
     envMock.PHONE_CODE_PRIMARY_PROVIDER = "telegram";
     const fetchMock = stubProviders({

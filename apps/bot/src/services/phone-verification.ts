@@ -188,7 +188,15 @@ async function twilioStartVerification(phone: string): Promise<string | null> {
       },
     );
     if (!res.ok) {
-      console.warn(`[phone-verification] twilio start returned ${res.status}`);
+      // Provider messages may echo the destination; retain only the numeric code.
+      const errorBody: unknown = await res.json().catch(() => null);
+      const errorCode =
+        errorBody !== null && typeof errorBody === "object" &&
+        "code" in errorBody && typeof errorBody.code === "number" &&
+        Number.isSafeInteger(errorBody.code)
+          ? errorBody.code
+          : "unknown";
+      console.warn(`[phone-verification] twilio start returned ${res.status}; code=${errorCode}`);
       return null;
     }
     const body = (await res.json()) as { sid?: string };
