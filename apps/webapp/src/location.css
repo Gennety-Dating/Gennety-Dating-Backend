@@ -5,6 +5,7 @@
    from outlines. Liquid-glass = backdrop-filter blur + saturate over the map,
    with a solid-tint fallback for WebViews that lack backdrop-filter. */
 
+@import "./fonts.css";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "./theme.css";
 
@@ -483,228 +484,105 @@ button.cta .cta-text.swap {
   display: none;
 }
 
-/* --- Venue Intent V2 · step 2 (vibe + review) ------------------------------
-   Full brand surface using the shared theme.css tokens (no hardcoded palette),
-   so it re-themes with a single data-theme flip and matches the map screen,
-   ticket, and venue-change Mini Apps. Structure is neutral (grey glass);
-   selection is the ONE bright signal (the "self" treatment — white on dark /
-   ink on light — so a chosen chip is unmistakable, not a faint ✓). Frameless:
-   depth comes from layered fills + inset light, never from outlines. */
+/* Venue Intent V2: photo chooser and optional words, matching native iOS. */
+/* Layout dimensions and photo treatment follow the native VenueSceneGrid. */
 .vibe-stage {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   position: fixed;
   inset: 0;
   z-index: 10000;
-  padding: max(64px, calc(env(safe-area-inset-top) + var(--tg-content-top))) 18px
-    max(28px, calc(env(safe-area-inset-bottom) + 12px));
   overflow-y: auto;
   color: var(--text);
-  background:
-    radial-gradient(130% 46% at 50% -6%, var(--accent-soft), transparent 60%),
-    var(--bg);
+  background: var(--bg);
+  padding: max(12px, calc(env(safe-area-inset-top) + var(--tg-content-top))) 0
+    max(20px, env(safe-area-inset-bottom));
 }
 .vibe-stage[hidden] { display: none; }
-/* Smooth "page turn" into step 2 instead of an abrupt swap — plays every time
-   the stage is shown (map Confirm advances here). Reduced-motion honored. */
-.vibe-stage:not([hidden]) {
-  animation: vibeStageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes vibeStageIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vibe-stage:not([hidden]) { animation: none; }
-}
 .vibe-card { max-width: 520px; margin: 0 auto; }
-
-.vibe-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.vibe-back {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  color: var(--text);
-  background: var(--fill);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
-}
-.vibe-back:active { background: var(--fill-strong); }
-.vibe-step {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
+.vibe-head { padding: 12px 20px; }
 .vibe-card h1 {
-  margin: 4px 0 8px;
-  font-size: 27px;
-  font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -0.01em;
-  color: var(--text);
+  font-family: "Gennety Display", system-ui, sans-serif;
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
-.vibe-help {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 15px;
-  line-height: 1.45;
+.vibe-help { margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.4; }
+.vibe-body { padding: 8px 20px 20px; }
+.vibe-scenes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.venue-scene {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.2;
+  padding: 0;
+  border: 0;
+  border-radius: 26px;
+  overflow: hidden;
+  isolation: isolate;
+  color: white;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
 }
-
-/* Comfortable, frameless glass textarea (16px font-size stops the iOS/Telegram
-   focus-zoom, same as the map search input). */
-.vibe-input { margin: 20px 0 12px; }
+.venue-scene-wide { grid-column: 1 / -1; height: 132px; aspect-ratio: auto; }
+.venue-scene img { width: 100%; height: 100%; object-fit: cover; object-position: var(--scene-focus, center); }
+.venue-scene-blur, .venue-scene-blur i { position: absolute; inset: 0; pointer-events: none; }
+.venue-scene-blur i {
+  -webkit-backdrop-filter: blur(3px) saturate(1.15);
+  backdrop-filter: blur(3px) saturate(1.15);
+  mask-image: linear-gradient(to top, black 0px, transparent 84px);
+}
+.venue-scene-blur i:nth-child(2) {
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  mask-image: linear-gradient(to top, black 20px, transparent 68px);
+}
+.venue-scene-blur i:nth-child(3) {
+  -webkit-backdrop-filter: blur(13px);
+  backdrop-filter: blur(13px);
+  mask-image: linear-gradient(to top, black 26px, transparent 50px);
+}
+.venue-scene-blur { background: linear-gradient(to top, #000b, #0004 68px, transparent 132px); }
+.venue-scene-caption { position: absolute; left: 13px; right: 9px; bottom: 9px; text-shadow: 0 1px 2px #0008; }
+.venue-scene-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.15; }
+.venue-scene-mood { display: block; font-size: 12px; line-height: 1.25; margin-top: 4px; }
+.venue-scene-mark { position: absolute; bottom: 9px; right: 9px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--accent); opacity: 0; }
+.venue-scene[aria-pressed="true"] .venue-scene-mark { opacity: 1; }
+.venue-scene:focus-visible { outline: 3px solid var(--accent-bright); outline-offset: 3px; }
+.vibe-own { display: block; margin: 24px 0 18px; font-size: 16px; font-weight: 700; }
+.vibe-input { margin: 0 0 18px; }
 #vibe-text {
   box-sizing: border-box;
   width: 100%;
-  min-height: 120px;
-  padding: 15px 16px;
-  resize: none;
-  /* One clean, EVEN 1px frame all around — the old inset top-highlight +
-     border combo lit only the top edge and read as a lopsided, half-drawn box.
-     caret-color makes the cursor visible in the light theme (it was white). */
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
+  min-height: 96px;
+  padding: 12px;
+  resize: vertical;
+  border: 0;
+  border-radius: 18px;
   color: var(--text);
   caret-color: var(--accent-bright);
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  font-family: inherit;
-  font-size: 16px;
-  line-height: 1.5;
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  font: inherit;
+  font-size: 17px;
   outline: none;
-  transition: border-color 0.15s ease;
 }
-#vibe-text::placeholder { color: var(--text-faint); }
-/* On focus: a heavier accent border, NO glow/shadow. box-sizing:border-box keeps
-   the outer box fixed, and trimming padding by the extra 1px of border keeps the
-   text from shifting as the border thickens. */
-#vibe-text:focus {
-  border-width: 2px;
-  border-color: var(--accent);
-  padding: 14px 15px;
-}
+#vibe-text:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.vibe-stage .cta { margin-top: 0; min-height: 50px; border-radius: 999px; color: white; background: linear-gradient(#a34c60, #8b253b 55%, #711d30); font-size: 17px; }
+.vibe-stage .cta.saving { opacity: 0.7; }
+.vibe-back { display: block; margin: 18px auto 0; padding: 8px 20px; border: 0; background: none; color: var(--accent-bright); font: inherit; font-size: 17px; cursor: pointer; min-height: 44px; }
+.vibe-error { color: var(--danger, #ef667c); font-size: 14px; }
+.vibe-error:empty { display: none; }
+.vibe-relax { margin-bottom: 18px; font-size: 15px; color: var(--text-muted); }
+.vibe-relax[hidden], #vibe-commute[hidden] { display: none; }
+.vibe-chip { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 999px; color: var(--text); background: var(--fill-strong); font: inherit; cursor: pointer; }
+.vibe-chip[aria-pressed="true"] { background: var(--accent); color: white; }
 
-/* Chip rows — quick-fill suggestions, the review chips, and the hard-constraint
-   chips all share the pill component. */
-.vibe-chips,
-.vibe-constraints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+.vibe-scenes:has([aria-pressed="true"]) .venue-scene[aria-pressed="false"] { opacity: 0.5; }
 
-.vibe-chip {
-  border: 0;
-  border-radius: 999px;
-  padding: 10px 15px;
-  cursor: pointer;
-  color: var(--text-muted);
-  background: var(--fill);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
-}
-.vibe-chip:active { transform: translateY(0.5px); }
-/* Selection = the "self" signal: a bright filled pill with a crisp ring and a
-   leading check — unmistakable on both themes, unlike the old faint ✓. */
-.vibe-chip.active {
-  color: var(--self);
-  background: var(--self-fill-strong);
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1.5px var(--self), 0 2px 10px var(--self-glow);
-}
-.vibe-chip.active::before {
-  content: "✓";
-  margin-right: 6px;
-  font-weight: 700;
-}
-
-/* The extracted chips glide in where the "Continue" button just vanished, so
-   the interpret round-trip resolves into a visible arrival instead of a blink.
-   Only plays on the hidden → shown flip; later chip toggles re-render the chips
-   inside an already-visible container and never restart it. */
-#vibe-review:not([hidden]) {
-  animation: vibeReviewIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes vibeReviewIn {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #vibe-review:not([hidden]) {
-    animation: none;
-  }
-}
-
-/* Grouped review sections give the step real structure (Experience / Atmosphere
-   / Format / Must-haves) instead of one undifferentiated blob of pills. */
-.vibe-review-label {
-  margin: 24px 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
-.vibe-group { margin-top: 18px; }
-/* Group header: the section name (left) + a subtle multi/single hint (right), so
-   it's clear at a glance where several chips can be picked vs just one. */
-.vibe-group-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.vibe-group-label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.vibe-group-hint {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-faint);
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-.vibe-price-note {
-  margin: 18px 0 4px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text-faint);
-}
-.vibe-error {
-  min-height: 20px;
-  margin: 12px 0 0;
-  font-size: 14px;
-  color: var(--accent-bright);
-}
-
-/* Primary actions inside the step — spacing above the burgundy CTA. */
-#vibe-interpret { margin-top: 16px; }
-#vibe-confirm { margin-top: 20px; }
+.venue-scene-title { padding-right: 34px; }
+.venue-scene-caption:has(.venue-scene-mood) .venue-scene-title { padding-right: 0; }
+.venue-scene-mood { padding-right: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

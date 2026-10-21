@@ -244,7 +244,7 @@ matchesRouter.post(
       res.status(400).json({ error: "description_too_long", maxLength: 500 });
       return;
     }
-    const intent = await interpretVenueIntent(id, req.userId!, text, req.body?.origin ?? null);
+    const intent = await interpretVenueIntent(id, req.userId!, text, req.body?.origin ?? null, { replaceConfirmed: true });
     if (isVenueOriginRefusal(intent)) {
       res.status(400).json(intent);
       return;

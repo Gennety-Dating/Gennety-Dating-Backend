@@ -196,6 +196,16 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     expect(txMatchUpdate).not.toHaveBeenCalled();
   });
 
+  it("reinterprets an explicit chooser submission after confirmation without letting chat do so", async () => {
+    const existing = confirmedIntent();
+    matchFindUnique.mockResolvedValue(baseMatch({ venueIntentA: existing }));
+    txMatchFindUnique.mockResolvedValue({ status: "negotiating_venue", venueIntentA: existing, venueIntentB: null });
+    const result = await interpretVenueIntent(MATCH_ID, USER_A, "actually let's do drinks", ORIGIN, { replaceConfirmed: true });
+    expect(asIntent(result).state).toBe("draft");
+    expect(asIntent(result).rawText).toBe("actually let's do drinks");
+    expect(txMatchUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it("still writes a draft for OWN side when the OTHER side is confirmed (guard is per-side)", async () => {
     const partnerConfirmed = confirmedIntent();
     matchFindUnique.mockResolvedValue(baseMatch({ venueIntentB: partnerConfirmed }));
