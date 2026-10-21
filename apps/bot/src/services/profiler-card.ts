@@ -32,9 +32,10 @@ export function profilerCardContent(
   const rows: InlineKeyboardButton[][] = (input?.options ?? []).map((option, index) => [{
     text: `${selected.includes(option.id) ? "✓ " : ""}${profilerOptionText(option, language)}`,
     callback_data: callback(String(index)),
+    ...(selected.includes(option.id) ? { style: "primary" as const } : {}),
   }]);
   if (input && !input.closed && selected.length) {
-    rows.push([{ text: t(language, "profilerCardSend"), callback_data: callback("send") }]);
+    rows.push([{ text: t(language, "profilerCardSend"), callback_data: callback("send"), style: "success" }]);
   }
   rows.push([{ text: t(language, "profilerCardOwn"), callback_data: callback("own") },
     { text: t(language, "profilerSkip"), callback_data: callback("skip") }]);
@@ -44,7 +45,7 @@ export function profilerCardContent(
   const html = `<p>${escapeRichHtml(text).replace(/\n/g, "<br>")}</p>` + rows.map((row) =>
     `<tg-button-row>${row.map((button) => {
       if (!("callback_data" in button)) return "";
-      return `<tg-button type="callback_data" data="${button.callback_data}">${escapeRichHtml(button.text)}</tg-button>`;
+      return `<tg-button type="callback_data" data="${button.callback_data}"${button.style ? ` style="${button.style}"` : ""}>${escapeRichHtml(button.text)}</tg-button>`;
     }).join("")}</tg-button-row>`).join("");
   return { html, text, keyboard: { inline_keyboard: rows } };
 }

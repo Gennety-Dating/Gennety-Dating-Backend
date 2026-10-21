@@ -1113,3 +1113,10 @@ in onboarding's “Mixed Telegram questions” section. Consecutive cards can sh
 one message; text questions remain in history. Demo has no separate bank or
 renderer. The native pilot, demo eligibility and time gates remain unchanged.
 Manual Telegram rendering and mixed-series QA remain required before rollout.
+
+### Profiler button colours (2026-10-22)
+
+Selected options use Telegram `primary` (blue) with the existing checkmark;
+confirmation uses `success` (green). Unselected options and secondary actions
+keep the default style. Rich messages and inline fallback share the styles.
+Demo uses the same renderer and flag; eligibility and answer handling are unchanged.
