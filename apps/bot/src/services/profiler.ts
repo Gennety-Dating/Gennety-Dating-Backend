@@ -4,6 +4,7 @@ import { prisma, type Prisma, type MatchStatus } from "@gennety/db";
 import {
   t,
   composeProfilerAnswerText,
+  profilerTelegramQuestionInput,
   type Language,
   PROFILER_MAX_ANSWER_LEN,
   profilerQuestionById,
@@ -236,8 +237,8 @@ async function sendQuestion(
 
 /**
  * Best-effort removal of the Skip keyboard from a question that was **resolved**
- * (answered, or explicitly skipped). Card mode also replaces embedded controls
- * with the closing text. Legacy mode leaves the question text in place — it is
+ * (answered, or explicitly skipped). Known interactive cards also lose their
+ * embedded controls. Free-text questions keep their text in place — it is
  * the context for the answer sitting right below it, and the user knows they
  * dealt with it. Never throws. Also used by the native path when the app
  * resolves a question the bot had sent to Telegram.
@@ -246,10 +247,12 @@ export async function stripQuestionKeyboard(
   api: Api<RawApi>,
   telegramId: bigint,
   messageId: number | null,
+  questionId?: string | null,
 ): Promise<void> {
   if (!messageId || telegramId <= 0n) return;
   try {
-    if (env.PROFILER_CARDS_ENABLED) {
+    const question = questionId ? profilerQuestionById(questionId) : null;
+    if (env.PROFILER_CARDS_ENABLED && question && profilerTelegramQuestionInput(question)) {
       const user = await prisma.user.findUnique({ where: { telegramId }, select: { language: true } });
       await closeProfilerCard(api, Number(telegramId), messageId, (user?.language ?? "en") as Language);
       return;
@@ -326,6 +329,7 @@ async function sendOneFromBatch(
   mode: "open" | "advance" = "open",
   wait?: Wait,
   previousMessageId?: number | null,
+  previousQuestionId?: string,
 ): Promise<"sent" | "paused" | "done"> {
   const cycleId = profilerCycleId(now);
   const contextual = mode === "open" ? await contextualQuestionFor(state, now) : null;
@@ -359,21 +363,21 @@ async function sendOneFromBatch(
     // All questions exhausted — completion is SILENT per spec §Phase 1b
     // (no "profile complete" ping). Do NOT play a status here.
     if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
-      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId);
     }
     await awaitNextProfilerWindow(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
   if (step.kind === "boundary") {
     if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
-      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId);
       await pauseBatchUntilNextWindow(state.userId, now, state.timeZone);
       return "paused";
     }
     return pauseAtBatchBoundary(api, state, now, wait);
   }
   const question = step.question;
-  // Card mode replaces a single message; legacy mode keeps its AI-compose beats.
+  // Only consecutive interactive questions share a message; prose remains in chat.
   if (env.PROFILER_CARDS_ENABLED) {
     const previous = previousMessageId ?? null;
     // Reserve before IO, so iOS sees the next question rather than opening a second batch.
@@ -384,7 +388,18 @@ async function sendOneFromBatch(
     if (reserved.count !== 1) return "paused";
     let delivered: number;
     try {
-      delivered = await deliverProfilerCard(api, Number(state.telegramId), question, state.language, previous, undefined, contextMarkdown);
+      const input = profilerTelegramQuestionInput(question);
+      const priorQuestion = previousQuestionId ? profilerQuestionById(previousQuestionId) : null;
+      // Recovery has no persisted previous format: send separately rather than erase prose.
+      const reuse = input && priorQuestion && profilerTelegramQuestionInput(priorQuestion) ? previous : null;
+      if (previous && !reuse) await stripQuestionKeyboard(api, state.telegramId, previous, previousQuestionId);
+      if (input) {
+        delivered = await deliverProfilerCard(api, Number(state.telegramId), question, state.language, reuse, undefined, contextMarkdown);
+      } else {
+        const sent = await sendQuestion(api, state.telegramId, question, state.language, mode, contextMarkdown, wait);
+        if (sent === null) throw new Error("Profiler text delivery failed");
+        delivered = sent;
+      }
     } catch {
       // Restore a due continuation, without consuming another question on each retry.
       await prisma.profile.updateMany({
@@ -401,7 +416,7 @@ async function sendOneFromBatch(
     });
     // The question may already have been answered in iOS during Telegram's request.
     if (attached.count !== 1) {
-      await closeProfilerCard(api, Number(state.telegramId), delivered, state.language).catch(() => {});
+      await stripQuestionKeyboard(api, state.telegramId, delivered, question.id);
     }
     return "sent";
   }
@@ -1072,6 +1087,7 @@ async function advanceAfterReply(
   now: Date,
   wait?: Wait,
   previousMessageId?: number | null,
+  previousQuestionId?: string,
 ): Promise<boolean> {
   // Re-read state AFTER the upsert so selection sees the just-recorded row.
   const state = await loadProfilerState(userId);
@@ -1081,12 +1097,12 @@ async function advanceAfterReply(
   // and the rest of the batch pauses to the next local window.
   if (await hasActiveDatePlanning(userId)) {
     if (env.PROFILER_CARDS_ENABLED && previousMessageId) {
-      await closeProfilerCard(api, Number(state.telegramId), previousMessageId, state.language).catch(() => {});
+      await stripQuestionKeyboard(api, state.telegramId, previousMessageId, previousQuestionId);
     }
     await pauseBatchUntilNextWindow(userId, now, state.timeZone);
     return true;
   }
-  await sendOneFromBatch(api, state, now, "advance", wait, previousMessageId);
+  await sendOneFromBatch(api, state, now, "advance", wait, previousMessageId, previousQuestionId);
   return true;
 }
 
@@ -1115,7 +1131,12 @@ async function recordCardReply(
     const state = await loadProfilerState(userId);
     if (state) {
       await pauseBatchUntilNextWindow(userId, now, state.timeZone);
-      if (messageId) await closeProfilerCard(api, Number(state.telegramId), messageId, state.language, t(state.language, "profilerRefusalAck")).catch(() => {});
+      if (messageId && profilerTelegramQuestionInput(question)) {
+        await closeProfilerCard(api, Number(state.telegramId), messageId, state.language, t(state.language, "profilerRefusalAck")).catch(() => {});
+      } else {
+        await stripQuestionKeyboard(api, state.telegramId, messageId, question.id);
+        await api.sendMessage(Number(state.telegramId), t(state.language, "profilerRefusalAck")).catch(() => {});
+      }
     }
     return true;
   }
@@ -1123,7 +1144,7 @@ async function recordCardReply(
     void refreshWingmanHintAbout(question.context.key, userId, now).catch(() => {});
   }
   // Delivery is recoverable: the committed continuation remains due if Telegram is unavailable.
-  await advanceAfterReply(api, userId, now, undefined, messageId);
+  await advanceAfterReply(api, userId, now, undefined, messageId, question.id);
   return true;
 }
 
@@ -1134,7 +1155,7 @@ export async function recordProfilerCardAnswer(
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
-  const answer = composeProfilerAnswerText(question, optionIds, text, language, PROFILER_MAX_ANSWER_LEN);
+  const answer = composeProfilerAnswerText(question, optionIds, text, language, PROFILER_MAX_ANSWER_LEN, undefined, profilerTelegramQuestionInput(question));
   if (!answer.ok) return false;
   return recordProfilerAnswer(api, userId, questionId, answer.answerText, {
     quick: { optionIds: answer.optionIds, source: answer.source }, expectedMessageId,

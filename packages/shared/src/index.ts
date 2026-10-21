@@ -59,6 +59,7 @@ export {
   profilerBankInputIds,
   profilerOptionText,
   profilerQuestionInput,
+  profilerTelegramQuestionInput,
 } from "./profiler-inputs.js";
 export type {
   ProfilerAnswerSource,

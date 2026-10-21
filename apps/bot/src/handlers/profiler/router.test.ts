@@ -468,3 +468,15 @@ it("a draft from an earlier card of the same question does not contaminate a new
   expect(recordProfilerCardAnswer).not.toHaveBeenCalled();
   expect(mAnswer).toHaveBeenCalledWith(expect.anything(), "u1", "f_chronotype", "теперь сова", expect.anything());
 });
+
+
+it("ignores a persisted travel selection after the Telegram question becomes free text", async () => {
+  Object.assign(env, { PROFILER_CARDS_ENABLED: true });
+  mCapture.mockResolvedValue({ userId: "u1", questionId: "f_travel", language: "ru", messageId: 7 });
+  const context = textCtx("В Японию на цветение сакуры", 1);
+  context.session.profilerCardDraft = { questionId: "f_travel", messageId: 7, revision: 1, optionIds: ["sea"] };
+  await run(context);
+  await elapseDebounce();
+  expect(recordProfilerCardAnswer).not.toHaveBeenCalled();
+  expect(mAnswer).toHaveBeenCalledWith(expect.anything(), "u1", "f_travel", "В Японию на цветение сакуры", expect.anything());
+});

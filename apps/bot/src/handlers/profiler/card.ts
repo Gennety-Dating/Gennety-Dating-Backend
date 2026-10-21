@@ -1,6 +1,6 @@
 import { profilerActiveQuestionPatch } from "../../services/profiler-schedule.js";
 import { prisma } from "@gennety/db";
-import { profilerQuestionById, profilerQuestionInput, profilerQuestionText, t, type Language } from "@gennety/shared";
+import { profilerQuestionById, profilerTelegramQuestionInput, profilerQuestionText, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import type { BotContext } from "../../session.js";
 import {
@@ -38,6 +38,13 @@ export async function handleProfilerCard(ctx: BotContext): Promise<void> {
         : t(language, "profilerCardInactive");
       await closeProfilerCard(ctx.api, ctx.from.id, messageId, language, text).catch(() => {});
     }
+    return;
+  }
+  // Retire cards issued before this question became free text; typing still answers it.
+  if (!profilerTelegramQuestionInput(question)) {
+    await ctx.answerCallbackQuery({ text: t(language, "profilerCardStale") }).catch(() => {});
+    await closeProfilerCard(ctx.api, ctx.from.id, messageId, language, profilerQuestionText(question, language)).catch(() => {});
+    delete ctx.session.profilerCardDraft;
     return;
   }
   if (ctx.session.matchFlow !== "idle" || ctx.session.menuState !== "idle" || ctx.session.expectingPhoto) {
@@ -88,7 +95,7 @@ export async function handleProfilerCard(ctx: BotContext): Promise<void> {
       }
       return;
     }
-    const input = profilerQuestionInput(question);
+    const input = profilerTelegramQuestionInput(question);
     if (callback.action === "own") {
       draft.writing = true;
     } else {

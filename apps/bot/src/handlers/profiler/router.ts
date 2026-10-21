@@ -7,6 +7,7 @@ import {
   PROFILER_ANSWER_DEBOUNCE_MS,
   profilerQuestionAcceptsImage,
   profilerQuestionById,
+  profilerTelegramQuestionInput,
   t,
 } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
@@ -257,7 +258,8 @@ profilerRouter.use(async (ctx, next) => {
         ctx.api,
         text,
         ctx.message?.message_id,
-        env.PROFILER_CARDS_ENABLED && ctx.session.profilerCardDraft?.questionId === capture.questionId
+        env.PROFILER_CARDS_ENABLED && profilerTelegramQuestionInput(profilerQuestionById(capture.questionId)!)
+          && ctx.session.profilerCardDraft?.questionId === capture.questionId
           && ctx.session.profilerCardDraft.messageId === capture.messageId
           ? { optionIds: [...ctx.session.profilerCardDraft.optionIds], language: capture.language, messageId: ctx.session.profilerCardDraft.messageId }
           : undefined,

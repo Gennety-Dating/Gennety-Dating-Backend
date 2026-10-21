@@ -522,7 +522,7 @@ export async function answerNativeProfilerQuestion(
   // Re-read AFTER the write, so selection sees the row just recorded.
   const state = await loadProfilerState(userId);
   if (!state) return { ok: true, outcome: "done" };
-  await retireTelegramCopy(state, claim.messageId);
+  await retireTelegramCopy(state, claim.messageId, question.id);
 
   if (refusal) {
     await pauseBatchUntilNextWindow(userId, now, state.timeZone);
@@ -648,9 +648,10 @@ async function advance(
 async function retireTelegramCopy(
   state: ProfilerUserState,
   messageId: number | null,
+  questionId: string,
 ): Promise<void> {
   if (!messageId) return;
   const api = getMainBotApi();
   if (!api) return;
-  await stripQuestionKeyboard(api, state.telegramId, messageId);
+  await stripQuestionKeyboard(api, state.telegramId, messageId, questionId);
 }

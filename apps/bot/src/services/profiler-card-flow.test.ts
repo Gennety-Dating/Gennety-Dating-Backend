@@ -15,16 +15,19 @@ vi.mock("@gennety/db", () => ({ prisma: {
   profilerAnswer: { upsert: vi.fn() },
   match: { findFirst: vi.fn().mockResolvedValue(null) },
 } }));
+vi.mock("./ai-stream.js", () => ({ streamComposedRich: vi.fn().mockResolvedValue({ message_id: 8 }), runStatusSequence: vi.fn() }));
 vi.mock("./profiler-card.js", () => ({ deliverProfilerCard: vi.fn().mockResolvedValue(7), closeProfilerCard: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("./profiler-context.js", () => ({ loadProfilerContextSignals: vi.fn(), resolveProfilerQuestionContext: vi.fn().mockResolvedValue({ kind: "none" }), profilerContextMarkdown: vi.fn() }));
 
 import { prisma } from "@gennety/db";
+import { streamComposedRich } from "./ai-stream.js";
 import { env } from "../config.js";
 import { closeProfilerCard, deliverProfilerCard } from "./profiler-card.js";
-import { recordProfilerCardAnswer, recordProfilerSkip, startProfilerBatch } from "./profiler.js";
+import { recordProfilerAnswer, recordProfilerCardAnswer, recordProfilerSkip, startProfilerBatch } from "./profiler.js";
 
 const question = profilerQuestionById("f_chronotype")!;
 const option = profilerQuestionInput(question)!.options[0]!.id;
+const api = { editMessageReplyMarkup: vi.fn().mockResolvedValue(true) };
 function state(remaining = 0) {
   return { id: "u", telegramId: 123n, gender: "female", language: "en",
     profile: { timeZone: "Europe/Kyiv", profilerBatchRemaining: remaining, profilerActiveQuestionId: null, profilerQuestionMessageId: 7 },
@@ -84,10 +87,10 @@ describe("Profiler card persistence and continuation", () => {
     expect(mocks.tx.profile.updateMany).toHaveBeenCalled();
   });
 
-  it("resumes the retained card after restart without resetting the batch budget", async () => {
+  it("resumes after restart without overwriting an unknown prior format or resetting the budget", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(state(1) as never);
-    expect(await startProfilerBatch({} as never, "u")).toBe("sent");
-    expect(deliverProfilerCard).toHaveBeenCalledWith(expect.anything(), 123, expect.any(Object), "en", 7, undefined, null);
+    expect(await startProfilerBatch(api as never, "u")).toBe("sent");
+    expect(deliverProfilerCard).toHaveBeenCalledWith(expect.anything(), 123, expect.any(Object), "en", null, undefined, null);
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(prisma.profile.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ profilerBatchRemaining: 0 }),
@@ -97,7 +100,7 @@ describe("Profiler card persistence and continuation", () => {
   it("failed delivery restores the due continuation and its unconsumed budget", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(state(1) as never);
     vi.mocked(deliverProfilerCard).mockRejectedValueOnce(new Error("network timeout"));
-    expect(await startProfilerBatch({} as never, "u")).toBe("paused");
+    expect(await startProfilerBatch(api as never, "u")).toBe("paused");
     expect(prisma.profile.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({ profilerActiveQuestionId: null, profilerBatchRemaining: 1, profilerNextAt: expect.any(Date) }),
     }));
@@ -106,7 +109,57 @@ describe("Profiler card persistence and continuation", () => {
   it("iOS resolving during delivery prevents the card being left interactive", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(state(1) as never);
     vi.mocked(prisma.profile.updateMany).mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
-    await startProfilerBatch({} as never, "u");
+    await startProfilerBatch(api as never, "u");
     expect(closeProfilerCard).toHaveBeenCalledWith(expect.anything(), 123, 7, "en");
   });
+});
+
+function maleState(answered: string[], remaining = 1) {
+  return { ...state(remaining), gender: "male", profilerAnswers: answered.map(questionId => ({
+    questionId, answerText: "answered", skipped: false, skipReturned: false, cycleId: "2026-W43",
+  })) };
+}
+
+it("keeps a free-text question in history when the next question is a card", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState(["m_passions"]) as never);
+  await recordProfilerAnswer(api as never, "u", "m_passions", "Synthesizers");
+  expect(api.editMessageReplyMarkup).toHaveBeenCalledWith(123, 7);
+  expect(closeProfilerCard).not.toHaveBeenCalled();
+  expect(deliverProfilerCard).toHaveBeenCalledWith(api, 123, expect.objectContaining({ id: "m_sport" }), "en", null, undefined, null);
+});
+
+it("updates consecutive cards in the same message", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState(["m_passions", "m_sport"]) as never);
+  await recordProfilerCardAnswer(api as never, "u", "m_sport", "en", ["running"], "", 7);
+  expect(deliverProfilerCard).toHaveBeenCalledWith(api, 123, expect.objectContaining({ id: "m_chronotype" }), "en", 7, undefined, null);
+  expect(closeProfilerCard).not.toHaveBeenCalled();
+});
+
+it("closes the previous card and sends a separate free-text question", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState(["m_passions", "m_sport", "m_chronotype"]) as never);
+  await recordProfilerCardAnswer(api as never, "u", "m_chronotype", "en", [option], "", 7);
+  expect(closeProfilerCard).toHaveBeenCalledWith(api, 123, 7, "en");
+  expect(deliverProfilerCard).not.toHaveBeenCalled();
+  expect(streamComposedRich).toHaveBeenCalled();
+  expect(prisma.profile.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: { profilerQuestionMessageId: 8 } }));
+});
+
+it("batch completion preserves the free-text question", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState(["m_passions"], 0) as never);
+  await recordProfilerAnswer(api as never, "u", "m_passions", "Synthesizers");
+  expect(api.editMessageReplyMarkup).toHaveBeenCalledWith(123, 7);
+  expect(closeProfilerCard).not.toHaveBeenCalled();
+  expect(streamComposedRich).not.toHaveBeenCalled();
+});
+
+
+it("keeps the preceding plain question when another plain question follows", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState([
+    "m_passions", "m_sport", "m_chronotype", "m_humor", "m_planner", "m_surprise", "m_food", "m_friends_say",
+  ]) as never);
+  await recordProfilerAnswer(api as never, "u", "m_friends_say", "Curious, kind, funny");
+  expect(api.editMessageReplyMarkup).toHaveBeenCalledWith(123, 7);
+  expect(closeProfilerCard).not.toHaveBeenCalled();
+  expect(deliverProfilerCard).not.toHaveBeenCalled();
+  expect(streamComposedRich).toHaveBeenCalledWith(api, 123, expect.anything(), [profilerQuestionById("m_media")!.text.en], expect.anything());
 });

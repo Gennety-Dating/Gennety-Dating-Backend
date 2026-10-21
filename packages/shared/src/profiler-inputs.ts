@@ -366,6 +366,29 @@ export function profilerQuestionInput(question: ProfilerQuestion): ProfilerQuest
   return input ? { ...input, closed: false } : null;
 }
 
+/** Telegram keeps personal stories in chat; the native pilot stays unchanged. */
+export function profilerTelegramQuestionInput(question: ProfilerQuestion): ProfilerQuestionInput | null {
+  if (question.context) {
+    return question.context.family === "topic" ? null : profilerQuestionInput(question);
+  }
+  if (question.id === "f_date_spots") return { ...TELEGRAM_DATE_SPOTS, closed: false };
+  if (question.id === "f_travel" || question.id === "m_travel") return null;
+  return profilerQuestionInput(question);
+}
+
+const TELEGRAM_DATE_SPOTS: ProfilerInput = {
+  kind: "chips",
+  multiple: true,
+  options: [
+    { id: "coffee", text: { en: "Coffee shop", ru: "Кофейня", uk: "Кав’ярня", de: "Café", pl: "Kawiarnia" } },
+    { id: "walk", text: { en: "A walk", ru: "Прогулка", uk: "Прогулянка", de: "Spaziergang", pl: "Spacer" } },
+    { id: "restaurant", text: { en: "Restaurant", ru: "Ресторан", uk: "Ресторан", de: "Restaurant", pl: "Restauracja" } },
+    { id: "exhibition", text: { en: "Exhibition", ru: "Выставка", uk: "Виставка", de: "Ausstellung", pl: "Wystawa" } },
+    { id: "activity", text: { en: "Something to do together", ru: "Занятие вдвоём", uk: "Заняття вдвох", de: "Etwas zusammen unternehmen", pl: "Wspólna aktywność" } },
+    { id: "bar", text: { en: "Bar", ru: "Бар", uk: "Бар", de: "Bar", pl: "Bar" } },
+  ],
+};
+
 /** Localized option text, English fallback. */
 export function profilerOptionText(option: ProfilerAnswerOption, language: Language): string {
   return option.text[language] ?? option.text.en;
@@ -387,6 +410,8 @@ export type ProfilerQuickAnswer =
  * the field, and the person sent it as is or added to it), the text alone is
  * the answer and nothing is repeated.
  *
+ * `input`: native callers use the default; Telegram passes its surface policy.
+ *
  * `source`: the client's word when it sent one that fits; otherwise derived —
  * no options → text, no text → tap, both → both.
  */
@@ -397,6 +422,7 @@ export function composeProfilerAnswerText(
   language: Language,
   maxLength: number,
   claimedSource?: ProfilerAnswerSource,
+  input: ProfilerQuestionInput | null = profilerQuestionInput(question),
 ): ProfilerQuickAnswer {
   const own = text.trim();
   const ids = [...new Set(optionIds.map((id) => id.trim()).filter((id) => id.length > 0))];
@@ -405,7 +431,6 @@ export function composeProfilerAnswerText(
     return { ok: true, answerText: own.slice(0, maxLength), optionIds: [], source: "text" };
   }
 
-  const input = profilerQuestionInput(question);
   if (!input) return { ok: false, error: "unknown_option" };
   const picked: ProfilerAnswerOption[] = [];
   for (const id of ids) {

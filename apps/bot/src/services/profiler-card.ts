@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import {
-  profilerOptionText, profilerQuestionInput, profilerQuestionText, t,
+  profilerOptionText, profilerTelegramQuestionInput, profilerQuestionText, t,
   type Language, type ProfilerQuestion, type SessionData,
 } from "@gennety/shared";
 import { escapeRichHtml, sendRichMessage, editRichMessage } from "./telegram-rich.js";
@@ -26,7 +26,7 @@ export function profilerCardContent(
   draft?: Pick<ProfilerCardDraft, "optionIds" | "revision" | "writing">,
   context?: string | null,
 ): { html: string; text: string; keyboard: InlineKeyboardMarkup } {
-  const input = profilerQuestionInput(question);
+  const input = profilerTelegramQuestionInput(question);
   const selected = draft?.optionIds ?? [];
   const callback = (action: string) => `${PROFILER_CARD_PREFIX}${profilerCardToken(question.id)}:${draft?.revision ?? 0}:${action}`;
   const rows: InlineKeyboardButton[][] = (input?.options ?? []).map((option, index) => [{

@@ -11,6 +11,23 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-21 — Mixed Telegram Profiler (supersedes delivery policy in the Oct 19 entry; restart only).**
+
+1. With `PROFILER_CARDS_ENABLED=true`, Telegram has 11 choice cards and 14
+   separate text questions. Date spots gain choices; travel and fresh-topic
+   prompts are free text. Native inputs remain unchanged. No migration or
+   webapp build is required. The flag stays off by default.
+2. Enable in the isolated demo environment first. Verify card → card edits,
+   card → text, text → card, and text → batch completion. The text question must
+   remain readable after reply, skip or a native answer. Verify own text, meme
+   capture, stale travel cards, network retry and restart recovery without
+   resetting the remaining budget. Same policy and gates in demo.
+3. Run shared Profiler input tests and bot Profiler/card/router/native/worker
+   tests, plus scoped typechecks and lint. Manual iOS/Android/Desktop Telegram
+   rendering remains pending. No real messages or deployment occur in this change.
+4. Roll back by disabling the existing flag and restarting. No schema or stored
+   answers need rollback; old card callbacks remain ownership-checked.
+
 **PENDING 2026-10-19 — Telegram Profiler interactive cards (restart only; no migration or webapp build).**
 
 1. `PROFILER_CARDS_ENABLED` defaults false. Enable on the isolated demo deployment first;

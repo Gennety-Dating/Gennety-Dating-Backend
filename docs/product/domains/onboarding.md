@@ -2059,15 +2059,16 @@ questions too — see **Native app** at the end of this list.
   Telegram-only; the native client owns its own onboarding shell (and shows the
   questions on its Today screen, below).
 - **Telegram interactive cards (2026-10-19).** `PROFILER_CARDS_ENABLED=true`
-  replaces the Telegram delivery described below with one editable Rich Message
-  per batch. The flag defaults off; the legacy delivery remains available.
+  uses the mixed Telegram delivery below: editable Rich Messages for choices
+  and separate messages for personal answers. The flag defaults off; the legacy delivery remains available.
   1. The existing bank, contextual triggers, batch size, quiet hours and
      date-planning gate determine the questions as before. The opening question
-     and each subsequent question appear whole, without repeated thinking beats.
+     and subsequent interactive questions appear whole, without repeated thinking beats.
   2. Closed contextual options answer immediately. Open options create an
      unsubmitted selection, confirmed by “Send answer” or completed with the
      person's own text. Multiple selection follows the shared input definition.
-     Questions without an input remain free text; supported image/link answers
+     Telegram uses its own input policy; the native pilot stays unchanged.
+     Questions without a Telegram input remain free text; supported image/link answers
      continue through their existing readers. Option images are deferred: this
      release uses text labels even for photo/pair inputs.
   3. Answer text, option ids and source (`tap` / `text` / `both`) use the same
@@ -2093,6 +2094,33 @@ questions too — see **Native app** at the end of this list.
      Android and Desktop is a release check, not implied by API success.
   8. Demo uses the same flag, renderer and answer path in its existing isolated
      environment. Matching consumes no new signals as part of this change.
+- **Mixed Telegram questions (2026-10-21, approved).** This refines the card
+  release above; `PROFILER_CARDS_ENABLED` keeps its existing default and scope.
+  1. The 11 interactive bank questions are `f_date_spots`, `f_comm_style`,
+     `f_chronotype`, `f_sport_pref`, `f_initiative`, `f_flowers`, `f_pets`,
+     `m_sport`, `m_chronotype`, `m_planner`, and `m_pets`. Date spots allow
+     multiple choices and personal detail. All options are localized in shared
+     data; this release still uses text labels, including flowers.
+  2. The other 14 bank questions are separate free-text messages: humour, food,
+     media, travel and learning for both genders; men's passions, surprises and
+     friends' descriptions; women's turn-offs. Humour retains its existing
+     opt-in meme/image/link handling and disclosure.
+  3. Contextual `topic` is free text. Format, signature, follow-up and recheck
+     retain their contextual choice cards. The native app keeps its existing
+     inputs and validation; only Telegram uses `profilerTelegramQuestionInput`.
+  4. Consecutive cards reuse their message. Crossing from card to text closes
+     the card and sends a separate question through the existing compose path.
+     Crossing from text to card removes only the old Skip keyboard; the text
+     remains in chat. Completion and planning pauses also preserve free text.
+  5. Recovery after a process restart retains the budget, but sends a new
+     message when the previous delivery format is unavailable. It never
+     overwrites an unknown previous question. Old card callbacks remain guarded
+     by active question/message ownership and are retired when tapped.
+  6. A travel/topic card from the prior release becomes text when tapped and
+     does not submit old options. Its saved draft cannot contaminate a new
+     free-text answer. Demo uses the same distribution, transitions and flag;
+     existing eligibility and scheduling gates still apply. No matching,
+     verification, schema, dependency or production configuration changes.
 - **Legacy delivery (flag off).** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
   **Every** question — the first of a batch and every follow-up — is delivered
   through the same **native Telegram AI-compose** path (Bot API 10.1 rich

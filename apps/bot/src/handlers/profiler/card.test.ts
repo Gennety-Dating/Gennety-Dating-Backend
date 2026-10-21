@@ -127,3 +127,13 @@ it("iOS winning during a draft edit retires the controls instead of reviving the
   expect(closeProfilerCard).toHaveBeenCalled();
   expect(context.session.profilerCardDraft).toBeUndefined();
 });
+
+it("retires a travel card from the previous release without submitting its old choices", async () => {
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(user("f_travel") as never);
+  const context = ctx("f_travel");
+  context.session.profilerCardDraft = { questionId: "f_travel", messageId: 7, revision: 0, optionIds: ["sea"] };
+  await handleProfilerCard(context);
+  expect(recordProfilerCardAnswer).not.toHaveBeenCalled();
+  expect(closeProfilerCard).toHaveBeenCalledWith(context.api, 123, 7, "en", profilerQuestionById("f_travel")!.text.en);
+  expect(context.session.profilerCardDraft).toBeUndefined();
+});

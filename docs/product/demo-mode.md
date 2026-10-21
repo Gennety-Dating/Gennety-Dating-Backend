@@ -1103,3 +1103,13 @@ Profiler eligibility, quiet hours and planning deferral still apply, so a short
 walkthrough may finish before its first batch becomes due. Demo QA must include
 an eligible visitor with a due batch; this change does not force questions into
 active date planning to make them visible sooner.
+
+### Mixed Profiler delivery (2026-10-21)
+
+The same `PROFILER_CARDS_ENABLED` flag now selects the mixed Telegram policy:
+11 bank questions have choices, 14 remain separate free-text messages, and the
+contextual fresh-topic question is free text. The list and transition rules live
+in onboarding's “Mixed Telegram questions” section. Consecutive cards can share
+one message; text questions remain in history. Demo has no separate bank or
+renderer. The native pilot, demo eligibility and time gates remain unchanged.
+Manual Telegram rendering and mixed-series QA remain required before rollout.
