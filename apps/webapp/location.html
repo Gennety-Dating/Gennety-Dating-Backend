@@ -271,72 +271,30 @@
     <!-- No-context fallback (opened without a match id) -->
     <div id="no-context" style="display: none"></div>
 
-    <!-- Venue Intent V2 — step 2: describe the vibe, review the plan, confirm.
-         The departure origin (step 1, the map) stays in memory while this opens;
-         interpret/confirm persist it. Full brand liquid-glass surface (theme.css
-         tokens) — every string is set from location.ts i18n. -->
-    <section id="vibe-stage" class="vibe-stage" hidden aria-live="polite">
+    <!-- The same photo chooser as iOS. Continue interprets and submits once. -->
+    <section id="vibe-stage" class="vibe-stage" hidden aria-live="polite" aria-labelledby="vibe-title" tabindex="-1">
       <div class="vibe-card">
-        <div class="vibe-head">
-          <button id="vibe-back" class="vibe-back" type="button" aria-label="Back">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-          </button>
-          <span class="vibe-step" id="vibe-step">Step 2 of 2</span>
-        </div>
-
-        <h1 id="vibe-title">What kind of spot?</h1>
-        <p id="vibe-help" class="vibe-help">Describe the vibe of the place — I'll find a real venue to match.</p>
-
-        <div class="vibe-input">
-          <textarea id="vibe-text" maxlength="500" rows="4" placeholder=""></textarea>
-        </div>
-        <button id="vibe-interpret" class="cta" type="button">
-          <span class="cta-text">Continue</span>
-          <span class="spinner" aria-hidden="true"></span>
-        </button>
-
-        <div id="vibe-review" hidden>
-          <p class="vibe-review-label" id="vibe-review-label">Here's what I picked up — tap to fine-tune:</p>
-
-          <div class="vibe-group">
-            <div class="vibe-group-head">
-              <span class="vibe-group-label" id="vibe-label-exp">Experience</span>
-              <span class="vibe-group-hint" id="vibe-hint-exp"></span>
-            </div>
-            <div id="vibe-chips-exp" class="vibe-chips"></div>
+        <header class="vibe-head">
+          <h1 id="vibe-title"></h1>
+          <p id="vibe-help" class="vibe-help"></p>
+        </header>
+        <div class="vibe-body">
+          <div id="vibe-scenes" class="vibe-scenes" role="group"></div>
+          <label id="vibe-own" class="vibe-own" for="vibe-text"></label>
+          <div class="vibe-input">
+            <textarea id="vibe-text" maxlength="500" rows="4"></textarea>
           </div>
-          <div class="vibe-group">
-            <div class="vibe-group-head">
-              <span class="vibe-group-label" id="vibe-label-amb">Atmosphere</span>
-              <span class="vibe-group-hint" id="vibe-hint-amb"></span>
-            </div>
-            <div id="vibe-chips-amb" class="vibe-chips"></div>
+          <div id="vibe-relax" class="vibe-relax" hidden>
+            <p id="vibe-relax-help"></p>
+            <button id="vibe-commute" class="vibe-chip" type="button" aria-pressed="false" hidden></button>
           </div>
-          <div class="vibe-group">
-            <div class="vibe-group-head">
-              <span class="vibe-group-label" id="vibe-label-fmt">Format</span>
-              <span class="vibe-group-hint" id="vibe-hint-fmt"></span>
-            </div>
-            <div id="vibe-chips-fmt" class="vibe-chips"></div>
-          </div>
-          <div class="vibe-group">
-            <div class="vibe-group-head">
-              <span class="vibe-group-label" id="vibe-label-must">Must-haves</span>
-              <span class="vibe-group-hint" id="vibe-hint-must"></span>
-            </div>
-            <div class="vibe-constraints" id="vibe-constraints"></div>
-          </div>
-
-          <p id="vibe-price-note" class="vibe-price-note"></p>
-          <button id="vibe-confirm" class="cta" type="button">
-            <span class="cta-text">Looks right — find our spot</span>
+          <p id="vibe-error" class="vibe-error" role="alert"></p>
+          <button id="vibe-interpret" class="cta" type="button">
+            <span class="cta-text"></span>
             <span class="spinner" aria-hidden="true"></span>
           </button>
+          <button id="vibe-back" class="vibe-back" type="button"></button>
         </div>
-
-        <p id="vibe-error" class="vibe-error" role="alert"></p>
       </div>
     </section>
 

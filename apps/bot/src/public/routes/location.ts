@@ -146,7 +146,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       return;
     }
     const intent = await runWithUsage(userUsageKey(actor.id), () =>
-      interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null),
+      interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null, { replaceConfirmed: true }),
     );
     // A pin outside the user's launched market is refused with its own reason,
     // never as `wrong-state` — the Mini App turns it into the on-screen block

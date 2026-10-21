@@ -3,30 +3,32 @@
 
 # Venue Intent V2 (2026-07-21)
 
-Venue negotiation is a two-step concierge flow on Telegram and iOS: departure
-origin → free-text vibe → editable canonical chips → one explicit confirmation.
-The initial venue is always selected automatically; users never browse a venue
-catalog in this flow. Confirmed V2 intent is stored per participant and is the
-only input to finalisation; ordinary Telegram messages cannot overwrite it and
-the server never re-parses it at selection time.
+Venue negotiation is a concierge flow shared by Telegram and iOS: departure
+origin → five photo scenes and/or free-text vibe → one Continue tap → waiting.
+As of 2026-10-21 there is no intermediate chip review or second confirmation.
+Continue interprets and confirms in sequence; the server still stores the
+canonical intent, and finalisation only uses confirmed intents. Ordinary chat
+cannot overwrite a confirmed intent or cause it to be re-parsed at selection.
 
-On **Telegram** the whole two-step flow runs inside the Location Mini App (a
-branded **liquid-glass** screen — `apps/webapp` `location.html` + `location.ts`,
-theme-aware via the shared `theme.css` tokens), not as chat buttons: step 1 marks
-the departure origin on the map, then the SAME Mini App advances to step 2 — a
-free-text vibe field plus the editable canonical chips grouped as Experience /
-Atmosphere / Format / Must-haves (selection is the bright "self" signal, not a
-faint ✓) — and one in-app Confirm. Confirm runs the V2 finalizer; when the
-partner hasn't confirmed yet the bot DMs the classic "waiting for the other
-side" cue (`venueWaitingPeer`), and when both have, finalisation delivers the
-scheduled confirmation. The Mini App uses the initData-authed
-`/v1/location/venue-intent/{state,interpret,confirm}` routes. (A short-lived
-2026-07 variant presented the chips as **inline Telegram buttons in chat**
-(`handlers/matching/venue-intent-chat.ts`); it was reverted 2026-07-23 —
-inline buttons cannot carry the brand's liquid-glass design or a comfortable
-text field, and origin capture already required the Mini App, so there was
-nothing left to keep in chat.) The **iOS** client keeps its own native chip
-screen via `/v1/matches/:id/venue-intent` (OpenAPI contract unchanged).
+On Telegram the flow runs in the Location Mini App (`location.html` and
+`location.ts`) with the same five photos, localized titles, crop anchors and
+scene facets as native `VenueScene.swift`: coffee, dinner, walk, wine, surprise.
+Four cards form a two-column grid; surprise spans the bottom row. Suggestions
+reorder the first four and supply mood subtitles. Selection shows a ruby check
+and dims other cards; a free-text field below can supplement or replace the
+photo choice. The native and Mini App clients retain their existing authenticated
+interpret/confirm API shapes. A single busy guard covers both calls, and a
+failure keeps the description and chosen photo available for retry.
+
+Restored drafts open the chooser with the saved origin and words. A no-candidates
+notice returns there to edit the description; commute relaxation is offered only
+for `no_candidates:commute_12_km`. Only explicit submissions from the native and
+Mini App interpret routes set `replaceConfirmed`; chat and background callers
+keep the existing confirmed-intent guard. This allows a user to rewrite their
+wish after failure without letting an ordinary chat message erase a decision.
+The existing chat search and native waiting animation are unchanged. Demo uses
+the same UI and submission path, with its existing isolated synthetic partner.
+
 Finalisation of a
 live-mode match delivers the FULL shared scheduled confirmation — the date-card
 PNG (§3.7a), the tappable `date_time` entity, the Maps/Change-venue keyboard, the

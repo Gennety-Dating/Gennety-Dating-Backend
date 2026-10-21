@@ -153,6 +153,11 @@ class FakeDocument {
       "selected",
       "no-context",
       "vibe-stage",
+      "vibe-scenes",
+      "vibe-own",
+      "vibe-relax",
+      "vibe-relax-help",
+      "vibe-commute",
       "vibe-text",
       "vibe-review",
       "vibe-review-label",
@@ -466,107 +471,97 @@ describe("Location Mini App geolocation quick-action", () => {
   });
 });
 
-describe("Venue Intent V2 initial price policy", () => {
-  it("does not render price chips and clears a restored legacy price before confirm", async () => {
-    const venueState = {
-      intent: {
-        rawText: "quiet coffee",
-        experiences: ["coffee_treats"],
-        ambiences: ["quiet"],
-        formats: ["seated"],
-        hardConstraints: {
-          dietary: [],
-          alcoholFree: false,
-          stepFree: false,
-          setting: null,
-          maxPrice: "free",
-          maxCommuteKm: 8,
-        },
-        parserConfidence: 1,
-        state: "draft",
-        manualConfirmationRequired: false,
-        origin: { lat: 50.45, lng: 30.52, address: null },
-      },
-      status: "draft",
-      partnerSubmitted: false,
-      suggestions: [],
-      selectionError: null,
-      mode: "live",
-    };
-    confirmVenueIntentTmaMock.mockResolvedValue({
-      intent: null,
-      status: "confirmed",
-      partnerSubmitted: false,
-      suggestions: [],
-      selectionError: null,
-      mode: "live",
-    });
+const intentDraft = () => ({
+  rawText: "quiet coffee", experiences: ["coffee_treats"], ambiences: ["quiet"], formats: ["seated"],
+  hardConstraints: { dietary: [], alcoholFree: false, stepFree: false, setting: null, maxPrice: "free", maxCommuteKm: 8 },
+  parserConfidence: 1, state: "draft", manualConfirmationRequired: false,
+  origin: { lat: 50.45, lng: 30.52, address: null },
+});
+const savedVenueState = () => ({ intent: intentDraft(), status: "draft", partnerSubmitted: false, suggestions: [], selectionError: null, mode: "live" });
 
-    const { document } = await loadLocationApp({ venueState });
+describe("Venue photo chooser submits without review", () => {
+  it("restores words and sends interpret → confirm in one tap, clearing retired constraints", async () => {
+    const venueState = savedVenueState();
+    const { app, document } = await loadLocationApp({ venueState });
+    interpretVenueIntentTmaMock.mockResolvedValue(intentDraft());
+    confirmVenueIntentTmaMock.mockResolvedValue({ ...venueState, status: "confirmed" });
     await flushPromises();
-
-    const labels = document.getElementById("vibe-constraints")!.children.map((child) => child.textContent);
-    expect(labels).not.toContain("Free");
-    expect(labels).not.toContain("Inexpensive");
-    expect(labels).not.toContain("Moderate");
-
-    document.getElementById("vibe-confirm")!.click();
+    expect(document.getElementById("vibe-text")!.value).toBe("quiet coffee");
+    expect(document.getElementById("vibe-scenes")!.children).toHaveLength(5);
+    expect(document.getElementById("vibe-interpret")!.hidden).toBe(false);
+    document.getElementById("vibe-interpret")!.click();
     await flushPromises();
-    expect(confirmVenueIntentTmaMock).toHaveBeenCalledWith(
-      "init-data",
-      MATCH_ID,
-      expect.objectContaining({
-        hardConstraints: expect.objectContaining({ maxPrice: null }),
-      }),
-    );
+    expect(interpretVenueIntentTmaMock).toHaveBeenCalledWith("init-data", MATCH_ID, "quiet coffee", venueState.intent.origin);
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledWith("init-data", MATCH_ID, expect.objectContaining({
+      experiences: ["coffee_treats"], hardConstraints: expect.objectContaining({ maxPrice: null }),
+    }));
+    vi.advanceTimersByTime(400);
+    expect(app.close).toHaveBeenCalledTimes(1);
   });
 
-  it("closes on confirm and never re-opens a relax hint from a stale selectionError", async () => {
-    // The server now finalizes in the BACKGROUND, so the confirm response can
-    // still carry the PREVIOUS attempt's `no_candidates` error. Trusting it
-    // would strand the user on a stale hint; the concierge DMs the relax notice
-    // in chat instead. The Mini App's job is simply to get out of the way.
-    const venueState = {
-      intent: {
-        rawText: "quiet coffee",
-        experiences: ["coffee_treats"],
-        ambiences: ["quiet"],
-        formats: ["seated"],
-        hardConstraints: {
-          dietary: [],
-          alcoholFree: false,
-          stepFree: false,
-          setting: null,
-          maxPrice: null,
-          maxCommuteKm: 8,
-        },
-        parserConfidence: 1,
-        state: "draft",
-        manualConfirmationRequired: false,
-        origin: { lat: 50.45, lng: 30.52, address: null },
-      },
-      status: "draft",
-      partnerSubmitted: false,
-      suggestions: [],
-      selectionError: null,
-      mode: "live",
-    };
-    confirmVenueIntentTmaMock.mockResolvedValue({
-      ...venueState,
-      intent: venueState.intent,
-      status: "confirmed",
-      selectionError: "no_candidates:commute_12_km:AB",
-    });
-
+  it("photo alone works, preserves its facets and ignores a stale finalizer error", async () => {
+    const venueState = savedVenueState();
     const { app, document } = await loadLocationApp({ venueState });
+    interpretVenueIntentTmaMock.mockResolvedValue(intentDraft());
+    confirmVenueIntentTmaMock.mockResolvedValue({ ...venueState, status: "confirmed", selectionError: "no_candidates:commute_12_km:AB" });
     await flushPromises();
-
-    document.getElementById("vibe-confirm")!.click();
+    document.getElementById("vibe-text")!.value = "";
+    document.getElementById("vibe-scenes")!.children[2]!.click();
+    document.getElementById("vibe-interpret")!.click();
+    document.getElementById("vibe-interpret")!.click();
     await flushPromises();
-    expect(confirmVenueIntentTmaMock).toHaveBeenCalledTimes(1);
+    expect(interpretVenueIntentTmaMock).toHaveBeenCalledTimes(1);
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledWith("init-data", MATCH_ID, expect.objectContaining({
+      experiences: ["conversation", "walk_view"], formats: ["outdoor", "walking"], ambiences: ["quiet", "scenic"],
+    }));
     expect(document.getElementById("vibe-error")!.textContent).toBe("");
     vi.advanceTimersByTime(400);
     expect(app.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the chosen photo and words on confirm failure and lets the user retry", async () => {
+    const { app, document } = await loadLocationApp({ venueState: savedVenueState() });
+    interpretVenueIntentTmaMock.mockResolvedValue(intentDraft());
+    confirmVenueIntentTmaMock.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ ...savedVenueState(), status: "confirmed" });
+    await flushPromises();
+    document.getElementById("vibe-scenes")!.children[0]!.click();
+    document.getElementById("vibe-interpret")!.click();
+    await flushPromises();
+    expect(app.close).not.toHaveBeenCalled();
+    expect(document.getElementById("vibe-text")!.value).toBe("quiet coffee");
+    expect(document.getElementById("vibe-interpret")!.disabled).toBe(false);
+    document.getElementById("vibe-interpret")!.click();
+    await flushPromises();
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not confirm on interpretation failure or empty input", async () => {
+    const { document } = await loadLocationApp({ venueState: savedVenueState() });
+    await flushPromises();
+    document.getElementById("vibe-text")!.value = "";
+    document.getElementById("vibe-interpret")!.click();
+    await flushPromises();
+    expect(interpretVenueIntentTmaMock).not.toHaveBeenCalled();
+    document.getElementById("vibe-text")!.value = "quiet coffee";
+    interpretVenueIntentTmaMock.mockRejectedValue(new Error("offline"));
+    document.getElementById("vibe-interpret")!.click();
+    await flushPromises();
+    expect(confirmVenueIntentTmaMock).not.toHaveBeenCalled();
+  });
+
+  it("offers commute relaxation only after a matching selection failure", async () => {
+    const venueState = { ...savedVenueState(), selectionError: "no_candidates:commute_12_km:AB" };
+    const { document } = await loadLocationApp({ venueState });
+    interpretVenueIntentTmaMock.mockResolvedValue(intentDraft());
+    confirmVenueIntentTmaMock.mockResolvedValue({ ...venueState, status: "confirmed" });
+    await flushPromises();
+    expect(document.getElementById("vibe-commute")!.hidden).toBe(false);
+    document.getElementById("vibe-commute")!.click();
+    document.getElementById("vibe-interpret")!.click();
+    await flushPromises();
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledWith("init-data", MATCH_ID, expect.objectContaining({
+      hardConstraints: expect.objectContaining({ maxCommuteKm: 12 }),
+    }));
   });
 });
 

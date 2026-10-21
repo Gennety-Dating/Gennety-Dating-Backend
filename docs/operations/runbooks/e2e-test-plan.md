@@ -200,8 +200,7 @@ Registration v2 (не через email-обход). Placeholder существу
 - **Calendar:** 6×14 сетка (13:00–19:30 каждые 30 мин), multi-pick, live
   peer-visibility, 0/1/>1 overlap, first-mover DMs.
 - **Venue (Venue Intent V2):** departure-origin **первым** (Location Mini
-  App) → free-text vibe → редактируемые канонические чипы (Experience /
-  Atmosphere / Format / Must-haves) → одно явное подтверждение; curated-first
+  App) → фото-сценарий и/или описание → «Дальше» (разбор + подтверждение без экрана тегов); curated-first
   → Places fallback; grounded-blurb; `date_time` entity; **Date Card** (PNG +
   shine + protect + Share-blur).
 - **Venue Change v2 (платная shared-доска):** кнопка у ОБЕИХ сторон,
@@ -365,8 +364,8 @@ Registration v2 (не через email-обход). Placeholder существу
 ### Pass 7 — Venue Intent V2 + Date Card
 - [ ] Departure-origin **первым** (Location Mini App: геолокация / автокомплит
       / тап-на-карте / drag)
-- [ ] Free-text vibe + редактируемые канонические чипы (Experience /
-      Atmosphere / Format / Must-haves) → одно явное Confirm
+- [ ] Пять фото-сценариев и/или свободное описание → «Дальше»
+      разбирает и подтверждает без промежуточного экрана тегов
 - [ ] Venue: curated-first → Places fallback (реальное место, открывается в
       Maps, grounded-blurb по фактам, `date_time` entity); для curated-пути —
       `dev:align-email-bypass --apply` (только домен A)

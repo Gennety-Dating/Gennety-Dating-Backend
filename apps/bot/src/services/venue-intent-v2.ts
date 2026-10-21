@@ -360,6 +360,7 @@ export async function interpretVenueIntent(
   userId: string,
   text: string,
   origin: VenueIntentOrigin | null = null,
+  opts?: { replaceConfirmed?: boolean },
 ): Promise<VenueIntentV2 | VenueOriginRefusal | null> {
   const own = await participant(matchId, userId);
   const rawText = text.trim();
@@ -407,7 +408,9 @@ export async function interpretVenueIntent(
 
   // VENUE-1: never let a fresh interpret draft clobber an already-confirmed
   // intent — PRODUCT_SPEC states "ordinary Telegram messages cannot
-  // overwrite it". The OpenAI call above takes 1-2s, so a naive "check the
+  // overwrite it". Only an explicit submission from the native/Mini App
+  // chooser may replace it (`replaceConfirmed`); ordinary chat keeps this guard.
+  // The OpenAI call above takes 1-2s, so a naive "check the
   // state we read in `participant()`, then write" leaves a real race window
   // (a `confirm` call could land in that gap); take a row lock and re-check
   // immediately before the write instead, mirroring the lock+re-check idiom
@@ -425,7 +428,7 @@ export async function interpretVenueIntent(
     if (fresh?.status !== "negotiating_venue") return null;
     const currentRaw = own.side === "A" ? fresh?.venueIntentA ?? null : fresh?.venueIntentB ?? null;
     const current = parseStored(currentRaw);
-    if (current?.state === "confirmed") {
+    if (current?.state === "confirmed" && !opts?.replaceConfirmed) {
       // Already locked in — echo it back unchanged rather than reverting to
       // a draft. The route's existing `if (!intent) 409` branch is unaffected
       // since this still returns a non-null intent.
