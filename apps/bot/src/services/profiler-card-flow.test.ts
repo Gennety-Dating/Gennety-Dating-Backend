@@ -169,7 +169,7 @@ it("finishes a series once with a shimmer and effect after persisting the answer
   await recordProfilerAnswer(api as never, "u", "m_passions", "Synthesizers");
   expect(runStatusSequence).toHaveBeenCalledOnce();
   expect(runStatusSequence).toHaveBeenCalledWith(api, 123, [expect.objectContaining({ text: "Gathering your vibe…" })], expect.objectContaining({ rich: true }));
-  expect(api.sendMessage).toHaveBeenCalledExactlyOnceWith(123, "I know you a little better now ✨", { message_effect_id: env.MESSAGE_EFFECT_PROFILER_ID });
+  expect(api.sendMessage).toHaveBeenCalledExactlyOnceWith(123, "I know you a little better now", { message_effect_id: env.MESSAGE_EFFECT_PROFILER_ID });
   expect(mocks.tx.profilerAnswer.upsert.mock.invocationCallOrder[0]).toBeLessThan(api.sendMessage.mock.invocationCallOrder[0]!);
   mocks.tx.profile.updateMany.mockResolvedValueOnce({ count: 0 });
   await recordProfilerAnswer(api as never, "u", "m_passions", "duplicate");
@@ -180,7 +180,7 @@ it("falls back on effect rejection but never resends an ambiguous failure", asyn
   vi.mocked(prisma.user.findUnique).mockResolvedValue(maleState(["m_passions"], 0) as never);
   api.sendMessage.mockRejectedValueOnce({ error_code: 400 });
   await recordProfilerAnswer(api as never, "u", "m_passions", "Synthesizers");
-  expect(api.sendMessage).toHaveBeenLastCalledWith(123, "I know you a little better now ✨");
+  expect(api.sendMessage).toHaveBeenLastCalledWith(123, "I know you a little better now");
   api.sendMessage.mockClear().mockRejectedValueOnce(new Error("timeout"));
   await expect(recordProfilerAnswer(api as never, "u", "m_passions", "Synthesizers")).resolves.toBe(true);
   expect(api.sendMessage).toHaveBeenCalledOnce();

@@ -771,7 +771,7 @@ const translations = {
     skipAnalyzeStep2: "🧮 Tying it all together…",
     skipAnalyzeStep3: "💞 Prepping you for matching…",
     profilerSeriesThinking: "Gathering your vibe…",
-    profilerSeriesDone: "I know you a little better now ✨",
+    profilerSeriesDone: "I know you a little better now",
     profilerBatchThinking: "Thinking…",
     profilerBatchSaving: "Saving your answers…",
     profilerBatchSaved:
@@ -1978,7 +1978,7 @@ const translations = {
     skipAnalyzeStep2: "🧮 Свожу всё воедино…",
     skipAnalyzeStep3: "💞 Готовлю к подбору…",
     profilerSeriesThinking: "Собираю твой вайб…",
-    profilerSeriesDone: "Теперь знаю тебя чуть лучше ✨",
+    profilerSeriesDone: "Теперь знаю тебя чуть лучше",
     profilerBatchThinking: "Думаю…",
     profilerBatchSaving: "Сохраняю твои ответы…",
     profilerBatchSaved:
@@ -3095,7 +3095,7 @@ const translations = {
     skipAnalyzeStep2: "🧮 Зводжу все воєдино…",
     skipAnalyzeStep3: "💞 Готую до підбору…",
     profilerSeriesThinking: "Збираю твій вайб…",
-    profilerSeriesDone: "Тепер знаю тебе трохи краще ✨",
+    profilerSeriesDone: "Тепер знаю тебе трохи краще",
     profilerBatchThinking: "Обмірковую…",
     profilerBatchSaving: "Зберігаю твої відповіді…",
     profilerBatchSaved:
@@ -4190,7 +4190,7 @@ const deTranslations: TranslationTable = {
   skipAnalyzeStep2: "🧮 Füge alles zusammen…",
   skipAnalyzeStep3: "💞 Bereite dich aufs Matching vor…",
   profilerSeriesThinking: "Ich sammle deinen Vibe…",
-  profilerSeriesDone: "Jetzt kenne ich dich ein bisschen besser ✨",
+  profilerSeriesDone: "Jetzt kenne ich dich ein bisschen besser",
   profilerBatchThinking: "Denke nach…",
   profilerBatchSaving: "Speichere deine Antworten…",
   profilerBatchSaved:
@@ -5281,7 +5281,7 @@ const plTranslations: TranslationTable = {
   skipAnalyzeStep2: "🧮 Składam wszystko w całość…",
   skipAnalyzeStep3: "💞 Przygotowuję cię do doboru…",
   profilerSeriesThinking: "Zbieram twój vibe…",
-  profilerSeriesDone: "Teraz znam cię trochę lepiej ✨",
+  profilerSeriesDone: "Teraz znam cię trochę lepiej",
   profilerBatchThinking: "Myślę…",
   profilerBatchSaving: "Zapisuję twoje odpowiedzi…",
   profilerBatchSaved:

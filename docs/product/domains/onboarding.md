@@ -2584,7 +2584,7 @@ questions too — see **Native app** at the end of this list.
 
 1. With the mixed Telegram policy enabled, a resolved series ends with a brief
    native thinking draft, followed by one localized receipt: “I know you a little
-   better now ✨”. The receipt carries Telegram's confetti message effect.
+   better now”. The receipt carries Telegram's confetti message effect.
 2. The last card retains its question text and loses controls. Plain questions
    remain in history. No separate “That’s it for now” message is added.
 3. The same finish applies to the last resolved series when the bank is exhausted.
