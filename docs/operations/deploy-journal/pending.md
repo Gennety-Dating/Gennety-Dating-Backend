@@ -11,6 +11,23 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-24 — iOS «Поделиться → Gennety» для видео: `/v1/me/share/*` (только код: без миграции, без env).**
+Три маршрута для листа расширения iOS: `POST /v1/me/share/video` (разбор Reels / TikTok / Shorts по обложке и
+подписи, один вызов `MODELS.visionFast`), `POST /v1/me/share/video/ask` (вопрос о видео, `MODELS.fast`),
+`POST /v1/me/share/interest` (одна тема в `Profile.hobbies`). Новый модуль `services/share-video/`, роутер
+`public/routes/share.ts`, общие `fetchAllowlisted*` в `short-video/safe-fetch.ts`; профайлер не тронут.
+- **Срочность:** нет. iOS (main `93a4c3e5`) на голый 404 без этого роутера уходит прежним путём вишлиста; после
+  выката ссылка на видео открывает лист видео.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флаг — тот же `WISHLIST_FEATURE_ENABLED`; таймаут
+  загрузки — существующий `SHORT_VIDEO_FETCH_TIMEOUT_MS`. Лимиты: 40 разборов и 60 вопросов в час на человека,
+  плюс дневной бюджет токенов (`usageGuard`).
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/share-video src/public/routes/share.test.ts
+  src/services/short-video`; на проде из iOS «Поделиться» на Reel → лист с заголовком и строками «＋»; «＋ Интерес»
+  → тема в профиле; вопрос → ответ в листе. Ссылка на YouTube Shorts → то же. Instagram с IP дроплета может
+  отдавать стену входа — тогда лист «Instagram не показал видео», это ожидаемо.
+- **Откат:** `git revert`; iOS сама вернётся к пути вишлиста.
+- **Демо:** без изменений (маршрут за тем же флагом; демо-режим вишлиста не трогался).
+
 **PENDING 2026-10-19 — музыка в профиле: до пяти треков вместо трёх (только код: без миграции, без env).**
 `MAX_PROFILE_TRACKS` 3 → 5 в `services/music/profile-music.ts`; `PUT /v1/me/music` — `maxItems: 5` в OpenAPI. У
 `profile_music_tracks.position` нет проверки в БД — схема не меняется.

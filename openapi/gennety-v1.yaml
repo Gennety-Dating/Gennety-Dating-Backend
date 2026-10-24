@@ -1918,6 +1918,99 @@ paths:
         "429": { description: Daily look-up budget spent }
         "503": { description: Search unavailable }
 
+  /v1/me/share/video:
+    post:
+      tags: [me]
+      operationId: shareVideoRead
+      summary: Read a shared short video (iOS share sheet)
+      description: |
+        «Поделиться → Gennety» for a Reel, a TikTok or a YouTube Short
+        (decision journal 2026-10-24). The server reads only what a logged-out
+        browser gets — caption, title, author, cover frame — and one vision
+        call turns it into a title, a summary, one interest, one item or place
+        and up to three suggested questions. `closed`: the platform gave
+        nothing (or the content cannot be repeated back). Cached 6 h per URL
+        and language. Behind `WISHLIST_FEATURE_ENABLED` (404 `feature-disabled`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareVideoReadRequest" }
+      responses:
+        "200":
+          description: What the video is about
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareVideo" }
+        "400":
+          description: "`not-video` (not a supported video link) or `bad-request`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: "`rate_limited` (40/h) or the daily token budget" }
+
+  /v1/me/share/video/ask:
+    post:
+      tags: [me]
+      operationId: shareVideoAsk
+      summary: Ask about a shared video, answered in the share sheet
+      description: |
+        Grounded only on the read (caption, cover description, title, item)
+        and the person's city; says plainly when the video does not show the
+        answer. 1–3 sentences, plain text, the person's language.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareVideoAskRequest" }
+      responses:
+        "200":
+          description: The answer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareVideoAnswer" }
+        "400":
+          description: "`not-video` or `bad-request`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: "`unreadable` — the video is closed" }
+        "429": { description: "`rate_limited` (60/h) or the daily token budget" }
+        "503": { description: "`unavailable` — the model gave no answer" }
+
+  /v1/me/share/interest:
+    post:
+      tags: [me]
+      operationId: shareInterestAdd
+      summary: Append one interest to the profile («＋ Интерес»)
+      description: |
+        Server-side merge into `Profile.hobbies`: case-insensitive dedupe,
+        appended at the end, refused (not truncated) at 10. Marks the
+        embedding for recompute when it changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareInterestRequest" }
+      responses:
+        "200":
+          description: The interests after the merge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareInterestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`too-many` — already 10 interests"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/wishlist/items:
     post:
       tags: [me]
@@ -8273,6 +8366,84 @@ components:
           type: string
           format: date-time
           description: Server clock, for the same skew correction the countdowns use.
+
+    ShareVideoReadRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 2000 }
+
+    ShareVideoItem:
+      type: object
+      required: [title, kind, category, query]
+      properties:
+        title: { type: string, maxLength: 60 }
+        kind: { type: string, enum: [item, place] }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        query:
+          type: string
+          maxLength: 120
+          description: "Web-search query for `/v1/me/wishlist/lookup` (`kind: query`)."
+        brand: { type: string, maxLength: 40 }
+
+    ShareVideo:
+      type: object
+      required: [status, platform, url, questions]
+      properties:
+        status: { type: string, enum: [read, closed] }
+        platform: { type: string, enum: [instagram, tiktok, youtube] }
+        url: { type: string, description: "Canonical, tracking-stripped URL" }
+        author: { type: string }
+        posterUrl: { type: string, description: "https, platform CDN only" }
+        title: { type: string, maxLength: 60 }
+        summary: { type: string, maxLength: 140 }
+        interest:
+          type: object
+          required: [label]
+          properties:
+            label: { type: string, maxLength: 50 }
+        item: { $ref: "#/components/schemas/ShareVideoItem" }
+        questions:
+          type: array
+          maxItems: 3
+          items: { type: string, maxLength: 28 }
+
+    ShareVideoAskRequest:
+      type: object
+      required: [url, question]
+      properties:
+        url: { type: string, maxLength: 2000 }
+        question: { type: string, minLength: 1, maxLength: 300 }
+        history:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [question, answer]
+            properties:
+              question: { type: string }
+              answer: { type: string }
+
+    ShareVideoAnswer:
+      type: object
+      required: [answer]
+      properties:
+        answer: { type: string, maxLength: 600 }
+
+    ShareInterestRequest:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 50 }
+
+    ShareInterestResult:
+      type: object
+      required: [hobbies, added]
+      properties:
+        hobbies:
+          type: array
+          items: { type: string }
+        added: { type: boolean, description: "false when it was already there" }
 
     WishlistCategory:
       type: string

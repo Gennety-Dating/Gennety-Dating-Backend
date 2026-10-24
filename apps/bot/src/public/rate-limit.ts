@@ -185,6 +185,25 @@ export const wishlistScreenshotsLimiter = make({
   keyGenerator: (req): string => `wishlist-shots:${req.userId ?? ipKey(req)}`,
 });
 
+/**
+ * iOS share sheet for a short video (decision journal 2026-10-24): one read is
+ * up to three fetches and one vision call — 40/hour per user. Questions about
+ * the video are one text call each — 60/hour.
+ */
+export const shareVideoLimiter = make({
+  windowMs: 3_600_000,
+  limit: 40,
+  keyGenerator: (req): string => `share-video:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate_limited" },
+});
+
+export const shareAskLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => `share-ask:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate_limited" },
+});
+
 /** Text turns that invoke an LLM — 60/hour per authenticated user. */
 export const agentTextLimiter = make({
   windowMs: 3_600_000,

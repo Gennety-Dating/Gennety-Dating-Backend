@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  fetchAllowlistedImage,
+  fetchAllowlistedPage,
   fetchPlatformPage,
   fetchPosterImage,
   fetchPublicImage,
@@ -99,6 +101,31 @@ function response(init: {
     headers: init.headers ?? {},
   });
 }
+
+describe("fetchAllowlisted* (share sheet, caller's own wall)", () => {
+  const youtube = (host: string) => host === "www.youtube.com";
+
+  it("reads from a host the caller allows, refuses one it does not", async () => {
+    const fetchFn = vi.fn(async () => response({ body: "{}" })) as never;
+    expect(
+      await fetchAllowlistedPage("https://www.youtube.com/oembed?url=x", youtube, { fetchFn, resolver: publicResolver }),
+    ).toMatchObject({ ok: true, body: "{}" });
+    const never = vi.fn();
+    expect(
+      await fetchAllowlistedPage("https://www.tiktok.com/x", youtube, { fetchFn: never as never, resolver: publicResolver }),
+    ).toEqual({ ok: false, error: "blocked" });
+    expect(never).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the caller's wall at every hop", async () => {
+    const fetchFn = vi.fn(async () =>
+      response({ status: 302, headers: { location: "https://evil.example/p.jpg" } }),
+    ) as never;
+    expect(
+      await fetchAllowlistedImage("https://www.youtube.com/p.jpg", youtube, { fetchFn, resolver: publicResolver }),
+    ).toEqual({ ok: false, error: "blocked" });
+  });
+});
 
 describe("fetchPlatformPage", () => {
   it("reads a page from an allowlisted host", async () => {

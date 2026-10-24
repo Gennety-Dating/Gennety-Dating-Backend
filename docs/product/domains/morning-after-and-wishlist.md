@@ -160,6 +160,23 @@ built earlier, with the agent, on «Сегодня».
    2.5 / 2.5f and DPIA R12 carry it; switch on only once that text is on the
    site.
 
+8. **A shared short video** (founder, 2026-10-24: «Поделиться → Gennety» for
+   Reels / TikTok / Shorts). The iOS share extension sends the link to
+   `POST /v1/me/share/video` (`services/share-video/read.ts`): the server reads
+   only what a logged-out browser gets — caption, title, author, cover frame
+   (TikTok/YouTube oEmbed, Instagram OG tags; no frames, no audio) — and one
+   vision call returns a title, a one-line summary, ONE interest, ONE item or
+   place (`query` for `/lookup`) and up to three questions. The sheet shows
+   them as «＋» rows; nothing is written without a tap. «＋ Интерес» is
+   `POST /v1/me/share/interest` (append to `Profile.hobbies`, case-insensitive
+   dedupe, `409 too-many` at 10, embedding marked dirty); the item goes through
+   the ordinary `/lookup` + `/items`. Questions are answered in the sheet
+   (`POST /v1/me/share/video/ask`), grounded only on the read plus the home
+   city. Nothing new is stored: the read lives in an in-process cache (6 h,
+   500 entries). YouTube is read for this path only — the Profiler's
+   allowlist is unchanged. Same `WISHLIST_FEATURE_ENABLED` switch; an older
+   server's bare 404 makes the app fall back to the wishlist flow.
+
 ## Flags, demo, rollout
 
 1. `MORNING_AFTER_ENABLED` (check, reveal, offer), `WISHLIST_FEATURE_ENABLED`

@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-24 | «Поделиться → Gennety» для видео: `/v1/me/share/video` (обложка+подпись+заголовок, один вызов vision → заголовок, сводка, один интерес, одна вещь/место, вопросы), `/video/ask` (ответ в листе по разбору), `/interest` (добавление в hobbies на сервере, 409 при 10); YouTube только для листа, профайлер не тронут; кэш в памяти | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-21 | Единый фото-выбор места iOS/Telegram, одна отправка без экрана тегов; анимация поиска отложена | [2026-10-21-venue-chooser.md](./2026-10-21-venue-chooser.md) |
 | 2026-10-21 | SMS diagnosis: Twilio 403/60238 provider block; numeric-only safe error logging, no provider settings changed, deployment pending | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-20 | Native login restored against pre-Pulse production: required `analyticsOptIn` always serialized, missing value defaults false; response-only backport, no migration or auth bypass | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
