@@ -42,7 +42,14 @@ Privacy Policy, the ROPA and the DPIA. **Applied 2026-09-26** (privacy v4.2, ROP
 v1.1, DPIA v1.1); the file stays as the record of what was moved in and of the
 switch-on order.
 
-## Website state (checked 2026-09-26)
+## Website state (checked 2026-10-26)
+
+**Since 2026-10-26 the website shows privacy v4.4 and terms v3.2** (website commit
+`1fa1491`, transcribed with `scripts/legal-md-to-tsx.py` from this repo at
+`23b0f3f7`) — the texts `LEGAL_DOCS_VERSION = "2026-10-13"` stamps. This met the
+legal gate of the Date Wishlist switch-on (deploy journal, 2026-10-26).
+
+Earlier state (checked 2026-09-26):
 
 Until 2026-09-26 the website still showed **privacy v3.0 and terms v2.0** (both
 23 July 2026): v4.0, v4.1 and terms v3.0 had been written here and stamped by
