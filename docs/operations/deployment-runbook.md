@@ -1166,7 +1166,10 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   to drop straight to the next question; nothing else changes. That kill switch
   is the whole rollback.
 - Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
-  — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
+  — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set;
+  **2026-10-27: moving to a dedicated Gennety bot** — `@sverkausbot` becomes the founder's
+  any/DiskPulse work bot; switch = `bash ~/gennety-backups/swap-founder-bot.sh`, see
+  `docs/architecture/decisions/2026-10-27-founder-bot-split.md`).
   When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's
   full profile + photos on first activation (questionnaire-based profile), (2) a tokenized
   weekly-matches report link after the scheduled batch, (3) both date cards + venue
