@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 242 entries
+# Deploy journal index — 243 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-10-28 | Chat change-offer card: agent offers profile changes as a card with buttons (`offer_change`), tap = consent (`POST /v1/chat/messages/{id}/offer`); stored in existing `messages.attachment` (kind `change_offer`); header token `offer`; code only, no migration, no env; Telegram unchanged | [pending.md](./pending.md) |
 | Deployed | 2026-10-26 | Full main `3edf3b15` → `23b0f3f7` (every PENDING block 2026-10-08…24, 7 additive migrations incl. `20261011120000_audit_indexes`) + `WISHLIST_FEATURE_ENABLED=true` after privacy v4.4 / terms v3.2 went live; morning-after, App Store wishlist, Pulse events, venue hint, app-review env stay off | [pending.md](./pending.md) |
 | Deployed (hotfix only) | 2026-10-20 | Native Telegram login: backport required `analyticsOptIn: false` to pre-Pulse user serializer; `gennety-bot` restart only, no migration, dependencies, or full main deployment | [2026-10-20-auth-compatibility.md](./2026-10-20-auth-compatibility.md) |
 | Deployed 2026-10-26 | 2026-10-19 | Музыка в профиле: до пяти треков вместо трёх (`MAX_PROFILE_TRACKS` 3 → 5, OpenAPI `maxItems: 5`); code only, no migration, no env; until deployed prod rejects 4–5 tracks with 400 `too_many_tracks` — ship before/with the iOS build | [pending.md](./pending.md) |

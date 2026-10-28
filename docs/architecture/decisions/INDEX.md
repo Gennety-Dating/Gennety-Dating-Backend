@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 438 entries
+# Decision index — all 439 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-28 | Предложения агента в чате — карточка с кнопками вместо «да» словами: `offer_change` (ничего не пишет), нажатие `POST /v1/chat/messages/{id}/offer` = согласие и выполняет ровно сохранённое; `messages.attachment` kind `change_offer`, поле `offer`; только сборкам с `X-Gennety-Chat-Cards: offer`; одно открытое предложение; Telegram без изменений | [2026-10-28-chat-change-offer.md](./2026-10-28-chat-change-offer.md) |
 | 2026-10-27 | Лента основателя переезжает с `@sverkausbot` на отдельный бот Gennety (замена `FOUNDER_BOT_TOKEN`, код не меняется; `@sverkausbot` — рабочий бот any/DiskPulse); переключение — скрипт основателя, PENDING | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |
 | 2026-10-24 | «Поделиться → Gennety» для видео: `/v1/me/share/video` (обложка+подпись+заголовок, один вызов vision → заголовок, сводка, один интерес, одна вещь/место, вопросы), `/video/ask` (ответ в листе по разбору), `/interest` (добавление в hobbies на сервере, 409 при 10); YouTube только для листа, профайлер не тронут; кэш в памяти | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-21 | Единый фото-выбор места iOS/Telegram, одна отправка без экрана тегов; анимация поиска отложена | [2026-10-21-venue-chooser.md](./2026-10-21-venue-chooser.md) |

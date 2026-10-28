@@ -3451,11 +3451,13 @@ paths:
       description: |
         **Cards a build draws (2026-10-15).** A build that renders native cards
         under a reply lists them in the `X-Gennety-Chat-Cards` header on this
-        route and on `/v1/chat/voice` — comma-separated, today only `wishlist`
-        (`ChatWishlistCard`). Sent like `X-Gennety-Build`, by the client's
-        middleware, so it is not an operation parameter. A build that sends
-        nothing never gets a card, and the agent gets no tool that would make
-        one.
+        route and on `/v1/chat/voice` — comma-separated, case and spaces
+        ignored: `wishlist` (`ChatWishlistCard` in `attachment`) and, since
+        2026-10-28, `offer` (`ChatChangeOffer` in `offer`). Sent like
+        `X-Gennety-Build`, by the client's middleware, so it is not an
+        operation parameter. A build that sends nothing never gets a card, and
+        the agent gets no tool that would make one — without `offer` the agent
+        keeps offering profile changes as a question in words.
       requestBody:
         required: true
         content:
@@ -3554,6 +3556,14 @@ paths:
                       in `X-Gennety-Chat-Cards`. Absent (never null) otherwise.
                       Stored with the reply, so `/v1/chat/history` returns it
                       on the same message with its current state.
+                  offer:
+                    $ref: "#/components/schemas/ChatChangeOffer"
+                    description: >-
+                      The agent's offer of a profile change, as a card with
+                      two buttons — only for a build that listed `offer` in
+                      `X-Gennety-Chat-Cards`. Absent otherwise (treat absent
+                      and null alike). Never together with `attachment`.
+                      Answered through `POST /v1/chat/messages/{id}/offer`.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3655,6 +3665,7 @@ paths:
                     items: { type: string }
                   action: { $ref: "#/components/schemas/AgentAction" }
                   attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
+                  offer: { $ref: "#/components/schemas/ChatChangeOffer" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3686,6 +3697,75 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/messages/{id}/offer:
+    post:
+      tags: [chat]
+      operationId: answerChatChangeOffer
+      summary: Accept or decline a change-offer card under an agent reply
+      description: |
+        The person's answer to a `ChatChangeOffer` (decision 2026-10-28). The
+        agent's `offer_change` tool writes nothing; this tap is the consent.
+        `accept` runs exactly the change stored with the offer, through the
+        same executor as the agent (same validation, same receipt), and the
+        offer becomes `accepted` with `receipt`; `decline` makes it
+        `declined`. Answers the offer as it now is — redraw from it.
+
+        Idempotent and serialized per message: an offer that is no longer
+        `open` (accepted, declined, or expired by a newer offer) answers its
+        current state unchanged, with 200, and runs nothing.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The assistant message the offer is under (`message.id` of the turn)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [accept, decline] }
+      responses:
+        "200":
+          description: The offer after the answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [offer]
+                properties:
+                  offer: { $ref: "#/components/schemas/ChatChangeOffer" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            Not a uuid, not the caller's message, or a reply without an offer —
+            one answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >-
+            `{ "error": "change-failed", "message": "…" }` — the change was
+            refused when run (e.g. the interests list is full); nothing was
+            saved and the offer stays `open`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, message]
+                properties:
+                  error: { type: string, enum: [change-failed] }
+                  message: { type: string }
 
   /v1/chat/messages/{id}/wishlist:
     post:
@@ -9555,6 +9635,43 @@ components:
                 The card under this assistant reply, with its current state.
                 Absent on every other row, and on every row while the wishlist
                 feature is off.
+            offer:
+              $ref: "#/components/schemas/ChatChangeOffer"
+              description: >-
+                The change-offer card under this assistant reply, with its
+                current state. Absent on every other row (treat absent and null
+                alike). A row never carries both `offer` and `attachment`.
+
+    ChatChangeOffer:
+      description: |
+        The chat agent's offer of one profile change (decision 2026-10-28):
+        instead of asking «хочешь, добавлю парфюмерию в интересы?» in words,
+        the agent shows the question with an accept button and «Not now».
+        The tap is the consent — `POST /v1/chat/messages/{id}/offer`. Only one
+        offer per person is `open` at a time: a newer one expires the older.
+        The stored tool and its arguments stay on the server.
+      type: object
+      required: [state, question, acceptLabel]
+      properties:
+        state:
+          type: string
+          enum: [open, accepted, declined, expired]
+          description: >-
+            `open` — waiting for a tap; `accepted` — done (by the tap, or by a
+            typed yes the agent acted on); `declined` — «Not now»; `expired` —
+            replaced by a newer offer before an answer. Only `open` shows
+            buttons.
+        question:
+          type: string
+          description: Short question in the person's language, ≤ 90 characters, e.g. «Добавить «парфюмерия» в интересы?»
+        acceptLabel:
+          type: string
+          description: The accept button, 1–2 words, e.g. «Добавить»; «Да» when the agent named none
+        receipt:
+          type: [string, "null"]
+          description: >-
+            Code-written confirmation after accept, in the person's language
+            (e.g. «Интересы обновлены»). Null until then.
 
     ChatWishlistCard:
       description: |

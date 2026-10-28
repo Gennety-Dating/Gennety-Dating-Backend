@@ -11,6 +11,20 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-28 — чат приложения: предложения агента карточкой с кнопками (`offer_change`, `POST /v1/chat/messages/{id}/offer`) (только код: без миграции, без env).**
+Агент предлагает изменение профиля не вопросом словами, а карточкой `offer` с вопросом и двумя кнопками; нажатие — согласие и
+выполняет ровно сохранённое изменение тем же исполнителем (решение `docs/architecture/decisions/2026-10-28-chat-change-offer.md`).
+Хранится в существующей колонке `messages.attachment` (`kind: "change_offer"`) — миграции нет.
+- **Срочность:** нет. Включается только у сборок iOS, которые шлют `offer` в `X-Gennety-Chat-Cards`; старые сборки и Telegram
+  без изменений (проза-предложение). Новая сборка iOS на старом проде просто не получит карточку — выкатывать до или вместе с ней.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флагов нет.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/chat-offer.test.ts src/services/chat-agent-offer.test.ts
+  src/public/routes/chat-offer-route.test.ts`; на проде из новой сборки iOS: «у меня парфюмерный гардероб» → под ответом карточка
+  «Добавить «парфюмерия» в интересы?» без вопроса в тексте; «Добавить» → 200 `offer.state=accepted` с чеком, интерес в профиле;
+  второе нажатие → то же состояние, второй записи нет; новое предложение делает прежнее `expired`.
+- **Откат:** `git revert`; карточки в истории станут обычными ответами (поле `offer` пропадёт), записанное не трогается.
+- **Демо:** без изменений.
+
 **Deployed 2026-10-26 — production `3edf3b15` → `23b0f3f7` + `WISHLIST_FEATURE_ENABLED=true` (founder 2026-10-26: «делай»; script `~/gennety-backups/deploy-1026-wishlist.sh`).**
 Every PENDING block from 2026-10-08 to 2026-10-24 below shipped in one window. Seven additive migrations applied before the restart, incl. `20261011120000_audit_indexes` (4× `CREATE INDEX IF NOT EXISTS`, audit `c1b2a47f`) that no PENDING block listed. Backup `prod-backup-2026-10-26T06-31-26Z.json`; drift-check OK; pm2 healthy, 0 restarts; Mini App published; `/v1/app/config` → `wishlist=true morningAfter=false stylePicks=false wishlistProduct=null`. Not switched on: `MORNING_AFTER_ENABLED`, `WISHLIST_APPSTORE_ENABLED`, `CLIENT_EVENTS_ENABLED`, `WISHLIST_VENUE_HINT_WEIGHT`, `APP_REVIEW_*`. Demo (`/opt/gennety-demo`) not touched.
 - **Откат:** `/opt/gennety-prev-20261026-063156` + `/opt/gennety/.env.bak-20261026-063156` + restart; Mini App `/var/www/dating-app.prev-20261026-063156`. Migrations stay (additive); old code would cover every subscriber's ticket again.
