@@ -124,8 +124,15 @@ echo "→ Dry-run rsync (every line below is a file that WOULD be deleted)…"
 # otherwise be destroyed by --delete.
 RSYNC_EXCLUDES=(
   --exclude '.git/'
-  --exclude 'node_modules/'
+  --exclude 'node_modules'
   --exclude 'dist/'
+  # These generated video artifacts and server-provisioned bot media are not
+  # present in a clean git export. Preserve them when syncing release source.
+  --exclude '/apps/video/build/'
+  --exclude '/apps/video/out/'
+  --exclude '/apps/bot/src/assets/welcome-gift/'
+  --exclude '/apps/bot/src/assets/verify-skip/'
+  --exclude '/apps/bot/src/assets/delete-freeze/'
   --exclude 'tmp/'
   --exclude '.env*'
   --exclude 'keys/'
@@ -137,8 +144,10 @@ RSYNC_EXCLUDES=(
   --exclude '.codex/'
   --exclude '.gstack/'
 )
-rsync -az --delete --dry-run --itemize-changes "${RSYNC_EXCLUDES[@]}" \
-  ./ "$SERVER:$REMOTE_PATH/" | grep '^\*deleting' || echo "   (nothing to delete)"
+# Capture first so an SSH/rsync failure cannot be mistaken for no deletions.
+RSYNC_DRY_RUN="$(rsync -az --delete --dry-run --itemize-changes "${RSYNC_EXCLUDES[@]}" \
+  ./ "$SERVER:$REMOTE_PATH/")"
+printf '%s\n' "$RSYNC_DRY_RUN" | grep '^\*deleting' || echo "   (nothing to delete)"
 
 # Braces are load-bearing where a variable abuts a non-ASCII character: bash
 # swallowed the "…" into the identifier and `set -u` killed the script with
