@@ -27,6 +27,10 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   // a MessageEntity (the final pitch message has no `parse_mode`).
   "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
+  // Step titles of the «how the app works» card (chat-app-guide.ts): «Blind» and
+  // «Ticket» are the German words too — the app calls it «Ticket» everywhere.
+  "guideBlindTitle",
+  "guidePlanTitle",
   // Bare domain on the referral card — a URL, not prose.
   "referralCardFooter",
   // "−{pct}%" on a plan card is a minus sign, a number and a percent sign — a

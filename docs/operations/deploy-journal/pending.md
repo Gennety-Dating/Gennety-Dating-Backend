@@ -26,7 +26,20 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    Production was not changed by this implementation. Roll back the commit and
    restart if needed. Decision: `2026-10-29-chat-wishlist-removal.md`.
 
+**Deployed 2026-10-29 — production `23b0f3f7` → `ed50c70d` (founder 2026-10-29: «выкатывай бэкенд на прод»; script `~/gennety-backups/deploy-1029-guide.sh`).**
+21 commits, code only: no migration (prod had 29 applied, nothing pending), env untouched. Shipped: chat «how the app works»
+card (`show_app_guide`, `guide`) + honest refusal of `open_screen` help/city/rematch in the app chat; change-offer card
+(`offer`); voice with photos; Telegram Profiler card code behind `PROFILER_CARDS_ENABLED` — **off on prod** (gated), so
+Telegram is unchanged and the three Profiler blocks below stay PENDING. Backup `prod-backup-2026-10-29T11-40-47Z.json`;
+66 files changed, 0 deletions; drift-check OK; pm2 healthy, 0 new restarts, pool errors 0, P2022 0; Mini App published;
+`/v1/app/config` unchanged (`wishlist=true morningAfter=false profileMusic=true stylePicks=false wishlistProduct=null`);
+`POST /v1/chat/messages/x/offer` → 401. Demo (`/opt/gennety-demo`) not touched.
+- **Откат:** `/opt/gennety-prev-20261029-114133` + `/opt/gennety/.env.bak-20261029-114133` + restart; Mini App
+  `/var/www/dating-app.prev-20261029-114133`.
+
 **PENDING 2026-10-22 — Profiler series finish and button colours (restart only).**
+   **Status 2026-10-29:** the code is on production since `ed50c70d`, but `PROFILER_CARDS_ENABLED` is off there (gate of
+   `deploy-1029-guide.sh`), so Telegram delivery is unchanged. The block stays PENDING until the flag is switched on.
 
 1. Selected options use primary blue and confirmation uses success green.
    With cards enabled, a completed series shows one short shimmer and one receipt
@@ -38,6 +51,8 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    pending; rollback the commits and restart the bot.
 
 **PENDING 2026-10-21 — Mixed Telegram Profiler (supersedes delivery policy in the Oct 19 entry; restart only).**
+   **Status 2026-10-29:** the code is on production since `ed50c70d`, but `PROFILER_CARDS_ENABLED` is off there (gate of
+   `deploy-1029-guide.sh`), so Telegram delivery is unchanged. The block stays PENDING until the flag is switched on.
 
 1. With `PROFILER_CARDS_ENABLED=true`, Telegram has 11 choice cards and 14
    separate text questions. Date spots gain choices; travel and fresh-topic
@@ -55,6 +70,8 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    answers need rollback; old card callbacks remain ownership-checked.
 
 **PENDING 2026-10-19 — Telegram Profiler interactive cards (restart only; no migration or webapp build).**
+   **Status 2026-10-29:** the code is on production since `ed50c70d`, but `PROFILER_CARDS_ENABLED` is off there (gate of
+   `deploy-1029-guide.sh`), so Telegram delivery is unchanged. The block stays PENDING until the flag is switched on.
 
 1. `PROFILER_CARDS_ENABLED` defaults false. Enable on the isolated demo deployment first;
    production remains on legacy delivery until the real-client check is complete.
@@ -73,7 +90,21 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    remains answerable by text. Demo has the same behaviour and separate data.
 
 
-**PENDING 2026-10-28 — чат приложения: предложения агента карточкой с кнопками (`offer_change`, `POST /v1/chat/messages/{id}/offer`) (только код: без миграции, без env).**
+**Deployed 2026-10-29 (was PENDING; production `ed50c70d`, 11:41–11:44 UTC) 2026-10-29 — чат приложения: «как работает приложение» карточкой пути (`show_app_guide`), честный отказ `open_screen` без экрана (только код: без миграции, без env).**
+Агент на «как работает приложение» показывает под ответом полосу из пяти шагов с «ты здесь» (поле `guide`), а не обещает
+«Справку», которой в приложении нет (решение `docs/architecture/decisions/2026-10-29-chat-app-guide.md`). Хранится в
+`messages.attachment` (`kind: "app_guide"`) — миграции нет.
+- **Срочность:** средняя — сейчас агент на этот вопрос в iOS утверждает, что появилась кнопка, которой нет. Отказ
+  `open_screen('help'|'city'|'rematch')` в чате приложения работает для ВСЕХ сборок, карточка — только для сборок с `guide` в
+  `X-Gennety-Chat-Cards`. Telegram: меняется только описание `help` в `open_screen` (поддержка, а не «как работает»).
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флагов нет.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/chat-app-guide.test.ts src/services/chat-agent-guide.test.ts`;
+  на проде из новой сборки iOS: «как работает приложение?» → короткий ответ «ты на … шаге» и под ним полоса из пяти карточек,
+  «ты здесь» на настоящем шаге; ни слова о справке или кнопке. Из старой сборки — ответ словами, без «кнопка появилась».
+- **Откат:** `git revert`; карточки в истории станут обычными ответами (поле `guide` пропадёт).
+- **Демо:** без изменений.
+
+**Deployed 2026-10-29 (was PENDING; production `ed50c70d`, 11:41–11:44 UTC) 2026-10-28 — чат приложения: предложения агента карточкой с кнопками (`offer_change`, `POST /v1/chat/messages/{id}/offer`) (только код: без миграции, без env).**
 Агент предлагает изменение профиля не вопросом словами, а карточкой `offer` с вопросом и двумя кнопками; нажатие — согласие и
 выполняет ровно сохранённое изменение тем же исполнителем (решение `docs/architecture/decisions/2026-10-28-chat-change-offer.md`).
 Хранится в существующей колонке `messages.attachment` (`kind: "change_offer"`) — миграции нет.
@@ -155,7 +186,7 @@ an exclusion of the reserved `telegramId` band `-779000099…-779000001` from th
 - **Demo:** unchanged (separate DB and puppets; branch inert without the vars).
 - **iOS:** no client change. The reviewer uses the existing university-email screen. The ASC Notes text lives in
   the iOS repo `docs/operations/appstore-review-notes.md` §2.
-**PENDING 2026-10-16 — Voice note with photos (code only; contract: `imageUrls` form fields on `POST /v1/chat/voice`).**
+**Deployed (was PENDING; code on production by `ed50c70d` 2026-10-29 at the latest) 2026-10-16 — Voice note with photos (code only; contract: `imageUrls` form fields on `POST /v1/chat/voice`).**
 The founder's ask: photos picked before a voice note now go with it as one turn (the recording is the album's
 caption), instead of being silently dropped. Same limit (10 → 413) and ownership check (403) as `/message`, both
 before Whisper. Demo: no-op (Telegram has its own voice path).

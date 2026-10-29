@@ -41,10 +41,11 @@ import {
   type WishlistCard,
 } from "../../services/chat-wishlist.js";
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
+import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
 
 /**
  * Native cards this build draws under a reply (decision 2026-10-15): the
- * comma-separated `X-Gennety-Chat-Cards` header, e.g. `wishlist, offer`. A
+ * comma-separated `X-Gennety-Chat-Cards` header, e.g. `wishlist, offer, guide`. A
  * build that sends nothing gets no card — and the agent no tool that would
  * make one.
  */
@@ -247,6 +248,8 @@ chatRouter.post(
         ...(turn.attachment ? { attachment: turn.attachment } : {}),
         // The change-offer card (decision 2026-10-28) — omitted when none.
         ...(turn.offer ? { offer: turn.offer } : {}),
+        // The «how the app works» card (decision 2026-10-29) — omitted when none.
+        ...(turn.guide ? { guide: turn.guide } : {}),
       };
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
@@ -357,6 +360,7 @@ chatRouter.post(
       ...(turn.action ? { action: turn.action } : {}),
       ...(turn.attachment ? { attachment: turn.attachment } : {}),
       ...(turn.offer ? { offer: turn.offer } : {}),
+      ...(turn.guide ? { guide: turn.guide } : {}),
     });
   },
 );
@@ -461,6 +465,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
     // wishlist card only). Not behind a flag: the card exists only on rows of
     // builds that asked for it.
     const rowOffer = row.role === "assistant" ? readChangeOffer(row.attachment) : null;
+    const rowGuide = row.role === "assistant" ? readAppGuide(row.attachment) : null;
     const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
     return {
       id: row.id,
@@ -476,6 +481,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...contextField(readChatContextSnapshot(row.context)),
       ...(cardById.get(row.id) ? { attachment: cardById.get(row.id) } : {}),
       ...(rowOffer ? { offer: changeOfferView(rowOffer) } : {}),
+      ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
     };
   });
   console.log(
