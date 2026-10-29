@@ -848,6 +848,7 @@ describe("lookupWishlistEntry — link", () => {
   it.each([
     { name: "Mystery object" },
     { name: "Perfume lipstick set" },
+    { name: "Парфюмированный лосьон для тела" },
   ])("keeps AI for an unknown or conflicting product category: $name", async (product) => {
     const page = `<meta property="og:image" content="https://shop.example.com/photo.jpg"><script type="application/ld+json">${JSON.stringify({ "@type": "Product", ...product })}</script>`;
     const fetchFn = linkFetch(html(page), NORMALISED);

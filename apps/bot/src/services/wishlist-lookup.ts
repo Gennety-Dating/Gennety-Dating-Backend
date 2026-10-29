@@ -967,7 +967,7 @@ function structuredProductCategory(
   if (explicit && isWishlistCategory(explicit)) return explicit;
   const text = `${explicit ?? ""} ${stringOf(product.name) ?? ""}`;
   const rules: [WishlistCategory, RegExp][] = [
-    ["perfume", /\b(?:eau de (?:parfum|toilette|cologne)|perfume|parfum|parfüm)\b|парфюм|парфум|туалетн[а-яіїє]* вод/iu],
+    ["perfume", /\b(?:eau de (?:parfum|toilette|cologne)|perfume|parfum|parfüm)\b|парфюмированн[а-я]* вод|парфумован[а-яіїє]* вод|туалетн[а-яіїє]* вод|(?:^|\s)духи(?:\s|$)/iu],
     ["beauty", /\b(?:lipstick|mascara|shampoo|conditioner|moisturizer|sunscreen)\b|помад[аы]|тушь|туш для|шампун|сонцезахис|солнцезащит/iu],
     ["fashion", /\b(?:cardigan|t-shirt|sneakers|jeans|hoodie|sweater)\b|кардиган|кроссовк|кросівк|футболк|джинс/iu],
     ["jewelry", /\b(?:earrings|necklace|bracelet)\b|серьг|сережк|намисто|браслет/iu],

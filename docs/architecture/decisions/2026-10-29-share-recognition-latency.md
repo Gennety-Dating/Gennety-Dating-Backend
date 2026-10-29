@@ -32,6 +32,6 @@ while quickly collecting wishlist items from shops and videos.
    Its reproducible benchmark and raw samples live in the iOS repository at
    `docs/performance/share-recognition-2026-10-29/`.
 
-Validation: 118 tests across lookup, extract, share read, share metadata,
+Validation: 119 tests across lookup, extract, share read, share metadata,
 share routes and safe fetch; bot TypeScript typecheck; scoped ESLint.
 Production rollout is pending. No deployment is implied by these measurements.
