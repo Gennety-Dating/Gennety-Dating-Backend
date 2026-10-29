@@ -152130,5 +152130,655 @@
     "_reviews": 129,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
     "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "CLAVE",
+    "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+    "lat": 50.4422171,
+    "lng": 30.5181289,
+    "googleMapsUri": "https://maps.google.com/?cid=936649242349979559&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "wine",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 12:00–23:00",
+        "вівторок: 12:00–23:00",
+        "середа: 12:00–23:00",
+        "четвер: 12:00–23:00",
+        "пʼятниця: 12:00–23:00",
+        "субота: 12:00–23:00",
+        "неділя: 12:00–23:00"
+      ],
+      "nextOpenTime": "2026-10-18T09:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 61,
+    "_priceLevel": null,
+    "_primaryType": "european_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "CLAVE",
+    "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+    "lat": 50.4422171,
+    "lng": 30.5181289,
+    "googleMapsUri": "https://maps.google.com/?cid=936649242349979559&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "wine",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 12:00–23:00",
+        "вівторок: 12:00–23:00",
+        "середа: 12:00–23:00",
+        "четвер: 12:00–23:00",
+        "пʼятниця: 12:00–23:00",
+        "субота: 12:00–23:00",
+        "неділя: 12:00–23:00"
+      ],
+      "nextOpenTime": "2026-10-18T09:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 61,
+    "_priceLevel": null,
+    "_primaryType": "european_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "CLAVE",
+    "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+    "lat": 50.4422171,
+    "lng": 30.5181289,
+    "googleMapsUri": "https://maps.google.com/?cid=936649242349979559&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "wine",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 12:00–23:00",
+        "вівторок: 12:00–23:00",
+        "середа: 12:00–23:00",
+        "четвер: 12:00–23:00",
+        "пʼятниця: 12:00–23:00",
+        "субота: 12:00–23:00",
+        "неділя: 12:00–23:00"
+      ],
+      "nextOpenTime": "2026-10-18T09:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 61,
+    "_priceLevel": null,
+    "_primaryType": "european_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "CLAVE",
+    "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+    "lat": 50.4422171,
+    "lng": 30.5181289,
+    "googleMapsUri": "https://maps.google.com/?cid=936649242349979559&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "wine",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 12:00–23:00",
+        "вівторок: 12:00–23:00",
+        "середа: 12:00–23:00",
+        "четвер: 12:00–23:00",
+        "пʼятниця: 12:00–23:00",
+        "субота: 12:00–23:00",
+        "неділя: 12:00–23:00"
+      ],
+      "nextOpenTime": "2026-10-18T09:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 61,
+    "_priceLevel": null,
+    "_primaryType": "european_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "CLAVE",
+    "address": "бульвар Тараса Шевченка, 5-7, Київ, 01004",
+    "lat": 50.4422171,
+    "lng": 30.5181289,
+    "googleMapsUri": "https://maps.google.com/?cid=936649242349979559&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "wine",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 12:00–23:00",
+        "вівторок: 12:00–23:00",
+        "середа: 12:00–23:00",
+        "четвер: 12:00–23:00",
+        "пʼятниця: 12:00–23:00",
+        "субота: 12:00–23:00",
+        "неділя: 12:00–23:00"
+      ],
+      "nextOpenTime": "2026-10-18T09:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 61,
+    "_priceLevel": null,
+    "_primaryType": "european_restaurant"
   }
 ]

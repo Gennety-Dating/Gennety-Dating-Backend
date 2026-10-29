@@ -1918,6 +1918,99 @@ paths:
         "429": { description: Daily look-up budget spent }
         "503": { description: Search unavailable }
 
+  /v1/me/share/video:
+    post:
+      tags: [me]
+      operationId: shareVideoRead
+      summary: Read a shared short video (iOS share sheet)
+      description: |
+        «Поделиться → Gennety» for a Reel, a TikTok or a YouTube Short
+        (decision journal 2026-10-24). The server reads only what a logged-out
+        browser gets — caption, title, author, cover frame — and one vision
+        call turns it into a title, a summary, one interest, one item or place
+        and up to three suggested questions. `closed`: the platform gave
+        nothing (or the content cannot be repeated back). Cached 6 h per URL
+        and language. Behind `WISHLIST_FEATURE_ENABLED` (404 `feature-disabled`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareVideoReadRequest" }
+      responses:
+        "200":
+          description: What the video is about
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareVideo" }
+        "400":
+          description: "`not-video` (not a supported video link) or `bad-request`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: "`rate_limited` (40/h) or the daily token budget" }
+
+  /v1/me/share/video/ask:
+    post:
+      tags: [me]
+      operationId: shareVideoAsk
+      summary: Ask about a shared video, answered in the share sheet
+      description: |
+        Grounded only on the read (caption, cover description, title, item)
+        and the person's city; says plainly when the video does not show the
+        answer. 1–3 sentences, plain text, the person's language.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareVideoAskRequest" }
+      responses:
+        "200":
+          description: The answer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareVideoAnswer" }
+        "400":
+          description: "`not-video` or `bad-request`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: "`unreadable` — the video is closed" }
+        "429": { description: "`rate_limited` (60/h) or the daily token budget" }
+        "503": { description: "`unavailable` — the model gave no answer" }
+
+  /v1/me/share/interest:
+    post:
+      tags: [me]
+      operationId: shareInterestAdd
+      summary: Append one interest to the profile («＋ Интерес»)
+      description: |
+        Server-side merge into `Profile.hobbies`: case-insensitive dedupe,
+        appended at the end, refused (not truncated) at 10. Marks the
+        embedding for recompute when it changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareInterestRequest" }
+      responses:
+        "200":
+          description: The interests after the merge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareInterestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`too-many` — already 10 interests"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/wishlist/items:
     post:
       tags: [me]
@@ -2382,8 +2475,8 @@ paths:
       operationId: getMyMusic
       summary: The caller's pinned tracks, in display order
       description: |
-        Up to three tracks, Apple Music and Spotify mixed freely (decisions
-        2026-09-11, 2026-10-08). 404 while `PROFILE_MUSIC_ENABLED` is off —
+        Up to five tracks, Apple Music and Spotify mixed freely (decisions
+        2026-09-11, 2026-10-08; the cap was three until 2026-10-19). 404 while `PROFILE_MUSIC_ENABLED` is off —
         which is also how a client learns to hide the section. Display-only:
         the tracks never feed matching or any AI (Spotify Developer Policy;
         the same rule holds for Apple Music).
@@ -2422,7 +2515,7 @@ paths:
               properties:
                 tracks:
                   type: array
-                  maxItems: 3
+                  maxItems: 5
                   items: { $ref: "#/components/schemas/MusicTrackRef" }
       responses:
         "200":
@@ -3358,11 +3451,13 @@ paths:
       description: |
         **Cards a build draws (2026-10-15).** A build that renders native cards
         under a reply lists them in the `X-Gennety-Chat-Cards` header on this
-        route and on `/v1/chat/voice` — comma-separated, today only `wishlist`
-        (`ChatWishlistCard`). Sent like `X-Gennety-Build`, by the client's
-        middleware, so it is not an operation parameter. A build that sends
-        nothing never gets a card, and the agent gets no tool that would make
-        one.
+        route and on `/v1/chat/voice` — comma-separated, case and spaces
+        ignored: `wishlist` (`ChatWishlistCard` in `attachment`) and, since
+        2026-10-28, `offer` (`ChatChangeOffer` in `offer`). Sent like
+        `X-Gennety-Build`, by the client's middleware, so it is not an
+        operation parameter. A build that sends nothing never gets a card, and
+        the agent gets no tool that would make one — without `offer` the agent
+        keeps offering profile changes as a question in words.
       requestBody:
         required: true
         content:
@@ -3461,6 +3556,14 @@ paths:
                       in `X-Gennety-Chat-Cards`. Absent (never null) otherwise.
                       Stored with the reply, so `/v1/chat/history` returns it
                       on the same message with its current state.
+                  offer:
+                    $ref: "#/components/schemas/ChatChangeOffer"
+                    description: >-
+                      The agent's offer of a profile change, as a card with
+                      two buttons — only for a build that listed `offer` in
+                      `X-Gennety-Chat-Cards`. Absent otherwise (treat absent
+                      and null alike). Never together with `attachment`.
+                      Answered through `POST /v1/chat/messages/{id}/offer`.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3562,6 +3665,7 @@ paths:
                     items: { type: string }
                   action: { $ref: "#/components/schemas/AgentAction" }
                   attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
+                  offer: { $ref: "#/components/schemas/ChatChangeOffer" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -3593,6 +3697,75 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/messages/{id}/offer:
+    post:
+      tags: [chat]
+      operationId: answerChatChangeOffer
+      summary: Accept or decline a change-offer card under an agent reply
+      description: |
+        The person's answer to a `ChatChangeOffer` (decision 2026-10-28). The
+        agent's `offer_change` tool writes nothing; this tap is the consent.
+        `accept` runs exactly the change stored with the offer, through the
+        same executor as the agent (same validation, same receipt), and the
+        offer becomes `accepted` with `receipt`; `decline` makes it
+        `declined`. Answers the offer as it now is — redraw from it.
+
+        Idempotent and serialized per message: an offer that is no longer
+        `open` (accepted, declined, or expired by a newer offer) answers its
+        current state unchanged, with 200, and runs nothing.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The assistant message the offer is under (`message.id` of the turn)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [accept, decline] }
+      responses:
+        "200":
+          description: The offer after the answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [offer]
+                properties:
+                  offer: { $ref: "#/components/schemas/ChatChangeOffer" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            Not a uuid, not the caller's message, or a reply without an offer —
+            one answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >-
+            `{ "error": "change-failed", "message": "…" }` — the change was
+            refused when run (e.g. the interests list is full); nothing was
+            saved and the offer stays `open`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, message]
+                properties:
+                  error: { type: string, enum: [change-failed] }
+                  message: { type: string }
 
   /v1/chat/messages/{id}/wishlist:
     post:
@@ -8274,6 +8447,84 @@ components:
           format: date-time
           description: Server clock, for the same skew correction the countdowns use.
 
+    ShareVideoReadRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 2000 }
+
+    ShareVideoItem:
+      type: object
+      required: [title, kind, category, query]
+      properties:
+        title: { type: string, maxLength: 60 }
+        kind: { type: string, enum: [item, place] }
+        category: { $ref: "#/components/schemas/WishlistCategory" }
+        query:
+          type: string
+          maxLength: 120
+          description: "Web-search query for `/v1/me/wishlist/lookup` (`kind: query`)."
+        brand: { type: string, maxLength: 40 }
+
+    ShareVideo:
+      type: object
+      required: [status, platform, url, questions]
+      properties:
+        status: { type: string, enum: [read, closed] }
+        platform: { type: string, enum: [instagram, tiktok, youtube] }
+        url: { type: string, description: "Canonical, tracking-stripped URL" }
+        author: { type: string }
+        posterUrl: { type: string, description: "https, platform CDN only" }
+        title: { type: string, maxLength: 60 }
+        summary: { type: string, maxLength: 140 }
+        interest:
+          type: object
+          required: [label]
+          properties:
+            label: { type: string, maxLength: 50 }
+        item: { $ref: "#/components/schemas/ShareVideoItem" }
+        questions:
+          type: array
+          maxItems: 3
+          items: { type: string, maxLength: 28 }
+
+    ShareVideoAskRequest:
+      type: object
+      required: [url, question]
+      properties:
+        url: { type: string, maxLength: 2000 }
+        question: { type: string, minLength: 1, maxLength: 300 }
+        history:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [question, answer]
+            properties:
+              question: { type: string }
+              answer: { type: string }
+
+    ShareVideoAnswer:
+      type: object
+      required: [answer]
+      properties:
+        answer: { type: string, maxLength: 600 }
+
+    ShareInterestRequest:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 50 }
+
+    ShareInterestResult:
+      type: object
+      required: [hobbies, added]
+      properties:
+        hobbies:
+          type: array
+          items: { type: string }
+        added: { type: boolean, description: "false when it was already there" }
+
     WishlistCategory:
       type: string
       enum: [place, drink, flowers, perfume, beauty, fashion, jewelry, gift, experience]
@@ -9384,6 +9635,43 @@ components:
                 The card under this assistant reply, with its current state.
                 Absent on every other row, and on every row while the wishlist
                 feature is off.
+            offer:
+              $ref: "#/components/schemas/ChatChangeOffer"
+              description: >-
+                The change-offer card under this assistant reply, with its
+                current state. Absent on every other row (treat absent and null
+                alike). A row never carries both `offer` and `attachment`.
+
+    ChatChangeOffer:
+      description: |
+        The chat agent's offer of one profile change (decision 2026-10-28):
+        instead of asking «хочешь, добавлю парфюмерию в интересы?» in words,
+        the agent shows the question with an accept button and «Not now».
+        The tap is the consent — `POST /v1/chat/messages/{id}/offer`. Only one
+        offer per person is `open` at a time: a newer one expires the older.
+        The stored tool and its arguments stay on the server.
+      type: object
+      required: [state, question, acceptLabel]
+      properties:
+        state:
+          type: string
+          enum: [open, accepted, declined, expired]
+          description: >-
+            `open` — waiting for a tap; `accepted` — done (by the tap, or by a
+            typed yes the agent acted on); `declined` — «Not now»; `expired` —
+            replaced by a newer offer before an answer. Only `open` shows
+            buttons.
+        question:
+          type: string
+          description: Short question in the person's language, ≤ 90 characters, e.g. «Добавить «парфюмерия» в интересы?»
+        acceptLabel:
+          type: string
+          description: The accept button, 1–2 words, e.g. «Добавить»; «Да» when the agent named none
+        receipt:
+          type: [string, "null"]
+          description: >-
+            Code-written confirmation after accept, in the person's language
+            (e.g. «Интересы обновлены»). Null until then.
 
     ChatWishlistCard:
       description: |

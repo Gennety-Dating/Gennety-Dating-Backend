@@ -418,8 +418,9 @@ export const env = {
   /// row keeps its data and simply stops being read.
   VOICE_PROMPT_ENABLED: process.env.VOICE_PROMPT_ENABLED === "true",
 
-  /// Music on the profile (decision 2026-09-11): up to three Spotify tracks a
-  /// person pins to their profile, shown there and to their match partner.
+  /// Music on the profile (decisions 2026-09-11, 2026-10-08, 2026-10-19): up to
+  /// five tracks (Apple Music or Spotify) a person pins to their profile, shown
+  /// there and to their match partner.
   /// Default OFF — ships dark. Off → `/v1/me/music`, `/v1/music/*` and
   /// `/v1/integrations/spotify/*` all 404, `partnerMusicTracks` is left out of
   /// the match, and the nightly metadata refresh does not run; existing rows

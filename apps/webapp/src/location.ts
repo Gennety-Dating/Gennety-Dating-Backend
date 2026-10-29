@@ -884,12 +884,10 @@ function renderScenes(): void {
     title.className = "venue-scene-title";
     title.textContent = chooserCopy[scene.id];
     caption.appendChild(title);
-    const mood = scene.id === "surprise" ? chooserCopy["venue.scene.surprise.hint"]
-      : offer.mood.map((id) => chooserCopy[id]).join(" · ");
-    if (mood) {
+    if (scene.id === "surprise") {
       const subtitle = document.createElement("span");
       subtitle.className = "venue-scene-mood";
-      subtitle.textContent = mood;
+      subtitle.textContent = chooserCopy["venue.scene.surprise.hint"];
       caption.appendChild(subtitle);
     }
     const mark = document.createElement("span");

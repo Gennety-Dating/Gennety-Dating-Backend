@@ -1,19 +1,24 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 438 entries
+# Decision index — all 439 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-28 | Предложения агента в чате — карточка с кнопками вместо «да» словами: `offer_change` (ничего не пишет), нажатие `POST /v1/chat/messages/{id}/offer` = согласие и выполняет ровно сохранённое; `messages.attachment` kind `change_offer`, поле `offer`; только сборкам с `X-Gennety-Chat-Cards: offer`; одно открытое предложение; Telegram без изменений | [2026-10-28-chat-change-offer.md](./2026-10-28-chat-change-offer.md) |
+| 2026-10-27 | Лента основателя переезжает с `@sverkausbot` на отдельный бот Gennety (замена `FOUNDER_BOT_TOKEN`, код не меняется; `@sverkausbot` — рабочий бот any/DiskPulse); переключение — скрипт основателя, PENDING | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |
+| 2026-10-24 | «Поделиться → Gennety» для видео: `/v1/me/share/video` (обложка+подпись+заголовок, один вызов vision → заголовок, сводка, один интерес, одна вещь/место, вопросы), `/video/ask` (ответ в листе по разбору), `/interest` (добавление в hobbies на сервере, 409 при 10); YouTube только для листа, профайлер не тронут; кэш в памяти | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-22 | Profiler series finish: short shimmer, one receipt without trailing sparkles and with confetti, last question preserved; same demo path, no per-question effects | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-22 | Profiler: selected options blue, confirmation green; rich and inline fallback, same demo renderer | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-21 | Единый фото-выбор места iOS/Telegram, одна отправка без экрана тегов; анимация поиска отложена | [2026-10-21-venue-chooser.md](./2026-10-21-venue-chooser.md) |
-| 2026-10-21 | Approved mixed Telegram Profiler: 11 choice cards, 14 free-text questions; date spots added, travel/topic free; separate messages at format changes, native unchanged, same demo flag | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-21 | SMS diagnosis: Twilio 403/60238 provider block; numeric-only safe error logging, no provider settings changed, deployment pending | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
+| 2026-10-21 | Approved mixed Telegram Profiler: 11 choice cards, 14 free-text questions; date spots added, travel/topic free; separate messages at format changes, native unchanged, same demo flag | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-20 | Native login restored against pre-Pulse production: required `analyticsOptIn` always serialized, missing value defaults false; response-only backport, no migration or auth bypass | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
+| 2026-10-19 | музыка в профиле: до пяти треков вместо трёх (`MAX_PROFILE_TRACKS` 3 → 5, `PUT /v1/me/music` maxItems 5) по просьбе основателя «хотя бы пять»; заменяет «до трёх» 2026-09-11/2026-10-08; без миграции; юр. тексты «up to three» не тронуты | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-19 | Vibe-вопросы Profiler: одна интерактивная карточка на партию в Telegram; закрытый ответ касанием, открытый с подтверждением/текстом, общий формат iOS; текстовые кнопки первым выпуском, флаг выключен, демо тем же кодом | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
+| 2026-10-18 | CLAVE (бульв. Шевченка 5-7) добавлен в premium-каталог Киева и витрину; без полного платного sync и без `merge --apply` (вернул бы 2 убранных места); фото — порядок Google | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | риски отказа App Review закрыты до первой подачи тремя ветками (сайт: legal v4.4/v3.2 + `/support`; iOS: манифест, автопродление у кнопки, переводы разрешений, экспорт-ключ, заметки ревью); ручные шаги основателя — `operations/appstore-submission-checklist.md`; вход по телефону на ревью рекомендовано выключить | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-16 | партнёр ревьюера App Store — «Gleb» с четырьмя фото основателя (его согласие, кадры альбома свидания, прод-бакет `app-review/partner-1..4.jpg`), ревьюер «Alex» стал девушкой; чужие фото из сети отклонены | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |
 | 2026-10-15 | демо-аккаунт ревьюера App Store на проде: один адрес + постоянный код (`APP_REVIEW_EMAIL`/`APP_REVIEW_CODE`), готовый проверенный «Alex», партнёр-заглушка «Emma» отвечает за вторую сторону, оба вне пула, выключается пустыми переменными | [2026-08-27_2026-09-01.md](./2026-08-27_2026-09-01.md) |

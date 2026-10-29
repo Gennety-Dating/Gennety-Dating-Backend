@@ -39,6 +39,19 @@ import {
   type WishlistCard,
   type WishlistCardView,
 } from "./chat-wishlist.js";
+import {
+  OFFER_CARD_CLIENT_TOKEN,
+  OFFER_CHANGE_TOOL,
+  OFFER_CHANGE_TOOL_NAME,
+  buildChangeOffer,
+  changeOfferNote,
+  changeOfferView,
+  expireOlderOffers,
+  markOfferAccepted,
+  readChangeOffer,
+  type ChangeOffer,
+  type ChangeOfferView,
+} from "./chat-offer.js";
 import { afterChatTurn } from "./chat-session-digest.js";
 import {
   PAST_CHAT_TOOLS,
@@ -121,6 +134,11 @@ const LEGACY_FALLBACK_LINES = new Set(SUPPORTED_LANGUAGES.map((lang) => t(lang, 
  * второго агента с тем же именем и другим характером — ровно то расхождение,
  * которое эта задача закрывает.
  */
+const PROSE_OFFER = "Offer it as one short\n  question; change nothing until they say yes.";
+/** The same sentence on a build that draws the offer card (`OFFER_ADDENDUM`). */
+const CARD_OFFER =
+  "Offer it ONLY through `offer_change` (see «Offers are buttons» below),\n  never as a question in words; change nothing until they tap or say yes.";
+
 const CHAT_ADDENDUM = `## This surface: the app's Chat tab
 
 The person is in the Gennety app's Chat tab, not in Telegram. Where the rules
@@ -149,8 +167,7 @@ below differ from the bubble and length rules above, these win here.
   something about themselves — a taste, a habit, a photo of a thing they love,
   a plan — connect it: what it says about them, how it helps you match them,
   and offer ONE concrete next step (save it to their interests, keep it as a
-  topic for the date, tune who they're matched with). Offer it as one short
-  question; change nothing until they say yes. A personal share never gets
+  topic for the date, tune who they're matched with). ${PROSE_OFFER} A personal share never gets
   just "понял" plus an offer: first a real reaction with substance (a take,
   what it says about them, how it could play on a date), then the offer.
 - **Consent is the gate for every change.** Call a tool that changes their
@@ -213,6 +230,46 @@ context above. The person's other chats with you are NOT in your context.
   time. Otherwise do not search; most turns need nothing from the past.
 - Never claim to remember what you have not read in this chat or through these
   tools. If nothing turns up, say so and ask.`
+
+/**
+ * The addendum as this turn's build should read it. Without the offer card it
+ * is `CHAT_ADDENDUM` byte for byte — older builds keep the prose offer.
+ */
+export function chatAddendum(offerCards: boolean): string {
+  return offerCards ? CHAT_ADDENDUM.replace(PROSE_OFFER, CARD_OFFER) : CHAT_ADDENDUM;
+}
+
+/**
+ * The change-offer part of the addendum (decision journal 2026-10-28) — only on
+ * turns of a build that draws the card (`X-Gennety-Chat-Cards: offer`). It
+ * replaces the prose «хочешь, добавлю…?» with a card and two buttons.
+ */
+export const OFFER_ADDENDUM = `### Offers are buttons (a card under your reply)
+- Every profile change you offer — interests, About me, field of study, the
+  partner age range, partner preferences, who they want to meet, height — goes
+  ONLY through \`offer_change\`: the exact tool and args it would run, a short
+  question and a 1–2 word button («Добавить», «Сохранить», «Обновить»). The
+  card shows the question with that button and «Not now». Their tap IS the yes:
+  exactly that change is saved, nothing else.
+- Your reply text is the reaction only. Never ask the question in words as
+  well — no «хочешь, добавлю…?», no «добавить?» — and don't describe the card.
+- The question is short and concrete and names the exact value being changed:
+  «Добавить «парфюмерия» в интересы?», «Поставить возраст партнёра 24–30?».
+  Never a vague «обновить профиль?».
+- One offer per reply, and only when the moment fits. A new offer replaces one
+  they have not answered.
+- When they explicitly ask for a change («добавь джаз в интересы»), just make
+  it with the tool itself — no card.
+- If they answer an open offer in words («да», «давай»), call that tool
+  directly with exactly the offered args.
+- Under your earlier replies, a bracketed note says what happened to each
+  offer. Trust it. Declined: don't offer the same thing again in this chat
+  unless they bring it up.`;
+
+/** Where the two cards meet: wishlist things never become a profile offer. */
+const OFFER_WISHLIST_NOTE = `- Things for their Date Wishlist are not a profile change: they go on the
+  wishlist card (\`propose_wishlist_items\`), never through \`offer_change\`, and
+  never both cards in one reply.`;
 
 /**
  * The wishlist part of the addendum — only on turns that offer
@@ -295,10 +352,19 @@ const CHAT_TOOLS = [
  * чатов. Порядок значения не имеет, а совпадений имён нет — проверяется тестом.
  */
 const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS, ...PAST_CHAT_TOOLS];
-/** A turn whose app draws the wishlist card also gets the tool that makes one. */
-const ALL_TOOLS_WITH_WISHLIST = [...ALL_TOOLS, PROPOSE_WISHLIST_TOOL];
+type ToolList = Array<(typeof ALL_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL>;
 
-type ToolList = typeof ALL_TOOLS_WITH_WISHLIST;
+/**
+ * The turn's tools: a build that draws the wishlist card also gets the tool
+ * that makes one, a build that draws the offer card gets `offer_change`.
+ */
+function turnTools(options: { wishlistCards: boolean; offerCards: boolean }): ToolList {
+  return [
+    ...ALL_TOOLS,
+    ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
+    ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
+  ];
+}
 
 /**
  * Класс чатовых инструментов. Оба профильных пишут, значит оба попадают под
@@ -311,6 +377,8 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   attach_profile_photo: "write",
   // Writes nothing: the card's button saves (`chat-wishlist.ts`).
   [PROPOSE_WISHLIST_TOOL_NAME]: "confirm",
+  // Writes nothing: the card's accept button runs the change (`chat-offer.ts`).
+  [OFFER_CHANGE_TOOL_NAME]: "confirm",
   ...PAST_CHAT_TOOL_KINDS,
 };
 
@@ -377,7 +445,8 @@ export interface ChatTurnInput {
   /**
    * Native cards this app build draws under a reply — the
    * `X-Gennety-Chat-Cards` header. `wishlist` lets the agent propose wishlist
-   * items; an older build never gets a card it would drop.
+   * items, `offer` lets it offer a profile change as a card with buttons; an
+   * older build never gets a card it would drop.
    */
   chatCards?: ReadonlySet<string>;
 }
@@ -401,6 +470,8 @@ export interface ChatTurnResult {
   action?: MenuAgentAction;
   /** The card stored under this reply (`messages.attachment`), as the app draws it. */
   attachment?: WishlistCardView;
+  /** The change-offer card stored under this reply (`messages.attachment`, kind `change_offer`). */
+  offer?: ChangeOfferView;
 }
 
 export interface ChatDeps {
@@ -466,12 +537,13 @@ async function runTurnInner(
   });
 
   const wishlistCards = env.WISHLIST_FEATURE_ENABLED && (input.chatCards?.has(WISHLIST_CARD_CLIENT_TOKEN) ?? false);
-  const tools: ToolList = wishlistCards ? ALL_TOOLS_WITH_WISHLIST : ALL_TOOLS;
-  const { messages, openedNewSession, visiblePhotos, openCardItems } = await buildChatMessages(
+  const offerCards = input.chatCards?.has(OFFER_CARD_CLIENT_TOKEN) ?? false;
+  const tools = turnTools({ wishlistCards, offerCards });
+  const { messages, openedNewSession, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
     userId,
     telegramId,
     sessionId,
-    { wishlistCards },
+    { wishlistCards, offerCards },
   );
   const consent = deps.consent ?? personConsented;
   // The offer a "да" would be answering: the assistant's message right before
@@ -489,6 +561,9 @@ async function runTurnInner(
   const receipts: string[] = [];
   let pendingAction: MenuAgentAction | null = null;
   let card: WishlistCard | null = null;
+  let offer: ChangeOffer | null = null;
+  /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
+  let answeredOffer: { messageId: string; receipt: string | null } | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
     const called = await completeWithRetry(messages, fetchFn, { tools });
     if (!called.ok) {
@@ -553,12 +628,40 @@ async function runTurnInner(
             content: JSON.stringify({
               success: false,
               error: "no_consent",
-              instruction:
-                "NOT saved: they shared this but did not ask to save it. Write your reply ONCE: react to what they said like a person would, and if it fits, offer this change as one short question. Do not say you saved anything.",
+              instruction: offerCards
+                ? "NOT saved: they shared this but did not ask to save it. React to what they said like a person would, and if it fits, offer this change with `offer_change` (the card asks — don't ask in words). Do not say you saved anything."
+                : "NOT saved: they shared this but did not ask to save it. Write your reply ONCE: react to what they said like a person would, and if it fits, offer this change as one short question. Do not say you saved anything.",
             }),
           });
           continue;
         }
+      }
+
+      // The change-offer card: validated here, stored with the reply below.
+      // One card per reply, wishlist or offer — `attachment` holds one.
+      if (name === OFFER_CHANGE_TOOL_NAME) {
+        if (!offerCards) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        if (offer || card) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, error: "one_card_per_reply", instruction: "A card is already under this reply — answer now, no second offer." }),
+          });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // buildChangeOffer refuses it below
+        }
+        const built = buildChangeOffer(args, language);
+        if (built.offer) offer = built.offer;
+        messages.push({ role: "tool", tool_call_id: tc.id, content: built.result });
+        continue;
       }
 
       // The wishlist card: built here, stored with the reply below. One card
@@ -568,7 +671,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (card) {
+        if (card || offer) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -642,7 +745,11 @@ async function runTurnInner(
       // что она применилась.
       if (toolKind(name) === "write" && toolReportedSuccess(outcome.result)) {
         writesUsed++;
-        if (outcome.receiptKey) receipts.push(t(language, outcome.receiptKey));
+        const receipt = outcome.receiptKey ? t(language, outcome.receiptKey) : null;
+        if (receipt) receipts.push(receipt);
+        // «да» typed under an open offer card, and the agent ran that tool
+        // itself: the card is answered, its buttons must not run it again.
+        if (openOffer && openOffer.tool === name) answeredOffer = { messageId: openOffer.messageId, receipt };
       }
 
       messages.push({
@@ -675,6 +782,9 @@ async function runTurnInner(
     } else if (card) {
       // The card is the substance of this reply; one line above it is enough.
       lastReply = t(language, "agentWishlistCardLine");
+    } else if (offer) {
+      // The card asks the question; the line above it must not repeat it.
+      lastReply = t(language, "agentOfferCardLine");
     } else if (pendingAction) {
       lastReply = fallbackReply(language);
     } else {
@@ -692,8 +802,21 @@ async function runTurnInner(
       role: "assistant",
       content: lastReply,
       ...(card ? { attachment: card as unknown as Prisma.InputJsonValue } : {}),
+      ...(!card && offer ? { attachment: offer as unknown as Prisma.InputJsonValue } : {}),
     },
   });
+  // One open offer at a time: earlier unanswered cards stop working. A failure
+  // here costs the old card's expiry, never the reply.
+  if (offer && !card) {
+    await expireOlderOffers(userId, persisted.id).catch((err: unknown) => {
+      console.warn("[chat] expiring older offers failed:", err);
+    });
+  }
+  if (answeredOffer) {
+    await markOfferAccepted(userId, answeredOffer.messageId, answeredOffer.receipt).catch((err: unknown) => {
+      console.warn("[chat] marking the answered offer failed:", err);
+    });
+  }
   // The card as the app draws it; a signing hiccup costs its photos, not the turn.
   const [attachment] = card
     ? await wishlistCardViews([card]).catch((err: unknown) => {
@@ -719,6 +842,7 @@ async function runTurnInner(
     ...(receipts.length > 0 ? { receipts } : {}),
     ...(pendingAction ? { action: pendingAction } : {}),
     ...(attachment ? { attachment } : {}),
+    ...(offer && !card ? { offer: changeOfferView(offer) } : {}),
   };
 }
 
@@ -752,12 +876,14 @@ async function buildChatMessages(
   userId: string,
   telegramId: bigint,
   sessionId: string,
-  options: { wishlistCards: boolean },
+  options: { wishlistCards: boolean; offerCards: boolean },
 ): Promise<{
   messages: OpenAIChatMessage[];
   openedNewSession: boolean;
   visiblePhotos: Set<string>;
   openCardItems: Set<string>;
+  /** The newest offer card in this chat still waiting for an answer. */
+  openOffer: { messageId: string; tool: string } | null;
 }> {
   const rows = await prisma.message.findMany({
     where: { userId, sessionId },
@@ -784,7 +910,15 @@ async function buildChatMessages(
       return null;
     }),
   ]);
-  const system = [base, CHAT_ADDENDUM, options.wishlistCards ? WISHLIST_ADDENDUM : null, personCard, contextBlock]
+  const system = [
+    base,
+    chatAddendum(options.offerCards),
+    options.offerCards ? OFFER_ADDENDUM : null,
+    options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
+    options.wishlistCards ? WISHLIST_ADDENDUM : null,
+    personCard,
+    contextBlock,
+  ]
     .filter(Boolean)
     .join("\n\n");
   const out: OpenAIChatMessage[] = [{ role: "system", content: system }];
@@ -793,6 +927,7 @@ async function buildChatMessages(
   const visiblePhotos = new Set<string>();
   // Items of cards still waiting for their tap — not to be proposed twice.
   const openCardItems = new Set<string>();
+  let openOffer: { messageId: string; tool: string } | null = null;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -867,12 +1002,19 @@ async function buildChatMessages(
       if (rowCard?.state === "open") {
         for (const item of rowCard.items) openCardItems.add(wishlistIdentity(item.title, item.brand));
       }
-      out.push({ role: "assistant", content: rowCard ? `${content}\n${wishlistCardNote(rowCard)}` : content });
+      // The offer under this reply and what they did with it. Shown on every
+      // build: a card answered on the phone must not be offered again in words.
+      const rowOffer = readChangeOffer((row as { attachment?: unknown }).attachment);
+      if (rowOffer) {
+        openOffer = rowOffer.state === "open" ? { messageId: row.id, tool: rowOffer.tool } : null;
+      }
+      const note = rowCard ? wishlistCardNote(rowCard) : rowOffer ? changeOfferNote(rowOffer) : null;
+      out.push({ role: "assistant", content: note ? `${content}\n${note}` : content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
 
-  return { messages: out, openedNewSession, visiblePhotos, openCardItems };
+  return { messages: out, openedNewSession, visiblePhotos, openCardItems, openOffer };
 }
 
 type HistoryRow = { role: string; imageUrl: string | null; imageUrls: string[] };

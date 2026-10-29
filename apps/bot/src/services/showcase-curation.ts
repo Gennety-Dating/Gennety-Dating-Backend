@@ -40,6 +40,7 @@ export interface ShowcasePick {
  * brought back, the most popular Idealist Coffee and five parks.
  * 2026-10-02: Très Branché struck by the founder and removed from the catalog;
  * ALTO (Сагайдачного 19) added to the premium catalog and listed here.
+ * 2026-10-18: CLAVE (бульв. Тараса Шевченка 5-7) — the same.
  */
 export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> = {
   "ua:kyiv": [
@@ -85,6 +86,7 @@ export const SHOWCASE_PICKS: Readonly<Record<string, readonly ShowcasePick[]>> =
     { placeId: "ChIJ-2SifnjP1EARoOX6vivIIW4", name: "Frou Frou" },
     { placeId: "ChIJzwdw7RLP1EARQCg6rI3Hz7k", name: "Porto Maltese" },
     { placeId: "ChIJ3bKJRaLP1EARiU6B6J-5siI", name: "ALTO" },
+    { placeId: "ChIJnZmXMgDP1EARp8do-YWl_ww", name: "CLAVE" },
     // Fashionable base places.
     { placeId: "ChIJ3_H8OFDO1EAR6SeTa5GIJYg", name: "Éclair Little Artwork" },
     { placeId: "ChIJM7oDHV7P1EAROolLz6ZFUrQ", name: "Passenger Gastro Bar" },

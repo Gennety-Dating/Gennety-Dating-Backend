@@ -68,6 +68,7 @@ import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createVenueChangeAppStoreRouter } from "./routes/venue-change-appstore.js";
 import { createPrimeTimeAppStoreRouter } from "./routes/prime-time-appstore.js";
 import { createWishlistRouter } from "./routes/wishlist.js";
+import { createShareRouter } from "./routes/share.js";
 import { createAfterDateRouter } from "./routes/after-date.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
@@ -442,6 +443,9 @@ app.use("/v1/me/profiler", createNativeProfilerRouter());
 // NATIVE client (decision journal 2026-10-08). Both before `/v1/me`; both
 // inert behind their flags (wishlist 404s, after-date answers empty).
 app.use("/v1/me/wishlist", createWishlistRouter());
+// «Поделиться → Gennety» for a short video (decision journal 2026-10-24) —
+// the wishlist's front door, same switch; before `/v1/me` like the rest.
+app.use("/v1/me/share", createShareRouter());
 app.use("/v1/me/after-date", createAfterDateRouter());
 
 // Anonymous pre-date chat for the NATIVE client — the JWT twin of the Telegram

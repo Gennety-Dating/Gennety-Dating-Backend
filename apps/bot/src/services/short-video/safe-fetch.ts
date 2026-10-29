@@ -430,6 +430,53 @@ export async function fetchPosterImage(
   return { ok: true, buffer };
 }
 
+/* ── caller-allowlisted fetches (share sheet, YouTube) ─────────────────── */
+
+/**
+ * The same three fetches for a caller that brings its OWN allowlist — the iOS
+ * share sheet reads YouTube too, the Profiler deliberately does not
+ * (`links.ts`). Passing the wall in, rather than widening `isShortVideoHost`,
+ * keeps the Profiler's perimeter exactly where it was. Every other wall
+ * (https only, no userinfo, public DNS, per-hop re-check, byte caps) applies
+ * unchanged.
+ */
+export async function fetchAllowlistedPage(
+  url: string,
+  allowHost: (hostname: string) => boolean,
+  options: SafeFetchOptions = {},
+): Promise<SafeFetchResult<{ body: string; finalUrl: string }>> {
+  const hop = await requestWithGuard(url, (next) => allowHost(next.hostname), options);
+  if (!hop.ok) return hop;
+  const buffer = await readCapped(hop.response, MAX_PAGE_BYTES);
+  if (!buffer) return { ok: false, error: "too_large" };
+  return { ok: true, body: buffer.toString("utf8"), finalUrl: hop.finalUrl };
+}
+
+/** `resolveRedirect` behind a caller's allowlist. */
+export async function resolveAllowlistedRedirect(
+  url: string,
+  allowHost: (hostname: string) => boolean,
+  options: SafeFetchOptions = {},
+): Promise<SafeFetchResult<{ finalUrl: string }>> {
+  const hop = await requestWithGuard(url, (next) => allowHost(next.hostname), options);
+  if (!hop.ok) return hop;
+  await hop.response.body?.cancel().catch(() => {});
+  return { ok: true, finalUrl: hop.finalUrl };
+}
+
+/** `fetchPosterImage` behind a caller's allowlist. */
+export async function fetchAllowlistedImage(
+  url: string,
+  allowHost: (hostname: string) => boolean,
+  options: SafeFetchOptions = {},
+): Promise<SafeFetchResult<{ buffer: Buffer }>> {
+  const hop = await requestWithGuard(url, (next) => allowHost(next.hostname), options);
+  if (!hop.ok) return hop;
+  const buffer = await readCapped(hop.response, MAX_IMAGE_BYTES);
+  if (!buffer) return { ok: false, error: "too_large" };
+  return { ok: true, buffer };
+}
+
 /* ── open-host fetches (Date Wishlist) ──────────────────────────────────── */
 
 /**

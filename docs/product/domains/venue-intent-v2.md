@@ -13,8 +13,9 @@ cannot overwrite a confirmed intent or cause it to be re-parsed at selection.
 On Telegram the flow runs in the Location Mini App (`location.html` and
 `location.ts`) with the same five photos, localized titles, crop anchors and
 scene facets as native `VenueScene.swift`: coffee, dinner, walk, wine, surprise.
-Four cards form a two-column grid; surprise spans the bottom row. Suggestions
-reorder the first four and supply mood subtitles. Selection shows a ruby check
+Four cards form a two-column grid; surprise spans the bottom row. All five cards have the same height (at least 176 px), with large bold
+titles over the blurred photo. Profile mood tags are not shown. Suggestions
+reorder the first four. Selection shows a ruby check
 and dims other cards; a free-text field below can supplement or replace the
 photo choice. The native and Mini App clients retain their existing authenticated
 interpret/confirm API shapes. A single busy guard covers both calls, and a

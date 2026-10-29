@@ -40,6 +40,8 @@ const USER = "11111111-1111-4111-8111-111111111111";
 const A = "4uLU6hMCjMI75M1A2tKUQC";
 const B = "7GhIk7Il098yCjg4BQjzvb";
 const C = "0VjIjW4GlUZAMYd2vXMi3b";
+const D = "3n3Ppam7vgaVa1iaRUc9Lp";
+const E = "2takcwOaAZWiXQijPHIx7B";
 const SONG = "1440857781";
 const SONG_2 = "1613600188";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -105,7 +107,11 @@ describe("setProfileMusic — refused before anyone is asked", () => {
     ["an Apple song without a storefront", [{ provider: "apple_music", trackId: SONG }], "invalid_tracks"],
     ["an Apple library id", [apple("i.PkdJvPXI2AJgm8")], "invalid_tracks"],
     ["a Spotify id passed as Apple's", [apple(A)], "invalid_tracks"],
-    ["four tracks", [spotify(A), spotify(B), spotify(C), apple(SONG)], "too_many_tracks"],
+    [
+      "six tracks",
+      [spotify(A), spotify(B), spotify(C), spotify(D), spotify(E), apple(SONG)],
+      "too_many_tracks",
+    ],
     ["the same track twice", [spotify(A), spotify(A)], "duplicate_tracks"],
     ["the same song from two storefronts", [apple(SONG, "ua"), apple(SONG, "us")], "duplicate_tracks"],
   ])("%s", async (_label, input, error) => {
@@ -181,6 +187,17 @@ describe("setProfileMusic — saving", () => {
     await setProfileMusic(USER, [apple(SONG, "us"), spotify(B)]);
     expect(h.getAppleMusicSong).toHaveBeenCalledWith(SONG, "us", {});
     expect(h.getTrack).toHaveBeenCalledWith(B, {});
+  });
+
+  it("takes five tracks — the cap since 2026-10-19", async () => {
+    const refs = [spotify(A), spotify(B), spotify(C), spotify(D), apple(SONG)];
+    const result = await setProfileMusic(USER, refs);
+    expect(result.ok).toBe(true);
+    expect(h.createMany).toHaveBeenCalledWith({
+      data: refs.map((ref, position) =>
+        expect.objectContaining({ position, trackId: ref.trackId }),
+      ),
+    });
   });
 
   it("an empty list clears the set", async () => {

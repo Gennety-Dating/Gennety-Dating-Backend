@@ -99,7 +99,7 @@ testing. Nothing may flow between them. Audited 2026-07-25 — current state:
 | Telegram bot | `@gennetytestbot` (token `8627…`) | `@gennetybot` (token `8707…`) | ✅ separate tokens — mandatory, long polling delivers each update to exactly one consumer |
 | Supabase Storage | `selfies-dev` / `profile-photos-dev` / `chat-attachments-dev` | `selfies` / `profile-photos` / `chat-attachments` | ✅ since 2026-07-25 (same project, separate buckets) |
 | OpenAI / Resend / AWS / Places | shared keys | shared keys | ⚪ stateless — no cross-contamination |
-| Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat, feed OFF | same token/chat, feed ON | ✅ since 2026-07-25 — see below |
+| Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat, feed OFF | same token/chat, feed ON | ✅ since 2026-07-25 — see below; bot itself moves off `@sverkausbot` to a dedicated Gennety bot (2026-10-27 decision) |
 
 **DB pool size (since 2026-10-13).** The bot process opens up to `DB_CONNECTION_LIMIT` (10, shared constants)
 Prisma connections: `apps/bot/src/config.ts` appends `connection_limit` to `DATABASE_URL` when the URL has none. A

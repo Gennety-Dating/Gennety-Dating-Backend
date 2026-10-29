@@ -18,8 +18,8 @@ import {
  * reader anywhere else.
  */
 
-/** The product rule: a profile shows at most three tracks. */
-export const MAX_PROFILE_TRACKS = 3;
+/** The product rule: a profile shows at most five tracks (was three until 2026-10-19). */
+export const MAX_PROFILE_TRACKS = 5;
 
 /** A week, then the provider is asked again (Spotify's Terms: shown data must be current). */
 const REFRESH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;

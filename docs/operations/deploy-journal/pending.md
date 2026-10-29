@@ -58,7 +58,69 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
    remains answerable by text. Demo has the same behaviour and separate data.
 
 
-**PENDING 2026-10-15 — App Store review account (restart only: no migration, no contract change; feature off until env is set).**
+**PENDING 2026-10-28 — чат приложения: предложения агента карточкой с кнопками (`offer_change`, `POST /v1/chat/messages/{id}/offer`) (только код: без миграции, без env).**
+Агент предлагает изменение профиля не вопросом словами, а карточкой `offer` с вопросом и двумя кнопками; нажатие — согласие и
+выполняет ровно сохранённое изменение тем же исполнителем (решение `docs/architecture/decisions/2026-10-28-chat-change-offer.md`).
+Хранится в существующей колонке `messages.attachment` (`kind: "change_offer"`) — миграции нет.
+- **Срочность:** нет. Включается только у сборок iOS, которые шлют `offer` в `X-Gennety-Chat-Cards`; старые сборки и Telegram
+  без изменений (проза-предложение). Новая сборка iOS на старом проде просто не получит карточку — выкатывать до или вместе с ней.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флагов нет.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/chat-offer.test.ts src/services/chat-agent-offer.test.ts
+  src/public/routes/chat-offer-route.test.ts`; на проде из новой сборки iOS: «у меня парфюмерный гардероб» → под ответом карточка
+  «Добавить «парфюмерия» в интересы?» без вопроса в тексте; «Добавить» → 200 `offer.state=accepted` с чеком, интерес в профиле;
+  второе нажатие → то же состояние, второй записи нет; новое предложение делает прежнее `expired`.
+- **Откат:** `git revert`; карточки в истории станут обычными ответами (поле `offer` пропадёт), записанное не трогается.
+- **Демо:** без изменений.
+
+**Deployed 2026-10-26 — production `3edf3b15` → `23b0f3f7` + `WISHLIST_FEATURE_ENABLED=true` (founder 2026-10-26: «делай»; script `~/gennety-backups/deploy-1026-wishlist.sh`).**
+Every PENDING block from 2026-10-08 to 2026-10-24 below shipped in one window. Seven additive migrations applied before the restart, incl. `20261011120000_audit_indexes` (4× `CREATE INDEX IF NOT EXISTS`, audit `c1b2a47f`) that no PENDING block listed. Backup `prod-backup-2026-10-26T06-31-26Z.json`; drift-check OK; pm2 healthy, 0 restarts; Mini App published; `/v1/app/config` → `wishlist=true morningAfter=false stylePicks=false wishlistProduct=null`. Not switched on: `MORNING_AFTER_ENABLED`, `WISHLIST_APPSTORE_ENABLED`, `CLIENT_EVENTS_ENABLED`, `WISHLIST_VENUE_HINT_WEIGHT`, `APP_REVIEW_*`. Demo (`/opt/gennety-demo`) not touched.
+- **Откат:** `/opt/gennety-prev-20261026-063156` + `/opt/gennety/.env.bak-20261026-063156` + restart; Mini App `/var/www/dating-app.prev-20261026-063156`. Migrations stay (additive); old code would cover every subscriber's ticket again.
+
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-24 — iOS «Поделиться → Gennety» для видео: `/v1/me/share/*` (только код: без миграции, без env).**
+- **Итог 2026-10-26:** live with `WISHLIST_FEATURE_ENABLED=true`.
+Три маршрута для листа расширения iOS: `POST /v1/me/share/video` (разбор Reels / TikTok / Shorts по обложке и
+подписи, один вызов `MODELS.visionFast`), `POST /v1/me/share/video/ask` (вопрос о видео, `MODELS.fast`),
+`POST /v1/me/share/interest` (одна тема в `Profile.hobbies`). Новый модуль `services/share-video/`, роутер
+`public/routes/share.ts`, общие `fetchAllowlisted*` в `short-video/safe-fetch.ts`; профайлер не тронут.
+- **Срочность:** нет. iOS (main `93a4c3e5`) на голый 404 без этого роутера уходит прежним путём вишлиста; после
+  выката ссылка на видео открывает лист видео.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флаг — тот же `WISHLIST_FEATURE_ENABLED`; таймаут
+  загрузки — существующий `SHORT_VIDEO_FETCH_TIMEOUT_MS`. Лимиты: 40 разборов и 60 вопросов в час на человека,
+  плюс дневной бюджет токенов (`usageGuard`).
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/share-video src/public/routes/share.test.ts
+  src/services/short-video`; на проде из iOS «Поделиться» на Reel → лист с заголовком и строками «＋»; «＋ Интерес»
+  → тема в профиле; вопрос → ответ в листе. Ссылка на YouTube Shorts → то же. Instagram с IP дроплета может
+  отдавать стену входа — тогда лист «Instagram не показал видео», это ожидаемо.
+- **Откат:** `git revert`; iOS сама вернётся к пути вишлиста.
+- **Демо:** без изменений (маршрут за тем же флагом; демо-режим вишлиста не трогался).
+
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-19 — музыка в профиле: до пяти треков вместо трёх (только код: без миграции, без env).**
+`MAX_PROFILE_TRACKS` 3 → 5 в `services/music/profile-music.ts`; `PUT /v1/me/music` — `maxItems: 5` в OpenAPI. У
+`profile_music_tracks.position` нет проверки в БД — схема не меняется.
+- **Срочность:** пока не выкачено, прод отвечает `400 too_many_tracks` на 4–5 треков. Новая сборка iOS
+  (`Limits.tracks = 5`) при сохранении четвёртого трека получит ошибку — выкатывать до или вместе с ней.
+- **Выкат:** обычный выкат кода + рестарт `gennety-bot`. Флаг `PROFILE_MUSIC_ENABLED` не трогается.
+- **Проверка:** `pnpm --filter @gennety/bot exec vitest run src/services/music/profile-music.test.ts
+  src/public/routes/music.test.ts`; на проде из iOS сохранить 5 треков → 200 и все пять в ответе; шестой (через API) →
+  400 `too_many_tracks`.
+- **Откат:** `git revert`. Кто уже сохранил 4–5 треков, их увидит (чтение без ограничения), но следующий `PUT`
+  с более чем тремя получит 400.
+- **Демо:** без изменений. **iOS:** см. срочность.
+
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-18 — CLAVE в premium-каталог Киева: БАЗА ПРОДА ГОТОВА, витрина ждёт выката кода.**
+`ChIJnZmXMgDP1EARp8do-YWl_ww`, бульв. Тараса Шевченка 5-7, 5 строк в `approved.json` (по одной на вуз) и пункт
+premium-части `SHOWCASE_PICKS`.
+- **Прод-база — сделано 2026-10-18 по слову основателя.** Ограниченный импорт одного `placeId`, как ALTO 2026-10-04:
+  одноразовый скрипт с полями `seed-venues.mjs` importVenues, `cityKey = ua:kyiv`, одна транзакция, без удалений
+  (не `seed-venues:import` — тот чистит стоп-лист по всей таблице). Создано 5 строк; активный premium Киева 210 → 215.
+  Бот не перезапускался: доска смены места читает таблицу на лету, CLAVE там сразу как premium.
+- **Осталось:** пункт витрины `SHOWCASE_PICKS` уедет с общим выкатом кода. До него пункта просто нет — ошибки нет.
+- **Проверка:** `select count(*) from curated_venues where place_id = 'ChIJnZmXMgDP1EARp8do-YWl_ww' and active and tier = 'premium'` → 5 (проверено 2026-10-18).
+- **Откат:** `deleteMany` по этому `place_id` (внешних ключей на таблицу нет) + `git revert`.
+- **Демо:** в `/opt/gennety-demo` не импортировано — только если основатель скажет.
+
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — App Store review account (restart only: no migration, no contract change; feature off until env is set).**
+- **Итог 2026-10-26:** code live; `APP_REVIEW_EMAIL` / `APP_REVIEW_CODE` NOT set — branch inert until submission.
 This adds the `APP_REVIEW_EMAIL` + `APP_REVIEW_CODE` sign-in branch on `/v1/auth/otp/*`, the reviewer "Alex" and the
 stand-in partner "Gleb" (`workers/app-review-partner.ts`, cron every 20 s, scheduled only when both vars are set), and
 an exclusion of the reserved `telegramId` band `-779000099…-779000001` from the match pool.
@@ -78,7 +140,8 @@ an exclusion of the reserved `telegramId` band `-779000099…-779000001` from th
 - **Demo:** unchanged (separate DB and puppets; branch inert without the vars).
 - **iOS:** no client change. The reviewer uses the existing university-email screen. The ASC Notes text lives in
   the iOS repo `docs/operations/appstore-review-notes.md` §2.
-**PENDING 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Wishlist as a soft venue hint (code only; env `WISHLIST_VENUE_HINT_WEIGHT`, default 0 = off).**
+- **Итог 2026-10-26:** code live; `WISHLIST_VENUE_HINT_WEIGHT` NOT set (0 = off). Privacy v4.4 is on the site now; turning it on is the founder's call.
 Decision journal 2026-10-15 «Вишлист как подсказка места». Place / drink / experience items of each side (list not
 hidden) become an in-band draw weight in venue selection, next to Tempo Sync Tier 2. Off by default; a new purpose
 of the list — privacy v4.4 (§7), ROPA 2.5/2.5f, DPIA R12 updated in `legal/`, NOT yet on the site.
@@ -90,7 +153,8 @@ Demo: no-op (no wishlist on the demo's Telegram visitor or partner).
   rows must stay 0.
 - **Откат:** `WISHLIST_VENUE_HINT_WEIGHT=0` + restart.
 
-**PENDING 2026-10-15 — Chat wishlist card (MIGRATION `20261015180000_message_attachment`, additive; contract: `attachment`, `POST /v1/chat/messages/{id}/wishlist`, header `X-Gennety-Chat-Cards`).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Chat wishlist card (MIGRATION `20261015180000_message_attachment`, additive; contract: `attachment`, `POST /v1/chat/messages/{id}/wishlist`, header `X-Gennety-Chat-Cards`).**
+- **Итог 2026-10-26:** migration applied; card live for builds that send `X-Gennety-Chat-Cards: wishlist` (flag on).
 Decision journal 2026-10-15 «Вишлист из чата». The app's chat agent proposes wishlist items from photos, screenshots,
 links and words as a card with one «Добавить» button; nothing is saved before the tap. Also in this block: a photo
 from an album (not only its first) can go to the profile; photos of earlier messages carry `[imageUrl=…]` tokens (the
@@ -108,7 +172,7 @@ iOS: a build that sends `X-Gennety-Chat-Cards: wishlist` draws the card; older b
   Without the header (`curl` to `/v1/chat/message`) → no `attachment`.
 - **Откат:** previous release; the column stays (nullable, nothing else reads it).
 
-**PENDING 2026-10-15 — App chat agent quality (no migration, no env; contract: new 503 `agent_unavailable` on `/v1/chat/message` + `/v1/chat/voice`).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — App chat agent quality (no migration, no env; contract: new 503 `agent_unavailable` on `/v1/chat/message` + `/v1/chat/voice`).**
 Decision journal 2026-10-15 «Чат-агент приложения». Earlier photos stay visible to the model; a turn with no reply is
 a 503 (the person's row is removed, the app retries with the same `clientMessageId`) instead of a stored canned line;
 1000-token replies, 5 tool rounds + a closing `tool_choice: "none"` call; person card in the prompt; shared persona now
@@ -123,7 +187,7 @@ iOS: every build already treats a non-2xx as "not delivered" with retry — no a
   in `apps/bot/evals/out/`.
 - **Откат:** previous release; no data written in a new shape.
 
-**PENDING 2026-10-15 — Profiler answers with voice and photos from the app (restart only: no migration, no env; new endpoint `POST /v1/me/profiler/answer/media`).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Profiler answers with voice and photos from the app (restart only: no migration, no env; new endpoint `POST /v1/me/profiler/answer/media`).**
 Branch `profiler-media-answer`. Multipart: `questionId`, optional `text` / `optionIds` (repeated or JSON array) /
 `source`, files `voice` (0..1, ≤ 25 MB) and `images` (0..4, JPEG/PNG/WebP ≤ 6 MB, HEIC → 415). Voice → Whisper
 (503 `transcription_unavailable`, 422 `not_heard`); photos → vision description (`readMemeImage` on the humour
@@ -149,7 +213,8 @@ Stored as «Video: …» after photos; frames are not kept. New 400 `missing_vid
 - **Откат:** `git revert` of the branch commit + restart (rows written stay ordinary text answers; uploaded photos stay
   under the user's prefix and are erased with the account).
 
-**PENDING 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Pulse: behaviour analytics without tokens (MIGRATION `20261015120000_pulse_analytics`, additive; env; contract v2 of `/v1/client/events`).**
+- **Итог 2026-10-26:** migration applied, code live; `CLIENT_EVENTS_ENABLED` / `ADMIN_READ_KEY` NOT set — no events stored yet. Mini App rebuilt and published.
 Spec `docs/product/domains/pulse-analytics.md`, decision journal 2026-10-15. Analytics consent `users.analytics_opt_in`
 (default false) set from the consent screens and `PUT /v1/me/analytics-consent`; `/v1/client/events` takes screen /
 dwell / tap / seen events from iOS and the Mini App (`tma` auth) and stores nothing for a signed-in person without
@@ -170,7 +235,7 @@ builds keep working (their ten event types are still accepted, but now only with
   rollup, brief, screens, journeys, funnels, consent withdrawal all ran on real SQL.
 - **Откат:** `git revert` of the Pulse commits + restart; the tables and columns are additive and can stay.
 
-**PENDING 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Waiting ladder + `EARLY_STAGE` (restart only: no migration, no contract change; env optional).**
 Branch `waiting-ladder`. The no-match notice goes silent by default and writes only on days 4/7/10/21/45
 without a pair (anchor: last dispatched match, else onboarding completion), one notice per step, nothing after
 day 45 (ladder shortened the same day, founder); new copy `waitingNotice*` / `waitingPush*` in 5 locales (`noMatchThisWeekTier1/2/3` removed). New env
@@ -187,7 +252,7 @@ changes.
 - **Откат:** `git revert` of the branch commits + restart (no data to undo; rows written carry `tier` 1–6 instead
   of weeks, read only by analytics).
 
-**PENDING 2026-10-15 — Founder video/voice notes retired (code only: no migration, no env, no contract change).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-15 — Founder video/voice notes retired (code only: no migration, no env, no contract change).**
 The bot no longer sends any recorded founder media: the welcome-gift кружок (`ru.mp4`, before the first pitch) is
 gone — the gift DM alone remains; the verification soft-skip voice note is replaced by a standalone text
 (`verifySkipNudgeCaption` rewritten in all five languages, no longer says "listen to this 👆"). The already-dead
@@ -197,7 +262,7 @@ Demo: unchanged. iOS/Mini App: no impact.
   only (no кружок). Leftover asset files on the server (if the rsync doesn't `--delete`) are harmless — no code reads them.
 - **Откат:** `git revert` of the commit.
 
-**PENDING 2026-10-13 — Performance wave «только безопасное» (code only: no migration, no env, no contract change).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Performance wave «только безопасное» (code only: no migration, no env, no contract change).**
 Commits `5d935472..278b6e83` + the lead's follow-up (37 agent commits: `/v1` read path, bot runtime/workers, compute and
 external I/O, admin + Mini App). A plain restart ships it, but `main` also carries the PENDING blocks below with
 migrations — deploy in their order (migrations before the restart), not this block alone. Fewer SQL per iOS poll
@@ -215,7 +280,7 @@ build changes (venue-change/ticket pollers, typed SDK calls) — rebuild and upl
   dashboard loads as before.
 - **Откат:** `git revert` of the range (no data to undo; in-process caches start empty).
 
-**PENDING 2026-10-13 — Dead ends, founder calls: block after the start, unreachable proposal, report a deleted partner (MIGRATION `20261013120000_former_matches`, additive).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Dead ends, founder calls: block after the start, unreachable proposal, report a deleted partner (MIGRATION `20261013120000_former_matches`, additive).**
 Branch `claude/dating-edge-cases-ihp2ur`, on top of the dead-end audit block below — ship together. A block after
 `agreedTime` records the block and force-closes the proxy chat (no cancellation, no refunds, nothing to the blocked
 side); the expiry sweep closes a proposal early when every silent side is Telegram-only with the bot blocked for
@@ -233,7 +298,7 @@ instead of 403; `POST /v1/matches/:id/block` answers `dateCancelled: false` afte
   with `DROP TABLE former_matches`. Reports filed through it stay as ordinary orphan reports and follow the
   tombstone sweep.
 
-**PENDING 2026-10-13 — Dead-end audit fixes (code only, no migration, no env).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Dead-end audit fixes (code only, no migration, no env).**
 Branch `claude/dating-edge-cases-ihp2ur`. Stall check-in at the venue step is asked again (claim accepts a stale stamp);
 cancellations end the iOS date-day card and refresh the Telegram banner; after a partner's deletion the survivor's proxy
 line / emergency reason / feedback get an answer (new i18n key `feedbackMatchGone`); Mini App calendar and venue board
@@ -248,7 +313,7 @@ Demo: unchanged. iOS: no contract change.
 - **Откат:** `git revert` of the branch commits; nothing to undo in data (recovery writes the same CAS the
   original paths write).
 
-**PENDING 2026-10-13 — Money audit fixes (code only, no migration, no env).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Money audit fixes (code only, no migration, no env).**
 Merged into `main` from `claude/amazing-cannon-y8a21a`. Wallet spend refunds keyed per spend row; cancellation refunds credited
 inside the cancelling transaction (a failed credit now rolls the cancel back — emergency cancel surfaces it as an
 error, the stall worker logs and retries next tick); Premium-settled slots not refunded; refund sweeps
@@ -275,7 +340,8 @@ TSX (`scripts/legal-md-to-tsx.py`) from the current `legal/privacy-policy.md` be
 - **Откат:** `git revert` of the branch commits; no data to undo (ledger keys are the same `refund:match:…`).
   Bare tombstones written meanwhile are harmless after a revert (they restore nothing) and age out in 24 months.
 
-**PENDING 2026-10-13 — DB pool 10 + background-scan indexes (MIGRATION, additive).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — DB pool 10 + background-scan indexes (MIGRATION, additive).**
+- **Итог 2026-10-26:** boot log `db pool connection_limit=10`; 0 pool errors after the restart.
 Same branch as the block below, ship together. Migration `20261013120000_background_scan_indexes`: three plain btree
 indexes (`users(status, status_message_id)`, `matches(peer_wait_message_id_a)`, `matches(peer_wait_message_id_b)`), no row
 touched; order against the restart does not matter (the old code runs the same queries, slower). Pool: the bot now opens
@@ -292,7 +358,7 @@ up to `DB_CONNECTION_LIMIT = 10` connections instead of Prisma's 3 on the drople
   redeploy); indexes — harmless to keep; code revert works with them in place (`DROP INDEX` only if ever needed, and then
   the migration row must be resolved too).
 
-**PENDING 2026-10-13 — Background-job hardening: hangs, leaks, API latency (code only).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Background-job hardening: hangs, leaks, API latency (code only).**
 Branch `claude/server-background-tasks-optimization-v4mykb`. No new env var, no new dependency; the migration and pool are the block above.
 Behaviour visible to ops: a founder alert «завис» when a cron run stays in flight >30 min; hourly sweeps now fire at
 :07/:13/:17/:23/:37/:43/:47 and stranded/no-match retries at :04/:08 past each quarter (env overrides still win);
@@ -304,7 +370,7 @@ Demo: same code; nothing demo-specific beyond capped driver maps.
   src/services/render src/services/match-engine-pool.test.ts`.
 - **Откат:** `git revert` of the branch commits; nothing persistent to undo.
 
-**PENDING 2026-10-13 — Dead-match refund recovery: hourly sweep + partner refund inside account deletion (code only).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Dead-match refund recovery: hourly sweep + partner refund inside account deletion (code only).**
 Merged into `main` 2026-10-13 with the money audit: the partner refund on account deletion is now done by the money
 audit's in-transaction cancel refund (`claimOneMatch`); this branch's separate deletion loop was not carried over.
 No migration, no env required (optional `DEAD_MATCH_REFUND_CRON_SCHEDULE`, default `30 * * * *`), no flag, no route.
@@ -321,7 +387,7 @@ iOS: no contract change. Demo: same code, founder feed off there.
 - **Откат:** previous release directory + restart. Persisted: ordinary `refund` ledger rows (real credits, keep them)
   and `refund_error` markers on `settled` passes, which nothing else reads.
 
-**PENDING 2026-10-13 — Simultaneous actions on one match: row locks + compare-and-set (code only).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-13 — Simultaneous actions on one match: row locks + compare-and-set (code only).**
 No migration, no env, no flag, no new route. What changes at runtime: the calendar save, the 48h stall cancel and the
 venue board's "keep the original" now run as one `SELECT … FOR UPDATE` transaction on the match row
 (`services/match-row-lock.ts`); venue finalization reruns once after a run that a second confirm joined; the venue-change
@@ -338,7 +404,7 @@ Demo: same code; a puppet calendar save racing the visitor's now counts as acted
 - **Откат:** previous release directory + restart. Nothing persisted needs undoing: new ledger keys are plain
   `external_payment_id` strings, and `refund_failed` rows are exactly what the old sweep already retries.
 
-**PENDING 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-11 — First-drop calibration window (MIGRATION, additive).**
 Migration `20261011180000_first_drop_calibration`: `profiles.calibration_until TIMESTAMP(3)` nullable, no default,
 no row rewritten — apply BEFORE the restart (the new code selects the column in the eligibility scan, the famine
 notice, `/v1/countdown`, `/v1/pulse` and the agent context → P2022 without it). Env: `FIRST_DROP_CALIBRATION_HOURS`
@@ -354,7 +420,8 @@ Demo: same code; demo personas are pre-completed, so no window appears there.
   hold off without a revert (already-armed windows still expire on their own within 24h — to release them at once:
   `update profiles set calibration_until = null where calibration_until > now()`).
 
-**PENDING 2026-10-08 — «The Morning After», Date Wishlist, Premium без покрытия билета (миграция `20261012120000_date_wishlist_morning_after`).**
+**Deployed 2026-10-26 (was PENDING; production `23b0f3f7`, 06:31–06:35 UTC) 2026-10-08 — «The Morning After», Date Wishlist, Premium без покрытия билета (миграция `20261012120000_date_wishlist_morning_after`).**
+- **Итог 2026-10-26:** migration applied (`premium_ticket_cover_until` stamped 0 rows — no paid-up Premium); `WISHLIST_FEATURE_ENABLED=true` in `/opt/gennety/.env`; `MORNING_AFTER_ENABLED` and `WISHLIST_APPSTORE_ENABLED` stay OFF (cheat sheet not live; founder asked for the wishlist only). Legal gate met: gennety.com shows privacy v4.4 / terms v3.2 (website `1fa1491`).
 Landed in main 2026-10-12 by merging `worktree-date-wishlist`; the migration was renumbered from `20261008120000` (it shared
 that timestamp with the deployed `profile_music_providers` and sorted before `first_drop_calibration`) — same SQL.
 Backend + Mini App + legal. Schema: additive columns (`matches.morning_after_*`, `mutual_interest_at`; `profiles.wishlist_*`;

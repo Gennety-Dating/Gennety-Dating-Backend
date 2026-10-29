@@ -22,7 +22,7 @@ import { type MusicTrack, type WireMusicTrack, withLegacyMusicFields } from "./t
  *      Spotify user id.
  *   3. The callback bounces to `gennety://spotify-import?status=…`, which ends
  *      the web session; the app collects the candidates with
- *      `peekTopTracksImport` and the person picks up to three.
+ *      `peekTopTracksImport` and the person picks up to five (`MAX_PROFILE_TRACKS`).
  *
  * State and candidates live in process memory, not a table: production is one
  * PM2 process, an attempt lives ten minutes, and a restart in between costs

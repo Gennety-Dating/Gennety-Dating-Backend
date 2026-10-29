@@ -33,8 +33,13 @@ a regression test for legacy Prisma rows and explicit consent values.
 3. After restart, public `/v1/ping` returned 200. Invalid ID token returned
    401 `Invalid Telegram token`. The poller started normally. The first probe
    during startup returned 502; the next probe passed after startup.
-4. Actual iPhone login requested from the founder; not claimed confirmed until
-   the founder reports the result.
+4. On 2026-10-21 the founder confirmed successful Telegram login on the personal
+   iPhone after relaunch and retry. The earlier generic SDK failure did not recur.
+   A brief consent-screen flash was separately traced to iOS publishing the
+   signed-in state before loading the existing profile; the iOS fix and fresh
+   main build are being verified separately.
+5. SMS remains blocked by Twilio: a single authorized request on 2026-10-21
+   returned HTTP 403 with error 60238. No provider configuration was changed.
 
 The mandatory dependency audit was run and **failed on existing advisories**
 (3 critical, 1 high, 3 moderate, of which 2 ignored), including `proxy-addr`.

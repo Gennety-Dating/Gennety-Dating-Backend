@@ -2428,6 +2428,18 @@
         "cozy",
         "lively"
       ]
+    },
+    {
+      "placeId": "ChIJnZmXMgDP1EARp8do-YWl_ww",
+      "name": "CLAVE",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "cozy"
+      ]
     }
   ],
   "excludedPlaces": [

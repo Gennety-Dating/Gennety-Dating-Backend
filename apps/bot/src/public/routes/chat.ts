@@ -40,11 +40,13 @@ import {
   wishlistCardViews,
   type WishlistCard,
 } from "../../services/chat-wishlist.js";
+import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 
 /**
  * Native cards this build draws under a reply (decision 2026-10-15): the
- * comma-separated `X-Gennety-Chat-Cards` header, e.g. `wishlist`. A build that
- * sends nothing gets no card — and the agent no tool that would make one.
+ * comma-separated `X-Gennety-Chat-Cards` header, e.g. `wishlist, offer`. A
+ * build that sends nothing gets no card — and the agent no tool that would
+ * make one.
  */
 function chatCardsOf(req: Request): Set<string> {
   const raw = req.get("x-gennety-chat-cards") ?? "";
@@ -67,6 +69,7 @@ function chatCardsOf(req: Request): Set<string> {
  *   GET   /v1/chat/sessions       the person's chats, most recently active first
  *   PATCH /v1/chat/sessions/:id   rename a chat
  *   POST  /v1/chat/messages/:id/wishlist  «Add» / «Not now» on a wishlist card
+ *   POST  /v1/chat/messages/:id/offer     accept / decline a change-offer card
  *   GET   /v1/chat/topics         the pre-sessions index, kept for older builds
  *
  * Chats (decision journal 2026-09-30): every turn lands in one chat — the one
@@ -260,6 +263,8 @@ chatRouter.post(
         // The card under the reply. Omitted — not null — when there is none,
         // like `context`: the generated Swift client drops a nullable object.
         ...(turn.attachment ? { attachment: turn.attachment } : {}),
+        // The change-offer card (decision 2026-10-28) — omitted when none.
+        ...(turn.offer ? { offer: turn.offer } : {}),
       };
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
@@ -362,6 +367,7 @@ chatRouter.post(
       ...(turn.receipts ? { receipts: turn.receipts } : {}),
       ...(turn.action ? { action: turn.action } : {}),
       ...(turn.attachment ? { attachment: turn.attachment } : {}),
+      ...(turn.offer ? { offer: turn.offer } : {}),
     });
   },
 );
@@ -462,6 +468,10 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
+    // A change-offer card rides `offer`, never `attachment` (that one is the
+    // wishlist card only). Not behind a flag: the card exists only on rows of
+    // builds that asked for it.
+    const rowOffer = row.role === "assistant" ? readChangeOffer(row.attachment) : null;
     const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
     return {
       id: row.id,
@@ -476,6 +486,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       // none: the generated Swift client drops a nullable object silently.
       ...contextField(readChatContextSnapshot(row.context)),
       ...(cardById.get(row.id) ? { attachment: cardById.get(row.id) } : {}),
+      ...(rowOffer ? { offer: changeOfferView(rowOffer) } : {}),
     };
   });
   console.log(
@@ -533,6 +544,49 @@ chatRouter.post(
     }
     const [attachment] = await wishlistCardViews([result.card]);
     res.json({ attachment });
+  },
+);
+
+/**
+ * POST /v1/chat/messages/:id/offer — the person's answer to a change-offer card
+ * under an agent reply (decision journal 2026-10-28).
+ *
+ *   { "action": "accept" }   — run exactly the stored change
+ *   { "action": "decline" }  — «Not now»
+ *
+ * The tap is the consent: accept runs the stored tool through the agent's own
+ * executors and answers `{ offer }` with its receipt. Idempotent and locked per
+ * message; an offer no longer open answers its current state unchanged. Someone
+ * else's message or a reply without an offer — 404. A change the executor
+ * refuses — 422 with its message, the offer stays open.
+ *
+ * Writes the profile, so it asks what a turn asks (`requireAgentAccess`) — but
+ * spends no tokens, so no `usageGuard`.
+ */
+chatRouter.post(
+  "/messages/:id/offer",
+  requireAgentAccess,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = String(req.params.id ?? "").toLowerCase();
+    if (!isUuid(id)) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const action = req.body?.action;
+    if (action !== "accept" && action !== "decline") {
+      res.status(400).json({ error: "bad-request" });
+      return;
+    }
+    const result = await resolveChangeOffer(req.userId!, id, action);
+    if (!result.ok) {
+      if (result.error === "not-found") {
+        res.status(404).json({ error: "not-found" });
+      } else {
+        res.status(422).json({ error: "change-failed", message: result.message });
+      }
+      return;
+    }
+    res.json({ offer: changeOfferView(result.offer) });
   },
 );
 

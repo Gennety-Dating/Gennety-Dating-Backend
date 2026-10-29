@@ -1251,8 +1251,9 @@ profile dirty and refreshes in one place) and read by `handlers/matching/pitch.t
 
 ### `profile_music_tracks`
 
-Up to three tracks a person pinned to their profile (decisions 2026-09-11,
-2026-10-08), Apple Music and Spotify mixed: `position` 0..2,
+Up to five tracks a person pinned to their profile (decisions 2026-09-11,
+2026-10-08, 2026-10-19 — three until then), Apple Music and Spotify mixed:
+`position` 0..4 (no DB check — the cap is `MAX_PROFILE_TRACKS` in code),
 `@@unique([userId, position])` + `@@unique([userId, provider, trackId])`,
 `onDelete: Cascade`. `provider` is `spotify` | `apple_music` (text, checked in
 code); `trackId` is the provider's id; `storefront` the Apple Music country the
