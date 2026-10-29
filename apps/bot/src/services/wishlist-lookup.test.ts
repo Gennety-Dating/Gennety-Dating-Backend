@@ -773,7 +773,26 @@ describe("lookupWishlistEntry — link", () => {
     description: "Цветочный аромат с пионом и розой.",
   };
 
-  it("reads the page, normalises it once and returns exactly one link candidate", async () => {
+  it("benchmarks cold structured product recognition with controlled upstream latency", async () => {
+    for (let sample = 1; sample <= 3; sample += 1) {
+      store.clear();
+      let aiCalls = 0;
+      const fetchFn = vi.fn(async (url: string | URL | Request) => {
+        const ai = String(url).endsWith("/chat/completions");
+        if (ai) aiCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, ai ? 500 : 100));
+        return ai
+          ? json({ choices: [{ message: { content: JSON.stringify(NORMALISED) }, finish_reason: "stop" }] })
+          : html(NOTINO_PAGE);
+      });
+      const start = performance.now();
+      const result = await lookupWishlistEntry({ userId: freshUser(), kind: "url", value: "https://www.notino.de/chloe/chloe-eau-de-parfum/", language: "ru", now: NOW, fetchFn: fetchFn as never });
+      expect(result.ok).toBe(true);
+      process.stdout.write(`SHARE_SERVER_BENCH sample=${sample} duration_ms=${Math.round(performance.now() - start)} ai_calls=${aiCalls}\n`);
+    }
+  });
+
+  it("reads a structured product without a model round-trip and returns one exact candidate", async () => {
     const fetchFn = linkFetch(html(NOTINO_PAGE), NORMALISED);
     const result = await lookupWishlistEntry({
       userId: freshUser(),
@@ -794,12 +813,20 @@ describe("lookupWishlistEntry — link", () => {
           productUrl: "https://www.notino.de/chloe/chloe-eau-de-parfum/",
           imageUrl: "https://www.notino.de/images/chloe-edp.jpg",
           priceBand: "€€",
-          description: "Цветочный аромат с пионом и розой.",
+          description: null,
           source: "link",
         },
       ],
     });
 
+    expect(fetchFn.mock.calls.some(([url]) => String(url).endsWith("/chat/completions"))).toBe(false);
+    expect([...store.values()][0]).toMatchObject({ kind: "url" });
+  });
+
+  it("keeps AI normalisation for pages without a structured Product", async () => {
+    const fetchFn = linkFetch(html(NOTINO_PAGE.replace('type="application/ld+json"', 'type="application/json"')), NORMALISED);
+    const result = await lookupWishlistEntry({ userId: freshUser(), kind: "url", value: "https://www.notino.de/chloe/chloe-eau-de-parfum/", language: "ru", now: NOW, fetchFn: fetchFn as never });
+    expect(result.ok).toBe(true);
     const llmCall = fetchFn.mock.calls.find(([url]) => String(url).endsWith("/chat/completions"));
     const body = JSON.parse(String(llmCall![1]!.body)) as {
       model: string;
@@ -811,11 +838,29 @@ describe("lookupWishlistEntry — link", () => {
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.messages[0]!.content).toContain("Russian");
     expect(JSON.parse(body.messages[1]!.content)).toMatchObject({
-      pageTitle: "Chloé Eau de Parfum",
-      brand: "Chloé",
+      pageTitle: "Chloé Eau de Parfum für Damen 50 ml",
+      brand: null,
       siteName: "Notino",
     });
     expect([...store.values()][0]).toMatchObject({ kind: "url" });
+  });
+
+  it.each([
+    { name: "Mystery object" },
+    { name: "Perfume lipstick set" },
+  ])("keeps AI for an unknown or conflicting product category: $name", async (product) => {
+    const page = `<meta property="og:image" content="https://shop.example.com/photo.jpg"><script type="application/ld+json">${JSON.stringify({ "@type": "Product", ...product })}</script>`;
+    const fetchFn = linkFetch(html(page), NORMALISED);
+    await lookupWishlistEntry({ userId: freshUser(), kind: "url", value: "https://shop.example.com/item", language: "ru", now: NOW, fetchFn: fetchFn as never });
+    expect(fetchFn.mock.calls.some(([url]) => String(url).endsWith("/chat/completions"))).toBe(true);
+  });
+
+  it("does not fast-track the first product of a category/listing page", async () => {
+    const page = `<meta property="og:image" content="https://shop.example.com/photo.jpg"><script type="application/ld+json">${JSON.stringify({ "@type": "ItemList", itemListElement: [{ "@type": "Product", name: "Eau de Parfum" }] })}</script>`;
+    const fetchFn = linkFetch(html(page), { ...NORMALISED, recognised: false });
+    const result = await lookupWishlistEntry({ userId: freshUser(), kind: "url", value: "https://shop.example.com/perfumes", language: "ru", now: NOW, fetchFn: fetchFn as never });
+    expect(result).toEqual({ ok: false, error: "not_found" });
+    expect(fetchFn.mock.calls.some(([url]) => String(url).endsWith("/chat/completions"))).toBe(true);
   });
 
   it("refuses a link to an internal host without any request", async () => {

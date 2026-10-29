@@ -138,10 +138,12 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<ShareVideoReadOutcome>>();
 
 /** Tests only. */
 export function clearShareVideoCache(): void {
   cache.clear();
+  inFlight.clear();
 }
 
 function cacheGet(key: string, now: number): CacheEntry["outcome"] | null {
@@ -224,10 +226,14 @@ async function defaultMetadata(ref: ShareVideoRef): Promise<ShareVideoMetadata |
   }
 
   const short = { platform: ref.platform, externalId: ref.externalId, url: ref.url };
-  const resolved = await resolveShortVideoRef(short, { timeoutMs });
+  // Instagram metadata already follows redirects and parses that final page.
+  // Resolving a share stub first fetched the same reel HTML twice in series.
+  const resolved = short.platform === "instagram"
+    ? { ok: true as const, ref: short }
+    : await resolveShortVideoRef(short, { timeoutMs });
   if (!resolved.ok) return null;
   const read = await fetchShortVideoMetadata(resolved.ref, { timeoutMs });
-  if (!read.ok) return null;
+  if (!read.ok || !read.ref.externalId) return null;
   return {
     ref: { platform: read.ref.platform, externalId: read.ref.externalId, url: read.ref.url },
     caption: read.metadata.caption,
@@ -414,9 +420,28 @@ export async function readSharedVideo(
   if (!ref) return { ok: false, error: "not_video" };
 
   const now = deps.now ?? Date.now;
-  const key = `${ref.url}|${viewer.language}`;
+  // City affects place suggestions in the prompt, so it is part of both keys.
+  const key = `${ref.url}|${viewer.language}|${viewer.cityKey ?? ""}`;
   const cached = cacheGet(key, now());
   if (cached) return cached;
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+  const work = readUncachedVideo(ref, viewer, deps, key, now);
+  inFlight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    if (inFlight.get(key) === work) inFlight.delete(key);
+  }
+}
+
+async function readUncachedVideo(
+  ref: ShareVideoRef,
+  viewer: { language: Language; cityKey: string | null },
+  deps: ShareVideoReadDeps,
+  key: string,
+  now: () => number,
+): Promise<ShareVideoReadOutcome> {
 
   const metadataFn = deps.metadata ?? defaultMetadata;
   const meta = await metadataFn(ref).catch(() => null);
@@ -474,6 +499,9 @@ export async function readSharedVideo(
     grounding: { caption: meta.caption, coverDescription: analysis?.coverDescription || undefined },
   };
   // A model miss is not cached: the next share of the same reel tries again.
-  if (analysis) cachePut(key, outcome, now());
+  if (analysis) {
+    cachePut(key, outcome, now());
+    cachePut(`${canonical}|${viewer.language}|${viewer.cityKey ?? ""}`, outcome, now());
+  }
   return outcome;
 }

@@ -35,8 +35,8 @@ import { uploadWishlistImage } from "./storage.js";
  * confirm from photo cards.
  *
  *  - a **link** is read through the SSRF perimeter (`fetchPublicPage`), its
- *    Open Graph / JSON-LD product data parsed, and ONE cheap structured call
- *    normalises it into a single candidate;
+ *    Open Graph / JSON-LD product data parsed. An unambiguous structured
+ *    Product becomes a candidate directly; other pages use one normaliser call;
  *  - a **text query** goes to the OpenAI Responses API with the hosted
  *    `web_search` tool (founder's choice — the existing OPENAI_API_KEY, no new
  *    provider), which answers up to `WISHLIST_LOOKUP_MAX_CANDIDATES` found
@@ -438,23 +438,27 @@ function spaceOutControlChars(value: string): string {
 }
 
 /** The first schema.org Product in a page's JSON-LD blocks (incl. `@graph`). */
-function findJsonLdProduct(html: string): JsonObject | null {
+function findJsonLdProduct(html: string, requireSingle = false): JsonObject | null {
+  const products: JsonObject[] = [];
+  let listing = false;
   const visit = (node: unknown, depth: number): JsonObject | null => {
     if (depth > 5) return null;
     if (Array.isArray(node)) {
       for (const child of node) {
         const hit = visit(child, depth + 1);
-        if (hit) return hit;
+        if (hit && !requireSingle) return hit;
       }
       return null;
     }
     if (!isObject(node)) return null;
+    if (requireSingle && typeIncludes(node, ["ItemList", "CollectionPage", "SearchResultsPage"])) listing = true;
     if (typeIncludes(node, ["Product", "ProductGroup", "IndividualProduct", "ProductModel"])) {
+      products.push(node);
       return node;
     }
     for (const key of ["@graph", "mainEntity", "itemListElement", "item"]) {
       const hit = visit(node[key], depth + 1);
-      if (hit) return hit;
+      if (hit && !requireSingle) return hit;
     }
     return null;
   };
@@ -475,9 +479,9 @@ function findJsonLdProduct(html: string): JsonObject | null {
       }
     }
     const hit = visit(parsed, 0);
-    if (hit) return hit;
+    if (hit && !requireSingle) return hit;
   }
-  return null;
+  return requireSingle && !listing && products.length === 1 ? products[0]! : null;
 }
 
 function stringOf(value: unknown): string | null {
@@ -847,12 +851,32 @@ async function lookupLink(url: string, ctx: LookupContext): Promise<WishlistLook
     timeoutMs: pageBudget,
     ...(ctx.fetchFn ? { fetchFn: ctx.fetchFn } : {}),
   });
+  if (ctx.signal.aborted) return { ok: false, error: "timeout" };
 
   let meta: ProductPageMeta;
   let productUrl = url;
   if (page.ok) {
     productUrl = canonicalHttpsUrl(page.finalUrl) ?? url;
     meta = parseProductPage(page.body, page.finalUrl);
+    // A shop's explicit Product record already supplies the actual name,
+    // brand and photo. Skip the serial model round-trip only when the
+    // category is unambiguous; generic pages still need the normaliser.
+    const product = findJsonLdProduct(page.body, true);
+    const name = product ? stringOf(product.name) : null;
+    const category = product ? structuredProductCategory(product, ctx.category) : null;
+    if (name && meta.imageUrl && category) {
+      const candidate = buildCandidate({
+        title: name,
+        brand: meta.brand,
+        category,
+        productUrl,
+        imageUrl: meta.imageUrl,
+        priceBand: priceBandFor(meta.priceAmount, meta.priceCurrency),
+        description: null,
+        source: "link",
+      });
+      if (candidate) return { ok: true, candidates: [candidate] };
+    }
   } else if (page.error === "blocked") {
     return { ok: false, error: "blocked" };
   } else if (page.error === "not_found") {
@@ -931,6 +955,25 @@ async function lookupLink(url: string, ctx: LookupContext): Promise<WishlistLook
     source: "link",
   });
   return candidate ? { ok: true, candidates: [candidate] } : { ok: false, error: "not_found" };
+}
+
+/** Conservative product-name rules; an unknown or conflicting category uses AI. */
+function structuredProductCategory(
+  product: Record<string, unknown>,
+  hint: WishlistCategory | undefined,
+): WishlistCategory | null {
+  if (hint) return hint;
+  const explicit = nameOf(product.category)?.toLowerCase();
+  if (explicit && isWishlistCategory(explicit)) return explicit;
+  const text = `${explicit ?? ""} ${stringOf(product.name) ?? ""}`;
+  const rules: [WishlistCategory, RegExp][] = [
+    ["perfume", /\b(?:eau de (?:parfum|toilette|cologne)|perfume|parfum|parfüm)\b|парфюм|парфум|туалетн[а-яіїє]* вод/iu],
+    ["beauty", /\b(?:lipstick|mascara|shampoo|conditioner|moisturizer|sunscreen)\b|помад[аы]|тушь|туш для|шампун|сонцезахис|солнцезащит/iu],
+    ["fashion", /\b(?:cardigan|t-shirt|sneakers|jeans|hoodie|sweater)\b|кардиган|кроссовк|кросівк|футболк|джинс/iu],
+    ["jewelry", /\b(?:earrings|necklace|bracelet)\b|серьг|сережк|намисто|браслет/iu],
+  ];
+  const matches = rules.filter(([, pattern]) => pattern.test(text));
+  return matches.length === 1 ? matches[0]![0] : null;
 }
 
 /* ── text query: Responses API + web_search ─────────────────────────────── */

@@ -90,6 +90,33 @@ const TIKTOK = "https://www.tiktok.com/@kyiv.coffee/video/7312345678901234567?_r
 describe("readSharedVideo", () => {
   beforeEach(() => clearShareVideoCache());
 
+  it("coalesces simultaneous reads and a question's grounding read into one analysis", async () => {
+    const d = deps({ analyze: vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return analysis();
+    }) });
+    const results = await Promise.all(Array.from({ length: 4 }, () => readSharedVideo(TIKTOK, viewer, d)));
+    expect(results.every((result) => result.ok)).toBe(true);
+    expect(d.analyze).toHaveBeenCalledTimes(1);
+    expect(d.calls.poster).toBe(1);
+  });
+
+  it("does not reuse city-dependent suggestions for another city", async () => {
+    const d = deps({ analyze: vi.fn(async () => analysis()) });
+    await readSharedVideo(TIKTOK, viewer, d);
+    await readSharedVideo(TIKTOK, { ...viewer, cityKey: "warsaw" }, d);
+    expect(d.analyze).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the in-flight entry after an analysis failure so retry can succeed", async () => {
+    const analyze = vi.fn().mockRejectedValueOnce(new Error("temporary")).mockResolvedValueOnce(analysis());
+    const d = deps({ analyze });
+    await readSharedVideo(TIKTOK, viewer, d);
+    const retry = await readSharedVideo(TIKTOK, viewer, d);
+    expect(retry.ok && retry.video.interest?.label).toBe("Спешелти-кофе");
+    expect(analyze).toHaveBeenCalledTimes(2);
+  });
+
   it("reads a video into title, interest, item and questions; caches it", async () => {
     const d = deps();
     const result = await readSharedVideo(TIKTOK, viewer, d);
