@@ -13,6 +13,17 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-29 — share recognition latency (code only; no migration or new flag).**
+
+Structured single-Product lookup skips AI when category/name/photo are explicit;
+Instagram share stubs no longer fetch the final HTML twice; concurrent video
+reads share work, with language and city in the cache key. The iOS companion
+changes are in Gennety-iOS `679b91b3` and the current share-layout branch
+`6067462f`. Controlled timings and limits are documented in
+`docs/architecture/decisions/2026-10-29-share-recognition-latency.md`.
+Production rollout and physical-device before/after measurements are pending.
+Demo uses the same enabled share code; no data or schema change.
+
 **PENDING 2026-10-29 — App chat wishlist removal (code only; no migration or native update).**
 
 1. With `WISHLIST_FEATURE_ENABLED`, the app agent gets `get_my_wishlist` and
