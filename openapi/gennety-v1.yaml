@@ -9691,7 +9691,10 @@ components:
             properties:
               key:
                 type: string
-                enum: [match, blind, plan, date, morning]
+                description: >-
+                  Open set — today `match`, `blind`, `plan`, `date`, `morning`.
+                  A closed enum would make one new step fail the whole reply;
+                  draw a key you do not know without a glyph.
               title:
                 type: string
                 description: One bold word or value; for `match` the drop time, e.g. «18:00».
@@ -9700,8 +9703,9 @@ components:
                 description: One short line under the title.
         here:
           type: [string, "null"]
-          enum: [match, blind, plan, date, morning, null]
-          description: The person's step; null when it could not be read (show no mark).
+          description: >-
+            The `key` of the person's step; null when it could not be read
+            (show no mark).
         hereLabel:
           type: string
           description: The mark's text, e.g. «ты здесь».
