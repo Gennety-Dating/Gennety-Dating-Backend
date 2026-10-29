@@ -3453,7 +3453,8 @@ paths:
         under a reply lists them in the `X-Gennety-Chat-Cards` header on this
         route and on `/v1/chat/voice` — comma-separated, case and spaces
         ignored: `wishlist` (`ChatWishlistCard` in `attachment`) and, since
-        2026-10-28, `offer` (`ChatChangeOffer` in `offer`). Sent like
+        2026-10-28, `offer` (`ChatChangeOffer` in `offer`) and, since
+        2026-10-29, `guide` (`ChatAppGuide` in `guide`). Sent like
         `X-Gennety-Build`, by the client's middleware, so it is not an
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
@@ -3563,6 +3564,13 @@ paths:
                       two buttons — only for a build that listed `offer` in
                       `X-Gennety-Chat-Cards`. Absent otherwise (treat absent
                       and null alike). Never together with `attachment`.
+                  guide:
+                    $ref: "#/components/schemas/ChatAppGuide"
+                    description: >-
+                      «How the app works» — five steps with the person's
+                      current one marked; only for a build that listed `guide`
+                      in `X-Gennety-Chat-Cards`. Absent otherwise. Never
+                      together with `attachment` or `offer`.
                       Answered through `POST /v1/chat/messages/{id}/offer`.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -3676,6 +3684,7 @@ paths:
                   action: { $ref: "#/components/schemas/AgentAction" }
                   attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
                   offer: { $ref: "#/components/schemas/ChatChangeOffer" }
+                  guide: { $ref: "#/components/schemas/ChatAppGuide" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -9656,6 +9665,46 @@ components:
                 The change-offer card under this assistant reply, with its
                 current state. Absent on every other row (treat absent and null
                 alike). A row never carries both `offer` and `attachment`.
+            guide:
+              $ref: "#/components/schemas/ChatAppGuide"
+              description: >-
+                The «how the app works» card under this assistant reply, as it
+                was shown (the stage is not re-read). Absent on every other row.
+
+    ChatAppGuide:
+      description: |
+        «How the app works» under a chat reply (decision 2026-10-29): the
+        product loop as five steps, with the person's step when the card was
+        made marked «here». The agent calls it when asked how Gennety works;
+        its reply text says only where they are and what happens next. Shows
+        only; nothing to tap. Text is in the person's language; the app picks
+        each step's glyph by `key`.
+      type: object
+      required: [steps, here, hereLabel]
+      properties:
+        steps:
+          type: array
+          description: The loop in order — `match`, `blind`, `plan`, `date`, `morning`.
+          items:
+            type: object
+            required: [key, title, line]
+            properties:
+              key:
+                type: string
+                enum: [match, blind, plan, date, morning]
+              title:
+                type: string
+                description: One bold word or value; for `match` the drop time, e.g. «18:00».
+              line:
+                type: string
+                description: One short line under the title.
+        here:
+          type: [string, "null"]
+          enum: [match, blind, plan, date, morning, null]
+          description: The person's step; null when it could not be read (show no mark).
+        hereLabel:
+          type: string
+          description: The mark's text, e.g. «ты здесь».
 
     ChatChangeOffer:
       description: |

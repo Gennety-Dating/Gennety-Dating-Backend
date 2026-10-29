@@ -52,6 +52,19 @@ import {
   type ChangeOffer,
   type ChangeOfferView,
 } from "./chat-offer.js";
+import {
+  GUIDE_CARD_CLIENT_TOKEN,
+  SHOW_APP_GUIDE_TOOL,
+  SHOW_APP_GUIDE_TOOL_NAME,
+  appGuideNote,
+  appGuideToolResult,
+  appGuideView,
+  buildAppGuide,
+  loadGuideStage,
+  readAppGuide,
+  type AppGuide,
+  type AppGuideView,
+} from "./chat-app-guide.js";
 import { afterChatTurn } from "./chat-session-digest.js";
 import {
   PAST_CHAT_TOOLS,
@@ -266,6 +279,19 @@ export const OFFER_ADDENDUM = `### Offers are buttons (a card under your reply)
   offer. Trust it. Declined: don't offer the same thing again in this chat
   unless they bring it up.`;
 
+/**
+ * The «how the app works» part of the addendum (decision journal 2026-10-29) —
+ * only on turns of a build that draws the card (`X-Gennety-Chat-Cards: guide`).
+ */
+export const GUIDE_ADDENDUM = `### How the app works (a card under your reply)
+- When they ask how Gennety works, what happens next in general, or are
+  confused about the flow, call \`show_app_guide\`: a strip of the five steps
+  with «you are here» on their real stage appears under your reply.
+- Your text is one or two sentences: where they are now and what happens next
+  for them. Never list the steps in words and never describe the card.
+- There is no Help screen in this app. Never promise one, never say a button
+  appeared unless a tool result says so.`;
+
 /** Where the two cards meet: wishlist things never become a profile offer. */
 const OFFER_WISHLIST_NOTE = `- Things for their Date Wishlist are not a profile change: they go on the
   wishlist card (\`propose_wishlist_items\`), never through \`offer_change\`, and
@@ -352,17 +378,20 @@ const CHAT_TOOLS = [
  * чатов. Порядок значения не имеет, а совпадений имён нет — проверяется тестом.
  */
 const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS, ...PAST_CHAT_TOOLS];
-type ToolList = Array<(typeof ALL_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL>;
+type ToolList = Array<
+  (typeof ALL_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL
+>;
 
 /**
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-function turnTools(options: { wishlistCards: boolean; offerCards: boolean }): ToolList {
+function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean }): ToolList {
   return [
     ...ALL_TOOLS,
     ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
+    ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
   ];
 }
 
@@ -379,6 +408,8 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [PROPOSE_WISHLIST_TOOL_NAME]: "confirm",
   // Writes nothing: the card's accept button runs the change (`chat-offer.ts`).
   [OFFER_CHANGE_TOOL_NAME]: "confirm",
+  // Reads the person's stage, writes nothing (`chat-app-guide.ts`).
+  [SHOW_APP_GUIDE_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
 };
 
@@ -445,8 +476,9 @@ export interface ChatTurnInput {
   /**
    * Native cards this app build draws under a reply — the
    * `X-Gennety-Chat-Cards` header. `wishlist` lets the agent propose wishlist
-   * items, `offer` lets it offer a profile change as a card with buttons; an
-   * older build never gets a card it would drop.
+   * items, `offer` lets it offer a profile change as a card with buttons,
+   * `guide` lets it show how the app works as a strip of steps; an older build
+   * never gets a card it would drop.
    */
   chatCards?: ReadonlySet<string>;
 }
@@ -472,6 +504,8 @@ export interface ChatTurnResult {
   attachment?: WishlistCardView;
   /** The change-offer card stored under this reply (`messages.attachment`, kind `change_offer`). */
   offer?: ChangeOfferView;
+  /** The «how the app works» card stored under this reply (`messages.attachment`, kind `app_guide`). */
+  guide?: AppGuideView;
 }
 
 export interface ChatDeps {
@@ -538,12 +572,13 @@ async function runTurnInner(
 
   const wishlistCards = env.WISHLIST_FEATURE_ENABLED && (input.chatCards?.has(WISHLIST_CARD_CLIENT_TOKEN) ?? false);
   const offerCards = input.chatCards?.has(OFFER_CARD_CLIENT_TOKEN) ?? false;
-  const tools = turnTools({ wishlistCards, offerCards });
+  const guideCards = input.chatCards?.has(GUIDE_CARD_CLIENT_TOKEN) ?? false;
+  const tools = turnTools({ wishlistCards, offerCards, guideCards });
   const { messages, openedNewSession, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
     userId,
     telegramId,
     sessionId,
-    { wishlistCards, offerCards },
+    { wishlistCards, offerCards, guideCards },
   );
   const consent = deps.consent ?? personConsented;
   // The offer a "да" would be answering: the assistant's message right before
@@ -562,6 +597,7 @@ async function runTurnInner(
   let pendingAction: MenuAgentAction | null = null;
   let card: WishlistCard | null = null;
   let offer: ChangeOffer | null = null;
+  let guide: AppGuide | null = null;
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
@@ -637,6 +673,49 @@ async function runTurnInner(
         }
       }
 
+      // The «how the app works» card: the person's stage is read here, the card
+      // is stored with the reply below. One card per reply.
+      if (name === SHOW_APP_GUIDE_TOOL_NAME) {
+        if (!guideCards) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        if (guide || card || offer) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, error: "one_card_per_reply", instruction: "A card is already under this reply — answer now." }),
+          });
+          continue;
+        }
+        // An unreadable stage costs the «here» mark, never the card.
+        const here = await loadGuideStage(userId).catch((err: unknown) => {
+          console.warn("[chat] guide stage unavailable:", err);
+          return null;
+        });
+        guide = buildAppGuide(language, here);
+        messages.push({ role: "tool", tool_call_id: tc.id, content: appGuideToolResult(guide) });
+        continue;
+      }
+
+      // A screen the app has no page for (decision journal 2026-10-29): the
+      // button is dropped on the phone, and the model, told it was given,
+      // insisted three times on a Help button that was not there.
+      if (name === "open_screen" && APP_SCREENLESS.has(screenArg(tc.function.arguments))) {
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            success: false,
+            error: "no_such_screen_in_app",
+            instruction: guideCards
+              ? "This app has no such screen and NO button was shown. Never say one appeared. If they asked how the app works, call show_app_guide; otherwise answer in words."
+              : "This app has no such screen and NO button was shown. Never say one appeared — answer in words.",
+          }),
+        });
+        continue;
+      }
+
       // The change-offer card: validated here, stored with the reply below.
       // One card per reply, wishlist or offer — `attachment` holds one.
       if (name === OFFER_CHANGE_TOOL_NAME) {
@@ -644,7 +723,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (offer || card) {
+        if (offer || card || guide) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -671,7 +750,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (card || offer) {
+        if (card || offer || guide) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -785,6 +864,9 @@ async function runTurnInner(
     } else if (offer) {
       // The card asks the question; the line above it must not repeat it.
       lastReply = t(language, "agentOfferCardLine");
+    } else if (guide) {
+      // The card is the explanation; one line above it is enough.
+      lastReply = t(language, "guideCardLine");
     } else if (pendingAction) {
       lastReply = fallbackReply(language);
     } else {
@@ -803,6 +885,7 @@ async function runTurnInner(
       content: lastReply,
       ...(card ? { attachment: card as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && offer ? { attachment: offer as unknown as Prisma.InputJsonValue } : {}),
+      ...(!card && !offer && guide ? { attachment: guide as unknown as Prisma.InputJsonValue } : {}),
     },
   });
   // One open offer at a time: earlier unanswered cards stop working. A failure
@@ -843,7 +926,23 @@ async function runTurnInner(
     ...(pendingAction ? { action: pendingAction } : {}),
     ...(attachment ? { attachment } : {}),
     ...(offer && !card ? { offer: changeOfferView(offer) } : {}),
+    ...(guide && !card && !offer ? { guide: appGuideView(guide) } : {}),
   };
+}
+
+/**
+ * `open_screen` targets the app draws no page for: `menu:help`, `menu:city`
+ * and `rematch:open` have no native screen (iOS `AgentReplyAction.target`).
+ */
+const APP_SCREENLESS = new Set(["help", "city", "rematch"]);
+
+function screenArg(raw: string | undefined): string {
+  try {
+    const screen = (JSON.parse(raw || "{}") as { screen?: unknown }).screen;
+    return typeof screen === "string" ? screen : "";
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -876,7 +975,7 @@ async function buildChatMessages(
   userId: string,
   telegramId: bigint,
   sessionId: string,
-  options: { wishlistCards: boolean; offerCards: boolean },
+  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean },
 ): Promise<{
   messages: OpenAIChatMessage[];
   openedNewSession: boolean;
@@ -914,6 +1013,7 @@ async function buildChatMessages(
     base,
     chatAddendum(options.offerCards),
     options.offerCards ? OFFER_ADDENDUM : null,
+    options.guideCards ? GUIDE_ADDENDUM : null,
     options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
     options.wishlistCards ? WISHLIST_ADDENDUM : null,
     personCard,
@@ -1008,7 +1108,14 @@ async function buildChatMessages(
       if (rowOffer) {
         openOffer = rowOffer.state === "open" ? { messageId: row.id, tool: rowOffer.tool } : null;
       }
-      const note = rowCard ? wishlistCardNote(rowCard) : rowOffer ? changeOfferNote(rowOffer) : null;
+      const rowGuide = readAppGuide((row as { attachment?: unknown }).attachment);
+      const note = rowCard
+        ? wishlistCardNote(rowCard)
+        : rowOffer
+          ? changeOfferNote(rowOffer)
+          : rowGuide
+            ? appGuideNote(rowGuide)
+            : null;
       out.push({ role: "assistant", content: note ? `${content}\n${note}` : content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
