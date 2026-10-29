@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed (demo only) | 2026-10-29 | Current Telegram bot + Mini App `586ae5df`; Profiler cards enabled on demo, isolated schema catch-up, 8,770 tests; GitHub/local main only, tips archived; production unchanged | [2026-10-29-demo.md](./2026-10-29-demo.md) |
 | PENDING | 2026-10-22 | Profiler series finish: shimmer, receipt with confetti and button colours; restart only, same demo policy | [pending.md](./pending.md) |
 | PENDING | 2026-10-21 | Mixed Telegram Profiler: 11 cards / 14 text prompts; travel/topic free, date spots choices; native unchanged; same flag, restart only, demo first | [pending.md](./pending.md) |
 | PENDING | 2026-10-19 | Telegram Profiler interactive batch cards: `PROFILER_CARDS_ENABLED` default off, demo first + real-client iOS/Android/Desktop QA; restart only, no migration or API contract change | [pending.md](./pending.md) |

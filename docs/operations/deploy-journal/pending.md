@@ -7,6 +7,8 @@
 
 Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the original file (newest first).
 
+Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is on demo, with Profiler cards enabled; this does not mark pending production work as deployed.
+
 ---
 
 # Gennety Dating Deploy
