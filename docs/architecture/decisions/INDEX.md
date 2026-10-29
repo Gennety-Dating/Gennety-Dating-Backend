@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-29 | App chat removes a wishlist item on explicit request, including «удали его»; fresh owner read, ambiguity question, single-write budget, success receipt; no native update; production pending | [2026-10-29-chat-wishlist-removal.md](./2026-10-29-chat-wishlist-removal.md) |
 | 2026-10-29 | Backend main histories consolidated; voice+photos and parallel video validation integrated; obsolete tips archived; existing single-branch rule retained; demo-only Telegram release with Profiler cards, production unchanged | [2026-10-29-telegram-demo.md](./2026-10-29-telegram-demo.md) |
 | 2026-10-28 | Предложения агента в чате — карточка с кнопками вместо «да» словами: `offer_change` (ничего не пишет), нажатие `POST /v1/chat/messages/{id}/offer` = согласие и выполняет ровно сохранённое; `messages.attachment` kind `change_offer`, поле `offer`; только сборкам с `X-Gennety-Chat-Cards: offer`; одно открытое предложение; Telegram без изменений | [2026-10-28-chat-change-offer.md](./2026-10-28-chat-change-offer.md) |
 | 2026-10-27 | Лента основателя переезжает с `@sverkausbot` на отдельный бот Gennety (замена `FOUNDER_BOT_TOKEN`, код не меняется; `@sverkausbot` — рабочий бот any/DiskPulse); переключение — скрипт основателя, PENDING | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |

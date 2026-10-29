@@ -24,9 +24,17 @@ const messageCreate = vi.fn(async (a: { data: { content: string } }) => ({
   createdAt: new Date("2026-10-15T10:00:00Z"),
 }));
 let historyRows: unknown[] = [];
+const wishlistItem = { id: "wish-another-13", title: "Another 13", brand: "Le Labo", category: "perfume" };
+const wishlistFindMany = vi.fn(async (_args: unknown) => [wishlistItem]);
+const deleteWishlistItem = vi.fn(async (_userId: string, _itemId: string) => true);
+vi.mock("./wishlist.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./wishlist.js")>()),
+  deleteWishlistItem: (userId: string, itemId: string) => deleteWishlistItem(userId, itemId),
+}));
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: (a: unknown) => findUnique(a) },
+    wishlistItem: { findMany: (args: unknown) => wishlistFindMany(args) },
     message: {
       create: (a: { data: { content: string } }) => messageCreate(a),
       findMany: async () => historyRows,
@@ -122,6 +130,8 @@ beforeEach(() => {
   historyRows = [];
   messageCreate.mockClear();
   proposeWishlistItems.mockClear();
+  wishlistFindMany.mockReset().mockResolvedValue([wishlistItem]);
+  deleteWishlistItem.mockReset().mockResolvedValue(true);
 });
 
 function toolNames(): string[] {
@@ -222,5 +232,96 @@ describe("the next turn", () => {
     await runChatTurn({ userId: USER, text: "спасибо", imageUrls: [], chatCards: WISHLIST }, { fetchFn });
     const assistant = sent[0]!.messages.find((m) => m.role === "assistant");
     expect(String(assistant!.content)).toContain("saved to their wishlist: «Tom Ford Lost Cherry»");
+  });
+});
+
+
+describe("removing a saved wishlist item in chat", () => {
+  const read = { name: "get_my_wishlist" };
+  const remove = { name: "remove_wishlist_item", args: JSON.stringify({ itemId: wishlistItem.id }) };
+  const text = "Блядь, ну тогда удали его нахуй.";
+
+  it("reads the live list and removes Another 13 referred to by 'его', with a receipt", async () => {
+    historyRows = [
+      { role: "user", content: text, imageUrls: [], context: null },
+      { role: "assistant", content: "Another 13 is already on your wishlist", imageUrls: [], context: null },
+    ];
+    queue = [calls([read]), calls([remove]), plain];
+    const consent = vi.fn(async () => true);
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn, consent });
+    expect(toolNames()).toEqual(expect.arrayContaining(["get_my_wishlist", "remove_wishlist_item"]));
+    expect(wishlistFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER } }));
+    expect(consent).toHaveBeenCalledWith(expect.objectContaining({
+      previous: "Another 13 is already on your wishlist", message: text,
+      tool: "remove_wishlist_item", args: { itemId: wishlistItem.id, item: wishlistItem },
+    }));
+    expect(deleteWishlistItem).toHaveBeenCalledExactlyOnceWith(USER, wishlistItem.id);
+    expect(turn.receipts).toEqual(["Удалено из вишлиста"]);
+    expect(turn.action).toBeUndefined();
+  });
+
+  it("does not expose operations or allow a hallucinated call while disabled", async () => {
+    env.WISHLIST_FEATURE_ENABLED = false;
+    queue = [calls([read, remove]), plain];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [], chatCards: WISHLIST }, { fetchFn });
+    expect(toolNames()).not.toContain("get_my_wishlist");
+    expect(toolNames()).not.toContain("remove_wishlist_item");
+    expect(wishlistFindMany).not.toHaveBeenCalled();
+    expect(deleteWishlistItem).not.toHaveBeenCalled();
+    expect(turn.receipts).toBeUndefined();
+  });
+
+  it("refuses an ID not read from this user's list in this turn", async () => {
+    queue = [calls([remove]), plain];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(deleteWishlistItem).not.toHaveBeenCalled();
+    expect(turn.receipts).toBeUndefined();
+    expect(sent.at(-1)!.messages).toContainEqual(expect.objectContaining({ role: "tool", content: expect.stringContaining("read_wishlist_first") }));
+  });
+
+  it("refuses another person's ID even after reading the owner's list", async () => {
+    queue = [calls([read]), calls([{ ...remove, args: JSON.stringify({ itemId: "someone-elses-item" }) }]), plain];
+    await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(deleteWishlistItem).not.toHaveBeenCalled();
+  });
+
+  it("does not remove on a dislike, an ambiguous reference or a denied request", async () => {
+    queue = [calls([read]), calls([remove]), plain];
+    const turn = await runChatTurn({ userId: USER, text: "не люблю его", imageUrls: [], chatCards: WISHLIST }, { fetchFn, consent: async () => false });
+    expect(deleteWishlistItem).not.toHaveBeenCalled();
+    expect(turn.receipts).toBeUndefined();
+    expect(sent.at(-1)!.messages).toContainEqual(expect.objectContaining({ role: "tool", content: expect.stringContaining("no_consent") }));
+  });
+
+  it("a failed removal produces no receipt and leaves the write budget available", async () => {
+    deleteWishlistItem.mockResolvedValueOnce(false);
+    queue = [calls([read]), calls([remove, { name: "update_hobbies" }]), plain];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(turn.receipts).toBeUndefined();
+    const results = sent.at(-1)!.messages.filter(m => m.role === "tool").map(m => JSON.parse(String(m.content)));
+    expect(results).toContainEqual(expect.objectContaining({ error: "item_not_found" }));
+    expect(results).not.toContainEqual(expect.objectContaining({ error: "write_budget_exhausted" }));
+  });
+
+  it("a successful removal spends the one-write budget", async () => {
+    queue = [calls([read]), calls([remove, { name: "update_hobbies" }]), plain];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(turn.receipts).toHaveLength(1);
+    expect(sent.at(-1)!.messages).toContainEqual(expect.objectContaining({ role: "tool", content: expect.stringContaining("write_budget_exhausted") }));
+  });
+
+  it("a database error is reported to the model, without claiming a removal", async () => {
+    deleteWishlistItem.mockRejectedValueOnce(new Error("offline"));
+    queue = [calls([read]), calls([remove]), plain];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(turn.receipts).toBeUndefined();
+    expect(sent.at(-1)!.messages).toContainEqual(expect.objectContaining({ role: "tool", content: expect.stringContaining("tool_failed") }));
+  });
+
+  it("a completed removal still has an honest reply if the model then fails", async () => {
+    queue = [calls([read]), calls([remove]), "fail", "fail"];
+    const turn = await runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn });
+    expect(turn.content).toBe("Удалено из вишлиста");
+    expect(turn.receipts).toEqual(["Удалено из вишлиста"]);
   });
 });

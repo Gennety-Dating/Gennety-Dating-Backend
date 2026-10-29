@@ -89,6 +89,16 @@ const store = vi.hoisted(() => {
     wishlistItem: {
       findMany: () => [...state.wishlist].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
       count: () => state.wishlist.length,
+      findFirst: (args) => {
+        const where = args.where as { id: string; userId: string };
+        return state.wishlist.find(row => row.id === where.id && row.userId === where.userId) ?? null;
+      },
+      deleteMany: (args) => {
+        const where = args.where as { id: string; userId: string };
+        const before = state.wishlist.length;
+        state.wishlist = state.wishlist.filter(row => row.id !== where.id || row.userId !== where.userId);
+        return { count: before - state.wishlist.length };
+      },
       createMany: (args) => {
         for (const data of args.data as Array<Record<string, unknown>>) {
           state.wishlist.push({ ...data, id: `w-${state.seq}`, createdAt: now() });
@@ -429,6 +439,31 @@ afterAll(() => {
 const CANNED = t("ru", "agentFallbackError");
 
 describe("chat agent — live evals", () => {
+  it("wishlist removal: duplicate add → «тогда удали его»", async () => {
+    store.state.wishlist.push({ id: "w-another-13", userId: USER, title: "Another 13", brand: "Le Labo", category: "perfume", imageUrl: null, createdAt: new Date() });
+    store.state.messages.push({ id: "previous", sessionId: SESSION, userId: USER, role: "assistant", content: "Another 13 is already on your wishlist, so there's nothing to add.", imageUrls: [], createdAt: new Date(Date.now() - 1000) });
+    const exchanges = await talk([{ text: "Блядь, ну тогда удали его нахуй.", expect: "Удаляет Another 13 из вишлиста и кратко подтверждает." }], SESSION, CARD_BUILD);
+    expect(exchanges[0]!.error).toBeNull();
+    expect(exchanges[0]!.reply).not.toBe(CANNED);
+    expect(exchanges[0]!.receipts).toContain(t("ru", "agentWishlistItemRemoved"));
+    expect(store.state.wishlist).toHaveLength(0);
+    expect(exchanges[0]!.action).toBeNull();
+    report.push(`## Wishlist removal regression\n\n${exchanges[0]!.reply}\n\nReceipt: ${exchanges[0]!.receipts.join(", ")}`);
+  });
+
+  it("wishlist removal: ambiguous «удали его» asks, changes nothing", async () => {
+    for (const [id, title] of [["w1", "Another 13"], ["w2", "Santal 33"]]) {
+      store.state.wishlist.push({ id: id!, userId: USER, title, brand: "Le Labo", category: "perfume", imageUrl: null, createdAt: new Date() });
+    }
+    store.state.messages.push({ id: "previous", sessionId: SESSION, userId: USER, role: "assistant", content: "В твоём вишлисте есть Another 13 и Santal 33.", imageUrls: [], createdAt: new Date(Date.now() - 1000) });
+    const exchanges = await talk([{ text: "Удали его из вишлиста", expect: "Уточняет, какой из двух ароматов удалить." }], SESSION, CARD_BUILD);
+    expect(exchanges[0]!.error).toBeNull();
+    expect(exchanges[0]!.receipts).toHaveLength(0);
+    expect(store.state.wishlist).toHaveLength(2);
+    expect(exchanges[0]!.reply).toContain("?");
+    report.push(`## Ambiguous removal regression\n\n${exchanges[0]!.reply}`);
+  });
+
   it("новичок: «👋», «пока ничем», «что умеешь»", async () => {
     const { exchanges } = await scenario("Новичок без дела", [
       { text: "👋", expect: "Живое приветствие по имени; можно сразу лёгкий вопрос или что его ждёт." },

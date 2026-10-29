@@ -13,6 +13,19 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-29 — App chat wishlist removal (code only; no migration or native update).**
+
+1. With `WISHLIST_FEATURE_ENABLED`, the app agent gets `get_my_wishlist` and
+   `remove_wishlist_item`, independently of card support. One explicit owner
+   request removes one item through the existing scoped service and photo cleanup.
+   Ambiguous requests ask first; provider/check failure leaves the item alone.
+2. Validate chat wishlist/consent/tools and route tests, bot/shared typechecks,
+   and live evals `-t 'wishlist removal:'` (in-memory DB). Demo app uses the same
+   flag and tools with its isolated data. Telegram menu tools are unchanged.
+3. Roll out code and restart the bot using the runbook; no new flag or schema.
+   Production was not changed by this implementation. Roll back the commit and
+   restart if needed. Decision: `2026-10-29-chat-wishlist-removal.md`.
+
 **PENDING 2026-10-22 — Profiler series finish and button colours (restart only).**
 
 1. Selected options use primary blue and confirmation uses success green.

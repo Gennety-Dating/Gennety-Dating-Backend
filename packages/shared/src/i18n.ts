@@ -364,6 +364,7 @@ const translations = {
     agentWishlistCardButton: "Add",
     /** Button into «My wishlist» under a chat reply. */
     agentEntryWishlist: "My wishlist",
+    agentWishlistItemRemoved: "Removed from your wishlist",
     /** The change-offer card's accept button when the agent named none (chat-offer.ts). */
     agentOfferAcceptDefault: "Yes",
     /** The line above a change-offer card when the model wrote none (chat-offer.ts). */
@@ -1631,6 +1632,7 @@ const translations = {
     agentWishlistCardLine: "Добавить в твой вишлист?",
     agentWishlistCardButton: "Добавить",
     agentEntryWishlist: "Мой вишлист",
+    agentWishlistItemRemoved: "Удалено из вишлиста",
     agentOfferAcceptDefault: "Да",
     agentOfferCardLine: "Есть идея:",
     agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
@@ -2749,6 +2751,7 @@ const translations = {
     agentWishlistCardLine: "Додати у твій вішліст?",
     agentWishlistCardButton: "Додати",
     agentEntryWishlist: "Мій вішліст",
+    agentWishlistItemRemoved: "Видалено з вішліста",
     agentOfferAcceptDefault: "Так",
     agentOfferCardLine: "Є ідея:",
     agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
@@ -3866,6 +3869,7 @@ const deTranslations: TranslationTable = {
   agentWishlistCardLine: "Auf deine Wunschliste setzen?",
   agentWishlistCardButton: "Hinzufügen",
   agentEntryWishlist: "Meine Wunschliste",
+  agentWishlistItemRemoved: "Von deiner Wunschliste entfernt",
   agentOfferAcceptDefault: "Ja",
   agentOfferCardLine: "Eine Idee:",
   agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
@@ -4956,6 +4960,7 @@ const plTranslations: TranslationTable = {
   agentWishlistCardLine: "Dodać do twojej listy życzeń?",
   agentWishlistCardButton: "Dodaj",
   agentEntryWishlist: "Moja lista życzeń",
+  agentWishlistItemRemoved: "Usunięto z listy życzeń",
   agentOfferAcceptDefault: "Tak",
   agentOfferCardLine: "Mam pomysł:",
   agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",

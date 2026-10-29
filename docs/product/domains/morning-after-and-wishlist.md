@@ -146,7 +146,21 @@ built earlier, with the agent, on «Сегодня».
      build gets neither the card nor the tool. App only — Telegram keeps the
      «Сегодня» session as the way in.
 
-7. **A soft hint for the first venue** (founder, 2026-10-15: «подсказывать
+7. **Removing an item in app chat** (founder, 2026-10-29). The agent can
+   remove one saved item when the person asks, including «тогда удали его»
+   after an already-saved reply. It reads the live owner list first with
+   `get_my_wishlist`, resolves the exact item, then calls `remove_wishlist_item`.
+   An ambiguous reference gets a question before any deletion. A separate
+   authorization check receives the real item title and brand; a failed check
+   leaves the item alone. Removal consumes the turn's single write budget and
+   returns a localized receipt only after success. It uses the same scoped
+   removal and photo cleanup as Profile. This is available with
+   `WISHLIST_FEATURE_ENABLED`, including builds without card support; no new
+   native API or app update is needed. Adding still requires the card's button.
+   Telegram's menu agent is unchanged. Demo app chats follow the same flag and
+   operate only on their isolated owner's list; no synthetic partner is edited.
+
+8. **A soft hint for the first venue** (founder, 2026-10-15: «подсказывать
    место свидания по вишлисту»). The `place` / `drink` / `experience` items of
    each side whose list is not hidden become one more draw weight inside the
    venue diversity band, next to Tempo Sync Tier 2
