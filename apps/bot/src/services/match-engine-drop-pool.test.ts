@@ -36,6 +36,13 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
+// This suite measures the real-user drop only. Local demo configuration must
+// not add a second, synthetic-fill planner to its SQL observations.
+vi.mock("../config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.js")>();
+  return { ...actual, env: { ...actual.env, SYNTHETIC_FILL_ENABLED: false } };
+});
+
 vi.mock("../workers/embedding-refresh.js", () => ({
   refreshAllDirtyEmbeddings: mocks.refreshAllDirtyEmbeddings,
 }));

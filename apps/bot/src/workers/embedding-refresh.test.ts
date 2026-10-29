@@ -131,7 +131,7 @@ function seedDirty(id: string, dirtyAt: Date | null): ProfileRow {
  * `embed` says how many profiles were embedded, `embedMany` how many HTTP
  * requests that took.
  */
-function embeddingClient(stub: { embed: ReturnType<typeof vi.fn> }) {
+function embeddingClient(stub: { embed: ReturnType<typeof vi.fn<(input: string) => Promise<number[]>>> }) {
   const embedMany = vi.fn(async (inputs: string[]) =>
     Promise.all(inputs.map((input) => stub.embed(input) as Promise<number[]>)),
   );

@@ -79,7 +79,8 @@ import {
 } from "./attendance.js";
 import { runDateLifecycleTick } from "../../services/date-lifecycle.js";
 
-type MockFn = ReturnType<typeof vi.fn>;
+// Heterogeneous Prisma/API test doubles accept each method's own arguments and result.
+type MockFn = ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 const mMatch = prisma.match as unknown as {
   findUnique: MockFn;
   findMany: MockFn;

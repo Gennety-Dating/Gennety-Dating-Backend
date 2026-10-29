@@ -150,6 +150,8 @@ describe("which turns get the wishlist tool", () => {
 
 describe("a turn with a card", () => {
   it("stores the card on the reply and hands it to the app", async () => {
+    // The real query reads back the just-persisted user message, including its album.
+    historyRows = [{ role: "user", content: "вот мои любимые духи", imageUrl: PHOTO, imageUrls: [PHOTO], context: null }];
     queue = [calls([propose]), plain];
     const turn = await runChatTurn({ userId: USER, text: "вот мои любимые духи", imageUrls: [PHOTO], chatCards: WISHLIST }, { fetchFn });
 

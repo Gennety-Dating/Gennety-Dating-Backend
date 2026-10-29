@@ -71,7 +71,8 @@ import { env } from "../config.js";
 
 const mutableEnv = env as { EARLY_STAGE: boolean; FIRST_DROP_CALIBRATION_HOURS: number };
 
-type MockFn = ReturnType<typeof vi.fn>;
+// Heterogeneous Prisma/API test doubles accept each method's own arguments and result.
+type MockFn = ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 const mUserFindMany = (prisma.user as unknown as { findMany: MockFn }).findMany;
 const mMatchFindFirst = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
 const mMatchCount = (prisma.match as unknown as { count: MockFn }).count;

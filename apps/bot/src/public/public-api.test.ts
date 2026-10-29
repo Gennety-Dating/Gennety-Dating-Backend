@@ -1143,6 +1143,9 @@ vi.mock(
 );
 
 vi.mock("../services/storage.js", () => ({
+  uploadChatImage: vi.fn(async (userId: string) => ({
+    path: `${userId}/chat-image.jpg`,
+  })),
   uploadSelfie: vi.fn(async (userId: string) => ({
     path: `${userId}/fake.jpg`,
   })),

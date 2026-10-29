@@ -156,6 +156,15 @@ export const VIDEO_IDENTITY_MATCH_THRESHOLD = 0.5;
 export const VIDEO_SAMPLE_TARGET_FRAMES = 12;
 
 /**
+ * How many sampled frames are in flight with the moderation providers at once
+ * (each frame = one OpenAI + one AWS call). Checked one by one, a 12-frame
+ * clip cost twelve provider round-trips back to back; six at a time makes it
+ * two, without one upload bursting all twelve frames into the providers' rate
+ * limits alongside everyone else's photo checks.
+ */
+export const FRAME_MODERATION_CONCURRENCY = 6;
+
+/**
  * Voice prompt bounds (VOICE_PROMPT_PRODUCT_SPEC.md).
  *
  * Unlike the profile video, this clip is not merely display-only: its

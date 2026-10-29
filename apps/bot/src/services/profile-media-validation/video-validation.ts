@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import {
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+  FRAME_MODERATION_CONCURRENCY,
   VIDEO_SAMPLE_TARGET_FRAMES,
 } from "@gennety/shared";
 import { env } from "../../config.js";
@@ -14,15 +15,6 @@ import { probeVideo, type VideoProbe } from "./video-probe.js";
 import type { MediaValidationResult, VideoFrame } from "./types.js";
 
 const MAX_DURATION_SECONDS = 60;
-
-/**
- * How many sampled frames are in flight with the moderation providers at once
- * (each frame = one OpenAI + one AWS call). Checked one by one, a 12-frame
- * clip cost twelve provider round-trips back to back; six at a time makes it
- * two, without one upload bursting all twelve frames into the providers' rate
- * limits alongside everyone else's photo checks.
- */
-export const FRAME_MODERATION_CONCURRENCY = 6;
 
 type BranchVerdict = "safe" | "unsafe" | "unavailable";
 

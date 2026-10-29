@@ -1,6 +1,6 @@
+import { FRAME_MODERATION_CONCURRENCY } from "@gennety/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
-  FRAME_MODERATION_CONCURRENCY,
   validateProfileVideo,
   type VideoValidationDeps,
 } from "./video-validation.js";

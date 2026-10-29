@@ -47,7 +47,7 @@ function build(overrides: Partial<BotRateLimitDeps> = {}) {
 }
 
 describe("botFloodGate (layer 1, before the chat queue)", () => {
-  let next: ReturnType<typeof vi.fn>;
+  let next: ReturnType<typeof vi.fn<() => Promise<void>>>;
   beforeEach(() => {
     next = vi.fn().mockResolvedValue(undefined);
   });
@@ -141,7 +141,7 @@ describe("botFloodGate (layer 1, before the chat queue)", () => {
 });
 
 describe("botRateLimit (layers 2/3, after the session)", () => {
-  let next: ReturnType<typeof vi.fn>;
+  let next: ReturnType<typeof vi.fn<() => Promise<void>>>;
   beforeEach(() => {
     next = vi.fn().mockResolvedValue(undefined);
   });

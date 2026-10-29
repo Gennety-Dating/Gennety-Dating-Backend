@@ -8,12 +8,12 @@ const { sendMessage, sendPhoto, sendMediaGroup, useTransformers, ApiCtor } = vi.
   // gets the same throttler + 429 replay as the main one — which means this
   // stand-in has to own a `config` like the real `Api` does.
   const useTransformers = vi.fn();
-  const ApiCtor = vi.fn().mockImplementation(() => ({
+  const ApiCtor = vi.fn().mockImplementation(function () { return {
     sendMessage,
     sendPhoto,
     sendMediaGroup,
     config: { use: useTransformers },
-  }));
+  }; });
   return { sendMessage, sendPhoto, sendMediaGroup, useTransformers, ApiCtor };
 });
 
