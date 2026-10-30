@@ -35,6 +35,7 @@ import { pendingMenuPhotoBatches } from "./handlers/menu/edit-profile.js";
 import { pendingProfilerAnswers } from "./handlers/profiler/router.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import {
+  startFounderDelivery,
   notifyFounderStatusTimerHealth,
   notifyFounderWeeklyMatches,
   notifyFounderAdSpendReminder,
@@ -1439,6 +1440,7 @@ async function main(): Promise<void> {
     console.error("[startup] ensureMatchPairIndex failed:", err);
   }
 
+  startFounderDelivery();
   registerSchedules();
 
   // Event-loop delay, chat-queue load and memory, once a minute — logging only.

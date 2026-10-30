@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-10-30 | Founder transport outbox: persisted requests + attachments, retry after restart; Mac workspace retained, encrypted copies and external health monitor; no DB migration; Vite 6.4.5 | [2026-10-30-founder-outbox.md](./2026-10-30-founder-outbox.md) |
 | Deployed (demo only) | 2026-10-29 | Current Telegram bot + Mini App `586ae5df`; Profiler cards enabled on demo, isolated schema catch-up, 8,770 tests; GitHub/local main only, tips archived; production unchanged | [2026-10-29-demo.md](./2026-10-29-demo.md) |
 | Deployed | 2026-10-29 | Full main `23b0f3f7` → `ed50c70d`: guide card, offer card, voice with photos; no migration, env unchanged; Profiler card code shipped but `PROFILER_CARDS_ENABLED` off (Profiler blocks stay PENDING) | [pending.md](./pending.md) |
 | PENDING | 2026-10-22 | Profiler series finish: shimmer, receipt with confetti and button colours; restart only, same demo policy | [pending.md](./pending.md) |

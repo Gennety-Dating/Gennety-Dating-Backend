@@ -7,6 +7,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-30 | Рабочая часть Sverkaus/Gennety остаётся на Mac по выбору владельца; копии на Mac + существующем сервере, новые функции рабочего пространства; файловый founder-outbox с at-least-once доставкой, без миграции БД | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |
 | 2026-10-29 | Share recognition: direct structured Product cards, one Instagram HTML read after share redirects, concurrent video request coalescing and city-aware cache; controlled benchmarks, production pending | [2026-10-29-share-recognition-latency.md](./2026-10-29-share-recognition-latency.md) |
 | 2026-10-29 | App chat removes a wishlist item on explicit request, including «удали его»; fresh owner read, ambiguity question, single-write budget, success receipt; no native update; production pending | [2026-10-29-chat-wishlist-removal.md](./2026-10-29-chat-wishlist-removal.md) |
 | 2026-10-29 | Backend main histories consolidated; voice+photos and parallel video validation integrated; obsolete tips archived; existing single-branch rule retained; demo-only Telegram release with Profiler cards, production unchanged | [2026-10-29-telegram-demo.md](./2026-10-29-telegram-demo.md) |

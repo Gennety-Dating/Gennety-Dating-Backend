@@ -5,6 +5,7 @@ import { env } from "../config.js";
 import { downloadProfileImage } from "./storage.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { installApiLimits } from "../api-limits.js";
+import { installFounderOutbox } from "./founder-outbox.js";
 import { buildWeeklyMatchesReport } from "./weekly-matches-report.js";
 import {
   formatPurchaseAmount,
@@ -34,7 +35,8 @@ import type { Venue } from "./venue.js";
  *      `FOUNDER_NOTIFY_ENABLED` alone — no feature flag of its own, because
  *      the reminder is worthless without the feed it already gates on.
  *
- * Everything here is BEST-EFFORT and fire-and-forget: a failure must never
+ * Preparation is best-effort; outbound API requests use a durable transport
+ * outbox (at-least-once). A failure must never
  * touch the user-facing flow. Callers should not await the result on any hot
  * path (or should `.catch(() => {})` when they do).
  *
@@ -107,6 +109,7 @@ function getFounderApi(): Api<RawApi> | null {
   // this one sends in bursts: eleven notifiers, several of which fire together
   // after the scheduled batch. It pays the same rules as the main bot.
   installApiLimits(founderApi);
+  installFounderOutbox(founderApi, env.FOUNDER_BOT_TOKEN);
   return founderApi;
 }
 
@@ -1442,3 +1445,6 @@ function plural(n: number, one: string, few: string, many: string): string {
 export function __resetFounderApiForTests(): void {
   founderApi = undefined;
 }
+
+/** Resume transport requests retained across a production restart. */
+export function startFounderDelivery(): void { getFounderApi(); }
