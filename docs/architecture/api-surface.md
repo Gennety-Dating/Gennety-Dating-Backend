@@ -1,7 +1,9 @@
 <!-- WHEN_TO_READ: You are adding or changing an HTTP route, a cron job, or a background worker. Covers the cron/worker registry in apps/bot/src/index.ts, the public /v1/* API surface, and the admin /admin/* surface. -->
 <!-- SOURCE: ARCHITECTURE.md (lines 1606-1972) — migrated 2026-09-01 -->
 
-## Cron & Workers (`apps/bot/src/index.ts`)
+#<!-- Screenshot library: /v1/me/screenshots/*, cron SCREENSHOT_LIBRARY_CRON_SCHEDULE (each minute); docs/product/domains/screenshot-library.md -->
+
+# Cron & Workers (`apps/bot/src/index.ts`)
 
 All schedules are env-overridable (the canonical names are listed below).
 

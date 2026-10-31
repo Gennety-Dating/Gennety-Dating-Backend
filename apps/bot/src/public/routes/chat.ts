@@ -42,6 +42,7 @@ import {
 } from "../../services/chat-wishlist.js";
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
+import { readScreenshotsCard, screenshotsCardViews, type ScreenshotsCard } from "../../services/chat-screenshots.js";
 
 /**
  * Native cards this build draws under a reply (decision 2026-10-15): the
@@ -250,6 +251,7 @@ chatRouter.post(
         ...(turn.offer ? { offer: turn.offer } : {}),
         // The «how the app works» card (decision 2026-10-29) — omitted when none.
         ...(turn.guide ? { guide: turn.guide } : {}),
+        ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
       };
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
@@ -361,6 +363,7 @@ chatRouter.post(
       ...(turn.attachment ? { attachment: turn.attachment } : {}),
       ...(turn.offer ? { offer: turn.offer } : {}),
       ...(turn.guide ? { guide: turn.guide } : {}),
+        ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
     });
   },
 );
@@ -458,6 +461,16 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   const cardViews = await wishlistCardViews(cardRows.map((entry) => entry.card)).catch(() => []);
   const cardById = new Map(cardRows.map((entry, i) => [entry.id, cardViews[i]] as const));
 
+  // Screenshot cards: re-signed on every read, so history restores them and a
+  // deleted source comes back as unavailable. Off with the feature.
+  const shotRows = env.SCREENSHOT_LIBRARY_ENABLED
+    ? page
+        .map((row) => ({ id: row.id, card: row.role === "assistant" ? readScreenshotsCard(row.attachment) : null }))
+        .filter((entry): entry is { id: string; card: ScreenshotsCard } => entry.card !== null)
+    : [];
+  const shotViews = await screenshotsCardViews(req.userId as string, shotRows.map((entry) => entry.card)).catch(() => []);
+  const shotById = new Map(shotRows.map((entry, i) => [entry.id, shotViews[i]] as const));
+
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
@@ -482,6 +495,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(cardById.get(row.id) ? { attachment: cardById.get(row.id) } : {}),
       ...(rowOffer ? { offer: changeOfferView(rowOffer) } : {}),
       ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
+      ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
     };
   });
   console.log(

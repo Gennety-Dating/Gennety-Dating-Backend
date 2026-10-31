@@ -13,6 +13,21 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
+
+1. Migration `20261031160000_screenshot_library` adds three tables. Additive, needs
+   the `vector` extension that production already has.
+2. Create a private Supabase bucket `screenshots` before the flag goes on. Account
+   deletion treats a missing bucket with no rows as empty, so deploying without it is safe.
+3. New env, both optional: `SCREENSHOT_LIBRARY_ENABLED` (default off),
+   `SUPABASE_SCREENSHOT_BUCKET`, `SCREENSHOT_LIBRARY_CRON_SCHEDULE`.
+4. Do NOT set the flag until the checklist in
+   `docs/product/domains/screenshot-library.md` is done, including legal review.
+
+**Check after deploy:** `GET /v1/app/config` shows `features.screenshotLibrary: false`;
+`GET /v1/me/screenshots/library` answers 404 `feature-disabled`; the log shows the
+`screenshot-library` tick without errors. Demo: same code, flag off.
+
 **PENDING 2026-10-29 — share recognition latency (code only; no migration or new flag).**
 
 Structured single-Product lookup skips AI when category/name/photo are explicit;

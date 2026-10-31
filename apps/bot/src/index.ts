@@ -3,6 +3,7 @@
 // would otherwise read .env first, set DATABASE_URL to the prod URL in
 // process.env, and silently shadow .env.local (dotenv defaults to non-
 // override). Reordering this line breaks local dev — bot then hits prod.
+import { screenshotLibraryTick } from "./workers/screenshot-library.js";
 import "./config.js";
 
 import type { Server } from "node:http";
@@ -347,6 +348,9 @@ const SELFIE_RETENTION_CRON_SCHEDULE =
  * after the selfie scrub, still off-peak. Batched, so a large backlog drains
  * over several days rather than in one long-running tick.
  */
+const SCREENSHOT_LIBRARY_CRON_SCHEDULE =
+  process.env.SCREENSHOT_LIBRARY_CRON_SCHEDULE ?? "* * * * *";
+
 const RETENTION_CRON_SCHEDULE =
   process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
 
@@ -682,6 +686,7 @@ function validateSchedules(): void {
       CHAT_SESSION_DIGEST_CRON_SCHEDULE,
       SELFIE_RETENTION_CRON_SCHEDULE,
       RETENTION_CRON_SCHEDULE,
+      SCREENSHOT_LIBRARY_CRON_SCHEDULE,
       ACTIVITY_ROLLUP_CRON_SCHEDULE,
       VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
       AD_SPEND_REMINDER_CRON_SCHEDULE,
@@ -1180,6 +1185,14 @@ function registerSchedules(): void {
   );
   console.log(
     `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+  );
+
+  // Screenshot library: removes what was deleted (also with the feature off, so
+  // switching it off never strands data) and indexes the queue while it is on.
+  cron.schedule(
+    SCREENSHOT_LIBRARY_CRON_SCHEDULE,
+    guardedTick("screenshot-library", screenshotLibraryTick),
+    { timezone: CRON_TIMEZONE },
   );
 
   // General data retention: expired OTP challenges (including phone numbers

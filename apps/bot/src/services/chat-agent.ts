@@ -1,3 +1,15 @@
+import {
+  executeScreenshotTool,
+  isScreenshotTool,
+  readScreenshotsCard,
+  SCREENSHOT_TOOL_KINDS,
+  SCREENSHOT_TOOLS,
+  SCREENSHOTS_CARD_CLIENT_TOKEN,
+  screenshotsCardNote,
+  screenshotsCardViews,
+  type ScreenshotsCard,
+  type ScreenshotsCardView,
+} from "./chat-screenshots.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -380,20 +392,21 @@ const CHAT_TOOLS = [
  */
 const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL
+  (typeof ALL_TOOLS)[number] | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number]
 >;
 
 /**
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean }): ToolList {
+function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean }): ToolList {
   return [
     ...ALL_TOOLS,
     ...(env.WISHLIST_FEATURE_ENABLED ? WISHLIST_TOOLS : []),
     ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
     ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
+    ...(options.screenshotCards ? SCREENSHOT_TOOLS : []),
   ];
 }
 
@@ -415,6 +428,7 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   // Reads the person's stage, writes nothing (`chat-app-guide.ts`).
   [SHOW_APP_GUIDE_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
+  ...SCREENSHOT_TOOL_KINDS,
 };
 
 function toolKind(name: string): string | undefined {
@@ -510,6 +524,8 @@ export interface ChatTurnResult {
   offer?: ChangeOfferView;
   /** The «how the app works» card stored under this reply (`messages.attachment`, kind `app_guide`). */
   guide?: AppGuideView;
+  /** The screenshot-library card, for builds that declared `screenshots`. */
+  screenshots?: ScreenshotsCardView;
 }
 
 export interface ChatDeps {
@@ -577,7 +593,10 @@ async function runTurnInner(
   const wishlistCards = env.WISHLIST_FEATURE_ENABLED && (input.chatCards?.has(WISHLIST_CARD_CLIENT_TOKEN) ?? false);
   const offerCards = input.chatCards?.has(OFFER_CARD_CLIENT_TOKEN) ?? false;
   const guideCards = input.chatCards?.has(GUIDE_CARD_CLIENT_TOKEN) ?? false;
-  const tools = turnTools({ wishlistCards, offerCards, guideCards });
+  // A build that draws the card, with the feature on. Nothing else about the
+  // person's library reaches the prompt: the tools are called on intent.
+  const screenshotCards = env.SCREENSHOT_LIBRARY_ENABLED && (input.chatCards?.has(SCREENSHOTS_CARD_CLIENT_TOKEN) ?? false);
+  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards });
   const { messages, openedNewSession, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
     userId,
     telegramId,
@@ -603,6 +622,7 @@ async function runTurnInner(
   let card: WishlistCard | null = null;
   let offer: ChangeOffer | null = null;
   let guide: AppGuide | null = null;
+  let shots: ScreenshotsCard | null = null;
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
@@ -693,7 +713,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (guide || card || offer) {
+        if (guide || card || offer || shots) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -729,6 +749,26 @@ async function runTurnInner(
         continue;
       }
 
+      // The screenshot library. Reads; only `show_screenshots` (or a search on a
+      // library not connected) leaves a card, one per reply like every other.
+      if (isScreenshotTool(name)) {
+        if (!screenshotCards) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // the executor refuses empty arguments
+        }
+        const outcome = await executeScreenshotTool(userId, name, args);
+        const taken = Boolean(card || offer || guide);
+        if (outcome.card && !taken) shots = outcome.card;
+        messages.push({ role: "tool", tool_call_id: tc.id, content: outcome.result });
+        continue;
+      }
+
       // The change-offer card: validated here, stored with the reply below.
       // One card per reply, wishlist or offer — `attachment` holds one.
       if (name === OFFER_CHANGE_TOOL_NAME) {
@@ -736,7 +776,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (offer || card || guide) {
+        if (offer || card || guide || shots) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -763,7 +803,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (card || offer || guide) {
+        if (card || offer || guide || shots) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -899,6 +939,7 @@ async function runTurnInner(
       ...(card ? { attachment: card as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && offer ? { attachment: offer as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && guide ? { attachment: guide as unknown as Prisma.InputJsonValue } : {}),
+      ...(!card && !offer && !guide && shots ? { attachment: shots as unknown as Prisma.InputJsonValue } : {}),
     },
   });
   // One open offer at a time: earlier unanswered cards stop working. A failure
@@ -918,6 +959,12 @@ async function runTurnInner(
     ? await wishlistCardViews([card]).catch((err: unknown) => {
         console.warn("[chat] wishlist card view failed:", err);
         return [] as WishlistCardView[];
+      })
+    : [];
+  const [screenshotsView] = shots
+    ? await screenshotsCardViews(userId, [shots]).catch((err: unknown) => {
+        console.warn("[chat] screenshots card view failed:", err instanceof Error ? err.name : "error");
+        return [] as ScreenshotsCardView[];
       })
     : [];
   // The chat's `updatedAt` is its newest message — what the history list sorts
@@ -940,6 +987,7 @@ async function runTurnInner(
     ...(attachment ? { attachment } : {}),
     ...(offer && !card ? { offer: changeOfferView(offer) } : {}),
     ...(guide && !card && !offer ? { guide: appGuideView(guide) } : {}),
+    ...(screenshotsView ? { screenshots: screenshotsView } : {}),
   };
 }
 
@@ -1131,13 +1179,16 @@ async function buildChatMessages(
         openOffer = rowOffer.state === "open" ? { messageId: row.id, tool: rowOffer.tool } : null;
       }
       const rowGuide = readAppGuide((row as { attachment?: unknown }).attachment);
+      const rowShots = readScreenshotsCard((row as { attachment?: unknown }).attachment);
       const note = rowCard
         ? wishlistCardNote(rowCard)
         : rowOffer
           ? changeOfferNote(rowOffer)
           : rowGuide
             ? appGuideNote(rowGuide)
-            : null;
+            : rowShots
+              ? screenshotsCardNote(rowShots)
+              : null;
       out.push({ role: "assistant", content: note ? `${content}\n${note}` : content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.

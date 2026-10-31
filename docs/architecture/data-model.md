@@ -7,6 +7,8 @@ Source of truth: [`packages/db/prisma/schema.prisma`](../../packages/db/prisma/s
 This section is an architectural map, not a manually authoritative schema dump;
 when columns diverge, Prisma wins.
 
+Screenshot library tables: `screenshot_libraries`, `screenshot_items`, `screenshot_exclusions` (docs/product/domains/screenshot-library.md).
+
 ### Enums
 
 | Enum | Values |

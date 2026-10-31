@@ -1704,6 +1704,211 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/screenshots/library:
+    get:
+      tags: [Screenshots]
+      operationId: getScreenshotLibrary
+      summary: The private screenshot library's state, counts and limits
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+    put:
+      tags: [Screenshots]
+      operationId: connectScreenshotLibrary
+      summary: Connect (idempotent). Carries the consent to cloud AI processing
+      description: >-
+        A Photos permission is not this consent. Automatic import and one-by-one
+        picking are the same library; `autoImport: false` never accepts `auto` uploads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consentVersion, autoImport, rangeDays]
+              properties:
+                consentVersion: { type: string, description: "`consentVersion` from GET, as shown to the person." }
+                autoImport: { type: boolean }
+                rangeDays: { type: [integer, "null"], description: "Null is all available history." }
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+        "409": { description: "`consent-required`: the text version changed." }
+    patch:
+      tags: [Screenshots]
+      operationId: pauseScreenshotLibrary
+      summary: Pause or resume import. Existing data stays
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused: { type: boolean }
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+        "409": { description: "`library-off`" }
+    delete:
+      tags: [Screenshots]
+      operationId: disconnectScreenshotLibrary
+      summary: Disconnect and delete. Safe to repeat
+      description: >-
+        Closed for search and new work when this returns. Objects are removed by
+        a retrying sweep: removal is finished only when `counts.deleting` is 0.
+        Originals in Photos are never touched.
+      responses:
+        "202": { description: Closed, removal under way, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+  /v1/me/screenshots/library/reconcile:
+    post:
+      tags: [Screenshots]
+      operationId: reconcileScreenshotLibrary
+      summary: Report sources the phone confirmed are no longer available
+      description: >-
+        Send only keys positively established as gone, never after a failed read.
+        They leave without an exclusion, so selecting them again brings them back.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [generation, removedSourceKeys]
+              properties:
+                generation: { type: integer }
+                removedSourceKeys: { type: array, maxItems: 500, items: { type: string, maxLength: 200 } }
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+        "409": { description: "`library-off`, `generation-stale`" }
+  /v1/me/screenshots/uploads:
+    post:
+      tags: [Screenshots]
+      operationId: reserveScreenshotUpload
+      summary: Reserve an upload. Idempotent on the content within the account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [generation, source, sourceKey, contentHash]
+              properties:
+                generation: { type: integer }
+                source: { type: string, enum: [auto, manual] }
+                sourceKey: { type: string, maxLength: 200 }
+                contentHash: { type: string, description: "SHA-256 of the original file, lowercase hex." }
+                capturedAt: { type: [string, "null"], format: date-time }
+                ocrText: { type: [string, "null"], description: "Text recognised on the phone." }
+      responses:
+        "200":
+          description: >-
+            `uploadUrl` is a signed PUT. Null with `duplicate: true` when these
+            bytes are already here: nothing to send.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item, duplicate]
+                properties:
+                  item: { $ref: "#/components/schemas/ScreenshotItem" }
+                  uploadUrl: { type: [string, "null"] }
+                  uploadPath: { type: [string, "null"] }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+        "409": { description: "`library-off`, `library-paused`, `generation-stale`, `auto-import-off`, `source-excluded`, `library-full`" }
+        "429": { description: "`rate-limited`" }
+        "503": { description: "`storage-unavailable`: retry later." }
+  /v1/me/screenshots:
+    get:
+      tags: [Screenshots]
+      operationId: listScreenshots
+      summary: The library, newest import first, or search results with `q`
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 300 } }
+        - { name: category, in: query, schema: { type: string, enum: [place, event, thing, other] } }
+        - { name: before, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 60 } }
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ScreenshotItem" } }
+                  nextBefore: { type: [string, "null"], format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+        "429": { description: "`rate-limited`" }
+        "503": { description: "`search-unavailable`" }
+  /v1/me/screenshots/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Screenshots]
+      operationId: getScreenshot
+      summary: One screenshot with a fresh signed URL
+      responses:
+        "200": { description: The item, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotItem" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id; `feature-disabled`" }
+    delete:
+      tags: [Screenshots]
+      operationId: deleteScreenshot
+      summary: Delete one. The next automatic pass will not bring it back
+      responses:
+        "204": { description: Deleted or never existed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`feature-disabled`" }
+  /v1/me/screenshots/{id}/commit:
+    post:
+      tags: [Screenshots]
+      operationId: commitScreenshotUpload
+      summary: Bytes were sent. Validate and queue. Safe to repeat
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [generation]
+              properties:
+                generation: { type: integer }
+      responses:
+        "200": { description: The item, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotItem" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, `feature-disabled`" }
+        "409": { description: "`upload-missing`: send the bytes again. `library-off`, `generation-stale`" }
+        "422": { description: "`bad-image`: not a JPEG or PNG within the limits. The row is gone." }
+        "503": { description: "`storage-unavailable`" }
   /v1/me/wishlist:
     get:
       tags: [me]
@@ -3564,6 +3769,12 @@ paths:
                       two buttons — only for a build that listed `offer` in
                       `X-Gennety-Chat-Cards`. Absent otherwise (treat absent
                       and null alike). Never together with `attachment`.
+                  screenshots:
+                    $ref: "#/components/schemas/ChatScreenshotsCard"
+                    description: >-
+                      Screenshot-library card, only for a build that listed
+                      `screenshots` in `X-Gennety-Chat-Cards`. Absent otherwise.
+                      Never together with another card.
                   guide:
                     $ref: "#/components/schemas/ChatAppGuide"
                     description: >-
@@ -3684,6 +3895,7 @@ paths:
                   action: { $ref: "#/components/schemas/AgentAction" }
                   attachment: { $ref: "#/components/schemas/ChatWishlistCard" }
                   offer: { $ref: "#/components/schemas/ChatChangeOffer" }
+                  screenshots: { $ref: "#/components/schemas/ChatScreenshotsCard" }
                   guide: { $ref: "#/components/schemas/ChatAppGuide" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -7959,6 +8171,11 @@ components:
                 «The Morning After» (2026-10-08): the two-button check the day
                 after a date and the mutual offer. False → `/v1/me/after-date`
                 answers empty. Absent on an older server — treat as false.
+            screenshotLibrary:
+              type: boolean
+              description: >-
+                Private screenshot library (2026-10-31). False hides every entry
+                to it. Absent on an older server, treat as false.
             wishlist:
               type: boolean
               description: >-
@@ -9665,12 +9882,78 @@ components:
                 The change-offer card under this assistant reply, with its
                 current state. Absent on every other row (treat absent and null
                 alike). A row never carries both `offer` and `attachment`.
+            screenshots:
+              $ref: "#/components/schemas/ChatScreenshotsCard"
             guide:
               $ref: "#/components/schemas/ChatAppGuide"
               description: >-
                 The «how the app works» card under this assistant reply, as it
                 was shown (the stage is not re-read). Absent on every other row.
 
+    ScreenshotLibrary:
+      type: object
+      required: [status, generation, autoImport, consentVersion, consentGiven, counts, limits]
+      properties:
+        status: { type: string, enum: [off, active, paused] }
+        generation: { type: integer, description: "Sent with every write. A new connection has a new number." }
+        autoImport: { type: boolean }
+        rangeDays: { type: [integer, "null"] }
+        lastReconciledAt: { type: [string, "null"], format: date-time }
+        consentVersion: { type: string, description: "The text version to send when connecting." }
+        consentGiven: { type: boolean }
+        counts:
+          type: object
+          required: [total, ready, processing, failed, deleting]
+          properties:
+            total: { type: integer }
+            ready: { type: integer }
+            processing: { type: integer }
+            failed: { type: integer }
+            deleting: { type: integer, description: "Hidden, removal not finished. Zero means removed." }
+        limits:
+          type: object
+          required: [maxItems, maxUploadBytes, maxDimension, maxPixels, maxOcrChars]
+          properties:
+            maxItems: { type: integer }
+            maxUploadBytes: { type: integer }
+            maxDimension: { type: integer }
+            maxPixels: { type: integer }
+            maxOcrChars: { type: integer }
+    ScreenshotItem:
+      type: object
+      required: [id, state, source, sourceKey, importedAt]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [reserved, queued, indexing, ready, failed] }
+        source: { type: string, enum: [auto, manual] }
+        sourceKey: { type: string }
+        title: { type: [string, "null"], description: "The model's reading, not a checked fact." }
+        description: { type: [string, "null"] }
+        category: { type: [string, "null"], enum: [place, event, thing, other, null] }
+        capturedAt: { type: [string, "null"], format: date-time }
+        importedAt: { type: string, format: date-time }
+        imageUrl: { type: [string, "null"], description: "Signed, expires in an hour: refetch instead of keeping it." }
+    ChatScreenshotsCard:
+      type: object
+      description: >-
+        Screenshots under a reply, or the button to connect the library
+        (`connect: true`, no items). `available: false` is a deleted source.
+      required: [connect, items]
+      properties:
+        connect: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, reason, available]
+            properties:
+              id: { type: string, format: uuid }
+              reason: { type: string }
+              title: { type: [string, "null"] }
+              capturedAt: { type: [string, "null"], format: date-time }
+              state: { type: [string, "null"] }
+              available: { type: boolean }
+              imageUrl: { type: [string, "null"] }
     ChatAppGuide:
       description: |
         «How the app works» under a chat reply (decision 2026-10-29): the

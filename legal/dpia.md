@@ -387,6 +387,15 @@ gated to a confirmed date or the default is turned off (item 17).
 
 ---
 
+### Screenshot library — NOT LIVE (flag off, 2026-10-31), needs review before it goes on
+
+Risk: screenshots hold third parties' messages, addresses, health or financial details,
+which then reach a processor. Reduced by: opt-in per text version, import limited to
+system-marked screenshots, a stated period, single and full deletion, no use in matching
+or profile, owner filter inside every query, no content in logs. Residual risk not
+assessed: to be reviewed by counsel, including whether incidental Art. 9 data needs a
+further safeguard such as a sensitive-content filter.
+
 ## 5. Consultation
 
 No supervisory-authority prior consultation under Art. 36 is considered

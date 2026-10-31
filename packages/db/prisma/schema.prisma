@@ -451,6 +451,9 @@ model User {
   clientEvents              ClientEvent[]
   profilerAnswers           ProfilerAnswer[]
   voicePrompt               VoicePrompt?
+  screenshotLibrary         ScreenshotLibrary?
+  screenshotItems           ScreenshotItem[]
+  screenshotExclusions      ScreenshotExclusion[]
   musicTracks               ProfileMusicTrack[]
   scratchMap                UserScratchMap?
   placeVisits               UserPlaceVisit[]
@@ -3936,4 +3939,83 @@ model StyleClick {
   @@index([itemId, createdAt])
   @@index([userId, createdAt])
   @@map("style_clicks")
+}
+
+/// The person's private screenshot library (decision journal 2026-10-31).
+/// One row per person who ever connected it; `status` = off keeps the row so
+/// `generation` stays monotonic: a late answer from a disconnected library is
+/// refused by its old number and cannot bring data back.
+model ScreenshotLibrary {
+  userId           String    @id @map("user_id") @db.Uuid
+  /// off | active | paused
+  status           String    @default("off")
+  generation       Int       @default(0)
+  /// True: the phone may import system-marked screenshots by itself. False:
+  /// only images the person picks one by one.
+  autoImport       Boolean   @default(false) @map("auto_import")
+  /// Null = all available history; never inferred from a Photos permission.
+  rangeDays        Int?      @map("range_days")
+  /// Consent to cloud AI processing of these images; separate from anything else.
+  consentAt        DateTime? @map("consent_at")
+  consentVersion   String?   @map("consent_version")
+  lastReconciledAt DateTime? @map("last_reconciled_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("screenshot_libraries")
+}
+
+/// One screenshot's private copy and everything derived from it. `deletedAt`
+/// hides it at once; the purge sweep removes the object and the row. A deleted
+/// row gives up `contentHash`, so the unique pair only binds live rows.
+model ScreenshotItem {
+  id                String                       @id @default(uuid()) @db.Uuid
+  userId            String                       @map("user_id") @db.Uuid
+  generation        Int
+  /// auto | manual
+  source            String
+  /// Opaque key of the phone's Photos object: not a cross-device identity.
+  sourceKey         String                       @map("source_key")
+  contentHash       String?                      @map("content_hash")
+  capturedAt        DateTime?                    @map("captured_at")
+  /// reserved | queued | indexing | ready | failed
+  state             String                       @default("reserved")
+  attempts          Int                          @default(0)
+  nextAttemptAt     DateTime?                    @map("next_attempt_at")
+  indexingStartedAt DateTime?                    @map("indexing_started_at")
+  storagePath       String                       @map("storage_path")
+  ocrText           String?                      @map("ocr_text")
+  title             String?
+  description       String?
+  /// place | event | thing | other. Null until indexed.
+  category          String?
+  /// Model's reading of the image: hypotheses with confidence, never facts.
+  entities          Json?
+  processingVersion Int?                         @map("processing_version")
+  embedding         Unsupported("vector(1536)")?
+  indexedAt         DateTime?                    @map("indexed_at")
+  deletedAt         DateTime?                    @map("deleted_at")
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @updatedAt @map("updated_at")
+  user              User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentHash])
+  @@index([userId, deletedAt, capturedAt(sort: Desc)])
+  @@index([userId, sourceKey])
+  @@index([state, nextAttemptAt])
+  @@index([deletedAt])
+  @@map("screenshot_items")
+}
+
+/// A source the person deleted: the next automatic pass must not bring it back.
+/// Picking it by hand clears the row; disconnecting clears them all.
+model ScreenshotExclusion {
+  userId    String   @map("user_id") @db.Uuid
+  sourceKey String   @map("source_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sourceKey])
+  @@map("screenshot_exclusions")
 }

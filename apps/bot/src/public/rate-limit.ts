@@ -543,6 +543,29 @@ export const spotifyImportLimiter = make({
   message: { error: "Too many import attempts, try again later." },
 });
 
+/** Screenshot library: a first import is many small requests, per user. */
+export const screenshotUploadLimiter = make({
+  windowMs: 3_600_000,
+  limit: 2_000,
+  keyGenerator: (req): string => `shot-up:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate-limited" },
+});
+
+export const screenshotReadLimiter = make({
+  windowMs: 60_000,
+  limit: 120,
+  keyGenerator: (req): string => `shot-read:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate-limited" },
+});
+
+/** Search embeds the query, so it has a price of its own. */
+export const screenshotSearchLimiter = make({
+  windowMs: 3_600_000,
+  limit: 120,
+  keyGenerator: (req): string => `shot-search:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate-limited" },
+});
+
 /** Mobile chat image upload — 30/hour per user (falls back to IP). */
 export const chatUploadLimiter = make({
   windowMs: 3_600_000,

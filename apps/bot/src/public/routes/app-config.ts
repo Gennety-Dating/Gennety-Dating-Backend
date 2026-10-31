@@ -103,6 +103,9 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // «Сегодня» session) — the cheat sheet needs both (2026-10-15).
       morningAfter: env.MORNING_AFTER_ENABLED,
       wishlist: env.WISHLIST_FEATURE_ENABLED,
+      // The private screenshot library (decision journal 2026-10-31). False:
+      // no Settings row, no chat card, and its routes answer `feature-disabled`.
+      screenshotLibrary: env.SCREENSHOT_LIBRARY_ENABLED,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides

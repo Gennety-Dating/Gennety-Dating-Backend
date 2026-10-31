@@ -182,6 +182,9 @@ export async function deleteUserAccount(
     removeUserStorage(env.SUPABASE_PHOTO_BUCKET, user.id, profilePaths),
     removeUserStorage(env.SUPABASE_CHAT_BUCKET, user.id, chatPaths),
     removeUserStorage(env.SUPABASE_VOICE_BUCKET, user.id, voicePaths),
+    // Screenshot library: every object is under `${userId}/`, also ones whose
+    // upload never finished, so the listing is what erases them.
+    removeUserStorage(env.SUPABASE_SCREENSHOT_BUCKET, user.id, []),
   ]);
   const failedObjects = cleanup.flatMap((result) => result.failedObjects);
   if (failedObjects.length > 0) {

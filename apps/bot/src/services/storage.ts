@@ -1206,3 +1206,65 @@ async function signBatch(
     return null;
   }
 }
+
+/* ── Screenshot library (private bucket, `${userId}/${itemId}.jpg`) ─────── */
+
+/** A PUT target for a key the server chose; retries may overwrite the same key. */
+export async function createScreenshotSignedUpload(path: string): Promise<string | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !isSafeStorageObjectPath(path)) return null;
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/storage/v1/object/upload/sign/${env.SUPABASE_SCREENSHOT_BUCKET}/${path}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "x-upsert": "true" },
+        signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as { url?: string };
+    if (!json.url) return null;
+    return json.url.startsWith("http") ? json.url : `${env.SUPABASE_URL}/storage/v1${json.url}`;
+  } catch {
+    return null;
+  }
+}
+
+export type ScreenshotDownload =
+  | { ok: true; bytes: Buffer }
+  | { ok: false; reason: "missing" | "too_large" | "unreachable" };
+
+/** Reads an untrusted upload back, never buffering more than `maxBytes`. */
+export async function downloadScreenshot(path: string, maxBytes: number): Promise<ScreenshotDownload> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !isSafeStorageObjectPath(path)) {
+    return { ok: false, reason: "missing" };
+  }
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_SCREENSHOT_BUCKET}/${path}`,
+      {
+        headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+        signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+      },
+    );
+    if (res.status === 400 || res.status === 404) return { ok: false, reason: "missing" };
+    if (!res.ok) return { ok: false, reason: "unreachable" };
+    const declared = Number(res.headers.get("content-length") ?? "0");
+    if (declared > maxBytes) {
+      await res.body?.cancel().catch(() => undefined);
+      return { ok: false, reason: "too_large" };
+    }
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.byteLength > maxBytes) return { ok: false, reason: "too_large" };
+    return { ok: true, bytes };
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+}
+
+export function createScreenshotSignedUrls(
+  paths: readonly string[],
+  expiresInSeconds: number,
+): Promise<Array<string | null>> {
+  return createSignedUrls(env.SUPABASE_SCREENSHOT_BUCKET, paths, expiresInSeconds);
+}

@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 439 entries
+# Decision index — all 440 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-10-31 | Private screenshot library behind a flag: own tables and bucket, consent per text version, row-state cron instead of a queue, generation against late answers, chat tools on intent, one card with several sources; founder approved images to OpenAI, 2,000-item cap, a single consent sheet; production pending | [2026-10-31-screenshot-library.md](./2026-10-31-screenshot-library.md) |
 | 2026-10-30 | Рабочая часть Sverkaus/Gennety остаётся на Mac по выбору владельца; копии на Mac + существующем сервере, новые функции рабочего пространства; файловый founder-outbox с at-least-once доставкой, без миграции БД | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |
 | 2026-10-29 | Share recognition: direct structured Product cards, one Instagram HTML read after share redirects, concurrent video request coalescing and city-aware cache; controlled benchmarks, production pending | [2026-10-29-share-recognition-latency.md](./2026-10-29-share-recognition-latency.md) |
 | 2026-10-29 | App chat removes a wishlist item on explicit request, including «удали его»; fresh owner read, ambiguity question, single-write budget, success receipt; no native update; production pending | [2026-10-29-chat-wishlist-removal.md](./2026-10-29-chat-wishlist-removal.md) |

@@ -196,6 +196,14 @@ shared rules in `packages/shared/src/wishlist.ts`.
 | **Retention** | No copy is made for the viewer: the sheet is read from the owner's live list, so an edit, a deletion, hiding the list or the owner's account deletion takes effect for the viewer immediately. An unlocked sheet stays openable for the viewer; the offer itself is shown for 7 days after mutual interest |
 | **Safeguard** | See DPIA R12–R13 |
 
+### 2.5j Screenshot library — NOT LIVE (feature flag off, 2026-10-31)
+
+Purpose: find things the person saved. Basis: consent, Art. 6(1)(a), per text version,
+stored in `screenshot_libraries`. Data: reduced screenshot copies, recognised text, model
+description and vector; may incidentally contain third-party or special-category data.
+Recipients: OpenAI, Supabase. Retention: until the person deletes it, disconnects or
+deletes the account. Public text: `legal/screenshot-library-draft.md`.
+
 ### 2.6 Communications with the AI, and the chat timeline
 
 | | |

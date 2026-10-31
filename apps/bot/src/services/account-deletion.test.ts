@@ -65,6 +65,7 @@ const testEnv = vi.hoisted(() => ({
   SUPABASE_PHOTO_BUCKET: "profile-photos",
   SUPABASE_CHAT_BUCKET: "chat-attachments",
   SUPABASE_VOICE_BUCKET: "voice-prompts",
+  SUPABASE_SCREENSHOT_BUCKET: "screenshots",
   FOUNDER_NOTIFY_ENABLED: true,
 }));
 vi.mock("../config.js", () => ({ env: testEnv }));

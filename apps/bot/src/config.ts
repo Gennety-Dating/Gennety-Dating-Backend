@@ -332,6 +332,7 @@ export const env = {
   /// INHERITED from production — which is exactly how the demo spent its first
   /// day writing into production storage (deploy.md, 2026-08-06).
   SUPABASE_VOICE_BUCKET: process.env.SUPABASE_VOICE_BUCKET ?? "voice-prompts",
+  SUPABASE_SCREENSHOT_BUCKET: process.env.SUPABASE_SCREENSHOT_BUCKET ?? "screenshots",
   /// Supabase Storage bucket for the media on admin announcements — the image
   /// or short silent video over the detail sheet, and the poster frame
   /// (decision journal 2026-09-13). Written only by the admin API. Expected to
@@ -705,6 +706,7 @@ export const env = {
   /// `MORNING_AFTER_ENABLED` as well (`wishlistSheetLive`, 2026-10-15), so this
   /// flag alone turns on collecting, not showing.
   WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
+  SCREENSHOT_LIBRARY_ENABLED: process.env.SCREENSHOT_LIBRARY_ENABLED === "true",
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),
