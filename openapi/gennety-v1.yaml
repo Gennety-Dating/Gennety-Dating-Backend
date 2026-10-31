@@ -1712,7 +1712,7 @@ paths:
       responses:
         "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     put:
       tags: [Screenshots]
       operationId: connectScreenshotLibrary
@@ -1735,8 +1735,8 @@ paths:
         "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
-        "409": { description: "`consent-required`: the text version changed." }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`consent-required`: the text version changed.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     patch:
       tags: [Screenshots]
       operationId: pauseScreenshotLibrary
@@ -1754,8 +1754,8 @@ paths:
         "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
-        "409": { description: "`library-off`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`library-off`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     delete:
       tags: [Screenshots]
       operationId: disconnectScreenshotLibrary
@@ -1767,7 +1767,7 @@ paths:
       responses:
         "202": { description: "Closed, removal under way", content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots/library/reconcile:
     post:
       tags: [Screenshots]
@@ -1798,8 +1798,8 @@ paths:
                   removed: { type: integer }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
-        "409": { description: "`library-off`, `generation-stale`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`library-off`, `generation-stale`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots/uploads:
     post:
       tags: [Screenshots]
@@ -1836,10 +1836,10 @@ paths:
                   duplicate: { type: boolean }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
-        "409": { description: "`library-off`, `library-paused`, `generation-stale`, `auto-import-off`, `source-excluded`, `library-full`" }
-        "429": { description: "`rate-limited`" }
-        "503": { description: "`storage-unavailable`: retry later." }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`library-off`, `library-paused`, `generation-stale`, `auto-import-off`, `source-excluded`, `library-full`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: "`rate-limited`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: "`storage-unavailable`: retry later.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots:
     get:
       tags: [Screenshots]
@@ -1863,9 +1863,9 @@ paths:
                   nextBefore: { type: [string, "null"], format: date-time }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
-        "429": { description: "`rate-limited`" }
-        "503": { description: "`search-unavailable`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: "`rate-limited`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: "`search-unavailable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1876,7 +1876,7 @@ paths:
       responses:
         "200": { description: The item, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotItem" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`not-found`, also for someone else's id; `feature-disabled`" }
+        "404": { description: "`not-found`, also for someone else's id; `feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     delete:
       tags: [Screenshots]
       operationId: deleteScreenshot
@@ -1884,7 +1884,7 @@ paths:
       responses:
         "204": { description: Deleted or never existed }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`feature-disabled`" }
+        "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots/{id}/commit:
     post:
       tags: [Screenshots]
@@ -1905,10 +1905,10 @@ paths:
         "200": { description: The item, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotItem" } } } }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { description: "`not-found`, `feature-disabled`" }
-        "409": { description: "`upload-missing`: send the bytes again. `library-off`, `generation-stale`" }
-        "422": { description: "`bad-image`: not a JPEG or PNG within the limits. The row is gone." }
-        "503": { description: "`storage-unavailable`" }
+        "404": { description: "`not-found`, `feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`upload-missing`: send the bytes again. `library-off`, `generation-stale`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: "`bad-image`: not a JPEG or PNG within the limits. The row is gone.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: "`storage-unavailable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/wishlist:
     get:
       tags: [me]
