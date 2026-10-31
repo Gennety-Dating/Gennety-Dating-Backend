@@ -1765,7 +1765,7 @@ paths:
         a retrying sweep: removal is finished only when `counts.deleting` is 0.
         Originals in Photos are never touched.
       responses:
-        "202": { description: Closed, removal under way, content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
+        "202": { description: "Closed, removal under way", content: { application/json: { schema: { $ref: "#/components/schemas/ScreenshotLibrary" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`feature-disabled`" }
   /v1/me/screenshots/library/reconcile:
