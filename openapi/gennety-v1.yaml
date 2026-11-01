@@ -1704,6 +1704,296 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/memory/ideas:
+    get:
+      tags: [Memory]
+      operationId: listMemoryIdeas
+      summary: The person's ideas, last changed first
+      parameters:
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: intent, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: before, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MemoryIdea" } }
+                  nextBefore: { type: [string, "null"], format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Memory]
+      operationId: saveMemoryIdea
+      summary: Keep something the person chose. A known identity joins its idea
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 120 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, title]
+              properties:
+                kind: { $ref: "#/components/schemas/MemoryIdeaKind" }
+                title: { type: string, maxLength: 120 }
+                note: { type: string, maxLength: 300 }
+                city: { type: string, maxLength: 80 }
+                placeId: { type: string }
+                reason: { $ref: "#/components/schemas/MemoryReason" }
+                recipient: { type: string, maxLength: 60 }
+                screenshotId: { type: string, format: uuid }
+                url: { type: string }
+                quote: { type: string, maxLength: 300 }
+      responses:
+        "200": { description: Joined an existing idea, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdeaSaved" } } } }
+        "201": { description: A new idea, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdeaSaved" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`source-not-found`; `feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`limit-reached`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/questions:
+    get:
+      tags: [Memory]
+      operationId: listMemoryIdeaQuestions
+      summary: A few new ideas worth one short question about why they were saved
+      responses:
+        "200":
+          description: Possibly none
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MemoryIdea" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/me/memory/ideas/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Memory]
+      operationId: getMemoryIdea
+      summary: One idea with its sources
+      responses:
+        "200": { description: The idea, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdea" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    patch:
+      tags: [Memory]
+      operationId: updateMemoryIdea
+      summary: One change per call. Intent, reason, «ask later» or the place
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 120 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                intent: { type: string, enum: [interested, want, tried, dropped] }
+                reason: { $ref: "#/components/schemas/MemoryReason" }
+                recipient: { type: string, maxLength: 60 }
+                snoozeReason: { type: boolean }
+                placeId: { type: [string, "null"] }
+                city: { type: string, maxLength: 80 }
+                expectedVersion: { type: integer }
+      responses:
+        "200": { description: The idea as it now stands, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdea" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`version-conflict`, `already-an-idea`, `planned-needs-a-date`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      tags: [Memory]
+      operationId: deleteMemoryIdea
+      summary: Delete the idea. Screenshots and wishlist positions stay
+      responses:
+        "204": { description: Deleted or never existed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/me/memory/ideas/{id}/usage:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Memory]
+      operationId: setMemoryIdeaUsage
+      summary: One use on or off, or «only for me». Off works with the feature off too
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 120 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                use: { type: string, enum: [own_dates, matching, partner] }
+                allow: { type: boolean }
+                onlyForMe: { type: boolean }
+                expectedVersion: { type: integer }
+      responses:
+        "200": { description: The idea as it now stands, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdea" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`not-own-wish`, `version-conflict`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/{id}/merge:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Memory]
+      operationId: mergeMemoryIdeas
+      summary: Join another idea into this one, on the person's word
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [fromId], properties: { fromId: { type: string, format: uuid } } }
+      responses:
+        "200": { description: The joined idea, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryIdea" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/{id}/split:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Memory]
+      operationId: splitMemoryIdea
+      summary: Undo a wrong join. The new idea starts with no uses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceIds, title]
+              properties:
+                sourceIds: { type: array, items: { type: string, format: uuid } }
+                title: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Both ideas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kept, split]
+                properties:
+                  kept: { $ref: "#/components/schemas/MemoryIdea" }
+                  split: { $ref: "#/components/schemas/MemoryIdea" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/{id}/deletion-scope:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Memory]
+      operationId: getMemoryIdeaDeletionScope
+      summary: What deleting this idea would remove, shown before it happens
+      responses:
+        "200":
+          description: The scope
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sources, wishlistPositionsKept, preferencesRevoked, remindersCancelled]
+                properties:
+                  sources: { type: object, additionalProperties: { type: integer } }
+                  wishlistPositionsKept: { type: integer }
+                  preferencesRevoked: { type: integer }
+                  remindersCancelled: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/{id}/sources/{sourceId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: sourceId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [Memory]
+      operationId: removeMemoryIdeaSource
+      summary: Take one source off. Removing the last one closes the idea
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema: { type: object, required: [ideaDeleted], properties: { ideaDeleted: { type: boolean } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/preferences:
+    get:
+      tags: [Memory]
+      operationId: listMemoryPreferences
+      summary: What the person confirmed about themselves and where it is used
+      responses:
+        "200":
+          description: The list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MemoryPreference" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Memory]
+      operationId: confirmMemoryPreference
+      summary: Confirm one. Matching stays off until its own grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [facet, value]
+              properties:
+                facet: { type: string, enum: [experience, ambience, format, food, interest, wish] }
+                value: { type: string, maxLength: 120 }
+                ideaId: { type: string, format: uuid }
+      responses:
+        "201": { description: Confirmed, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryPreference" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/preferences/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [Memory]
+      operationId: revokeMemoryPreference
+      summary: Stop every use at once
+      responses:
+        "204": { description: Revoked or never existed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/me/memory/preferences/{id}/matching:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Memory]
+      operationId: setMemoryPreferenceMatching
+      summary: Grant or take back its use in matching
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [allow], properties: { allow: { type: boolean } } }
+      responses:
+        "200": { description: The preference, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryPreference" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots/library:
     get:
       tags: [Screenshots]
@@ -8177,6 +8467,9 @@ components:
                 «The Morning After» (2026-10-08): the two-button check the day
                 after a date and the mutual offer. False → `/v1/me/after-date`
                 answers empty. Absent on an older server — treat as false.
+            memoryIdeas:
+              type: boolean
+              description: Ideas and their uses. False hides saving and offers; revoking and deleting still work.
             screenshotLibrary:
               type: boolean
               description: >-
@@ -9949,6 +10242,79 @@ components:
         capturedAt: { type: [string, "null"], format: date-time }
         importedAt: { type: string, format: date-time }
         imageUrl: { type: [string, "null"], description: "Signed, expires in an hour: refetch instead of keeping it." }
+    MemoryIdeaKind: { type: string, enum: [place, event, activity, outfit, gift, food, aesthetic, culture, note] }
+    MemoryReason: { type: string, enum: [this_place, atmosphere, date_idea, style, gift, reference] }
+    MemoryIdeaSaved:
+      type: object
+      required: [idea, created, candidates]
+      properties:
+        idea: { $ref: "#/components/schemas/MemoryIdea" }
+        created: { type: boolean }
+        candidates:
+          type: array
+          description: Same words in the same city. Worth asking; never joined automatically.
+          items:
+            type: object
+            required: [id, title, city]
+            properties:
+              id: { type: string, format: uuid }
+              title: { type: string }
+              city: { type: [string, "null"] }
+    MemoryIdea:
+      type: object
+      required: [id, kind, title, note, city, placeId, eventAt, eventTimezone, eventCheck, intent, reason, recipient, usage, version, sources, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        title: { type: string }
+        note: { type: [string, "null"] }
+        city: { type: [string, "null"] }
+        placeId: { type: [string, "null"] }
+        eventAt: { type: [string, "null"], format: date-time }
+        eventTimezone: { type: [string, "null"] }
+        eventCheck: { type: string, description: "unverified | confirmed | outdated | unknown" }
+        intent: { type: string, description: "interested | want | planned | tried | dropped" }
+        reason: { type: [string, "null"] }
+        recipient: { type: [string, "null"] }
+        usage:
+          type: object
+          required: [ownDates, matching, partner, onlyForMe]
+          properties:
+            ownDates: { type: boolean }
+            matching: { type: boolean }
+            partner: { type: boolean }
+            onlyForMe: { type: boolean }
+        version: { type: integer }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [id, kind, provenance, screenshotId, wishlistItemId, url, quote, createdAt]
+            properties:
+              id: { type: string, format: uuid }
+              kind: { type: string }
+              provenance: { type: string, description: "ocr | model | external | person" }
+              screenshotId: { type: [string, "null"], format: uuid }
+              wishlistItemId: { type: [string, "null"], format: uuid }
+              url: { type: [string, "null"] }
+              quote: { type: [string, "null"] }
+              createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MemoryPreference:
+      type: object
+      required: [id, facet, value, originIdeaId, usage, confirmedAt]
+      properties:
+        id: { type: string, format: uuid }
+        facet: { type: string }
+        value: { type: string }
+        originIdeaId: { type: [string, "null"], format: uuid }
+        usage:
+          type: object
+          required: [ownDates, matching]
+          properties:
+            ownDates: { type: boolean }
+            matching: { type: boolean }
+        confirmedAt: { type: string, format: date-time }
     ChatScreenshotsCard:
       type: object
       description: >-

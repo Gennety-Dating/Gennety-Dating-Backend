@@ -13,6 +13,16 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-01 — ideas over the screenshot library (additive migration, flag off).**
+
+1. Migration `20261101120000_memory_ideas` adds six tables. Additive.
+2. New optional env: `MEMORY_IDEAS_ENABLED` (default off).
+3. Do NOT set the flag before the screenshot library's own checklist is done.
+
+**Check after deploy:** `GET /v1/app/config` shows `features.memoryIdeas: false`;
+`POST /v1/me/memory/ideas` answers 404 `feature-disabled`; the `memory-ideas` tick runs without errors.
+Demo: same code, flag off.
+
 **PENDING 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
 
 1. Migration `20261031160000_screenshot_library` adds three tables. Additive, needs

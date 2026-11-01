@@ -453,6 +453,9 @@ model User {
   voicePrompt               VoicePrompt?
   screenshotLibrary         ScreenshotLibrary?
   screenshotItems           ScreenshotItem[]
+  memoryIdeas               MemoryIdea[]
+  memoryPreferences         MemoryPreference[]
+  memoryImpressions         MemoryImpression[]
   screenshotExclusions      ScreenshotExclusion[]
   musicTracks               ProfileMusicTrack[]
   scratchMap                UserScratchMap?
@@ -4018,4 +4021,171 @@ model ScreenshotExclusion {
 
   @@id([userId, sourceKey])
   @@map("screenshot_exclusions")
+}
+
+/// One thing a person wants, joined from however many sources mention it
+/// (decision journal 2026-11-01). Every field the person did not state stays
+/// null: a model's guess lives on the source, not here.
+model MemoryIdea {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  /// place | event | activity | outfit | gift | food | aesthetic | culture | note
+  kind               String
+  title              String
+  note               String?
+  /// `place:<id>`, `catalog:<key>` or `url:<canonical>`. Null when the only
+  /// thing known is a name. Unique per person, and a deleted idea gives it up.
+  canonicalKey       String?   @map("canonical_key")
+  /// Google Place id, the identity every catalog reader dedupes on. Null keeps
+  /// the idea personal: no invented point, no coordinates.
+  placeId            String?   @map("place_id")
+  city               String?
+  /// When the place was linked: person | external | model.
+  placeProvenance    String?   @map("place_provenance")
+  eventAt            DateTime? @map("event_at")
+  eventTimezone      String?   @map("event_timezone")
+  /// unverified | confirmed | outdated | unknown
+  eventCheck         String    @default("unverified") @map("event_check")
+  eventCheckedAt     DateTime? @map("event_checked_at")
+  /// interested | want | planned | tried | dropped
+  intent             String    @default("interested")
+  /// The intent a plan interrupted: a cancelled plan returns here.
+  intentBeforePlan   String?   @map("intent_before_plan")
+  /// this_place | atmosphere | date_idea | style | gift | reference
+  reason             String?
+  recipient          String?
+  reasonAnsweredAt   DateTime? @map("reason_answered_at")
+  reasonSnoozedUntil DateTime? @map("reason_snoozed_until")
+  allowOwnDates      Boolean   @default(false) @map("allow_own_dates")
+  allowMatching      Boolean   @default(false) @map("allow_matching")
+  allowPartner       Boolean   @default(false) @map("allow_partner")
+  /// The match a plan belongs to. Reads re-check the pair, so no foreign key.
+  plannedMatchId     String?   @map("planned_match_id") @db.Uuid
+  version            Int       @default(1)
+  deletedAt          DateTime? @map("deleted_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sources            MemoryIdeaSource[]
+  events             MemoryIdeaEvent[]
+  reminders          MemoryReminder[]
+
+  @@unique([userId, canonicalKey])
+  @@index([userId, deletedAt, updatedAt(sort: Desc)])
+  @@index([userId, placeId])
+  @@map("memory_ideas")
+}
+
+/// One mention of an idea. Sources keep their own owners and deletion rules:
+/// removing this row touches neither the screenshot nor the wishlist position.
+model MemoryIdeaSource {
+  id               String     @id @default(uuid()) @db.Uuid
+  ideaId           String     @map("idea_id") @db.Uuid
+  userId           String     @map("user_id") @db.Uuid
+  /// screenshot | link | chat | manual | wishlist
+  kind             String
+  /// What makes this source itself, like `screenshot:<id>` or `url:<canonical>`.
+  dedupeKey        String     @map("dedupe_key")
+  screenshotItemId String?    @map("screenshot_item_id") @db.Uuid
+  wishlistItemId   String?    @map("wishlist_item_id") @db.Uuid
+  url              String?
+  /// The person's own words for chat and manual sources.
+  quote            String?
+  /// Where the idea's data from this source came from: ocr | model | external | person.
+  provenance       String
+  /// The idea this source first belonged to, so a wrong join can be undone.
+  originIdeaId     String?    @map("origin_idea_id") @db.Uuid
+  createdAt        DateTime   @default(now()) @map("created_at")
+  idea             MemoryIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([ideaId])
+  @@index([screenshotItemId])
+  @@map("memory_idea_sources")
+}
+
+/// The history of meaningful changes, and the guard against repeats: an event
+/// redelivered under the same key is a no-op.
+model MemoryIdeaEvent {
+  id             String     @id @default(uuid()) @db.Uuid
+  ideaId         String     @map("idea_id") @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  /// person | system
+  actor          String
+  type           String
+  payload        Json?
+  idempotencyKey String?    @map("idempotency_key")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  idea           MemoryIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([ideaId, createdAt])
+  @@map("memory_idea_events")
+}
+
+/// What the person confirmed about themselves, in a compact form a consumer can
+/// read without ever touching a screenshot. `revokedAt` stops every use at once.
+model MemoryPreference {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  /// experience | ambience | format | food | interest | wish
+  facet         String
+  value         String
+  originIdeaId  String?   @map("origin_idea_id") @db.Uuid
+  allowOwnDates Boolean   @default(true) @map("allow_own_dates")
+  allowMatching Boolean   @default(false) @map("allow_matching")
+  confirmedAt   DateTime  @map("confirmed_at")
+  revokedAt     DateTime? @map("revoked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, facet, value])
+  @@index([userId, revokedAt])
+  @@map("memory_preferences")
+}
+
+/// An optional «remind me in time». At most one live row per idea, and the
+/// partial state lets a worker claim it once.
+model MemoryReminder {
+  id        String     @id @default(uuid()) @db.Uuid
+  ideaId    String     @map("idea_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  dueAt     DateTime   @map("due_at")
+  /// pending | sent | cancelled
+  state     String     @default("pending")
+  /// Refuses a second reminder for one occasion, across jobs and triggers.
+  dedupeKey String     @map("dedupe_key")
+  sentAt    DateTime?  @map("sent_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  idea      MemoryIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([state, dueAt])
+  @@index([ideaId])
+  @@map("memory_reminders")
+}
+
+/// One person's own view after an attended date. Place, format and partner are
+/// separate on purpose, and the row is never shown to the other side.
+model MemoryImpression {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  matchId      String   @map("match_id") @db.Uuid
+  ideaId       String?  @map("idea_id") @db.Uuid
+  /// liked | neutral | disliked | null when skipped
+  placeRating  String?  @map("place_rating")
+  formatRating String?  @map("format_rating")
+  /// Repeat this kind of date, with anyone. Says nothing about the partner.
+  repeatFormat Boolean? @map("repeat_format")
+  note         String?
+  skipped      Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchId])
+  @@index([ideaId])
+  @@map("memory_impressions")
 }

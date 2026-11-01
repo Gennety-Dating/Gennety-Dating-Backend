@@ -10,6 +10,7 @@ import {
   type ScreenshotsCard,
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
+import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -37,7 +38,7 @@ import {
 } from "./chat-context.js";
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
 import { buildPersonCard } from "./chat-person-card.js";
-import { CONSENT_GATED_TOOLS, personConsented, type ConsentQuestion } from "./chat-consent.js";
+import { MEMORY_STRICT_TOOLS, CONSENT_GATED_TOOLS, personConsented, type ConsentQuestion } from "./chat-consent.js";
 import { stripMarkdownEmphasis } from "./reply-text.js";
 import {
   PROPOSE_WISHLIST_TOOL,
@@ -392,7 +393,7 @@ const CHAT_TOOLS = [
  */
 const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number]
+  (typeof ALL_TOOLS)[number] | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number]
 >;
 
 /**
@@ -407,6 +408,7 @@ function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guide
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
     ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
     ...(options.screenshotCards ? SCREENSHOT_TOOLS : []),
+    ...(env.MEMORY_IDEAS_ENABLED ? MEMORY_TOOLS : []),
   ];
 }
 
@@ -429,6 +431,7 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [SHOW_APP_GUIDE_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
   ...SCREENSHOT_TOOL_KINDS,
+  ...MEMORY_TOOL_KINDS,
 };
 
 function toolKind(name: string): string | undefined {
@@ -675,7 +678,7 @@ async function runTurnInner(
 
       // Sharing is not asking: a profile write the person neither requested
       // nor agreed to is turned back into an offer (`chat-consent.ts`).
-      if (CONSENT_GATED_TOOLS.has(name)) {
+      if (CONSENT_GATED_TOOLS.has(name) || MEMORY_STRICT_TOOLS.has(name)) {
         let args: unknown = {};
         try {
           args = JSON.parse(tc.function.arguments || "{}");
@@ -695,7 +698,9 @@ async function runTurnInner(
             content: JSON.stringify({
               success: false,
               error: "no_consent",
-              instruction: name === "remove_wishlist_item"
+              instruction: MEMORY_STRICT_TOOLS.has(name)
+                ? "NOT changed: their last message did not ask for exactly this. Ask one short question naming the change; do not say it is done."
+                : name === "remove_wishlist_item"
                 ? "NOT removed: the person did not ask to remove this item, or the target is unclear. Ask which item they want removed; do not offer a profile change card."
                 : offerCards
                 ? "NOT saved: they shared this but did not ask to save it. React to what they said like a person would, and if it fits, offer this change with `offer_change` (the card asks — don't ask in words). Do not say you saved anything."
@@ -746,6 +751,25 @@ async function runTurnInner(
               : "This app has no such screen and NO button was shown. Never say one appeared — answer in words.",
           }),
         });
+        continue;
+      }
+
+      // Ideas (`chat-memory.ts`). Strict writes passed the consent check above;
+      // the budget and the receipt follow the tool's own success.
+      if (isMemoryTool(name)) {
+        if (!env.MEMORY_IDEAS_ENABLED) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // the executor refuses empty arguments
+        }
+        const result = await executeMemoryTool(userId, name, args);
+        if (toolKind(name) === "write" && toolReportedSuccess(result)) writesUsed++;
+        messages.push({ role: "tool", tool_call_id: tc.id, content: result });
         continue;
       }
 
@@ -1077,6 +1101,7 @@ async function buildChatMessages(
     options.guideCards ? GUIDE_ADDENDUM : null,
     options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
     options.wishlistCards ? WISHLIST_ADDENDUM : null,
+    env.MEMORY_IDEAS_ENABLED ? MEMORY_ADDENDUM : null,
     env.WISHLIST_FEATURE_ENABLED ? `### Removing items from their wishlist
 - You CAN remove a saved item here: get_my_wishlist, then remove_wishlist_item.
 - Only on their explicit request. Resolve «удали его / remove it» from the recent conversation;

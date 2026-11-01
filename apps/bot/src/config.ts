@@ -707,6 +707,9 @@ export const env = {
   /// flag alone turns on collecting, not showing.
   WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
   SCREENSHOT_LIBRARY_ENABLED: process.env.SCREENSHOT_LIBRARY_ENABLED === "true",
+  /// Ideas and their use (`docs/product/domains/memory-ideas.md`). Off turns
+  /// off offering and new data; revoking a use and deleting always stay on.
+  MEMORY_IDEAS_ENABLED: process.env.MEMORY_IDEAS_ENABLED === "true",
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),

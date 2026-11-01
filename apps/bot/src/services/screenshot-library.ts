@@ -19,6 +19,7 @@ import {
   type ScreenshotKind,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { dropScreenshotSources } from "./memory-ideas.js";
 import { imageDimensions } from "../utils/image-dimensions.js";
 import { sniffImageMime } from "../utils/image-sniff.js";
 import { createOpenAIEmbeddingClient, toPgVectorLiteral } from "./profile-analysis.js";
@@ -179,6 +180,7 @@ export async function disconnectLibrary(userId: string): Promise<ScreenshotLibra
       WHERE user_id = ${userId}::uuid AND deleted_at IS NULL
     `;
     await tx.screenshotExclusion.deleteMany({ where: { userId } });
+    await dropScreenshotSources(tx, userId, "all");
   });
   return libraryView(userId);
 }
@@ -349,6 +351,7 @@ export async function deleteItem(userId: string, itemId: string): Promise<void> 
   if (!row) return;
   await prisma.$transaction(async (tx) => {
     await hideRows(tx, { userId, id: itemId });
+    await dropScreenshotSources(tx, userId, [itemId]);
     await tx.screenshotExclusion.upsert({
       where: { userId_sourceKey: { userId, sourceKey: row.sourceKey } },
       create: { userId, sourceKey: row.sourceKey },
@@ -370,7 +373,12 @@ export async function reconcile(
   await requireOpen(userId, generation);
   let removed = 0;
   for (const sourceKey of removedSourceKeys) {
-    removed += await hideRows(prisma, { userId, sourceKey });
+    removed += await prisma.$transaction(async (tx) => {
+      const gone = await tx.screenshotItem.findMany({ where: { userId, sourceKey, deletedAt: null }, select: { id: true } });
+      const count = await hideRows(tx, { userId, sourceKey });
+      await dropScreenshotSources(tx, userId, gone.map((row) => row.id));
+      return count;
+    });
   }
   await prisma.screenshotLibrary.updateMany({ where: { userId, generation }, data: { lastReconciledAt: new Date() } });
   return { removed };

@@ -566,6 +566,14 @@ export const screenshotSearchLimiter = make({
   message: { error: "rate-limited" },
 });
 
+/** Ideas: a person edits a few at a time; a retry loop stops here. */
+export const memoryIdeasLimiter = make({
+  windowMs: 60_000,
+  limit: 120,
+  keyGenerator: (req): string => `memory:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate-limited" },
+});
+
 /** Mobile chat image upload — 30/hour per user (falls back to IP). */
 export const chatUploadLimiter = make({
   windowMs: 3_600_000,

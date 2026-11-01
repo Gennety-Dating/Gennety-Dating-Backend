@@ -69,6 +69,7 @@ import { createVenueChangeAppStoreRouter } from "./routes/venue-change-appstore.
 import { createPrimeTimeAppStoreRouter } from "./routes/prime-time-appstore.js";
 import { createWishlistRouter } from "./routes/wishlist.js";
 import { createScreenshotsRouter } from "./routes/screenshots.js";
+import { createMemoryRouter } from "./routes/memory.js";
 import { createShareRouter } from "./routes/share.js";
 import { createAfterDateRouter } from "./routes/after-date.js";
 import { createPremiumRouter } from "./routes/premium.js";
@@ -445,6 +446,7 @@ app.use("/v1/me/profiler", createNativeProfilerRouter());
 // inert behind their flags (wishlist 404s, after-date answers empty).
 app.use("/v1/me/wishlist", createWishlistRouter());
 app.use("/v1/me/screenshots", createScreenshotsRouter());
+app.use("/v1/me/memory", createMemoryRouter());
 // «Поделиться → Gennety» for a short video (decision journal 2026-10-24) —
 // the wishlist's front door, same switch; before `/v1/me` like the rest.
 app.use("/v1/me/share", createShareRouter());

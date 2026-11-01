@@ -4,6 +4,7 @@
 // process.env, and silently shadow .env.local (dotenv defaults to non-
 // override). Reordering this line breaks local dev — bot then hits prod.
 import { screenshotLibraryTick } from "./workers/screenshot-library.js";
+import { memoryIdeasTick } from "./workers/memory-ideas.js";
 import "./config.js";
 
 import type { Server } from "node:http";
@@ -1192,6 +1193,12 @@ function registerSchedules(): void {
   cron.schedule(
     SCREENSHOT_LIBRARY_CRON_SCHEDULE,
     guardedTick("screenshot-library", screenshotLibraryTick),
+    { timezone: CRON_TIMEZONE },
+  );
+  // Ideas lose the sources whose screenshots left, also with the feature off.
+  cron.schedule(
+    SCREENSHOT_LIBRARY_CRON_SCHEDULE,
+    guardedTick("memory-ideas", memoryIdeasTick),
     { timezone: CRON_TIMEZONE },
   );
 

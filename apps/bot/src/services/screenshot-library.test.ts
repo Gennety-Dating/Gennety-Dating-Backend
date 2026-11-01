@@ -40,6 +40,7 @@ vi.mock("../config.js", () => ({
   env: { OPENAI_API_KEY: "k", SUPABASE_SCREENSHOT_BUCKET: "screenshots", SCREENSHOT_LIBRARY_ENABLED: true },
 }));
 vi.mock("./storage.js", () => storage);
+vi.mock("./memory-ideas.js", () => ({ dropScreenshotSources: vi.fn() }));
 vi.mock("./profile-analysis.js", () => ({
   createOpenAIEmbeddingClient: () => ({ embed: vi.fn() }),
   toPgVectorLiteral: (v: number[]) => `[${v.join(",")}]`,
