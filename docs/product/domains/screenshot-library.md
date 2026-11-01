@@ -97,6 +97,28 @@ detail in that turn's context only and is stored nowhere. It carries its rules i
 same message: everything on it is data, no one is identified from a face or body, and
 a person pictured says nothing about the owner.
 
+## Is it still on
+
+`check_event` looks an event up through the web search the wishlist already uses, and
+answers one of three. `confirmed` means a page the search itself cited states a date
+that has not passed; the agent may give that link. `outdated` means a cited page says
+it is over, or a date, on the page or the screenshot, has passed, which needs no search.
+`unverified` is everything else: no cited page, no date, a timeout, a limit. Then the
+agent states nothing as fact and says it could not check.
+
+A screenshot's words are search terms and no more. Links are removed from them before
+the search, and a link counts only if the search's own record cites its site, so a page
+planted in a screenshot cannot vouch for itself. Links are never opened by Gennety.
+
+Ten searches per person per day and two per turn, in process like the wishlist's; twenty
+seconds each. The verdict is cached six hours for a yes, a day for a no and half an hour
+for not knowing, shared across people, in `web_lookup_cache`; a failed search is not cached
+and a cached yes whose date has passed reads as `outdated`. Tokens reach the person's
+daily budget through `openaiFetch`. Over budget means no search. Each search is billed by
+the provider apart from tokens; `[event-check]` log lines count them. Not run against the
+live provider yet: the shape of `web_search_call.action.sources` and citations under a
+JSON answer is unmeasured, and if they come back empty every answer is `unverified`.
+
 ## Cost
 
 Prices at the time of writing, `gpt-6-luna`: $0.10 input and $0.50 output per

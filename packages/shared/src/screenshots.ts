@@ -85,6 +85,17 @@ export const SCREENSHOT_VIEWS_PER_TURN = 2;
 /** The agent's look at a picture only needs its URL for the next model call. */
 export const SCREENSHOT_VIEW_URL_TTL_S = 300;
 
+/** `check_event`: web searches per person per day, and per turn. A cached answer is free. */
+export const EVENT_CHECKS_PER_DAY = 10;
+export const EVENT_CHECKS_PER_TURN = 2;
+/** The person is waiting for a reply, so a slow search reads as «could not check». */
+export const EVENT_CHECK_TIMEOUT_MS = 20_000;
+export const EVENT_CHECK_MAX_OUTPUT_TOKENS = 2_000;
+/** A yes goes stale fastest: tickets sell out. A no holds longer; not knowing is retried soon. */
+export const EVENT_CHECK_CACHE_CONFIRMED_MS = 6 * 3_600_000;
+export const EVENT_CHECK_CACHE_OUTDATED_MS = 24 * 3_600_000;
+export const EVENT_CHECK_CACHE_UNVERIFIED_MS = 30 * 60_000;
+
 /** Ceiling of one reading. A longer answer is cut, which `finish_reason` reports. */
 export const SCREENSHOT_READING_MAX_TOKENS = 1_500;
 /** Words the reading may copy off the image; the phone's OCR is kept apart. */

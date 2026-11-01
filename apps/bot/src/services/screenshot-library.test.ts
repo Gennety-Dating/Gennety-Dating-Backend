@@ -467,6 +467,28 @@ describe("chat tools", () => {
     });
   });
 
+  describe("checking an event", () => {
+    it("works with no library, and tells the agent how to speak about the answer", async () => {
+      db.screenshotLibrary.findUnique.mockResolvedValue(null);
+      const parsed = JSON.parse((await executeScreenshotTool(USER, "check_event", { name: "Jazz", city: "Kyiv", date: "2020-01-01" })).result);
+      expect(parsed).toMatchObject({ status: "outdated", reason: "date_passed" });
+      expect(parsed.instruction).toMatch(/Do not suggest it/);
+      expect(db.screenshotLibrary.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("stops at two per turn", async () => {
+      const turn = newScreenshotTurnState();
+      const args = { name: "Jazz", city: "Kyiv", date: "2020-01-01" };
+      await executeScreenshotTool(USER, "check_event", args, {}, turn);
+      await executeScreenshotTool(USER, "check_event", args, {}, turn);
+      expect(JSON.parse((await executeScreenshotTool(USER, "check_event", args, {}, turn)).result).error).toBe("check_limit");
+    });
+
+    it("refuses without a name", async () => {
+      expect(JSON.parse((await executeScreenshotTool(USER, "check_event", { city: "Kyiv" })).result).error).toBe("bad_arguments");
+    });
+  });
+
   it("another person's id reads as missing and makes no card", async () => {
     db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
     db.screenshotItem.findFirst.mockResolvedValue(null);
