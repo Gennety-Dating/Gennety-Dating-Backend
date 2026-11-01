@@ -1,3 +1,4 @@
+import { dropWishlistSource } from "./memory-ideas.js";
 import { prisma } from "@gennety/db";
 import {
   LEGAL_DOCS_TASTE_HINTS_FROM,
@@ -326,6 +327,10 @@ export async function deleteWishlistItem(userId: string, itemId: string, now: Da
   const { count } = await prisma.wishlistItem.deleteMany({ where: { id: itemId, userId } });
   if (count === 0) return false;
   await prisma.user.update({ where: { id: userId }, data: { wishlistChangedAt: now } });
+  // The position's trace in ideas goes with it, whatever the flag: deletion never waits.
+  await dropWishlistSource(userId, itemId).catch((err: unknown) => {
+    console.warn("[wishlist] idea source not dropped:", err instanceof Error ? err.name : "error");
+  });
   const path = ownWishlistImagePath(userId, row?.imageUrl);
   if (path) {
     void deleteStorageObject(env.SUPABASE_CHAT_BUCKET, path).catch((err: unknown) => {

@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { prisma } from "@gennety/db";
 import {
   MEMORY_IDEA_KINDS,
   MEMORY_INTENTS,
@@ -6,6 +7,7 @@ import {
   MEMORY_RATINGS,
   MEMORY_REASONS,
   MEMORY_USES,
+  type Language,
   type MemoryIdeaKind,
   type MemoryIntent,
   type MemoryPreferenceFacet,
@@ -48,6 +50,7 @@ import {
   planningSuggestions,
   recordImpression,
   setReminder,
+  vibeQuestion,
 } from "../../services/memory-planning.js";
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T => typeof value === "string" && (list as readonly string[]).includes(value);
@@ -127,6 +130,7 @@ export function createMemoryRouter(): Router {
       kind: body.kind as MemoryIdeaKind,
       title: body.title,
       ...(typeof body.note === "string" ? { note: body.note } : {}),
+      ...(typeof body.topic === "string" ? { topic: body.topic } : {}),
       ...(typeof body.city === "string" ? { city: body.city } : {}),
       ...(typeof body.placeId === "string" ? { placeId: body.placeId } : {}),
       ...(body.reason ? { reason: body.reason as MemoryReason } : {}),
@@ -263,7 +267,7 @@ export function createMemoryRouter(): Router {
     const id = ideaId(req, res);
     if (!id) return;
     if (!env.MEMORY_IDEAS_ENABLED) {
-      res.json({ suggestions: [], shared: [], vibe: [] });
+      res.json({ suggestions: [], shared: [], vibe: [], vibeIds: { experiences: [], ambiences: [] } });
       return;
     }
     res.json(await planningSuggestions(id, userOf(req), { city: typeof req.query.city === "string" ? req.query.city.slice(0, 80) : null }));
@@ -297,6 +301,16 @@ export function createMemoryRouter(): Router {
       skipped: body.skipped === true,
     });
     res.status(204).end();
+  }));
+
+  /** One question, or none. The answer goes to `POST /preferences` as facet and option id. */
+  router.get("/vibe-question", guarded(async (req, res) => {
+    if (!env.MEMORY_IDEAS_ENABLED) {
+      res.json({ question: null });
+      return;
+    }
+    const account = await prisma.user.findUnique({ where: { id: userOf(req) }, select: { language: true } });
+    res.json({ question: await vibeQuestion(userOf(req), (account?.language ?? "en") as Language) });
   }));
 
   router.get("/preferences", guarded(async (req, res) => {

@@ -1744,6 +1744,7 @@ paths:
                 kind: { $ref: "#/components/schemas/MemoryIdeaKind" }
                 title: { type: string, maxLength: 120 }
                 note: { type: string, maxLength: 300 }
+                topic: { type: string, maxLength: 40 }
                 city: { type: string, maxLength: 80 }
                 placeId: { type: string }
                 reason: { $ref: "#/components/schemas/MemoryReason" }
@@ -1758,6 +1759,39 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`source-not-found`; `feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "409": { description: "`limit-reached`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/vibe-question:
+    get:
+      tags: [Memory]
+      operationId: getMemoryVibeQuestion
+      summary: One question about the mood or activity they want, or none
+      description: >-
+        Asked once two or more moods or activities are saved and that facet is unanswered. Answer with
+        `POST /v1/me/memory/preferences`, the question's `facet` and an option's `id`. Using it in matching stays a
+        separate grant. `question` is null with the flag off.
+      responses:
+        "200":
+          description: The question or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [question]
+                properties:
+                  question:
+                    type: [object, "null"]
+                    required: [facet, title, options]
+                    properties:
+                      facet: { type: string }
+                      title: { type: string }
+                      options:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, label]
+                          properties:
+                            id: { type: string }
+                            label: { type: string }
+        "401": { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/memory/ideas/questions:
     get:
       tags: [Memory]
@@ -10492,6 +10526,7 @@ components:
         kind: { type: string }
         title: { type: string }
         note: { type: [string, "null"] }
+        topic: { type: [string, "null"], description: "One lowercase word for what it is about. Not in `required`: added 2026-11-01." }
         city: { type: [string, "null"] }
         placeId: { type: [string, "null"] }
         eventAt: { type: [string, "null"], format: date-time }

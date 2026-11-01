@@ -4,11 +4,20 @@ import {
   MEMORY_OVERLAP_STATUSES,
   MEMORY_PLANNING_SUGGESTIONS,
   MEMORY_REMINDER_LEAD_MS,
+  MEMORY_VIBE_QUESTION_MIN_IDEAS,
+  mapVibeTagsToFacets,
   memoryIdeaFitsPlan,
+  memoryVibeQuestion,
+  preferenceVenueIds,
   usableForOverlap,
   usableForOwnDates,
+  type Language,
   type MemoryIntent,
   type MemoryRating,
+  type MemoryVibeQuestion,
+  type VenueAmbience,
+  type VenueExperience,
+  type VenueFormat,
   type MemoryReason,
 } from "@gennety/shared";
 import { getIdea, markPlanned, MemoryIdeaError, releasePlan, setIntent, type MemoryIdeaView } from "./memory-ideas.js";
@@ -158,6 +167,8 @@ export interface PlanningSuggestion {
   title: string;
   kind: string;
   placeId: string | null;
+  /** As saved, in any language, so nothing here treats a spelling as a known mismatch. */
+  city: string | null;
   /** The person's own reason, for the sentence the app builds. */
   reason: string | null;
   /** The date is not confirmed. The app says so; it never claims it is on. */
@@ -169,22 +180,104 @@ export async function planningSuggestions(
   matchId: string,
   viewerId: string,
   options: { city: string | null; now?: Date },
-): Promise<{ suggestions: PlanningSuggestion[]; shared: PairOverlap[]; vibe: string[] }> {
+): Promise<{ suggestions: PlanningSuggestion[]; shared: PairOverlap[]; vibe: string[]; vibeIds: { experiences: VenueExperience[]; ambiences: VenueAmbience[] } }> {
   const pair = await readPair(matchId, viewerId);
   const now = options.now ?? new Date();
   const live = MEMORY_OVERLAP_STATUSES.has(pair.status);
-  if (!live) return { suggestions: [], shared: [], vibe: [] };
+  if (!live) return { suggestions: [], shared: [], vibe: [], vibeIds: { experiences: [], ambiences: [] } };
   const [rows, shared, preferences] = await Promise.all([
     prisma.memoryIdea.findMany({ where: { userId: viewerId, deletedAt: null, allowOwnDates: true }, orderBy: { updatedAt: "desc" }, take: 200 }),
     pairOverlap(matchId, viewerId),
-    prisma.memoryPreference.findMany({ where: { userId: viewerId, revokedAt: null, allowOwnDates: true, facet: { in: ["experience", "ambience", "format", "wish"] } }, take: 8, orderBy: { confirmedAt: "desc" }, select: { value: true } }),
+    prisma.memoryPreference.findMany({ where: { userId: viewerId, revokedAt: null, allowOwnDates: true, facet: { in: ["experience", "ambience", "format", "wish"] } }, take: 8, orderBy: { confirmedAt: "desc" }, select: { facet: true, value: true } }),
   ]);
-  const suggestions = rows
+  const vibeIds = preferenceVenueIds(preferences);
+  const fitting = rows
     .filter((r) => usableForOwnDates(gate(r)))
-    .filter((r) => memoryIdeaFitsPlan(r, { city: options.city, at: pair.agreedTime, now }))
+    .filter((r) => memoryIdeaFitsPlan(r, { city: options.city, at: pair.agreedTime, now }));
+  const ordered = await byConfirmedVibe(fitting, vibeIds);
+  const suggestions = ordered
     .slice(0, MEMORY_PLANNING_SUGGESTIONS)
-    .map((r) => ({ ideaId: r.id, title: r.title, kind: r.kind, placeId: r.placeId, reason: r.reason, needsCheck: r.eventAt !== null && r.eventCheck !== "confirmed" }));
-  return { suggestions, shared, vibe: preferences.map((p) => p.value) };
+    .map((r) => ({
+      ideaId: r.id,
+      title: r.title,
+      kind: r.kind,
+      placeId: r.placeId,
+      city: r.city,
+      reason: r.reason,
+      // An event with no date to its name is as unchecked as one with a wrong date.
+      needsCheck: (r.eventAt !== null || r.kind === "event") && r.eventCheck !== "confirmed",
+    }));
+  return { suggestions, shared, vibe: preferences.map((p) => p.value), vibeIds };
+}
+
+/** What they said they like comes first. An order only: nothing is added or dropped. */
+async function byConfirmedVibe(rows: IdeaRow[], vibe: { experiences: VenueExperience[]; ambiences: VenueAmbience[] }): Promise<IdeaRow[]> {
+  if (vibe.experiences.length + vibe.ambiences.length === 0) return rows;
+  const placeIds = rows.flatMap((r) => (r.placeId ? [r.placeId] : []));
+  if (placeIds.length === 0) return rows;
+  const venues = await prisma.curatedVenue.findMany({ where: { placeId: { in: placeIds } }, select: { placeId: true, vibeTags: true } });
+  const score = new Map(venues.map((venue) => {
+    const facets = mapVibeTagsToFacets(venue.vibeTags);
+    const hits = facets.experiences.filter((id) => vibe.experiences.includes(id)).length + facets.ambiences.filter((id) => vibe.ambiences.includes(id)).length;
+    return [venue.placeId, hits] as const;
+  }));
+  const of = (row: IdeaRow) => (row.placeId ? (score.get(row.placeId) ?? 0) : 0);
+  return rows.map((row, index) => ({ row, index })).sort((a, b) => of(b.row) - of(a.row) || a.index - b.index).map(({ row }) => row);
+}
+
+/** The pair a chat means by «наше свидание»: a booked date first, then the one being arranged. */
+export async function currentPairMatchId(userId: string): Promise<string | null> {
+  const matches = await prisma.match.findMany({
+    where: { OR: [{ userAId: userId }, { userBId: userId }], status: { in: [...MEMORY_OVERLAP_STATUSES] as Array<"negotiating" | "negotiating_venue" | "scheduled"> } },
+    orderBy: { updatedAt: "desc" },
+    take: 5,
+    select: { id: true, status: true },
+  });
+  return (matches.find((m) => m.status === "scheduled") ?? matches[0])?.id ?? null;
+}
+
+export type IntentSuggestion = { experiences: VenueExperience[]; ambiences: VenueAmbience[]; formats: VenueFormat[] };
+
+/**
+ * First-screen chips for a venue intent, with what the person confirmed first. Only
+ * suggestions: the intent is still theirs to confirm, and hard constraints and the
+ * final selection read none of this.
+ */
+export async function suggestionsWithPreferences(userId: string, suggestions: IntentSuggestion[]): Promise<IntentSuggestion[]> {
+  const rows = await prisma.memoryPreference.findMany({
+    where: { userId, revokedAt: null, allowOwnDates: true, facet: { in: ["experience", "ambience", "format"] } },
+    orderBy: { confirmedAt: "desc" },
+    take: 12,
+    select: { facet: true, value: true },
+  });
+  const vibe = preferenceVenueIds(rows);
+  if (vibe.experiences.length + vibe.ambiences.length === 0) return suggestions;
+  const hits = (s: IntentSuggestion) => s.experiences.filter((id) => vibe.experiences.includes(id)).length + s.ambiences.filter((id) => vibe.ambiences.includes(id)).length;
+  const ordered = suggestions.map((s, index) => ({ s, index })).sort((a, b) => hits(b.s) - hits(a.s) || a.index - b.index).map(({ s }) => s);
+  // A chip needs an experience to stand on; an ambience alone has reordered above.
+  if (vibe.experiences.length === 0 || (ordered[0] && hits(ordered[0]) > 0)) return ordered;
+  return [{ experiences: vibe.experiences.slice(0, 3), ambiences: vibe.ambiences.slice(0, 3), formats: [] }, ...ordered].slice(0, 3);
+}
+
+/**
+ * «Что тебе ближе» once there are a few moods or activities saved and the person
+ * has not said. Same input, same question. The answer is a plain confirmed
+ * preference; using it in matching stays a separate grant.
+ */
+export async function vibeQuestion(userId: string, language: Language): Promise<MemoryVibeQuestion | null> {
+  const rows = await prisma.memoryIdea.findMany({
+    where: { userId, deletedAt: null, kind: { in: ["aesthetic", "activity"] }, intent: { not: "dropped" }, OR: [{ reason: null }, { reason: { notIn: ["gift", "reference"] } }] },
+    select: { kind: true },
+    take: 200,
+  });
+  if (rows.length < MEMORY_VIBE_QUESTION_MIN_IDEAS) return null;
+  const answered = await prisma.memoryPreference.findMany({ where: { userId, revokedAt: null, facet: { in: ["ambience", "experience"] } }, select: { facet: true } });
+  const said = new Set(answered.map((a) => a.facet));
+  const aesthetic = rows.filter((r) => r.kind === "aesthetic").length;
+  const first: "ambience" | "experience" = aesthetic * 2 >= rows.length ? "ambience" : "experience";
+  const second: "ambience" | "experience" = first === "ambience" ? "experience" : "ambience";
+  const facet = [first, second].find((f) => !said.has(f));
+  return facet ? memoryVibeQuestion(facet, language) : null;
 }
 
 /**
@@ -262,6 +355,22 @@ export async function recordImpression(matchId: string, viewerId: string, input:
   if (idea) await setIntent(viewerId, idea.id, "tried", { actor: "system", idempotencyKey: `tried:${idea.id}:${matchId}` });
 }
 
+/** The date a chat means by «вчера было»: their latest one they confirmed going to. */
+export async function latestAttendedMatch(viewerId: string): Promise<{ matchId: string; venueName: string | null } | null> {
+  const match = await prisma.match.findFirst({
+    where: { OR: [{ userAId: viewerId, dateAttendedA: true }, { userBId: viewerId, dateAttendedB: true }] },
+    orderBy: { agreedTime: "desc" },
+    select: { id: true, venueName: true },
+  });
+  return match ? { matchId: match.id, venueName: match.venueName } : null;
+}
+
+/** What they allowed and have not tried: the honest answer to «а что дальше». */
+export async function nextAllowedIdeas(userId: string, limit = 2): Promise<Array<{ ideaId: string; title: string; kind: string }>> {
+  const rows = await prisma.memoryIdea.findMany({ where: { userId, deletedAt: null, allowOwnDates: true, plannedMatchId: null }, orderBy: { updatedAt: "desc" }, take: 50 });
+  return rows.filter((r) => usableForOwnDates(gate(r))).slice(0, limit).map((r) => ({ ideaId: r.id, title: r.title, kind: r.kind }));
+}
+
 /** Attended dates this person has not spoken about. Skipping counts as speaking. */
 export async function pendingImpressions(viewerId: string, limit = 3): Promise<Array<{ matchId: string; venueName: string | null; ideaId: string | null }>> {
   const matches = await prisma.match.findMany({
@@ -306,7 +415,7 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
   }
   const stale = await prisma.memoryIdea.findMany({
     where: { plannedMatchId: { not: null }, deletedAt: null },
-    select: { userId: true, plannedMatchId: true },
+    select: { userId: true, plannedMatchId: true, placeId: true },
     take: limit,
   });
   const matches = await prisma.match.findMany({
@@ -316,7 +425,9 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
   const byId = new Map(matches.map((m) => [m.id, m]));
   for (const row of stale) {
     const match = byId.get(row.plannedMatchId as string);
-    if (!match || match.status === "cancelled" || match.status === "expired") {
+    // A booked date whose place moved is no longer this idea's plan.
+    const moved = match?.status === "scheduled" && match.venuePlaceId !== null && row.placeId !== null && match.venuePlaceId !== row.placeId;
+    if (!match || match.status === "cancelled" || match.status === "expired" || moved) {
       released += await releasePlan(row.userId, row.plannedMatchId as string);
     }
   }
@@ -336,6 +447,8 @@ export async function setReminder(userId: string, ideaId: string, now: Date = ne
     create: { ideaId, userId, dueAt, dedupeKey },
     update: {},
   });
+  // Asked again after cancelling: it really is back on. One already sent stays sent.
+  await prisma.memoryReminder.updateMany({ where: { userId, dedupeKey, state: "cancelled" }, data: { state: "pending", dueAt } });
   await prisma.memoryReminder.updateMany({ where: { ideaId, state: "pending", dedupeKey: { not: dedupeKey } }, data: { state: "cancelled" } });
   return { dueAt: dueAt.toISOString() };
 }
@@ -349,12 +462,50 @@ export async function cancelReminder(userId: string, ideaId: string): Promise<vo
  * one is only set by the person asking again or by an existing reminder moving.
  */
 export async function setEventDate(userId: string, ideaId: string, eventAt: Date | null, timezone: string | null, check: "unverified" | "confirmed" | "outdated" | "unknown", now: Date = new Date()): Promise<void> {
+  const before = await prisma.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null }, select: { eventAt: true } });
+  if (!before) throw new MemoryIdeaError("not-found", 404);
   const hadReminder = await prisma.memoryReminder.count({ where: { ideaId, userId, state: "pending" } });
   const updated = await prisma.memoryIdea.updateMany({
     where: { id: ideaId, userId, deletedAt: null },
     data: { eventAt, eventTimezone: timezone, eventCheck: check, eventCheckedAt: now, version: { increment: 1 } },
   });
   if (updated.count === 0) throw new MemoryIdeaError("not-found", 404);
+  await prisma.memoryIdeaEvent.create({ data: { ideaId, userId, actor: "system", type: "event_check", payload: { check, at: eventAt?.toISOString() ?? null } } });
+  // The same date checked again keeps its reminder: cancelling it here would end it
+  // for good, as a repeat of the same occasion must not send twice.
+  const sameDate = before.eventAt?.getTime() === eventAt?.getTime();
+  if (sameDate && check !== "outdated") return;
   await cancelReminder(userId, ideaId);
   if (hadReminder > 0 && eventAt && eventAt > now && check !== "outdated") await setReminder(userId, ideaId, now);
+}
+
+/**
+ * What a web check says about a saved idea. Only the search's verdict lands here,
+ * never the screenshot's own words. A limit or an outage says nothing, so it leaves
+ * the last known state. A run of several days stays `unknown` with no date, since
+ * one date would rule out the other days; its check is asked again next time.
+ */
+export async function applyEventCheck(
+  userId: string,
+  ideaId: string,
+  result: { status: "confirmed" | "outdated" | "unverified"; reason: string; startDate?: string; endDate?: string },
+  now: Date = new Date(),
+): Promise<string | null> {
+  if (result.status === "unverified" && result.reason !== "no_source") return null;
+  const idea = await prisma.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null }, select: { eventAt: true, eventTimezone: true } });
+  if (!idea) return null;
+  if (result.status === "confirmed") {
+    if (result.endDate && result.endDate !== result.startDate) {
+      await setEventDate(userId, ideaId, null, null, "unknown", now);
+      return "unknown";
+    }
+    const day = result.startDate ?? result.endDate;
+    if (!day) return null;
+    const keep = idea.eventAt?.toISOString().slice(0, 10) === day;
+    await setEventDate(userId, ideaId, keep ? idea.eventAt : new Date(`${day}T12:00:00.000Z`), keep ? idea.eventTimezone : null, "confirmed", now);
+    return "confirmed";
+  }
+  const check = result.status === "outdated" ? "outdated" : "unknown";
+  await setEventDate(userId, ideaId, idea.eventAt, idea.eventTimezone, check, now);
+  return check;
 }

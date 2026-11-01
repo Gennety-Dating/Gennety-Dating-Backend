@@ -10,6 +10,7 @@ import {
   MEMORY_TITLE_MAX,
   canonicalMemoryUrl,
   isOnlyForMe,
+  isSensitivePreference,
   memoryCanonicalKey,
   possiblySameIdea,
   type MemoryIdeaKind,
@@ -76,6 +77,7 @@ export interface MemoryIdeaView {
   kind: string;
   title: string;
   note: string | null;
+  topic: string | null;
   city: string | null;
   placeId: string | null;
   eventAt: string | null;
@@ -96,6 +98,7 @@ export function ideaView(row: IdeaRow): MemoryIdeaView {
     kind: row.kind,
     title: row.title,
     note: row.note,
+    topic: row.topic,
     city: row.city,
     placeId: row.placeId,
     eventAt: row.eventAt?.toISOString() ?? null,
@@ -219,7 +222,7 @@ export async function saveIdea(
       }
       const count = await tx.memoryIdea.count({ where: { userId, deletedAt: null } });
       if (count >= MEMORY_IDEAS_MAX_PER_USER) throw new MemoryIdeaError("limit-reached", 409);
-      const answered = input.reason ? { reason: input.reason, reasonAnsweredAt: new Date(), recipient: clip(input.recipient, MEMORY_RECIPIENT_MAX) } : {};
+      const answered = input.reason ? { reason: input.reason, reasonAnsweredAt: new Date(), recipient: input.reason === "gift" ? clip(input.recipient, MEMORY_RECIPIENT_MAX) : null } : {};
       const row = await tx.memoryIdea.create({
         data: {
           userId,
@@ -369,9 +372,9 @@ export async function setReason(
   });
 }
 
-export async function snoozeReason(userId: string, id: string, now: Date = new Date()): Promise<MemoryIdeaView> {
+export async function snoozeReason(userId: string, id: string, now: Date = new Date(), forMs: number = MEMORY_REASON_SNOOZE_MS): Promise<MemoryIdeaView> {
   return change(userId, id, { actor: "person", type: "reason_snoozed" }, async () => ({
-    data: { reasonSnoozedUntil: new Date(now.getTime() + MEMORY_REASON_SNOOZE_MS) },
+    data: { reasonSnoozedUntil: new Date(now.getTime() + forMs) },
   }));
 }
 
@@ -443,7 +446,11 @@ export async function setPlace(userId: string, id: string, placeId: string | nul
 
 /** A plan began: the wish is remembered, so a cancelled plan restores it. */
 export async function markPlanned(userId: string, id: string, matchId: string): Promise<MemoryIdeaView> {
-  return change(userId, id, { actor: "system", type: "planned", idempotencyKey: `planned:${id}:${matchId}` }, async (row) => ({
+  // The row is the guard, not a history key: a date's place can move away and back.
+  const current = await getIdea(userId, id);
+  const already = await prisma.memoryIdea.count({ where: { id, userId, plannedMatchId: matchId } });
+  if (already > 0) return current;
+  return change(userId, id, { actor: "system", type: "planned" }, async (row) => ({
     data: { intent: "planned", plannedMatchId: matchId, intentBeforePlan: row.intent === "planned" ? row.intentBeforePlan : row.intent },
     payload: { matchId },
   }));
@@ -453,7 +460,7 @@ export async function markPlanned(userId: string, id: string, matchId: string): 
 export async function releasePlan(userId: string, matchId: string): Promise<number> {
   const rows = await prisma.memoryIdea.findMany({ where: { userId, plannedMatchId: matchId, deletedAt: null }, select: { id: true } });
   for (const { id } of rows) {
-    await change(userId, id, { actor: "system", type: "plan_released", idempotencyKey: `released:${id}:${matchId}` }, async (row) => ({
+    await change(userId, id, { actor: "system", type: "plan_released" }, async (row) => ({
       data: { intent: row.intent === "planned" ? (row.intentBeforePlan ?? "want") : row.intent, plannedMatchId: null, intentBeforePlan: null },
       payload: { matchId },
     }));
@@ -469,6 +476,8 @@ export async function mergeIdeas(userId: string, intoId: string, fromId: string,
     const from = await liveIdea(tx, userId, fromId);
     await tx.memoryIdeaSource.updateMany({ where: { ideaId: fromId, userId }, data: { ideaId: intoId } });
     await tx.memoryReminder.updateMany({ where: { ideaId: fromId, state: "pending" }, data: { state: "cancelled" } });
+    // A preference follows the thing it came from, or closing `into` later would miss it.
+    await tx.memoryPreference.updateMany({ where: { userId, originIdeaId: fromId }, data: { originIdeaId: intoId } });
     await tx.memoryIdea.updateMany({
       where: { id: fromId, userId },
       data: { deletedAt: new Date(), canonicalKey: null, version: { increment: 1 } },
@@ -628,6 +637,23 @@ export async function dropWishlistSource(userId: string, wishlistItemId: string)
   });
 }
 
+/** A position added from this idea: the idea gains that source, and the list keeps its own delete. */
+export async function attachWishlistSource(userId: string, ideaId: string, wishlistItemId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const row = await liveIdea(tx, userId, ideaId);
+    const owned = await tx.wishlistItem.findFirst({ where: { id: wishlistItemId, userId }, select: { id: true } });
+    if (!owned) throw new MemoryIdeaError("source-not-found", 404);
+    const dedupeKey = `wishlist:${wishlistItemId}`;
+    const known = await tx.memoryIdeaSource.findUnique({ where: { userId_dedupeKey: { userId, dedupeKey } } });
+    if (known) return;
+    const source = await tx.memoryIdeaSource.create({
+      data: { userId, ideaId, originIdeaId: ideaId, kind: "wishlist", dedupeKey, wishlistItemId, provenance: "person" },
+    });
+    await tx.memoryIdea.update({ where: { id: ideaId }, data: { version: { increment: 1 } } });
+    await recordEvent(tx, row, "person", "source_added", { sourceId: source.id, kind: "wishlist" });
+  });
+}
+
 /* ── confirmed preferences ───────────────────────────────────────────────── */
 
 export interface MemoryPreferenceView {
@@ -663,13 +689,17 @@ async function markProfileDirty(tx: Pick<typeof prisma, "profile">, userId: stri
 export async function confirmPreference(userId: string, facet: MemoryPreferenceFacet, value: string, originIdeaId: string | null = null): Promise<MemoryPreferenceView> {
   const clean = clip(value, MEMORY_PREFERENCE_VALUE_MAX);
   if (!clean) throw new MemoryIdeaError("bad-value", 400);
+  if (isSensitivePreference(clean)) throw new MemoryIdeaError("sensitive-value", 422);
   if (originIdeaId) await getIdea(userId, originIdeaId);
   const now = new Date();
+  // Confirming again turns matching off, so a vector holding it has to recompute.
+  const wasInMatching = await prisma.memoryPreference.count({ where: { userId, facet, value: clean, allowMatching: true } });
   const row = await prisma.memoryPreference.upsert({
     where: { userId_facet_value: { userId, facet, value: clean } },
     create: { userId, facet, value: clean, originIdeaId, confirmedAt: now },
     update: { revokedAt: null, confirmedAt: now, allowOwnDates: true, allowMatching: false, ...(originIdeaId ? { originIdeaId } : {}) },
   });
+  if (wasInMatching > 0) await markProfileDirty(prisma, userId);
   return preferenceView(row);
 }
 
