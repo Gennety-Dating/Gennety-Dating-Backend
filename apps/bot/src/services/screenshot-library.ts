@@ -504,8 +504,19 @@ export interface SearchDeps {
   embed?: (input: string) => Promise<number[]>;
 }
 
-function escapeLike(word: string): string {
-  return `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+/** Words of a description that say nothing on their own. The query is in English. */
+const QUERY_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "that", "this", "about", "some", "something", "things", "how", "what", "where", "when", "was", "are", "you", "your", "all", "any", "saved", "screenshot",
+]);
+
+/**
+ * A Postgres pattern for one word. It matches at the start of a word, so an
+ * inflected Russian word still finds its stem; a short one must be the whole word,
+ * or «car» answers «add to cart» and «recipe card» (labelled set, 2026-11-01).
+ */
+function wordPattern(word: string): string {
+  const escaped = word.replace(/[\\.^$*+?()[\]{}|-]/g, (c) => `\\${c}`);
+  return [...word].length < 5 ? `\\m${escaped}\\M` : `\\m${escaped}`;
 }
 
 /** Up to three lines around the first word found: what the person will recognise. */
@@ -578,21 +589,26 @@ export async function searchScreenshotsPage(
   const limit = request.limit ?? SCREENSHOT_SEARCH_HITS;
   const wanted = offset + limit + 1;
   const scope = filterSql(request.filter ?? {});
-  const words = [...new Set([...keywords, ...query.split(/[^\p{L}\p{N}'-]+/u)])]
-    .map((w) => w.trim().slice(0, 40))
-    .filter((w) => [...w].length >= 3)
+  const usable = (w: string) => w.trim().slice(0, 40);
+  const named = [...new Set(keywords.map(usable))].filter((w) => [...w].length >= 3).slice(0, 6);
+  const described = [...new Set(query.split(/[^\p{L}\p{N}'-]+/u).map(usable))]
+    .filter((w) => [...w].length >= 3 && !QUERY_STOP_WORDS.has(w.toLowerCase()))
     .slice(0, 8);
+  const words = [...named, ...described];
   const hits = new Map<string, ScreenshotHit>();
 
   if (words.length > 0) {
-    const patterns = words.map(escapeLike);
+    // A name given as a keyword finds on its own. Words of the description must
+    // all be there: one common word of it is not a match, meaning search is for that.
+    const anyOf = named.map(wordPattern);
+    const allOf = described.map(wordPattern);
     const rows = await prisma.$queryRaw<HitRow[]>`
       SELECT id, title, description, category, captured_at, state, ocr_text
       FROM screenshot_items
       WHERE user_id = ${userId}::uuid AND deleted_at IS NULL AND state <> 'reserved'
-        AND (ocr_text ILIKE ANY (${patterns}::text[])
-             OR title ILIKE ANY (${patterns}::text[])
-             OR description ILIKE ANY (${patterns}::text[]))
+        AND (concat_ws(' ', ocr_text, title, description) ~* ANY (${anyOf}::text[])
+             OR (cardinality(${allOf}::text[]) > 0
+                 AND concat_ws(' ', ocr_text, title, description) ~* ALL (${allOf}::text[])))
         ${scope}
       ORDER BY captured_at DESC NULLS LAST, id
       LIMIT ${wanted}

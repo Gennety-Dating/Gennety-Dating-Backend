@@ -23,6 +23,14 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 `POST /v1/me/memory/ideas` answers 404 `feature-disabled`; the `memory-ideas` tick runs without errors.
 Demo: same code, flag off.
 
+**PENDING 2026-11-01 — screenshot library: agent coverage (code only, flag off; no migration, no new env).**
+
+Ten stored kinds and `kind` on the API, `category` stays four values. Reindex of version 1
+rows runs only with the flag on. New agent tools `view_screenshot`, `check_event`, only on
+turns with the flag and the card. Check after deploy: nothing, the flag is off. Demo: same
+code, flag off. iOS: no change needed. Before the flag goes on: the checklist in
+`docs/product/domains/screenshot-library.md`.
+
 **PENDING 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
 
 1. Migration `20261031160000_screenshot_library` adds three tables. Additive, needs

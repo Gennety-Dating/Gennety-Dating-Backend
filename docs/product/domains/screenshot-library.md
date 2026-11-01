@@ -96,11 +96,20 @@ exclusion. Disconnecting clears all exclusions, so reconnecting imports afresh.
 Exact words over recognised text, title and description come first, then cosine
 distance up to `SCREENSHOT_MATCH_MAX_DISTANCE`. Both filter by owner in the query.
 There is no vector index: per-person rows are few and an approximate index filtered
-afterwards would lose results. The agent can narrow by kind and by the day a
+afterwards would lose results. Words match from the start of a word, whole if shorter
+than five letters. A keyword finds on its own; the words of a description must all be
+there. The labelled set found this: as plain substrings, «car insurance» answered
+«recipe card» and «add to cart». The agent can narrow by kind and by the day a
 screenshot was taken, and can list without a query, newest first with a total, for
 «все мои рестораны». An item with no capture time counts by its import. Pages are
-20 when listing and 8 when searching, with `nextOffset` while more remain. The distance limit is a starting value and has not
-been measured on a labelled set.
+20 when listing and 8 when searching, with `nextOffset` while more remain.
+
+The distance limit is a starting value and has not
+been measured: the labelled set is `apps/bot/evals/screenshot-search/labelled-set.ts`,
+all invented, nine lines of three items, and `threshold.ts` beside it prints the figures
+when given an embedding key. The SQL itself runs in
+`screenshot-library.integration.test.ts` with a toy embedding, which says nothing about
+the right value.
 
 ## What the agent reads and sees
 
@@ -149,5 +158,5 @@ API, half the price for the old archive, is not implemented yet.
 ## Before turning the flag on
 
 Create the private `screenshots` bucket. Publish the policy text in
-`legal/screenshot-library-draft.md` after legal review. Run the labelled search set
-and the physical iPhone timings. Compare real token counts with the estimate.
+`legal/screenshot-library-draft.md` after legal review. Run `evals/screenshot-search/threshold.ts` with a key and set the distance limit from it,
+take the physical iPhone timings, and run `check_event` against the live provider. Compare real token counts with the estimate.

@@ -2,7 +2,7 @@
 <!-- SOURCE: ARCHITECTURE.md (lines 1606-1972) — migrated 2026-09-01 -->
 
 #<!-- Ideas: /v1/me/memory/*; docs/product/domains/memory-ideas.md -->
-#<!-- Screenshot library: /v1/me/screenshots/*, cron SCREENSHOT_LIBRARY_CRON_SCHEDULE (each minute); docs/product/domains/screenshot-library.md -->
+#<!-- Screenshot library: /v1/me/screenshots/*, cron SCREENSHOT_LIBRARY_CRON_SCHEDULE (each minute); docs/product/domains/screenshot-library.md; 2026-11-01 `GET /v1/me/screenshots` gains query `kind`, items gain `kind`, `category` stays four values -->
 
 # Cron & Workers (`apps/bot/src/index.ts`)
 
