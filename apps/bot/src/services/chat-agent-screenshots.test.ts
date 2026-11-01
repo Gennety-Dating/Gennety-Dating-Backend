@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The screenshot library inside a chat turn: which turns get its tools and its
@@ -20,6 +20,7 @@ const messageCreate = vi.fn(async (a: { data: { content: string; attachment?: un
 }));
 const libraryFind = vi.fn();
 const itemFindFirst = vi.fn();
+const ideaFindMany = vi.fn(async (_a: unknown) => [] as Array<{ title: string }>);
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: async () => ({ telegramId: 4242n, language: "ru", profile: { homeCityKey: null } }) },
@@ -29,6 +30,9 @@ vi.mock("@gennety/db", () => ({
       delete: async () => undefined,
     },
     screenshotLibrary: { findUnique: (a: unknown) => libraryFind(a) },
+    memoryIdea: { findMany: (a: unknown) => ideaFindMany(a) },
+    memoryIdeaEvent: { create: async () => ({}) },
+    wishlistItem: { findMany: async () => [] },
     screenshotItem: { findFirst: (a: unknown) => itemFindFirst(a), findMany: async () => [], count: async () => 0 },
   },
   Prisma: { sql: () => [], empty: [], join: () => [] },
@@ -182,6 +186,62 @@ describe("a question about a date, not connected", () => {
     const out = await turn(CARDS);
     expect(out.screenshots).toBeUndefined();
     expect(messageCreate.mock.calls.at(-1)![0].data.attachment).toBeUndefined();
+  });
+});
+
+describe("ideas on, with no library card", () => {
+  const IDEA = "33333333-3333-4333-8333-333333333333";
+  const item = { title: "Шарф", category: "gift", image: "none", ideaId: IDEA };
+
+  beforeEach(() => {
+    env.MEMORY_IDEAS_ENABLED = true;
+    env.WISHLIST_FEATURE_ENABLED = true;
+    ideaFindMany.mockReset();
+    ideaFindMany.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    env.MEMORY_IDEAS_ENABLED = false;
+    env.WISHLIST_FEATURE_ENABLED = false;
+  });
+
+  it("the event check is there, and the rest of the library is not", async () => {
+    await turn();
+    const names = toolNames();
+    expect(names).toContain("check_event");
+    expect(names).toContain("planning_ideas");
+    expect(names).not.toContain("search_screenshots");
+  });
+
+  it("a gift for someone else makes no card without their exact words", async () => {
+    ideaFindMany.mockResolvedValue([{ title: "Шарф" }]);
+    queue = [calls([{ name: "propose_wishlist_items", args: { items: [item] } }]), plain];
+    const asked: string[] = [];
+    const out = await runChatTurn(
+      { userId: USER, text: "вот шарф", imageUrls: [], chatCards: new Set(["wishlist"]) },
+      { fetchFn, consent: async (q: { tool: string }) => { asked.push(q.tool); return false; } },
+    );
+    expect(asked).toContain("wishlist_from_gift_idea");
+    const reply = JSON.parse(String(sent[1]!.messages.find((m) => m.role === "tool")!.content));
+    expect(reply.error).toBe("gift_idea");
+    expect((out as { wishlist?: unknown }).wishlist).toBeUndefined();
+  });
+
+  it("with their exact words the card shows, and it never asks about an ordinary item", async () => {
+    ideaFindMany.mockResolvedValue([{ title: "Шарф" }]);
+    queue = [calls([{ name: "propose_wishlist_items", args: { items: [item] } }]), plain];
+    await runChatTurn({ userId: USER, text: "добавь шарф в мой вишлист", imageUrls: [], chatCards: new Set(["wishlist"]) }, { fetchFn, consent });
+    const reply = JSON.parse(String(sent[1]!.messages.find((m) => m.role === "tool")!.content));
+    expect(reply.success).toBe(true);
+
+    sent.length = 0;
+    ideaFindMany.mockResolvedValue([]);
+    queue = [calls([{ name: "propose_wishlist_items", args: { items: [{ title: "Духи", category: "perfume", image: "none" }] } }]), plain];
+    const asked: string[] = [];
+    await runChatTurn(
+      { userId: USER, text: "обожаю эти духи", imageUrls: [], chatCards: new Set(["wishlist"]) },
+      { fetchFn, consent: async (q: { tool: string }) => { asked.push(q.tool); return true; } },
+    );
+    expect(asked).toEqual([]);
   });
 });
 

@@ -63,6 +63,47 @@ form, which reads only the person's last message and refuses when it cannot answ
 Screenshot text, a link and the assistant's own words never count as a yes. The agent finds
 an idea first, asks when several match and tells the deletion scope before deleting.
 
+A finding becomes an idea through `save_idea` with `screenshotId`; kind and title come from
+the screenshot unless said otherwise (item is gift, media is culture, text and other are
+note, the rest keep their name). After showing something saved the agent may ask one short
+question: «Хочу сюда / Нравится атмосфера / Идея для свидания / Просто сохранить», which are
+`this_place`, `atmosphere`, `date_idea` and `reference`. A reason and a recipient come only
+from the person's words; the consent check says so. A skipped question on a saved idea is
+`skip_idea_question` and is not asked again for ten years, unlike the app's «позже». A question about
+a screenshot not yet saved has no row to remember it; the prompt asks not to repeat it, and the code does not enforce that.
+
+`check_event` with `idea_id` writes the verdict to the idea: a single confirmed day as
+`confirmed`, outdated as `outdated`, no source as `unknown`. An outage or a limit writes nothing.
+A run of several days becomes `unknown` with no date, because one date would rule out its other
+days; it reads as `needsCheck`, and is checked again next time. The check is also offered with ideas on and the library card off.
+
+`planning_ideas` reads the current pair's `planningSuggestions`, a booked date first. It passes no
+city: ideas keep a city as written, in any language, and a spelling is not a known mismatch. The
+suggestion carries `city`, and the agent is told to check it, which is an instruction, not a filter. It books and moves nothing.
+
+`confirm_preference` refuses, on every path, words about allergies, diet, health, beliefs,
+politics and sexuality, by an explicit list in five languages (`isSensitivePreference`, 422
+`sensitive-value`). A list is not a classifier: it over-refuses («без алкоголя») and can miss a
+paraphrase, so the prompt rule stays. A confirmed `experience` or `ambience` that is one of the venue
+ids orders planning suggestions by the catalog's tags and adds or orders the first chips of a venue
+intent. `format` is kept but changes neither. Nothing here touches hard constraints or the final selection.
+
+`GET /v1/me/memory/vibe-question` asks once two or more saved moods or activities exist and that
+facet is unanswered: ambience if at least half are moods, else experience, then the other. Options
+are the venue ids in five languages. The answer is `POST /preferences`; matching stays a separate grant.
+
+Adding to the wishlist stays the card. An item may name its `ideaId`; the tap adds a wishlist source to
+that idea, or makes a new idea when none is named. Removing the position calls `dropWishlistSource`,
+with the flag on or off. An idea with reason `gift` gets a card only after the strict consent check on
+the person's last message. Wishlist rules and the paid sheet are untouched.
+
+`use_style_reference` marks a saved look `style`. Only kind `outfit`. Style Picks reads the words live,
+and the set's cache key holds the digest, so the next read regenerates.
+
+`record_impression` writes place, format and repeat after a date the person confirmed going to, and
+answers with `next`, their allowed untried ideas. The person goes to the existing `record_date_feedback`.
+Nothing of it reaches the partner, and blind rules are not touched.
+
 ## Where ideas reach
 
 `services/memory-planning.ts`. Everything reads the grants at call time and nothing is cached,

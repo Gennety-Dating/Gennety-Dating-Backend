@@ -23,6 +23,13 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 `POST /v1/me/memory/ideas` answers 404 `feature-disabled`; the `memory-ideas` tick runs without errors.
 Demo: same code, flag off.
 
+**PENDING 2026-11-01 — ideas in chat, stage B (code only, flag off; no migration, no new env).**
+
+New agent tools `idea_questions`, `skip_idea_question`, `planning_ideas`, `use_style_reference`, `record_impression`;
+`check_event` also with ideas on and no library card. New `GET /v1/me/memory/vibe-question`, additive fields.
+One path runs with the flag off: removing a wishlist position drops its idea source, which finds nothing when no idea
+exists. Check after deploy: `vibe-question` answers `{question: null}`. Demo: same code, flag off. iOS: no change required.
+
 **PENDING 2026-11-01 — screenshot library: agent coverage (code only, flag off; no migration, no new env).**
 
 Ten stored kinds and `kind` on the API, `category` stays four values. Reindex of version 1
