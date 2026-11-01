@@ -13,8 +13,24 @@ A screenshot, the model's reading of it and something the person confirmed are
 three different things. Importing changes no profile field, no matching input,
 no date and nothing a partner can see. Adding to the wishlist stays the existing
 card with its button. Nothing from the library rides in the prompt: the agent
-calls `search_screenshots`, `read_screenshot` and `show_screenshots` on intent.
+calls `search_screenshots`, `read_screenshot`, `view_screenshot`, `show_screenshots`
+and `check_event` on intent.
 Telegram has no part of this.
+
+The agent looks when asked for something saved (`purpose: find_saved`), and may look
+once when the person asks about a date, something to do, a look, a gift, food, an
+atmosphere or free time (`purpose: inspiration`). Only the first can raise the
+«Подключить» button: a question about Saturday does not grow a card, and without a
+library the prompt tells the agent not to look or bring it up. The prompt carries one
+bit, whether a library is open, and none of its content.
+
+The prompt section also says, on every turn with the tools: saved is not wanted, so the
+reason and the atmosphere are asked, not concluded; no allergy, diet or sensitive trait
+from a picture; a gift starts with asking who it is for; nobody is identified from a
+face, and a pictured person says nothing about the owner; an event is checked before it
+is suggested and what has passed is not offered; found is not saved, and the wishlist's
+card stays the only way to add. These are instructions to a model, not enforced by code,
+apart from the tools' own limits; live prompt evals have not been run.
 
 ## Flow
 

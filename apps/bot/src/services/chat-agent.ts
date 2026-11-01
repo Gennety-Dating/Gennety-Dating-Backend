@@ -1,10 +1,12 @@
 import {
   executeScreenshotTool,
+  isScreenshotLibraryOpen,
   isScreenshotTool,
   newScreenshotTurnState,
   readScreenshotsCard,
   SCREENSHOT_TOOL_KINDS,
   SCREENSHOT_TOOLS,
+  screenshotLibraryAddendum,
   SCREENSHOTS_CARD_CLIENT_TOKEN,
   type ScreenshotImageForModel,
   type ScreenshotToolOutcome,
@@ -603,11 +605,13 @@ async function runTurnInner(
   // person's library reaches the prompt: the tools are called on intent.
   const screenshotCards = env.SCREENSHOT_LIBRARY_ENABLED && (input.chatCards?.has(SCREENSHOTS_CARD_CLIENT_TOKEN) ?? false);
   const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards });
+  // Unreadable counts as not connected: the find request still gets its answer.
+  const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
     userId,
     telegramId,
     sessionId,
-    { wishlistCards, offerCards, guideCards },
+    { wishlistCards, offerCards, guideCards, screenshotLibraryOpen },
   );
   const consent = deps.consent ?? personConsented;
   // The offer a "да" would be answering: the assistant's message right before
@@ -1081,7 +1085,7 @@ async function buildChatMessages(
   userId: string,
   telegramId: bigint,
   sessionId: string,
-  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean },
+  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotLibraryOpen?: boolean | null },
 ): Promise<{
   messages: OpenAIChatMessage[];
   openedNewSession: boolean;
@@ -1122,6 +1126,7 @@ async function buildChatMessages(
     options.guideCards ? GUIDE_ADDENDUM : null,
     options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
     options.wishlistCards ? WISHLIST_ADDENDUM : null,
+    typeof options.screenshotLibraryOpen === "boolean" ? screenshotLibraryAddendum(options.screenshotLibraryOpen) : null,
     env.MEMORY_IDEAS_ENABLED ? MEMORY_ADDENDUM : null,
     env.WISHLIST_FEATURE_ENABLED ? `### Removing items from their wishlist
 - You CAN remove a saved item here: get_my_wishlist, then remove_wishlist_item.

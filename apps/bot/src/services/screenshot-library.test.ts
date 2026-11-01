@@ -317,16 +317,48 @@ describe("search", () => {
 });
 
 describe("chat tools", () => {
-  it("not connected: no results, and the connect button", async () => {
+  it("not connected, asked to find: no results, and the connect button", async () => {
     db.screenshotLibrary.findUnique.mockResolvedValue(null);
-    const out = await executeScreenshotTool(USER, "search_screenshots", { query: "wine" });
+    const out = await executeScreenshotTool(USER, "search_screenshots", { query: "wine", purpose: "find_saved" });
     expect(out.card).toMatchObject({ connect: true, items: [] });
     expect(JSON.parse(out.result)).toMatchObject({ error: "library_not_connected" });
   });
 
+  it("not connected, a question about a date: no card and no mention", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue({ status: "off" });
+    for (const args of [{ query: "date idea", purpose: "inspiration" }, { query: "date idea" }]) {
+      const out = await executeScreenshotTool(USER, "search_screenshots", args);
+      expect(out.card).toBeUndefined();
+      expect(JSON.parse(out.result).instruction).toMatch(/do not mention the library/);
+    }
+  });
+
+  it("not connected, reading: promises no button that is not there", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(null);
+    const out = await executeScreenshotTool(USER, "read_screenshot", { id: ITEM });
+    expect(out.card).toBeUndefined();
+    expect(JSON.parse(out.result).instruction).not.toMatch(/button is under/);
+  });
+
+  it("a date question that finds nothing stays silent about the library", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    const out = await executeScreenshotTool(USER, "search_screenshots", { query: "qqq", purpose: "inspiration" }, { embed: async () => [0.1] });
+    expect(JSON.parse(out.result).instruction).toMatch(/do not mention that you looked/);
+  });
+
+  it("a date question that finds something is told saved is not wanted", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    db.$queryRaw.mockResolvedValueOnce([
+      { id: ITEM, title: "Cosy room", description: null, category: "aesthetic", captured_at: null, state: "ready", ocr_text: null },
+    ]);
+    const parsed = JSON.parse((await executeScreenshotTool(USER, "search_screenshots", { query: "cosy room", purpose: "inspiration" }, { embed: async () => [0.1] })).result);
+    expect(parsed.instruction).toMatch(/Why they saved it is unknown/);
+    expect(parsed.hits[0].kind).toBe("aesthetic");
+  });
+
   it("empty search is told to say so", async () => {
     db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
-    const out = await executeScreenshotTool(USER, "search_screenshots", { query: "qqq" }, { embed: () => Promise.resolve([0.1]) });
+    const out = await executeScreenshotTool(USER, "search_screenshots", { query: "qqq", purpose: "find_saved" }, { embed: () => Promise.resolve([0.1]) });
     const parsed = JSON.parse(out.result);
     expect(parsed.hits).toEqual([]);
     expect(parsed.instruction).toMatch(/invent nothing/i);
