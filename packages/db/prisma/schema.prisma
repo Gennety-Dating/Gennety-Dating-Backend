@@ -4033,6 +4033,9 @@ model MemoryIdea {
   kind               String
   title              String
   note               String?
+  /// One lowercase English word for what it is about («ceramics»), so two
+  /// people's ideas can meet without either's words. Null when none fits.
+  topic              String?
   /// `place:<id>`, `catalog:<key>` or `url:<canonical>`. Null when the only
   /// thing known is a name. Unique per person, and a deleted idea gives it up.
   canonicalKey       String?   @map("canonical_key")
@@ -4073,6 +4076,7 @@ model MemoryIdea {
   @@unique([userId, canonicalKey])
   @@index([userId, deletedAt, updatedAt(sort: Desc)])
   @@index([userId, placeId])
+  @@index([userId, topic])
   @@map("memory_ideas")
 }
 

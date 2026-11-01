@@ -63,6 +63,37 @@ form, which reads only the person's last message and refuses when it cannot answ
 Screenshot text, a link and the assistant's own words never count as a yes. The agent finds
 an idea first, asks when several match and tells the deletion scope before deleting.
 
+## Where ideas reach
+
+`services/memory-planning.ts`. Everything reads the grants at call time and nothing is cached,
+so revoking takes effect on the next read.
+
+- Venue board: a wanted place moves a few positions in the viewer's order. The set stays the
+  pair's, as `venue-change-personalization.ts` requires. A suggestion never books, pays, or moves
+  a date; a change still goes through the existing board.
+- Planning (`GET /v1/me/memory/matches/{id}/planning`): allowed wishes minus a known mismatch in
+  city, date or check. An unconfirmed date comes back as `needsCheck`. Unknown never excludes,
+  and it is never told as a fact.
+- A pair's overlap: same place or same `topic`, from ideas both sides allowed, after both said
+  yes, with no block either way. The viewer gets their own title back. An empty answer reads the
+  same whatever the cause.
+- Map: the person's points where the catalog knows the place, and the rest listed without a point.
+  It is its own read, separate from frequent places and the date map, and counts no visit.
+- Matching: a confirmed preference with its own grant joins the embedding input as one short
+  line, via `embeddingDirty`, so a revocation is out of the next vector. Hard filters run before
+  any of this, and the pitch does not read these rows. No quality gain is claimed: not measured.
+- Style Picks: looks marked `style`, as words. No image and no one's body. The digest hash
+  changes with them, so the cached set follows.
+- A date's memo: the owner's only. Weather, dress code and opening hours are not in it. The
+  briefing's own visibility gate is untouched. Health data is not read here at all.
+- After a date: `reconcilePlans` ties an idea to a real scheduled date and restores it after a
+  cancellation. Only a visit the person confirmed allows an impression, and only that sets
+  `tried`. Place, format and repeat are separate, nothing says anything about the partner,
+  «не хочу оценивать» counts as an answer, and a later answer corrects it.
+- Reminders: only for an idea with a date, at most one per occasion, one push a day per person,
+  held in quiet hours, claimed before sending. The idea is re-read at send time, so a dropped
+  wish, a moved date, a revoked use or a block ends it without a push.
+
 ## Demo mode
 
 Same code, flag off, so ideas do not appear in demo. When turned on there, synthetic data

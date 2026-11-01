@@ -58,6 +58,7 @@ export interface SaveIdeaInput {
   kind: MemoryIdeaKind;
   title: string;
   note?: string | null;
+  topic?: string | null;
   city?: string | null;
   placeId?: string | null;
   catalogKey?: string | null;
@@ -225,6 +226,7 @@ export async function saveIdea(
           kind: input.kind,
           title,
           note: clip(input.note, MEMORY_NOTE_MAX),
+          topic: clip(input.topic, 40)?.toLowerCase() ?? null,
           canonicalKey,
           placeId: input.placeId ?? null,
           placeProvenance: input.placeId ? (input.source.provenance === "person" ? "person" : "external") : null,
@@ -516,6 +518,7 @@ async function closeIdea(tx: Tx, userId: string, id: string, now: Date): Promise
     where: { userId, originIdeaId: id, revokedAt: null },
     data: { revokedAt: now, allowOwnDates: false, allowMatching: false },
   });
+  if (revoked.count > 0) await tx.profile.updateMany({ where: { userId }, data: { embeddingDirty: true, embeddingDirtyAt: now } });
   await tx.memoryIdeaSource.deleteMany({ where: { ideaId: id, userId } });
   await tx.memoryIdea.updateMany({
     where: { id, userId, deletedAt: null },
@@ -651,6 +654,12 @@ function preferenceView(row: { id: string; facet: string; value: string; originI
  * Something the person said about themselves, in so many words. Matching stays
  * off until a separate grant. Confirming a revoked value again is a new decision.
  */
+async function markProfileDirty(tx: Pick<typeof prisma, "profile">, userId: string): Promise<void> {
+  // The embedding recomputes from current grants, so a grant or a revocation
+  // reaches matching through the one path every profile edit already takes.
+  await tx.profile.updateMany({ where: { userId }, data: { embeddingDirty: true, embeddingDirtyAt: new Date() } });
+}
+
 export async function confirmPreference(userId: string, facet: MemoryPreferenceFacet, value: string, originIdeaId: string | null = null): Promise<MemoryPreferenceView> {
   const clean = clip(value, MEMORY_PREFERENCE_VALUE_MAX);
   if (!clean) throw new MemoryIdeaError("bad-value", 400);
@@ -667,6 +676,7 @@ export async function confirmPreference(userId: string, facet: MemoryPreferenceF
 export async function setPreferenceMatching(userId: string, id: string, allow: boolean): Promise<MemoryPreferenceView> {
   const updated = await prisma.memoryPreference.updateMany({ where: { id, userId, revokedAt: null }, data: { allowMatching: allow } });
   if (updated.count === 0) throw new MemoryIdeaError("not-found", 404);
+  await markProfileDirty(prisma, userId);
   const row = await prisma.memoryPreference.findFirstOrThrow({ where: { id, userId } });
   return preferenceView(row);
 }
@@ -676,6 +686,7 @@ export async function revokePreference(userId: string, id: string): Promise<void
     where: { id, userId, revokedAt: null },
     data: { revokedAt: new Date(), allowOwnDates: false, allowMatching: false },
   });
+  await markProfileDirty(prisma, userId);
 }
 
 export async function listPreferences(userId: string): Promise<MemoryPreferenceView[]> {

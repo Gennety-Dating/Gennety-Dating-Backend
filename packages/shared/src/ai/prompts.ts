@@ -539,6 +539,8 @@ export interface StylePicksDigest {
   placeVibes: string[];
   about: string | null;
   answers: Array<{ question: string; answer: string }>;
+  /** Looks the person chose as their own references, in words. Absent: none. */
+  references?: string[];
 }
 
 export interface StylePicksShortlistItem {
@@ -646,7 +648,7 @@ export function stylePicksUserContent(
 ${JSON.stringify(facts)}
 ${fenceUntrusted("about", digest.about)}
 ${fenceUntrusted("their answers", answers || null)}
-
+${digest.references?.length ? `${fenceUntrusted("looks they chose as references", digest.references.join("\n"))}\n` : ""}
 ## SHORTLIST (id | category | product | notes | tags | price tier 1-3)
 ${items}`;
 }

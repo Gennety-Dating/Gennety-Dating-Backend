@@ -3,6 +3,8 @@ import { prisma } from "@gennety/db";
 import { haversineDistanceKm } from "./geo.js";
 import { readAttendedPlaceIds } from "./date-map.js";
 import { readFrequentPlaces } from "./frequent-places.js";
+import { wantedPlaceIds } from "./memory-planning.js";
+import { env } from "../config.js";
 
 /**
  * Personal ordering of the venue-change board (2026-09-12, founder's call).
@@ -79,6 +81,8 @@ export interface ViewerAffinity {
   anchors: AffinityAnchor[];
   /** Place ids of this person's confirmed dates (the date map). */
   beenThere: ReadonlySet<string>;
+  /** Places this person said they want and allowed for their dates. */
+  wanted?: ReadonlySet<string>;
 }
 
 /** Nothing known about this viewer — ranking is then the identity function. */
@@ -105,6 +109,9 @@ const AFFINITY_WEIGHT = 0.45;
 
 /** Having already been taken there costs about a third of the list's span. */
 const SEEN_PENALTY = 0.35;
+
+/** A stated wish moves a card a few places, like affinity. It never adds one to the set. */
+const WANTED_BOOST = 0.3;
 
 /**
  * A visit count past this adds nothing more.
@@ -161,14 +168,16 @@ export function personalizeOrder<T extends RankableVenue>(
   affinity: ViewerAffinity,
 ): T[] {
   if (venues.length < 2) return [...venues];
-  if (affinity.anchors.length === 0 && affinity.beenThere.size === 0) return [...venues];
+  const wanted = affinity.wanted ?? new Set<string>();
+  if (affinity.anchors.length === 0 && affinity.beenThere.size === 0 && wanted.size === 0) return [...venues];
 
   const span = venues.length - 1;
   const scored = venues.map((venue, index) => {
     const base = 1 - index / span;
     const personal =
       AFFINITY_WEIGHT * affinityOf(venue, affinity.anchors) -
-      (venue.placeId && affinity.beenThere.has(venue.placeId) ? SEEN_PENALTY : 0);
+      (venue.placeId && affinity.beenThere.has(venue.placeId) ? SEEN_PENALTY : 0) +
+      (venue.placeId && wanted.has(venue.placeId) ? WANTED_BOOST : 0);
     return { index, score: base + personal };
   });
 
@@ -183,20 +192,23 @@ export function personalizeOrder<T extends RankableVenue>(
  */
 export async function readViewerAffinity(userId: string): Promise<ViewerAffinity> {
   try {
-    const [frequent, beenThere] = await Promise.all([
+    const [frequent, beenThere, wanted] = await Promise.all([
       // Reads the opt-in itself and answers with an empty ranking when it is
       // off, so consent is enforced in one place rather than re-checked here.
       readFrequentPlaces(userId),
       // Places of this person's confirmed dates — the date map's own source,
       // so "you have been here" means exactly what the profile shows.
       readAttendedPlaceIds(userId),
+      // Read live: a revoked use is gone from the next board. A failure here
+      // costs the nudge only, never the frequent-places signal.
+      env.MEMORY_IDEAS_ENABLED ? wantedPlaceIds(userId).catch(() => new Set<string>()) : new Set<string>(),
     ]);
 
     // Hidden places are excluded deliberately. Hiding one is the owner saying
     // "do not show people this about me"; quietly steering their date towards
     // it would honour the letter of that and not the point.
     const shown = frequent.ranking.shown;
-    if (shown.length === 0) return { anchors: [], beenThere };
+    if (shown.length === 0) return { anchors: [], beenThere, wanted };
 
     // The block carries no coordinates — it is a list of names — so the
     // catalog is what turns a place id back into a point on the map.
@@ -217,7 +229,7 @@ export async function readViewerAffinity(userId: string): Promise<ViewerAffinity
       if (!point) continue;
       anchors.push({ lat: point.lat, lng: point.lng, visits: place.visits });
     }
-    return { anchors, beenThere };
+    return { anchors, beenThere, wanted };
   } catch (err) {
     console.error("[venue-change] affinity unavailable — serving base order:", err);
     return NO_AFFINITY;

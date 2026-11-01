@@ -25,9 +25,11 @@ interface ProfileRow {
 }
 
 const profiles = new Map<string, ProfileRow>();
+const grants = vi.hoisted(() => ({ rows: [] as Array<{ userId: string; value: string }> }));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
+    memoryPreference: { findMany: vi.fn(async () => grants.rows) },
     profile: {
       findMany: vi.fn(async ({
         take,
@@ -139,6 +141,32 @@ function embeddingClient(stub: { embed: ReturnType<typeof vi.fn<(input: string) 
 }
 
 describe("embeddingRefreshTick (M-2)", () => {
+  it("adds only what the person granted to matching, and drops it after a revocation", async () => {
+    const seed = (id: string) =>
+      profiles.set(id, {
+        id,
+        userId: "u-grant",
+        psychologicalSummary: "Summary",
+        partnerPreferences: null,
+        negativeConstraints: null,
+        hobbies: [],
+        embeddingDirty: true,
+        embeddingDirtyAt: new Date(1),
+        embedding: null,
+      });
+    const embed = vi.fn(async (_input: string) => new Array(1536).fill(0.1) as number[]);
+    const client = embeddingClient({ embed: embed as never });
+    seed("p-grant");
+    grants.rows = [{ userId: "u-grant", value: "больше активных свиданий" }];
+    await embeddingRefreshTick({ client });
+    expect(embed.mock.calls.at(-1)?.[0]).toContain("Wants in dates: больше активных свиданий");
+
+    seed("p-grant");
+    grants.rows = [];
+    await embeddingRefreshTick({ client });
+    expect(embed.mock.calls.at(-1)?.[0]).not.toContain("Wants in dates");
+  });
+
   it("recomputes dirty profiles and clears the flag", async () => {
     seedDirty("p1", new Date("2026-01-01T00:00:00Z"));
 

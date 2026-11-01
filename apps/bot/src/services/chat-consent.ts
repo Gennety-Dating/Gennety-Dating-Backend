@@ -34,7 +34,7 @@ export const CONSENT_GATED_TOOLS = new Set([
  * Ideas: grants and deletion need the person's own words, and fail closed. Only
  * their last message counts; screenshot text and an assistant's reply are data.
  */
-export const MEMORY_STRICT_TOOLS = new Set(["save_idea", "update_idea", "grant_idea_use", "delete_idea", "confirm_preference", "grant_preference_matching"]);
+export const MEMORY_STRICT_TOOLS = new Set(["save_idea", "update_idea", "grant_idea_use", "delete_idea", "confirm_preference", "grant_preference_matching", "set_idea_reminder"]);
 
 const TIMEOUT_MS = 8_000;
 

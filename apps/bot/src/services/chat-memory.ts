@@ -28,6 +28,7 @@ import {
   setUsage,
   type MemoryIdeaView,
 } from "./memory-ideas.js";
+import { cancelReminder, setReminder, similarPlaces } from "./memory-planning.js";
 
 /**
  * The chat's way to manage ideas in plain words. The server owns every check:
@@ -57,6 +58,7 @@ export const MEMORY_TOOLS = [
     {
       kind: { type: "string", enum: [...MEMORY_IDEA_KINDS] },
       title: { type: "string" },
+      topic: { type: ["string", "null"], description: "One lowercase English word for what it is about, e.g. ceramics, jazz, picnic." },
       city: { type: ["string", "null"], description: "Only if they said it or it is on the source." },
       screenshotId: { type: ["string", "null"] },
       url: { type: ["string", "null"] },
@@ -95,6 +97,18 @@ export const MEMORY_TOOLS = [
     ["id"],
     { id: ID },
   ),
+  fn(
+    "similar_places",
+    "Places with the atmosphere of ones they saved («как у этих трёх»). Real catalog places only; check they fit before suggesting.",
+    ["ideaIds"],
+    { ideaIds: { type: "array", maxItems: 5, items: { type: "string" } }, cityKey: { type: ["string", "null"] } },
+  ),
+  fn(
+    "set_idea_reminder",
+    "«Напомни вовремя» for an idea with a date. Without a date it is refused: ask them for it. on=false cancels.",
+    ["id", "on"],
+    { id: ID, on: { type: "boolean" } },
+  ),
   fn("list_preferences", "What they have confirmed about themselves and where it is used.", [], {}),
   fn(
     "confirm_preference",
@@ -120,6 +134,8 @@ export const MEMORY_TOOL_KINDS: Record<string, "read" | "write"> = {
   find_ideas: "read",
   idea_deletion_scope: "read",
   list_preferences: "read",
+  similar_places: "read",
+  set_idea_reminder: "write",
   save_idea: "write",
   update_idea: "write",
   grant_idea_use: "write",
@@ -167,7 +183,7 @@ const str = (value: unknown): string | null => (typeof value === "string" && val
 export async function executeMemoryTool(userId: string, name: string, rawArgs: unknown): Promise<string> {
   const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as Record<string, unknown>;
   const id = str(args.id);
-  if (["update_idea", "grant_idea_use", "revoke_idea_use", "idea_deletion_scope", "delete_idea", "grant_preference_matching", "revoke_preference"].includes(name) && (!id || !isUuid(id))) {
+  if (["update_idea", "grant_idea_use", "revoke_idea_use", "idea_deletion_scope", "delete_idea", "grant_preference_matching", "revoke_preference", "set_idea_reminder"].includes(name) && (!id || !isUuid(id))) {
     return refused("bad_id", "Nothing changed. Use an id from find_ideas or list_preferences.");
   }
   try {
@@ -188,6 +204,7 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
         const saved = await saveIdea(userId, {
           kind: args.kind as MemoryIdeaKind,
           title: String(args.title ?? ""),
+          topic: str(args.topic),
           city: str(args.city),
           reason: (str(args.reason) as MemoryReason | null) ?? null,
           recipient: str(args.recipient),
@@ -228,6 +245,17 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
         await getIdea(userId, id as string);
         await deleteIdea(userId, id as string);
         return ok({ deleted: true });
+      case "similar_places": {
+        const ids = Array.isArray(args.ideaIds) ? args.ideaIds.filter((v): v is string => typeof v === "string" && isUuid(v)).slice(0, 5) : [];
+        const places = await similarPlaces(userId, ids, str(args.cityKey));
+        return ok({ places, ...(places.length === 0 ? { instruction: "Nothing to go on: say so and invent nothing." } : {}) });
+      }
+      case "set_idea_reminder":
+        if (args.on === false) {
+          await cancelReminder(userId, id as string);
+          return ok({ reminder: "cancelled" });
+        }
+        return ok({ reminder: await setReminder(userId, id as string) });
       case "list_preferences":
         return ok({ preferences: await listPreferences(userId) });
       case "confirm_preference": {
@@ -250,6 +278,8 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
         "not-own-wish": "Nothing changed: it is marked a gift or a reference, so it cannot be used for their own dates. Say that, and ask if that mark is wrong.",
         "source-not-found": "Nothing saved: that source is gone.",
         "version-conflict": "Nothing changed: it was just edited elsewhere. Read it again.",
+        "no-date": "No reminder set: it has no confirmed date. Ask them for the date; do not guess.",
+        "date-passed": "No reminder set: that date has passed or is out of date. Say so.",
       };
       return refused(err.code, instruction[err.code] ?? "Nothing changed. Tell them it did not work.");
     }

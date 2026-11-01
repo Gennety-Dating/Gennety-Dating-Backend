@@ -144,3 +144,28 @@ export function possiblySameIdea(
   const title = normalizedMemoryTitle(a.title);
   return title.length > 0 && title === normalizedMemoryTitle(b.title);
 }
+
+/** Days before a dated idea its reminder comes due. */
+export const MEMORY_REMINDER_LEAD_MS = 3 * 24 * 3_600_000;
+/** Push reminders at most this often per person, whatever the occasions. */
+export const MEMORY_REMINDER_MIN_GAP_MS = 24 * 3_600_000;
+export const MEMORY_PLANNING_SUGGESTIONS = 3;
+export const MEMORY_OVERLAP_MAX = 3;
+/** A pair's overlap can be shown only after both said yes; a blind decision stays blind. */
+export const MEMORY_OVERLAP_STATUSES: ReadonlySet<string> = new Set(["negotiating", "negotiating_venue", "scheduled"]);
+export const MEMORY_RATINGS = ["liked", "neutral", "disliked"] as const;
+export type MemoryRating = (typeof MEMORY_RATINGS)[number];
+
+/** Can it fit this plan, as far as is known? Unknown city or date does not exclude; a known mismatch does. */
+export function memoryIdeaFitsPlan(
+  idea: { city: string | null; eventAt: Date | null; eventCheck: string },
+  plan: { city: string | null; at: Date | null; now: Date },
+): boolean {
+  if (idea.city && plan.city && normalizedMemoryTitle(idea.city) !== normalizedMemoryTitle(plan.city)) return false;
+  if (idea.eventCheck === "outdated") return false;
+  if (idea.eventAt) {
+    if (idea.eventAt.getTime() < plan.now.getTime()) return false;
+    if (plan.at && Math.abs(idea.eventAt.getTime() - plan.at.getTime()) > 12 * 3_600_000) return false;
+  }
+  return true;
+}

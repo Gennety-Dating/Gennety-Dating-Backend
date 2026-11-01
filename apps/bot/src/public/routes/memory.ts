@@ -3,11 +3,13 @@ import {
   MEMORY_IDEA_KINDS,
   MEMORY_INTENTS,
   MEMORY_PREFERENCE_FACETS,
+  MEMORY_RATINGS,
   MEMORY_REASONS,
   MEMORY_USES,
   type MemoryIdeaKind,
   type MemoryIntent,
   type MemoryPreferenceFacet,
+  type MemoryRating,
   type MemoryReason,
   type MemoryUse,
 } from "@gennety/shared";
@@ -38,6 +40,15 @@ import {
   splitIdea,
   type ChangeOptions,
 } from "../../services/memory-ideas.js";
+import {
+  cancelReminder,
+  dateMemo,
+  ideaMap,
+  pendingImpressions,
+  planningSuggestions,
+  recordImpression,
+  setReminder,
+} from "../../services/memory-planning.js";
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T => typeof value === "string" && (list as readonly string[]).includes(value);
 
@@ -228,6 +239,64 @@ export function createMemoryRouter(): Router {
       return;
     }
     res.json(await removeSource(userOf(req), id, sourceId));
+  }));
+
+  router.put("/ideas/:id/reminder", guarded(async (req, res) => {
+    const id = ideaId(req, res);
+    if (!id || !enabled(res)) return;
+    res.json(await setReminder(userOf(req), id));
+  }));
+
+  router.delete("/ideas/:id/reminder", guarded(async (req, res) => {
+    const id = ideaId(req, res);
+    if (!id) return;
+    await cancelReminder(userOf(req), id);
+    res.status(204).end();
+  }));
+
+  router.get("/map", guarded(async (req, res) => {
+    res.json(env.MEMORY_IDEAS_ENABLED ? await ideaMap(userOf(req)) : { points: [], withoutPoint: [] });
+  }));
+
+  /** What ideas add to one date's planning. Empty looks the same for every reason. */
+  router.get("/matches/:id/planning", guarded(async (req, res) => {
+    const id = ideaId(req, res);
+    if (!id) return;
+    if (!env.MEMORY_IDEAS_ENABLED) {
+      res.json({ suggestions: [], shared: [], vibe: [] });
+      return;
+    }
+    res.json(await planningSuggestions(id, userOf(req), { city: typeof req.query.city === "string" ? req.query.city.slice(0, 80) : null }));
+  }));
+
+  /** The owner's own note for a date. Never served to the other side. */
+  router.get("/matches/:id/memo", guarded(async (req, res) => {
+    const id = ideaId(req, res);
+    if (!id) return;
+    res.json(env.MEMORY_IDEAS_ENABLED ? await dateMemo(id, userOf(req)) : { ideas: [], references: [] });
+  }));
+
+  router.get("/impressions/pending", guarded(async (req, res) => {
+    res.json({ items: env.MEMORY_IDEAS_ENABLED ? await pendingImpressions(userOf(req)) : [] });
+  }));
+
+  router.put("/matches/:id/impression", guarded(async (req, res) => {
+    const id = ideaId(req, res);
+    if (!id || !enabled(res)) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const rating = (v: unknown) => v == null || oneOf(MEMORY_RATINGS, v);
+    if (!rating(body.placeRating) || !rating(body.formatRating) || (body.repeatFormat != null && typeof body.repeatFormat !== "boolean")) {
+      res.status(400).json({ error: "bad-request" });
+      return;
+    }
+    await recordImpression(id, userOf(req), {
+      placeRating: (body.placeRating as MemoryRating | null | undefined) ?? null,
+      formatRating: (body.formatRating as MemoryRating | null | undefined) ?? null,
+      repeatFormat: (body.repeatFormat as boolean | null | undefined) ?? null,
+      note: typeof body.note === "string" ? body.note : null,
+      skipped: body.skipped === true,
+    });
+    res.status(204).end();
   }));
 
   router.get("/preferences", guarded(async (req, res) => {

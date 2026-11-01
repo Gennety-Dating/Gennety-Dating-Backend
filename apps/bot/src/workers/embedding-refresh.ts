@@ -220,6 +220,20 @@ async function refreshDirtyEmbeddings(
 
   type Row = (typeof dirty)[number];
 
+  // What the person granted to matching, in its compact form. Read whatever the
+  // flag says, so a revocation always leaves the next vector.
+  const granted = await prisma.memoryPreference.findMany({
+    where: { userId: { in: dirty.map((row) => row.userId) }, allowMatching: true, revokedAt: null },
+    orderBy: { confirmedAt: "desc" },
+    select: { userId: true, value: true },
+  });
+  const grantedByUser = new Map<string, string[]>();
+  for (const { userId, value } of granted) {
+    const list = grantedByUser.get(userId) ?? [];
+    if (list.length < 8) list.push(value);
+    grantedByUser.set(userId, list);
+  }
+
 
   const composeInput = (row: Row): string => {
     let text = [
@@ -235,6 +249,10 @@ async function refreshDirtyEmbeddings(
     const transcript = row.user?.voicePrompt?.transcript;
     if (transcript) {
       text += `\nVoice prompt: ${transcript}`;
+    }
+    const wants = grantedByUser.get(row.userId);
+    if (wants?.length) {
+      text += `\nWants in dates: ${wants.join("; ")}`;
     }
     return text.slice(0, 8000);
   };

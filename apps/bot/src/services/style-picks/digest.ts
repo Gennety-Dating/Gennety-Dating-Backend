@@ -6,6 +6,7 @@ import {
   type StylePicksDigest,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { styleReferenceTexts } from "../memory-planning.js";
 
 /**
  * Vibe Check, step 1: the person, reduced to what a stylist needs — built
@@ -68,6 +69,8 @@ export interface StyleDigestSource {
   answers: Array<{ questionId: string; answerText: string | null }>;
   /** One entry per distinct place (attended date or frequent place). */
   places: Array<{ category: string; vibeTags: string[] }>;
+  /** Looks the person chose as references (ideas), in words. No image, no body. */
+  references?: string[];
 }
 
 function clip(text: string, max: number): string {
@@ -169,6 +172,7 @@ export function buildStyleDigest(source: StyleDigestSource): StylePicksDigest | 
     placeVibes: [...vibeCounts.entries()].sort(byCount).slice(0, PLACE_VIBES_MAX).map(([vibe]) => vibe),
     about: summary ? clip(summary, STYLE_DIGEST_TEXT_MAX_CHARS) : null,
     answers: answers.slice(0, ANSWERS_MAX),
+    ...(source.references?.length ? { references: source.references.map((r) => clip(r, ANSWER_MAX_CHARS)) } : {}),
   };
   return digestSignalCount(digest) >= STYLE_DIGEST_MIN_SIGNALS ? digest : null;
 }
@@ -251,6 +255,7 @@ export async function loadStyleDigestSource(
       profile: user.profile,
       answers: user.profilerAnswers,
       places,
+      references: env.MEMORY_IDEAS_ENABLED ? await styleReferenceTexts(userId) : [],
     },
   };
 }

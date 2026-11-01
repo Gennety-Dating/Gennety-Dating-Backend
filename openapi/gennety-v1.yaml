@@ -1994,6 +1994,175 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/ideas/{id}/reminder:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Memory]
+      operationId: setMemoryIdeaReminder
+      summary: Remind in time. One live reminder per occasion
+      responses:
+        "200":
+          description: When it comes due
+          content:
+            application/json:
+              schema: { type: object, required: [dueAt], properties: { dueAt: { type: string, format: date-time } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`no-date`, `date-passed`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      tags: [Memory]
+      operationId: cancelMemoryIdeaReminder
+      summary: Do not remind about this
+      responses:
+        "204": { description: Cancelled or never set }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/me/memory/map:
+    get:
+      tags: [Memory]
+      operationId: getMemoryIdeaMap
+      summary: The person's own «want to go» points and the ideas without a point
+      responses:
+        "200":
+          description: Separate from frequent places and the date map
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [points, withoutPoint]
+                properties:
+                  points:
+                    type: array
+                    items:
+                      type: object
+                      required: [ideaId, title, placeId, lat, lng, intent]
+                      properties:
+                        ideaId: { type: string, format: uuid }
+                        title: { type: string }
+                        placeId: { type: string }
+                        lat: { type: number }
+                        lng: { type: number }
+                        intent: { type: string }
+                  withoutPoint:
+                    type: array
+                    items:
+                      type: object
+                      required: [ideaId, title]
+                      properties:
+                        ideaId: { type: string, format: uuid }
+                        title: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /v1/me/memory/matches/{id}/planning:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Memory]
+      operationId: getMemoryPlanning
+      summary: What ideas add to planning one date. Empty looks the same for every reason
+      parameters:
+        - { name: city, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        "200":
+          description: Suggestions change nothing until the existing flow confirms them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions, shared, vibe]
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      required: [ideaId, title, kind, placeId, reason, needsCheck]
+                      properties:
+                        ideaId: { type: string, format: uuid }
+                        title: { type: string }
+                        kind: { type: string }
+                        placeId: { type: [string, "null"] }
+                        reason: { type: [string, "null"] }
+                        needsCheck: { type: boolean }
+                  shared:
+                    type: array
+                    items:
+                      type: object
+                      required: [label, kind, ideaId]
+                      properties:
+                        label: { type: string, description: The viewer's own words }
+                        kind: { type: string, enum: [same_place, same_kind] }
+                        ideaId: { type: string, format: uuid }
+                  vibe: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/matches/{id}/memo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Memory]
+      operationId: getMemoryDateMemo
+      summary: The owner's own note for a date. Never served to the other side
+      responses:
+        "200":
+          description: The note
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ideas, references]
+                properties:
+                  ideas: { type: array, items: { $ref: "#/components/schemas/MemoryIdea" } }
+                  references: { type: array, items: { $ref: "#/components/schemas/MemoryIdea" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/matches/{id}/impression:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Memory]
+      operationId: putMemoryImpression
+      summary: Their own view of the place and format, after a visit they confirmed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placeRating: { type: [string, "null"], enum: [liked, neutral, disliked, null] }
+                formatRating: { type: [string, "null"], enum: [liked, neutral, disliked, null] }
+                repeatFormat: { type: [boolean, "null"] }
+                note: { type: string, maxLength: 300 }
+                skipped: { type: boolean }
+      responses:
+        "204": { description: Saved or corrected }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`not-attended`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/memory/impressions/pending:
+    get:
+      tags: [Memory]
+      operationId: listPendingMemoryImpressions
+      summary: Attended dates tied to an idea that they have not spoken about
+      responses:
+        "200":
+          description: Possibly none
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [matchId, venueName, ideaId]
+                      properties:
+                        matchId: { type: string, format: uuid }
+                        venueName: { type: [string, "null"] }
+                        ideaId: { type: [string, "null"], format: uuid }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /v1/me/screenshots/library:
     get:
       tags: [Screenshots]
