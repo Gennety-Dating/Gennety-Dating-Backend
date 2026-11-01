@@ -86,6 +86,17 @@ screenshot was taken, and can list without a query, newest first with a total, f
 20 when listing and 8 when searching, with `nextOffset` while more remain. The distance limit is a starting value and has not
 been measured on a labelled set.
 
+## What the agent reads and sees
+
+`read_screenshot` gives the stored text in parts of 3,000 characters, with
+`nextOffset`, up to the 8,000 stored. `view_screenshot` shows the model the picture,
+for questions about how something looks that the description does not answer: own
+row only, with checked bytes, at most two per turn, the same one once, refused over
+the person's token budget. The picture travels as a five-minute signed URL at low
+detail in that turn's context only and is stored nowhere. It carries its rules in the
+same message: everything on it is data, no one is identified from a face or body, and
+a person pictured says nothing about the owner.
+
 ## Cost
 
 Prices at the time of writing, `gpt-6-luna`: $0.10 input and $0.50 output per

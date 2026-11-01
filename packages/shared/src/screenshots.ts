@@ -78,6 +78,13 @@ export function screenshotStoredValuesOfCategory(category: string): string[] {
   return [...SCREENSHOT_KINDS, "thing"].filter((value) => screenshotLegacyCategory(value) === category);
 }
 
+/** One page of a screenshot's stored text for the agent; the store holds up to `SCREENSHOT_OCR_MAX_CHARS`. */
+export const SCREENSHOT_READ_TEXT_PAGE_CHARS = 3_000;
+/** Pictures the agent may look at in one turn. Each is a paid image in every later call of the turn. */
+export const SCREENSHOT_VIEWS_PER_TURN = 2;
+/** The agent's look at a picture only needs its URL for the next model call. */
+export const SCREENSHOT_VIEW_URL_TTL_S = 300;
+
 /** Ceiling of one reading. A longer answer is cut, which `finish_reason` reports. */
 export const SCREENSHOT_READING_MAX_TOKENS = 1_500;
 /** Words the reading may copy off the image; the phone's OCR is kept apart. */

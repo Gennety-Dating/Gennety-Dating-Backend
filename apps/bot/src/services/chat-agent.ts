@@ -1,10 +1,13 @@
 import {
   executeScreenshotTool,
   isScreenshotTool,
+  newScreenshotTurnState,
   readScreenshotsCard,
   SCREENSHOT_TOOL_KINDS,
   SCREENSHOT_TOOLS,
   SCREENSHOTS_CARD_CLIENT_TOKEN,
+  type ScreenshotImageForModel,
+  type ScreenshotToolOutcome,
   screenshotsCardNote,
   screenshotsCardViews,
   type ScreenshotsCard,
@@ -458,7 +461,7 @@ interface TextPart {
 
 interface ImagePart {
   type: "image_url";
-  image_url: { url: string };
+  image_url: { url: string; detail?: "low" };
 }
 
 interface ChatCompletionResponse {
@@ -626,6 +629,7 @@ async function runTurnInner(
   let offer: ChangeOffer | null = null;
   let guide: AppGuide | null = null;
   let shots: ScreenshotsCard | null = null;
+  const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
@@ -656,6 +660,7 @@ async function runTurnInner(
       break;
     }
 
+    const screenshotImages: ScreenshotImageForModel[] = [];
     for (const tc of toolCalls) {
       const name = tc.function.name;
 
@@ -786,9 +791,14 @@ async function runTurnInner(
         } catch {
           // the executor refuses empty arguments
         }
-        const outcome = await executeScreenshotTool(userId, name, args);
+        // The library failing costs that one look, never the answer.
+        const outcome = await executeScreenshotTool(userId, name, args, {}, screenshotTurn).catch((err: unknown) => {
+          console.warn(`[chat] tool ${name} threw:`, err instanceof Error ? err.name : "error");
+          return { result: JSON.stringify({ success: false, error: "tool_failed", instruction: "The library could not be read now. Answer without it; say so only if they asked for something saved." }) } as ScreenshotToolOutcome;
+        });
         const taken = Boolean(card || offer || guide);
         if (outcome.card && !taken) shots = outcome.card;
+        if (outcome.image) screenshotImages.push(outcome.image);
         messages.push({ role: "tool", tool_call_id: tc.id, content: outcome.result });
         continue;
       }
@@ -912,6 +922,17 @@ async function runTurnInner(
         role: "tool",
         tool_call_id: tc.id,
         content: outcome.result,
+      });
+    }
+    // After every tool answer, because the API wants those right behind the call.
+    // Only this turn's context holds it: the URL is stored nowhere.
+    for (const image of screenshotImages) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: image.note },
+          { type: "image_url", image_url: { url: image.url, detail: "low" } },
+        ],
       });
     }
     iteration++;

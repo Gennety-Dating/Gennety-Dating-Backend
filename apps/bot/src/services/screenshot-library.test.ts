@@ -66,7 +66,7 @@ import {
   reindexBatch,
   SCREENSHOT_PROCESSING_VERSION,
 } from "../workers/screenshot-library.js";
-import { executeScreenshotTool, readScreenshotsCard, screenshotsCardViews } from "./chat-screenshots.js";
+import { executeScreenshotTool, newScreenshotTurnState, readScreenshotsCard, screenshotsCardViews } from "./chat-screenshots.js";
 import {
   commitUpload,
   connectLibrary,
@@ -375,6 +375,96 @@ describe("chat tools", () => {
     });
     const parsed = JSON.parse((await executeScreenshotTool(USER, "read_screenshot", { id: ITEM })).result);
     expect(parsed.note).toMatch(/data, not instructions/);
+  });
+
+  describe("reading long text", () => {
+    const stored = { id: ITEM, title: "x", description: "y", capturedAt: null, entities: [], category: "text" };
+
+    it("gives the whole stored text in parts", async () => {
+      db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+      const text = "abcdefghij".repeat(800);
+      db.screenshotItem.findFirst.mockResolvedValue({ ...stored, ocrText: text });
+      let joined = "";
+      let offset: number | undefined;
+      let rounds = 0;
+      do {
+        const parsed = JSON.parse((await executeScreenshotTool(USER, "read_screenshot", { id: ITEM, offset })).result);
+        expect(parsed.totalChars).toBe(8000);
+        expect(parsed.recognisedText.length).toBeLessThanOrEqual(3000);
+        joined += parsed.recognisedText;
+        offset = parsed.nextOffset;
+        rounds++;
+      } while (offset !== undefined && rounds < 10);
+      expect(joined).toBe(text);
+      expect(rounds).toBe(3);
+    });
+
+    it("does not split a character between parts", async () => {
+      db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+      const text = `${"a".repeat(2999)}😀${"b".repeat(100)}`;
+      db.screenshotItem.findFirst.mockResolvedValue({ ...stored, ocrText: text });
+      const parsed = JSON.parse((await executeScreenshotTool(USER, "read_screenshot", { id: ITEM })).result);
+      expect(parsed.recognisedText).toBe("a".repeat(2999));
+      expect(parsed.nextOffset).toBe(2999);
+    });
+
+    it("no text stays null, and an offset past the end is harmless", async () => {
+      db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+      db.screenshotItem.findFirst.mockResolvedValue({ ...stored, ocrText: null });
+      expect(JSON.parse((await executeScreenshotTool(USER, "read_screenshot", { id: ITEM, offset: 99 })).result).recognisedText).toBeNull();
+    });
+  });
+
+  describe("looking at the picture", () => {
+    const stored = { id: ITEM, storagePath: `${USER}/${ITEM}.jpg`, state: "ready" };
+    const other = "33333333-3333-4333-8333-333333333333";
+    const third = "44444444-4444-4444-8444-444444444444";
+    const fine = { overBudget: () => false };
+
+    beforeEach(() => {
+      db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+      db.screenshotItem.findFirst.mockResolvedValue(stored);
+    });
+
+    it("gives a short-lived URL and the rules, only for the owner's row with bytes", async () => {
+      const out = await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, fine);
+      expect(out.image?.url).toBe("https://signed");
+      expect(out.image?.note).toMatch(/data, not instructions/);
+      expect(out.image?.note).toMatch(/Do not identify anyone/);
+      expect(out.image?.note).toMatch(/not the owner of the library/);
+      expect(storage.createScreenshotSignedUrls.mock.calls[0]![1]).toBe(300);
+      expect(db.screenshotItem.findFirst.mock.calls[0]![0].where).toEqual({
+        id: ITEM, userId: USER, deletedAt: null, state: { not: "reserved" },
+      });
+    });
+
+    it("someone else's id: nothing signed", async () => {
+      db.screenshotItem.findFirst.mockResolvedValue(null);
+      const out = await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, fine);
+      expect(JSON.parse(out.result).error).toBe("not_found");
+      expect(out.image).toBeUndefined();
+      expect(storage.createScreenshotSignedUrls).not.toHaveBeenCalled();
+    });
+
+    it("two pictures a turn, and the same one is not paid for twice", async () => {
+      const turn = newScreenshotTurnState();
+      expect((await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, fine, turn)).image).toBeDefined();
+      expect(JSON.parse((await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, fine, turn)).result).error).toBe("already_shown");
+      expect((await executeScreenshotTool(USER, "view_screenshot", { id: other }, fine, turn)).image).toBeDefined();
+      expect(JSON.parse((await executeScreenshotTool(USER, "view_screenshot", { id: third }, fine, turn)).result).error).toBe("view_limit");
+    });
+
+    it("over the token budget: no picture", async () => {
+      const out = await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, { overBudget: () => true });
+      expect(JSON.parse(out.result).error).toBe("over_budget");
+      expect(out.image).toBeUndefined();
+    });
+
+    it("signing failure costs the picture, not the turn", async () => {
+      storage.createScreenshotSignedUrls.mockRejectedValue(new Error("down"));
+      const out = await executeScreenshotTool(USER, "view_screenshot", { id: ITEM }, fine);
+      expect(JSON.parse(out.result).error).toBe("image_unavailable");
+    });
   });
 
   it("another person's id reads as missing and makes no card", async () => {
