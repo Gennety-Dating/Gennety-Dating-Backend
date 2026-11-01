@@ -1848,6 +1848,12 @@ paths:
       parameters:
         - { name: q, in: query, schema: { type: string, maxLength: 300 } }
         - { name: category, in: query, schema: { type: string, enum: [place, event, thing, other] } }
+        - name: kind
+          in: query
+          description: >-
+            The finer filter: `place`, `event`, `activity`, `outfit`, `item`, `food`, `aesthetic`,
+            `media`, `text`, `other`. Wins over `category`. An unknown value is 400.
+          schema: { type: string }
         - { name: before, in: query, schema: { type: string, format: date-time } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 60 } }
       responses:
@@ -9929,7 +9935,17 @@ components:
         sourceKey: { type: string }
         title: { type: [string, "null"], description: "The model's reading, not a checked fact." }
         description: { type: [string, "null"] }
-        category: { type: [string, "null"], enum: [place, event, thing, other, null] }
+        category:
+          type: [string, "null"]
+          enum: [place, event, thing, other, null]
+          description: >-
+            The first four-value vocabulary, closed for shipped clients. New values arrive in `kind`.
+        kind:
+          type: [string, "null"]
+          description: >-
+            What the screenshot shows: `place`, `event`, `activity`, `outfit`, `item`, `food`,
+            `aesthetic`, `media`, `text` or `other` today. A documented string rather than an enum,
+            so a value added later does not break a decoder. Null until indexed.
         capturedAt: { type: [string, "null"], format: date-time }
         importedAt: { type: string, format: date-time }
         imageUrl: { type: [string, "null"], description: "Signed, expires in an hour: refetch instead of keeping it." }

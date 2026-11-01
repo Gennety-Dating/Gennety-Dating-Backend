@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { SCREENSHOT_LIST_PAGE, SCREENSHOT_OCR_MAX_CHARS } from "@gennety/shared";
+import { SCREENSHOT_KINDS, SCREENSHOT_LIST_PAGE, SCREENSHOT_OCR_MAX_CHARS, type ScreenshotKind } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { screenshotReadLimiter, screenshotSearchLimiter, screenshotUploadLimiter } from "../rate-limit.js";
 import { env } from "../../config.js";
@@ -139,14 +139,16 @@ export function createScreenshotsRouter(): Router {
     }
     const before = typeof req.query.before === "string" ? new Date(req.query.before) : undefined;
     const category = typeof req.query.category === "string" ? req.query.category : undefined;
+    const kind = typeof req.query.kind === "string" ? req.query.kind : undefined;
     const limit = Number(req.query.limit);
-    if (before && Number.isNaN(before.getTime())) {
+    if ((before && Number.isNaN(before.getTime())) || (kind && !(SCREENSHOT_KINDS as readonly string[]).includes(kind))) {
       res.status(400).json({ error: "bad-request" });
       return;
     }
     res.json(await listItems(userId, {
       ...(before ? { before } : {}),
       ...(category ? { category } : {}),
+      ...(kind ? { kind: kind as ScreenshotKind } : {}),
       limit: Number.isInteger(limit) && limit > 0 ? limit : SCREENSHOT_LIST_PAGE,
     }));
   }));

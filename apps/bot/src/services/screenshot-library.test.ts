@@ -46,15 +46,32 @@ vi.mock("./profile-analysis.js", () => ({
 }));
 vi.mock("./openai-fetch.js", () => ({ openaiFetch: vi.fn() }));
 
-import { SCREENSHOT_CONSENT_VERSION } from "@gennety/shared";
+import {
+  SCREENSHOT_CONSENT_VERSION,
+  SCREENSHOT_KINDS,
+  SCREENSHOT_READING_MAX_TOKENS,
+  screenshotKindOf,
+  screenshotLegacyCategory,
+  screenshotStoredValuesOfCategory,
+} from "@gennety/shared";
 import { imageDimensions } from "../utils/image-dimensions.js";
-import { indexBatch, purgeBatch, READING_SYSTEM_PROMPT } from "../workers/screenshot-library.js";
+import {
+  indexBatch,
+  parseReading,
+  purgeBatch,
+  READING_FIELDS,
+  READING_SYSTEM_PROMPT,
+  readScreenshot,
+  reindexBatch,
+  SCREENSHOT_PROCESSING_VERSION,
+} from "../workers/screenshot-library.js";
 import { executeScreenshotTool, readScreenshotsCard, screenshotsCardViews } from "./chat-screenshots.js";
 import {
   commitUpload,
   connectLibrary,
   deleteItem,
   isAcceptableImage,
+  listItems,
   matchedSnippet,
   reserveUpload,
   searchScreenshots,
@@ -363,5 +380,147 @@ describe("worker", () => {
     });
     const sql = (db.$executeRaw.mock.calls.at(-1)![0] as string[]).join("?");
     expect(sql).toMatch(/generation = \?\s+AND deleted_at IS NULL AND state = 'indexing'/);
+  });
+
+  it("a failure out of attempts is stamped, so the reindex does not revive it forever", async () => {
+    db.$queryRaw.mockResolvedValue([{ ...queued, attempts: 4 }]);
+    db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
+    await indexBatch({
+      download: async () => ({ ok: true as const, bytes: Buffer.from("x") }),
+      read: async () => null,
+      embed: vi.fn(),
+    });
+    expect(db.screenshotItem.updateMany.mock.calls.at(-1)![0].data).toMatchObject({
+      state: "failed",
+      processingVersion: SCREENSHOT_PROCESSING_VERSION,
+    });
+  });
+});
+
+describe("the reading", () => {
+  const body = (finish: string, content: string) =>
+    new Response(JSON.stringify({ choices: [{ finish_reason: finish, message: { content } }], usage: {} }), { status: 200 });
+  const good = JSON.stringify({ title: "Pasta", description: "A recipe", category: "food", visibleText: "Boil water", entities: [] });
+
+  it("a cut answer is asked again without copied words, and is not a failure", async () => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(body("length", '{"title":"Pas'))
+      .mockResolvedValueOnce(body("stop", good));
+    const reading = await readScreenshot(Buffer.from([0xff]), "ocr", fetchFn as unknown as typeof fetch);
+    expect(reading).toMatchObject({ title: "Pasta", category: "food", visibleText: "" });
+    const asked = JSON.parse(fetchFn.mock.calls[1]![1].body);
+    expect(asked.messages[0].content).toMatch(/visibleText must be an empty string/);
+    expect(asked.max_completion_tokens).toBe(SCREENSHOT_READING_MAX_TOKENS);
+  });
+
+  it("cut twice is an ordinary failure, and stops at two requests", async () => {
+    const fetchFn = vi.fn().mockImplementation(async () => body("length", "{"));
+    expect(await readScreenshot(Buffer.from([0xff]), null, fetchFn as unknown as typeof fetch)).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("broken JSON without a cut does not throw", async () => {
+    const fetchFn = vi.fn().mockImplementation(async () => body("stop", "not json"));
+    expect(await readScreenshot(Buffer.from([0xff]), null, fetchFn as unknown as typeof fetch)).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a value outside the vocabulary never reaches a row", () => {
+    const parsed = parseReading(JSON.stringify({
+      title: "t", description: "d", category: "gift_for_mum", visibleText: "v",
+      entities: [{ type: "recipient", value: "mum", confidence: 7 }, { type: "dish", value: "", confidence: 1 }],
+    }));
+    expect(parsed).toMatchObject({ category: "other", entities: [{ type: "other", value: "mum", confidence: 1 }] });
+  });
+
+  it("the schema has nowhere to store a guess about the person", () => {
+    expect([...READING_FIELDS].sort()).toEqual(["category", "description", "entities", "title", "visibleText"]);
+    expect(READING_SYSTEM_PROMPT).toMatch(/Never state who a thing is for/);
+    expect(READING_SYSTEM_PROMPT).toMatch(/allergy, a diet/);
+    expect(READING_SYSTEM_PROMPT).toMatch(/Do not identify any person/);
+    for (const kind of SCREENSHOT_KINDS) expect(READING_SYSTEM_PROMPT).toContain(`${kind} (`);
+  });
+});
+
+describe("kinds on the wire", () => {
+  it("a shipped client only ever sees its four values", () => {
+    for (const kind of SCREENSHOT_KINDS) {
+      expect(["place", "event", "thing", "other"]).toContain(screenshotLegacyCategory(kind));
+    }
+    expect(screenshotLegacyCategory("outfit")).toBe("thing");
+    expect(screenshotLegacyCategory("food")).toBe("other");
+    expect(screenshotLegacyCategory("from the future")).toBe("other");
+    expect(screenshotLegacyCategory(null)).toBeNull();
+  });
+
+  it("a row not reindexed yet reads as the nearest kind", () => {
+    expect(screenshotKindOf("thing")).toBe("item");
+    expect(screenshotKindOf(null)).toBeNull();
+  });
+
+  it("the old filter still finds everything it means", async () => {
+    expect(screenshotStoredValuesOfCategory("thing").sort()).toEqual(["item", "outfit", "thing"]);
+    expect(screenshotStoredValuesOfCategory("nonsense")).toEqual([]);
+    await listItems(USER, { category: "other" });
+    expect(db.screenshotItem.findMany.mock.calls[0]![0].where.category.in).toContain("food");
+  });
+
+  it("an item carries both fields", async () => {
+    db.screenshotItem.findMany.mockResolvedValue([{ ...row, state: "ready", category: "food" }]);
+    const { items } = await listItems(USER, { kind: "food" });
+    expect(items[0]).toMatchObject({ category: "other", kind: "food" });
+    expect(db.screenshotItem.findMany.mock.calls[0]![0].where).toMatchObject({ userId: USER, category: { in: ["food"] } });
+  });
+});
+
+describe("reindex", () => {
+  const old = { id: ITEM, generation: 3, storage_path: "p", ocr_text: "ocr", attempts: 2, next_attempt_at: null };
+  const reading = { title: "t", description: "d", category: "food" as const, visibleText: "v", entities: [] };
+  const download = async () => ({ ok: true as const, bytes: Buffer.from("x") });
+
+  it("the row stays searchable: the claim does not touch its state", async () => {
+    db.$queryRaw.mockResolvedValue([old]);
+    db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
+    await reindexBatch({ download, read: async () => reading, embed: async () => [0.1] });
+    const claim = db.screenshotItem.updateMany.mock.calls[1]![0];
+    expect(claim.where).toMatchObject({ state: "ready", deletedAt: null, generation: 3 });
+    expect(claim.data.state).toBeUndefined();
+    const sql = (db.$executeRaw.mock.calls.at(-1)![0] as string[]).join("?");
+    expect(sql).toMatch(/generation = \?\s+AND deleted_at IS NULL AND state = 'ready'/);
+  });
+
+  it("only rows of a live, consented library of an older version are picked", async () => {
+    await reindexBatch({ read: vi.fn(), download, embed: vi.fn() });
+    const sql = (db.$queryRaw.mock.calls[0]![0] as string[]).join("?");
+    expect(sql).toMatch(/processing_version < \?/);
+    expect(sql).toMatch(/l\.status = 'active' AND l\.generation = i\.generation AND l\.consent_at IS NOT NULL/);
+  });
+
+  it("a failed re-read leaves the old reading and waits", async () => {
+    db.$queryRaw.mockResolvedValue([old]);
+    db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
+    await reindexBatch({ download, read: async () => null, embed: vi.fn() });
+    const last = db.screenshotItem.updateMany.mock.calls.at(-1)![0];
+    expect(last.data.state).toBeUndefined();
+    expect(last.data.attempts).toBe(1);
+    expect(last.data.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
+    expect(db.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it("a row someone else claimed or deleted costs no paid call", async () => {
+    db.$queryRaw.mockResolvedValue([old]);
+    db.screenshotItem.updateMany.mockResolvedValue({ count: 0 });
+    const read = vi.fn();
+    await reindexBatch({ download, read, embed: vi.fn() });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("rows given up under an older version return to the queue, under this one do not", async () => {
+    db.$queryRaw.mockResolvedValue([]);
+    await reindexBatch({});
+    const revive = db.screenshotItem.updateMany.mock.calls[0]![0];
+    expect(revive.where.state).toBe("failed");
+    expect(revive.where.OR).toEqual([{ processingVersion: null }, { processingVersion: { lt: SCREENSHOT_PROCESSING_VERSION } }]);
+    expect(revive.data).toMatchObject({ state: "queued", attempts: 0 });
   });
 });

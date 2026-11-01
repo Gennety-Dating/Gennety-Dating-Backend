@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 440 entries
+# Decision index — all 441 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-01 | Screenshot library covers the founder's nine kinds of saved things: ten stored kinds, `category` stays four values for shipped builds and `kind` is new; the reading stores no guess about the person; agent stage only, writing points wait for stage B; flag still off, production pending | [2026-11-01-screenshot-agent-coverage.md](./2026-11-01-screenshot-agent-coverage.md) |
 | 2026-10-31 | Private screenshot library behind a flag: own tables and bucket, consent per text version, row-state cron instead of a queue, generation against late answers, chat tools on intent, one card with several sources; founder approved images to OpenAI, 2,000-item cap, a single consent sheet; production pending | [2026-10-31-screenshot-library.md](./2026-10-31-screenshot-library.md) |
 | 2026-10-30 | Рабочая часть Sverkaus/Gennety остаётся на Mac по выбору владельца; копии на Mac + существующем сервере, новые функции рабочего пространства; файловый founder-outbox с at-least-once доставкой, без миграции БД | [2026-10-27-founder-bot-split.md](./2026-10-27-founder-bot-split.md) |
 | 2026-10-29 | Share recognition: direct structured Product cards, one Instagram HTML read after share redirects, concurrent video request coalescing and city-aware cache; controlled benchmarks, production pending | [2026-10-29-share-recognition-latency.md](./2026-10-29-share-recognition-latency.md) |

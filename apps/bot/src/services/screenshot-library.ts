@@ -10,6 +10,12 @@ import {
   SCREENSHOT_SEARCH_HITS,
   SCREENSHOT_SIGNED_URL_TTL_S,
   SCREENSHOT_UPLOAD_MAX_BYTES,
+  screenshotKindOf,
+  screenshotLegacyCategory,
+  screenshotStoredValuesOfCategory,
+  screenshotStoredValuesOfKind,
+  type ScreenshotCategory,
+  type ScreenshotKind,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { imageDimensions } from "../utils/image-dimensions.js";
@@ -378,7 +384,9 @@ export interface ScreenshotItemView {
   sourceKey: string;
   title: string | null;
   description: string | null;
-  category: string | null;
+  /** The four values shipped clients decode. `kind` is the finer one. */
+  category: ScreenshotCategory | null;
+  kind: ScreenshotKind | null;
   capturedAt: string | null;
   importedAt: string;
   imageUrl: string | null;
@@ -404,7 +412,8 @@ function itemView(row: ItemRow, imageUrl: string | null): ScreenshotItemView {
     sourceKey: row.sourceKey,
     title: row.title,
     description: row.description,
-    category: row.category,
+    category: screenshotLegacyCategory(row.category),
+    kind: screenshotKindOf(row.category),
     capturedAt: row.capturedAt?.toISOString() ?? null,
     importedAt: row.createdAt.toISOString(),
     imageUrl,
@@ -420,7 +429,7 @@ async function signed(rows: Array<ItemRow & { storagePath: string }>): Promise<S
 
 export async function listItems(
   userId: string,
-  options: { before?: Date; category?: string; limit?: number },
+  options: { before?: Date; category?: string; kind?: ScreenshotKind; limit?: number },
 ): Promise<{ items: ScreenshotItemView[]; nextBefore: string | null }> {
   const limit = Math.min(options.limit ?? SCREENSHOT_LIST_PAGE, SCREENSHOT_LIST_PAGE);
   const rows = await prisma.screenshotItem.findMany({
@@ -429,7 +438,11 @@ export async function listItems(
       deletedAt: null,
       state: { not: "reserved" },
       ...(options.before ? { createdAt: { lt: options.before } } : {}),
-      ...(options.category ? { category: options.category } : {}),
+      ...(options.kind
+        ? { category: { in: screenshotStoredValuesOfKind(options.kind) } }
+        : options.category
+          ? { category: { in: screenshotStoredValuesOfCategory(options.category) } }
+          : {}),
     },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
