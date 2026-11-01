@@ -80,7 +80,10 @@ exclusion. Disconnecting clears all exclusions, so reconnecting imports afresh.
 Exact words over recognised text, title and description come first, then cosine
 distance up to `SCREENSHOT_MATCH_MAX_DISTANCE`. Both filter by owner in the query.
 There is no vector index: per-person rows are few and an approximate index filtered
-afterwards would lose results. The distance limit is a starting value and has not
+afterwards would lose results. The agent can narrow by kind and by the day a
+screenshot was taken, and can list without a query, newest first with a total, for
+«все мои рестораны». An item with no capture time counts by its import. Pages are
+20 when listing and 8 when searching, with `nextOffset` while more remain. The distance limit is a starting value and has not
 been measured on a labelled set.
 
 ## Cost

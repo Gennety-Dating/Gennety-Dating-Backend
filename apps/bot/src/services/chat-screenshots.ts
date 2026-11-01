@@ -1,7 +1,20 @@
 import { prisma } from "@gennety/db";
-import { SCREENSHOT_CARD_MAX_ITEMS, SCREENSHOT_SIGNED_URL_TTL_S } from "@gennety/shared";
+import {
+  SCREENSHOT_AGENT_LIST_PAGE,
+  SCREENSHOT_CARD_MAX_ITEMS,
+  SCREENSHOT_KINDS,
+  SCREENSHOT_SEARCH_HITS,
+  SCREENSHOT_SIGNED_URL_TTL_S,
+  screenshotKindOf,
+  type ScreenshotKind,
+} from "@gennety/shared";
 import { isUuid } from "../utils/uuid.js";
-import { searchScreenshots, type SearchDeps } from "./screenshot-library.js";
+import {
+  listScreenshotsPage,
+  searchScreenshotsPage,
+  type ScreenshotFilter,
+  type SearchDeps,
+} from "./screenshot-library.js";
 import { createScreenshotSignedUrls } from "./storage.js";
 
 /**
@@ -39,14 +52,29 @@ export const SCREENSHOT_TOOLS = [
       parameters: {
         type: "object",
         additionalProperties: false,
-        required: ["query"],
         properties: {
-          query: { type: "string", description: "What to look for, as a short English description." },
+          query: {
+            type: "string",
+            description: "What to look for, as a short English description. Leave it out to list everything of a kind or a period, newest first.",
+          },
           keywords: {
             type: "array",
             maxItems: 6,
             items: { type: "string" },
             description: "Names or distinctive words as they would appear on the screenshot, in that language.",
+          },
+          category: {
+            type: "string",
+            enum: [...SCREENSHOT_KINDS],
+            description:
+              "Only this kind: place (restaurants, parks, hotels), event (concerts, exhibitions, shows, workshops), activity (ideas of things to do), outfit, item (gifts, flowers, things), food (dishes, recipes, menus), aesthetic (interiors, landscapes, mood), media (books, films, music, hobbies), text (quotes, notes), other.",
+          },
+          taken_from: { type: "string", description: "Only screenshots taken on or after this day, YYYY-MM-DD." },
+          taken_to: { type: "string", description: "Only screenshots taken on or before this day, YYYY-MM-DD." },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            description: "The nextOffset of the previous answer, for the next page. Ask for it only if the person wants more.",
           },
         },
       },
@@ -194,6 +222,40 @@ function fail(error: string, instruction: string): ScreenshotToolOutcome {
   return { result: JSON.stringify({ success: false, error, instruction }) };
 }
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A real calendar day at UTC midnight. `new Date` would roll 02-31 into March. */
+function parseDay(value: unknown): Date | null {
+  if (typeof value !== "string" || !DAY_RE.test(value)) return null;
+  const at = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === value ? at : null;
+}
+
+/** The tool's filter arguments, or the refusal to send back. */
+function readFilter(args: Record<string, unknown>): { filter: ScreenshotFilter } | { refusal: ScreenshotToolOutcome } {
+  const filter: ScreenshotFilter = {};
+  if (args.category !== undefined) {
+    if (!(SCREENSHOT_KINDS as readonly unknown[]).includes(args.category)) {
+      return { refusal: fail("bad_category", `category must be one of: ${SCREENSHOT_KINDS.join(", ")}.`) };
+    }
+    filter.kind = args.category as ScreenshotKind;
+  }
+  if (args.taken_from !== undefined) {
+    const from = parseDay(args.taken_from);
+    if (!from) return { refusal: fail("bad_date", "taken_from must be a real day, YYYY-MM-DD.") };
+    filter.capturedFrom = from;
+  }
+  if (args.taken_to !== undefined) {
+    const to = parseDay(args.taken_to);
+    if (!to) return { refusal: fail("bad_date", "taken_to must be a real day, YYYY-MM-DD.") };
+    filter.capturedBefore = new Date(to.getTime() + 24 * 3_600_000);
+  }
+  if (filter.capturedFrom && filter.capturedBefore && filter.capturedFrom >= filter.capturedBefore) {
+    return { refusal: fail("bad_date", "taken_from is after taken_to.") };
+  }
+  return { filter };
+}
+
 function day(at: Date | null): string | null {
   return at ? at.toISOString().slice(0, 10) : null;
 }
@@ -221,12 +283,21 @@ export async function executeScreenshotTool(
 
   if (name === SEARCH_SCREENSHOTS_TOOL_NAME) {
     const query = typeof args.query === "string" ? args.query.trim().slice(0, 300) : "";
-    if (!query) return fail("empty_query", "Search needs a description of what to look for.");
+    const read = readFilter(args);
+    if ("refusal" in read) return read.refusal;
+    const { filter } = read;
+    const narrowed = Boolean(filter.kind || filter.capturedFrom || filter.capturedBefore);
+    if (!query && !narrowed) return fail("empty_query", "Search needs a description of what to look for, or a category or dates to list.");
     const keywords = Array.isArray(args.keywords) ? args.keywords.filter((k): k is string => typeof k === "string") : [];
-    const [hits, processing] = await Promise.all([
-      searchScreenshots(userId, query, keywords, deps),
+    const offset = typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 0;
+    const limit = query ? SCREENSHOT_SEARCH_HITS : SCREENSHOT_AGENT_LIST_PAGE;
+    const [page, processing] = await Promise.all([
+      query
+        ? searchScreenshotsPage(userId, query, keywords, { filter, offset, limit }, deps)
+        : listScreenshotsPage(userId, { filter, offset, limit }),
       prisma.screenshotItem.count({ where: { userId, deletedAt: null, state: { in: ["reserved", "queued", "indexing"] } } }),
     ]);
+    const { hits } = page;
     return {
       result: JSON.stringify({
         success: true,
@@ -240,11 +311,13 @@ export async function executeScreenshotTool(
                   : "Nothing matches. Say so plainly and invent nothing.",
             }
           : {}),
+        ...("total" in page ? { total: page.total } : {}),
+        ...(page.hasMore ? { nextOffset: offset + limit } : {}),
         hits: hits.map((hit) => ({
           id: hit.id,
           title: hit.title,
           description: hit.description,
-          category: hit.category,
+          kind: screenshotKindOf(hit.category),
           date: day(hit.capturedAt),
           matchedBy: hit.match,
           matchedText: hit.matchedText,

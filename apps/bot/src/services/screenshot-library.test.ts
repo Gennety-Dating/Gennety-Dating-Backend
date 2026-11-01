@@ -74,7 +74,9 @@ import {
   listItems,
   matchedSnippet,
   reserveUpload,
+  listScreenshotsPage,
   searchScreenshots,
+  searchScreenshotsPage,
 } from "./screenshot-library.js";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -270,6 +272,43 @@ describe("search", () => {
     expect(hits).toEqual([]);
   });
 
+  const hitRow = (n: number) => ({
+    id: `id-${n}`, title: `t${n}`, description: null, category: "place", captured_at: null, state: "ready", ocr_text: null,
+  });
+
+  it("a page is a slice of one order, and says when there is more", async () => {
+    db.$queryRaw.mockResolvedValueOnce([0, 1, 2, 3, 4].map(hitRow));
+    const page = await searchScreenshotsPage(USER, "wine bar", [], { offset: 2, limit: 2 }, { embed: vi.fn() });
+    expect(page.hits.map((h) => h.id)).toEqual(["id-2", "id-3"]);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("the last page says there is no more", async () => {
+    db.$queryRaw.mockResolvedValueOnce([0, 1, 2].map(hitRow));
+    const page = await searchScreenshotsPage(USER, "wine bar", [], { offset: 2, limit: 2 }, { embed: async () => [0.1] });
+    expect(page.hits.map((h) => h.id)).toEqual(["id-2"]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("every query carries the owner and the filter", async () => {
+    await searchScreenshotsPage(USER, "wine bar", [], { filter: { kind: "item" } }, { embed: async () => [0.1] });
+    expect(db.$queryRaw).toHaveBeenCalledTimes(2);
+    for (const call of db.$queryRaw.mock.calls) {
+      expect((call[0] as string[]).join("?")).toMatch(/user_id = \?::uuid AND deleted_at IS NULL/);
+      expect(JSON.stringify(call)).toContain('"thing"');
+    }
+  });
+
+  it("a listing has no paid call, and counts", async () => {
+    db.$queryRaw.mockResolvedValueOnce([hitRow(0), hitRow(1), hitRow(2)]).mockResolvedValueOnce([{ total: 7 }]);
+    const page = await listScreenshotsPage(USER, { limit: 2, filter: { kind: "place" } });
+    expect(page).toMatchObject({ total: 7, hasMore: true });
+    expect(page.hits).toHaveLength(2);
+    for (const call of db.$queryRaw.mock.calls) {
+      expect((call[0] as string[]).join("?")).toMatch(/user_id = \?::uuid AND deleted_at IS NULL/);
+    }
+  });
+
   it("snippets stay near the word", () => {
     expect(matchedSnippet(`${"x ".repeat(200)}terrace${" y".repeat(200)}`, ["terrace"])!.length).toBeLessThan(140);
     expect(matchedSnippet(null, ["a"])).toBeNull();
@@ -291,6 +330,40 @@ describe("chat tools", () => {
     expect(parsed.hits).toEqual([]);
     expect(parsed.instruction).toMatch(/invent nothing/i);
     expect(out.card).toBeUndefined();
+  });
+
+  it("lists a kind without a query, with paging", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    db.$queryRaw
+      .mockResolvedValueOnce(Array.from({ length: 21 }, (_, n) => ({
+        id: `id-${n}`, title: "t", description: null, category: "place", captured_at: null, state: "ready", ocr_text: null,
+      })))
+      .mockResolvedValueOnce([{ total: 45 }]);
+    const parsed = JSON.parse((await executeScreenshotTool(USER, "search_screenshots", { category: "place", offset: 20 })).result);
+    expect(parsed).toMatchObject({ total: 45, nextOffset: 40 });
+    expect(parsed.hits).toHaveLength(20);
+    expect(parsed.hits[0].kind).toBe("place");
+  });
+
+  it("refuses nonsense filters before any query", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    for (const args of [
+      { query: "x", category: "nope" },
+      { query: "x", taken_from: "2026-02-31" },
+      { query: "x", taken_to: "yesterday" },
+      { query: "x", taken_from: "2026-03-02", taken_to: "2026-03-01" },
+      {},
+    ]) {
+      expect(JSON.parse((await executeScreenshotTool(USER, "search_screenshots", args)).result).success).toBe(false);
+    }
+    expect(db.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("the end day of a range is whole", async () => {
+    db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    db.$queryRaw.mockResolvedValue([{ total: 0 }]);
+    await executeScreenshotTool(USER, "search_screenshots", { taken_to: "2026-03-01" });
+    expect(JSON.stringify(db.$queryRaw.mock.calls[0])).toContain("2026-03-02T00:00:00.000Z");
   });
 
   it("results are marked as data", async () => {

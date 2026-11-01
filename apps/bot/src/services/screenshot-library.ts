@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma, Prisma } from "@gennety/db";
 import {
+  SCREENSHOT_AGENT_LIST_PAGE,
   SCREENSHOT_CONSENT_VERSION,
   SCREENSHOT_LIBRARY_MAX_ITEMS,
   SCREENSHOT_LIST_PAGE,
@@ -478,7 +479,7 @@ export interface ScreenshotHit {
   capturedAt: Date | null;
   state: string;
   matchedText: string | null;
-  match: "text" | "meaning";
+  match: "text" | "meaning" | "list";
 }
 
 interface HitRow {
@@ -513,18 +514,62 @@ export function matchedSnippet(text: string | null, words: readonly string[]): s
   return null;
 }
 
+/** Narrow a search or a listing. The owner is not here: every query has it itself. */
+export interface ScreenshotFilter {
+  kind?: ScreenshotKind;
+  /** Taken on or after this moment; an item with no capture time counts by its import. */
+  capturedFrom?: Date;
+  /** Taken before this moment. */
+  capturedBefore?: Date;
+}
+
+function filterSql(filter: ScreenshotFilter): Prisma.Sql {
+  const parts: Prisma.Sql[] = [];
+  if (filter.kind) parts.push(Prisma.sql`AND category = ANY (${screenshotStoredValuesOfKind(filter.kind)}::text[])`);
+  if (filter.capturedFrom) parts.push(Prisma.sql`AND COALESCE(captured_at, created_at) >= ${filter.capturedFrom}`);
+  if (filter.capturedBefore) parts.push(Prisma.sql`AND COALESCE(captured_at, created_at) < ${filter.capturedBefore}`);
+  return parts.length > 0 ? Prisma.join(parts, " ") : Prisma.empty;
+}
+
+function hitOf(row: HitRow, match: ScreenshotHit["match"], words: readonly string[]): ScreenshotHit {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    capturedAt: row.captured_at,
+    state: row.state,
+    matchedText: matchedSnippet(row.ocr_text, words),
+    match,
+  };
+}
+
+export interface ScreenshotPageRequest {
+  filter?: ScreenshotFilter;
+  offset?: number;
+  limit?: number;
+}
+
 /**
  * Exact words first, because a name the person remembers beats any embedding;
  * then meaning, cut off at the distance above. The owner filter is in both
  * queries, ahead of ranking. Words also reach screenshots still being indexed,
  * since the phone's OCR arrived with the upload.
+ *
+ * A page is a slice of that one order, which is stable: both queries break ties
+ * by id. Each reads up to the page's end plus one, which is at most a library.
  */
-export async function searchScreenshots(
+export async function searchScreenshotsPage(
   userId: string,
   query: string,
   keywords: readonly string[],
+  request: ScreenshotPageRequest = {},
   deps: SearchDeps = {},
-): Promise<ScreenshotHit[]> {
+): Promise<{ hits: ScreenshotHit[]; hasMore: boolean }> {
+  const offset = Math.max(0, request.offset ?? 0);
+  const limit = request.limit ?? SCREENSHOT_SEARCH_HITS;
+  const wanted = offset + limit + 1;
+  const scope = filterSql(request.filter ?? {});
   const words = [...new Set([...keywords, ...query.split(/[^\p{L}\p{N}'-]+/u)])]
     .map((w) => w.trim().slice(0, 40))
     .filter((w) => [...w].length >= 3)
@@ -540,24 +585,14 @@ export async function searchScreenshots(
         AND (ocr_text ILIKE ANY (${patterns}::text[])
              OR title ILIKE ANY (${patterns}::text[])
              OR description ILIKE ANY (${patterns}::text[]))
-      ORDER BY captured_at DESC NULLS LAST
-      LIMIT ${SCREENSHOT_SEARCH_HITS}
+        ${scope}
+      ORDER BY captured_at DESC NULLS LAST, id
+      LIMIT ${wanted}
     `;
-    for (const row of rows) {
-      hits.set(row.id, {
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        category: row.category,
-        capturedAt: row.captured_at,
-        state: row.state,
-        matchedText: matchedSnippet(row.ocr_text, words),
-        match: "text",
-      });
-    }
+    for (const row of rows) hits.set(row.id, hitOf(row, "text", words));
   }
 
-  if (hits.size < SCREENSHOT_SEARCH_HITS) {
+  if (hits.size < wanted) {
     const embed = deps.embed ?? defaultEmbed;
     const vector = await embed(query).catch(() => null);
     if (vector) {
@@ -568,26 +603,58 @@ export async function searchScreenshots(
         WHERE user_id = ${userId}::uuid AND deleted_at IS NULL AND state = 'ready'
           AND embedding IS NOT NULL
           AND embedding <=> ${literal}::vector <= ${SCREENSHOT_MATCH_MAX_DISTANCE}
-        ORDER BY embedding <=> ${literal}::vector
-        LIMIT ${SCREENSHOT_SEARCH_HITS}
+          ${scope}
+        ORDER BY embedding <=> ${literal}::vector, id
+        LIMIT ${wanted}
       `;
       for (const row of rows) {
-        if (hits.size >= SCREENSHOT_SEARCH_HITS) break;
-        if (hits.has(row.id)) continue;
-        hits.set(row.id, {
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          category: row.category,
-          capturedAt: row.captured_at,
-          state: row.state,
-          matchedText: null,
-          match: "meaning",
-        });
+        if (hits.size >= wanted) break;
+        if (!hits.has(row.id)) hits.set(row.id, hitOf(row, "meaning", words));
       }
     }
   }
-  return [...hits.values()];
+  const ranked = [...hits.values()];
+  return { hits: ranked.slice(offset, offset + limit), hasMore: ranked.length > offset + limit };
+}
+
+export async function searchScreenshots(
+  userId: string,
+  query: string,
+  keywords: readonly string[],
+  deps: SearchDeps = {},
+): Promise<ScreenshotHit[]> {
+  return (await searchScreenshotsPage(userId, query, keywords, {}, deps)).hits;
+}
+
+/** «All my restaurants»: no query to rank by, so newest first, with the total. */
+export async function listScreenshotsPage(
+  userId: string,
+  request: ScreenshotPageRequest = {},
+): Promise<{ hits: ScreenshotHit[]; hasMore: boolean; total: number }> {
+  const offset = Math.max(0, request.offset ?? 0);
+  const limit = request.limit ?? SCREENSHOT_AGENT_LIST_PAGE;
+  const scope = filterSql(request.filter ?? {});
+  const [rows, counted] = await Promise.all([
+    prisma.$queryRaw<HitRow[]>`
+      SELECT id, title, description, category, captured_at, state, NULL::text AS ocr_text
+      FROM screenshot_items
+      WHERE user_id = ${userId}::uuid AND deleted_at IS NULL AND state <> 'reserved'
+        ${scope}
+      ORDER BY COALESCE(captured_at, created_at) DESC, id
+      LIMIT ${limit + 1} OFFSET ${offset}
+    `,
+    prisma.$queryRaw<Array<{ total: number }>>`
+      SELECT COUNT(*)::int AS total
+      FROM screenshot_items
+      WHERE user_id = ${userId}::uuid AND deleted_at IS NULL AND state <> 'reserved'
+        ${scope}
+    `,
+  ]);
+  return {
+    hits: rows.slice(0, limit).map((row) => hitOf(row, "list", [])),
+    hasMore: rows.length > limit,
+    total: counted[0]?.total ?? 0,
+  };
 }
 
 async function defaultEmbed(input: string): Promise<number[]> {

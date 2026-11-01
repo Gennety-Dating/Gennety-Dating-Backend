@@ -12,6 +12,8 @@ export const SCREENSHOT_MAX_DIMENSION = 1_600;
 export const SCREENSHOT_MAX_PIXELS = 4_000_000;
 export const SCREENSHOT_OCR_MAX_CHARS = 8_000;
 export const SCREENSHOT_SEARCH_HITS = 8;
+/** One page when the agent lists a kind or a period, for «все мои рестораны». */
+export const SCREENSHOT_AGENT_LIST_PAGE = 20;
 export const SCREENSHOT_CARD_MAX_ITEMS = 6;
 export const SCREENSHOT_LIST_PAGE = 60;
 export const SCREENSHOT_INDEX_MAX_ATTEMPTS = 5;
