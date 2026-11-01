@@ -1,4 +1,6 @@
 import {
+  CHECK_EVENT_TOOL,
+  CHECK_EVENT_TOOL_NAME,
   executeScreenshotTool,
   isScreenshotLibraryOpen,
   isScreenshotTool,
@@ -50,6 +52,7 @@ import {
   PROPOSE_WISHLIST_TOOL,
   PROPOSE_WISHLIST_TOOL_NAME,
   WISHLIST_CARD_CLIENT_TOKEN,
+  giftIdeasIn,
   proposeWishlistItems,
   readWishlistCard,
   wishlistCardNote,
@@ -413,7 +416,7 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
     ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
     ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
-    ...(options.screenshotCards ? SCREENSHOT_TOOLS : []),
+    ...(options.screenshotCards ? SCREENSHOT_TOOLS : env.MEMORY_IDEAS_ENABLED ? [CHECK_EVENT_TOOL] : []),
     ...(env.MEMORY_IDEAS_ENABLED ? MEMORY_TOOLS : []),
   ];
 }
@@ -804,7 +807,7 @@ async function runTurnInner(
       // The screenshot library. Reads; only `show_screenshots` (or a search on a
       // library not connected) leaves a card, one per reply like every other.
       if (isScreenshotTool(name)) {
-        if (!screenshotCards) {
+        if (!screenshotCards && !(name === CHECK_EVENT_TOOL_NAME && env.MEMORY_IDEAS_ENABLED)) {
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
@@ -873,6 +876,21 @@ async function runTurnInner(
           args = JSON.parse(tc.function.arguments || "{}");
         } catch {
           // parseItems refuses it below
+        }
+        // Someone else's gift reaches a list a partner can see only on the person's
+        // exact words. A saved reason outranks a model that wants to be helpful.
+        const giftItems = env.MEMORY_IDEAS_ENABLED ? await giftIdeasIn(userId, args).catch(() => []) : [];
+        if (giftItems.length > 0 && !(await consent({ previous, message: text, tool: "wishlist_from_gift_idea", args: { gifts: giftItems } }))) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({
+              success: false,
+              error: "gift_idea",
+              instruction: "NO card shown: this idea is saved as a gift for someone else, and the wishlist is what a partner can see. Ask if they really want it on their own wishlist; do not say anything was added.",
+            }),
+          });
+          continue;
         }
         const proposed = await proposeWishlistItems(args, {
           userId,
@@ -1147,7 +1165,7 @@ async function buildChatMessages(
     options.guideCards ? GUIDE_ADDENDUM : null,
     options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
     options.wishlistCards ? WISHLIST_ADDENDUM : null,
-    typeof options.screenshotLibraryOpen === "boolean" ? screenshotLibraryAddendum(options.screenshotLibraryOpen) : null,
+    typeof options.screenshotLibraryOpen === "boolean" ? screenshotLibraryAddendum(options.screenshotLibraryOpen, env.MEMORY_IDEAS_ENABLED) : null,
     env.MEMORY_IDEAS_ENABLED ? MEMORY_ADDENDUM : null,
     env.WISHLIST_FEATURE_ENABLED ? `### Removing items from their wishlist
 - You CAN remove a saved item here: get_my_wishlist, then remove_wishlist_item.

@@ -12,8 +12,11 @@ import {
   type Language,
   type WishlistCategory,
   type WishlistPriceBand,
+  type MemoryIdeaKind,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { isUuid } from "../utils/uuid.js";
+import { attachWishlistSource, saveIdea } from "./memory-ideas.js";
 import {
   createChatImageSignedUrls,
   deleteStorageObject,
@@ -79,6 +82,8 @@ export interface WishlistCardItem {
   productUrl: string | null;
   priceBand: WishlistPriceBand | null;
   source: CardItemSource;
+  /** The idea it came from: a tap adds the position to that idea as a source. Never sent to the app. */
+  ideaId?: string;
 }
 
 export interface WishlistCard {
@@ -145,6 +150,7 @@ export const PROPOSE_WISHLIST_TOOL = {
                 description: "The [imageUrl=…] token value of the photo that shows this item, if any.",
               },
               link: { type: ["string", "null"], description: "The https link they sent for this item, if any." },
+              ideaId: { type: ["string", "null"], description: "The saved idea this comes from, if any, from find_ideas." },
               image: {
                 type: "string",
                 enum: ["photo", "find", "none"],
@@ -167,6 +173,7 @@ interface ParsedItem {
   photo: string | null;
   link: string | null;
   image: "photo" | "find" | "none";
+  ideaId: string | null;
 }
 
 function cleanText(value: unknown, max: number): string | null {
@@ -207,9 +214,34 @@ function parseItems(raw: unknown, visiblePhotos: ReadonlySet<string>): ParsedIte
       photo,
       link: cleanLink(item.link),
       image,
+      ideaId: typeof item.ideaId === "string" && isUuid(item.ideaId) ? item.ideaId : null,
     });
   }
   return out;
+}
+
+/** Titles of the ideas named in a card's arguments that are saved as gifts. Owner in the query. */
+export async function giftIdeasIn(userId: string, raw: unknown): Promise<string[]> {
+  const ids = parseItems(raw, new Set()).flatMap((item) => (item.ideaId ? [item.ideaId] : []));
+  if (ids.length === 0) return [];
+  const rows = await prisma.memoryIdea.findMany({ where: { userId, deletedAt: null, id: { in: ids }, reason: "gift" }, select: { title: true } });
+  return rows.map((row) => row.title);
+}
+
+/** A tapped position's trace in ideas. Its absence never costs the save. */
+async function linkIdea(userId: string, item: WishlistCardItem, wishlistItemId: string): Promise<void> {
+  if (!env.MEMORY_IDEAS_ENABLED) return;
+  if (item.ideaId) {
+    await attachWishlistSource(userId, item.ideaId, wishlistItemId);
+    return;
+  }
+  const kinds: Partial<Record<WishlistCategory, MemoryIdeaKind>> = { place: "place", drink: "food", experience: "activity" };
+  await saveIdea(userId, {
+    kind: kinds[item.category] ?? "gift",
+    title: item.title,
+    intent: "want",
+    source: { kind: "wishlist", provenance: "person", wishlistItemId },
+  });
 }
 
 /** Brand + title, case- and punctuation-folded — "the same thing" for de-duplication. */
@@ -347,6 +379,7 @@ export async function proposeWishlistItems(
         productUrl: item.link,
         priceBand: null,
         source: item.link ? "link" : "text",
+        ...(item.ideaId ? { ideaId: item.ideaId } : {}),
       };
       const wantsLookup = Boolean(item.link) || item.image === "find";
       if (!wantsLookup || lookupsLeft <= 0) return base;
@@ -512,6 +545,7 @@ export interface ResolveDeps {
   existingItems: (userId: string) => Promise<Array<{ title: string; brand: string | null }>>;
   copyChatPhoto: (userId: string, chatPath: string) => Promise<string | null>;
   addItems: typeof addWishlistItems;
+  linkIdea?: (userId: string, item: WishlistCardItem, wishlistItemId: string) => Promise<void>;
 }
 
 /** The person's chat photo, copied under their own wishlist key; null on any failure. */
@@ -629,6 +663,13 @@ async function resolveInner(
         return { ok: false, error: "too-many", room: Math.max(0, WISHLIST_MAX_ITEMS - (await deps.countItems(userId))) };
       }
       return { ok: false, error: "unavailable" };
+    }
+    for (const item of toAdd) {
+      const row = added.items.find((view) => wishlistIdentity(view.title, view.brand) === wishlistIdentity(item.title, item.brand));
+      if (!row) continue;
+      await (deps.linkIdea ?? linkIdea)(userId, item, row.id).catch((err: unknown) => {
+        console.warn("[chat] wishlist idea link failed:", err instanceof Error ? err.name : "error");
+      });
     }
   }
 

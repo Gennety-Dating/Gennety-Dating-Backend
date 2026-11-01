@@ -14,7 +14,9 @@ import {
 } from "@gennety/shared";
 import { isOverTokenBudget } from "../public/usage-middleware.js";
 import { isUuid } from "../utils/uuid.js";
+import { env } from "../config.js";
 import { checkEvent, type EventCheckDeps, type EventCheckResult } from "./event-check.js";
+import { applyEventCheck } from "./memory-planning.js";
 import {
   listScreenshotsPage,
   searchScreenshotsPage,
@@ -167,6 +169,7 @@ export const SCREENSHOT_TOOLS = [
           date: { type: "string", description: "The date on the screenshot, YYYY-MM-DD, if it shows one." },
           end_date: { type: "string", description: "The last day, YYYY-MM-DD, if it runs for several days." },
           venue: { type: "string", description: "The venue, if known." },
+          idea_id: { type: "string", description: "When you are checking one of their saved ideas: its id, so the idea keeps the result." },
         },
       },
     },
@@ -180,6 +183,9 @@ export const SCREENSHOT_TOOL_KINDS: Record<string, "read"> = {
   [SHOW_SCREENSHOTS_TOOL_NAME]: "read",
   [CHECK_EVENT_TOOL_NAME]: "read",
 };
+
+/** Ideas can hold an event with no library in sight, so the check stands on its own. */
+export const CHECK_EVENT_TOOL = SCREENSHOT_TOOLS.find((tool) => tool.function.name === CHECK_EVENT_TOOL_NAME)!;
 
 export function isScreenshotTool(name: string): boolean {
   return name in SCREENSHOT_TOOL_KINDS;
@@ -286,14 +292,17 @@ const LIBRARY_TOOLS = `Search with \`search_screenshots\`. You can narrow it by 
  * The library's content never rides here; only whether there is one, so someone
  * with nothing connected does not spend a tool round on every date question.
  */
-export function screenshotLibraryAddendum(open: boolean): string {
+export function screenshotLibraryAddendum(open: boolean, ideas = false): string {
+  const rules = ideas
+    ? LIBRARY_RULES.replace("and you never say «запомнил», «сохранил», «учту».", "unless they ask to keep it (`save_idea` with screenshotId); until that tool answers success you never say «запомнил», «сохранил», «учту».")
+    : LIBRARY_RULES;
   return open
     ? `### Their screenshot library (private, on demand)
 They saved screenshots here: places, events, ideas of things to do, looks, gifts and things, food, interiors and landscapes, books, films and music, quotes and notes. You see none of it until you look.
 - They ask for something they saved: look, with purpose find_saved.
 - They ask you about a date, something to do, a look, a gift, food, an atmosphere or free time: you may look once, with purpose inspiration, if it could really help. Not in small talk, and never bring the library up by yourself otherwise.
 ${LIBRARY_TOOLS}
-${LIBRARY_RULES}`
+${rules}`
     : `### Their screenshot library (not connected)
 They have not connected it, so there is nothing to look in. Only if they ask to find something they saved, call \`search_screenshots\` with purpose find_saved: that shows the button to connect it. For anything else do not call it and do not bring it up.
 \`check_event\` still works: before you suggest an event or state its date, call it. Never offer what has passed, and if the answer is unverified, say you could not check it.`;
@@ -336,8 +345,8 @@ const EVENT_INSTRUCTIONS: Record<EventCheckResult["status"], string> = {
     "It could not be checked, which says nothing either way. Do not state its date, place or tickets as fact and do not call it confirmed. If you mention it, say you could not check it and that they should look at the source themselves.",
 };
 
-function eventToolResult(result: EventCheckResult): string {
-  return JSON.stringify({ success: true, ...result, instruction: EVENT_INSTRUCTIONS[result.status] });
+function eventToolResult(result: EventCheckResult, recorded: string | null): string {
+  return JSON.stringify({ success: true, ...result, ...(recorded ? { ideaNowSays: recorded } : {}), instruction: EVENT_INSTRUCTIONS[result.status] });
 }
 
 /** Never ends inside a surrogate pair, so a part is always valid text. */
@@ -411,7 +420,12 @@ export async function executeScreenshotTool(
       { ...(deps.overBudget ? { overBudget: deps.overBudget } : {}), ...deps.eventCheck },
     );
     if (!checked) return fail("bad_arguments", "A check needs the event's name, without links, and a city.");
-    return { result: eventToolResult(checked) };
+    const ideaId = typeof args.idea_id === "string" && isUuid(args.idea_id) ? args.idea_id : null;
+    // The owner filter is inside. A failed write costs the record, not the answer.
+    const recorded = ideaId && env.MEMORY_IDEAS_ENABLED
+      ? await applyEventCheck(userId, ideaId, checked).catch(() => null)
+      : null;
+    return { result: eventToolResult(checked, recorded) };
   }
 
   const library = await prisma.screenshotLibrary.findUnique({ where: { userId }, select: { status: true } });
