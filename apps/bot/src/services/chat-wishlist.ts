@@ -247,6 +247,8 @@ export interface ProposeContext {
   openCardItems?: ReadonlySet<string>;
   /** The card's button as the app labels it in their language («Добавить»). */
   buttonLabel: string;
+  /** Called as a web look-up starts: the turn's status names it. */
+  onLookup?: () => void;
 }
 
 export interface ProposeOutcome {
@@ -349,6 +351,7 @@ export async function proposeWishlistItems(
       const wantsLookup = Boolean(item.link) || item.image === "find";
       if (!wantsLookup || lookupsLeft <= 0) return base;
       lookupsLeft -= 1;
+      ctx.onLookup?.();
       const found = await deps
         .lookup({
           userId: ctx.userId,

@@ -4399,6 +4399,61 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/chat/activity:
+    get:
+      tags: [chat]
+      operationId: getChatActivity
+      summary: What the chat turn of a clientMessageId is doing right now
+      description: |
+        Polled beside a blocking `POST /v1/chat/message` to show a one-line
+        status (2026-11-01). Scoped to the caller: someone else's id reads as
+        unknown. Unknown, finished and expired ids all answer 200 with
+        `{ "step": null, "seq": 0 }`, never 404, because the client polls
+        before its POST is registered. Only `/v1/chat/message` reports steps;
+        a turn sent without a `clientMessageId`, and `/v1/chat/voice`, stay
+        unknown. Limit: 150 requests a minute per user, separate from the send
+        limit.
+      parameters:
+        - name: clientMessageId
+          in: query
+          required: true
+          description: The id sent in the body of `POST /v1/chat/message`.
+          schema: { type: string, minLength: 8, maxLength: 64 }
+      responses:
+        "200":
+          description: The current step, or null when no turn is known under this id
+          headers:
+            Cache-Control:
+              description: Always `no-store`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [step, seq]
+                properties:
+                  step:
+                    type: [string, "null"]
+                    description: |
+                      Machine key, null when no turn is known: `thinking`,
+                      `reading_photo`, `web`, `screenshots`, `wishlist`,
+                      `past_chats`, `profile`, `date`, `writing`. Deliberately
+                      not an enum: `enum: [..., null]` breaks the generated
+                      Swift client. The client localizes the key and should
+                      treat one it does not know as `thinking`.
+                  seq:
+                    type: integer
+                    minimum: 0
+                    description: |
+                      Grows on each step change within one turn, starting at 1;
+                      0 when `step` is null. A send retried after a failure is
+                      a new turn and starts at 1 again.
+        "401":
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /v1/chat/messages/{id}/offer:
     post:
       tags: [chat]

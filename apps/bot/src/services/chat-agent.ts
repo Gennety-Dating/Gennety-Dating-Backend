@@ -44,6 +44,7 @@ import {
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
 import { buildPersonCard } from "./chat-person-card.js";
 import { MEMORY_STRICT_TOOLS, CONSENT_GATED_TOOLS, personConsented, type ConsentQuestion } from "./chat-consent.js";
+import { stepForTool, type ChatActivityStep } from "./chat-activity.js";
 import { stripMarkdownEmphasis } from "./reply-text.js";
 import {
   PROPOSE_WISHLIST_TOOL,
@@ -405,7 +406,7 @@ type ToolList = Array<
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean }): ToolList {
   return [
     ...ALL_TOOLS,
     ...(env.WISHLIST_FEATURE_ENABLED ? WISHLIST_TOOLS : []),
@@ -507,6 +508,11 @@ export interface ChatTurnInput {
    * never gets a card it would drop.
    */
   chatCards?: ReadonlySet<string>;
+  /**
+   * Told what the turn is doing right now (`chat-activity.ts`). Status only: it
+   * changes nothing in the turn, and absent or throwing it costs nothing.
+   */
+  onStep?: (step: ChatActivityStep) => void;
 }
 
 export interface ChatTurnResult {
@@ -636,7 +642,19 @@ async function runTurnInner(
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
+  const report = (step: ChatActivityStep): void => {
+    try {
+      input.onStep?.(step);
+    } catch (err) {
+      console.warn("[chat] activity report failed:", err);
+    }
+  };
+  report(imageUrls.length > 0 ? "reading_photo" : "thinking");
   while (iteration < MAX_TOOL_ITERATIONS) {
+    // Whether this call ends in words is known only once it returns. After a
+    // tool round it nearly always does, so that is what the person is told; a
+    // further tool call moves the status on to that tool.
+    if (iteration > 0) report("writing");
     const called = await completeWithRetry(messages, fetchFn, { tools });
     if (!called.ok) {
       failure = called.reason;
@@ -667,6 +685,7 @@ async function runTurnInner(
     const screenshotImages: ScreenshotImageForModel[] = [];
     for (const tc of toolCalls) {
       const name = tc.function.name;
+      report(stepForTool(name));
 
       // Бюджет проверяется ДО запуска: вторая запись за ход отвергается, а не
       // применяется и потом объясняется. Модели сказано попросить — значит
@@ -862,6 +881,7 @@ async function runTurnInner(
           visiblePhotos,
           openCardItems,
           buttonLabel: t(language, "agentWishlistCardButton"),
+          onLookup: () => report("web"),
         }).catch((err: unknown) => {
           console.warn("[chat] wishlist card failed:", err);
           return { result: JSON.stringify({ success: false, error: "tool_failed", detail: "Tell them it did not work this time." }), card: null, openWishlist: false };
@@ -945,6 +965,7 @@ async function runTurnInner(
   // Out of tool rounds while the model still wants tools: one last call with
   // tools off, so the turn ends in words about what was done, not a fallback.
   if (!lastReply && !failure && iteration >= MAX_TOOL_ITERATIONS) {
+    report("writing");
     const closing = await completeWithRetry(messages, fetchFn, { tools, toolChoice: "none" });
     if (closing.ok) lastReply = finishReply(closing.choice);
     else failure = `closing call: ${closing.reason}`;

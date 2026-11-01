@@ -104,6 +104,18 @@ describe("proposeWishlistItems", () => {
     expect(out.card?.items[0]?.photoPath).toBeNull();
   });
 
+  it("says when a web look-up starts, and only then", async () => {
+    const onLookup = vi.fn();
+    await proposeWishlistItems({ items: [{ title: "Пионы", category: "flowers", image: "none" }] }, { ...ctx, onLookup }, deps());
+    expect(onLookup).not.toHaveBeenCalled();
+    await proposeWishlistItems(
+      { items: [{ title: "духи", category: "gift", link: "http://shop.example/santal-33", image: "none" }] },
+      { ...ctx, onLookup },
+      deps(),
+    );
+    expect(onLookup).toHaveBeenCalledOnce();
+  });
+
   it("reads a link for its page photo and name", async () => {
     const d = deps({ lookup: async () => ({ ok: true, candidates: [candidate({ title: "Santal 33 EDP", source: "link" }) as never] }) });
     const out = await proposeWishlistItems(

@@ -714,6 +714,16 @@ Supported first-class flows:
   (partner's first name, venue, time, status, the person's own outcome; never
   the partner's side). An older app build that names no chat keeps landing in
   the most recent chat while it is under six hours quiet. Demo behaves as prod.
+  **Live status (2026-11-01):** a send blocks until the reply, so the app polls
+  `GET /v1/chat/activity?clientMessageId=` beside it for what the agent is doing
+  now, as a machine key the client localizes: `thinking`, `reading_photo` (the
+  turn carries a photo, before the first model call returns), the tool's area
+  (`web`, `screenshots`, `wishlist`, `past_chats`, `profile`, `date`, mapped in
+  `services/chat-activity.ts`), and `writing` on any model call after a tool
+  round. Whether that call ends in words or in another tool is known only when
+  it returns, so a further tool moves the status back to that tool. A wishlist
+  card reports `web` while it looks an item up. No message content is held, and
+  voice turns report nothing: `/v1/chat/voice` takes no `clientMessageId`.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
 - **Blocking** — `POST /v1/matches/:id/block`, plus `GET /v1/me/blocks` and

@@ -495,6 +495,18 @@ export const chatMessageLimiter = make({
 });
 
 /**
+ * Status poll of a chat turn — 150/min per user, twice the 75/min of polling
+ * every 800 ms, so two chats open at once still fit. Its own key: polling
+ * never touches `chatMessageLimiter`, the budget of sends. It does count against
+ * the per-IP `globalLimiter`, like everything else.
+ */
+export const chatActivityLimiter = make({
+  windowMs: 60_000,
+  limit: 150,
+  keyGenerator: (req): string => `chat-activity:${req.userId ?? ipKey(req)}`,
+});
+
+/**
  * Proxy-chat send — 30/min per user (audit B-09). The pre-date chat is a few
  * lines to find each other; a person typing fast sends a handful a minute.
  * Anything near this ceiling is a loop or a flood aimed at the partner, whose

@@ -1,6 +1,27 @@
 # 2026-10-31 — Private screenshot library
 
-1 entries.
+2 entries.
+
+## 2026-11-01 — Chat status from the real tool loop, `writing` is a best guess
+
+Kind: deviation from plan. Recorded in `apps/bot/src/services/chat-activity.ts`,
+`docs/product/domains/main-menu.md`.
+
+The agreed contract has `thinking` between tools and `writing` for the tool-free
+final completion. The model call is not streamed, so whether a call is tool-free is
+known only once it has returned, when the words already exist. Going by the letter
+would mean `writing` almost never shows. Instead every model call after a tool round
+reports `writing`, and a further tool call moves the status to that tool. So a status
+can go `past_chats`, `writing`, `date`, `writing`, and `thinking` shows only before
+the first tool. A tool the turn refuses (budget, consent) still reports its step:
+the consent check is itself a model call, so the wait is real.
+
+`/v1/chat/voice` is not covered on purpose: it takes no `clientMessageId` and has no
+send dedupe. Adding one is a change of the voice contract in both repos, not part of
+status reporting. The store is in process memory because production is one PM2
+process in fork mode, as `SendDedupe` already assumes. Going to cluster mode would
+break both. Going forward: a new chat tool must be placed in `CHAT_TOOL_STEPS`, the
+test compares it with the real tool list. Nothing was deployed.
 
 ## 2026-10-31 — Private screenshot library behind a flag
 

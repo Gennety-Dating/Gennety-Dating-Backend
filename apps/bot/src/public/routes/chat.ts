@@ -5,8 +5,9 @@ import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { requireAgentAccess } from "../agent-access-middleware.js";
-import { chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
+import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
+import { chatActivity } from "../../services/chat-activity.js";
 import { listChatTopics } from "../../services/chat-topics.js";
 import {
   claimChatSession,
@@ -67,6 +68,7 @@ function chatCardsOf(req: Request): Set<string> {
  *   POST  /v1/chat/upload         multipart image → opaque storage path
  *   POST  /v1/chat/message        { text?, imageUrl?, context?, sessionId? } → assistant reply
  *   POST  /v1/chat/voice          the same turn from a voice note
+ *   GET   /v1/chat/activity       what the turn of a `clientMessageId` is doing now
  *   GET   /v1/chat/history        newest page, `before` pages backwards, `sessionId` = one chat
  *   GET   /v1/chat/sessions       the person's chats, most recently active first
  *   PATCH /v1/chat/sessions/:id   rename a chat
@@ -216,6 +218,9 @@ chatRouter.post(
 
     const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
     const reply = await chatSends.run(req.userId!, clientMessageId, async () => {
+      // Inside `run`: a retry answered from `chatSends` starts no turn, so it
+      // must not start a status either. No id, nothing the phone could poll.
+      const activity = clientMessageId ? chatActivity.begin(req.userId!, clientMessageId) : null;
       const turn = await runChatTurn({
         userId: req.userId!,
         text,
@@ -223,7 +228,8 @@ chatRouter.post(
         context,
         sessionId,
         chatCards: chatCardsOf(req),
-      });
+        ...(activity ? { onStep: activity.report } : {}),
+      }).finally(() => activity?.finish());
       return {
         message: {
           id: turn.id,
@@ -367,6 +373,23 @@ chatRouter.post(
     });
   },
 );
+
+/**
+ * GET /v1/chat/activity — what the turn sent with this `clientMessageId` is
+ * doing right now (decision journal 2026-11-01). `step` is a machine key the
+ * client localizes; `seq` grows with each change.
+ *
+ * Unknown, finished and expired all answer `{ step: null, seq: 0 }` with a 200,
+ * never a 404: the client starts polling before its POST has been registered.
+ * The key includes `req.userId`, so someone else's id reads as unknown.
+ *
+ * A read that spends nothing, so outside `requireAgentAccess` and `usageGuard`,
+ * like `/history`. `no-store`: a cached answer would freeze the status.
+ */
+chatRouter.get("/activity", chatActivityLimiter, (req: Request, res: Response): void => {
+  res.set("Cache-Control", "no-store");
+  res.json(chatActivity.read(req.userId!, parseClientMessageId(req.query.clientMessageId)));
+});
 
 /**
  * GET /v1/chat/history — oldest-first slice, newest page first. Mobile uses

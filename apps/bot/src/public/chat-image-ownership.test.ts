@@ -40,6 +40,7 @@ vi.mock("./agent-access-middleware.js", () => ({
   requireAgentAccess: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("./rate-limit.js", () => ({
+  chatActivityLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   chatMessageLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   chatUploadLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   voiceLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),

@@ -350,3 +350,56 @@ describe("чатовые записи под бюджетом хода", () => {
     expect(toolResultSeen("c0")).toMatchObject({ success: false, detail: "Height out of range" });
   });
 });
+
+/**
+ * Статус хода (решение 2026-11-01): что слышит `onStep` по дороге. Сам ход от
+ * него не зависит — ни отсутствие, ни исключение ничего не меняют.
+ */
+describe("отчёт о шагах хода", () => {
+  const steps = () => {
+    const seen: string[] = [];
+    return { seen, onStep: (step: string) => void seen.push(step) };
+  };
+
+  it("ход без инструментов так и остаётся размышлением", async () => {
+    const { seen, onStep } = steps();
+    await runChatTurn({ userId: "u1", text: "привет", imageUrls: [], onStep }, { fetchFn });
+    expect(seen).toEqual(["thinking"]);
+  });
+
+  it("снимок читается, потом инструмент, потом ответ", async () => {
+    queue = [completion([{ name: "search_past_chats", args: '{"query":"Аня"}' }]), plain];
+    const { seen, onStep } = steps();
+    await runChatTurn(
+      { userId: "u1", text: "что на фото?", imageUrls: ["u1/1.jpg"], sessionId: "s-now", onStep },
+      { fetchFn },
+    );
+    expect(seen).toEqual(["reading_photo", "past_chats", "writing"]);
+  });
+
+  it("второй круг инструментов сменяет «пишет» своим шагом", async () => {
+    queue = [
+      completion([{ name: "search_past_chats", args: '{"query":"Аня"}' }]),
+      completion([{ name: "get_my_standing" }]),
+      plain,
+    ];
+    const { seen, onStep } = steps();
+    await runChatTurn({ userId: "u1", text: "как дела?", imageUrls: [], sessionId: "s-now", onStep }, { fetchFn });
+    expect(seen).toEqual(["thinking", "past_chats", "writing", "date", "writing"]);
+  });
+
+  it("сломанный отчёт не стоит хода", async () => {
+    const turn = await runChatTurn(
+      {
+        userId: "u1",
+        text: "привет",
+        imageUrls: [],
+        onStep: () => {
+          throw new Error("boom");
+        },
+      },
+      { fetchFn },
+    );
+    expect(turn.content).toBe("ответ");
+  });
+});

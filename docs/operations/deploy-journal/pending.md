@@ -30,6 +30,18 @@ rows runs only with the flag on. New agent tools `view_screenshot`, `check_event
 turns with the flag and the card. Check after deploy: nothing, the flag is off. Demo: same
 code, flag off. iOS: no change needed. Before the flag goes on: the checklist in
 `docs/product/domains/screenshot-library.md`.
+**PENDING 2026-11-01 — real status of a chat turn: `GET /v1/chat/activity` (no migration, no env, no flag).**
+
+New route beside the blocking `POST /v1/chat/message`; the tool loop reports steps into
+an in-memory store. An older app build never calls it, and a send behaves as before.
+iOS needs this on production before its polling shows anything but null.
+
+**Check after deploy:** with a valid token, `GET /v1/chat/activity?clientMessageId=probe-0001`
+answers 200 `{"step":null,"seq":0}` with `Cache-Control: no-store`; without a token, 401.
+Then from the app, a message that needs a tool shows its status change. **Rollback:** the
+ordinary code rollback; the app treats a failed poll as no status. **Demo:** same code,
+nothing specific. **PM2:** must stay one process in fork mode, a second instance would
+answer polls from an empty store.
 
 **PENDING 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
 
