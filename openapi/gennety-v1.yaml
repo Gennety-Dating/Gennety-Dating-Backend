@@ -2043,7 +2043,12 @@ paths:
               schema: { type: object, required: [dueAt], properties: { dueAt: { type: string, format: date-time } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
-        "409": { description: "`no-date`, `date-passed`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409":
+          description: >-
+            `needs-own-dates` (the idea is not allowed for the person's own dates, or is a gift, a reference,
+            dropped or tried: such a reminder would never be sent, so it is refused; added in the 2026-11 audit, F-02),
+            `no-date`, `date-passed`
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
       tags: [Memory]
       operationId: cancelMemoryIdeaReminder

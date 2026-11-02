@@ -438,6 +438,9 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
 export async function setReminder(userId: string, ideaId: string, now: Date = new Date()): Promise<{ dueAt: string }> {
   const idea = await prisma.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null } });
   if (!idea) throw new MemoryIdeaError("not-found", 404);
+  // The sender cancels a reminder whose idea may not be used for their own dates,
+  // so accepting one here would answer «set» for a push that never comes (audit F-02).
+  if (!usableForOwnDates(gate(idea))) throw new MemoryIdeaError("needs-own-dates", 409);
   if (!idea.eventAt) throw new MemoryIdeaError("no-date", 409);
   if (idea.eventCheck === "outdated" || idea.eventAt <= now) throw new MemoryIdeaError("date-passed", 409);
   const dueAt = new Date(Math.max(idea.eventAt.getTime() - MEMORY_REMINDER_LEAD_MS, now.getTime()));
@@ -476,7 +479,12 @@ export async function setEventDate(userId: string, ideaId: string, eventAt: Date
   const sameDate = before.eventAt?.getTime() === eventAt?.getTime();
   if (sameDate && check !== "outdated") return;
   await cancelReminder(userId, ideaId);
-  if (hadReminder > 0 && eventAt && eventAt > now && check !== "outdated") await setReminder(userId, ideaId, now);
+  if (hadReminder > 0 && eventAt && eventAt > now && check !== "outdated") {
+    await setReminder(userId, ideaId, now).catch((err: unknown) => {
+      // A wish closed meanwhile keeps no reminder; that is not a failed check.
+      if (!(err instanceof MemoryIdeaError && err.code === "needs-own-dates")) throw err;
+    });
+  }
 }
 
 /**

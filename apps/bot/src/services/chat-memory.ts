@@ -123,7 +123,7 @@ export const MEMORY_TOOLS = [
   ),
   fn(
     "set_idea_reminder",
-    "«Напомни вовремя» for an idea with a date. Without a date it is refused: ask them for it. on=false cancels.",
+    "«Напомни вовремя» for an idea with a date that they allowed for their own dates. Without a date, or without that use, it is refused: say why. on=false cancels.",
     ["id", "on"],
     { id: ID, on: { type: "boolean" } },
   ),
@@ -397,6 +397,7 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
         "not-attended": "Nothing recorded: they have not confirmed going to this date. Do not ask them to rate it.",
         "no-date": "No reminder set: it has no confirmed date. Ask them for the date; do not guess.",
         "date-passed": "No reminder set: that date has passed or is out of date. Say so.",
+        "needs-own-dates": "No reminder set: this idea is not allowed for their own dates (or it is a gift, a reference or no longer wanted), and a reminder only comes for those. Say so, and ask whether to allow it for their dates first.",
       };
       return refused(err.code, instruction[err.code] ?? "Nothing changed. Tell them it did not work.");
     }
