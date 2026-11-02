@@ -185,6 +185,8 @@ describe("consent and state", () => {
 describe("uploads", () => {
   beforeEach(() => {
     db.screenshotLibrary.findUnique.mockResolvedValue(openLibrary);
+    // The library row as `reserveUpload` reads it under its lock.
+    db.$queryRaw.mockResolvedValue([{ status: "active", generation: 3, auto_import: true }]);
   });
 
   it("the same bytes do not make a second row", async () => {

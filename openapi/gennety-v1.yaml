@@ -2335,7 +2335,12 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
-        "409": { description: "`library-off`, `library-paused`, `generation-stale`, `auto-import-off`, `source-excluded`, `library-full`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409":
+          description: >-
+            `library-off`, `library-paused`, `generation-stale`, `auto-import-off`, `source-excluded`, `library-full`,
+            `out-of-range` (an automatic upload whose `capturedAt` is older than the library's `rangeDays`; a manual
+            pick is not limited; added in the 2026-11 audit, F-12)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429": { description: "`rate-limited`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "503": { description: "`storage-unavailable`: retry later.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/me/screenshots:

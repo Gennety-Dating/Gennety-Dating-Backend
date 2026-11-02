@@ -45,6 +45,8 @@ import {
 
 export type LibraryStatus = "off" | "active" | "paused";
 
+const DAY_MS = 24 * 3_600_000;
+
 export class ScreenshotLibraryError extends Error {
   constructor(
     readonly code:
@@ -54,6 +56,7 @@ export class ScreenshotLibraryError extends Error {
       | "consent-required"
       | "auto-import-off"
       | "source-excluded"
+      | "out-of-range"
       | "library-full"
       | "upload-missing"
       | "bad-image"
@@ -227,6 +230,12 @@ export async function reserveUpload(userId: string, input: ReserveInput): Promis
       where: { userId_sourceKey: { userId, sourceKey: input.sourceKey } },
     });
     if (excluded) throw new ScreenshotLibraryError("source-excluded", 409);
+    // The period chosen on connecting is what they agreed to have imported; the
+    // phone filters by it, and the server holds it too (audit F-12). A screenshot
+    // with no capture time and anything picked by hand are not limited by it.
+    if (library.rangeDays !== null && input.capturedAt && input.capturedAt.getTime() < Date.now() - library.rangeDays * DAY_MS) {
+      throw new ScreenshotLibraryError("out-of-range", 409);
+    }
   } else {
     // Picking it by hand is the person changing their mind about that source.
     await prisma.screenshotExclusion.deleteMany({ where: { userId, sourceKey: input.sourceKey } });
@@ -245,16 +254,28 @@ export async function reserveUpload(userId: string, input: ReserveInput): Promis
     };
   }
 
-  const total = await prisma.screenshotItem.count({ where: { userId, deletedAt: null } });
-  if (total >= SCREENSHOT_LIBRARY_MAX_ITEMS) throw new ScreenshotLibraryError("library-full", 409);
-
   const id = randomUUID();
   const storagePath = storagePathOf(userId, id);
   const ocrText = input.ocrText?.slice(0, SCREENSHOT_OCR_MAX_CHARS) ?? null;
   let row;
   try {
     row = await prisma.$transaction(async (tx) => {
+      // The library row is the lock disconnecting takes first: a reservation
+      // that read «open» before a disconnect committed waits for it here and
+      // then sees «off», instead of leaving a live row in a closed library.
+      // The cap is counted under the same lock, so two uploads cannot both
+      // take the last place (audit F-04).
+      const [locked] = await tx.$queryRaw<Array<{ status: string; generation: number; auto_import: boolean }>>`
+        SELECT status, generation, auto_import FROM screenshot_libraries WHERE user_id = ${userId}::uuid FOR UPDATE
+      `;
+      if (!locked || locked.status === "off") throw new ScreenshotLibraryError("library-off", 409);
+      if (locked.generation !== input.generation) throw new ScreenshotLibraryError("generation-stale", 409);
+      if (input.source === "auto" && locked.status === "paused") throw new ScreenshotLibraryError("library-paused", 409);
+      if (input.source === "auto" && !locked.auto_import) throw new ScreenshotLibraryError("auto-import-off", 409);
+      // A new version of a source replaces the old one, so it is counted without it.
       await hideRows(tx, { userId, sourceKey: input.sourceKey });
+      const total = await tx.screenshotItem.count({ where: { userId, deletedAt: null } });
+      if (total >= SCREENSHOT_LIBRARY_MAX_ITEMS) throw new ScreenshotLibraryError("library-full", 409);
       return tx.screenshotItem.create({
         data: {
           id,
