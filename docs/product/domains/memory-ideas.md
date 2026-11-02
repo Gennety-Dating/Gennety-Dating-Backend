@@ -53,7 +53,8 @@ wishlist position has its own delete and stays. A catch-all sweep in `workers/me
 covers screenshots hidden by a path that knows nothing about ideas. Account deletion cascades.
 
 Each change writes a history row in one transaction, and a repeated `Idempotency-Key`
-returns the idea as it stands.
+returns the idea as it stands, also for merge and split and also when the retry raced the
+first attempt.
 
 ## In chat
 
@@ -128,11 +129,14 @@ so revoking takes effect on the next read.
 - A date's memo: the owner's only. Weather, dress code and opening hours are not in it. The
   briefing's own visibility gate is untouched. Health data is not read here at all.
 - After a date: `reconcilePlans` ties an idea to a real scheduled date and restores it after a
-  cancellation. Only a visit the person confirmed allows an impression, and only that sets
+  cancellation; it reads only the plans whose date is gone, cancelled, expired or moved, so
+  finished dates never crowd them out. Only a visit the person confirmed allows an impression, and only that sets
   `tried`. Place, format and repeat are separate, nothing says anything about the partner,
   «не хочу оценивать» counts as an answer, and a later answer corrects it.
-- Reminders: only for an idea with a date, at most one per occasion, one push a day per person,
-  held in quiet hours, claimed before sending. The idea is re-read at send time, so a dropped
+- Reminders: only for an idea with a date that is usable for the person's own dates, at most one
+  per occasion, one push a day per person, held in quiet hours, claimed before sending. Asking for
+  one on an idea without that use answers 409 `needs-own-dates`, because the sender would cancel
+  it without a push (audit 2026-11, F-02). The idea is re-read at send time, so a dropped
   wish, a moved date, a revoked use or a block ends it without a push.
 
 ## Demo mode

@@ -37,8 +37,13 @@ apart from the tools' own limits; live prompt evals have not been run.
 The phone downsizes the image to at most 1600 px, recognises text with Vision,
 hashes the original and calls `POST /v1/me/screenshots/uploads`. It PUTs to the
 signed URL, then calls `POST /v1/me/screenshots/{id}/commit`, where the server
-checks the real bytes (JPEG or PNG, size, pixels). A one-minute cron
-(`workers/screenshot-library.ts`) takes six queued items, newest first, reads
+checks the real bytes (JPEG or PNG, size, pixels). The reservation runs under a
+lock on the library row, the one «Отключить и удалить» takes first, so an upload
+racing a disconnect is refused rather than left in a closed library, and the cap is
+counted there. An automatic upload older than the chosen `rangeDays` answers
+`out-of-range`; a hand-picked one is not limited. A one-minute cron
+(`workers/screenshot-library.ts`) takes six queued items, newest first, checks the
+stored bytes again (the signed PUT outlives commit), reads
 each with `MODELS.visionFast`, embeds the text with `text-embedding-3-small` and
 marks it ready. A failure backs off and retries, up to five attempts. An answer cut
 by the token limit is not a failure: one more request asks for no copied words, and
@@ -154,6 +159,16 @@ counts (`[screenshots] read tokens`), which should replace this estimate. Indexi
 runs outside a request, so it does not spend the person's daily chat budget. Its
 limits are 2,000 items per library and 1,000 indexed per person per day. The Batch
 API, half the price for the old archive, is not implemented yet.
+
+With the flag off the routes still answer `GET` (state, list, one item; not the
+search, which pays for an embedding) and `DELETE` (one item, and disconnect-and-delete),
+so switching the feature off never strands data. Connecting, uploading, reconciling and
+search answer 404 `feature-disabled`, and the cron only purges.
+
+Throughput: one tick indexes at most six items, so the whole service indexes at most
+about 8,600 a day, shared by everyone, newest first across all libraries. One person's
+2,000-item first import alone takes about five and a half hours. This is a capacity
+choice to make before the flag goes on (audit 2026-11, F-11), not a bug.
 
 ## Before turning the flag on
 
