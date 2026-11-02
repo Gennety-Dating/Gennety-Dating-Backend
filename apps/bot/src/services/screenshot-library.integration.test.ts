@@ -15,6 +15,16 @@ import { listItems, listScreenshotsPage, searchScreenshotsPage } from "./screens
 
 const DIMENSIONS = 1536;
 
+/** A PNG header the server's image check accepts: the indexer re-checks bytes before reading. */
+function png(width: number, height: number): Buffer {
+  const b = Buffer.alloc(32);
+  b.writeUInt32BE(0x89504e47, 0);
+  b.writeUInt32BE(0x0d0a1a0a, 4);
+  b.writeUInt32BE(width, 16);
+  b.writeUInt32BE(height, 20);
+  return b;
+}
+
 /** Words hashed into a vector: same words, near; no shared words, orthogonal. */
 function toyEmbedding(text: string): number[] {
   const vector: number[] = Array.from({ length: DIMENSIONS }, () => 0);
@@ -218,7 +228,7 @@ describe("the old client's view", () => {
 });
 
 describe("reindex", () => {
-  const download = async () => ({ ok: true as const, bytes: Buffer.from("x") });
+  const download = async () => ({ ok: true as const, bytes: png(400, 800) });
   const reading = { title: "New", description: "new reading", category: "food" as const, visibleText: "", entities: [] };
 
   it("re-reads only older rows, updates them, leaves the rest", async () => {

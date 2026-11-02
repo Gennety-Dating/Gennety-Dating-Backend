@@ -581,7 +581,7 @@ describe("worker", () => {
     db.$queryRaw.mockResolvedValue([queued]);
     db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
     await indexBatch({
-      download: async () => ({ ok: true as const, bytes: Buffer.from("x") }),
+      download: async () => ({ ok: true as const, bytes: png(400, 800) }),
       read: () => Promise.reject(new Error("503")),
       embed: vi.fn(),
     });
@@ -594,7 +594,7 @@ describe("worker", () => {
     db.$queryRaw.mockResolvedValue([queued]);
     db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
     await indexBatch({
-      download: async () => ({ ok: true as const, bytes: Buffer.from("x") }),
+      download: async () => ({ ok: true as const, bytes: png(400, 800) }),
       read: async () => reading,
       embed: async () => [0.1],
     });
@@ -606,7 +606,7 @@ describe("worker", () => {
     db.$queryRaw.mockResolvedValue([{ ...queued, attempts: 4 }]);
     db.screenshotItem.updateMany.mockResolvedValue({ count: 1 });
     await indexBatch({
-      download: async () => ({ ok: true as const, bytes: Buffer.from("x") }),
+      download: async () => ({ ok: true as const, bytes: png(400, 800) }),
       read: async () => null,
       embed: vi.fn(),
     });
@@ -696,7 +696,7 @@ describe("kinds on the wire", () => {
 describe("reindex", () => {
   const old = { id: ITEM, generation: 3, storage_path: "p", ocr_text: "ocr", attempts: 2, next_attempt_at: null };
   const reading = { title: "t", description: "d", category: "food" as const, visibleText: "v", entities: [] };
-  const download = async () => ({ ok: true as const, bytes: Buffer.from("x") });
+  const download = async () => ({ ok: true as const, bytes: png(400, 800) });
 
   it("the row stays searchable: the claim does not touch its state", async () => {
     db.$queryRaw.mockResolvedValue([old]);

@@ -16,6 +16,7 @@ import { MODELS, normalizeChatCompletion } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { createOpenAIEmbeddingClient, toPgVectorLiteral } from "../services/profile-analysis.js";
 import { deleteStorageObject, downloadScreenshot } from "../services/storage.js";
+import { isAcceptableImage } from "../services/screenshot-library.js";
 import { readScreenshotsCard, SCREENSHOTS_CARD_KIND } from "../services/chat-screenshots.js";
 
 /**
@@ -268,6 +269,12 @@ async function indexOne(
       await failOrRetry(row.id, row.generation, attempts);
       return;
     }
+    // The signed PUT stays valid for a while after commit, so what is stored now
+    // may not be what commit checked. Checked again before any paid call (audit F-05).
+    if (!isAcceptableImage(downloaded.bytes)) {
+      await failOrRetry(row.id, row.generation, SCREENSHOT_INDEX_MAX_ATTEMPTS);
+      return;
+    }
     const reading = await (deps.read ?? readScreenshot)(downloaded.bytes, row.ocrText);
     if (!reading) {
       await failOrRetry(row.id, row.generation, attempts);
@@ -372,7 +379,9 @@ async function reindexOne(row: ReindexRow, deps: IndexDeps, now: Date): Promise<
     if (claimed.count === 0) return;
 
     const downloaded = await (deps.download ?? downloadScreenshot)(row.storage_path, SCREENSHOT_UPLOAD_MAX_BYTES);
-    const reading = downloaded.ok ? await (deps.read ?? readScreenshot)(downloaded.bytes, row.ocr_text) : null;
+    const reading = downloaded.ok && isAcceptableImage(downloaded.bytes)
+      ? await (deps.read ?? readScreenshot)(downloaded.bytes, row.ocr_text)
+      : null;
     if (!reading) {
       await giveBack();
       return;
