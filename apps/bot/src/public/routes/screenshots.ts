@@ -25,11 +25,21 @@ import {
  * person: no route takes a user id. Errors are distinct codes, so the phone can
  * tell "no consent" from "try later" from "this one is gone".
  */
+/** Reading what exists and deleting it; never a search, which pays for an embedding. */
+function stillServedWhenOff(req: Request): boolean {
+  if (req.method === "DELETE") return true;
+  if (req.method !== "GET") return false;
+  return !(typeof req.query.q === "string" && req.query.q.trim().length > 0);
+}
+
 export function createScreenshotsRouter(): Router {
   const router = Router();
 
-  router.use((_req: Request, res: Response, next): void => {
-    if (!env.SCREENSHOT_LIBRARY_ENABLED) {
+  // With the flag off a person still sees what is stored and can remove it:
+  // switching the feature off must never strand data (decision 2026-11-01,
+  // audit F-01). Connecting, uploading, reconciling and the paid search stop.
+  router.use((req: Request, res: Response, next): void => {
+    if (!env.SCREENSHOT_LIBRARY_ENABLED && !stillServedWhenOff(req)) {
       res.status(404).json({ error: "feature-disabled" });
       return;
     }
