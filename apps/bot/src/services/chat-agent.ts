@@ -822,8 +822,21 @@ async function runTurnInner(
           console.warn(`[chat] tool ${name} threw:`, err instanceof Error ? err.name : "error");
           return { result: JSON.stringify({ success: false, error: "tool_failed", instruction: "The library could not be read now. Answer without it; say so only if they asked for something saved." }) } as ScreenshotToolOutcome;
         });
-        const taken = Boolean(card || offer || guide);
-        if (outcome.card && !taken) shots = outcome.card;
+        // One card per reply. A card that cannot be attached must not be reported
+        // as shown, or the reply promises cards or a button that are not there (audit F-06).
+        if (outcome.card && (card || offer || guide || shots)) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({
+              success: false,
+              error: "one_card_per_reply",
+              instruction: "A card is already under this reply, so no screenshot cards and no button were added. Do not say they appeared; answer now.",
+            }),
+          });
+          continue;
+        }
+        if (outcome.card) shots = outcome.card;
         if (outcome.image) screenshotImages.push(outcome.image);
         messages.push({ role: "tool", tool_call_id: tc.id, content: outcome.result });
         continue;

@@ -21,6 +21,7 @@ const messageCreate = vi.fn(async (a: { data: { content: string; attachment?: un
 const libraryFind = vi.fn();
 const itemFindFirst = vi.fn();
 const ideaFindMany = vi.fn(async (_a: unknown) => [] as Array<{ title: string }>);
+const itemFindMany = vi.fn(async (_a: unknown) => [] as unknown[]);
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: async () => ({ telegramId: 4242n, language: "ru", profile: { homeCityKey: null } }) },
@@ -33,7 +34,7 @@ vi.mock("@gennety/db", () => ({
     memoryIdea: { findMany: (a: unknown) => ideaFindMany(a) },
     memoryIdeaEvent: { create: async () => ({}) },
     wishlistItem: { findMany: async () => [] },
-    screenshotItem: { findFirst: (a: unknown) => itemFindFirst(a), findMany: async () => [], count: async () => 0 },
+    screenshotItem: { findFirst: (a: unknown) => itemFindFirst(a), findMany: (a: unknown) => itemFindMany(a), count: async () => 0 },
   },
   Prisma: { sql: () => [], empty: [], join: () => [] },
 }));
@@ -100,6 +101,8 @@ beforeEach(() => {
   messageCreate.mockClear();
   libraryFind.mockReset();
   itemFindFirst.mockReset();
+  itemFindMany.mockReset();
+  itemFindMany.mockResolvedValue([]);
   libraryFind.mockResolvedValue({ status: "active", generation: 1 });
 });
 
@@ -277,5 +280,52 @@ describe("a picture for the model", () => {
     queue = [calls([{ name: "view_screenshot", args: { id: ITEM } }]), plain];
     const out = await turn(CARDS);
     expect(out.content).toBe("ок.");
+  });
+});
+
+describe("one card per reply (audit F-06)", () => {
+  const OTHER = "33333333-3333-4333-8333-333333333333";
+  const toolAnswers = (at: number) =>
+    sent[at]!.messages.filter((m) => m.role === "tool").map((m) => JSON.parse(String(m.content)) as Record<string, unknown>);
+
+  beforeEach(() => {
+    env.SCREENSHOT_LIBRARY_ENABLED = true;
+    itemFindMany.mockResolvedValue([
+      { id: ITEM, storagePath: `${USER}/${ITEM}.jpg`, title: "first", capturedAt: null, state: "ready" },
+      { id: OTHER, storagePath: `${USER}/${OTHER}.jpg`, title: "second", capturedAt: null, state: "ready" },
+    ]);
+  });
+
+  it("a second show_screenshots is refused, and the first card is the one stored", async () => {
+    queue = [
+      calls([
+        { name: "show_screenshots", args: { items: [{ id: ITEM, reason: "first" }] } },
+        { name: "show_screenshots", args: { items: [{ id: OTHER, reason: "second" }] } },
+      ]),
+      plain,
+    ];
+    await turn(CARDS);
+    const [first, second] = toolAnswers(1);
+    expect(first!.success).toBe(true);
+    expect(second!.success).toBe(false);
+    expect(second!.error).toBe("one_card_per_reply");
+    const stored = messageCreate.mock.calls.at(-1)![0].data.attachment as { items: Array<{ id: string }> };
+    expect(stored.items.map((i) => i.id)).toEqual([ITEM]);
+  });
+
+  it("the connect button is not promised when a card is already there", async () => {
+    libraryFind.mockResolvedValue(null);
+    queue = [
+      calls([
+        { name: "search_screenshots", args: { purpose: "find_saved", query: "wine bar" } },
+        { name: "search_screenshots", args: { purpose: "find_saved", query: "terrace" } },
+      ]),
+      plain,
+    ];
+    await turn(CARDS);
+    const [first, second] = toolAnswers(1);
+    expect(String(first!.instruction)).toMatch(/connect/);
+    expect(second!.error).toBe("one_card_per_reply");
+    expect(String(second!.instruction)).not.toMatch(/button is under/);
   });
 });
