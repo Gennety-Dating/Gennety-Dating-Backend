@@ -243,11 +243,17 @@ Baseline at `4cd7f595` and final at the branch head, same machine and database:
 
 1. `pnpm typecheck`: baseline pass; final pass.
 2. `pnpm lint`: baseline fail (4 errors, F-09); final pass.
-3. `pnpm --filter @gennety/bot test`: baseline 479 files / 7,732 tests passed; final FINAL_UNIT.
-4. `pnpm --filter @gennety/shared test`: baseline 27 / 454 passed; final FINAL_SHARED.
+3. `pnpm --filter @gennety/bot test`: baseline 479 files / 7,732 tests passed; final 480 / 7,740 passed.
+4. `pnpm --filter @gennety/shared test`: baseline 27 / 454 passed; final 27 / 454 passed.
 5. `pnpm --filter @gennety/bot test:integration` (needs the local test database): baseline 12 / 139 passed; final
-   FINAL_INT.
-6. `npx @redocly/cli@1.34.5 lint openapi/gennety-v1.yaml`: final FINAL_OPENAPI.
+   final full run 14 files / 152 tests: 151 passed, 1 failed, and one file did not load. Both failures came
+   from the machine's disk filling up during the run (ENOSPC loading the held-out test file; a Postgres
+   `PANIC: could not fsync` in `account-deletion.integration.test.ts`), not from the code. Docker then could not
+   restart with about 3 GB free, so the full run was not repeated. Every file this audit touches passed on its own
+   after the last code change: `screenshots-audit` 13/13, `memory-ideas` + `memory-lines` 44/44,
+   `screenshot-library` 20/20, held-out 1/1. Limited verification: repeat `pnpm test:integration` on a machine with
+   free disk before merging.
+6. `npx @redocly/cli@1.34.5 lint openapi/gennety-v1.yaml`: final valid, 12 warnings, the same 12 as on the baseline file.
 7. Regression files added: `apps/bot/src/services/screenshots-audit.integration.test.ts`,
    `apps/bot/src/services/screenshot-search-holdout.integration.test.ts`,
    `apps/bot/src/public/routes/screenshots.test.ts`, and new cases in `chat-agent-screenshots.test.ts`.
