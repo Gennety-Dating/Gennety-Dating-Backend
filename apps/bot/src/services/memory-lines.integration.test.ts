@@ -7,7 +7,7 @@ import { sendDueReminders } from "../workers/memory-ideas.js";
 import { executeScreenshotTool } from "./chat-screenshots.js";
 import { executeMemoryTool } from "./chat-memory.js";
 import { giftIdeasIn, resolveWishlistCard, type ResolveDeps, type WishlistCardItem } from "./chat-wishlist.js";
-import { applyEventCheck, dateMemo, ideaMap, pairOverlap, planningSuggestions, reconcilePlans, recordImpression, setEventDate, setReminder, styleReferenceTexts, suggestionsWithPreferences, vibeQuestion, wantedPlaceIds } from "./memory-planning.js";
+import { applyEventCheck, dateMemo, ideaMap, pairOverlap, planningSuggestions, reconcilePlans, setEventDate, setReminder, styleReferenceTexts, suggestionsWithPreferences, vibeQuestion, wantedPlaceIds } from "./memory-planning.js";
 import { confirmPreference, getIdea, listPreferences, reasonQuestions, saveIdea, setUsage } from "./memory-ideas.js";
 import { stylePicksHash } from "./style-picks/service.js";
 import { buildStyleDigest, type StyleDigestSource } from "./style-picks/digest.js";

@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import { env } from "../config.js";
 import { runWithUsage, userUsageKey } from "../services/usage-context.js";
-import { usageLimiter } from "../services/usage-limiter.js";
+import { isOverTokenBudget } from "../services/usage-budget.js";
+
+export { isOverTokenBudget };
 
 /**
  * Token-budget guard for the JWT-authed routes that spend OpenAI tokens
@@ -37,13 +38,6 @@ export function usageGuard(req: Request, res: Response, next: NextFunction): voi
   // Attribute any OpenAI tokens spent downstream to this user. `next()` runs
   // synchronously inside the context, so async handlers inherit it.
   runWithUsage(userUsageKey(userId), () => Promise.resolve(next()));
-}
-
-/** Over the person's daily budget, or the global breaker is open. */
-export function isOverTokenBudget(userId: string): boolean {
-  const overUserBudget =
-    env.LLM_TOKEN_BUDGET_ENABLED && usageLimiter.isOverDailyBudget(userUsageKey(userId));
-  return overUserBudget || usageLimiter.isGlobalBudgetExceeded();
 }
 
 /**

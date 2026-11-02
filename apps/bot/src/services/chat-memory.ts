@@ -10,7 +10,6 @@ import {
   VENUE_EXPERIENCES,
   VENUE_FORMATS,
   memoryKindOfScreenshot,
-  type MemoryIdeaKind,
   type MemoryIntent,
   type MemoryPreferenceFacet,
   type MemoryRating,

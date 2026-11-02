@@ -12,7 +12,7 @@ import {
   screenshotKindOf,
   type ScreenshotKind,
 } from "@gennety/shared";
-import { isOverTokenBudget } from "../public/usage-middleware.js";
+import { isOverTokenBudget } from "./usage-budget.js";
 import { isUuid } from "../utils/uuid.js";
 import { env } from "../config.js";
 import { checkEvent, type EventCheckDeps, type EventCheckResult } from "./event-check.js";

@@ -9,7 +9,7 @@ import {
   EVENT_CHECKS_PER_DAY,
 } from "@gennety/shared";
 import { env } from "../config.js";
-import { isOverTokenBudget } from "../public/usage-middleware.js";
+import { isOverTokenBudget } from "./usage-budget.js";
 import { openaiFetch } from "./openai-fetch.js";
 import { canonicalHttpsUrl, extractResponsesOutputText } from "./wishlist-lookup.js";
 
