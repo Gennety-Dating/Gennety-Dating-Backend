@@ -404,33 +404,44 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
     take: limit,
     select: { id: true, userAId: true, userBId: true, venuePlaceId: true },
   });
+  // One read for every booked date instead of one per date (audit F-07: 203
+  // statements a minute with 200 dates).
+  const candidates = scheduled.length
+    ? await prisma.memoryIdea.findMany({
+        where: {
+          userId: { in: [...new Set(scheduled.flatMap((m) => [m.userAId, m.userBId]))] },
+          placeId: { in: [...new Set(scheduled.map((m) => m.venuePlaceId as string))] },
+          deletedAt: null,
+          allowOwnDates: true,
+          plannedMatchId: null,
+          intent: { in: ["interested", "want"] },
+        },
+      })
+    : [];
   for (const match of scheduled) {
-    const ideas = await prisma.memoryIdea.findMany({
-      where: { userId: { in: [match.userAId, match.userBId] }, deletedAt: null, placeId: match.venuePlaceId, allowOwnDates: true, plannedMatchId: null, intent: { in: ["interested", "want"] } },
-    });
+    const ideas = candidates.filter((r) => r.placeId === match.venuePlaceId && (r.userId === match.userAId || r.userId === match.userBId));
     for (const idea of ideas.filter((r) => usableForOwnDates(gate(r)))) {
       await markPlanned(idea.userId, idea.id, match.id);
       planned++;
     }
   }
-  const stale = await prisma.memoryIdea.findMany({
-    where: { plannedMatchId: { not: null }, deletedAt: null },
-    select: { userId: true, plannedMatchId: true, placeId: true },
-    take: limit,
-  });
-  const matches = await prisma.match.findMany({
-    where: { id: { in: [...new Set(stale.map((s) => s.plannedMatchId as string))] } },
-    select: { id: true, status: true, venuePlaceId: true, dateAttendedA: true, dateAttendedB: true },
-  });
-  const byId = new Map(matches.map((m) => [m.id, m]));
-  for (const row of stale) {
-    const match = byId.get(row.plannedMatchId as string);
-    // A booked date whose place moved is no longer this idea's plan.
-    const moved = match?.status === "scheduled" && match.venuePlaceId !== null && row.placeId !== null && match.venuePlaceId !== row.placeId;
-    if (!match || match.status === "cancelled" || match.status === "expired" || moved) {
-      released += await releasePlan(row.userId, row.plannedMatchId as string);
-    }
-  }
+  // Only plans that need releasing are read. Reading every planned idea and
+  // filtering here let finished dates fill the page, so a cancelled date past
+  // the first `limit` rows never gave its wish back (audit F-07).
+  const stale = await prisma.$queryRaw<Array<{ user_id: string; planned_match_id: string }>>`
+    SELECT DISTINCT i.user_id, i.planned_match_id
+    FROM memory_ideas i
+    LEFT JOIN matches m ON m.id = i.planned_match_id
+    WHERE i.planned_match_id IS NOT NULL AND i.deleted_at IS NULL
+      AND (
+        m.id IS NULL
+        OR m.status::text IN ('cancelled', 'expired')
+        -- A booked date whose place moved is no longer this idea's plan.
+        OR (m.status::text = 'scheduled' AND m.venue_place_id IS NOT NULL AND i.place_id IS NOT NULL AND m.venue_place_id <> i.place_id)
+      )
+    LIMIT ${limit}
+  `;
+  for (const row of stale) released += await releasePlan(row.user_id, row.planned_match_id);
   return { planned, released };
 }
 
