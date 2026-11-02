@@ -162,7 +162,7 @@ async function recordEvent(
   });
 }
 
-async function liveIdea(tx: Tx, userId: string, id: string): Promise<IdeaRow> {
+async function liveIdea(tx: Tx | typeof prisma, userId: string, id: string): Promise<IdeaRow> {
   const row = await tx.memoryIdea.findFirst({ where: { id, userId, deletedAt: null }, include: withSources });
   if (!row) throw new MemoryIdeaError("not-found", 404);
   return row;
@@ -274,12 +274,9 @@ async function change(
   options: { actor: MemoryActor; type: string; idempotencyKey?: string | undefined; expectedVersion?: number | undefined },
   apply: (row: IdeaRow, tx: Tx) => Promise<{ data: Prisma.MemoryIdeaUpdateManyMutationInput; payload?: Prisma.InputJsonValue }>,
 ): Promise<MemoryIdeaView> {
-  const row = await prisma.$transaction(async (tx) => {
+  const attempt = () => prisma.$transaction(async (tx) => {
     const current = await liveIdea(tx, userId, id);
-    if (options.idempotencyKey) {
-      const seen = await tx.memoryIdeaEvent.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey: options.idempotencyKey } }, select: { id: true } });
-      if (seen) return current;
-    }
+    if (options.idempotencyKey && (await seenKey(tx, userId, options.idempotencyKey))) return current;
     if (options.expectedVersion !== undefined && options.expectedVersion !== current.version) {
       throw new MemoryIdeaError("version-conflict", 409);
     }
@@ -292,7 +289,26 @@ async function change(
     await recordEvent(tx, current, options.actor, options.type, payload, options.idempotencyKey);
     return liveIdea(tx, userId, id);
   });
-  return ideaView(row);
+  return ideaView(await afterRace(userId, options.idempotencyKey, attempt, () => liveIdea(prisma, userId, id)));
+}
+
+async function seenKey(tx: Tx | typeof prisma, userId: string, idempotencyKey: string): Promise<{ payload: Prisma.JsonValue } | null> {
+  return tx.memoryIdeaEvent.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey } }, select: { payload: true } });
+}
+
+/**
+ * A retry that raced its own first attempt (same `Idempotency-Key`) loses on the
+ * version or on the key's unique index. When the key is now recorded, the first
+ * attempt won and its result is the answer, not a 409 or a 500 (audit F-08).
+ */
+async function afterRace<T>(userId: string, idempotencyKey: string | undefined, attempt: () => Promise<T>, answer: () => Promise<T>): Promise<T> {
+  try {
+    return await attempt();
+  } catch (err) {
+    const raced = isUniqueViolation(err) || (err instanceof MemoryIdeaError && err.code === "version-conflict");
+    if (idempotencyKey && raced && (await seenKey(prisma, userId, idempotencyKey))) return answer();
+    throw err;
+  }
 }
 
 export interface ChangeOptions {
@@ -471,7 +487,9 @@ export async function releasePlan(userId: string, matchId: string): Promise<numb
 /** Join `fromId` into `intoId`, on the person's word. Each source remembers where it came from. */
 export async function mergeIdeas(userId: string, intoId: string, fromId: string, options: ChangeOptions = {}): Promise<MemoryIdeaView> {
   if (intoId === fromId) throw new MemoryIdeaError("same-idea", 400);
-  const row = await prisma.$transaction(async (tx) => {
+  const attempt = () => prisma.$transaction(async (tx) => {
+    // A retry after a lost answer: `from` is gone, and the join is the answer.
+    if (options.idempotencyKey && (await seenKey(tx, userId, options.idempotencyKey))) return liveIdea(tx, userId, intoId);
     const into = await liveIdea(tx, userId, intoId);
     const from = await liveIdea(tx, userId, fromId);
     await tx.memoryIdeaSource.updateMany({ where: { ideaId: fromId, userId }, data: { ideaId: intoId } });
@@ -489,7 +507,7 @@ export async function mergeIdeas(userId: string, intoId: string, fromId: string,
     await recordEvent(tx, into, "person", "merged", { fromId, title: from.title, kind: from.kind, reason: from.reason, intent: from.intent, usage: { allowOwnDates: from.allowOwnDates, allowMatching: from.allowMatching, allowPartner: from.allowPartner } }, options.idempotencyKey);
     return liveIdea(tx, userId, intoId);
   });
-  return ideaView(row);
+  return ideaView(await afterRace(userId, options.idempotencyKey, attempt, () => liveIdea(prisma, userId, intoId)));
 }
 
 /**
@@ -498,7 +516,15 @@ export async function mergeIdeas(userId: string, intoId: string, fromId: string,
  */
 export async function splitIdea(userId: string, id: string, sourceIds: readonly string[], title: string, options: ChangeOptions = {}): Promise<{ kept: MemoryIdeaView; split: MemoryIdeaView }> {
   const cleanTitle = requireTitle(title);
-  const out = await prisma.$transaction(async (tx) => {
+  const repeated = async (tx: Tx | typeof prisma) => {
+    const seen = options.idempotencyKey ? await seenKey(tx, userId, options.idempotencyKey) : null;
+    const intoId = (seen?.payload as { intoId?: unknown } | null)?.intoId;
+    return typeof intoId === "string" ? { kept: await liveIdea(tx, userId, id), split: await liveIdea(tx, userId, intoId) } : null;
+  };
+  const attempt = () => prisma.$transaction(async (tx) => {
+    // A retry after a lost answer: the sources already moved, and that split is the answer.
+    const before = await repeated(tx);
+    if (before) return before;
     const current = await liveIdea(tx, userId, id);
     const moving = current.sources.filter((s) => sourceIds.includes(s.id));
     if (moving.length === 0 || moving.length === current.sources.length) throw new MemoryIdeaError("bad-split", 400);
@@ -510,6 +536,11 @@ export async function splitIdea(userId: string, id: string, sourceIds: readonly 
     await recordEvent(tx, current, "person", "split", { intoId: split.id, sourceIds: moving.map((s) => s.id) }, options.idempotencyKey);
     await recordEvent(tx, split, "person", "created", { splitFrom: id });
     return { kept: await liveIdea(tx, userId, id), split: await liveIdea(tx, userId, split.id) };
+  });
+  const out = await afterRace(userId, options.idempotencyKey, attempt, async () => {
+    const found = await repeated(prisma);
+    if (!found) throw new MemoryIdeaError("version-conflict", 409);
+    return found;
   });
   return { kept: ideaView(out.kept), split: ideaView(out.split) };
 }
