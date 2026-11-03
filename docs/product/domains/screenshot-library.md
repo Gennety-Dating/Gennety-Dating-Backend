@@ -162,7 +162,14 @@ API, half the price for the old archive, is not implemented yet.
 
 With the flag off the routes still answer `GET` (state, list, one item; not the
 search, which pays for an embedding) and `DELETE` (one item, and disconnect-and-delete),
-so switching the feature off never strands data. Connecting, uploading, reconciling and
+so switching the feature off never strands data. A person on `SCREENSHOT_LIBRARY_USER_IDS`
+(comma-separated user UUIDs) gets every route, the chat tools and indexing as if the flag were
+on (`services/feature-preview.ts`); `GET /v1/app/config` says so only with their token.
+
+The signed upload URL does not overwrite (2026-11-03): one key per item, and once bytes are stored
+nothing replaces them, so a repeated PUT after a lost answer is refused as existing and the phone
+goes on to commit. Reconcile removes only automatic imports of the current generation; a
+hand-picked screenshot stays. An edited screenshot keeps its idea, which moves to the new version. Connecting, uploading, reconciling and
 search answer 404 `feature-disabled`, and the cron only purges.
 
 Throughput: one tick indexes at most six items, so the whole service indexes at most

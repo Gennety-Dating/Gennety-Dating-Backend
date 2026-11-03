@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 443 entries
+# Decision index — all 444 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-03 | Founder decisions on the screenshots/ideas audit: shared ideas only from ideas saved before the mutual yes, listed topics and catalog places; ticket step before shared ideas and suggestions; reminder on turns own dates on; idea `matching`/`partner` uses read by nothing and refused; edited screenshot keeps its idea; push without title; upload URL without upsert; per-user preview env lists | [2026-11-02-screenshots-backend-audit.md](./2026-11-02-screenshots-backend-audit.md) |
 | 2026-11-02 | Backend audit of screenshots and ideas: screenshot GET/DELETE served with the flag off; reminder refused with `needs-own-dates` when it could never be sent; automatic uploads held to `rangeDays` (`out-of-range`); the pair-overlap probe left for a founder decision; nothing deployed | [2026-11-02-screenshots-backend-audit.md](./2026-11-02-screenshots-backend-audit.md) |
 | 2026-11-01 | ideas are a separate layer over the screenshot library; uses granted per idea | [2026-11-01-memory-ideas](./2026-11-01-memory-ideas.md) |
 | 2026-11-01 | Stage B: nine kinds of saved things work in chat on ideas, no new tables: screenshot to idea, event check to idea, planning tool, sensitive-word refusal in five languages, vibe question, wishlist and Style Picks links, impression; defects fixed in ideas; flag off, production pending | [2026-11-01-screenshot-agent-coverage.md](./2026-11-01-screenshot-agent-coverage.md) |

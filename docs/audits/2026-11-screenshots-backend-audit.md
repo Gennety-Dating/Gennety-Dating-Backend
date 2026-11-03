@@ -35,21 +35,24 @@ This audit does not claim to have found every defect. Coverage and what was not 
 
 Code-level readiness of the backend improved; the features are still not ready to switch on in production.
 
-Blockers before turning the flags on (none of them is a code defect left unfixed by this audit, except F-03):
+Update 2026-11-03: the founder decided the open questions; all are implemented (section 11). F-03 is fixed.
+The per-user preview lets the founder test both features on his own account while the flags stay off.
 
-1. F-03, the pair-overlap probe, needs a founder decision before `MEMORY_IDEAS_ENABLED` goes on.
+Blockers before turning the flags on for everyone (none of them is a code defect left unfixed by this audit):
+
+1. Resolved 2026-11-03: F-03 is fixed by the founder's rule (section 11).
 2. F-11, indexing capacity: one tick indexes 6 items, about 8,600 a day for the whole service, shared newest-first.
    Acceptable for a small pilot, not for a public launch with 2,000-item first imports.
 3. Open items from the 2026-10-31 decision remain: the private bucket must exist, the search distance limit
    (`SCREENSHOT_MATCH_MAX_DISTANCE = 0.72`) is still not measured with the real embedding model, real token counts
    are not measured, the policy text needs legal review, and `check_event` has never run against the live provider.
-4. iOS must handle the two new 409 codes (section 9) before the flags go on.
+4. iOS must handle the contract changes in section 9 (both rounds) before the flags or the preview go on.
 
 ## 3. Findings registry
 
 Severity counts: High 0; Medium 3 (F-01, F-02, F-03); Low 7 (F-04, F-05, F-06, F-07, F-08, F-09, F-12);
-informational / not fixed 4 (F-10, F-11, F-13, F-14). Fixed and verified: 9. Not fixed: 5 (one needs a founder
-decision, four documented with reasons).
+informational / not fixed 4 (F-10, F-11, F-13, F-14). After the 2026-11-03 round: fixed and verified 10 (F-03 added);
+not fixed 4, all documented with reasons. F-02's fix was replaced by the founder's rule (section 11).
 
 ### F-01 — Medium — flag off strands the person's data (fixed and verified)
 
@@ -64,7 +67,7 @@ decision, four documented with reasons).
    served; connect, upload, commit, reconcile and search still stop.
 6. Verification: route tests with supertest, flag off and on, token still required.
 
-### F-02 — Medium — a reminder that is accepted and never sent (fixed and verified)
+### F-02 — Medium — a reminder that is accepted and never sent (fixed and verified; fix replaced 2026-11-03)
 
 1. Category: false success / notifications. Scenario: «Напомни вовремя» on a dated idea.
 2. Where: `apps/bot/src/services/memory-planning.ts` `setReminder` (now line 449) against
@@ -78,8 +81,11 @@ decision, four documented with reasons).
    chat tool explains it; `setEventDate` no longer throws on a closed wish. OpenAPI updated.
 6. Verification: integration tests (refusal, granted path delivers exactly one push, chat tool reports the refusal);
    existing reminder tests still pass.
+7. 2026-11-03: the founder chose a different fix. Turning a reminder on now also turns on own dates in the same
+   transaction; only a gift/reference (`not-own-wish`) or a dropped/tried idea (`idea-closed`) is refused. The defect
+   (a reminder accepted that is never sent) stays fixed: the sender's rule and the setter's rule agree.
 
-### F-03 — Medium — pair overlap can be probed to list the partner's ideas (not fixed: founder decision)
+### F-03 — Medium — pair overlap can be probed to list the partner's ideas (fixed and verified 2026-11-03)
 
 1. Category: disclosure between a pair. Scenario: both said yes (`negotiating`, `negotiating_venue`, `scheduled`).
 2. Where: `apps/bot/src/services/memory-planning.ts` `pairOverlap` (line 148); `topic` and `placeId` are free strings
@@ -92,9 +98,12 @@ decision, four documented with reasons).
 4. Expected (spec 02 §7): only an allowed formulation of a shared idea; private wishes and their existence stay
    hidden. Actual: B's `own_dates` grant becomes, through fabricated ideas, a disclosure that the separate `partner`
    grant was meant to control. Rate limit 120 requests a minute per person bounds speed only.
-5. Why not fixed: every fix changes what overlap means. Options for the founder: a closed `topic` vocabulary and
-   catalog-only `placeId`; count only the viewer's ideas saved before the pair's mutual yes; require B's `partner`
-   grant for overlap; or cap distinct probes per pair. Recommended: the first two together.
+5. First round: not fixed, because every fix changes what overlap means. 2026-11-03: the founder chose a closed topic
+   list (`MEMORY_OVERLAP_TOPICS`), catalog-only places, and only ideas saved before both said yes (the later of the
+   two ACCEPTED events; matches without them use when the match was sent, which only cuts more).
+6. Verification: `memory-decisions.integration.test.ts` runs the same nine-call probe after the yes and finds nothing;
+   on the old `memory-planning.ts` the same test fails (and the free-text/non-catalog test fails too). Ideas saved
+   before the yes with a listed topic or a catalog place still meet.
 
 ### F-04 — Low — upload reserved during «Отключить и удалить» survives it; cap race (fixed and verified)
 
@@ -280,6 +289,8 @@ dummy env the unit tests use.
 
 ## 8. Product questions and improvements (not defects)
 
+The founder answered Q1–Q5 on 2026-11-03; the answers are implemented (section 11). The questions are kept below as they were asked.
+
 1. Q1. Idea-level `matching` and `partner` grants are stored and shown but nothing reads them; only confirmed
    preferences reach matching, and the wishlist never reads `partner`. Should the switches be hidden until a consumer
    exists, or should a consumer be built?
@@ -313,3 +324,83 @@ dummy env the unit tests use.
    OpenAI key for vision and embeddings, the legal text.
 3. Rollout: code on branch `audit/screenshots-backend` only, not merged, not deployed. Both flags off. Code ready
    is not settings applied and not released.
+
+## 11. Round 2: the founder's decisions (2026-11-03)
+
+Branch `audit/screenshots-backend`, after `5bea9fc0`. Decision entry:
+`docs/architecture/decisions/2026-11-02-screenshots-backend-audit.md` (2026-11-03 entry). Rollout:
+`docs/operations/deploy-journal/pending.md` (2026-11-03 block, prod env change PENDING for the coordinator).
+
+1. F-03, shared ideas: done as decided (closed topic list, catalog places, only ideas saved before the mutual yes).
+   Fixed and verified (above).
+2. Per-idea `matching` and `partner`: fields kept. Nothing reads them: the one helper that would have
+   (`usableForPartnerWishlist`, unused) is removed, turning either on answers 409 `use-unavailable` on the API and in
+   chat (the chat tool now offers `own_dates` only), turning off still works. Matching reads confirmed preferences
+   only, as before. Verified by integration tests.
+3. Ticket gate: shared ideas and planning suggestions are empty until the Date Ticket step is done. My reading of
+   «done»: `ticketStatus` `completed`, or `refunded`/`expired` (the offer lapsed and scheduling opened for free), or a
+   `scheduled` match; `pending`/`partial` never, also before the offer is stamped; with tickets off there is no gate.
+   Question for the founder: should `refunded`/`expired` pairs (who never paid) see them? Verified by an integration
+   test across pending, partial, completed and tickets-off.
+4. Reminder on turns own dates on: `PUT …/reminder` and `set_idea_reminder` set the reminder and `allowOwnDates` in
+   one transaction (with a history row `usage {use: own_dates, via: reminder}`) and return the idea plus
+   `ownDatesTurnedOn`. 409 `not-own-wish` for gift/reference, `idea-closed` for dropped/tried, `no-date`,
+   `date-passed`, `version-conflict`; nothing is granted on a refusal. `MemoryIdea.reminder {state: on|sent|off, dueAt}`
+   now reports the real state. A moved event date carries an existing reminder but never grants anything itself.
+5. Late delete retries: deleting a screenshot, the library, an idea, a reminder or a preference twice already answered
+   the same; removing an idea's source a second time answered 404 and now answers 200 (`ideaDeleted` as it stands).
+   Someone else's id is still 404. Verified by an integration test and route tests.
+6. Edited screenshot: the idea moves to the new version in the transaction that replaces the row; the orphan sweep no
+   longer closes it. Verified (new version, sweep, idea keeps its title and source).
+7. Lock screen: the reminder push is «Idea reminder» / «Напоминание об идее» (en, ru, uk, de, pl) with a generic body;
+   the title stays in the app (`data.ideaId`). Push budget: the existing one-a-day gap per person
+   (`MEMORY_REMINDER_MIN_GAP_MS`) is the budget for ideas; ideas send no other push. Verified.
+8. Flag off: viewing and deleting stay available (F-01, unchanged).
+9. B-4: object keys were already unique per item (`${userId}/${itemId}.jpg`, a new UUID per reservation). The signed
+   upload URL is now requested with `x-upsert: false`, so stored bytes cannot be replaced after commit (the worker
+   re-check from F-05 stays). Unit test on the request. Not verified against live Supabase. B-5: reconcile removed any
+   row with the key; it now removes only `source = auto` rows of the current generation. Verified.
+10. Per-user preview: `SCREENSHOT_LIBRARY_USER_IDS` and `MEMORY_IDEAS_USER_IDS` (comma-separated user UUIDs, invalid
+    values dropped with a warning). One helper, `services/feature-preview.ts` (`screenshotLibraryOn`, `memoryIdeasOn`,
+    `…Users()` for jobs), replaces every flag read: screenshot and memory routes (auth now runs before the flag check),
+    chat history cards, chat tools and prompt, `GET /v1/app/config` (token optional, `Vary: Authorization`), venue
+    board and venue-intent ordering, Style Picks references, wishlist idea links, `check_event` recording, the indexer
+    (only listed people's rows), the ideas tick (planning and reminders only for listed people). Purge, orphan sweep
+    and plan release stay global. Verified by unit tests (helper, app-config with and without token, both routers, chat
+    tools) and integration tests (indexer, reminders, planning, empty list does nothing).
+
+Commands, round 2 (same machine; free disk 8.6–12 GB during the run, so the full integration suite was run):
+
+1. `pnpm typecheck`: pass. `pnpm lint`: pass.
+2. `pnpm --filter @gennety/bot test`: 483 files / 7,755 tests passed.
+3. `pnpm --filter @gennety/shared test`: 27 / 454 passed.
+4. `pnpm --filter @gennety/bot test:integration`: 15 files / 164 tests passed (the full suite, including the run the
+   disk cut short in round 1).
+5. `npx @redocly/cli@1.34.5 lint openapi/gennety-v1.yaml`: valid, the same 12 warnings as the baseline.
+
+iOS contract changes, round 2 (exact):
+
+1. `MemoryIdea` gains `reminder: { state: "on" | "sent" | "off", dueAt: string | null }` (not in `required`; absent on an
+   older server means `off`).
+2. `PUT /v1/me/memory/ideas/{id}/reminder` 200 body: `{ dueAt, idea: MemoryIdea, ownDatesTurnedOn: boolean }` (was
+   `{ dueAt }`). 409 codes: `not-own-wish`, `idea-closed`, `no-date`, `date-passed`, `version-conflict`.
+   `needs-own-dates` from round 1 is gone.
+3. `PUT /v1/me/memory/ideas/{id}/usage`: `{use: matching|partner, allow: true}` answers 409 `use-unavailable`;
+   `allow: false` and `own_dates` unchanged. `usage.matching` and `usage.partner` remain in the response.
+4. `DELETE /v1/me/memory/ideas/{id}/sources/{sourceId}`: a repeat answers 200 instead of 404.
+5. Screenshot upload: the signed PUT no longer overwrites; a repeated PUT after a lost answer is refused by storage
+   (HTTP 400/409, `Duplicate`): treat it as uploaded and call commit.
+6. `POST /v1/me/screenshots/library/reconcile` removes only automatic imports of the current generation.
+7. `GET /v1/app/config` accepts an optional bearer token; with it, `features.screenshotLibrary` and
+   `features.memoryIdeas` answer for that person. The app must send the token and fetch the config again after
+   sign-in, sign-out and account switch, or a preview user still reads `false`.
+8. Unauthenticated calls to `/v1/me/screenshots/*` now answer 401 before the flag check (was 404 `feature-disabled`).
+9. Reminder pushes carry a generic title and body; `data.type` and `data.ideaId` unchanged.
+
+Env var names: `SCREENSHOT_LIBRARY_USER_IDS`, `MEMORY_IDEAS_USER_IDS` (new, optional, empty by default), alongside the
+existing `SCREENSHOT_LIBRARY_ENABLED`, `MEMORY_IDEAS_ENABLED`. Production change: PENDING, coordinator.
+
+New tests, round 2: `src/services/feature-preview.test.ts`, `src/public/routes/memory.test.ts`,
+`src/services/storage-screenshot-upload.test.ts`, `src/services/memory-decisions.integration.test.ts`, new cases in
+`screenshots.test.ts`, `chat-agent-screenshots.test.ts`, `screenshots-audit.integration.test.ts`; fixtures in
+`memory-ideas.integration.test.ts` and `memory-lines.integration.test.ts` now save ideas before the pair's yes.

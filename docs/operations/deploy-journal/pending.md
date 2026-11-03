@@ -13,6 +13,26 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-03 — screenshots/ideas audit fixes and per-user preview (branch `audit/screenshots-backend`, not merged; no migration).**
+
+1. Code: the audit's fixes and the founder's decisions of 2026-11-03 (report
+   `docs/audits/2026-11-screenshots-backend-audit.md`). Both global flags stay off.
+2. New optional env, read through `services/feature-preview.ts`:
+   `SCREENSHOT_LIBRARY_USER_IDS` and `MEMORY_IDEAS_USER_IDS`, comma-separated user UUIDs.
+   A listed person gets the feature as if its flag were on; everyone else keeps the flag-off behaviour.
+3. **PENDING — production env change, owned by the coordinator:** set both lists to the founder's user id
+   in the bot's env and restart. Not done by this branch. Before it: the private `screenshots` bucket must exist,
+   and the iOS build must send its bearer token to `GET /v1/app/config` (otherwise the app still reads `false`).
+4. Rollback: empty the two env values (or remove them) and restart; no data migration to undo.
+
+**Check after deploy:** without a token `GET /v1/app/config` shows both features `false`; with the founder's token
+both `true`, with another person's token both `false`. `POST /v1/me/memory/ideas` answers 404 `feature-disabled`
+for another person. The `screenshot-library` and `memory-ideas` ticks run without errors and index or remind only
+for the listed id. Demo: same code; lists empty there.
+
+**iOS impact:** see the report's «iOS contract changes» (reminder answer and `MemoryIdea.reminder`, `use-unavailable`,
+upload PUT no longer overwrites, app-config per token).
+
 **PENDING 2026-11-01 — ideas over the screenshot library (additive migration, flag off).**
 
 1. Migration `20261101120000_memory_ideas` adds six tables. Additive.

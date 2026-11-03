@@ -33,9 +33,11 @@ cancelled plan restores the earlier intent. Dropping a wish does not cancel a bo
 
 ## Uses
 
-Personal search needs no grant and has no switch. Three uses are granted one by one, are
-checked on the server and are read live by each consumer: own dates, matching, showing to
-a partner through the existing wishlist. Connecting Photos grants none of them. «Только для
+Personal search needs no grant and has no switch. Own dates is granted per idea, checked on the
+server and read live by each consumer. The columns for matching and for showing to a partner
+exist, but nothing reads them: the app hides their switches, turning one on answers 409
+`use-unavailable`, and no code may treat either as consent (decision 2026-11-03). Matching reads
+confirmed preferences only. Connecting Photos grants none of them. «Только для
 меня» is the absence of all three. Only the person can turn one on; a gift or a reference
 cannot be turned on until that mark changes. Turning one off, and deleting, work with the
 flag off as well.
@@ -46,7 +48,9 @@ so a consumer never reads a raw column.
 ## Lifecycle
 
 Deleting one source leaves the idea while another source states it. Deleting a screenshot
-takes its source with it, and an idea with nothing left closes. Disconnecting the library
+takes its source with it, and an idea with nothing left closes. An edited screenshot (a new
+version under the same source key) is not a deletion: its idea moves to the new version
+(decision 2026-11-03). Removing a source again answers 200. Disconnecting the library
 does this for every screenshot, so no hidden copy survives as personalisation. Closing an
 idea clears its text, cancels its reminders and revokes preferences that came from it. A
 wishlist position has its own delete and stays. A catch-all sweep in `workers/memory-ideas.ts`
@@ -113,12 +117,14 @@ so revoking takes effect on the next read.
 - Venue board: a wanted place moves a few positions in the viewer's order. The set stays the
   pair's, as `venue-change-personalization.ts` requires. A suggestion never books, pays, or moves
   a date; a change still goes through the existing board.
-- Planning (`GET /v1/me/memory/matches/{id}/planning`): allowed wishes minus a known mismatch in
-  city, date or check. An unconfirmed date comes back as `needsCheck`. Unknown never excludes,
+- Planning (`GET /v1/me/memory/matches/{id}/planning`): after the Date Ticket step only (with
+  tickets off, at once); allowed wishes minus a known mismatch in city, date or check. An unconfirmed date comes back as `needsCheck`. Unknown never excludes,
   and it is never told as a fact.
-- A pair's overlap: same place or same `topic`, from ideas both sides allowed, after both said
-  yes, with no block either way. The viewer gets their own title back. An empty answer reads the
-  same whatever the cause.
+- A pair's overlap: same catalog place or same listed `topic` (`MEMORY_OVERLAP_TOPICS`), from
+  ideas both sides allowed and saved before both said yes, once the Date Ticket step is done, with
+  no block either way. A free-text topic, a place the catalog does not know and an idea saved after
+  the yes never take part, so a new idea cannot probe the partner's (decision 2026-11-03). The viewer
+  gets their own title back. An empty answer reads the same whatever the cause.
 - Map: the person's points where the catalog knows the place, and the rest listed without a point.
   It is its own read, separate from frequent places and the date map, and counts no visit.
 - Matching: a confirmed preference with its own grant joins the embedding input as one short
@@ -133,11 +139,21 @@ so revoking takes effect on the next read.
   finished dates never crowd them out. Only a visit the person confirmed allows an impression, and only that sets
   `tried`. Place, format and repeat are separate, nothing says anything about the partner,
   «не хочу оценивать» counts as an answer, and a later answer corrects it.
-- Reminders: only for an idea with a date that is usable for the person's own dates, at most one
-  per occasion, one push a day per person, held in quiet hours, claimed before sending. Asking for
-  one on an idea without that use answers 409 `needs-own-dates`, because the sender would cancel
-  it without a push (audit 2026-11, F-02). The idea is re-read at send time, so a dropped
+- Reminders: only for an idea with a date that is usable for the person's own dates. Turning one
+  on also turns that use on, in the same request, and answers with the idea (decision 2026-11-03);
+  a gift or a reference answers 409 `not-own-wish`, a dropped or tried idea `idea-closed`. At most
+  one per occasion, one push a day per person (the push budget for ideas), held in quiet hours,
+  claimed before sending. The push shows no idea title, only «Напоминание об идее» in the person's
+  language; the app shows the title from `ideaId`. The idea's `reminder` field says `on`, `sent` or `off`. The idea is re-read at send time, so a dropped
   wish, a moved date, a revoked use or a block ends it without a push.
+
+## Per-user preview
+
+`MEMORY_IDEAS_USER_IDS` (comma-separated user UUIDs) turns ideas on for those people with the flag
+off; `SCREENSHOT_LIBRARY_USER_IDS` does the same for the library. Every check goes through
+`services/feature-preview.ts`: routes, chat tools and prompt, `GET /v1/app/config` (per token),
+the venue and Style Picks consumers, and the ticks, which plan and remind only for listed people.
+Deleting, revoking, the orphan sweep and plan release stay on for everyone.
 
 ## Demo mode
 

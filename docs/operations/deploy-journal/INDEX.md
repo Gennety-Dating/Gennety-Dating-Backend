@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 244 entries
+# Deploy journal index — 245 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-11-03 | Screenshots/ideas audit fixes + per-user preview env `SCREENSHOT_LIBRARY_USER_IDS`, `MEMORY_IDEAS_USER_IDS` (prod env change PENDING, coordinator); branch `audit/screenshots-backend`, no migration | [pending.md](./pending.md) |
 | PENDING | 2026-11-01 | Real status of a chat turn: `GET /v1/chat/activity`, in-memory on one PM2 process; no migration, no env, no flag | [pending.md](./pending.md) |
 | Deployed | 2026-10-30 | Founder transport outbox: persisted requests + attachments, retry after restart; Mac workspace retained, encrypted copies and external health monitor; no DB migration; Vite 6.4.5 | [2026-10-30-founder-outbox.md](./2026-10-30-founder-outbox.md) |
 | Deployed (demo only) | 2026-10-29 | Current Telegram bot + Mini App `586ae5df`; Profiler cards enabled on demo, isolated schema catch-up, 8,770 tests; GitHub/local main only, tips archived; production unchanged | [2026-10-29-demo.md](./2026-10-29-demo.md) |
