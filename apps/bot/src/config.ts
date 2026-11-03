@@ -707,9 +707,15 @@ export const env = {
   /// flag alone turns on collecting, not showing.
   WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
   SCREENSHOT_LIBRARY_ENABLED: process.env.SCREENSHOT_LIBRARY_ENABLED === "true",
+  /// Per-user preview of the screenshot library while the flag is off: these
+  /// user UUIDs (comma-separated) get the feature as if it were on. Read only
+  /// through `services/feature-preview.ts`.
+  SCREENSHOT_LIBRARY_USER_IDS: parseUserIdList(process.env.SCREENSHOT_LIBRARY_USER_IDS, "SCREENSHOT_LIBRARY_USER_IDS"),
   /// Ideas and their use (`docs/product/domains/memory-ideas.md`). Off turns
   /// off offering and new data; revoking a use and deleting always stay on.
   MEMORY_IDEAS_ENABLED: process.env.MEMORY_IDEAS_ENABLED === "true",
+  /// Per-user preview of ideas, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  MEMORY_IDEAS_USER_IDS: parseUserIdList(process.env.MEMORY_IDEAS_USER_IDS, "MEMORY_IDEAS_USER_IDS"),
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),
@@ -1574,6 +1580,19 @@ function spotifyRedirectUri(raw: string | undefined): string {
     "[config] SPOTIFY_REDIRECT_URI must be https (or http on 127.0.0.1 / [::1]) — ignoring it.",
   );
   return "";
+}
+
+/** Comma-separated user UUIDs, lowercased; anything else is dropped with a warning. */
+function parseUserIdList(raw: string | undefined, name: string): readonly string[] {
+  if (!raw) return [];
+  const ids: string[] = [];
+  for (const part of raw.split(",")) {
+    const id = part.trim().toLowerCase();
+    if (!id) continue;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) ids.push(id);
+    else console.warn(`[config] ${name}: ignoring a value that is not a user UUID`);
+  }
+  return [...new Set(ids)];
 }
 
 function parseTelegramIdSet(raw: string | undefined): ReadonlySet<bigint> {

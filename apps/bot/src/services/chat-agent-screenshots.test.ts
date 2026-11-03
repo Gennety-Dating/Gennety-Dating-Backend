@@ -329,3 +329,25 @@ describe("one card per reply (audit F-06)", () => {
     expect(String(second!.instruction)).not.toMatch(/button is under/);
   });
 });
+
+describe("per-user preview (decision 2026-11-03)", () => {
+  afterEach(() => {
+    delete env.SCREENSHOT_LIBRARY_USER_IDS;
+    delete env.MEMORY_IDEAS_USER_IDS;
+  });
+
+  it("a listed person gets the library and idea tools with both flags off", async () => {
+    env.SCREENSHOT_LIBRARY_USER_IDS = [USER];
+    env.MEMORY_IDEAS_USER_IDS = [USER];
+    await turn(CARDS);
+    for (const name of [...LIBRARY_TOOLS, "find_ideas", "save_idea"]) expect(toolNames()).toContain(name);
+    expect(system()).toMatch(/Their saved ideas/);
+  });
+
+  it("someone not on the list sees none of it", async () => {
+    env.SCREENSHOT_LIBRARY_USER_IDS = ["99999999-9999-4999-8999-999999999999"];
+    env.MEMORY_IDEAS_USER_IDS = ["99999999-9999-4999-8999-999999999999"];
+    await turn(CARDS);
+    for (const name of [...LIBRARY_TOOLS, "find_ideas"]) expect(toolNames()).not.toContain(name);
+  });
+});

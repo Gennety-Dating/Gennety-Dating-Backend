@@ -4,6 +4,8 @@ import { env } from "../../config.js";
 import { ticketProducts } from "../../services/appstore.js";
 import { primeTimeAppleRailLive } from "../../services/prime-time.js";
 import { appleMusicConfigured } from "../../services/music/apple-music.js";
+import { memoryIdeasOn, screenshotLibraryOn } from "../../services/feature-preview.js";
+import { optionalAuth } from "../auth-middleware.js";
 
 /**
  * GET /v1/app/config — pre-auth bootstrap for the native mobile client.
@@ -55,7 +57,9 @@ const CITY_CATALOG_VIEW = CITY_CATALOG.map((city) => ({
   status: city.status,
 }));
 
-appConfigRouter.get("/config", (_req: Request, res: Response) => {
+// A token is optional: with one, the two preview features answer for that person.
+appConfigRouter.get("/config", optionalAuth, (req: Request, res: Response) => {
+  res.vary("Authorization");
   const primeTimePass = primeTimeAppleRailLive();
   res.json({
     minSupportedIosVersion: env.IOS_MIN_SUPPORTED_APP_VERSION || null,
@@ -105,8 +109,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       wishlist: env.WISHLIST_FEATURE_ENABLED,
       // The private screenshot library (decision journal 2026-10-31). False:
       // no Settings row, no chat card, and its routes answer `feature-disabled`.
-      screenshotLibrary: env.SCREENSHOT_LIBRARY_ENABLED,
-      memoryIdeas: env.MEMORY_IDEAS_ENABLED,
+      // Both also answer true for a person on their preview list, but only when
+      // the request carries that person's token (`services/feature-preview.ts`).
+      screenshotLibrary: screenshotLibraryOn(req.userId),
+      memoryIdeas: memoryIdeasOn(req.userId),
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides

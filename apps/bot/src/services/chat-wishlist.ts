@@ -1,3 +1,4 @@
+import { memoryIdeasOn } from "./feature-preview.js";
 import { prisma, type Prisma } from "@gennety/db";
 import {
   CHAT_WISHLIST_CARD_MAX_ITEMS,
@@ -230,7 +231,7 @@ export async function giftIdeasIn(userId: string, raw: unknown): Promise<string[
 
 /** A tapped position's trace in ideas. Its absence never costs the save. */
 async function linkIdea(userId: string, item: WishlistCardItem, wishlistItemId: string): Promise<void> {
-  if (!env.MEMORY_IDEAS_ENABLED) return;
+  if (!memoryIdeasOn(userId)) return;
   if (item.ideaId) {
     await attachWishlistSource(userId, item.ideaId, wishlistItemId);
     return;

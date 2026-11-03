@@ -9,6 +9,7 @@ const ITEM_ID = "22222222-2222-4222-8222-222222222222";
 
 const env = vi.hoisted(() => ({
   SCREENSHOT_LIBRARY_ENABLED: false,
+  SCREENSHOT_LIBRARY_USER_IDS: [] as string[],
   JWT_SECRET: "test-jwt-secret-value-long-enough",
   BOT_TOKEN: "123456:test-bot-token",
   PUBLIC_BASE_URL: "https://api.example",
@@ -56,6 +57,7 @@ function auth(): { Authorization: string } {
 
 beforeEach(() => {
   env.SCREENSHOT_LIBRARY_ENABLED = false;
+  env.SCREENSHOT_LIBRARY_USER_IDS = [];
   vi.clearAllMocks();
 });
 
@@ -107,5 +109,29 @@ describe("screenshot routes with the flag on", () => {
     env.SCREENSHOT_LIBRARY_ENABLED = true;
     const res = await request(app()).put("/v1/me/screenshots/library").set(auth()).send({ consentVersion: "x", autoImport: true, rangeDays: null });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("per-user preview with the flag off (decision 2026-11-03)", () => {
+  const OTHER = "33333333-3333-4333-8333-333333333333";
+  function authAs(id: string): { Authorization: string } {
+    const token = jwt.sign({ sub: id, typ: "access" }, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE, expiresIn: "15m" });
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  it("a listed person gets every route, search included", async () => {
+    env.SCREENSHOT_LIBRARY_USER_IDS = [USER_ID];
+    const a = app();
+    expect((await request(a).put("/v1/me/screenshots/library").set(auth()).send({ consentVersion: "x", autoImport: true, rangeDays: null })).status).toBe(200);
+    expect((await request(a).get("/v1/me/screenshots?q=wine").set(auth())).status).toBe(200);
+    expect(lib.connectLibrary).toHaveBeenCalledWith(USER_ID, expect.anything());
+  });
+
+  it("anyone else keeps the flag-off answers", async () => {
+    env.SCREENSHOT_LIBRARY_USER_IDS = [USER_ID];
+    const res = await request(app()).put("/v1/me/screenshots/library").set(authAs(OTHER)).send({ consentVersion: "x", autoImport: true, rangeDays: null });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("feature-disabled");
+    expect((await request(app()).delete("/v1/me/screenshots/library").set(authAs(OTHER))).status).toBe(202);
   });
 });

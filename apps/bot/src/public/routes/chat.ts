@@ -4,6 +4,7 @@ import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
+import { screenshotLibraryOn } from "../../services/feature-preview.js";
 import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
@@ -486,7 +487,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
 
   // Screenshot cards: re-signed on every read, so history restores them and a
   // deleted source comes back as unavailable. Off with the feature.
-  const shotRows = env.SCREENSHOT_LIBRARY_ENABLED
+  const shotRows = screenshotLibraryOn(req.userId)
     ? page
         .map((row) => ({ id: row.id, card: row.role === "assistant" ? readScreenshotsCard(row.attachment) : null }))
         .filter((entry): entry is { id: string; card: ScreenshotsCard } => entry.card !== null)

@@ -18,6 +18,7 @@ import {
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
+import { memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -409,15 +410,16 @@ type ToolList = Array<
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean }): ToolList {
+  const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
     ...(env.WISHLIST_FEATURE_ENABLED ? WISHLIST_TOOLS : []),
     ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
     ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
-    ...(options.screenshotCards ? SCREENSHOT_TOOLS : env.MEMORY_IDEAS_ENABLED ? [CHECK_EVENT_TOOL] : []),
-    ...(env.MEMORY_IDEAS_ENABLED ? MEMORY_TOOLS : []),
+    ...(options.screenshotCards ? SCREENSHOT_TOOLS : ideas ? [CHECK_EVENT_TOOL] : []),
+    ...(ideas ? MEMORY_TOOLS : []),
   ];
 }
 
@@ -612,15 +614,17 @@ async function runTurnInner(
   const guideCards = input.chatCards?.has(GUIDE_CARD_CLIENT_TOKEN) ?? false;
   // A build that draws the card, with the feature on. Nothing else about the
   // person's library reaches the prompt: the tools are called on intent.
-  const screenshotCards = env.SCREENSHOT_LIBRARY_ENABLED && (input.chatCards?.has(SCREENSHOTS_CARD_CLIENT_TOKEN) ?? false);
-  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards });
+  const screenshotCards = screenshotLibraryOn(userId) && (input.chatCards?.has(SCREENSHOTS_CARD_CLIENT_TOKEN) ?? false);
+  // On for everyone with the flag, or for this person on the preview list.
+  const ideasOn = memoryIdeasOn(userId);
+  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn });
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
     userId,
     telegramId,
     sessionId,
-    { wishlistCards, offerCards, guideCards, screenshotLibraryOpen },
+    { wishlistCards, offerCards, guideCards, screenshotLibraryOpen, memoryIdeas: ideasOn },
   );
   const consent = deps.consent ?? personConsented;
   // The offer a "да" would be answering: the assistant's message right before
@@ -788,7 +792,7 @@ async function runTurnInner(
       // Ideas (`chat-memory.ts`). Strict writes passed the consent check above;
       // the budget and the receipt follow the tool's own success.
       if (isMemoryTool(name)) {
-        if (!env.MEMORY_IDEAS_ENABLED) {
+        if (!ideasOn) {
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
@@ -807,7 +811,7 @@ async function runTurnInner(
       // The screenshot library. Reads; only `show_screenshots` (or a search on a
       // library not connected) leaves a card, one per reply like every other.
       if (isScreenshotTool(name)) {
-        if (!screenshotCards && !(name === CHECK_EVENT_TOOL_NAME && env.MEMORY_IDEAS_ENABLED)) {
+        if (!screenshotCards && !(name === CHECK_EVENT_TOOL_NAME && ideasOn)) {
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
@@ -892,7 +896,7 @@ async function runTurnInner(
         }
         // Someone else's gift reaches a list a partner can see only on the person's
         // exact words. A saved reason outranks a model that wants to be helpful.
-        const giftItems = env.MEMORY_IDEAS_ENABLED ? await giftIdeasIn(userId, args).catch(() => []) : [];
+        const giftItems = ideasOn ? await giftIdeasIn(userId, args).catch(() => []) : [];
         if (giftItems.length > 0 && !(await consent({ previous, message: text, tool: "wishlist_from_gift_idea", args: { gifts: giftItems } }))) {
           messages.push({
             role: "tool",
@@ -1137,7 +1141,7 @@ async function buildChatMessages(
   userId: string,
   telegramId: bigint,
   sessionId: string,
-  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotLibraryOpen?: boolean | null },
+  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotLibraryOpen?: boolean | null; memoryIdeas?: boolean },
 ): Promise<{
   messages: OpenAIChatMessage[];
   openedNewSession: boolean;
@@ -1178,8 +1182,8 @@ async function buildChatMessages(
     options.guideCards ? GUIDE_ADDENDUM : null,
     options.offerCards && options.wishlistCards ? OFFER_WISHLIST_NOTE : null,
     options.wishlistCards ? WISHLIST_ADDENDUM : null,
-    typeof options.screenshotLibraryOpen === "boolean" ? screenshotLibraryAddendum(options.screenshotLibraryOpen, env.MEMORY_IDEAS_ENABLED) : null,
-    env.MEMORY_IDEAS_ENABLED ? MEMORY_ADDENDUM : null,
+    typeof options.screenshotLibraryOpen === "boolean" ? screenshotLibraryAddendum(options.screenshotLibraryOpen, options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED) : null,
+    (options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED) ? MEMORY_ADDENDUM : null,
     env.WISHLIST_FEATURE_ENABLED ? `### Removing items from their wishlist
 - You CAN remove a saved item here: get_my_wishlist, then remove_wishlist_item.
 - Only on their explicit request. Resolve «удали его / remove it» from the recent conversation;

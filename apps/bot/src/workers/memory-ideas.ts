@@ -1,6 +1,6 @@
 import { prisma } from "@gennety/db";
 import { MEMORY_REMINDER_MIN_GAP_MS, usableForOwnDates, type Language, type MemoryIntent, type MemoryReason } from "@gennety/shared";
-import { env } from "../config.js";
+import { memoryIdeasUsers } from "../services/feature-preview.js";
 import { dropScreenshotSources } from "../services/memory-ideas.js";
 import { reconcilePlans } from "../services/memory-planning.js";
 import { sendPushToUser } from "../services/push.js";
@@ -26,17 +26,24 @@ export async function sweepOrphanSources(limit = 200): Promise<number> {
   return orphans.length;
 }
 
-const REMINDER_COPY: Record<Language, { title: string; body: (title: string) => string }> = {
-  en: { title: "Remember this idea?", body: (t) => `«${t}» is coming up. Check it's still on.` },
-  ru: { title: "Помнишь эту идею?", body: (t) => `Скоро «${t}». Проверь, всё ли в силе.` },
-  uk: { title: "Пам'ятаєш цю ідею?", body: (t) => `Незабаром «${t}». Перевір, чи все в силі.` },
-  de: { title: "Denkst du noch an diese Idee?", body: (t) => `Bald ist «${t}». Prüf kurz, ob es noch stattfindet.` },
-  pl: { title: "Pamiętasz ten pomysł?", body: (t) => `Niedługo «${t}». Sprawdź, czy wszystko aktualne.` },
+/**
+ * The push says that something saved is coming up and nothing more: a lock screen
+ * is not private, and an idea's title can be a wish the person keeps to
+ * themselves (decision 2026-11-03). The title is shown in the app, from `ideaId`.
+ */
+export const REMINDER_COPY: Record<Language, { title: string; body: string }> = {
+  en: { title: "Idea reminder", body: "Something you saved is coming up soon. Open to see it." },
+  ru: { title: "Напоминание об идее", body: "Скоро то, что ты сохранял(а). Открой, чтобы посмотреть." },
+  uk: { title: "Нагадування про ідею", body: "Незабаром те, що ти зберіг(ла). Відкрий, щоб подивитися." },
+  de: { title: "Erinnerung an eine Idee", body: "Bald ist etwas, das du gespeichert hast. Öffne die App, um es zu sehen." },
+  pl: { title: "Przypomnienie o pomyśle", body: "Wkrótce coś, co zapisałeś(-aś). Otwórz, żeby zobaczyć." },
 };
 
 export interface ReminderDeps {
   send?: typeof sendPushToUser;
   quiet?: (now: Date) => boolean;
+  /** Only these people (a preview list); null or absent: everyone. */
+  users?: readonly string[] | null;
 }
 
 /**
@@ -46,8 +53,9 @@ export interface ReminderDeps {
  */
 export async function sendDueReminders(now: Date = new Date(), deps: ReminderDeps = {}): Promise<number> {
   if ((deps.quiet ?? isQuietHours)(now)) return 0;
+  if (deps.users && deps.users.length === 0) return 0;
   const due = await prisma.memoryReminder.findMany({
-    where: { state: "pending", dueAt: { lte: now } },
+    where: { state: "pending", dueAt: { lte: now }, ...(deps.users ? { userId: { in: [...deps.users] } } : {}) },
     include: { idea: true },
     orderBy: { dueAt: "asc" },
     take: 100,
@@ -66,7 +74,8 @@ export async function sendDueReminders(now: Date = new Date(), deps: ReminderDep
       await prisma.memoryReminder.updateMany({ where: { id: reminder.id, state: "pending" }, data: { state: "cancelled" } });
       continue;
     }
-    // One a day per person. It stays pending and goes on a later tick.
+    // The push budget for ideas: one a day per person, whatever the occasions
+    // (`MEMORY_REMINDER_MIN_GAP_MS`). It stays pending and goes on a later tick.
     const recent = await prisma.memoryReminder.count({ where: { userId: reminder.userId, state: "sent", sentAt: { gt: new Date(now.getTime() - MEMORY_REMINDER_MIN_GAP_MS) } } });
     if (recent > 0) continue;
     const claimed = await prisma.memoryReminder.updateMany({ where: { id: reminder.id, state: "pending" }, data: { state: "sent", sentAt: now } });
@@ -75,8 +84,7 @@ export async function sendDueReminders(now: Date = new Date(), deps: ReminderDep
     const copy = REMINDER_COPY[(account?.language ?? "en") as Language] ?? REMINDER_COPY.en;
     await (deps.send ?? sendPushToUser)(reminder.userId, {
       title: copy.title,
-      // A name on a lock screen is the person's own idea and names nobody else.
-      body: copy.body(idea.title),
+      body: copy.body,
       collapseId: `memory-${idea.id}`,
       data: { type: "memory.reminder", ideaId: idea.id },
     });
@@ -87,7 +95,9 @@ export async function sendDueReminders(now: Date = new Date(), deps: ReminderDep
 
 export async function memoryIdeasTick(): Promise<void> {
   await sweepOrphanSources();
-  if (!env.MEMORY_IDEAS_ENABLED) return;
-  await reconcilePlans();
-  await sendDueReminders();
+  // Everyone with the flag on, else only the preview list (`services/feature-preview.ts`).
+  const users = memoryIdeasUsers();
+  if (users !== null && users.length === 0) return;
+  await reconcilePlans(new Date(), 200, users);
+  await sendDueReminders(new Date(), { users });
 }

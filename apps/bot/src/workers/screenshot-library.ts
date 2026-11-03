@@ -17,6 +17,7 @@ import { openaiFetch } from "../services/openai-fetch.js";
 import { createOpenAIEmbeddingClient, toPgVectorLiteral } from "../services/profile-analysis.js";
 import { deleteStorageObject, downloadScreenshot } from "../services/storage.js";
 import { isAcceptableImage } from "../services/screenshot-library.js";
+import { screenshotLibraryUsers } from "../services/feature-preview.js";
 import { readScreenshotsCard, SCREENSHOTS_CARD_KIND } from "../services/chat-screenshots.js";
 
 /**
@@ -227,12 +228,21 @@ export function searchableText(reading: ScreenshotReading, ocrText: string | nul
 }
 
 export interface IndexDeps {
+  /** Only these people's rows (a preview list); null or absent: everyone's. */
+  users?: readonly string[] | null;
   download?: typeof downloadScreenshot;
   read?: (bytes: Buffer, ocrText: string | null) => Promise<ScreenshotReading | null>;
   embed?: (input: string) => Promise<number[]>;
 }
 
 /* ── Index ──────────────────────────────────────────────────────────────── */
+
+/** A preview list as a filter; an empty list matches nobody. */
+function onlyUsers(users: readonly string[] | null | undefined): Prisma.Sql {
+  if (!users) return Prisma.empty;
+  if (users.length === 0) return Prisma.sql`AND FALSE`;
+  return Prisma.sql`AND i.user_id IN (${Prisma.join(users.map((id) => Prisma.sql`${id}::uuid`))})`;
+}
 
 function backoffMs(attempts: number): number {
   return Math.min(60_000 * 2 ** attempts, 6 * 3_600_000);
@@ -328,6 +338,7 @@ export async function indexBatch(deps: IndexDeps = {}, now: Date = new Date()): 
       AND (i.next_attempt_at IS NULL OR i.next_attempt_at <= ${now})
       AND l.status = 'active' AND l.generation = i.generation AND l.consent_at IS NOT NULL
       ${overBudget.length > 0 ? Prisma.sql`AND i.user_id NOT IN (${Prisma.join(overBudget.map((o) => Prisma.sql`${o.userId}::uuid`))})` : Prisma.empty}
+      ${onlyUsers(deps.users)}
     ORDER BY i.captured_at DESC NULLS LAST
     LIMIT ${INDEX_BATCH}
   `;
@@ -438,6 +449,7 @@ export async function reindexBatch(deps: IndexDeps = {}, now: Date = new Date())
       AND (i.next_attempt_at IS NULL OR i.next_attempt_at <= ${now})
       AND l.status = 'active' AND l.generation = i.generation AND l.consent_at IS NOT NULL
       ${overBudget.length > 0 ? Prisma.sql`AND i.user_id NOT IN (${Prisma.join(overBudget.map((o) => Prisma.sql`${o.userId}::uuid`))})` : Prisma.empty}
+      ${onlyUsers(deps.users)}
     ORDER BY i.captured_at DESC NULLS LAST
     LIMIT ${SCREENSHOT_REINDEX_BATCH}
   `;
@@ -503,7 +515,10 @@ async function scrubCards(userId: string, ids: ReadonlySet<string>): Promise<voi
 }
 
 export async function screenshotLibraryTick(): Promise<void> {
+  // Removal never waits on a flag.
   await purgeBatch();
-  if (!env.SCREENSHOT_LIBRARY_ENABLED) return;
-  if ((await indexBatch()) < INDEX_BATCH) await reindexBatch();
+  // Indexing is paid work: everyone with the flag on, else only the preview list.
+  const users = screenshotLibraryUsers();
+  if (users !== null && users.length === 0) return;
+  if ((await indexBatch({ users })) < INDEX_BATCH) await reindexBatch({ users });
 }

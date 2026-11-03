@@ -1,3 +1,4 @@
+import { memoryIdeasOn } from "./feature-preview.js";
 import { prisma } from "@gennety/db";
 import {
   EVENT_CHECKS_PER_TURN,
@@ -14,7 +15,6 @@ import {
 } from "@gennety/shared";
 import { isOverTokenBudget } from "./usage-budget.js";
 import { isUuid } from "../utils/uuid.js";
-import { env } from "../config.js";
 import { checkEvent, type EventCheckDeps, type EventCheckResult } from "./event-check.js";
 import { applyEventCheck } from "./memory-planning.js";
 import {
@@ -422,7 +422,7 @@ export async function executeScreenshotTool(
     if (!checked) return fail("bad_arguments", "A check needs the event's name, without links, and a city.");
     const ideaId = typeof args.idea_id === "string" && isUuid(args.idea_id) ? args.idea_id : null;
     // The owner filter is inside. A failed write costs the record, not the answer.
-    const recorded = ideaId && env.MEMORY_IDEAS_ENABLED
+    const recorded = ideaId && memoryIdeasOn(userId)
       ? await applyEventCheck(userId, ideaId, checked).catch(() => null)
       : null;
     return { result: eventToolResult(checked, recorded) };

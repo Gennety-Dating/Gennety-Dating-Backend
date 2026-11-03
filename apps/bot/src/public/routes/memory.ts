@@ -17,7 +17,7 @@ import {
 } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { memoryIdeasLimiter } from "../rate-limit.js";
-import { env } from "../../config.js";
+import { memoryIdeasOn } from "../../services/feature-preview.js";
 import { isUuid } from "../../utils/uuid.js";
 import {
   confirmPreference,
@@ -88,8 +88,8 @@ export function createMemoryRouter(): Router {
         throw err;
       }
     };
-  const enabled = (res: Response): boolean => {
-    if (env.MEMORY_IDEAS_ENABLED) return true;
+  const enabled = (req: Request, res: Response): boolean => {
+    if (memoryIdeasOn(req.userId)) return true;
     res.status(404).json({ error: "feature-disabled" });
     return false;
   };
@@ -116,7 +116,7 @@ export function createMemoryRouter(): Router {
   }));
 
   router.post("/ideas", guarded(async (req, res) => {
-    if (!enabled(res)) return;
+    if (!enabled(req, res)) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const screenshotId = typeof body.screenshotId === "string" && isUuid(body.screenshotId) ? body.screenshotId : null;
     const url = typeof body.url === "string" ? body.url : null;
@@ -149,7 +149,7 @@ export function createMemoryRouter(): Router {
   }));
 
   router.get("/ideas/questions", guarded(async (req, res) => {
-    res.json({ items: env.MEMORY_IDEAS_ENABLED ? await reasonQuestions(userOf(req)) : [] });
+    res.json({ items: memoryIdeasOn(userOf(req)) ? await reasonQuestions(userOf(req)) : [] });
   }));
 
   router.get("/ideas/:id", guarded(async (req, res) => {
@@ -175,7 +175,7 @@ export function createMemoryRouter(): Router {
       return;
     }
     if (body.placeId !== undefined && (body.placeId === null || typeof body.placeId === "string")) {
-      if (body.placeId !== null && !enabled(res)) return;
+      if (body.placeId !== null && !enabled(req, res)) return;
       res.json(await setPlace(userOf(req), id, body.placeId as string | null, typeof body.city === "string" ? body.city : null, options));
       return;
     }
@@ -195,13 +195,13 @@ export function createMemoryRouter(): Router {
       res.status(400).json({ error: "bad-request" });
       return;
     }
-    if (body.allow && !enabled(res)) return;
+    if (body.allow && !enabled(req, res)) return;
     res.json(await setUsage(userOf(req), id, body.use as MemoryUse, body.allow, changeOptions(req)));
   }));
 
   router.post("/ideas/:id/merge", guarded(async (req, res) => {
     const id = ideaId(req, res);
-    if (!id || !enabled(res)) return;
+    if (!id || !enabled(req, res)) return;
     const from = (req.body as Record<string, unknown> | undefined)?.fromId;
     if (typeof from !== "string" || !isUuid(from)) {
       res.status(400).json({ error: "bad-request" });
@@ -247,7 +247,7 @@ export function createMemoryRouter(): Router {
 
   router.put("/ideas/:id/reminder", guarded(async (req, res) => {
     const id = ideaId(req, res);
-    if (!id || !enabled(res)) return;
+    if (!id || !enabled(req, res)) return;
     res.json(await setReminder(userOf(req), id));
   }));
 
@@ -259,14 +259,14 @@ export function createMemoryRouter(): Router {
   }));
 
   router.get("/map", guarded(async (req, res) => {
-    res.json(env.MEMORY_IDEAS_ENABLED ? await ideaMap(userOf(req)) : { points: [], withoutPoint: [] });
+    res.json(memoryIdeasOn(userOf(req)) ? await ideaMap(userOf(req)) : { points: [], withoutPoint: [] });
   }));
 
   /** What ideas add to one date's planning. Empty looks the same for every reason. */
   router.get("/matches/:id/planning", guarded(async (req, res) => {
     const id = ideaId(req, res);
     if (!id) return;
-    if (!env.MEMORY_IDEAS_ENABLED) {
+    if (!memoryIdeasOn(userOf(req))) {
       res.json({ suggestions: [], shared: [], vibe: [], vibeIds: { experiences: [], ambiences: [] } });
       return;
     }
@@ -277,16 +277,16 @@ export function createMemoryRouter(): Router {
   router.get("/matches/:id/memo", guarded(async (req, res) => {
     const id = ideaId(req, res);
     if (!id) return;
-    res.json(env.MEMORY_IDEAS_ENABLED ? await dateMemo(id, userOf(req)) : { ideas: [], references: [] });
+    res.json(memoryIdeasOn(userOf(req)) ? await dateMemo(id, userOf(req)) : { ideas: [], references: [] });
   }));
 
   router.get("/impressions/pending", guarded(async (req, res) => {
-    res.json({ items: env.MEMORY_IDEAS_ENABLED ? await pendingImpressions(userOf(req)) : [] });
+    res.json({ items: memoryIdeasOn(userOf(req)) ? await pendingImpressions(userOf(req)) : [] });
   }));
 
   router.put("/matches/:id/impression", guarded(async (req, res) => {
     const id = ideaId(req, res);
-    if (!id || !enabled(res)) return;
+    if (!id || !enabled(req, res)) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const rating = (v: unknown) => v == null || oneOf(MEMORY_RATINGS, v);
     if (!rating(body.placeRating) || !rating(body.formatRating) || (body.repeatFormat != null && typeof body.repeatFormat !== "boolean")) {
@@ -305,7 +305,7 @@ export function createMemoryRouter(): Router {
 
   /** One question, or none. The answer goes to `POST /preferences` as facet and option id. */
   router.get("/vibe-question", guarded(async (req, res) => {
-    if (!env.MEMORY_IDEAS_ENABLED) {
+    if (!memoryIdeasOn(userOf(req))) {
       res.json({ question: null });
       return;
     }
@@ -318,7 +318,7 @@ export function createMemoryRouter(): Router {
   }));
 
   router.post("/preferences", guarded(async (req, res) => {
-    if (!enabled(res)) return;
+    if (!enabled(req, res)) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     if (!oneOf(MEMORY_PREFERENCE_FACETS, body.facet) || typeof body.value !== "string") {
       res.status(400).json({ error: "bad-request" });
@@ -335,7 +335,7 @@ export function createMemoryRouter(): Router {
       res.status(400).json({ error: "bad-request" });
       return;
     }
-    if (allow && !enabled(res)) return;
+    if (allow && !enabled(req, res)) return;
     res.json(await setPreferenceMatching(userOf(req), id, allow));
   }));
 

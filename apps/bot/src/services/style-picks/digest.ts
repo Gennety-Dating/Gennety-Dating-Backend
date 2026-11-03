@@ -1,3 +1,4 @@
+import { memoryIdeasOn } from "../feature-preview.js";
 import { prisma } from "@gennety/db";
 import {
   ARCHETYPES,
@@ -255,7 +256,7 @@ export async function loadStyleDigestSource(
       profile: user.profile,
       answers: user.profilerAnswers,
       places,
-      references: env.MEMORY_IDEAS_ENABLED ? await styleReferenceTexts(userId) : [],
+      references: memoryIdeasOn(userId) ? await styleReferenceTexts(userId) : [],
     },
   };
 }

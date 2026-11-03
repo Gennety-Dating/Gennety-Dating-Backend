@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { SCREENSHOT_KINDS, SCREENSHOT_LIST_PAGE, SCREENSHOT_OCR_MAX_CHARS, type ScreenshotKind } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { screenshotReadLimiter, screenshotSearchLimiter, screenshotUploadLimiter } from "../rate-limit.js";
-import { env } from "../../config.js";
+import { screenshotLibraryOn } from "../../services/feature-preview.js";
 import { isUuid } from "../../utils/uuid.js";
 import {
   commitUpload,
@@ -38,14 +38,15 @@ export function createScreenshotsRouter(): Router {
   // With the flag off a person still sees what is stored and can remove it:
   // switching the feature off must never strand data (decision 2026-11-01,
   // audit F-01). Connecting, uploading, reconciling and the paid search stop.
+  // The token comes first: the feature can be on for one person only (preview list).
+  router.use(requireAuth);
   router.use((req: Request, res: Response, next): void => {
-    if (!env.SCREENSHOT_LIBRARY_ENABLED && !stillServedWhenOff(req)) {
+    if (!screenshotLibraryOn(req.userId) && !stillServedWhenOff(req)) {
       res.status(404).json({ error: "feature-disabled" });
       return;
     }
     next();
   });
-  router.use(requireAuth);
 
   const guarded =
     (handler: (req: Request, res: Response) => Promise<void>) =>

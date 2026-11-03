@@ -1,10 +1,10 @@
+import { memoryIdeasOn } from "./feature-preview.js";
 import { prisma } from "@gennety/db";
 
 import { haversineDistanceKm } from "./geo.js";
 import { readAttendedPlaceIds } from "./date-map.js";
 import { readFrequentPlaces } from "./frequent-places.js";
 import { wantedPlaceIds } from "./memory-planning.js";
-import { env } from "../config.js";
 
 /**
  * Personal ordering of the venue-change board (2026-09-12, founder's call).
@@ -201,7 +201,7 @@ export async function readViewerAffinity(userId: string): Promise<ViewerAffinity
       readAttendedPlaceIds(userId),
       // Read live: a revoked use is gone from the next board. A failure here
       // costs the nudge only, never the frequent-places signal.
-      env.MEMORY_IDEAS_ENABLED ? wantedPlaceIds(userId).catch(() => new Set<string>()) : new Set<string>(),
+      memoryIdeasOn(userId) ? wantedPlaceIds(userId).catch(() => new Set<string>()) : new Set<string>(),
     ]);
 
     // Hidden places are excluded deliberately. Hiding one is the owner saying

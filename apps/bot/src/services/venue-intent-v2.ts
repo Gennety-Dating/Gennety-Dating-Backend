@@ -1,3 +1,4 @@
+import { memoryIdeasOn } from "./feature-preview.js";
 import { suggestionsWithPreferences } from "./memory-planning.js";
 import { createHash } from "node:crypto";
 import type { InlineKeyboardMarkup } from "grammy/types";
@@ -291,7 +292,7 @@ export async function getVenueIntentState(matchId: string, userId: string): Prom
 
   const market = await resolveDepartureMarket(userId);
   // Chips only; a failure costs the order, never the screen.
-  const ordered = env.MEMORY_IDEAS_ENABLED ? await suggestionsWithPreferences(userId, suggestions).catch(() => suggestions) : suggestions;
+  const ordered = memoryIdeasOn(userId) ? await suggestionsWithPreferences(userId, suggestions).catch(() => suggestions) : suggestions;
 
   return {
     intent,
