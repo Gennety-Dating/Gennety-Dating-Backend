@@ -13,14 +13,14 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-03 — screenshots/ideas audit fixes and per-user preview (branch `audit/screenshots-backend`, not merged; no migration).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-03 — screenshots/ideas audit fixes and per-user preview (branch `audit/screenshots-backend`, not merged; no migration).**
 
 1. Code: the audit's fixes and the founder's decisions of 2026-11-03 (report
    `docs/audits/2026-11-screenshots-backend-audit.md`). Both global flags stay off.
 2. New optional env, read through `services/feature-preview.ts`:
    `SCREENSHOT_LIBRARY_USER_IDS` and `MEMORY_IDEAS_USER_IDS`, comma-separated user UUIDs.
    A listed person gets the feature as if its flag were on; everyone else keeps the flag-off behaviour.
-3. **PENDING — production env change, owned by the coordinator:** set both lists to the founder's user id
+3. **Done 2026-11-03 (backup `prod-backup-2026-11-03T09-55-57Z.json`, script `~/gennety-backups/deploy-1103-shots.sh`): bucket `screenshots` created private (2 MiB, jpeg/png); both lists = the founder's id only; was — production env change, owned by the coordinator:** set both lists to the founder's user id
    in the bot's env and restart. Not done by this branch. Before it: the private `screenshots` bucket must exist,
    and the iOS build must send its bearer token to `GET /v1/app/config` (otherwise the app still reads `false`).
 4. Rollback: empty the two env values (or remove them) and restart; no data migration to undo.
@@ -33,7 +33,7 @@ for the listed id. Demo: same code; lists empty there.
 **iOS impact:** see the report's «iOS contract changes» (reminder answer and `MemoryIdea.reminder`, `use-unavailable`,
 upload PUT no longer overwrites, app-config per token).
 
-**PENDING 2026-11-01 — ideas over the screenshot library (additive migration, flag off).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-01 — ideas over the screenshot library (additive migration, flag off).**
 
 1. Migration `20261101120000_memory_ideas` adds six tables. Additive.
 2. New optional env: `MEMORY_IDEAS_ENABLED` (default off).
@@ -43,21 +43,21 @@ upload PUT no longer overwrites, app-config per token).
 `POST /v1/me/memory/ideas` answers 404 `feature-disabled`; the `memory-ideas` tick runs without errors.
 Demo: same code, flag off.
 
-**PENDING 2026-11-01 — ideas in chat, stage B (code only, flag off; no migration, no new env).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-01 — ideas in chat, stage B (code only, flag off; no migration, no new env).**
 
 New agent tools `idea_questions`, `skip_idea_question`, `planning_ideas`, `use_style_reference`, `record_impression`;
 `check_event` also with ideas on and no library card. New `GET /v1/me/memory/vibe-question`, additive fields.
 One path runs with the flag off: removing a wishlist position drops its idea source, which finds nothing when no idea
 exists. Check after deploy: `vibe-question` answers `{question: null}`. Demo: same code, flag off. iOS: no change required.
 
-**PENDING 2026-11-01 — screenshot library: agent coverage (code only, flag off; no migration, no new env).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-01 — screenshot library: agent coverage (code only, flag off; no migration, no new env).**
 
 Ten stored kinds and `kind` on the API, `category` stays four values. Reindex of version 1
 rows runs only with the flag on. New agent tools `view_screenshot`, `check_event`, only on
 turns with the flag and the card. Check after deploy: nothing, the flag is off. Demo: same
 code, flag off. iOS: no change needed. Before the flag goes on: the checklist in
 `docs/product/domains/screenshot-library.md`.
-**PENDING 2026-11-01 — real status of a chat turn: `GET /v1/chat/activity` (no migration, no env, no flag).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-01 — real status of a chat turn: `GET /v1/chat/activity` (no migration, no env, no flag).**
 
 New route beside the blocking `POST /v1/chat/message`; the tool loop reports steps into
 an in-memory store. An older app build never calls it, and a send behaves as before.
@@ -70,7 +70,7 @@ ordinary code rollback; the app treats a failed poll as no status. **Demo:** sam
 nothing specific. **PM2:** must stay one process in fork mode, a second instance would
 answer polls from an empty store.
 
-**PENDING 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-10-31 — private screenshot library (additive migration, flag off, new cron).**
 
 1. Migration `20261031160000_screenshot_library` adds three tables. Additive, needs
    the `vector` extension that production already has.
@@ -85,7 +85,7 @@ answer polls from an empty store.
 `GET /v1/me/screenshots/library` answers 404 `feature-disabled`; the log shows the
 `screenshot-library` tick without errors. Demo: same code, flag off.
 
-**PENDING 2026-10-29 — share recognition latency (code only; no migration or new flag).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-10-29 — share recognition latency (code only; no migration or new flag).**
 
 Structured single-Product lookup skips AI when category/name/photo are explicit;
 Instagram share stubs no longer fetch the final HTML twice; concurrent video
@@ -96,7 +96,7 @@ changes are in Gennety-iOS `679b91b3` and the current share-layout branch
 Production rollout and physical-device before/after measurements are pending.
 Demo uses the same enabled share code; no data or schema change.
 
-**PENDING 2026-10-29 — App chat wishlist removal (code only; no migration or native update).**
+**Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-10-29 — App chat wishlist removal (code only; no migration or native update).**
 
 1. With `WISHLIST_FEATURE_ENABLED`, the app agent gets `get_my_wishlist` and
    `remove_wishlist_item`, independently of card support. One explicit owner
