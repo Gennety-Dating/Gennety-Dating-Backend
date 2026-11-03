@@ -19,7 +19,7 @@ import {
   type ScreenshotKind,
 } from "@gennety/shared";
 import { env } from "../config.js";
-import { dropScreenshotSources } from "./memory-ideas.js";
+import { dropScreenshotSources, moveScreenshotSources } from "./memory-ideas.js";
 import { imageDimensions } from "../utils/image-dimensions.js";
 import { sniffImageMime } from "../utils/image-sniff.js";
 import { createOpenAIEmbeddingClient, toPgVectorLiteral } from "./profile-analysis.js";
@@ -273,10 +273,15 @@ export async function reserveUpload(userId: string, input: ReserveInput): Promis
       if (input.source === "auto" && locked.status === "paused") throw new ScreenshotLibraryError("library-paused", 409);
       if (input.source === "auto" && !locked.auto_import) throw new ScreenshotLibraryError("auto-import-off", 409);
       // A new version of a source replaces the old one, so it is counted without it.
+      const older = await tx.screenshotItem.findMany({
+        where: { userId, sourceKey: input.sourceKey, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
       await hideRows(tx, { userId, sourceKey: input.sourceKey });
       const total = await tx.screenshotItem.count({ where: { userId, deletedAt: null } });
       if (total >= SCREENSHOT_LIBRARY_MAX_ITEMS) throw new ScreenshotLibraryError("library-full", 409);
-      return tx.screenshotItem.create({
+      const created = await tx.screenshotItem.create({
         data: {
           id,
           userId,
@@ -289,6 +294,9 @@ export async function reserveUpload(userId: string, input: ReserveInput): Promis
           ocrText,
         },
       });
+      // An edit in Photos: the idea follows the new version (decision 2026-11-03).
+      await moveScreenshotSources(tx, userId, older.map((row) => row.id), created.id);
+      return created;
     });
   } catch (err) {
     // Two identical requests raced: the loser answers with the winner's row.
@@ -308,7 +316,7 @@ export async function reserveUpload(userId: string, input: ReserveInput): Promis
 /** Hide rows and drop their derived text in one statement; the sweep does the rest. */
 async function hideRows(
   db: Pick<typeof prisma, "$executeRaw">,
-  target: { userId: string; id?: string; sourceKey?: string },
+  target: { userId: string; id?: string; sourceKey?: string; source?: "auto"; generation?: number },
 ): Promise<number> {
   const now = new Date();
   return db.$executeRaw`
@@ -318,6 +326,8 @@ async function hideRows(
     WHERE user_id = ${target.userId}::uuid AND deleted_at IS NULL
       ${target.id ? Prisma.sql`AND id = ${target.id}::uuid` : Prisma.empty}
       ${target.sourceKey ? Prisma.sql`AND source_key = ${target.sourceKey}` : Prisma.empty}
+      ${target.source ? Prisma.sql`AND source = ${target.source}` : Prisma.empty}
+      ${target.generation !== undefined ? Prisma.sql`AND generation = ${target.generation}` : Prisma.empty}
   `;
 }
 
@@ -395,8 +405,11 @@ export async function reconcile(
   let removed = 0;
   for (const sourceKey of removedSourceKeys) {
     removed += await prisma.$transaction(async (tx) => {
-      const gone = await tx.screenshotItem.findMany({ where: { userId, sourceKey, deletedAt: null }, select: { id: true } });
-      const count = await hideRows(tx, { userId, sourceKey });
+      // Only what the automatic import brought in this generation: a screenshot
+      // picked by hand needs no library access, so leaving the iOS selection
+      // says nothing about it (audit B-5).
+      const gone = await tx.screenshotItem.findMany({ where: { userId, sourceKey, source: "auto", generation, deletedAt: null }, select: { id: true } });
+      const count = await hideRows(tx, { userId, sourceKey, source: "auto", generation });
       await dropScreenshotSources(tx, userId, gone.map((row) => row.id));
       return count;
     });

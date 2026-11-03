@@ -65,28 +65,51 @@ async function readyShot(userId: string, fields: { title?: string; ocr?: string 
 
 /* ── F-02: a reminder nobody would ever receive ─────────────────────────── */
 
-describe("F-02 reminders need the own-dates use they are later checked against", () => {
-  it("refuses a reminder on an idea without that use, instead of accepting one that is silently cancelled", async () => {
+describe("F-02 / decision 2026-11-03: turning a reminder on also allows the idea for own dates", () => {
+  it("one request: the reminder is set, own dates is on, and the idea says both", async () => {
     const saved = await saveIdea(a, { kind: "event", title: "Концерт", eventAt: new Date(Date.now() + 10 * DAY), source: person("хочу на концерт") });
-    await expect(setReminder(a, saved.idea.id)).rejects.toMatchObject({ code: "needs-own-dates" });
-    expect(await db.memoryReminder.count({ where: { ideaId: saved.idea.id } })).toBe(0);
+    expect(saved.idea.reminder).toEqual({ state: "off", dueAt: null });
+    const set = await setReminder(a, saved.idea.id);
+    expect(set.ownDatesTurnedOn).toBe(true);
+    expect(set.idea.usage.ownDates).toBe(true);
+    expect(set.idea.reminder.state).toBe("on");
+    expect(set.idea.reminder.dueAt).toBe(set.dueAt);
+    expect((await getIdea(a, saved.idea.id)).reminder.state).toBe("on");
+    const usage = await db.memoryIdeaEvent.findMany({ where: { ideaId: saved.idea.id, type: "usage" } });
+    expect(usage.map((e) => e.payload)).toEqual([{ use: "own_dates", allow: true, via: "reminder" }]);
   });
 
-  it("with the use granted it is accepted and delivered once", async () => {
-    const saved = await saveIdea(a, { kind: "event", title: "Концерт", eventAt: new Date(Date.now() + 10 * DAY), source: person("хочу на концерт") });
-    await setUsage(a, saved.idea.id, "own_dates", true);
+  it("it is then delivered once, with no idea title on the lock screen", async () => {
+    const saved = await saveIdea(a, { kind: "event", title: "Тайный концерт", eventAt: new Date(Date.now() + 10 * DAY), source: person("концерт") });
     await setReminder(a, saved.idea.id);
-    const pushes: string[] = [];
-    const send = async (_u: string, p: { body: string }) => { pushes.push(p.body); return true; };
+    const pushes: Array<{ title: string; body: string; data?: Record<string, unknown> }> = [];
+    const send = async (_u: string, p: { title: string; body: string; data?: Record<string, unknown> }) => { pushes.push(p); return true; };
     await sendDueReminders(new Date(Date.now() + 8 * DAY), { send: send as never, quiet: () => false });
     expect(pushes).toHaveLength(1);
+    expect(JSON.stringify([pushes[0]!.title, pushes[0]!.body])).not.toContain("Тайный");
+    expect(pushes[0]!.title).toBe("Idea reminder");
+    expect(pushes[0]!.data).toMatchObject({ type: "memory.reminder", ideaId: saved.idea.id });
+    expect((await getIdea(a, saved.idea.id)).reminder.state).toBe("sent");
   });
 
-  it("the chat tool reports the refusal, not a set reminder", async () => {
+  it("a gift or a reference is refused with not-own-wish, a dropped idea with idea-closed; nothing is granted", async () => {
+    const gift = await saveIdea(a, { kind: "gift", title: "Шарф", eventAt: new Date(Date.now() + 10 * DAY), reason: "gift", recipient: "сестра", source: person("шарф") });
+    await expect(setReminder(a, gift.idea.id)).rejects.toMatchObject({ code: "not-own-wish" });
+    const dropped = await saveIdea(a, { kind: "event", title: "Выставка", eventAt: new Date(Date.now() + 10 * DAY), source: person("выставка") });
+    await setIntent(a, dropped.idea.id, "dropped");
+    await expect(setReminder(a, dropped.idea.id)).rejects.toMatchObject({ code: "idea-closed" });
+    for (const id of [gift.idea.id, dropped.idea.id]) {
+      expect((await getIdea(a, id)).usage.ownDates).toBe(false);
+      expect(await db.memoryReminder.count({ where: { ideaId: id } })).toBe(0);
+    }
+  });
+
+  it("the chat tool says own dates came on with it", async () => {
     const saved = await saveIdea(a, { kind: "event", title: "Выставка", eventAt: new Date(Date.now() + 10 * DAY), source: person("выставка") });
     const out = JSON.parse(await executeMemoryTool(a, "set_idea_reminder", { id: saved.idea.id, on: true }));
-    expect(out.success).toBe(false);
-    expect(out.error).toBe("needs-own-dates");
+    expect(out.success).toBe(true);
+    expect(out.idea.uses.ownDates).toBe(true);
+    expect(String(out.instruction)).toMatch(/own dates/);
   });
 });
 

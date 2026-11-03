@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@gennety/db";
-import { usableForOwnDates, usableForPartnerWishlist } from "@gennety/shared";
+import { usableForOwnDates } from "@gennety/shared";
 import { sendDueReminders, sweepOrphanSources } from "../workers/memory-ideas.js";
 import {
   dateMemo,
@@ -116,12 +116,10 @@ describe("ideas on a real database", () => {
     const u = await newUser();
     const gift = await saveIdea(u, { kind: "gift", title: "Шарф", source: person("этот шарф") });
     await setUsage(u, gift.idea.id, "own_dates", true);
-    await setUsage(u, gift.idea.id, "partner", true);
     const view = await setReason(u, gift.idea.id, "gift", "сестра");
     expect(view.usage.onlyForMe).toBe(true);
     const row = await prisma.memoryIdea.findUniqueOrThrow({ where: { id: gift.idea.id } });
     expect(usableForOwnDates({ ...row, intent: row.intent as "want", reason: "gift" })).toBe(false);
-    expect(usableForPartnerWishlist({ ...row, intent: row.intent as "want", reason: "gift" })).toBe(false);
     expect((await listIdeas(u, { query: "сестра" })).items.map((i) => i.id)).toEqual([gift.idea.id]);
     await expect(setUsage(u, gift.idea.id, "own_dates", true)).rejects.toMatchObject({ code: "not-own-wish" });
   });
@@ -224,7 +222,8 @@ describe("ideas on a real database", () => {
   });
 
   async function newMatch(a: string, b: string, data: Record<string, unknown> = {}): Promise<string> {
-    const match = await prisma.match.create({ data: { userAId: a, userBId: b, status: "negotiating_venue", ...data } as never, select: { id: true } });
+    // The pair's yes comes after every idea these tests save: only ideas saved before it count (decision 2026-11-03).
+    const match = await prisma.match.create({ data: { userAId: a, userBId: b, status: "negotiating_venue", createdAt: new Date(Date.now() + 60_000), ...data } as never, select: { id: true } });
     return match.id;
   }
 

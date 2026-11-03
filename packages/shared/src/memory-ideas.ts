@@ -93,10 +93,13 @@ export function usableForOverlap(idea: MemoryIdeaGate): boolean {
   return usableForOwnDates(idea);
 }
 
-/** May this idea be added to the wishlist a partner can buy into? Never someone else's gift. */
-export function usableForPartnerWishlist(idea: MemoryIdeaGate): boolean {
-  return idea.allowPartner && liveOwnWish(idea);
-}
+/*
+ * There is deliberately no `usableFor…` for an idea's `allowMatching` or
+ * `allowPartner` (decision 2026-11-03): nothing reads them, the app hides their
+ * switches and the server refuses turning them on, so no code may treat either
+ * column as consent. Matching reads confirmed preferences; the wishlist keeps
+ * its own rules.
+ */
 
 /**
  * Tracking params never make two different things out of one link, and a path
@@ -156,6 +159,24 @@ export const MEMORY_REMINDER_LEAD_MS = 3 * 24 * 3_600_000;
 export const MEMORY_REMINDER_MIN_GAP_MS = 24 * 3_600_000;
 export const MEMORY_PLANNING_SUGGESTIONS = 3;
 export const MEMORY_OVERLAP_MAX = 3;
+/**
+ * The only topics a pair's overlap compares (decision 2026-11-03). A topic is a
+ * free word on the idea; outside this list it stays the person's own and never
+ * takes part, so a made-up word cannot be used to probe the partner's ideas.
+ */
+export const MEMORY_OVERLAP_TOPICS = [
+  "art", "bakery", "beer", "board-games", "books", "bowling", "brunch", "camping", "ceramics", "cinema",
+  "climbing", "cocktails", "coffee", "comedy", "concert", "cooking", "cycling", "dance", "dessert", "escape-room",
+  "gallery", "hiking", "jazz", "karaoke", "kayaking", "market", "museum", "music", "opera", "painting",
+  "park", "photography", "picnic", "pottery", "running", "sailing", "skating", "spa", "sushi", "swimming",
+  "tea", "tennis", "theatre", "wine", "yoga",
+] as const;
+export type MemoryOverlapTopic = (typeof MEMORY_OVERLAP_TOPICS)[number];
+
+export function isOverlapTopic(topic: string | null | undefined): topic is MemoryOverlapTopic {
+  return typeof topic === "string" && (MEMORY_OVERLAP_TOPICS as readonly string[]).includes(topic);
+}
+
 /** A pair's overlap can be shown only after both said yes; a blind decision stays blind. */
 export const MEMORY_OVERLAP_STATUSES: ReadonlySet<string> = new Set(["negotiating", "negotiating_venue", "scheduled"]);
 export const MEMORY_RATINGS = ["liked", "neutral", "disliked"] as const;

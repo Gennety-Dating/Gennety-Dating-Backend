@@ -36,8 +36,9 @@ async function shot(userId: string, category: string, title: string): Promise<st
   return id;
 }
 
+// The pair's yes comes after every idea these tests save: only ideas saved before it count (decision 2026-11-03).
 const newMatch = async (a: string, b: string, data: Record<string, unknown> = {}) =>
-  (await prisma.match.create({ data: { userAId: a, userBId: b, status: "negotiating_venue", ...data } as never, select: { id: true } })).id;
+  (await prisma.match.create({ data: { userAId: a, userBId: b, status: "negotiating_venue", createdAt: new Date(Date.now() + 60_000), ...data } as never, select: { id: true } })).id;
 
 beforeAll(async () => {
   await prisma.$connect();
@@ -137,7 +138,8 @@ describe("the nine lines", () => {
     expect(saved.idea.kind).toBe("gift");
     const gift = await tool(u, "update_idea", { id: saved.idea.id, reason: "gift", recipient: "сестра" });
     expect(gift.idea).toMatchObject({ reason: "gift", recipient: "сестра" });
-    expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "partner" })).error).toBe("not-own-wish");
+    expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "own_dates" })).error).toBe("not-own-wish");
+    expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "partner" })).error).toBe("use-unavailable");
     expect(await giftIdeasIn(u, { items: [{ title: "Пионы", ideaId: saved.idea.id }] })).toEqual(["Пионы"]);
   });
 
@@ -268,7 +270,7 @@ describe("six journeys", () => {
     expect(planning.suggestions).toEqual([]);
     expect(planning.shared).toEqual([]);
     expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "own_dates" })).error).toBe("not-own-wish");
-    expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "matching" })).error).toBe("not-own-wish");
+    expect((await tool(u, "grant_idea_use", { id: saved.idea.id, use: "matching" })).error).toBe("use-unavailable");
     const profile = await prisma.memoryPreference.count({ where: { userId: u } });
     expect(profile).toBe(0);
   });

@@ -98,9 +98,9 @@ export const MEMORY_TOOLS = [
   ),
   fn(
     "grant_idea_use",
-    "Turn ON one use after they asked for exactly that: own_dates «учитывай при выборе места», matching «разрешаю использовать в подборе», partner «можно показать партнёру».",
+    "Turn ON the use for their own dates after they asked for exactly that: «учитывай при выборе места». Matching goes through a confirmed preference, and showing an idea to a partner is not available.",
     ["id", "use"],
-    { id: ID, use: { type: "string", enum: [...MEMORY_USES] } },
+    { id: ID, use: { type: "string", enum: ["own_dates"] } },
   ),
   fn(
     "revoke_idea_use",
@@ -123,7 +123,7 @@ export const MEMORY_TOOLS = [
   ),
   fn(
     "set_idea_reminder",
-    "«Напомни вовремя» for an idea with a date that they allowed for their own dates. Without a date, or without that use, it is refused: say why. on=false cancels.",
+    "«Напомни вовремя» for an idea with a date. Turning it on also allows the idea for their own dates, since a reminder needs that. A gift, a reference, a dropped or tried idea or one without a date is refused: say why. on=false cancels.",
     ["id", "on"],
     { id: ID, on: { type: "boolean" } },
   ),
@@ -336,7 +336,14 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
           await cancelReminder(userId, id as string);
           return ok({ reminder: "cancelled" });
         }
-        return ok({ reminder: await setReminder(userId, id as string) });
+      {
+        const set = await setReminder(userId, id as string);
+        return ok({
+          reminder: { dueAt: set.dueAt },
+          idea: view(set.idea),
+          ...(set.ownDatesTurnedOn ? { instruction: "A reminder needs the idea to be usable for their own dates, so that use is now on too. Tell them in one line." } : {}),
+        });
+      }
       case "list_preferences":
         return ok({ preferences: await listPreferences(userId) });
       case "confirm_preference": {
@@ -397,7 +404,8 @@ export async function executeMemoryTool(userId: string, name: string, rawArgs: u
         "not-attended": "Nothing recorded: they have not confirmed going to this date. Do not ask them to rate it.",
         "no-date": "No reminder set: it has no confirmed date. Ask them for the date; do not guess.",
         "date-passed": "No reminder set: that date has passed or is out of date. Say so.",
-        "needs-own-dates": "No reminder set: this idea is not allowed for their own dates (or it is a gift, a reference or no longer wanted), and a reminder only comes for those. Say so, and ask whether to allow it for their dates first.",
+        "idea-closed": "No reminder set: they said they no longer want it, or already tried it. Say so; ask if that has changed.",
+        "use-unavailable": "Nothing changed: that use is not available. Only «учитывай при выборе места» (own_dates) can be turned on for an idea; for matching, a confirmed preference is the way.",
       };
       return refused(err.code, instruction[err.code] ?? "Nothing changed. Tell them it did not work.");
     }

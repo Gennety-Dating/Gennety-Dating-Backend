@@ -41,10 +41,19 @@ export class MemoryIdeaError extends Error {
 }
 
 type Tx = Prisma.TransactionClient;
-type IdeaRow = Prisma.MemoryIdeaGetPayload<{ include: { sources: true } }>;
 export type MemoryActor = "person" | "system";
 
-const withSources = { sources: { orderBy: { createdAt: "asc" as const } } };
+/** Sources, and the live or last sent reminder, so the card shows the reminder as it is. */
+const withSources = {
+  sources: { orderBy: { createdAt: "asc" as const } },
+  reminders: {
+    where: { state: { in: ["pending", "sent"] } },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: { state: true, dueAt: true },
+  },
+} satisfies Prisma.MemoryIdeaInclude;
+type IdeaRow = Prisma.MemoryIdeaGetPayload<{ include: typeof withSources }>;
 
 export interface MemorySourceInput {
   kind: MemorySourceKind;
@@ -87,9 +96,17 @@ export interface MemoryIdeaView {
   reason: string | null;
   recipient: string | null;
   usage: { ownDates: boolean; matching: boolean; partner: boolean; onlyForMe: boolean };
+  /** `on`: a reminder is waiting (`dueAt`); `sent`: this occasion's went out; `off`: none. */
+  reminder: { state: "on" | "sent" | "off"; dueAt: string | null };
   version: number;
   sources: Array<{ id: string; kind: string; provenance: string; screenshotId: string | null; wishlistItemId: string | null; url: string | null; quote: string | null; createdAt: string }>;
   updatedAt: string;
+}
+
+function reminderOf(row: { state: string; dueAt: Date } | undefined): MemoryIdeaView["reminder"] {
+  if (row?.state === "pending") return { state: "on", dueAt: row.dueAt.toISOString() };
+  if (row?.state === "sent") return { state: "sent", dueAt: null };
+  return { state: "off", dueAt: null };
 }
 
 export function ideaView(row: IdeaRow): MemoryIdeaView {
@@ -113,6 +130,7 @@ export function ideaView(row: IdeaRow): MemoryIdeaView {
       partner: row.allowPartner,
       onlyForMe: isOnlyForMe(row),
     },
+    reminder: reminderOf(row.reminders[0]),
     version: row.version,
     sources: row.sources.map((s) => ({
       id: s.id,
@@ -425,6 +443,10 @@ const USE_FIELD: Record<MemoryUse, "allowOwnDates" | "allowMatching" | "allowPar
 export async function setUsage(userId: string, id: string, use: MemoryUse, allow: boolean, options: ChangeOptions = {}): Promise<MemoryIdeaView> {
   const actor = options.actor ?? "person";
   if (allow && actor !== "person") throw new MemoryIdeaError("needs-the-person", 403);
+  // Nothing reads an idea's `matching` or `partner` use (decision 2026-11-03):
+  // turning one on would promise a use that never happens. The fields stay, off
+  // works, on is refused. Matching reads confirmed preferences only.
+  if (allow && use !== "own_dates") throw new MemoryIdeaError("use-unavailable", 409);
   return change(userId, id, { ...options, actor, type: "usage" }, async (row, tx) => {
     if (allow && (row.reason === "gift" || row.reason === "reference")) throw new MemoryIdeaError("not-own-wish", 409);
     if (!allow && use === "own_dates") await cancelReminders(tx, id);
@@ -621,9 +643,14 @@ export async function deleteIdea(userId: string, id: string): Promise<void> {
 export async function removeSource(userId: string, ideaId: string, sourceId: string): Promise<{ ideaDeleted: boolean }> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
+    // A late retry (after a lost answer, or after signing in again) finds the
+    // work done and says so, instead of an error. Someone else's id stays a 404.
+    const any = await tx.memoryIdea.findFirst({ where: { id: ideaId, userId }, select: { deletedAt: true } });
+    if (!any) throw new MemoryIdeaError("not-found", 404);
+    if (any.deletedAt) return { ideaDeleted: true };
     const row = await liveIdea(tx, userId, ideaId);
     const removed = await tx.memoryIdeaSource.deleteMany({ where: { id: sourceId, ideaId, userId } });
-    if (removed.count === 0) throw new MemoryIdeaError("source-not-found", 404);
+    if (removed.count === 0) return { ideaDeleted: false };
     if (row.sources.length <= 1) {
       await closeIdea(tx, userId, ideaId, now);
       return { ideaDeleted: true };
@@ -652,6 +679,24 @@ export async function dropScreenshotSources(tx: Tx, userId: string, screenshotIt
     const left = await tx.memoryIdeaSource.count({ where: { ideaId, userId } });
     if (left === 0) await closeIdea(tx, userId, ideaId, now);
   }
+}
+
+/**
+ * A screenshot edited in Photos arrives as a new version under the same source
+ * key, and the old version leaves. The idea it supported moves to the new
+ * version instead of closing (decision 2026-11-03): an edit is not a deletion.
+ * Called in the transaction that hides the old rows and creates the new one.
+ */
+export async function moveScreenshotSources(tx: Tx, userId: string, fromItemIds: readonly string[], toItemId: string): Promise<number> {
+  if (fromItemIds.length === 0) return 0;
+  const sources = await tx.memoryIdeaSource.findMany({ where: { userId, screenshotItemId: { in: [...fromItemIds] } }, select: { id: true, ideaId: true } });
+  // One screenshot backs at most one source per person (the dedupe key), so the
+  // newest of several old versions keeps it and the rest leave as before.
+  const [kept, ...rest] = sources;
+  if (!kept) return 0;
+  await tx.memoryIdeaSource.update({ where: { id: kept.id }, data: { screenshotItemId: toItemId, dedupeKey: `screenshot:${toItemId}` } });
+  if (rest.length > 0) await dropScreenshotSources(tx, userId, fromItemIds);
+  return 1;
 }
 
 /** A wishlist position was removed: the idea loses that source, nothing more. */

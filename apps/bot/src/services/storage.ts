@@ -1209,7 +1209,12 @@ async function signBatch(
 
 /* ── Screenshot library (private bucket, `${userId}/${itemId}.jpg`) ─────── */
 
-/** A PUT target for a key the server chose; retries may overwrite the same key. */
+/**
+ * A PUT target for a key the server chose, one per item. Without `x-upsert` a
+ * key holds the first bytes stored under it: a retry after a lost answer gets
+ * «already exists» (the upload is done; commit next), and nothing can replace
+ * the object once commit has checked it (audit B-4).
+ */
 export async function createScreenshotSignedUpload(path: string): Promise<string | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !isSafeStorageObjectPath(path)) return null;
   try {
@@ -1217,7 +1222,7 @@ export async function createScreenshotSignedUpload(path: string): Promise<string
       `${env.SUPABASE_URL}/storage/v1/object/upload/sign/${env.SUPABASE_SCREENSHOT_BUCKET}/${path}`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "x-upsert": "true" },
+        headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "x-upsert": "false" },
         signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
       },
     );

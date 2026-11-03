@@ -92,7 +92,11 @@ paths:
       description: |
         Unauthenticated by design: the client must learn "update required"
         before it can log in. `minSupportedIosVersion` null → no forced update.
-      security: []
+        A bearer token is optional (added 2026-11-03): with one, `features.screenshotLibrary`
+        and `features.memoryIdeas` answer for that person, so a person on a preview list
+        sees them on while the flags are off. The response varies by `Authorization`;
+        a client should fetch it again after signing in or out.
+      security: [{}, { bearerAuth: [] }]
       responses:
         "200":
           description: Client bootstrap payload
@@ -1877,7 +1881,11 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
-        "409": { description: "`not-own-wish`, `version-conflict`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409":
+          description: >-
+            `not-own-wish`, `version-conflict`, `use-unavailable` (turning on `matching` or `partner`:
+            nothing uses them, decision 2026-11-03; turning them off still works)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /v1/me/memory/ideas/{id}/merge:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1956,9 +1964,12 @@ paths:
       tags: [Memory]
       operationId: removeMemoryIdeaSource
       summary: Take one source off. Removing the last one closes the idea
+      description: >-
+        Safe to repeat (2026-11-03): a source already gone answers 200 with the idea's state
+        (`ideaDeleted: true` once the idea is closed). Someone else's id stays 404.
       responses:
         "200":
-          description: Removed
+          description: Removed, or already removed
           content:
             application/json:
               schema: { type: object, required: [ideaDeleted], properties: { ideaDeleted: { type: boolean } } }
@@ -2035,19 +2046,28 @@ paths:
       tags: [Memory]
       operationId: setMemoryIdeaReminder
       summary: Remind in time. One live reminder per occasion
+      description: >-
+        Turning a reminder on also allows the idea for the person's own dates, in the same request,
+        because a reminder is only sent for such an idea (decision 2026-11-03). The answer carries the
+        idea as it now stands; `ownDatesTurnedOn` says whether this request switched that use on.
       responses:
         "200":
-          description: When it comes due
+          description: When it comes due, and the idea
           content:
             application/json:
-              schema: { type: object, required: [dueAt], properties: { dueAt: { type: string, format: date-time } } }
+              schema:
+                type: object
+                required: [dueAt]
+                properties:
+                  dueAt: { type: string, format: date-time }
+                  idea: { $ref: "#/components/schemas/MemoryIdea" }
+                  ownDatesTurnedOn: { type: boolean }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "`not-found`, also for someone else's id", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "409":
           description: >-
-            `needs-own-dates` (the idea is not allowed for the person's own dates, or is a gift, a reference,
-            dropped or tried: such a reminder would never be sent, so it is refused; added in the 2026-11 audit, F-02),
-            `no-date`, `date-passed`
+            `not-own-wish` (a gift or a reference: never the person's own date idea), `idea-closed` (dropped
+            or tried), `no-date`, `date-passed`, `version-conflict`. Nothing is granted on a refusal.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
       tags: [Memory]
@@ -2274,6 +2294,8 @@ paths:
       description: >-
         Send only keys positively established as gone, never after a failed read.
         They leave without an exclusion, so selecting them again brings them back.
+        Only screenshots the automatic import brought in this generation leave; a hand-picked
+        one under the same key stays (2026-11-03).
       requestBody:
         required: true
         content:
@@ -2321,7 +2343,9 @@ paths:
         "200":
           description: >-
             `uploadUrl` is a signed PUT. Null with `duplicate: true` when these
-            bytes are already here: nothing to send.
+            bytes are already here: nothing to send. Since 2026-11-03 the URL does not overwrite:
+            a repeated PUT after a lost answer is refused by storage as already existing (HTTP 400
+            or 409 with `Duplicate`); treat that as uploaded and call commit.
           content:
             application/json:
               schema:
@@ -8737,12 +8761,15 @@ components:
                 answers empty. Absent on an older server — treat as false.
             memoryIdeas:
               type: boolean
-              description: Ideas and their uses. False hides saving and offers; revoking and deleting still work.
+              description: >-
+                Ideas and their uses. False hides saving and offers; revoking and deleting still work.
+                Per person when the request carries a token (preview list, 2026-11-03).
             screenshotLibrary:
               type: boolean
               description: >-
                 Private screenshot library (2026-10-31). False hides every entry
-                to it. Absent on an older server, treat as false.
+                to it. Absent on an older server, treat as false. Per person when the
+                request carries a token (preview list, 2026-11-03).
             wishlist:
               type: boolean
               description: >-
@@ -10551,8 +10578,22 @@ components:
           properties:
             ownDates: { type: boolean }
             matching: { type: boolean }
-            partner: { type: boolean }
+            partner:
+              type: boolean
+              description: Stored, never read by any feature and cannot be turned on (409 `use-unavailable`); hide it.
             onlyForMe: { type: boolean }
+          description: >-
+            `matching` is likewise stored but not used and cannot be turned on: matching reads
+            confirmed preferences only (decision 2026-11-03).
+        reminder:
+          type: object
+          description: >-
+            Added 2026-11-03; not in `required` for older servers (absent means `off`). `on`: a reminder
+            is waiting, `dueAt` set. `sent`: this occasion's reminder went out. `off`: none.
+          required: [state, dueAt]
+          properties:
+            state: { type: string, enum: ["on", "sent", "off"] }
+            dueAt: { type: [string, "null"], format: date-time }
         version: { type: integer }
         sources:
           type: array

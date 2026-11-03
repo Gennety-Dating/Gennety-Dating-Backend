@@ -1,4 +1,5 @@
 import { prisma, type Prisma } from "@gennety/db";
+import { env } from "../config.js";
 import {
   MEMORY_OVERLAP_MAX,
   MEMORY_OVERLAP_STATUSES,
@@ -9,6 +10,7 @@ import {
   memoryIdeaFitsPlan,
   memoryVibeQuestion,
   preferenceVenueIds,
+  isOverlapTopic,
   usableForOverlap,
   usableForOwnDates,
   type Language,
@@ -111,10 +113,45 @@ interface PairContext {
   partnerId: string;
   status: string;
   agreedTime: Date | null;
+  /** The Date Ticket step is behind them (or tickets are off). */
+  ticketDone: boolean;
+  /** When the second «да» landed; ideas saved later never count for this pair. */
+  mutualYesAt: Date;
+}
+
+/**
+ * The paid step is over: both paid, or the offer lapsed and scheduling opened
+ * for free (`refunded`, `expired`). `pending`/`partial` is the gate itself, also
+ * before the offer is stamped; with tickets off there is no gate.
+ */
+const TICKET_DONE = new Set(["completed", "refunded", "expired"]);
+function ticketStepDone(match: { status: string; ticketStatus: string }): boolean {
+  if (!env.TICKET_FEATURE_ENABLED) return true;
+  return match.status === "scheduled" || TICKET_DONE.has(match.ticketStatus);
+}
+
+/**
+ * The moment both had said yes: the later of the two first ACCEPTED events. A
+ * match without them (older rows) falls back to when it was sent, which is
+ * earlier still, so the cut only ever leaves out more.
+ */
+async function mutualYesAt(match: { id: string; userAId: string; userBId: string; dispatchedAt: Date | null; createdAt: Date }): Promise<Date> {
+  const accepted = await prisma.matchEvent.findMany({
+    where: { matchId: match.id, actionType: "ACCEPTED", actorId: { in: [match.userAId, match.userBId] } },
+    orderBy: { createdAt: "asc" },
+    select: { actorId: true, createdAt: true },
+  });
+  const a = accepted.find((e) => e.actorId === match.userAId)?.createdAt;
+  const b = accepted.find((e) => e.actorId === match.userBId)?.createdAt;
+  if (a && b) return a > b ? a : b;
+  return match.dispatchedAt ?? match.createdAt;
 }
 
 async function readPair(matchId: string, viewerId: string): Promise<PairContext> {
-  const match = await prisma.match.findUnique({ where: { id: matchId }, select: { id: true, userAId: true, userBId: true, status: true, agreedTime: true } });
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { id: true, userAId: true, userBId: true, status: true, agreedTime: true, ticketStatus: true, dispatchedAt: true, createdAt: true },
+  });
   if (!match || (match.userAId !== viewerId && match.userBId !== viewerId)) throw new MemoryIdeaError("not-found", 404);
   return {
     matchId: match.id,
@@ -122,6 +159,8 @@ async function readPair(matchId: string, viewerId: string): Promise<PairContext>
     partnerId: match.userAId === viewerId ? match.userBId : match.userAId,
     status: match.status,
     agreedTime: match.agreedTime,
+    ticketDone: ticketStepDone(match),
+    mutualYesAt: await mutualYesAt(match),
   };
 }
 
@@ -143,21 +182,39 @@ export interface PairOverlap {
 /**
  * Ideas both sides allowed for their dates, compared on the server. Only the
  * viewer's own idea comes back, and an empty list reads the same for every
- * reason: too early, a block, a private idea or simply nothing shared.
+ * reason: too early, the ticket not done, a block, a private idea or nothing shared.
+ *
+ * Against probing (audit F-03, decision 2026-11-03): only ideas saved before both
+ * said yes take part, a topic only from `MEMORY_OVERLAP_TOPICS` and a place only
+ * if the catalog knows it. A new idea made to test the partner's never counts.
  */
 export async function pairOverlap(matchId: string, viewerId: string): Promise<PairOverlap[]> {
   const pair = await readPair(matchId, viewerId);
-  if (!MEMORY_OVERLAP_STATUSES.has(pair.status)) return [];
-  if (await isBlockedEitherWay(viewerId, pair.partnerId)) return [];
-  const load = (userId: string) => prisma.memoryIdea.findMany({ where: { userId, deletedAt: null, allowOwnDates: true }, take: 500 });
-  const [mine, theirs] = await Promise.all([load(viewerId), load(pair.partnerId)]);
-  const theirUsable = theirs.filter((r) => usableForOverlap(gate(r)));
-  const theirPlaces = new Set(theirUsable.flatMap((r) => (r.placeId ? [r.placeId] : [])));
-  const theirTopics = new Set(theirUsable.flatMap((r) => (r.topic ? [r.topic] : [])));
+  return overlapOf(pair);
+}
+
+async function overlapOf(pair: PairContext): Promise<PairOverlap[]> {
+  if (!MEMORY_OVERLAP_STATUSES.has(pair.status) || !pair.ticketDone) return [];
+  if (await isBlockedEitherWay(pair.viewerId, pair.partnerId)) return [];
+  const load = (userId: string) =>
+    prisma.memoryIdea.findMany({ where: { userId, deletedAt: null, allowOwnDates: true, createdAt: { lt: pair.mutualYesAt } }, take: 500 });
+  const [mineRaw, theirsRaw] = await Promise.all([load(pair.viewerId), load(pair.partnerId)]);
+  const mine = mineRaw.filter((r) => usableForOverlap(gate(r)));
+  const theirs = theirsRaw.filter((r) => usableForOverlap(gate(r)));
+  const placeIds = [...new Set([...mine, ...theirs].flatMap((r) => (r.placeId ? [r.placeId] : [])))];
+  const catalog = placeIds.length
+    ? new Set((await prisma.curatedVenue.findMany({ where: { placeId: { in: placeIds } }, select: { placeId: true } })).map((v) => v.placeId as string))
+    : new Set<string>();
+  const placeOf = (r: IdeaRow) => (r.placeId && catalog.has(r.placeId) ? r.placeId : null);
+  const topicOf = (r: IdeaRow) => (isOverlapTopic(r.topic) ? r.topic : null);
+  const theirPlaces = new Set(theirs.flatMap((r) => { const p = placeOf(r); return p ? [p] : []; }));
+  const theirTopics = new Set(theirs.flatMap((r) => { const t = topicOf(r); return t ? [t] : []; }));
   const out: PairOverlap[] = [];
-  for (const row of mine.filter((r) => usableForOverlap(gate(r)))) {
-    if (row.placeId && theirPlaces.has(row.placeId)) out.push({ label: row.title, kind: "same_place", ideaId: row.id });
-    else if (row.topic && theirTopics.has(row.topic)) out.push({ label: row.title, kind: "same_kind", ideaId: row.id });
+  for (const row of mine) {
+    const place = placeOf(row);
+    const topic = topicOf(row);
+    if (place && theirPlaces.has(place)) out.push({ label: row.title, kind: "same_place", ideaId: row.id });
+    else if (topic && theirTopics.has(topic)) out.push({ label: row.title, kind: "same_kind", ideaId: row.id });
   }
   return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "same_place" ? -1 : 1)).slice(0, MEMORY_OVERLAP_MAX);
 }
@@ -183,11 +240,13 @@ export async function planningSuggestions(
 ): Promise<{ suggestions: PlanningSuggestion[]; shared: PairOverlap[]; vibe: string[]; vibeIds: { experiences: VenueExperience[]; ambiences: VenueAmbience[] } }> {
   const pair = await readPair(matchId, viewerId);
   const now = options.now ?? new Date();
-  const live = MEMORY_OVERLAP_STATUSES.has(pair.status);
+  // Both said yes and the ticket step is done (decision 2026-11-03); before that
+  // the answer is empty and looks the same as having nothing.
+  const live = MEMORY_OVERLAP_STATUSES.has(pair.status) && pair.ticketDone;
   if (!live) return { suggestions: [], shared: [], vibe: [], vibeIds: { experiences: [], ambiences: [] } };
   const [rows, shared, preferences] = await Promise.all([
     prisma.memoryIdea.findMany({ where: { userId: viewerId, deletedAt: null, allowOwnDates: true }, orderBy: { updatedAt: "desc" }, take: 200 }),
-    pairOverlap(matchId, viewerId),
+    overlapOf(pair),
     prisma.memoryPreference.findMany({ where: { userId: viewerId, revokedAt: null, allowOwnDates: true, facet: { in: ["experience", "ambience", "format", "wish"] } }, take: 8, orderBy: { confirmedAt: "desc" }, select: { facet: true, value: true } }),
   ]);
   const vibeIds = preferenceVenueIds(preferences);
@@ -395,7 +454,7 @@ export async function pendingImpressions(viewerId: string, limit = 3): Promise<A
  * Ties ideas to real dates from the matches themselves, so no scheduling path
  * has to know about them. Keys make every step safe to repeat.
  */
-export async function reconcilePlans(now: Date = new Date(), limit = 200): Promise<{ planned: number; released: number }> {
+export async function reconcilePlans(now: Date = new Date(), limit = 200, users: readonly string[] | null = null): Promise<{ planned: number; released: number }> {
   let planned = 0;
   let released = 0;
   const scheduled = await prisma.match.findMany({
@@ -409,7 +468,9 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
   const candidates = scheduled.length
     ? await prisma.memoryIdea.findMany({
         where: {
-          userId: { in: [...new Set(scheduled.flatMap((m) => [m.userAId, m.userBId]))] },
+          // Planning writes to the idea, so only people the feature is on for
+          // (`users`: a preview list, null for everyone). Releasing below is not limited.
+          userId: { in: [...new Set(scheduled.flatMap((m) => [m.userAId, m.userBId]))].filter((id) => !users || users.includes(id)) },
           placeId: { in: [...new Set(scheduled.map((m) => m.venuePlaceId as string))] },
           deletedAt: null,
           allowOwnDates: true,
@@ -446,25 +507,61 @@ export async function reconcilePlans(now: Date = new Date(), limit = 200): Promi
 }
 
 /** «Напомнить вовремя». One live reminder per occasion; a date without an event is refused, not guessed. */
-export async function setReminder(userId: string, ideaId: string, now: Date = new Date()): Promise<{ dueAt: string }> {
-  const idea = await prisma.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null } });
-  if (!idea) throw new MemoryIdeaError("not-found", 404);
-  // The sender cancels a reminder whose idea may not be used for their own dates,
-  // so accepting one here would answer «set» for a push that never comes (audit F-02).
-  if (!usableForOwnDates(gate(idea))) throw new MemoryIdeaError("needs-own-dates", 409);
-  if (!idea.eventAt) throw new MemoryIdeaError("no-date", 409);
-  if (idea.eventCheck === "outdated" || idea.eventAt <= now) throw new MemoryIdeaError("date-passed", 409);
+export interface ReminderSet {
+  dueAt: string;
+  /** The idea as it now stands, with `usage.ownDates` and `reminder`. */
+  idea: MemoryIdeaView;
+  /** This request also turned on the use for their own dates. */
+  ownDatesTurnedOn: boolean;
+}
+
+type ReminderDb = Pick<typeof prisma, "memoryReminder">;
+
+/** One live reminder for the idea's current date; repeats and old dates are folded in. */
+async function writeReminder(db: ReminderDb, userId: string, idea: { id: string; eventAt: Date }, now: Date): Promise<Date> {
   const dueAt = new Date(Math.max(idea.eventAt.getTime() - MEMORY_REMINDER_LEAD_MS, now.getTime()));
   const dedupeKey = `event:${idea.id}:${idea.eventAt.toISOString()}`;
-  await prisma.memoryReminder.upsert({
+  await db.memoryReminder.upsert({
     where: { userId_dedupeKey: { userId, dedupeKey } },
-    create: { ideaId, userId, dueAt, dedupeKey },
+    create: { ideaId: idea.id, userId, dueAt, dedupeKey },
     update: {},
   });
   // Asked again after cancelling: it really is back on. One already sent stays sent.
-  await prisma.memoryReminder.updateMany({ where: { userId, dedupeKey, state: "cancelled" }, data: { state: "pending", dueAt } });
-  await prisma.memoryReminder.updateMany({ where: { ideaId, state: "pending", dedupeKey: { not: dedupeKey } }, data: { state: "cancelled" } });
-  return { dueAt: dueAt.toISOString() };
+  await db.memoryReminder.updateMany({ where: { userId, dedupeKey, state: "cancelled" }, data: { state: "pending", dueAt } });
+  await db.memoryReminder.updateMany({ where: { ideaId: idea.id, state: "pending", dedupeKey: { not: dedupeKey } }, data: { state: "cancelled" } });
+  return dueAt;
+}
+
+/**
+ * «Напомнить вовремя». A reminder is only sent for an idea usable for the
+ * person's own dates, so turning one on also turns that use on, in the same
+ * transaction (decision 2026-11-03, replacing the 409 of audit F-02). An idea
+ * that cannot be such a wish is refused: a gift or a reference (`not-own-wish`),
+ * a dropped or tried one (`idea-closed`). A date without an event is refused, not guessed.
+ */
+export async function setReminder(userId: string, ideaId: string, now: Date = new Date()): Promise<ReminderSet> {
+  const { dueAt, turnedOn } = await prisma.$transaction(async (tx) => {
+    const idea = await tx.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null } });
+    if (!idea) throw new MemoryIdeaError("not-found", 404);
+    if (idea.reason === "gift" || idea.reason === "reference") throw new MemoryIdeaError("not-own-wish", 409);
+    if (idea.intent === "dropped" || idea.intent === "tried") throw new MemoryIdeaError("idea-closed", 409);
+    if (!idea.eventAt) throw new MemoryIdeaError("no-date", 409);
+    if (idea.eventCheck === "outdated" || idea.eventAt <= now) throw new MemoryIdeaError("date-passed", 409);
+    let turnedOn = false;
+    if (!idea.allowOwnDates) {
+      const updated = await tx.memoryIdea.updateMany({
+        where: { id: ideaId, userId, deletedAt: null, version: idea.version },
+        data: { allowOwnDates: true, version: { increment: 1 } },
+      });
+      if (updated.count === 0) throw new MemoryIdeaError("version-conflict", 409);
+      await tx.memoryIdeaEvent.create({
+        data: { ideaId, userId, actor: "person", type: "usage", payload: { use: "own_dates", allow: true, via: "reminder" } },
+      });
+      turnedOn = true;
+    }
+    return { dueAt: await writeReminder(tx, userId, { id: idea.id, eventAt: idea.eventAt }, now), turnedOn };
+  });
+  return { dueAt: dueAt.toISOString(), idea: await getIdea(userId, ideaId), ownDatesTurnedOn: turnedOn };
 }
 
 export async function cancelReminder(userId: string, ideaId: string): Promise<void> {
@@ -491,10 +588,10 @@ export async function setEventDate(userId: string, ideaId: string, eventAt: Date
   if (sameDate && check !== "outdated") return;
   await cancelReminder(userId, ideaId);
   if (hadReminder > 0 && eventAt && eventAt > now && check !== "outdated") {
-    await setReminder(userId, ideaId, now).catch((err: unknown) => {
-      // A wish closed meanwhile keeps no reminder; that is not a failed check.
-      if (!(err instanceof MemoryIdeaError && err.code === "needs-own-dates")) throw err;
-    });
+    // The reminder moves with its date; a wish closed meanwhile keeps none, and
+    // moving one never grants a use by itself.
+    const after = await prisma.memoryIdea.findFirst({ where: { id: ideaId, userId, deletedAt: null } });
+    if (after && usableForOwnDates(gate(after))) await writeReminder(prisma, userId, { id: ideaId, eventAt }, now);
   }
 }
 
