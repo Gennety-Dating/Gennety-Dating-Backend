@@ -23,6 +23,12 @@
    1. «Мне подходит» two-tap ask: it lives on the native «Сегодня» block; the Telegram calendar already commits with a separate button.
    2. Market circle without fill and the removed Home/Work chips: the Telegram departure map has neither.
 
+5. Founder's review of the screenshots, same day (supersedes 1.1, 1.2 and the countdown in 1.3).
+   1. The offer is NOT ported: «it looks unclear in iOS too» — the native offer goes to its own redesign first. Telegram keeps its offer («Это мэтч», the ticket with the wallet count, the two-avatar «pay for both» and the secondary), and only its two buttons become capsules (`border-radius: 999px`, scoped to `.gate-offer`).
+   2. No countdown capsule anywhere in the Telegram gate: the chat card above the Mini App already carries the window. The native app keeps its capsule on the offer and the cover screens.
+   3. Cover panel (1.3) and the result (1.5) ship as built; the result's «Твой билет» row leads with the brand ticket glyph (the same skewed plate with the butterfly as the waiting screen) instead of the drawn `ticket.fill`.
+   4. «Чего хочется?» ships as built; checked for overlap at 390×844, 375×667, 360×600 and 390×460 — on the shortest the grid scrolls inside its frame and the last card stops above the row.
+
 **Demo mode.** Identical — the demo gate settles on the tap (`settle-no-charge`) behind the same panel and ask; nothing here branches on demo.
 
 **Deploy.** Client-only (webapp bundle) plus bot copy; no schema, no API change. Shipping follows the founder's approval of the screenshots.

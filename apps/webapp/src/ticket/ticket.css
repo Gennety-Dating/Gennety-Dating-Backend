@@ -1127,13 +1127,13 @@ body {
 
 /* ══ Ticket gate, iOS variant B (founder's pick 2026-10-30) ══════════════════
    Rebuilt after the native `TicketGateView`, one iOS point to one CSS pixel:
-   countdown capsule top-left; offer = portrait 84 on a glow, headline 28,
-   body 15, the ticket, ONE action and a quiet scope line under it; waiting =
-   the ticket glyph on light, headline 28, body 15; the cover ask = a frosted
-   panel along the bottom edge; result = «Оба билета на месте» with two rows
-   that stands until «Выбрать время». */
+   waiting = the ticket glyph on light, headline 28, body 15; the cover ask = a
+   frosted panel along the bottom edge; result = «Оба билета на месте» with two
+   rows that stands until «Выбрать время». Telegram has no countdown capsule
+   and keeps its own offer, its two buttons rounded to capsules (founder,
+   2026-11-04). */
 .gate-b {
-  /* `accentInk`: what paints MEANING (glyphs, checks, the timer) — never a
+  /* `accentInk`: what paints MEANING (glyphs, checks) — never a
      surface. #C13352 holds on the near-black stage where #8B253B sinks. */
   --gate-ink: #c13352;
   --gate-panel: rgba(30, 24, 26, 0.74);
@@ -1147,66 +1147,16 @@ body {
   --gate-edge: rgba(0, 0, 0, 0.08);
 }
 
-.gate-b .ticket-scroll {
+.gate-b:not(.gate-offer) .ticket-scroll {
   gap: 0;
 }
-/* Room for the countdown capsule above the first line. */
-.gate-b.gate-offer .ticket-scroll,
-.gate-b.gate-cover-partner .ticket-scroll,
-.gate-b.gate-waiting .ticket-scroll {
-  padding-top: calc(14px + 36px + env(safe-area-inset-top) + var(--tg-content-top));
-}
 
-.gate-topbar {
-  position: absolute;
-  z-index: 5;
-  top: calc(6px + env(safe-area-inset-top) + var(--tg-content-top));
-  left: 16px;
-}
-.gate-countdown {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 36px;
-  padding: 0 12px;
+/* ── Offer: Telegram's own screen, buttons as capsules ─────────────────── */
+.gate-offer .btn-hero,
+.gate-offer .btn-secondary {
   border-radius: 999px;
-  background: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), inset 0 0 0 0.5px var(--gate-edge);
-  color: var(--text);
-}
-.gate-countdown-glyph {
-  width: 15px;
-  height: 15px;
-  color: var(--gate-ink);
-}
-.gate-countdown-clock {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
 }
 
-/* ── Offer ─────────────────────────────────────────────────────────────── */
-.gate-glow-portrait {
-  position: relative;
-  flex: none;
-  margin-top: 8px;
-}
-.gate-glow {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 124px;
-  height: 124px;
-  margin: -62px 0 0 -62px;
-  border-radius: 50%;
-  background: rgba(139, 37, 59, 0.18);
-  filter: blur(38px);
-  pointer-events: none;
-}
 .gate-portrait {
   position: relative;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
@@ -1226,17 +1176,6 @@ body {
   line-height: 1.4;
   text-wrap: balance;
 }
-.gate-b .gn-referral {
-  margin-top: 14px;
-}
-/* The ticket is the reader scene's object, not the screen's headline: at
-   iOS's proportion (~160 wide) the one action stays above the fold. `zoom`
-   rather than `transform: scale` so the layout box shrinks with it. */
-.gate-ticket {
-  margin-top: 6px;
-  zoom: 0.62;
-}
-
 .gate-bar {
   align-items: center;
   gap: 2px;
@@ -1279,38 +1218,12 @@ body {
   filter: brightness(0.75);
   cursor: default;
 }
-.gate-offer-pill {
-  min-width: 248px;
-  max-width: 100%;
-}
 .gate-pill-wide {
   width: 100%;
 }
 .gate-pill .ticket-famine-badge {
   position: static;
   margin: 0;
-}
-
-/* «Оплатить только свой» — the alternative reads as the alternative. */
-.gate-scope-line {
-  min-height: 44px;
-  margin-top: 6px;
-  padding: 0 12px;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.gate-scope-line:disabled {
-  opacity: 0.5;
-}
-.gate-scope-spacer {
-  display: block;
-  visibility: hidden;
 }
 
 /* ── Waiting / cover ───────────────────────────────────────────────────── */
@@ -1528,10 +1441,6 @@ body {
   display: grid;
   place-items: center;
   color: var(--gate-ink);
-}
-.gate-ticket-fill {
-  width: 22px;
-  height: 22px;
 }
 .gate-secured-title {
   flex: 1;

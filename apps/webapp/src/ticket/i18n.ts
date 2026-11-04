@@ -27,10 +27,16 @@ export interface TicketStrings {
    */
   heading: string;
   sub: string;
+  payBoth: string;
+  payBothWithTicket: string;
+  paySelf: string;
+  paySelfOnly: string;
   /** Famine single-ticket discount badge on the self-pay button. `{pct}`. */
   famineBadge: string;
   useSelf: string;
   useBoth: string;
+  usePartner: string;
+  payPartner: string;
   coverPartnerTitle: string;
   coverPartnerSub: string;
   /**
@@ -75,14 +81,6 @@ export interface TicketStrings {
   close: string;
   youFallback: string;
   matchFallback: string;
-  /** Pay button on the gate — `{amount}` is the Stars or dollar price. iOS `ticket.reader.pay`. */
-  payAmount: string;
-  /** The quiet line under the gate's one action: switch to paying only your own ticket. */
-  scopeOnlyMine: string;
-  /** The same line, switched back: pay for both tickets. */
-  scopeBoth: string;
-  /** Accessible caption of the countdown capsule (the capsule itself shows only the clock). */
-  deadlineLabel: string;
   coverAction: string;
   coverConfirm: string;
   coverCancel: string;
@@ -97,11 +95,17 @@ export interface TicketStrings {
 }
 
 const en: TicketStrings = {
-  heading: "Your date needs a ticket",
-  sub: "You both said yes. One Date Ticket per person, then you pick the time together.",
+  heading: "It's a match",
+  sub: "Grab your ticket and we'll pick a time.",
+  payBoth: "Pay for us both — {amount}",
+  payBothWithTicket: "Pay for both 🎟️ + {amount}",
+  paySelf: "Pay only mine — {amount}",
+  paySelfOnly: "Pay my ticket — {amount}",
   famineBadge: "−{pct}% for you",
-  useSelf: "Use ticket",
-  useBoth: "Use 2 tickets",
+  useSelf: "Use a ticket — for you 🎟️",
+  useBoth: "Use 2 tickets — you & your date 🎟️🎟️",
+  usePartner: "Use a ticket for your date 🎟️",
+  payPartner: "Pay for your date — {amount}",
   coverPartnerTitle: "Pay for the second ticket too?",
   coverPartnerSub: "{name} will find out it's already paid for.",
   premiumCovered: "Premium covers your ticket ✨",
@@ -122,10 +126,6 @@ const en: TicketStrings = {
   close: "Close",
   youFallback: "You",
   matchFallback: "Your match",
-  payAmount: "Pay {amount}",
-  scopeOnlyMine: "Pay only for mine",
-  scopeBoth: "Pay for both tickets",
-  deadlineLabel: "Time left:",
   coverAction: "I'll cover it",
   coverConfirm: "Confirm",
   coverCancel: "Cancel",
@@ -139,11 +139,17 @@ const en: TicketStrings = {
 };
 
 const ru: TicketStrings = {
-  heading: "Свиданию нужен билет",
-  sub: "Вы оба сказали «да». По одному билету с каждого — и переходим ко времени.",
+  heading: "Это мэтч",
+  sub: "Возьми билет — и выберем время.",
+  payBoth: "Оплатить за нас обоих — {amount}",
+  payBothWithTicket: "Оплатить за двоих 🎟️ + {amount}",
+  paySelf: "Оплатить только свой — {amount}",
+  paySelfOnly: "Оплатить свой билет — {amount}",
   famineBadge: "−{pct}% для тебя",
-  useSelf: "Использовать билет",
-  useBoth: "Использовать 2 билета",
+  useSelf: "Использовать билет — за себя 🎟️",
+  useBoth: "Использовать 2 билета — ты и пара 🎟️🎟️",
+  usePartner: "Использовать билет за пару 🎟️",
+  payPartner: "Оплатить за пару — {amount}",
   coverPartnerTitle: "Оплатить и второй билет?",
   coverPartnerSub: "{name} узнает, что он уже оплачен.",
   premiumCovered: "Твой билет покрыт Premium ✨",
@@ -164,10 +170,6 @@ const ru: TicketStrings = {
   close: "Закрыть",
   youFallback: "Ты",
   matchFallback: "Твой мэтч",
-  payAmount: "Оплатить · {amount}",
-  scopeOnlyMine: "Оплатить только свой",
-  scopeBoth: "Оплатить оба билета",
-  deadlineLabel: "Осталось:",
   coverAction: "Беру на себя",
   coverConfirm: "Подтвердить",
   coverCancel: "Отмена",
@@ -181,11 +183,17 @@ const ru: TicketStrings = {
 };
 
 const uk: TicketStrings = {
-  heading: "Побаченню потрібен квиток",
-  sub: "Ви обоє сказали «так». По одному квитку з кожного — і переходимо до часу.",
+  heading: "Це метч",
+  sub: "Візьми квиток — і оберемо час.",
+  payBoth: "Сплатити за нас обох — {amount}",
+  payBothWithTicket: "Сплатити за двох 🎟️ + {amount}",
+  paySelf: "Сплатити лише свій — {amount}",
+  paySelfOnly: "Сплатити свій квиток — {amount}",
   famineBadge: "−{pct}% для тебе",
-  useSelf: "Використати квиток",
-  useBoth: "Використати 2 квитки",
+  useSelf: "Використати квиток — за себе 🎟️",
+  useBoth: "Використати 2 квитки — ти і пара 🎟️🎟️",
+  usePartner: "Використати квиток за пару 🎟️",
+  payPartner: "Сплатити за пару — {amount}",
   coverPartnerTitle: "Оплатити і другий квиток?",
   coverPartnerSub: "{name} дізнається, що він уже оплачений.",
   premiumCovered: "Твій квиток покритий Premium ✨",
@@ -206,10 +214,6 @@ const uk: TicketStrings = {
   close: "Закрити",
   youFallback: "Ти",
   matchFallback: "Твій метч",
-  payAmount: "Оплатити · {amount}",
-  scopeOnlyMine: "Сплатити лише свій",
-  scopeBoth: "Сплатити обидва квитки",
-  deadlineLabel: "Залишилося:",
   coverAction: "Беру на себе",
   coverConfirm: "Підтвердити",
   coverCancel: "Скасувати",
@@ -223,11 +227,17 @@ const uk: TicketStrings = {
 };
 
 const de: TicketStrings = {
-  heading: "Euer Date braucht ein Ticket",
-  sub: "Ihr habt beide Ja gesagt. Ein Date-Ticket pro Person, dann wählt ihr die Zeit.",
+  heading: "Es ist ein Match",
+  sub: "Hol dir dein Ticket — dann wählen wir die Zeit.",
+  payBoth: "Für uns beide zahlen — {amount}",
+  payBothWithTicket: "Für beide zahlen 🎟️ + {amount}",
+  paySelf: "Nur meins zahlen — {amount}",
+  paySelfOnly: "Mein Ticket zahlen — {amount}",
   famineBadge: "−{pct}% für dich",
-  useSelf: "Ticket einlösen",
-  useBoth: "2 Tickets einlösen",
+  useSelf: "Ticket nutzen — für dich 🎟️",
+  useBoth: "2 Tickets nutzen — du & dein Date 🎟️🎟️",
+  usePartner: "Ticket für dein Date nutzen 🎟️",
+  payPartner: "Für dein Date zahlen — {amount}",
   coverPartnerTitle: "Auch das zweite Ticket bezahlen?",
   coverPartnerSub: "{name} erfährt, dass es schon bezahlt ist.",
   premiumCovered: "Premium deckt dein Ticket ✨",
@@ -248,10 +258,6 @@ const de: TicketStrings = {
   close: "Schließen",
   youFallback: "Du",
   matchFallback: "Dein Match",
-  payAmount: "{amount} zahlen",
-  scopeOnlyMine: "Nur meins bezahlen",
-  scopeBoth: "Beide Tickets bezahlen",
-  deadlineLabel: "Verbleibend:",
   coverAction: "Ich übernehme das",
   coverConfirm: "Bestätigen",
   coverCancel: "Abbrechen",
@@ -265,11 +271,17 @@ const de: TicketStrings = {
 };
 
 const pl: TicketStrings = {
-  heading: "Wasza randka potrzebuje biletu",
-  sub: "Oboje powiedzieliście tak. Po jednym bilecie na osobę — potem wybieracie czas.",
+  heading: "To match",
+  sub: "Weź bilet — i wybierzemy termin.",
+  payBoth: "Zapłać za nas oboje — {amount}",
+  payBothWithTicket: "Zapłać za oboje 🎟️ + {amount}",
+  paySelf: "Zapłać tylko za siebie — {amount}",
+  paySelfOnly: "Zapłać za swój bilet — {amount}",
   famineBadge: "−{pct}% dla Ciebie",
-  useSelf: "Użyj biletu",
-  useBoth: "Użyj 2 biletów",
+  useSelf: "Użyj biletu — za siebie 🎟️",
+  useBoth: "Użyj 2 biletów — Ty i Twoja randka 🎟️🎟️",
+  usePartner: "Użyj biletu za swoją randkę 🎟️",
+  payPartner: "Zapłać za swoją randkę — {amount}",
   coverPartnerTitle: "Opłacić też drugi bilet?",
   coverPartnerSub: "{name} dowie się, że jest już opłacony.",
   premiumCovered: "Premium pokrywa twój bilet ✨",
@@ -290,10 +302,6 @@ const pl: TicketStrings = {
   close: "Zamknij",
   youFallback: "Ty",
   matchFallback: "Twoje dopasowanie",
-  payAmount: "Zapłać {amount}",
-  scopeOnlyMine: "Zapłać tylko za swój",
-  scopeBoth: "Zapłać za oba bilety",
-  deadlineLabel: "Pozostało:",
   coverAction: "Biorę na siebie",
   coverConfirm: "Potwierdź",
   coverCancel: "Anuluj",

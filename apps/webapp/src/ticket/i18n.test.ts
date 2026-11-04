@@ -46,14 +46,15 @@ describe("Date Ticket i18n", () => {
     }
   });
 
-  it("carries the native gate copy (iOS variant B, 2026-10-30)", () => {
-    expect(strings("ru").heading).toBe("Свиданию нужен билет");
+  it("carries the native cover and result copy (iOS variant B, 2026-10-30)", () => {
+    // The offer keeps its own Telegram copy: the founder held the native offer
+    // back from Telegram on 2026-11-04.
+    expect(strings("ru").heading).toBe("Это мэтч");
     expect(strings("ru").successTitle).toBe("Оба билета на месте");
     expect(strings("ru").coverAction).toBe("Беру на себя");
-    expect(strings("en").scopeOnlyMine).toBe("Pay only for mine");
     for (const lang of languages) {
       const s = strings(lang);
-      expect(s.payAmount).toContain("{amount}");
+      for (const t of [s.payBoth, s.payBothWithTicket, s.paySelf, s.paySelfOnly, s.payPartner]) expect(t).toContain("{amount}");
       expect(s.coverPartnerSub).toContain("{name}");
       for (const w of [s.walletOne, s.walletFew, s.walletMany, s.walletOther]) expect(w).toContain("{n}");
     }

@@ -13,6 +13,21 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-04 — Telegram ticket gate and «Чего хочется?» after iOS variant B, bot confirm labels (webapp build + bot restart; no migration, no env, no flag).**
+
+1. Code: decision `docs/architecture/decisions/2026-11-04-telegram-drop-flow-b.md` (with the founder's review, item 5).
+   `ticket.html`: offer as before with capsule buttons; no countdown; cover panel with «Беру на себя» → «Подтвердить» + «✕»;
+   result «Оба билета на месте» waits for «Выбрать время». `location.html`: «Чего хочется?» on one screen.
+   Shared i18n: «Подтвердить — иду» / «Точно не иду», decline warning dropped, «⏳ Ответить за …».
+2. Ship: the usual webapp build and bot restart (runbook); nothing on the database or env.
+3. Rollback: the previous release directory + restart; no data to undo.
+
+**Check after deploy:** open a match's ticket Mini App as a male with 2 tickets: «Это мэтч», two capsule buttons, no
+timer. Spend one ticket → the bottom panel «Оплатить и второй билет?»; «Беру на себя» → «Подтвердить» + «✕», ✕ folds it,
+6 s idle folds it; «Подтвердить» → «Оба билета на месте» stays until «Выбрать время». On the venue step the five cards
+fit the screen, «Дальше» rises after a pick. In the bot, answer «да» to a pitch → the card button reads «Подтвердить — иду».
+Demo: identical (the gate settles on the tap). **iOS impact:** none — client copy and layout only.
+
 **Deployed 2026-11-03 (was PENDING; production `d49a9241`, 09:56–09:59 UTC) 2026-11-03 — screenshots/ideas audit fixes and per-user preview (branch `audit/screenshots-backend`, not merged; no migration).**
 
 1. Code: the audit's fixes and the founder's decisions of 2026-11-03 (report
