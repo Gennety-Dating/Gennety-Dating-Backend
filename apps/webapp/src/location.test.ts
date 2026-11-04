@@ -59,6 +59,12 @@ class FakeClassList {
   contains(name: string): boolean {
     return this.names.has(name);
   }
+  toggle(name: string, force?: boolean): boolean {
+    const on = force ?? !this.names.has(name);
+    if (on) this.names.add(name);
+    else this.names.delete(name);
+    return on;
+  }
 }
 
 class FakeElement {
@@ -181,6 +187,11 @@ class FakeDocument {
       "vibe-interpret",
       "vibe-confirm",
       "vibe-error",
+      "vibe-card",
+      "vibe-dock",
+      "vibe-open",
+      "vibe-input",
+      "vibe-scrim",
     ]) {
       this.elements.set(id, new FakeElement(id));
     }
@@ -533,6 +544,28 @@ describe("Venue photo chooser submits without review", () => {
     document.getElementById("vibe-interpret")!.click();
     await flushPromises();
     expect(confirmVenueIntentTmaMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps «Дальше» back until there is a choice, and opens the field over the row (iOS 2026-10-30)", async () => {
+    const venueState = { ...savedVenueState(), intent: { ...intentDraft(), rawText: "" } };
+    const { document } = await loadLocationApp({ venueState });
+    await flushPromises();
+    const stage = document.getElementById("vibe-stage")!;
+    expect(stage.classList.contains("has-choice")).toBe(false);
+    document.getElementById("vibe-scenes")!.children[1]!.click();
+    expect(stage.classList.contains("has-choice")).toBe(true);
+    expect(stage.classList.contains("has-text")).toBe(false);
+    document.getElementById("vibe-open")!.click();
+    expect(stage.classList.contains("text-open")).toBe(true);
+    expect(document.getElementById("vibe-input")!.hidden).toBe(false);
+    expect(document.getElementById("vibe-scrim")!.hidden).toBe(false);
+    document.getElementById("vibe-text")!.value = "по-тихому";
+    document.getElementById("vibe-text")!.fire("input");
+    expect(stage.classList.contains("has-text")).toBe(true);
+    expect(document.getElementById("vibe-own")!.textContent).toBe("по-тихому");
+    document.getElementById("vibe-scrim")!.click();
+    expect(stage.classList.contains("text-open")).toBe(false);
+    expect(document.getElementById("vibe-input")!.hidden).toBe(true);
   });
 
   it("does not confirm on interpretation failure or empty input", async () => {

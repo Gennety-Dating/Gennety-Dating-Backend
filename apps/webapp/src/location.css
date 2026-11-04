@@ -491,15 +491,34 @@ button.cta .cta-text.swap {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  overflow-y: auto;
+  /* The whole step on one screen (iOS 2026-10-30, «приходится самому
+     прокручивать вниз и искать кнопку»): the cards share the height left
+     between the heading and the bottom row. Scrolling stays only as the
+     floor for a screen where even the smallest cards do not fit. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--text);
   background: var(--bg);
-  padding: max(12px, calc(env(safe-area-inset-top) + var(--tg-content-top))) 0
-    max(20px, env(safe-area-inset-bottom));
+  --vibe-row: 50px;
+  --vibe-dock-top: 14px;
+  --vibe-dock-bottom: calc(12px + env(safe-area-inset-bottom) + var(--tg-content-bottom, 0px));
+  padding-top: max(12px, calc(env(safe-area-inset-top) + var(--tg-content-top)));
 }
 .vibe-stage[hidden] { display: none; }
-.vibe-card { max-width: 520px; margin: 0 auto; }
-.vibe-head { padding: 12px 20px; }
+.vibe-card {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  /* Room for the bottom row: it floats over the foot of the card. */
+  padding-bottom: calc(var(--vibe-row) + var(--vibe-dock-top) + var(--vibe-dock-bottom));
+  transition: filter 0.42s cubic-bezier(0.3, 1.1, 0.5, 1);
+}
+.vibe-head { flex: none; padding: 12px 20px; }
 .vibe-card h1 {
   font-family: "Gennety Display", system-ui, sans-serif;
   margin: 0 0 8px;
@@ -509,13 +528,32 @@ button.cta .cta-text.swap {
   letter-spacing: -0.02em;
 }
 .vibe-help { margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.4; }
-.vibe-body { padding: 8px 20px 20px; }
-.vibe-scenes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; container-type: inline-size; }
+.vibe-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.vibe-grid-wrap::-webkit-scrollbar { display: none; }
+/* One height for all five scenes, the wide «Удиви меня» included: the rows
+   split the free height, never below 108 (the title and its mark stop
+   fitting) and never above 230 (a 3:4 frame has nothing more to show). */
+.vibe-scenes {
+  --vibe-rows: 3;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: clamp(108px, calc((100% - (var(--vibe-rows) - 1) * 12px) / var(--vibe-rows)), 230px);
+  gap: 12px;
+  height: 100%;
+  min-height: calc(var(--vibe-rows) * 108px + (var(--vibe-rows) - 1) * 12px);
+  align-content: start;
+}
 .venue-scene {
   position: relative;
   display: block;
   width: 100%;
-  height: max(176px, calc((100cqw - 12px) * 0.6));
+  height: 100%;
   padding: 0;
   border: 0;
   border-radius: 26px;
@@ -552,33 +590,161 @@ button.cta .cta-text.swap {
 .venue-scene-mark { position: absolute; bottom: 14px; right: 14px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--accent); opacity: 0; }
 .venue-scene[aria-pressed="true"] .venue-scene-mark { opacity: 1; }
 .venue-scene:focus-visible { outline: 3px solid var(--accent-bright); outline-offset: 3px; }
-.vibe-own { display: block; margin: 24px 0 18px; font-size: 16px; font-weight: 700; }
-.vibe-input { margin: 0 0 18px; }
+/* ── Bottom row: «‹», the field, «Дальше» (iOS `textDock`) ───────────── */
+.vibe-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: var(--vibe-dock-top) 20px var(--vibe-dock-bottom);
+}
+/* The frosting under the row: blur that grows from the top edge down, no hard
+   cut across the cards — only once there is something to say down here. */
+.vibe-dock::before {
+  content: "";
+  position: absolute;
+  inset: -24px -100vw 0;
+  z-index: -1;
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  backdrop-filter: blur(22px) saturate(1.3);
+  background: color-mix(in srgb, var(--bg) 42%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.6) 30%, #000 60%);
+  mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.6) 30%, #000 60%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.vibe-stage.has-choice .vibe-dock::before,
+.vibe-stage.text-open .vibe-dock::before { opacity: 1; }
+
+.vibe-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--vibe-row);
+}
+.vibe-round,
+.vibe-opener {
+  flex: none;
+  height: var(--vibe-row);
+  border: 0;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--glass-bg-strong, rgba(255, 255, 255, 0.1));
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s ease, width 0.42s cubic-bezier(0.3, 1.1, 0.5, 1), flex-basis 0.42s cubic-bezier(0.3, 1.1, 0.5, 1);
+}
+.vibe-round:active, .vibe-opener:active { transform: scale(0.95); }
+.vibe-round {
+  width: var(--vibe-row);
+  display: grid;
+  place-items: center;
+}
+/* The field at rest: one line with the hint (or the start of the words). */
+.vibe-opener {
+  flex: 1 1 auto;
+  min-width: var(--vibe-row);
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  overflow: hidden;
+}
+.vibe-opener-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 16px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vibe-opener-glyph { display: none; flex: none; }
+/* Beside «Дальше» the field folds into a circle; the glyph turns burgundy
+   once words are in it. */
+.vibe-stage.has-choice .vibe-opener {
+  flex: 0 0 var(--vibe-row);
+  width: var(--vibe-row);
+  padding: 0;
+  justify-content: center;
+}
+.vibe-stage.has-choice .vibe-opener-text { display: none; }
+.vibe-stage.has-choice .vibe-opener-glyph { display: block; }
+.vibe-stage.has-text .vibe-opener-glyph { color: #c13352; }
+
+.vibe-next {
+  flex: 1;
+  min-width: 0;
+}
+/* Specific enough to beat the page's shared `.cta` display. */
+.vibe-stage:not(.has-choice) .vibe-next { display: none; }
+.vibe-stage.has-choice .vibe-next {
+  display: flex;
+  animation: vibe-rise 0.42s cubic-bezier(0.3, 1.25, 0.5, 1) both;
+}
+@keyframes vibe-rise {
+  from { opacity: 0; transform: translateY(40px); filter: blur(8px); }
+}
+.vibe-stage .cta { margin-top: 0; min-height: var(--vibe-row); height: var(--vibe-row); border-radius: 999px; color: white; background: linear-gradient(#a34c60, #8b253b 55%, #711d30); font-size: 17px; }
+.vibe-stage .cta.saving { opacity: 0.7; }
+
+/* The field open: over the row, above the keyboard; the cards behind it are
+   blurred and stand still (their height is pinned in location.ts). */
+.vibe-stage.text-open .vibe-card { filter: blur(8px); pointer-events: none; }
+.vibe-stage.text-open .vibe-round,
+.vibe-stage.text-open .vibe-opener { display: none; }
+.vibe-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.3);
+  animation: vibe-fade 0.3s ease both;
+}
+.vibe-scrim[hidden] { display: none; }
+@keyframes vibe-fade { from { opacity: 0; } }
+.vibe-input { animation: vibe-field 0.42s cubic-bezier(0.3, 1.1, 0.5, 1) both; }
+.vibe-input[hidden] { display: none; }
+@keyframes vibe-field { from { opacity: 0; transform: translateY(24px); } }
 #vibe-text {
   box-sizing: border-box;
+  display: block;
   width: 100%;
-  min-height: 96px;
-  padding: 12px;
-  resize: vertical;
+  height: 120px;
+  padding: 14px 16px;
+  resize: none;
   border: 0;
-  border-radius: 18px;
+  border-radius: 22px;
   color: var(--text);
   caret-color: var(--accent-bright);
-  background: var(--glass-bg);
+  background: var(--glass-bg-strong, rgba(255, 255, 255, 0.1));
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   box-shadow: inset 0 1px 0 var(--glass-highlight);
   font: inherit;
   font-size: 17px;
   outline: none;
 }
-#vibe-text:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
-.vibe-stage .cta { margin-top: 0; min-height: 50px; border-radius: 999px; color: white; background: linear-gradient(#a34c60, #8b253b 55%, #711d30); font-size: 17px; }
-.vibe-stage .cta.saving { opacity: 0.7; }
-.vibe-back { display: block; margin: 18px auto 0; padding: 8px 20px; border: 0; background: none; color: var(--accent-bright); font: inherit; font-size: 17px; cursor: pointer; min-height: 44px; }
-.vibe-error { color: var(--danger, #ef667c); font-size: 14px; }
+.vibe-error { margin: 0; color: var(--danger, #ef667c); font-size: 14px; }
 .vibe-error:empty { display: none; }
-.vibe-relax { margin-bottom: 18px; font-size: 15px; color: var(--text-muted); }
+.vibe-relax { font-size: 15px; color: var(--text-muted); }
+.vibe-relax p { margin: 0 0 8px; }
 .vibe-relax[hidden], #vibe-commute[hidden] { display: none; }
 .vibe-chip { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 999px; color: var(--text); background: var(--fill-strong); font: inherit; cursor: pointer; }
 .vibe-chip[aria-pressed="true"] { background: var(--accent); color: white; }
+@media (prefers-reduced-motion: reduce) {
+  .vibe-stage.has-choice .vibe-next, .vibe-input, .vibe-scrim { animation-duration: 0.01s; }
+  .vibe-card { transition: none; }
+}
 
 .vibe-scenes:has([aria-pressed="true"]) .venue-scene[aria-pressed="false"] { opacity: 0.5; }

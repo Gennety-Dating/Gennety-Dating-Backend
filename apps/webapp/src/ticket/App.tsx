@@ -11,7 +11,7 @@ import {
   type TicketState,
   type TicketScope,
 } from "../api.js";
-import { pickLang, strings, fill, type TicketStrings } from "./i18n.js";
+import { pickLang, strings, fill, walletLine, type TicketStrings } from "./i18n.js";
 import {
   deriveScreen,
   deriveOfferButtons,
@@ -28,11 +28,16 @@ import { createResponseEpoch } from "../request-epoch.js";
 import { createIntervalPoller } from "../poller.js";
 import { Ticket3D } from "./Ticket3D.js";
 import { useActionBarSpace } from "./action-bar.js";
-import { Confetti } from "./Confetti.js";
-import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
 import { Avatar } from "./Avatar.js";
-import { HeartMark } from "./marks.js";
+import {
+  CountdownBadge,
+  CoverDock,
+  GlowPortrait,
+  SecuredRow,
+  TicketFillGlyph,
+  TicketGlyph,
+} from "./gate-parts.js";
 import { returnParams } from "../return-to.js";
 import { ReferralChip } from "../referral-hint-react.js";
 
@@ -70,6 +75,19 @@ function haptic(type: "light" | "success" | "error"): void {
   else h.notificationOccurred(type);
 }
 
+/** The cover panel's touch feedback — every action answers under the finger. */
+function dockHaptic(kind: "press" | "select" | "refused"): void {
+  const h = app?.HapticFeedback;
+  if (!h) return;
+  if (kind === "press") h.impactOccurred("light");
+  else if (kind === "select") h.selectionChanged();
+  else h.notificationOccurred("error");
+}
+
+function openTicketStore(): void {
+  location.href = `tickets.html?${returnParams("ticket-gate", { match: matchId, lang })}`;
+}
+
 function goToScheduling(): void {
   // Same-origin webapp bundle — reopen the Calendar Mini App in this WebView.
   location.href = `index.html?match=${encodeURIComponent(matchId)}&lang=${lang}`;
@@ -91,20 +109,13 @@ function preloadImage(url: string): Promise<void> {
 }
 
 function screenPhotoSrcs(state: TicketState): string[] {
-  const mine = ticketPhotoSrc(state, "self");
   const partner = ticketPhotoSrc(state, "partner");
   const sc = deriveScreen(state);
-  const urls: Array<string | null> = [];
-  if (sc === "partner-paid") urls.push(partner); // his photo on her reveal card
-  else if (sc === "success" && state.iCoveredPartner) urls.push(partner); // her photo
-  else if (sc === "offer" && state.myGender === "male") {
-    urls.push(mine, partner); // pay-for-both button avatars
-  } else if (sc === "cover-partner") {
-    // Her face only — the cover screen shows the person he'd be covering, not
-    // the pair. (It used to preload BOTH photos here and render neither, so the
-    // spinner waited on images the screen never displayed.)
-    urls.push(partner);
-  }
+  // Only the partner's face is ever drawn on the gate now: the offer's
+  // portrait, the cover panel, the result's second row, her reveal card.
+  // Preloading a photo the screen never shows only keeps the spinner up.
+  const urls: Array<string | null> =
+    sc === "partner-paid" || sc === "offer" || sc === "cover-partner" || sc === "success" ? [partner] : [];
   return urls.filter((u): u is string => Boolean(u));
 }
 
@@ -122,10 +133,12 @@ async function preloadScreenPhotos(state: TicketState): Promise<void> {
 export function App(): ReactElement {
   const s = strings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
-  // "I'll let them grab it" — session-only (see ScreenOptions in ticket-state).
-  // It survives the 4s poll because React state isn't remounted by it, and it
-  // is reversible from the waiting screen.
-  const [coverDeferred, setCoverDeferred] = useState(false);
+  // Which offer the one action pays for (iOS variant B, 2026-10-30): "both" by
+  // default, and the quiet line under the action switches to "only mine". The
+  // two equal buttons it replaces read as two equal answers.
+  const [scope, setScope] = useState<"both" | "self">("both");
+  // Bumped on every refused spend so the cover panel folds its question back.
+  const [spendFailed, setSpendFailed] = useState(0);
   const myName = app?.initDataUnsafe?.user?.first_name ?? s.youFallback;
   // The action bar floats over the scroll; this measures it so the scroll
   // reserves exactly its height at the end (see action-bar.ts).
@@ -169,8 +182,7 @@ export function App(): ReactElement {
 
   // Poll while waiting on the partner so partner-payment / refund transitions
   // land without the user reopening the Mini App.
-  const screen: TicketScreen | null =
-    phase.kind === "view" ? deriveScreen(phase.state, { coverDeferred }) : null;
+  const screen: TicketScreen | null = phase.kind === "view" ? deriveScreen(phase.state) : null;
   useEffect(() => {
     // Poll while waiting on the partner (also on the male's "cover-partner"
     // screen, where the partner may pay herself in the meantime).
@@ -278,6 +290,7 @@ export function App(): ReactElement {
         applyWrite(next);
       } catch (err) {
         haptic("error");
+        setSpendFailed((n) => n + 1);
         app?.showAlert(errorText(err, s));
         // A refused spend usually means the screen is stale (the gate expired,
         // or the partner settled first). Re-read so the user lands on the
@@ -359,91 +372,48 @@ export function App(): ReactElement {
     return <div className="ticket-page ticket-center"><p className="ticket-error">{phase.message}</p></div>;
   }
   const state = phase.state;
-  const sc = deriveScreen(state, { coverDeferred });
-  const myPhotoSrc = ticketPhotoSrc(state, "self");
+  const sc = deriveScreen(state);
   const partnerPhotoSrc = ticketPhotoSrc(state, "partner");
-  // He deferred the cover offer but nothing is settled on her side yet — keep a
-  // quiet way back so "let them grab it" is a choice, not a one-way door.
-  const canReconsiderCover =
-    sc === "waiting" && coverDeferred && state.myGender === "male" && !state.partnerPaid;
+  const partnerName = state.partnerName ?? s.matchFallback;
+
+  // Offer: one action for the chosen scope; the alternative lives in the quiet
+  // line under it, and only when there is one (a male who can still cover).
+  const offerButtons = sc === "offer" ? deriveOfferButtons(state) : [];
+  const heroButton = offerButtons.find((b) => b.primary) ?? offerButtons[0] ?? null;
+  const altButton = offerButtons.find((b) => !b.primary) ?? null;
+  const offerButton = scope === "self" && altButton ? altButton : heroButton;
+  const coverButton = sc === "cover-partner" ? (deriveCoverPartnerButtons(state)[0] ?? null) : null;
+  // The window only means something while a ticket is still owed.
+  const showsDeadline =
+    Boolean(state.expiresAt) && (sc === "offer" || sc === "cover-partner" || sc === "waiting");
+  const premiumPlate =
+    state.myPremiumActive && state.iPaid && (sc === "waiting" || sc === "cover-partner");
 
   return (
-    <div className="ticket-page has-bar">
-      {sc === "success" && <Confetti />}
+    <div className={`ticket-page has-bar gate-b gate-${sc}`}>
+      {showsDeadline && state.expiresAt ? (
+        <div className="gate-topbar">
+          <CountdownBadge expiresAt={state.expiresAt} label={s.deadlineLabel} />
+        </div>
+      ) : null}
+
       <div className="ticket-scroll">
         {sc === "partner-paid" ? (
           <PartnerPaidCard
-            partnerName={state.partnerName ?? s.matchFallback}
+            partnerName={partnerName}
             partnerPhotoUrl={partnerPhotoSrc}
             strings={s}
           />
-        ) : (
+        ) : sc === "offer" ? (
           <>
-            <header className="ticket-header">
-              <h1>{headerTitle(sc, state, s)}</h1>
-              {headerSub(sc, state, s) ? <p>{headerSub(sc, state, s)}</p> : null}
-              {/* The partner's remaining window belongs to the sentence above
-                  it, not to the bottom of the scroll where it used to live —
-                  see PartialTimer for why that position was both unreadable
-                  and unexplained. */}
-              {(sc === "waiting" || sc === "cover-partner") && (
-                <PartialTimer expiresAt={state.expiresAt} strings={s} />
-              )}
+            <GlowPortrait src={partnerPhotoSrc} name={state.partnerName} size={84} />
+            <header className="ticket-header gate-header">
+              <h1>{s.heading}</h1>
+              <p>{s.sub}</p>
             </header>
-
-            {/* Premium closed this slot, and nothing else on the screen says
-                so — "waiting on them" with no account of why YOUR half is done
-                reads as the gate having skipped you. Since 2026-10-08 only the
-                grandfathered ticket cover closes a slot, and `myPremiumActive`
-                is the server's word for exactly that cover (a subscription
-                alone reads false). Drawn from the live cover rather than from
-                the slot, so an ended cover quietly stops claiming it instead
-                of asserting something stale. */}
-            {state.myPremiumActive && state.iPaid && (sc === "waiting" || sc === "cover-partner") && (
-              <p className="tkt-premium-note">{s.premiumCovered}</p>
-            )}
-
-            {sc === "success" && state.iCoveredPartner && (
-              <div className="tkt-covered-hero">
-                <Avatar
-                  src={partnerPhotoSrc}
-                  name={state.partnerName}
-                  size={132}
-                  badge={<HeartMark />}
-                  className="tkt-avatar-hero"
-                />
-              </div>
-            )}
-
-            {/* The serial is seeded from the match, so this pair's ticket is
-                genuinely their own rather than one shared by every pair whose
-                names collide. The wallet count rides on the stub, and only on
-                the two screens where it is still actionable — after the gate
-                settles, how many tickets are left is no longer this screen's
-                business. */}
-            <Ticket3D
-              myName={myName}
-              partnerName={state.partnerName}
-              balance={sc === "offer" || sc === "cover-partner" ? state.myBalance : null}
-              strings={s}
-            />
-
-            {/* No Premium upsell here. The "your ticket is free with Premium"
-                row that used to sit at this spot was deleted on 2026-10-08:
-                Premium no longer covers Date Tickets ("за билет на свидание
-                платят всегда"), so the line would be false for every new
-                subscriber. */}
-
-            {/* Referral cross-promo: invite a friend, earn a Date Ticket.
-                Shown only while the wallet is genuinely empty and only at the
-                offer step — by "cover-partner" he already secured his own
-                ticket, so the pitch no longer applies. It lives here (scroll
-                content), never in the sticky action bar, so it can't compete
-                with the pay/use buttons below.
-
-                It never sits next to a Premium pitch: the referral program
-                pays in tickets only and is never part of one. */}
-            {sc === "offer" && state.myBalance === 0 && state.referralEnabled && (
+            {/* The free path to a ticket sits in the content, never among the
+                pay actions (the chip rule iOS `ReferralChip` follows too). */}
+            {state.myBalance === 0 && state.referralEnabled && (
               <ReferralChip
                 lang={lang}
                 onTap={() => {
@@ -452,185 +422,139 @@ export function App(): ReactElement {
                 }}
               />
             )}
-
-            {/* The cover offer is a distinct block UNDER his own "ticket
-                secured" result, not the headline. Her face is the whole point
-                of the gesture, so it leads the card. */}
-            {sc === "cover-partner" && (
-              <section className="tkt-cover-card">
-                <Avatar src={partnerPhotoSrc} name={state.partnerName} size={64} />
-                <div className="tkt-cover-copy">
-                  <h2>{s.coverPartnerTitle}</h2>
-                  <p>{fill(s.coverPartnerSub, { name: state.partnerName ?? s.matchFallback })}</p>
-                  {/* Stated here rather than left to be discovered on the
-                      button: this is the one screen where a subscriber could
-                      reasonably assume covering her is included too, and it is
-                      the screen where he decides. */}
-                  {state.myPremiumActive && (
-                    <p className="tkt-cover-premium">
-                      {fill(s.premiumCoverNotIncluded, {
-                        name: state.partnerName ?? s.matchFallback,
-                      })}
-                    </p>
-                  )}
-                </div>
-              </section>
-            )}
+            {/* No wallet count on the stub: whether the tickets suffice is said
+                by the action itself — «Использовать» or a price (iOS 2026-10-01). */}
+            <div className="gate-ticket">
+              <Ticket3D myName={myName} partnerName={state.partnerName} balance={null} strings={s} />
+            </div>
+          </>
+        ) : sc === "cover-partner" || sc === "waiting" ? (
+          <div className="gate-center">
+            <TicketGlyph size={64} />
+            <header className="ticket-header gate-header gate-header-tight">
+              <h1>{s.waitingTitle}</h1>
+              <p>{s.waitingSub}</p>
+            </header>
+            {premiumPlate && <p className="gate-premium-plate">{s.premiumCovered}</p>}
+          </div>
+        ) : sc === "success" ? (
+          // The result does not fly past: it stands until «Выбрать время» and
+          // says whose ticket is in (founder's pick 2026-10-30).
+          <div className="gate-center gate-secured">
+            <h1 className="gate-secured-heading">{s.successTitle}</h1>
+            <div className="gate-secured-rows">
+              <SecuredRow lead={<TicketFillGlyph />} title={s.securedMine} />
+              <SecuredRow
+                lead={<Avatar src={partnerPhotoSrc} name={state.partnerName} size={36} className="gate-portrait" />}
+                title={partnerName}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <header className="ticket-header">
+              <h1>{s.closedTitle}</h1>
+              <p>{s.closedSub}</p>
+            </header>
+            <Ticket3D myName={myName} partnerName={state.partnerName} balance={null} strings={s} />
           </>
         )}
       </div>
 
-      <footer className="action-bar" ref={barRef}>
-        {sc === "offer" &&
-          deriveOfferButtons(state).map((b) => {
-            const discounted =
-              !state.starsEnabled &&
-              b.action === "pay" &&
-              b.scope === "self" &&
-              state.selfDiscountPct > 0;
-            return (
+      {sc === "cover-partner" && coverButton ? (
+        <CoverDock
+          partnerSrc={partnerPhotoSrc}
+          partnerName={state.partnerName}
+          title={s.coverPartnerTitle}
+          body={fill(s.coverPartnerSub, { name: partnerName })}
+          premiumNote={
+            state.myPremiumActive ? fill(s.premiumCoverNotIncluded, { name: partnerName }) : null
+          }
+          actionLabel={s.coverAction}
+          confirmLabel={s.coverConfirm}
+          cancelLabel={s.coverCancel}
+          confirmHint={s.coverConfirmHint}
+          asks={coverButton.action === "use"}
+          working={paying}
+          failed={spendFailed}
+          onSpend={() => onOfferButton(state, coverButton)}
+          haptic={dockHaptic}
+          footer={
+            <button type="button" className="gate-wallet-line" onClick={() => {
+              dockHaptic("press");
+              openTicketStore();
+            }}>
+              <span>{walletLine(lang, state.myBalance)}</span>
+              <span className="gate-wallet-topup">{s.walletTopUp}</span>
+            </button>
+          }
+        />
+      ) : null}
+
+      {sc !== "cover-partner" && sc !== "waiting" && (
+        <footer className="action-bar gate-bar" ref={barRef}>
+          {sc === "offer" && offerButton && (
+            <>
               <button
-                key={`${b.action}:${b.scope}`}
+                key={`${offerButton.action}:${offerButton.scope}`}
                 type="button"
-                className={`${b.primary ? "btn-hero" : "btn-secondary"}${discounted ? " btn-famine" : ""}${b.scope === "both" ? " btn-with-avatars" : ""}`}
+                className={`gate-pill gate-offer-pill${isFamine(offerButton, state) ? " btn-famine" : ""}`}
                 disabled={paying}
-                onClick={() => onOfferButton(state, b)}
+                onClick={() => onOfferButton(state, offerButton)}
               >
-                {b.scope === "both" && (
-                  <span className="btn-avatars" aria-hidden="true">
-                    <Avatar src={myPhotoSrc} name={myName} size={44} />
-                    <Avatar
-                      src={partnerPhotoSrc}
-                      name={state.partnerName}
-                      size={44}
-                      className="tkt-avatar-overlap"
-                    />
-                  </span>
-                )}
-                {discounted && (
+                {isFamine(offerButton, state) && (
                   <span className="ticket-famine-badge">
                     {fill(s.famineBadge, { pct: String(state.selfDiscountPct) })}
                   </span>
                 )}
-                {offerLabel(b, state, s)}
+                {offerLabel(offerButton, state, s)}
               </button>
-            );
-          })}
+              {altButton ? (
+                <button
+                  type="button"
+                  className="gate-scope-line"
+                  disabled={paying}
+                  onClick={() => {
+                    app?.HapticFeedback?.selectionChanged();
+                    setScope((v) => (v === "both" ? "self" : "both"));
+                  }}
+                >
+                  {scope === "both" ? s.scopeOnlyMine : s.scopeBoth}
+                </button>
+              ) : (
+                // Holds the line's height so the action stays where it was.
+                <span className="gate-scope-line gate-scope-spacer" aria-hidden="true" />
+              )}
+            </>
+          )}
 
-        {sc === "cover-partner" && (
-          <>
-            {deriveCoverPartnerButtons(state).map((b) => (
-              <button
-                key={`${b.action}:${b.scope}`}
-                type="button"
-                className={b.primary ? "btn-hero btn-with-avatars" : "btn-secondary"}
-                disabled={paying}
-                onClick={() => onOfferButton(state, b)}
-              >
-                {b.primary && (
-                  <span className="btn-avatars" aria-hidden="true">
-                    <Avatar src={partnerPhotoSrc} name={state.partnerName} size={44} />
-                  </span>
-                )}
-                {offerLabel(b, state, s)}
-              </button>
-            ))}
-            {/* A real, bordered alternative — not a ghost text link — and it
-                moves him to the waiting screen instead of closing the app. */}
-            <button type="button" className="btn-ghost" onClick={() => setCoverDeferred(true)}>
-              {s.justWait}
+          {(sc === "success" || sc === "partner-paid" || sc === "closed") && (
+            <button type="button" className="gate-pill gate-pill-wide" onClick={goToScheduling}>
+              {s.goToScheduling}
             </button>
-          </>
-        )}
-
-        {(sc === "success" || sc === "partner-paid" || sc === "closed") && (
-          <button type="button" className="btn-primary" onClick={goToScheduling}>
-            {s.goToScheduling}
-          </button>
-        )}
-
-        {/* Reopening the cover offer is the only ACTION on this screen, so it
-            takes the button rung and Close drops to text under it. Close is
-            not an action — Telegram renders its own ✕ in the chrome above —
-            and it had the full-width glass button while the real choice was a
-            14px grey link beneath, i.e. the exact inversion §3.5b corrected on
-            the cover screen. With nothing to reconsider (a female, or a
-            partner who already settled) Close is alone and keeps the rung. */}
-        {sc === "waiting" && (
-          <>
-            {canReconsiderCover && (
-              <button type="button" className="btn-secondary" onClick={() => setCoverDeferred(false)}>
-                {s.coverReconsider}
-              </button>
-            )}
-            <button
-              type="button"
-              className={canReconsiderCover ? "btn-text" : "btn-secondary"}
-              onClick={() => app?.close()}
-            >
-              {s.close}
-            </button>
-          </>
-        )}
-      </footer>
+          )}
+        </footer>
+      )}
     </div>
   );
+}
+
+/** The famine discount rides only on the actor's own money ticket. */
+function isFamine(b: OfferButton, state: TicketState): boolean {
+  return !state.starsEnabled && b.action === "pay" && b.scope === "self" && state.selfDiscountPct > 0;
 }
 
 function offerLabel(b: OfferButton, state: TicketState, s: TicketStrings): string {
   if (b.action === "use") {
     if (b.scope === "both") return s.useBoth;
-    if (b.scope === "partner") return s.usePartner;
+    if (b.scope === "partner") return s.coverAction;
     return s.useSelf;
   }
   const amount =
     state.starsEnabled && state.stars
       ? formatStars(starsForButton(b, state.stars))
       : formatUsd(b.amountCents);
-  if (b.action === "use-self-pay-partner") return fill(s.payBothWithTicket, { amount });
-  if (b.scope === "both") return fill(s.payBoth, { amount });
-  if (b.scope === "partner") return fill(s.payPartner, { amount });
-  // "self" wording differs for a single-option (female) vs the male's secondary.
-  return state.myGender === "male" ? fill(s.paySelf, { amount }) : fill(s.paySelfOnly, { amount });
-}
-
-function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): string {
-  switch (sc) {
-    case "offer":
-      return s.heading;
-    // He just paid: the headline is HIS result, and the cover offer lives in
-    // its own card below. `coverPartnerTitle`/`Sub` moved there.
-    case "cover-partner":
-      return s.waitingTitle;
-    case "waiting":
-      return s.waitingTitle;
-    case "success":
-      return state.iCoveredPartner ? s.coveredHerTitle : s.successTitle;
-    case "partner-paid":
-      return fill(s.partnerPaidTitle, { name: state.partnerName ?? s.matchFallback });
-    case "closed":
-      return s.closedTitle;
-  }
-}
-
-function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): string | null {
-  switch (sc) {
-    case "offer":
-      return s.sub;
-    case "cover-partner":
-      return s.waitingSub;
-    case "waiting":
-      return s.waitingSub;
-    case "success":
-      return state.iCoveredPartner
-        ? fill(s.coveredHerSub, { name: state.partnerName ?? s.matchFallback })
-        : s.successSub;
-    // The title already says the ticket is paid (copy audit 2026-10-01).
-    case "partner-paid":
-      return null;
-    case "closed":
-      return s.closedSub;
-  }
+  return fill(s.payAmount, { amount });
 }
 
 function errorText(err: unknown, s: TicketStrings): string {

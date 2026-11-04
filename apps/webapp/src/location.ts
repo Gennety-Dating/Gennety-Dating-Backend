@@ -823,8 +823,10 @@ function applyVibeUi(): void {
   };
   set("vibe-title", chooserCopy["venue.text.title"]);
   set("vibe-help", chooserCopy["venue.text.help"]);
-  set("vibe-own", chooserCopy["venue.text.own"]);
-  set("vibe-back", chooserCopy["venue.back"]);
+  // The back control is a round chevron now (iOS `MapRoundButton`): its word
+  // is its accessible name, not its content.
+  document.getElementById("vibe-back")?.setAttribute("aria-label", chooserCopy["venue.back"]);
+  document.getElementById("vibe-open")?.setAttribute("aria-label", chooserCopy["venue.text.own"]);
   const button = document.getElementById("vibe-interpret");
   const span = button?.querySelector?.(".cta-text");
   if (span) span.textContent = chooserCopy["venue.text.continue"];
@@ -850,6 +852,7 @@ function showVibeStage(): void {
   applyVibeUi();
   renderScenes();
   renderRelaxation();
+  syncVibeDock();
 }
 
 function restoreVibe(): void {
@@ -857,12 +860,86 @@ function restoreVibe(): void {
   if (text && draft) text.value = draft.rawText;
   allowLongerCommute = draft?.hardConstraints.maxCommuteKm === 12;
   renderRelaxation();
+  syncVibeDock();
 }
+
+// ── The bottom row (iOS `VenueIntentView.textDock`, 2026-10-30) ─────────────
+// «‹» and the field at rest; with a choice «Дальше» rises beside them and the
+// field folds into a circle, so nothing overlaps anything. Tapping the field
+// opens it over the row — above the keyboard — with the cards blurred and
+// standing still behind it.
+
+function vibeTyped(): string {
+  return (document.getElementById("vibe-text") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+}
+
+function syncVibeDock(): void {
+  const stage = document.getElementById("vibe-stage");
+  if (!stage) return;
+  const typed = vibeTyped();
+  stage.classList.toggle("has-choice", Boolean(pickedScene) || typed.length > 0);
+  stage.classList.toggle("has-text", typed.length > 0);
+  const own = document.getElementById("vibe-own");
+  if (own) own.textContent = typed || chooserCopy["venue.text.own"];
+}
+
+let vibeTextOpen = false;
+
+function setVibeTextOpen(open: boolean): void {
+  if (vibeTextOpen === open) return;
+  vibeTextOpen = open;
+  const stage = document.getElementById("vibe-stage");
+  const card = document.getElementById("vibe-card");
+  const input = document.getElementById("vibe-input");
+  const scrim = document.getElementById("vibe-scrim");
+  const text = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
+  if (open && card && typeof card.offsetHeight === "number") {
+    // The keyboard shrinks Telegram's WebView; pinning the card's height keeps
+    // the blurred cards where they were instead of squeezing them.
+    card.style.height = `${card.offsetHeight}px`;
+  } else if (card) {
+    card.style.height = "";
+  }
+  stage?.classList.toggle("text-open", open);
+  if (input) input.hidden = !open;
+  if (scrim) scrim.hidden = !open;
+  if (open) text?.focus?.({ preventScroll: true });
+  else text?.blur?.();
+  syncVibeDock();
+}
+
+document.getElementById("vibe-open")?.addEventListener("click", () => {
+  if (vibeBusy) return;
+  app?.HapticFeedback?.selectionChanged?.();
+  setVibeTextOpen(true);
+});
+document.getElementById("vibe-scrim")?.addEventListener("click", () => setVibeTextOpen(false));
+document.getElementById("vibe-text")?.addEventListener("input", () => {
+  const error = document.getElementById("vibe-error");
+  if (error) error.textContent = "";
+  syncVibeDock();
+});
+// The keyboard dismissed by the system (its own «Done», a swipe) closes the
+// field too — a beat later, so a tap that is still landing is not moved.
+document.getElementById("vibe-text")?.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.activeElement?.id !== "vibe-text") setVibeTextOpen(false);
+  }, 160);
+});
+// «Дальше» must not steal focus first: the blur would close the field and
+// shift the row under the finger before the click lands.
+document.getElementById("vibe-interpret")?.addEventListener("pointerdown", (event) => event.preventDefault());
 
 function renderScenes(): void {
   const container = document.getElementById("vibe-scenes");
   if (!container) return;
-  container.replaceChildren(...sceneOffers(venueState?.suggestions ?? []).map((offer) => {
+  const offers = sceneOffers(venueState?.suggestions ?? []);
+  // Portraits pair up two to a row; «Удиви меня» takes a row of its own. The
+  // rows split the free height evenly (iOS `VenueSceneGrid.cardHeight`).
+  const portraits = offers.filter((offer) => offer.scene.id !== "surprise").length;
+  const rows = Math.ceil(portraits / 2) + (offers.length > portraits ? 1 : 0);
+  container.style.setProperty?.("--vibe-rows", String(Math.max(1, rows)));
+  container.replaceChildren(...offers.map((offer) => {
     const { scene } = offer;
     const button = document.createElement("button");
     button.type = "button";
@@ -905,6 +982,7 @@ function renderScenes(): void {
       if (error) error.textContent = "";
       app?.HapticFeedback?.selectionChanged?.();
       renderScenes();
+      syncVibeDock();
       document.querySelector?.<HTMLElement>(`[data-scene="${scene.id}"]`)?.focus();
     });
     return button;
@@ -981,6 +1059,7 @@ function startCtaThinking(btn: HTMLButtonElement, steps: string[]): () => void {
 
 document.getElementById("vibe-back")?.addEventListener("click", () => {
   if (vibeBusy) return;
+  setVibeTextOpen(false);
   const stage = document.getElementById("vibe-stage");
   if (stage) stage.hidden = true;
   setMapInert(false);
@@ -997,7 +1076,7 @@ document.getElementById("vibe-interpret")?.addEventListener("click", async () =>
     return;
   }
   app.HapticFeedback?.impactOccurred?.("medium");
-  textArea?.blur?.();
+  setVibeTextOpen(false);
   vibeBusy = true;
   if (textArea) textArea.disabled = true;
   const stopThinking = startCtaThinking(

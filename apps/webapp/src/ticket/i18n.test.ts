@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickLang, strings, type Lang } from "./i18n.js";
+import { pickLang, strings, walletLine, type Lang } from "./i18n.js";
 
 const languages: Lang[] = ["en", "ru", "uk", "de", "pl"];
 
@@ -46,18 +46,25 @@ describe("Date Ticket i18n", () => {
     }
   });
 
-  it("names whose window the countdown is, and carries localized units", () => {
+  it("carries the native gate copy (iOS variant B, 2026-10-30)", () => {
+    expect(strings("ru").heading).toBe("Свиданию нужен билет");
+    expect(strings("ru").successTitle).toBe("Оба билета на месте");
+    expect(strings("ru").coverAction).toBe("Беру на себя");
+    expect(strings("en").scopeOnlyMine).toBe("Pay only for mine");
     for (const lang of languages) {
       const s = strings(lang);
-      expect(s.waitingTimer).toContain("{time}");
-      // A bare "Осталось {time}" is what this guards against: the line has to
-      // say whose time it is, so it is longer than the placeholder plus a word.
-      expect(s.waitingTimer.replace("{time}", "").trim().length).toBeGreaterThan(12);
-      expect(s.timeHours).toContain("{n}");
-      expect(s.timeMinutes).toContain("{n}");
-      expect(s.timeSoon.length).toBeGreaterThan(0);
-      expect(s.timeSoon).not.toContain("{n}");
+      expect(s.payAmount).toContain("{amount}");
+      expect(s.coverPartnerSub).toContain("{name}");
+      for (const w of [s.walletOne, s.walletFew, s.walletMany, s.walletOther]) expect(w).toContain("{n}");
     }
+  });
+
+  it("declines the wallet line by the language's plural rules", () => {
+    expect(walletLine("ru", 1)).toBe("1 билет в кошельке");
+    expect(walletLine("ru", 3)).toBe("3 билета в кошельке");
+    expect(walletLine("ru", 5)).toBe("5 билетов в кошельке");
+    expect(walletLine("en", 2)).toBe("2 tickets in your wallet");
+    expect(walletLine("pl", 2)).toBe("2 bilety w portfelu");
   });
 
   it("no longer carries the pay-step \"free with Premium\" line", () => {

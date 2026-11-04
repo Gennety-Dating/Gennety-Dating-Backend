@@ -504,15 +504,15 @@ const translations = {
     matchBtnAccept: "Accept",
     matchBtnDecline: "❌ Pass",
     matchDeclineConfirmPrompt:
-      "Pass on this match?\n\nThis is final — you won't be matched with this person again.",
-    matchBtnConfirmDecline: "❌ Yes, pass",
+      "Pass on this match?",
+    matchBtnConfirmDecline: "Not going, for sure",
     matchBtnKeepDeciding: "← Go back",
     matchDecisionQuestionM:
       "Want to go on a date with him? Just answer yes or no.",
     matchDecisionQuestionF:
       "Want to go on a date with her? Just answer yes or no.",
     matchTextYesConfirm: "Love that ✨ Confirm below — and I'll take care of the rest:",
-    matchBtnConfirmGo: "💫 Yes, I'm going",
+    matchBtnConfirmGo: "Confirm — I'm going",
     matchTextUnsure:
       "No rush — when you know, just tell me “yes” or “no”.",
     matchDeclineDismissed:
@@ -558,8 +558,8 @@ const translations = {
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ {hours}h left to reply",
     pitchCountdownMinutes: "⏳ {minutes} min left to reply",
-    pitchDeadlineBtnHm: "⏳ Time left to reply: {h}h {m}m",
-    pitchDeadlineBtnMin: "⏳ Time left to reply: {m}m",
+    pitchDeadlineBtnHm: "⏳ Reply within {h}h {m}m",
+    pitchDeadlineBtnMin: "⏳ Reply within {m}m",
     pitchCountdownTapToast: "Just say yes or no whenever you're ready — the window's still open ✨",
     pitchDeadlineNudge:
       "Heads up — your window to answer this match closes in about {hours}h. If you'd like to go, just say yes now; no worries if not.",
@@ -1764,15 +1764,15 @@ const translations = {
     matchBtnAccept: "Принять",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
-      "Точно пасуешь?\n\nЭто решение окончательное — этого человека ты больше не увидишь.",
-    matchBtnConfirmDecline: "❌ Да, пас",
+      "Точно пасуешь?",
+    matchBtnConfirmDecline: "Точно не иду",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
       "Хочешь пойти с ним на свидание? Просто ответь да или нет.",
     matchDecisionQuestionF:
       "Хочешь пойти с ней на свидание? Просто ответь да или нет.",
     matchTextYesConfirm: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
-    matchBtnConfirmGo: "💫 Да, иду на свидание",
+    matchBtnConfirmGo: "Подтвердить — иду",
     matchTextUnsure:
       "Не спеши — когда решишь, просто напиши мне «да» или «нет».",
     matchDeclineDismissed:
@@ -1811,8 +1811,8 @@ const translations = {
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Осталось {hours}ч на ответ",
     pitchCountdownMinutes: "⏳ Осталось {minutes} мин на ответ",
-    pitchDeadlineBtnHm: "⏳ Осталось на ответ: {h}ч {m}м",
-    pitchDeadlineBtnMin: "⏳ Осталось на ответ: {m}м",
+    pitchDeadlineBtnHm: "⏳ Ответить за {h}ч {m}м",
+    pitchDeadlineBtnMin: "⏳ Ответить за {m}м",
     pitchCountdownTapToast: "Просто скажи да или нет, когда решишь — окно ещё открыто ✨",
     pitchDeadlineNudge:
       "Небольшое напоминание — окно, чтобы ответить на этот мэтч, закроется примерно через {hours}ч. Если хочешь пойти, просто скажи да сейчас; если нет — тоже окей.",
@@ -2894,15 +2894,15 @@ const translations = {
     matchBtnAccept: "Прийняти",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
-      "Точно пасуєш?\n\nЦе рішення остаточне — цю людину ти більше не побачиш.",
-    matchBtnConfirmDecline: "❌ Так, пас",
+      "Точно пасуєш?",
+    matchBtnConfirmDecline: "Точно не йду",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
       "Хочеш піти з ним на побачення? Просто відповідай так або ні.",
     matchDecisionQuestionF:
       "Хочеш піти з нею на побачення? Просто відповідай так або ні.",
     matchTextYesConfirm: "Чудово ✨ Підтверди — і далі все зроблю я:",
-    matchBtnConfirmGo: "💫 Так, іду на побачення",
+    matchBtnConfirmGo: "Підтвердити — йду",
     matchTextUnsure:
       "Не поспішай — коли вирішиш, просто напиши мені «так» або «ні».",
     matchDeclineDismissed:
@@ -2941,8 +2941,8 @@ const translations = {
     matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Залишилось {hours}год на відповідь",
     pitchCountdownMinutes: "⏳ Залишилось {minutes} хв на відповідь",
-    pitchDeadlineBtnHm: "⏳ Залишилось на відповідь: {h}год {m}хв",
-    pitchDeadlineBtnMin: "⏳ Залишилось на відповідь: {m}хв",
+    pitchDeadlineBtnHm: "⏳ Відповісти за {h}год {m}хв",
+    pitchDeadlineBtnMin: "⏳ Відповісти за {m}хв",
     pitchCountdownTapToast: "Просто скажи так чи ні, коли вирішиш — вікно ще відкрите ✨",
     pitchDeadlineNudge:
       "Невелике нагадування — вікно, щоб відповісти на цей метч, закриється приблизно за {hours}год. Якщо хочеш піти, просто скажи так зараз; якщо ні — теж окей.",
@@ -4018,15 +4018,15 @@ const deTranslations: TranslationTable = {
   matchBtnAccept: "Annehmen",
   matchBtnDecline: "❌ Passen",
   matchDeclineConfirmPrompt:
-    "Wirklich passen?\n\nDas ist endgültig — diese Person wird dir nicht noch einmal vorgeschlagen.",
-  matchBtnConfirmDecline: "❌ Ja, passen",
+    "Wirklich passen?",
+  matchBtnConfirmDecline: "Sicher nicht",
   matchBtnKeepDeciding: "← Zurück",
   matchDecisionQuestionM:
     "Willst du mit ihm auf ein Date gehen? Antworte einfach ja oder nein.",
   matchDecisionQuestionF:
     "Willst du mit ihr auf ein Date gehen? Antworte einfach ja oder nein.",
   matchTextYesConfirm: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
-  matchBtnConfirmGo: "💫 Ja, ich gehe hin",
+  matchBtnConfirmGo: "Bestätigen — ich gehe",
   matchTextUnsure:
     "Kein Stress — sag mir einfach „ja“ oder „nein“, wenn du so weit bist.",
   matchDeclineDismissed:
@@ -4064,8 +4064,8 @@ const deTranslations: TranslationTable = {
   matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Noch {hours}h zum Antworten",
   pitchCountdownMinutes: "⏳ Noch {minutes} Min zum Antworten",
-  pitchDeadlineBtnHm: "⏳ Zeit zum Antworten: {h}h {m}m",
-  pitchDeadlineBtnMin: "⏳ Zeit zum Antworten: {m}m",
+  pitchDeadlineBtnHm: "⏳ Antworten in {h}h {m}m",
+  pitchDeadlineBtnMin: "⏳ Antworten in {m}m",
   pitchCountdownTapToast: "Sag einfach ja oder nein, wenn du so weit bist — das Fenster ist noch offen ✨",
   pitchDeadlineNudge:
     "Kurzer Hinweis — dein Fenster, um auf dieses Match zu antworten, schließt in etwa {hours}h. Wenn du hingehen möchtest, sag jetzt einfach ja; kein Problem, wenn nicht.",
@@ -5120,15 +5120,15 @@ const plTranslations: TranslationTable = {
   matchBtnAccept: "Akceptuj",
   matchBtnDecline: "❌ Odpuść",
   matchDeclineConfirmPrompt:
-    "Na pewno pasujesz?\n\nTo decyzja ostateczna — tej osoby już nie zobaczysz.",
-  matchBtnConfirmDecline: "❌ Tak, odpuść",
+    "Na pewno pasujesz?",
+  matchBtnConfirmDecline: "Na pewno nie idę",
   matchBtnKeepDeciding: "← Wróć",
   matchDecisionQuestionM:
     "Chcesz iść z nim na randkę? Po prostu odpowiedz tak albo nie.",
   matchDecisionQuestionF:
     "Chcesz iść z nią na randkę? Po prostu odpowiedz tak albo nie.",
   matchTextYesConfirm: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
-  matchBtnConfirmGo: "💫 Tak, idę na randkę",
+  matchBtnConfirmGo: "Potwierdź — idę",
   matchTextUnsure:
     "Bez pośpiechu — gdy zdecydujesz, napisz mi po prostu „tak” albo „nie”.",
   matchDeclineDismissed:
@@ -5166,8 +5166,8 @@ const plTranslations: TranslationTable = {
   matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Zostało {hours}h na odpowiedź",
   pitchCountdownMinutes: "⏳ Zostało {minutes} min na odpowiedź",
-  pitchDeadlineBtnHm: "⏳ Zostało na odpowiedź: {h}h {m}m",
-  pitchDeadlineBtnMin: "⏳ Zostało na odpowiedź: {m}m",
+  pitchDeadlineBtnHm: "⏳ Odpowiedz w ciągu {h}h {m}m",
+  pitchDeadlineBtnMin: "⏳ Odpowiedz w ciągu {m}m",
   pitchCountdownTapToast: "Po prostu powiedz tak lub nie, gdy będziesz gotowy — okno wciąż jest otwarte ✨",
   pitchDeadlineNudge:
     "Małe przypomnienie — okno na odpowiedź na to dopasowanie zamknie się za około {hours}h. Jeśli chcesz iść, po prostu powiedz teraz tak; jeśli nie — też w porządku.",

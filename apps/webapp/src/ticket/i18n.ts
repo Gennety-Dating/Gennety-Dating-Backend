@@ -27,16 +27,10 @@ export interface TicketStrings {
    */
   heading: string;
   sub: string;
-  payBoth: string;
-  payBothWithTicket: string;
-  paySelf: string;
-  paySelfOnly: string;
   /** Famine single-ticket discount badge on the self-pay button. `{pct}`. */
   famineBadge: string;
   useSelf: string;
   useBoth: string;
-  usePartner: string;
-  payPartner: string;
   coverPartnerTitle: string;
   coverPartnerSub: string;
   /**
@@ -59,17 +53,6 @@ export interface TicketStrings {
    * Premium") was deleted on 2026-10-08 with the benefit it advertised.
    */
   premiumCoverNotIncluded: string;
-  justWait: string;
-  /**
-   * The way back from the waiting screen after he declined the cover offer.
-   *
-   * It is the only thing on that screen that DOES anything — "Close" merely
-   * repeats Telegram's own ✕ in the chrome above — so it takes the button slot
-   * and Close drops to the text rung beneath it. It shipped the other way round
-   * (a 14px grey link under a full-width Close), which is the same inversion
-   * §3.5b already corrected once on the cover screen itself.
-   */
-  coverReconsider: string;
   /**
    * The field name printed on the ticket stub, left of the count. One word,
    * rendered uppercase by CSS — it is what turns the number on the right from a
@@ -78,38 +61,9 @@ export interface TicketStrings {
   balanceLabel: string;
   balanceNote: string;
   successTitle: string;
-  successSub: string;
-  /**
-   * Success screen when HE covered HER ticket — the goodwill gesture (§3.5b).
-   *
-   * TRANSLATOR NOTE: `coveredHerTitle` is a mate clapping you on the shoulder —
-   * "respect", "well played". It is NOT a compliment about his looks, which is
-   * exactly why «Красавчик!» / «Красунчик!» were dropped: they read as "handsome
-   * guy" to half the audience. Prefer the plain, unambiguous "respect" in every
-   * locale. Keep the register warm and peer-level — never congratulatory-from-
-   * above, never sentimental, and no emoji.
-   */
-  coveredHerTitle: string;
-  coveredHerSub: string;
   goToScheduling: string;
   waitingTitle: string;
   waitingSub: string;
-  /**
-   * The partner's remaining window, rendered under `waitingSub`. `{time}`.
-   *
-   * TRANSLATOR NOTE: it MUST name whose window it is. The English line always
-   * did ("They have {time} left"); the four translations had been reduced to a
-   * bare "Осталось {time}" while making them gender-neutral, which left a
-   * number on screen that said neither what was running out nor for whom. Name
-   * the person with the same role noun `waitingSub` uses, in a form that works
-   * for a partner of either gender.
-   */
-  waitingTimer: string;
-  /** Countdown units for `waitingTimer`'s `{time}` — each carries `{n}`. */
-  timeHours: string;
-  timeMinutes: string;
-  /** Under a minute; a phrase, so no `{n}`. */
-  timeSoon: string;
   partnerPaidTitle: string;
   /** Tiny "PAID" seal on the covered-ticket hero (partner-paid screen). */
   partnerPaidStamp: string;
@@ -121,39 +75,43 @@ export interface TicketStrings {
   close: string;
   youFallback: string;
   matchFallback: string;
+  /** Pay button on the gate — `{amount}` is the Stars or dollar price. iOS `ticket.reader.pay`. */
+  payAmount: string;
+  /** The quiet line under the gate's one action: switch to paying only your own ticket. */
+  scopeOnlyMine: string;
+  /** The same line, switched back: pay for both tickets. */
+  scopeBoth: string;
+  /** Accessible caption of the countdown capsule (the capsule itself shows only the clock). */
+  deadlineLabel: string;
+  coverAction: string;
+  coverConfirm: string;
+  coverCancel: string;
+  coverConfirmHint: string;
+  /** Wallet line under the cover panel — plural forms, each carries `{n}`. */
+  walletOne: string;
+  walletFew: string;
+  walletMany: string;
+  walletOther: string;
+  walletTopUp: string;
+  securedMine: string;
 }
 
 const en: TicketStrings = {
-  heading: "It's a match",
-  sub: "Grab your ticket and we'll pick a time.",
-  payBoth: "Pay for us both — {amount}",
-  payBothWithTicket: "Pay for both 🎟️ + {amount}",
-  paySelf: "Pay only mine — {amount}",
-  paySelfOnly: "Pay my ticket — {amount}",
+  heading: "Your date needs a ticket",
+  sub: "You both said yes. One Date Ticket per person, then you pick the time together.",
   famineBadge: "−{pct}% for you",
-  useSelf: "Use a ticket — for you 🎟️",
-  useBoth: "Use 2 tickets — you & your date 🎟️🎟️",
-  usePartner: "Use a ticket for your date 🎟️",
-  payPartner: "Pay for your date — {amount}",
-  coverPartnerTitle: "Cover your date?",
-  coverPartnerSub: "Get a ticket for {name} too?",
+  useSelf: "Use ticket",
+  useBoth: "Use 2 tickets",
+  coverPartnerTitle: "Pay for the second ticket too?",
+  coverPartnerSub: "{name} will find out it's already paid for.",
   premiumCovered: "Premium covers your ticket ✨",
   premiumCoverNotIncluded: "Premium covers only you. {name}'s ticket is separate.",
-  justWait: "I'll let them grab it",
-  coverReconsider: "Actually — cover their ticket",
   balanceLabel: "Balance",
   balanceNote: "Your wallet: {n}",
-  successTitle: "You're in",
-  successSub: "You both have tickets. Now pick a time.",
-  coveredHerTitle: "Lovely!",
-  coveredHerSub: "{name} already knows. Now just pick a time.",
-  goToScheduling: "Pick a time",
-  waitingTitle: "The ticket's yours",
-  waitingSub: "Waiting for your match — we'll message you as soon as they grab theirs.",
-  waitingTimer: "They have {time} left",
-  timeHours: "{n}h",
-  timeMinutes: "{n}m",
-  timeSoon: "under a minute",
+  successTitle: "Both tickets are in",
+  goToScheduling: "Choose a time",
+  waitingTitle: "Your ticket is secured",
+  waitingSub: "Waiting on the second ticket now.",
   partnerPaidTitle: "{name} already paid your ticket",
   partnerPaidStamp: "Paid",
   closedTitle: "Picking a time 📅",
@@ -164,42 +122,38 @@ const en: TicketStrings = {
   close: "Close",
   youFallback: "You",
   matchFallback: "Your match",
+  payAmount: "Pay {amount}",
+  scopeOnlyMine: "Pay only for mine",
+  scopeBoth: "Pay for both tickets",
+  deadlineLabel: "Time left:",
+  coverAction: "I'll cover it",
+  coverConfirm: "Confirm",
+  coverCancel: "Cancel",
+  coverConfirmHint: "Tap Confirm to pay for the second ticket",
+  walletOne: "{n} ticket in your wallet",
+  walletFew: "{n} tickets in your wallet",
+  walletMany: "{n} tickets in your wallet",
+  walletOther: "{n} tickets in your wallet",
+  walletTopUp: "Buy more",
+  securedMine: "Your ticket",
 };
 
 const ru: TicketStrings = {
-  heading: "Это мэтч",
-  sub: "Возьми билет — и выберем время.",
-  payBoth: "Оплатить за нас обоих — {amount}",
-  payBothWithTicket: "Оплатить за двоих 🎟️ + {amount}",
-  paySelf: "Оплатить только свой — {amount}",
-  paySelfOnly: "Оплатить свой билет — {amount}",
+  heading: "Свиданию нужен билет",
+  sub: "Вы оба сказали «да». По одному билету с каждого — и переходим ко времени.",
   famineBadge: "−{pct}% для тебя",
-  useSelf: "Использовать билет — за себя 🎟️",
-  useBoth: "Использовать 2 билета — ты и пара 🎟️🎟️",
-  usePartner: "Использовать билет за пару 🎟️",
-  payPartner: "Оплатить за пару — {amount}",
-  coverPartnerTitle: "Оплатить за пару?",
-  coverPartnerSub: "Возьмёшь билет и для {name}?",
+  useSelf: "Использовать билет",
+  useBoth: "Использовать 2 билета",
+  coverPartnerTitle: "Оплатить и второй билет?",
+  coverPartnerSub: "{name} узнает, что он уже оплачен.",
   premiumCovered: "Твой билет покрыт Premium ✨",
   premiumCoverNotIncluded: "Premium — только за тебя. Билет для {name} — отдельно.",
-  justWait: "Пусть возьмёт свой",
-  coverReconsider: "Всё-таки оплатить за пару",
   balanceLabel: "Баланс",
   balanceNote: "Твой кошелёк: {n}",
-  successTitle: "Готово",
-  successSub: "Билеты у обоих. Теперь выберите время.",
-  coveredHerTitle: "Красиво!",
-  coveredHerSub: "{name} уже знает. Осталось выбрать время.",
+  successTitle: "Оба билета на месте",
   goToScheduling: "Выбрать время",
-  waitingTitle: "Билет твой",
-  waitingSub: "Ждём твою пару — напишем, как только возьмёт свой.",
-  // Names the subject without gendering it: the male reaches this screen too
-  // (he can decline the cover offer), so «У неё» would be wrong for half the
-  // viewers — but «Осталось» alone named nobody at all.
-  waitingTimer: "У твоей пары осталось {time}",
-  timeHours: "{n} ч",
-  timeMinutes: "{n} мин",
-  timeSoon: "меньше минуты",
+  waitingTitle: "Твой билет на месте",
+  waitingSub: "Ждём второй билет.",
   partnerPaidTitle: "{name} уже оплатил твой билет",
   partnerPaidStamp: "Оплачено",
   closedTitle: "Выбираем время 📅",
@@ -210,39 +164,38 @@ const ru: TicketStrings = {
   close: "Закрыть",
   youFallback: "Ты",
   matchFallback: "Твой мэтч",
+  payAmount: "Оплатить · {amount}",
+  scopeOnlyMine: "Оплатить только свой",
+  scopeBoth: "Оплатить оба билета",
+  deadlineLabel: "Осталось:",
+  coverAction: "Беру на себя",
+  coverConfirm: "Подтвердить",
+  coverCancel: "Отмена",
+  coverConfirmHint: "Нажми «Подтвердить», чтобы оплатить второй билет",
+  walletOne: "{n} билет в кошельке",
+  walletFew: "{n} билета в кошельке",
+  walletMany: "{n} билетов в кошельке",
+  walletOther: "{n} билета в кошельке",
+  walletTopUp: "Пополнить",
+  securedMine: "Твой билет",
 };
 
 const uk: TicketStrings = {
-  heading: "Це метч",
-  sub: "Візьми квиток — і оберемо час.",
-  payBoth: "Сплатити за нас обох — {amount}",
-  payBothWithTicket: "Сплатити за двох 🎟️ + {amount}",
-  paySelf: "Сплатити лише свій — {amount}",
-  paySelfOnly: "Сплатити свій квиток — {amount}",
+  heading: "Побаченню потрібен квиток",
+  sub: "Ви обоє сказали «так». По одному квитку з кожного — і переходимо до часу.",
   famineBadge: "−{pct}% для тебе",
-  useSelf: "Використати квиток — за себе 🎟️",
-  useBoth: "Використати 2 квитки — ти і пара 🎟️🎟️",
-  usePartner: "Використати квиток за пару 🎟️",
-  payPartner: "Сплатити за пару — {amount}",
-  coverPartnerTitle: "Сплатити за пару?",
-  coverPartnerSub: "Візьмеш квиток і для {name}?",
+  useSelf: "Використати квиток",
+  useBoth: "Використати 2 квитки",
+  coverPartnerTitle: "Оплатити і другий квиток?",
+  coverPartnerSub: "{name} дізнається, що він уже оплачений.",
   premiumCovered: "Твій квиток покритий Premium ✨",
   premiumCoverNotIncluded: "Premium — лише за тебе. Квиток для {name} — окремо.",
-  justWait: "Нехай візьме свій",
-  coverReconsider: "Все-таки сплатити за пару",
   balanceLabel: "Баланс",
   balanceNote: "Твій гаманець: {n}",
-  successTitle: "Готово",
-  successSub: "Квитки в обох. Тепер оберіть час.",
-  coveredHerTitle: "Красиво!",
-  coveredHerSub: "{name} вже знає. Лишилось обрати час.",
+  successTitle: "Обидва квитки на місці",
   goToScheduling: "Обрати час",
-  waitingTitle: "Квиток твій",
-  waitingSub: "Чекаємо на твою пару — напишемо, щойно візьме свій.",
-  waitingTimer: "У твоєї пари залишилось {time}",
-  timeHours: "{n} год",
-  timeMinutes: "{n} хв",
-  timeSoon: "менше хвилини",
+  waitingTitle: "Твій квиток на місці",
+  waitingSub: "Чекаємо на другий квиток.",
   partnerPaidTitle: "{name} вже сплатив твій квиток",
   partnerPaidStamp: "Сплачено",
   closedTitle: "Обираємо час 📅",
@@ -253,39 +206,38 @@ const uk: TicketStrings = {
   close: "Закрити",
   youFallback: "Ти",
   matchFallback: "Твій метч",
+  payAmount: "Оплатити · {amount}",
+  scopeOnlyMine: "Сплатити лише свій",
+  scopeBoth: "Сплатити обидва квитки",
+  deadlineLabel: "Залишилося:",
+  coverAction: "Беру на себе",
+  coverConfirm: "Підтвердити",
+  coverCancel: "Скасувати",
+  coverConfirmHint: "Натисни «Підтвердити», щоб оплатити другий квиток",
+  walletOne: "{n} квиток у гаманці",
+  walletFew: "{n} квитки у гаманці",
+  walletMany: "{n} квитків у гаманці",
+  walletOther: "{n} квитка у гаманці",
+  walletTopUp: "Поповнити",
+  securedMine: "Твій квиток",
 };
 
 const de: TicketStrings = {
-  heading: "Es ist ein Match",
-  sub: "Hol dir dein Ticket — dann wählen wir die Zeit.",
-  payBoth: "Für uns beide zahlen — {amount}",
-  payBothWithTicket: "Für beide zahlen 🎟️ + {amount}",
-  paySelf: "Nur meins zahlen — {amount}",
-  paySelfOnly: "Mein Ticket zahlen — {amount}",
+  heading: "Euer Date braucht ein Ticket",
+  sub: "Ihr habt beide Ja gesagt. Ein Date-Ticket pro Person, dann wählt ihr die Zeit.",
   famineBadge: "−{pct}% für dich",
-  useSelf: "Ticket nutzen — für dich 🎟️",
-  useBoth: "2 Tickets nutzen — du & dein Date 🎟️🎟️",
-  usePartner: "Ticket für dein Date nutzen 🎟️",
-  payPartner: "Für dein Date zahlen — {amount}",
-  coverPartnerTitle: "Date übernehmen?",
-  coverPartnerSub: "Holst du auch ein Ticket für {name}?",
+  useSelf: "Ticket einlösen",
+  useBoth: "2 Tickets einlösen",
+  coverPartnerTitle: "Auch das zweite Ticket bezahlen?",
+  coverPartnerSub: "{name} erfährt, dass es schon bezahlt ist.",
   premiumCovered: "Premium deckt dein Ticket ✨",
   premiumCoverNotIncluded: "Premium gilt nur für dich. Das Ticket für {name} kommt extra.",
-  justWait: "Sollen sie selbst holen",
-  coverReconsider: "Doch für dein Date zahlen",
   balanceLabel: "Guthaben",
   balanceNote: "Dein Guthaben: {n}",
-  successTitle: "Du bist dabei",
-  successSub: "Ihr habt beide Tickets. Jetzt wählt eine Zeit.",
-  coveredHerTitle: "Stark!",
-  coveredHerSub: "{name} weiß schon Bescheid. Jetzt nur noch die Zeit wählen.",
+  successTitle: "Beide Tickets sind da",
   goToScheduling: "Zeit wählen",
-  waitingTitle: "Das Ticket ist deins",
-  waitingSub: "Wir warten auf dein Match — wir schreiben dir, sobald das zweite Ticket da ist.",
-  waitingTimer: "Dein Match hat noch {time}",
-  timeHours: "{n} Std.",
-  timeMinutes: "{n} Min.",
-  timeSoon: "weniger als eine Minute",
+  waitingTitle: "Dein Ticket ist gesichert",
+  waitingSub: "Jetzt fehlt noch das zweite Ticket.",
   partnerPaidTitle: "{name} hat dein Ticket schon bezahlt",
   partnerPaidStamp: "Bezahlt",
   closedTitle: "Wir wählen die Zeit 📅",
@@ -296,39 +248,38 @@ const de: TicketStrings = {
   close: "Schließen",
   youFallback: "Du",
   matchFallback: "Dein Match",
+  payAmount: "{amount} zahlen",
+  scopeOnlyMine: "Nur meins bezahlen",
+  scopeBoth: "Beide Tickets bezahlen",
+  deadlineLabel: "Verbleibend:",
+  coverAction: "Ich übernehme das",
+  coverConfirm: "Bestätigen",
+  coverCancel: "Abbrechen",
+  coverConfirmHint: "Tippe auf „Bestätigen“, um das zweite Ticket zu bezahlen",
+  walletOne: "{n} Ticket in der Brieftasche",
+  walletFew: "{n} Tickets in der Brieftasche",
+  walletMany: "{n} Tickets in der Brieftasche",
+  walletOther: "{n} Tickets in der Brieftasche",
+  walletTopUp: "Nachkaufen",
+  securedMine: "Dein Ticket",
 };
 
 const pl: TicketStrings = {
-  heading: "To match",
-  sub: "Weź bilet — i wybierzemy termin.",
-  payBoth: "Zapłać za nas oboje — {amount}",
-  payBothWithTicket: "Zapłać za oboje 🎟️ + {amount}",
-  paySelf: "Zapłać tylko za siebie — {amount}",
-  paySelfOnly: "Zapłać za swój bilet — {amount}",
+  heading: "Wasza randka potrzebuje biletu",
+  sub: "Oboje powiedzieliście tak. Po jednym bilecie na osobę — potem wybieracie czas.",
   famineBadge: "−{pct}% dla Ciebie",
-  useSelf: "Użyj biletu — za siebie 🎟️",
-  useBoth: "Użyj 2 biletów — Ty i Twoja randka 🎟️🎟️",
-  usePartner: "Użyj biletu za swoją randkę 🎟️",
-  payPartner: "Zapłać za swoją randkę — {amount}",
-  coverPartnerTitle: "Pokryć randkę?",
-  coverPartnerSub: "Weźmiesz bilet też dla {name}?",
+  useSelf: "Użyj biletu",
+  useBoth: "Użyj 2 biletów",
+  coverPartnerTitle: "Opłacić też drugi bilet?",
+  coverPartnerSub: "{name} dowie się, że jest już opłacony.",
   premiumCovered: "Premium pokrywa twój bilet ✨",
   premiumCoverNotIncluded: "Premium — tylko za ciebie. Bilet dla {name} — osobno.",
-  justWait: "Niech weźmie swój",
-  coverReconsider: "Jednak zapłać za swoją randkę",
   balanceLabel: "Saldo",
   balanceNote: "Twój portfel: {n}",
-  successTitle: "Gotowe",
-  successSub: "Oboje macie bilety. Teraz wybierzcie termin.",
-  coveredHerTitle: "Pięknie!",
-  coveredHerSub: "{name} już wie. Zostało wybrać termin.",
-  goToScheduling: "Wybierz termin",
-  waitingTitle: "Bilet jest twój",
-  waitingSub: "Czekamy na twoją parę — napiszemy, gdy tylko weźmie swój.",
-  waitingTimer: "Twoje dopasowanie ma jeszcze {time}",
-  timeHours: "{n} godz.",
-  timeMinutes: "{n} min",
-  timeSoon: "mniej niż minuta",
+  successTitle: "Oba bilety są",
+  goToScheduling: "Wybierz godzinę",
+  waitingTitle: "Twój bilet jest zaklepany",
+  waitingSub: "Czekamy na drugi bilet.",
   partnerPaidTitle: "{name} zapłacił już za Twój bilet",
   partnerPaidStamp: "Opłacone",
   closedTitle: "Wybieramy termin 📅",
@@ -339,6 +290,20 @@ const pl: TicketStrings = {
   close: "Zamknij",
   youFallback: "Ty",
   matchFallback: "Twoje dopasowanie",
+  payAmount: "Zapłać {amount}",
+  scopeOnlyMine: "Zapłać tylko za swój",
+  scopeBoth: "Zapłać za oba bilety",
+  deadlineLabel: "Pozostało:",
+  coverAction: "Biorę na siebie",
+  coverConfirm: "Potwierdź",
+  coverCancel: "Anuluj",
+  coverConfirmHint: "Stuknij „Potwierdź”, aby opłacić drugi bilet",
+  walletOne: "{n} bilet w portfelu",
+  walletFew: "{n} bilety w portfelu",
+  walletMany: "{n} biletów w portfelu",
+  walletOther: "{n} biletu w portfelu",
+  walletTopUp: "Dokup",
+  securedMine: "Twój bilet",
 };
 
 const dict: Record<Lang, TicketStrings> = { en, ru, uk, de, pl };
@@ -350,6 +315,18 @@ export function pickLang(raw: string | null | undefined): Lang {
 
 export function strings(lang: Lang): TicketStrings {
   return dict[lang] ?? en;
+}
+
+/**
+ * «N билетов в кошельке» in the language's own plural form — the same forms
+ * the native app's `ticket.wallet.balance` carries (one / few / many / other).
+ */
+export function walletLine(lang: Lang, n: number): string {
+  const s = strings(lang);
+  const form = new Intl.PluralRules(lang).select(n);
+  const tpl =
+    form === "one" ? s.walletOne : form === "few" ? s.walletFew : form === "many" ? s.walletMany : s.walletOther;
+  return tpl.replaceAll("{n}", String(n));
 }
 
 /** Interpolate `{key}` placeholders. */
