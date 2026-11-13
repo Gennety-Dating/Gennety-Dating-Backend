@@ -45,6 +45,12 @@ import {
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
 import { readScreenshotsCard, screenshotsCardViews, type ScreenshotsCard } from "../../services/chat-screenshots.js";
+import {
+  answerProfilerInChat,
+  openProfilerQuestionInChat,
+  postDueProfilerQuestion,
+  type ProfilerChatRow,
+} from "../../services/profiler-chat.js";
 
 /**
  * Native cards this build draws under a reply (decision 2026-10-15): the
@@ -219,6 +225,19 @@ chatRouter.post(
 
     const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
     const reply = await chatSends.run(req.userId!, clientMessageId, async () => {
+      // The chat ends with a live «about you» question (decision journal
+      // 2026-11-13): this message is its answer, and the reply is the next
+      // question or the closing line — no concierge turn. Only a plain typed
+      // message: a photo or a chip is a different conversation.
+      if (sessionId && text && imageUrls.length === 0 && !context) {
+        // A failure here costs the question, never the message: it goes to
+        // the concierge as an ordinary turn.
+        const answered = await profilerAnswerOf(req.userId!, sessionId, text).catch((err: unknown) => {
+          console.warn("[chat] profiler answer in chat failed:", err);
+          return null;
+        });
+        if (answered) return { message: profilerMessageView(answered.reply), sessionId, uiHint: null };
+      }
       // Inside `run`: a retry answered from `chatSends` starts no turn, so it
       // must not start a status either. No id, nothing the phone could poll.
       const activity = clientMessageId ? chatActivity.begin(req.userId!, clientMessageId) : null;
@@ -271,6 +290,40 @@ chatRouter.post(
     res.json(reply);
   },
 );
+
+/**
+ * POST /v1/chat/profiler — put the due «about you» question into this chat
+ * (decision journal 2026-11-13). The app calls it when the chat with Gennety
+ * comes on screen. `{ message }` — the question row, now part of the chat's
+ * history; `{}` — nothing to ask, or the chat already ends with it. The
+ * `sessionId` is claimed like a first message's: a fresh chat the device
+ * minted becomes the person's.
+ */
+chatRouter.post("/profiler", chatMessageLimiter, async (req: Request, res: Response): Promise<void> => {
+  const sessionId = await sessionFromRequest(req.body?.sessionId, req.userId!, res);
+  if (sessionId === false) return;
+  if (!sessionId) {
+    res.status(400).json({ error: "Missing sessionId" });
+    return;
+  }
+  const row = await postDueProfilerQuestion(req.userId!, sessionId);
+  res.json(row ? { message: profilerMessageView(row) } : {});
+});
+
+async function profilerAnswerOf(userId: string, sessionId: string, text: string) {
+  const questionId = await openProfilerQuestionInChat(userId, sessionId);
+  return questionId ? answerProfilerInChat({ userId, sessionId, questionId, text }) : null;
+}
+
+function profilerMessageView(row: ProfilerChatRow) {
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    imageUrl: row.imageUrl,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 /**
  * POST /v1/chat/voice — голосовая реплика в чат приложения.

@@ -76,6 +76,15 @@ vi.mock("../../services/chat-sessions.js", async (importOriginal) => {
   };
 });
 
+const openProfilerQuestionInChat = vi.fn(async (_u: string, _s: string): Promise<string | null> => null);
+const answerProfilerInChat = vi.fn(async (_input: unknown): Promise<unknown> => null);
+const postDueProfilerQuestion = vi.fn(async (_u: string, _s: string): Promise<unknown> => null);
+vi.mock("../../services/profiler-chat.js", () => ({
+  openProfilerQuestionInChat: (u: string, s: string) => openProfilerQuestionInChat(u, s),
+  answerProfilerInChat: (input: unknown) => answerProfilerInChat(input),
+  postDueProfilerQuestion: (u: string, s: string) => postDueProfilerQuestion(u, s),
+}));
+
 const signBatch = vi.fn(async (paths: string[]) => paths.map((p) => `https://signed.example/${p}`));
 const signOne = vi.fn(async (path: string) => `https://signed.example/${path}`);
 vi.mock("../../services/storage.js", () => ({
@@ -128,6 +137,79 @@ beforeEach(() => {
   messageFindUnique.mockReset().mockResolvedValue(null);
   signBatch.mockClear();
   signOne.mockClear();
+  openProfilerQuestionInChat.mockReset().mockResolvedValue(null);
+  answerProfilerInChat.mockReset().mockResolvedValue(null);
+  postDueProfilerQuestion.mockReset().mockResolvedValue(null);
+});
+
+const profilerRow = (id: string, role: "assistant" | "user", content: string) => ({
+  id,
+  role,
+  content,
+  imageUrl: null,
+  createdAt: new Date("2026-11-13T12:00:00.000Z"),
+});
+
+describe("«about you» questions in the chat (2026-11-13)", () => {
+  it("a message to a chat that ends with a live question answers it — no concierge turn", async () => {
+    openProfilerQuestionInChat.mockResolvedValue("f_date_spots");
+    answerProfilerInChat.mockResolvedValue({
+      user: profilerRow("u1", "user", "Rooftops"),
+      reply: profilerRow("q2", "assistant", "Morning or evening?"),
+    });
+    const res = await request(app())
+      .post("/v1/chat/message")
+      .set(auth())
+      .send({ text: "Rooftops", sessionId: CHAT });
+
+    expect(res.status).toBe(200);
+    expect(answerProfilerInChat).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_ID, sessionId: CHAT, questionId: "f_date_spots", text: "Rooftops" }),
+    );
+    expect(runChatTurn).not.toHaveBeenCalled();
+    expect(res.body.message).toMatchObject({ id: "q2", role: "assistant", content: "Morning or evening?" });
+    expect(res.body.sessionId).toBe(CHAT);
+  });
+
+  it("an answer that is not taken falls through to the concierge", async () => {
+    openProfilerQuestionInChat.mockResolvedValue("f_date_spots");
+    answerProfilerInChat.mockResolvedValue(null);
+    const res = await request(app()).post("/v1/chat/message").set(auth()).send({ text: "hi", sessionId: CHAT });
+    expect(res.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalled();
+  });
+
+  it("a profiler failure costs the question, never the message", async () => {
+    openProfilerQuestionInChat.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const res = await request(app()).post("/v1/chat/message").set(auth()).send({ text: "hi", sessionId: CHAT });
+    expect(res.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalled();
+  });
+
+  it("POST /profiler puts the due question into the claimed chat", async () => {
+    postDueProfilerQuestion.mockResolvedValue(profilerRow("q1", "assistant", "Where do you like to go?"));
+    const res = await request(app()).post("/v1/chat/profiler").set(auth()).send({ sessionId: CHAT });
+    expect(res.status).toBe(200);
+    expect(claimChatSession).toHaveBeenCalledWith(USER_ID, CHAT);
+    expect(res.body).toEqual({
+      message: {
+        id: "q1",
+        role: "assistant",
+        content: "Where do you like to go?",
+        imageUrl: null,
+        createdAt: "2026-11-13T12:00:00.000Z",
+      },
+    });
+  });
+
+  it("POST /profiler with nothing due is an empty object; without a chat — 400", async () => {
+    const empty = await request(app()).post("/v1/chat/profiler").set(auth()).send({ sessionId: CHAT });
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({});
+    const missing = await request(app()).post("/v1/chat/profiler").set(auth()).send({});
+    expect(missing.status).toBe(400);
+  });
 });
 
 describe("GET /v1/chat/sessions", () => {

@@ -4522,6 +4522,61 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /v1/chat/profiler:
+    post:
+      tags: [chat]
+      operationId: postChatProfilerQuestion
+      summary: Put the due «about you» question into this chat
+      description: |
+        The Profiler lives in the chat with Gennety (decision journal
+        2026-11-13). The app calls this when the chat comes on screen. The
+        question is written as an ordinary `assistant` row of the chat and
+        returned as `message`; `{}` means nothing is due, or the chat already
+        ends with that question. The `sessionId` is claimed like a first
+        message's, so a chat the device just minted becomes the caller's.
+
+        While the chat ends with a live question, the next plain typed
+        `POST /v1/chat/message` in it (no images, no context) is recorded as
+        the answer — the same rules as `POST /v1/me/profiler/answer` — and the
+        reply is the next question or a closing line, with no agent turn. A
+        closed question lists its options numbered; a number or an option's
+        words pick it. A message that cannot be taken as the answer is an
+        ordinary agent turn.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The question row, or an empty object when nothing is asked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/ChatMessage" }
+        "400":
+          description: Missing or invalid sessionId
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: The chat belongs to someone else
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/chat/messages/{id}/offer:
     post:
       tags: [chat]
