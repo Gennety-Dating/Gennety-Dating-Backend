@@ -13,7 +13,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-04 — Telegram ticket gate and «Чего хочется?» after iOS variant B, bot confirm labels (webapp build + bot restart; no migration, no env, no flag).**
+**Deployed 2026-11-13 (was PENDING; production `57c6c510`, 13:01–13:06 UTC, see [2026-11-13-profiler-chat.md](./2026-11-13-profiler-chat.md)) 2026-11-04 — Telegram ticket gate and «Чего хочется?» after iOS variant B, bot confirm labels (webapp build + bot restart; no migration, no env, no flag).**
 
 1. Code: decision `docs/architecture/decisions/2026-11-04-telegram-drop-flow-b.md` (with the founder's review, item 5).
    `ticket.html`: offer as before with capsule buttons; no countdown; cover panel with «Беру на себя» → «Подтвердить» + «✕»;

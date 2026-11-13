@@ -1,15 +1,16 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 246 entries
+# Deploy journal index — 247 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING | 2026-11-04 | Telegram ticket gate (offer kept with capsule buttons, no countdown, cover panel two-tap, result waits) + «Чего хочется?» on one screen + bot confirm labels; webapp build + restart, no migration | [pending.md](./pending.md) |
-| PENDING | 2026-11-03 | Screenshots/ideas audit fixes + per-user preview env `SCREENSHOT_LIBRARY_USER_IDS`, `MEMORY_IDEAS_USER_IDS` (prod env change PENDING, coordinator); branch `audit/screenshots-backend`, no migration | [pending.md](./pending.md) |
-| PENDING | 2026-11-01 | Real status of a chat turn: `GET /v1/chat/activity`, in-memory on one PM2 process; no migration, no env, no flag | [pending.md](./pending.md) |
+| Deployed | 2026-11-13 | Production `57c6c510`: in-app chat «about you» questions (`POST /v1/chat/profiler`, reply intercept in `/v1/chat/message`) + Telegram ticket gate variant B + audit overrides (fast-xml-parser 5.12.0); no migration, no env | [2026-11-13-profiler-chat.md](./2026-11-13-profiler-chat.md) |
+| Deployed 2026-11-13 | 2026-11-04 | Telegram ticket gate (offer kept with capsule buttons, no countdown, cover panel two-tap, result waits) + «Чего хочется?» on one screen + bot confirm labels; webapp build + restart, no migration | [pending.md](./pending.md) |
+| Deployed 2026-11-03 | 2026-11-03 | Screenshots/ideas audit fixes + per-user preview env `SCREENSHOT_LIBRARY_USER_IDS`, `MEMORY_IDEAS_USER_IDS` (prod env change PENDING, coordinator); branch `audit/screenshots-backend`, no migration | [pending.md](./pending.md) |
+| Deployed 2026-11-03 | 2026-11-01 | Real status of a chat turn: `GET /v1/chat/activity`, in-memory on one PM2 process; no migration, no env, no flag | [pending.md](./pending.md) |
 | Deployed | 2026-10-30 | Founder transport outbox: persisted requests + attachments, retry after restart; Mac workspace retained, encrypted copies and external health monitor; no DB migration; Vite 6.4.5 | [2026-10-30-founder-outbox.md](./2026-10-30-founder-outbox.md) |
 | Deployed (demo only) | 2026-10-29 | Current Telegram bot + Mini App `586ae5df`; Profiler cards enabled on demo, isolated schema catch-up, 8,770 tests; GitHub/local main only, tips archived; production unchanged | [2026-10-29-demo.md](./2026-10-29-demo.md) |
 | Deployed | 2026-10-29 | Full main `23b0f3f7` → `ed50c70d`: guide card, offer card, voice with photos; no migration, env unchanged; Profiler card code shipped but `PROFILER_CARDS_ENABLED` off (Profiler blocks stay PENDING) | [pending.md](./pending.md) |
