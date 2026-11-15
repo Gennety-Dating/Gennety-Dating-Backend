@@ -4257,7 +4257,7 @@ describe("/v1/matches/*", () => {
       .get("/v1/matches/current")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ match: null });
+    expect(res.body).toEqual({ match: null, lastOutcome: null });
   });
 
   it("GET /current prioritizes a scheduled date over a newer proposed row", async () => {

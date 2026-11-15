@@ -5,6 +5,8 @@ const renderExpiryCard = vi.fn();
 // satori + resvg rasterize per case (and so the null branch — the plain-text
 // fallback — is reachable at all).
 vi.mock("./expiry-card.js", () => ({ renderExpiryCard }));
+const sendPushToUser = vi.fn();
+vi.mock("./push.js", () => ({ sendPushToUser }));
 
 const { sendExpiryNotifications, buildCard } = await import("./expiry-notify.js");
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
@@ -280,6 +282,50 @@ describe("sendExpiryNotifications", () => {
     expect(r.skipped).toBe(1);
     expect(api.sendPhoto).toHaveBeenCalledTimes(1);
     expect(api.sendPhoto.mock.calls[0]![0]).toBe(200);
+  });
+
+  it("pushes an app-only side the same words Telegram would send, and counts it", async () => {
+    const api = makeApi();
+    sendPushToUser.mockResolvedValue(true);
+    const m = matchWith(
+      side({ side: "A", telegramId: -42n, platform: "mobile", role: "silent", peerAccepted: true }),
+    );
+
+    const r = await sendExpiryNotifications(api as never, [m], 0);
+
+    expect(r.notified).toBe(1);
+    expect(r.skipped).toBe(0);
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(sendPushToUser).toHaveBeenCalledTimes(1);
+    const [userId, payload] = sendPushToUser.mock.calls[0]!;
+    expect(userId).toBe("user-a");
+    expect(payload.data).toEqual({ type: "match.outcome", matchId: "m-1" });
+    expect(payload.body).toMatch(/your match was actually in/i);
+    expect(payload.body).toMatch(/Time to answer is up/);
+    expect(payload.body).not.toMatch(/\*/);
+  });
+
+  it("a `both` side hears it on both rails; a responder push says the partner never replied", async () => {
+    const api = makeApi();
+    sendPushToUser.mockResolvedValue(true);
+    const m = matchWith(side({ platform: "both", role: "responder" }));
+
+    const r = await sendExpiryNotifications(api as never, [m], 0);
+
+    expect(r.notified).toBe(1);
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(sendPushToUser.mock.calls[0]![1].body).toMatch(/didn't reply within 24h/);
+  });
+
+  it("an app-only side with no deliverable push is still counted as skipped", async () => {
+    const api = makeApi();
+    sendPushToUser.mockResolvedValue(false);
+    const m = matchWith(side({ telegramId: -42n, platform: "mobile" }));
+
+    const r = await sendExpiryNotifications(api as never, [m], 0);
+
+    expect(r.skipped).toBe(1);
+    expect(r.notified).toBe(0);
   });
 
   it("does not edit pitch when pitchMessageId is null", async () => {

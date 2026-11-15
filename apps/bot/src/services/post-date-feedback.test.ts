@@ -399,9 +399,17 @@ describe("pendingFeedbackFor", () => {
       submitted: false,
       secondDateKnown: false,
       answered: false,
+      attended: null,
       maxTextLength: FEEDBACK_MAX_TEXT_LEN,
       serverNow: new Date("2026-08-11T09:00:00.000Z"),
     });
+  });
+
+  it("carries this side's own «did you meet?» answer, never the partner's", async () => {
+    mMatch.findFirst.mockResolvedValue({ ...row, dateAttendedA: false, dateAttendedB: true });
+    expect((await pendingFeedbackFor("uid-A"))?.attended).toBe(false);
+    mMatch.findFirst.mockResolvedValue({ ...row, dateAttendedA: null, dateAttendedB: true });
+    expect((await pendingFeedbackFor("uid-A"))?.attended).toBeNull();
   });
 
   it("a partner with no first name reads as null, as before", async () => {

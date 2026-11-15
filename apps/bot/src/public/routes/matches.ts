@@ -11,6 +11,7 @@ import { classifyMatchDecisionForUser } from "../../services/decision-intent.js"
 import { partnerPhotoUrls, resolvePartnerMedia } from "../partner-photos.js";
 import { serializePartnerProfileVideo } from "../../services/native-profile-video.js";
 import { env } from "../../config.js";
+import { lastMatchOutcomeFor } from "../../services/match-outcome.js";
 import {
   getCurrentMatchForUser,
   serializePartnerVoicePrompt,
@@ -153,9 +154,18 @@ matchesRouter.get(
 
 matchesRouter.get("/current", async (req: Request, res: Response): Promise<void> => {
   const match = await getCurrentMatchForUser(req.userId!);
+  // How the last pair ended, only while nothing is open (2026-11-15): without
+  // it the app's Today fell back to "searching" the moment a match ended, with
+  // no word about why. Best-effort — the envelope must never fail on it.
+  const lastOutcome = match
+    ? null
+    : await lastMatchOutcomeFor(req.userId!).catch((err: unknown) => {
+        console.warn("[matches] lastOutcome failed:", err);
+        return null;
+      });
   // Wrapped (2026-07-18, mobile contract): a bare `null` JSON body is
   // awkward for typed clients — `{ match: null }` keeps the envelope stable.
-  res.json({ match });
+  res.json({ match, lastOutcome });
 });
 
 /**

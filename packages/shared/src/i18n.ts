@@ -985,6 +985,11 @@ const translations = {
     feedbackAlreadySubmitted: "You've already told us how this date went — thanks, it's saved ✨",
     feedbackMatchGone: "This date is no longer available, so I couldn't save that.",
     feedbackPushTitle: "How was your date?",
+    // Push titles moved out of code (2026-11-15) — they were English for everyone.
+    pushTitleItsAMatch: "It's a match",
+    pushTitleVenueLocked: "Venue locked in",
+    pushBodyVenueLocked: "{venue} — tap for details.",
+    pushTitleWingman: "Secret Insight",
     feedbackPushBody: "A minute of your time helps us find you a better match next time.",
     // The drop notification on the app rail (iOS §5.3). Word for word the
     // mock-up the pre-permission screen showed during onboarding — the app
@@ -2171,6 +2176,11 @@ const translations = {
     feedbackAlreadySubmitted: "Отзыв об этом свидании уже есть — спасибо, всё сохранено ✨",
     feedbackMatchGone: "Это свидание больше недоступно, поэтому сохранить отзыв не получилось.",
     feedbackPushTitle: "Как прошло свидание?",
+    // Push titles moved out of code (2026-11-15) — they were English for everyone.
+    pushTitleItsAMatch: "Это мэтч",
+    pushTitleVenueLocked: "Место выбрано",
+    pushBodyVenueLocked: "{venue} — детали внутри.",
+    pushTitleWingman: "Секретная подсказка",
     feedbackPushBody: "Минута твоего времени — и в следующий раз мы подберём точнее.",
     matchDropPushTitle: "Твоя пара найдена",
     matchDropPushBody: "Нажми, чтобы посмотреть ✨",
@@ -3303,6 +3313,11 @@ const translations = {
     feedbackAlreadySubmitted: "Відгук про це побачення вже є — дякую, усе збережено ✨",
     feedbackMatchGone: "Це побачення більше недоступне, тому зберегти відгук не вдалося.",
     feedbackPushTitle: "Як пройшло побачення?",
+    // Push titles moved out of code (2026-11-15) — they were English for everyone.
+    pushTitleItsAMatch: "Це метч",
+    pushTitleVenueLocked: "Місце обрано",
+    pushBodyVenueLocked: "{venue} — деталі всередині.",
+    pushTitleWingman: "Секретна підказка",
     feedbackPushBody: "Хвилина твого часу — і наступного разу ми підберемо точніше.",
     matchDropPushTitle: "Твою пару знайдено",
     matchDropPushBody: "Натисни, щоб подивитися ✨",
@@ -4405,6 +4420,11 @@ const deTranslations: TranslationTable = {
   feedbackAlreadySubmitted: "Du hast uns schon erzählt, wie dieses Date war — danke, es ist gespeichert ✨",
   feedbackMatchGone: "Dieses Date ist nicht mehr verfügbar, deshalb konnte ich das nicht speichern.",
   feedbackPushTitle: "Wie war dein Date?",
+  // Push titles moved out of code (2026-11-15) — they were English for everyone.
+  pushTitleItsAMatch: "Es ist ein Match",
+  pushTitleVenueLocked: "Ort steht fest",
+  pushBodyVenueLocked: "{venue} — Details in der App.",
+  pushTitleWingman: "Geheimer Tipp",
   feedbackPushBody: "Eine Minute von dir, und das nächste Match passt besser.",
   matchDropPushTitle: "Dein Match ist da",
   matchDropPushBody: "Tippe zum Ansehen ✨",
@@ -5511,6 +5531,11 @@ const plTranslations: TranslationTable = {
   feedbackAlreadySubmitted: "Już opowiedziałeś(-aś), jak poszła ta randka — dzięki, zapisane ✨",
   feedbackMatchGone: "Ta randka nie jest już dostępna, więc nie udało mi się tego zapisać.",
   feedbackPushTitle: "Jak poszła randka?",
+  // Push titles moved out of code (2026-11-15) — they were English for everyone.
+  pushTitleItsAMatch: "Jest match",
+  pushTitleVenueLocked: "Miejsce wybrane",
+  pushBodyVenueLocked: "{venue} — szczegóły w aplikacji.",
+  pushTitleWingman: "Sekretna wskazówka",
   feedbackPushBody: "Minuta twojego czasu, a następne dopasowanie będzie trafniejsze.",
   matchDropPushTitle: "Twój match już jest",
   matchDropPushBody: "Kliknij, aby zobaczyć ✨",

@@ -18,12 +18,15 @@ import type { BotContext } from "../../session.js";
 import {
   classifyAttendanceReply,
   isAttendanceOutcome,
-  type AttendanceOutcome,
 } from "../../services/attendance.js";
 import {
   buildAttendanceOutcomeKeyboard,
   buildFeedbackKeyboard,
 } from "../../services/post-date-keyboards.js";
+import {
+  writeAttendanceOutcomeSide,
+  writeAttendanceSide,
+} from "../../services/attendance-record.js";
 import {
   claimMatchFlow,
   matchFlowClaimIsLive,
@@ -69,33 +72,12 @@ async function resolveSide(ctx: BotContext, matchId: string): Promise<SideResolu
 }
 
 /**
- * Записать факт явки.
- *
- * Идемпотентно по колонке: повторный ответ просто перезаписывает свой же.
- * Ответ второй стороны НЕ трогается — расхождение это `disputed`, реальное
- * состояние, а не ошибка, которую надо схлопнуть (см. `resolvePairAttendance`).
+ * Записать факт явки — общий писатель с приложением
+ * (`services/attendance-record.ts`). Идемпотентно по колонке; ответ второй
+ * стороны НЕ трогается — расхождение это `disputed` (см. `resolvePairAttendance`).
  */
-async function writeAttendance(
-  matchId: string,
-  isA: boolean,
-  attended: boolean,
-): Promise<void> {
-  await prisma.match.update({
-    where: { id: matchId },
-    data: isA ? { dateAttendedA: attended } : { dateAttendedB: attended },
-  });
-}
-
-async function writeOutcome(
-  matchId: string,
-  isA: boolean,
-  outcome: AttendanceOutcome,
-): Promise<void> {
-  await prisma.match.update({
-    where: { id: matchId },
-    data: isA ? { attendanceOutcomeA: outcome } : { attendanceOutcomeB: outcome },
-  });
-}
+const writeAttendance = writeAttendanceSide;
+const writeOutcome = writeAttendanceOutcomeSide;
 
 /**
  * Общий хвост ответа «да»: факт записан, дальше обычное приглашение в форму.

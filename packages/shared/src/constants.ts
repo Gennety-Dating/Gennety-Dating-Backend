@@ -1007,3 +1007,10 @@ export const PULSE_ANALYTICS = {
    */
   readKeyMinLength: 32,
 } as const;
+
+/**
+ * How long a finished match keeps its outcome on `/v1/matches/current`
+ * (`lastOutcome`). The app shows it once as a dismissible Today card; past
+ * this window the search simply continues without a word about the old pair.
+ */
+export const LAST_MATCH_OUTCOME_WINDOW_MS = 72 * 60 * 60 * 1000;

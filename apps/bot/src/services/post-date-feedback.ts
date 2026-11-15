@@ -393,6 +393,12 @@ export interface PendingFeedbackView {
    * an empty side.
    */
   answered: boolean;
+  /**
+   * This side's own «did you meet?» answer (`dateAttendedA/B`), null until
+   * given. The app asks it before the form, as Telegram does; a `false` means
+   * the form has nothing to ask about (2026-11-15).
+   */
+  attended: boolean | null;
   maxTextLength: number;
   serverNow: Date;
 }
@@ -431,6 +437,8 @@ export async function pendingFeedbackFor(
       feedbackByB: true,
       morningAfterA: true,
       morningAfterB: true,
+      dateAttendedA: true,
+      dateAttendedB: true,
     },
   });
   if (!match || !match.agreedTime) return null;
@@ -458,6 +466,7 @@ export async function pendingFeedbackFor(
     submitted: isFormFeedbackAnswer(own),
     secondDateKnown: ownMorningAnswer(match, userId) != null,
     answered: Boolean(own),
+    attended: (isA ? match.dateAttendedA : match.dateAttendedB) ?? null,
     maxTextLength: FEEDBACK_MAX_TEXT_LEN,
     serverNow: now,
   };

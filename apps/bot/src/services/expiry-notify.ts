@@ -2,7 +2,8 @@ import { InputFile, type Api, type RawApi } from "grammy";
 import { GrammyError } from "grammy";
 import { t, type Language, type TranslationKey } from "@gennety/shared";
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
-import { telegramReachable } from "./telegram-reach.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
+import { sendPushToUser } from "./push.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import {
   renderExpiryCard,
@@ -37,9 +38,12 @@ import {
  * declines the card too; either way we fall back to `composeBody`, the exact
  * plain text this function sent before. No sentence exists on only one branch.
  *
- * Mobile-only sides (synthetic negative `telegramId`) are skipped — the
- * Expo client renders its own state from the `proposalDeadlineAt` API
- * field, no Telegram DM exists for them.
+ * App-reachable sides (`pushReachable`) get the same notice as a push
+ * (2026-11-15). The old comment here claimed the app "renders its own state
+ * from `proposalDeadlineAt`" — it did not: `/v1/matches/current` drops the row
+ * the moment it expires, so an app user was never told the window closed. The
+ * push mirrors `composeBody` (the plain-text Telegram notice) word for word;
+ * the app's Today card reads the same outcome from `lastOutcome`.
  */
 
 export const DEFAULT_NOTIFY_DELAY_MS = 2000;
@@ -230,6 +234,28 @@ async function clearPitchKeyboard(
   }
 }
 
+/**
+ * The expiry notice as a push. Same words as the Telegram fallback text
+ * (`composeBody`), with the Markdown markers dropped — a lock screen renders
+ * none. Never throws.
+ */
+export async function sendExpiryPush(matchId: string, side: SideClassification): Promise<boolean> {
+  const lang: Language = (side.language as Language) ?? "en";
+  try {
+    return await sendPushToUser(side.userId, {
+      title: "Gennety",
+      body: composeBody(side, lang).replace(/[*_`]/g, "").trim(),
+      data: { type: "match.outcome", matchId },
+    });
+  } catch (err) {
+    console.warn(
+      `[expiry-notify] push failed userId=${side.userId}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
 export async function sendExpiryNotifications(
   api: Api<RawApi>,
   matches: MatchExpiry[],
@@ -241,13 +267,20 @@ export async function sendExpiryNotifications(
 
   // Flatten to a single ordered list so the rate-limiter paces evenly
   // across matches rather than bursting all sides of one match at once.
-  const sides: SideClassification[] = matches.flatMap((m) => m.sides);
+  const entries = matches.flatMap((m) => m.sides.map((side) => ({ matchId: m.matchId, side })));
+  const sides: SideClassification[] = entries.map((e) => e.side);
 
   for (let i = 0; i < sides.length; i++) {
     const side = sides[i]!;
 
+    // The app leg first and independently of Telegram, like every other
+    // two-rail notice (`decision.ts` → `notifyPeer`): a `both` account hears
+    // it on both, a `mobile` one at all.
+    const pushed = pushReachable(side) ? await sendExpiryPush(entries[i]!.matchId, side) : false;
+
     if (!telegramReachable(side)) {
-      skipped++;
+      if (pushed) notified++;
+      else skipped++;
       continue;
     }
 

@@ -10,6 +10,7 @@ import {
   type PendingFeedbackView,
 } from "../../services/post-date-feedback.js";
 import { isUuid } from "../../utils/uuid.js";
+import { recordDateAttendance } from "../../services/attendance-record.js";
 
 /**
  * Post-date feedback for the NATIVE client (JWT) — PRODUCT_SPEC §Phase 4.3.
@@ -21,8 +22,10 @@ import { isUuid } from "../../utils/uuid.js";
  * `completed`. An app user was not merely unable to submit — they were never
  * told a form existed, and could not have found it if they had been.
  *
- *   GET  /v1/me/feedback/pending   — the date this user still owes feedback on
- *   POST /v1/me/feedback/post-date — one submission
+ *   GET  /v1/me/feedback/pending    — the date this user still owes feedback on
+ *   POST /v1/me/feedback/post-date  — one submission
+ *   POST /v1/me/feedback/attendance — «did you meet?», asked before the form
+ *                                     (2026-11-15; Telegram's `attend:*` twin)
  *
  * Mounted under `/v1/me` rather than beside the Mini App's `/v1/feedback`
  * because discovery is user-scoped, and because two routers on one prefix
@@ -83,6 +86,39 @@ export function createNativeFeedbackRouter(): Router {
     res.json({ pending: pending ? serialize(pending) : null });
   });
 
+  router.post("/attendance", async (req: Request, res: Response): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const matchId = typeof body.matchId === "string" ? body.matchId : null;
+    if (!matchId || !isUuid(matchId)) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    if (typeof body.attended !== "boolean") {
+      res.status(400).json({ error: "bad-attended" });
+      return;
+    }
+    const result = await recordDateAttendance({
+      matchId,
+      userId: req.userId!,
+      attended: body.attended,
+      outcome: body.outcome,
+    });
+    if (!result.ok) {
+      const status =
+        result.error === "not-participant"
+          ? 403
+          : result.error === "wrong-state"
+            ? 409
+            : result.error === "match-not-found"
+              ? 404
+              : 400;
+      res.status(status).json({ error: result.error });
+      return;
+    }
+    const pending = await pendingFeedbackFor(req.userId!);
+    res.json({ pending: pending ? serialize(pending) : null });
+  });
+
   return router;
 }
 
@@ -94,6 +130,7 @@ function serialize(view: PendingFeedbackView): Record<string, unknown> {
     agreedTime: view.agreedTime.toISOString(),
     submitted: view.submitted,
     askSecondDate: !view.secondDateKnown,
+    attended: view.attended,
     maxTextLength: view.maxTextLength,
     serverNow: view.serverNow.toISOString(),
   };

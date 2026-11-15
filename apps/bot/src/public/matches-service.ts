@@ -305,11 +305,14 @@ interface ParticipantContact {
 async function notifyParticipant(
   user: ParticipantContact,
   key: TranslationKey,
-  push: { type: string; title: string; matchId: string },
+  push: { type: string; title: string | { key: TranslationKey }; matchId: string },
   options: { telegram?: boolean } = {},
 ): Promise<void> {
   const lang = (user.language ?? "en") as Language;
   const text = t(lang, key);
+  // A localized title is passed as its key: the recipient's language is only
+  // known here (2026-11-15 — "It's a match" went out in English to everyone).
+  const title = typeof push.title === "string" ? push.title : t(lang, push.title.key);
   const api = getBotApi();
   if (
     options.telegram !== false &&
@@ -323,7 +326,7 @@ async function notifyParticipant(
   }
   if (user.platform === "mobile" || user.platform === "both") {
     await sendPushToUser(user.id, {
-      title: push.title,
+      title,
       // A lock screen renders no Markdown — drop the bold markers.
       body: text.replace(/[*_`]/g, ""),
       data: { type: push.type, matchId: push.matchId },
@@ -766,7 +769,7 @@ export async function applyMatchDecision(
             "matchBothAccepted",
             {
               type: "match.both_accepted",
-              title: "It's a match",
+              title: { key: "pushTitleItsAMatch" },
               matchId,
             },
             { telegram: !telegramHandledByCta },
@@ -776,7 +779,7 @@ export async function applyMatchDecision(
             "matchBothAccepted",
             {
               type: "match.both_accepted",
-              title: "It's a match",
+              title: { key: "pushTitleItsAMatch" },
               matchId,
             },
             { telegram: !telegramHandledByCta },
@@ -1023,7 +1026,8 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
       vibeLngA: true,
       vibeLatB: true,
       vibeLngB: true,
-      userA: { select: { universityDomain: true } },
+      userA: { select: { universityDomain: true, language: true } },
+      userB: { select: { language: true } },
     },
   });
   if (!match || match.status !== "negotiating_venue") return;
@@ -1097,15 +1101,17 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
     console.warn(`[wingman] generation failed for match ${matchId}:`, err);
   });
 
+  const langA = (match.userA.language ?? "en") as Language;
+  const langB = (match.userB.language ?? "en") as Language;
   await Promise.all([
     sendPushToUser(match.userAId, {
-      title: "Venue locked in",
-      body: `${venue.name} — tap for details.`,
+      title: t(langA, "pushTitleVenueLocked"),
+      body: t(langA, "pushBodyVenueLocked", { venue: venue.name }),
       data: { type: "match.scheduled", matchId },
     }),
     sendPushToUser(match.userBId, {
-      title: "Venue locked in",
-      body: `${venue.name} — tap for details.`,
+      title: t(langB, "pushTitleVenueLocked"),
+      body: t(langB, "pushBodyVenueLocked", { venue: venue.name }),
       data: { type: "match.scheduled", matchId },
     }),
   ]);

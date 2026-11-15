@@ -546,7 +546,7 @@ export async function runDateLifecycleTick(
       if (match.userA.platform === "mobile" || match.userA.platform === "both") {
         deliveries.push(
           sendPushToUser(match.userA.id, {
-            title: "Secret Insight",
+            title: t(langA, "pushTitleWingman"),
             body: hintA,
             data: { type: "match.wingman", matchId: match.id },
           }).catch((err) => console.warn("[wingman] push A failed:", err)),
@@ -555,7 +555,7 @@ export async function runDateLifecycleTick(
       if (match.userB.platform === "mobile" || match.userB.platform === "both") {
         deliveries.push(
           sendPushToUser(match.userB.id, {
-            title: "Secret Insight",
+            title: t(langB, "pushTitleWingman"),
             body: hintB,
             data: { type: "match.wingman", matchId: match.id },
           }).catch((err) => console.warn("[wingman] push B failed:", err)),

@@ -1708,6 +1708,62 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/feedback/attendance:
+    post:
+      tags: [me]
+      operationId: submitDateAttendance
+      summary: «Did you meet?» — asked before the post-date form
+      description: |
+        The JWT twin of Telegram's `attend:*` buttons; both write through
+        `services/attendance-record.ts` — `dateAttended*` and, after a no, the
+        "what happened" `attendanceOutcome*` of THIS side only. Same gate as
+        the form: a `completed` match, a participant. A repeat overwrites this
+        side's own answer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId, attended]
+              properties:
+                matchId: { type: string, format: uuid }
+                attended: { type: boolean }
+                outcome:
+                  type: string
+                  enum: [no_show_partner, no_show_self, both_rescheduled, other]
+                  description: "Only with `attended: false`; otherwise 400 `bad-outcome`."
+      responses:
+        "200":
+          description: Recorded. Carries the pending view afterwards.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending: { $ref: "#/components/schemas/PendingFeedback" }
+        "400":
+          description: "`bad-attended` or `bad-outcome`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The caller is not on this match.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`wrong-state` — the date has not been closed out yet."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/memory/ideas:
     get:
       tags: [Memory]
@@ -5369,6 +5425,14 @@ paths:
                 type: object
                 properties:
                   match: { $ref: "#/components/schemas/SerializedMatch" }
+                  lastOutcome:
+                    $ref: "#/components/schemas/MatchOutcome"
+                    description: |
+                      How the caller's last match ended (2026-11-15). Only when
+                      `match` is null, only for a pair the caller was shown,
+                      and only within 72 h of the end. OPTIONAL rather than a
+                      nullable union for the generator reason given on
+                      `PendingFeedback`; the server sends an explicit `null`.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/matches/{id}/partner-photos:
@@ -9320,6 +9384,35 @@ components:
             for DISPLAY only. (Same reason the set has 🤣 and not 😂 — Telegram
             has no 😂.)
 
+    MatchOutcome:
+      type: object
+      description: |
+        A FINAL outcome of the caller's last match — `services/match-outcome.ts`.
+        Blind-decision safe by construction: a partner's decline is named
+        only when the caller had decided too, a partner's yes only to a side
+        that stayed silent until expiry; anything else is plain `cancelled`.
+        The app shows it once (a dismissible Today card, dismissal per
+        `matchId`).
+      required: [matchId, kind, penalized, at]
+      properties:
+        matchId: { type: string, format: uuid }
+        kind:
+          type: string
+          description: |
+            `expired_you_silent` | `expired_missed_date` (silent, and the
+            partner had said yes) | `expired_peer_silent` |
+            `expired_you_declined` | `declined_by_partner` | `declined_by_you`
+            | `cancelled_by_partner` | `cancelled_by_you` | `cancelled`.
+            A plain string, not an enum, on purpose: a new kind must not fail
+            the decoding of the whole `/current` envelope in an older app —
+            an unknown kind is simply not shown.
+        penalized:
+          type: boolean
+          description: |
+            The silent side's rating was lowered (second offence). Only ever
+            true on `expired_you_silent` / `expired_missed_date`.
+        at: { type: string, format: date-time }
+
     PendingFeedback:
       type: object
       description: |
@@ -9340,6 +9433,13 @@ components:
         partnerFirstName: { type: [string, "null"] }
         venueName: { type: [string, "null"] }
         agreedTime: { type: string, format: date-time }
+        attended:
+          type: [boolean, "null"]
+          description: |
+            This side's own «did you meet?» answer, null until given
+            (2026-11-15). The app asks it before the form, as Telegram does
+            (`POST /v1/me/feedback/attendance`); `false` means the form has
+            nothing to ask about. Absent on an older server — ask.
         submitted:
           type: boolean
           description: |

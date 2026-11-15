@@ -4,7 +4,8 @@ import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
-import { telegramReachable } from "../../services/telegram-reach.js";
+import { pushReachable, telegramReachable } from "../../services/telegram-reach.js";
+import { sendPushToUser } from "../../services/push.js";
 import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import {
@@ -168,6 +169,33 @@ function selfUser(match: TicketMatch, side: Side): TicketUser {
 
 function peerUser(match: TicketMatch, side: Side): TicketUser {
   return side === "A" ? match.userB : match.userA;
+}
+
+/**
+ * The app leg of a ticket-gate notice (2026-11-15). Each one below used to be a
+ * Telegram DM only, so an app user never heard that the partner took their
+ * ticket, covered theirs, or that their own came back. Same localized words as
+ * the DM; the type opens Today, whose scene IS the ticket gate while it is open
+ * (`PushRouter.todayTypes`). Best-effort — never throws, never blocks the money
+ * path it rides on.
+ */
+async function pushTicketNotice(
+  user: TicketUser,
+  matchId: string,
+  type: "ticket.peer_paid" | "ticket.partner_covered" | "ticket.refunded",
+  body: string,
+): Promise<void> {
+  if (!pushReachable(user)) return;
+  await sendPushToUser(user.id, {
+    title: "Gennety",
+    body,
+    data: { type, matchId },
+  }).catch((err: unknown) => {
+    console.warn(
+      `[ticket-gate] ${type} push failed match=${matchId}:`,
+      err instanceof Error ? err.message : err,
+    );
+  });
 }
 
 // ── Public state view (shared by the GET state route + tests) ───────────────
@@ -924,6 +952,12 @@ async function settleTicket(
         )
         .catch(() => {});
     }
+    await pushTicketNotice(
+      peer,
+      matchId,
+      "ticket.peer_paid",
+      t(langOf(peer), "ticketPeerTookTheirs", { name: me.firstName ?? "" }),
+    );
   }
 
   if (bothPaid && after.ticketStatus !== "completed") {
@@ -1573,6 +1607,18 @@ export async function completeTicketGateAndUnlockScheduling(
   }
   const deferHerCalendar =
     coveredSide !== null && done?.partnerPaidSeenAt == null && revealDelivered;
+  // Her app hears it too — once, because the completion flip above is the CAS.
+  // Never defers her Calendar: a push is no reveal she has to open first.
+  if (done && coveredSide && done.partnerPaidSeenAt === null) {
+    const covered = selfUser(done, coveredSide);
+    const payer = peerUser(done, coveredSide);
+    await pushTicketNotice(
+      covered,
+      matchId,
+      "ticket.partner_covered",
+      t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
+    );
+  }
 
   // The persistent ticket card stays in chat untouched; the Calendar is sent as
   // a SEPARATE message that follows it. `calendarMessageId*` is NOT null here —
@@ -1709,6 +1755,7 @@ export async function settleStrandedTicketRefund(
         .sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"))
         .catch(() => {});
     }
+    await pushTicketNotice(payer, matchId, "ticket.refunded", t(langOf(payer), "ticketRefundedDm"));
   }
   return true;
 }
@@ -1944,6 +1991,7 @@ export async function refundAndFallbackToScheduling(
         );
       });
   }
+  await pushTicketNotice(payer, matchId, "ticket.refunded", t(langOf(payer), "ticketRefundedDm"));
 
   await startScheduling(api, matchId, { afterTicketGate: true });
 }

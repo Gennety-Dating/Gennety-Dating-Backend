@@ -391,6 +391,12 @@ async function classifyAndPenalise(
         actorId: s.role === "silent" ? s.userId : peer.userId,
         targetId: s.role === "silent" ? peer.userId : s.userId,
         actionType: s.role === "silent" ? "EXPIRED_SILENT" : "EXPIRED_PEER_IGNORED",
+        // The app's Today card (`services/match-outcome.ts`) reads this to say
+        // "rating lowered" only when it really was — the counter on the
+        // profile moves on, this row does not.
+        ...(s.role === "silent"
+          ? { metadata: { penalised: s.penalised === true, offenseCount: s.offenseCount ?? 1 } }
+          : {}),
       });
     } catch (err) {
       console.warn(
