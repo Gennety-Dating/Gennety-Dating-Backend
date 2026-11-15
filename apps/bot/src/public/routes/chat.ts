@@ -9,6 +9,8 @@ import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
 import { chatActivity } from "../../services/chat-activity.js";
+import { chatReplyWaiters, sendChatReplyPush } from "../../services/chat-reply-push.js";
+import { randomUUID } from "node:crypto";
 import { listChatTopics } from "../../services/chat-topics.js";
 import {
   claimChatSession,
@@ -117,6 +119,48 @@ function isAgentUnavailable(err: unknown): boolean {
   return err instanceof Error && err.name === "ChatAgentUnavailableError";
 }
 
+/**
+ * Whether anyone is still there for this turn's reply (app audit 2026-11-15,
+ * item 11). The turn runs to the end whether or not the phone is still
+ * connected — the server stores the reply either way — so when every request
+ * waiting on it has disconnected (`ChatReplyWaiters`), the reply goes out as
+ * the «Gennety ответил» push with the chat to open. Settled exactly once per
+ * request — with the reply, or with nothing when the turn failed — so a
+ * waiter never outlives its request.
+ */
+function watchClient(req: Request, res: Response, clientMessageId: string | null) {
+  const userId = req.userId!;
+  let gone = false;
+  res.once("close", () => {
+    if (!res.writableEnded) gone = true;
+  });
+  const settleOnce = chatReplyWaiters.join(`${userId}\u0000${clientMessageId ?? randomUUID()}`, () => gone);
+  const settle = (reply: Record<string, unknown> | null): void => {
+    const push = settleOnce();
+    const content = (reply?.message as { content?: unknown } | undefined)?.content;
+    const sessionId = reply?.sessionId;
+    if (push && typeof content === "string" && typeof sessionId === "string") {
+      void sendChatReplyPush({ userId, sessionId, content });
+    }
+  };
+  return {
+    settle,
+    /** The turn's answer, settled on the way through — a failure settles empty. */
+    follow<T extends Record<string, unknown> | null>(turn: Promise<T>): Promise<T> {
+      return turn.then(
+        (reply) => {
+          settle(reply);
+          return reply;
+        },
+        (err: unknown) => {
+          settle(null);
+          throw err;
+        },
+      );
+    },
+  };
+}
+
 export const chatRouter: Router = Router();
 
 chatRouter.use(requireAuth);
@@ -129,6 +173,13 @@ const CHAT_TEXT_MAX_LENGTH = 4_000;
  * turn is remembered; anything thrown is forgotten and the retry runs anew.
  */
 const chatSends = new SendDedupe<Record<string, unknown>>({ keep: () => true });
+
+/** `/voice`'s answer, status included: only a 200 is kept for a retry. */
+interface VoiceAnswer {
+  status: number;
+  body: Record<string, unknown>;
+}
+const voiceSends = new SendDedupe<VoiceAnswer>({ keep: (answer) => answer.status === 200 });
 
 /** Сколько снимков несёт один ход — как альбом Telegram. */
 const CHAT_IMAGES_MAX = 10;
@@ -224,7 +275,8 @@ chatRouter.post(
     if (sessionId === false) return;
 
     const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
-    const reply = await chatSends.run(req.userId!, clientMessageId, async () => {
+    const watch = watchClient(req, res, clientMessageId);
+    const reply = await watch.follow(chatSends.run(req.userId!, clientMessageId, async () => {
       // The chat ends with a live «about you» question (decision journal
       // 2026-11-13): this message is its answer, and the reply is the next
       // question or the closing line — no concierge turn. Only a plain typed
@@ -282,7 +334,7 @@ chatRouter.post(
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
       throw err;
-    });
+    }));
     if (!reply) {
       res.status(503).json({ error: "agent_unavailable" });
       return;
@@ -368,63 +420,84 @@ chatRouter.post(
     const imageUrls = turnImageUrls(undefined, req.body?.imageUrls);
     if (!imagesAllowed(imageUrls, req.userId!, res)) return;
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId! },
-      select: { language: true },
-    });
+    // The same idempotency and status as `/message` (app audit 2026-11-15):
+    // a retry of a note whose answer was lost gets that answer back instead
+    // of a second transcription and a second turn, and the phone can poll
+    // `/activity` with the same id. Only a 200 is remembered — a refusal or an
+    // outage is asked again.
+    const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
+    const watch = watchClient(req, res, clientMessageId);
+    let answer: VoiceAnswer;
+    try {
+      answer = await voiceSends.run(req.userId!, clientMessageId, async (): Promise<VoiceAnswer> => {
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { language: true },
+      });
 
-    const transcription = await transcribeVoiceResult(req.file.buffer, {
-      mime: req.file.mimetype,
-      ...(user?.language ? { language: user.language } : {}),
-    });
-    // Our outage is not the recording's fault: 503 tells the app to keep the
-    // note and offer a retry, where 422 would have it discarded (audit C-06).
-    if (!transcription.ok && transcription.reason === "unavailable") {
-      res.status(503).json({ error: "transcription_unavailable" });
-      return;
-    }
-    const transcript = transcription.ok ? transcription.text : "";
-    if (!transcript) {
-      res.status(422).json({ error: "Could not transcribe audio" });
-      return;
-    }
+      const transcription = await transcribeVoiceResult(req.file!.buffer, {
+        mime: req.file!.mimetype,
+        ...(user?.language ? { language: user.language } : {}),
+      });
+      // Our outage is not the recording's fault: 503 tells the app to keep the
+      // note and offer a retry, where 422 would have it discarded (audit C-06).
+      if (!transcription.ok && transcription.reason === "unavailable") {
+        return { status: 503, body: { error: "transcription_unavailable" } };
+      }
+      const transcript = transcription.ok ? transcription.text : "";
+      if (!transcript) {
+        return { status: 422, body: { error: "Could not transcribe audio" } };
+      }
 
-    const turn = await runChatTurn({
-      userId: req.userId!,
-      text: transcript,
-      imageUrls,
-      context,
-      sessionId,
-      chatCards: chatCardsOf(req),
-    }).catch((err: unknown) => {
-      if (isAgentUnavailable(err)) return null;
+      const activity = clientMessageId ? chatActivity.begin(req.userId!, clientMessageId) : null;
+      const turn = await runChatTurn({
+        userId: req.userId!,
+        text: transcript,
+        imageUrls,
+        context,
+        sessionId,
+        chatCards: chatCardsOf(req),
+        ...(activity ? { onStep: activity.report } : {}),
+      })
+        .catch((err: unknown) => {
+          if (isAgentUnavailable(err)) return null;
+          throw err;
+        })
+        .finally(() => activity?.finish());
+      // Same contract as the transcription outage above: 503 keeps the note in
+      // the app with its retry.
+      if (!turn) {
+        return { status: 503, body: { error: "agent_unavailable" } };
+      }
+
+      return {
+        status: 200,
+        body: {
+          message: {
+            id: turn.id,
+            role: turn.role,
+            content: turn.content,
+            imageUrl: turn.imageUrl,
+            createdAt: turn.createdAt.toISOString(),
+          },
+          sessionId: turn.sessionId,
+          uiHint: null,
+          transcript,
+          ...(turn.receipts ? { receipts: turn.receipts } : {}),
+          ...(turn.action ? { action: turn.action } : {}),
+          ...(turn.attachment ? { attachment: turn.attachment } : {}),
+          ...(turn.offer ? { offer: turn.offer } : {}),
+          ...(turn.guide ? { guide: turn.guide } : {}),
+          ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
+        },
+      };
+    });
+    } catch (err) {
+      watch.settle(null);
       throw err;
-    });
-    // Same contract as the transcription outage above: 503 keeps the note in
-    // the app with its retry.
-    if (!turn) {
-      res.status(503).json({ error: "agent_unavailable" });
-      return;
     }
-
-    res.json({
-      message: {
-        id: turn.id,
-        role: turn.role,
-        content: turn.content,
-        imageUrl: turn.imageUrl,
-        createdAt: turn.createdAt.toISOString(),
-      },
-      sessionId: turn.sessionId,
-      uiHint: null,
-      transcript,
-      ...(turn.receipts ? { receipts: turn.receipts } : {}),
-      ...(turn.action ? { action: turn.action } : {}),
-      ...(turn.attachment ? { attachment: turn.attachment } : {}),
-      ...(turn.offer ? { offer: turn.offer } : {}),
-      ...(turn.guide ? { guide: turn.guide } : {}),
-        ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
-    });
+    watch.settle(answer.status === 200 ? answer.body : null);
+    res.status(answer.status).json(answer.body);
   },
 );
 

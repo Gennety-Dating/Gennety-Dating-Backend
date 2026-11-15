@@ -53,6 +53,13 @@ export const CHAT_SESSION_DIGEST_RESCAN_DAYS = 7;
 /** Transcript fed to the titler / summarizer: newest messages, capped twice. */
 export const CHAT_SESSION_DIGEST_MESSAGES = 80;
 export const CHAT_SESSION_DIGEST_CHARS = 12_000;
+/**
+ * A chat longer than the agent's window (app audit 2026-11-15): its own
+ * summary rides the prompt as «earlier in this chat», and is rewritten each
+ * time the chat has grown by this many messages since — one small-model call
+ * per that many messages, only in chats past the window.
+ */
+export const CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES = 20;
 /** A stored summary is cut here — the model is asked for 3–6 sentences. */
 export const CHAT_SESSION_SUMMARY_MAX = 2_000;
 

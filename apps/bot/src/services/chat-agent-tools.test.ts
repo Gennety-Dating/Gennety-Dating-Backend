@@ -385,7 +385,7 @@ describe("отчёт о шагах хода", () => {
     ];
     const { seen, onStep } = steps();
     await runChatTurn({ userId: "u1", text: "как дела?", imageUrls: [], sessionId: "s-now", onStep }, { fetchFn });
-    expect(seen).toEqual(["thinking", "past_chats", "writing", "date", "writing"]);
+    expect(seen).toEqual(["thinking", "past_chats", "writing", "matching", "writing"]);
   });
 
   it("сломанный отчёт не стоит хода", async () => {

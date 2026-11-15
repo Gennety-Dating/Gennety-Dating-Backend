@@ -21,6 +21,7 @@ export const CHAT_ACTIVITY_STEPS = [
   "past_chats",
   "profile",
   "date",
+  "matching",
   "writing",
 ] as const;
 
@@ -50,16 +51,18 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   ["review_my_photos", "profile"],
   ["offer_change", "profile"],
   ["propose_close_account", "profile"],
-  // Matching, the date, the venue.
+  // The search itself: why they are or are not being matched, pausing it.
+  ["get_my_standing", "matching"],
+  ["pause_matching", "matching"],
+  ["resume_matching", "matching"],
+  // The match, the date, the venue.
   ["explain_my_match", "date"],
-  ["get_my_standing", "date"],
+  ["get_my_date", "date"],
   ["propose_venue_change", "date"],
   ["propose_cancel_date", "date"],
   ["record_date_feedback", "date"],
   ["record_rejection_feedback", "date"],
   ["propose_report_partner", "date"],
-  ["pause_matching", "date"],
-  ["resume_matching", "date"],
   // The wishlist. A card's web look-up reports `web` from inside the tool.
   ["get_my_wishlist", "wishlist"],
   ["remove_wishlist_item", "wishlist"],

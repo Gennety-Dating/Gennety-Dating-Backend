@@ -144,6 +144,7 @@ describe("chat agent sessions", () => {
       userId: USER,
       sessionId: CHAT,
       openedNewSession: true,
+      refreshSummary: false,
     });
   });
 

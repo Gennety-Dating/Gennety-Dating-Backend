@@ -29,6 +29,7 @@ const {
   openProfilerQuestionInChat,
   postDueProfilerQuestion,
   profilerChatText,
+  profilerReplyIsAside,
   readProfilerChatAttachment,
 } = await import("./profiler-chat.js");
 
@@ -231,5 +232,67 @@ describe("answerProfilerInChat", () => {
       await answerProfilerInChat({ userId: USER, sessionId: CHAT, questionId: OPEN.id, text: "hi", now: NOW }),
     ).toBeNull();
     expect(db.message.create).not.toHaveBeenCalled();
+  });
+});
+
+// App audit 2026-11-15: a question to Gennety, or talk about the match, the
+// date, tickets or the venue, typed under an open «about you» question is not
+// its answer — the concierge gets the turn.
+describe("profilerReplyIsAside", () => {
+  it.each([
+    ["когда будет пара?", "Куда тянет в путешествиях?"],
+    ["почему мне никого не подбирают", "Куда тянет в путешествиях?"],
+    ["сколько у меня билетов", "Что слушаешь в дороге?"],
+    ["а где моё свидание", "Что слушаешь в дороге?"],
+    ["скажи, что с мэтчем", "Любимое блюдо?"],
+    ["why no match yet", "What do you cook?"],
+    ["can you change the venue", "What do you cook?"],
+    ["I want to cancel my date", "What do you cook?"],
+    ["czy mam randkę w sobotę", "Co gotujesz?"],
+  ])("%s → concierge", (text, question) => {
+    expect(profilerReplyIsAside(text, question)).toBe(true);
+  });
+
+  it.each([
+    ["Rooftops", "Where do you like to go on a date?"],
+    ["a quiet bar, first dates should be calm", "Where do you like to go on a date?"],
+    ["когда устаю — гуляю у воды", "Как отдыхаешь?"],
+    ["где-нибудь у моря", "Куда тянет в путешествиях?"],
+    ["смотрю футбольный матч с друзьями", "Чем занят по выходным?"],
+    ["пару дней в горах", "Куда тянет в путешествиях?"],
+    ["маленькие уютные заведения", "Где любишь бывать?"],
+    ["2", "How did the format feel?"],
+  ])("%s → stays the answer", (text, question) => {
+    expect(profilerReplyIsAside(text, question)).toBe(false);
+  });
+});
+
+describe("answerProfilerInChat — asides", () => {
+  it("a question is not taken as the answer: nothing written, the concierge gets the turn", async () => {
+    native.getNativeProfilerBatch.mockResolvedValue({ question: OPEN, remaining: 2 });
+    const answered = await answerProfilerInChat({
+      userId: USER,
+      sessionId: CHAT,
+      questionId: OPEN.id,
+      text: "When is my next match?",
+      now: NOW,
+    });
+    expect(answered).toBeNull();
+    expect(native.answerNativeProfilerQuestion).not.toHaveBeenCalled();
+    expect(db.message.create).not.toHaveBeenCalled();
+  });
+
+  it("an option named by its words is still the answer", async () => {
+    native.getNativeProfilerBatch.mockResolvedValue({ question: CLOSED, remaining: 1 });
+    native.answerNativeProfilerQuestion.mockResolvedValue({ ok: true, outcome: "done" });
+    const answered = await answerProfilerInChat({
+      userId: USER,
+      sessionId: CHAT,
+      questionId: CLOSED.id,
+      text: "Just right",
+      now: NOW,
+    });
+    expect(answered).not.toBeNull();
+    expect(native.answerNativeProfilerQuestion).toHaveBeenCalled();
   });
 });

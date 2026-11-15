@@ -11,6 +11,7 @@ import { prisma } from "@gennety/db";
 import {
   CADENCE,
   dropOutpacesNotices,
+  isValidTimeZone,
   premiumPlanDisplayPrice,
   PREMIUM_PLANS,
   PROXY_OPEN_HOURS,
@@ -30,7 +31,10 @@ import {
   type PlaybookCadence,
   type PlaybookFeatures,
   type PlaybookPricing,
+  type PromptSurface,
 } from "./product-playbook.js";
+
+export type { PromptSurface } from "./product-playbook.js";
 import { getRecentChatEvents, type ChatEventView } from "./chat-events.js";
 import { stallCheckInPending } from "./match-stall.js";
 import { rematchLimits } from "./rematch.js";
@@ -79,6 +83,22 @@ ${VOICE_SELF_NAME}
   - Women: lead with comfort, taste, and control; respect her standards; warm but never over-flatter or patronize. On waits, warmth means calm and certain, not consoling.
   - Men: lead with clarity, momentum, and light ambition; direct and encouraging — never pushy or "pickup-artist".
 - No gendered vocatives ("bro", "girl"), no corporate speak, no fake enthusiasm.`;
+
+/**
+ * The persona as each surface reads it (app audit 2026-11-15). Telegram gets
+ * `BASE_PERSONA` byte for byte; the app's chat is told where its words
+ * actually land instead of "Telegram".
+ */
+function personaFor(surface: PromptSurface): string {
+  if (surface === "tg") return BASE_PERSONA;
+  return BASE_PERSONA.replace(
+    "each blank-line block is delivered as its own Telegram message",
+    "each blank-line block is shown as its own bubble in the app's chat",
+  ).replace(
+    "Your replies are sent to Telegram without any formatting renderer",
+    "Your replies are shown in the app without any formatting renderer",
+  );
+}
 
 /** Read the live feature flags the playbook + context rendering depend on. */
 function playbookFeatures(): PlaybookFeatures {
@@ -355,12 +375,12 @@ function localeFor(language: string | null): string {
  * so the agent quotes the same figure the user reads. Without an explicit zone
  * this followed the host clock: a UTC server said "15:00" for a 18:00 Kyiv time.
  */
-function formatClock(date: Date, locale: string): string {
+function formatClock(date: Date, locale: string, timeZone: string = RENDER_TZ): string {
   return date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: RENDER_TZ,
+    timeZone,
   });
 }
 
@@ -382,7 +402,7 @@ export function describeSearchPhase(
 }
 
 /** Full date+time label ("Saturday, May 16, 19:00") in `RENDER_TZ`. */
-function formatWhen(date: Date, locale: string): string {
+function formatWhen(date: Date, locale: string, timeZone: string = RENDER_TZ): string {
   return date.toLocaleString(locale, {
     weekday: "long",
     month: "long",
@@ -390,8 +410,19 @@ function formatWhen(date: Date, locale: string): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: RENDER_TZ,
+    timeZone,
   });
+}
+
+/**
+ * The zone match times are quoted in. Telegram: `RENDER_TZ`, the zone its date
+ * card prints. The app shows times in the person's own zone, so the app's
+ * agent reads the profile's (app audit 2026-11-15, «two clocks»); a missing or
+ * unknown zone falls back to `RENDER_TZ`.
+ */
+export function promptTimeZone(surface: PromptSurface, profileZone: string | null | undefined): string {
+  if (surface === "tg" || !profileZone) return RENDER_TZ;
+  return isValidTimeZone(profileZone) ? profileZone : RENDER_TZ;
 }
 
 /** Human "time until" the date, e.g. "in ~4h", "in ~2 days", "~10 min ago". */
@@ -418,8 +449,11 @@ export function describeActiveMatch(
   now: Date,
   locale: string,
   features: PlaybookFeatures,
+  surface: PromptSurface = "tg",
+  timeZone: string = RENDER_TZ,
 ): string {
   if (!match) return "No active match. Waiting for the next batch.";
+  const app = surface === "app";
 
   const partner = match.partnerFirstName ?? "their match";
   const lines: string[] = [];
@@ -446,7 +480,11 @@ export function describeActiveMatch(
 
   if (match.status === "negotiating") {
     lines.push("Match accepted by both sides — currently scheduling the date.");
-    lines.push(`Partner: ${partner}. Both are marking availability in the Calendar Mini App.`);
+    lines.push(
+      app
+        ? `Partner: ${partner}. Both are marking availability in the app's calendar (it opens from the match card on Today).`
+        : `Partner: ${partner}. Both are marking availability in the Calendar Mini App.`,
+    );
     if (features.tickets && match.ticketStatus && match.ticketStatus !== "completed") {
       lines.push(`Date Ticket gate: ${match.ticketStatus} (Calendar unlocks once both tickets are settled).`);
     }
@@ -457,16 +495,24 @@ export function describeActiveMatch(
 
   if (match.status === "negotiating_venue") {
     lines.push("Match accepted — now choosing the meeting place.");
-    lines.push(`Partner: ${partner}. Each submits a departure point (map) then a short vibe; the concierge then picks the venue.`);
+    lines.push(
+      app
+        ? `Partner: ${partner}. Each submits a departure point (map) then a short vibe; Gennety then picks the venue.`
+        : `Partner: ${partner}. Each submits a departure point (map) then a short vibe; the concierge then picks the venue.`,
+    );
     if (match.venueSelfSubmitted === true) {
       lines.push(
         match.venuePartnerSubmitted === true
-          ? "This user HAS submitted theirs, and so has the partner — the concierge is picking the venue now. Nothing is left for them to do; the place lands in this chat shortly."
+          ? app
+            ? "This user HAS submitted theirs, and so has the partner — Gennety is picking the venue now. Nothing is left for them to do; the place appears on their date card on Today shortly, with a push."
+            : "This user HAS submitted theirs, and so has the partner — the concierge is picking the venue now. Nothing is left for them to do; the place lands in this chat shortly."
           : `This user HAS submitted theirs (departure point and vibe are saved). Nothing is left for them to do — they are waiting on ${partner}. Do NOT ask them to pick a point or a vibe again, and do not imply anything was lost or reset.`,
       );
     } else if (match.venueSelfSubmitted === false) {
       lines.push(
-        "This user has NOT submitted theirs yet — they still need to open the venue Mini App (the \"Pick on map\" button) and mark their departure point, then describe the vibe.",
+        app
+          ? "This user has NOT submitted theirs yet — they still need to mark their departure point on the map (\"Starting from?\"), then describe the evening (\"What kind of evening?\"); both open from the match card on Today."
+          : "This user has NOT submitted theirs yet — they still need to open the venue Mini App (the \"Pick on map\" button) and mark their departure point, then describe the vibe.",
       );
     }
     const stall = stallLine();
@@ -475,7 +521,7 @@ export function describeActiveMatch(
   }
 
   if (match.status === "scheduled") {
-    const when = match.agreedTime ? formatWhen(match.agreedTime, locale) : "TBD";
+    const when = match.agreedTime ? formatWhen(match.agreedTime, locale, timeZone) : "TBD";
     const venue = match.venueName ?? "TBD";
     lines.push(`Date scheduled: ${when} at ${venue}.`);
     lines.push(`Partner: ${partner}.`);
@@ -493,7 +539,11 @@ export function describeActiveMatch(
     }
     if (match.venueAddress) lines.push(`Venue address: ${match.venueAddress}.`);
     if (match.venueGoogleMapsUri) {
-      lines.push(`Venue map link exists (the "Open in Maps" button on their date card).`);
+      lines.push(
+        app
+          ? `Venue map link exists (the "Get directions" button on their date card).`
+          : `Venue map link exists (the "Open in Maps" button on their date card).`,
+      );
     }
 
     // Find-each-other status — the most-asked scheduled-stage question.
@@ -508,7 +558,8 @@ export function describeActiveMatch(
         coord = `the anonymous coordination chat is OPEN NOW (closes ${formatClock(
           match.proxyClosesAt!,
           locale,
-        )}) — tell them to tap "Enter chat" to coordinate the exact spot.`;
+          timeZone,
+        )}) — tell them to tap "${app ? "Open chat" : "Enter chat"}"${app ? " on their date card" : ""} to coordinate the exact spot.`;
       } else if (match.proxyClosedAt != null) {
         coord = `the coordination chat has closed.`;
       } else if (match.agreedTime != null) {
@@ -516,17 +567,18 @@ export function describeActiveMatch(
         // the anonymous chat opens for every date, and the prompt must not
         // promise the handle swap that used to precede it.
         const opensAt = new Date(match.agreedTime.getTime() - PROXY_OPEN_LEAD_MS);
-        coord = `the anonymous "Enter chat" button appears automatically ~1h before the date (around ${formatClock(
+        coord = `the anonymous "${app ? "Open chat" : "Enter chat"}" button appears automatically ~1h before the date (around ${formatClock(
           opensAt,
           locale,
-        )}) for both of them. Contacts are never exchanged — that chat is how they find each other.`;
+          timeZone,
+        )})${app ? " on the date card" : ""} for both of them. Contacts are never exchanged — that chat is how they find each other.`;
       } else {
         coord = `coordination tools open automatically shortly before the date.`;
       }
       lines.push(`Find-each-other: ${coord}`);
     } else {
       lines.push(
-        `Find-each-other: have them go to the venue pin ("Open in Maps") at the agreed time and look inside — it's a small, easy-to-find spot.`,
+        `Find-each-other: have them go to the venue pin ("${app ? "Get directions" : "Open in Maps"}") at the agreed time and look inside — it's a small, easy-to-find spot.`,
       );
     }
 
@@ -696,7 +748,7 @@ const ACTIVE_MATCH_STATUSES = [
   "scheduled",
 ] as const;
 
-async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
+async function fetchUserContext(telegramId: bigint, surface: PromptSurface): Promise<UserContext> {
   const statusFilter = { status: { in: [...ACTIVE_MATCH_STATUSES] } };
   const user = await prisma.user.findUnique({
     where: { telegramId },
@@ -710,7 +762,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       ticketBalance: true,
       premiumUntil: true,
       verificationStatus: true,
-      profile: { select: { homeCity: true, calibrationUntil: true } },
+      profile: { select: { homeCity: true, calibrationUntil: true, timeZone: true } },
       matchesAsA: {
         where: statusFilter,
         orderBy: { createdAt: "desc" },
@@ -778,7 +830,14 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       }
     : null;
 
-  const matchSummary = describeActiveMatch(activeMatch, new Date(), locale, features);
+  const matchSummary = describeActiveMatch(
+    activeMatch,
+    new Date(),
+    locale,
+    features,
+    surface,
+    promptTimeZone(surface, user?.profile?.timeZone),
+  );
 
   const chatTimeline = user?.id
     ? renderChatTimeline(await getRecentChatEvents(user.id), locale)
@@ -831,22 +890,31 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
 /**
  * Build the full dynamic system prompt for a post-onboarding user.
  *
+ * `surface` — who reads it: `tg` (the Telegram bot, the default, unchanged
+ * byte for byte) or `app` (the app's chat agent, `chat-agent.ts`), where the
+ * persona, the playbook and the match block name the app's screens, App Store
+ * billing and push notifications, and match times are in the profile's zone.
+ *
  * Structure:
  *   [Base Persona]
  *   [--- Product Playbook (code-owned, flag-aware) ---]
  *   [--- Operator Knowledge Base (DB, optional) ---]
  *   [--- Current User Context (live, side-resolved match) ---]
  */
-export async function buildSystemPrompt(telegramId: bigint): Promise<string> {
+export async function buildSystemPrompt(
+  telegramId: bigint,
+  surface: PromptSurface = "tg",
+): Promise<string> {
   const [knowledge, userCtx] = await Promise.all([
     fetchKnowledgeBase(),
-    fetchUserContext(telegramId),
+    fetchUserContext(telegramId, surface),
   ]);
 
   const playbook = buildProductPlaybook(
     playbookFeatures(),
     playbookPricing(),
     playbookCadence(),
+    surface,
   );
 
   const pendingSection = userCtx.pendingRejectionHint
@@ -898,8 +966,8 @@ ${userCtx.chatTimeline}
 
 **Read the timeline before you answer.** It is the ground truth for what the
 user is reacting to: the last thing the bot sent, the form it took (a plain
-message, a photo card, a Mini App), the buttons that were on it, and what the
-user did next. Most of it was NOT written by you — cards, nudges and Mini App
+message, a photo card, ${surface === "app" ? "a screen" : "a Mini App"}), the buttons that were on it, and what the
+user did next. Most of it was NOT written by you — cards, nudges and ${surface === "app" ? "screen" : "Mini App"}
 follow-ups are sent by the product itself.
 
 - A short follow-up with no subject of its own — "почему?", "why?", "и что
@@ -932,7 +1000,7 @@ English on a bare emoji, which reads as it having lost the thread.${pendingSecti
     ? `\n\n## Operator Knowledge Base (extra notes)\n${knowledge}`
     : "";
 
-  return `${BASE_PERSONA}
+  return `${personaFor(surface)}
 
 ## Product Playbook
 ${playbook}${knowledgeSection}

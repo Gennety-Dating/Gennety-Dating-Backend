@@ -35,7 +35,10 @@ describe("stepForTool", () => {
     ["explain_my_match", "date"],
     ["propose_venue_change", "date"],
     ["propose_cancel_date", "date"],
-    ["get_my_standing", "date"],
+    ["get_my_standing", "matching"],
+    ["pause_matching", "matching"],
+    ["resume_matching", "matching"],
+    ["get_my_date", "date"],
   ])("%s is %s", (name, step) => {
     expect(stepForTool(name)).toBe(step);
   });

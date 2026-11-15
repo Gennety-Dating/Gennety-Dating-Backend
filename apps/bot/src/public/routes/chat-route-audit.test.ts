@@ -213,6 +213,38 @@ describe("B-09: clientMessageId", () => {
   });
 });
 
+// App audit 2026-11-15: a voice note carries the same idempotency key.
+describe("voice clientMessageId", () => {
+  const sendVoice = (id?: string) => {
+    let req = request(app()).post("/v1/chat/voice").set(auth());
+    if (id) req = req.field("clientMessageId", id);
+    return req.attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+  };
+
+  it("a retry with the same id gets the first answer without a second transcription or turn", async () => {
+    const first = await sendVoice("voice-retry-0001");
+    const again = await sendVoice("voice-retry-0001");
+    expect(first.status).toBe(200);
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual(first.body);
+    expect(transcription).toHaveBeenCalledTimes(1);
+    expect(runChatTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal is not remembered: the retry is heard again", async () => {
+    transcription.mockResolvedValueOnce({ ok: false, reason: "unavailable" });
+    expect((await sendVoice("voice-retry-0002")).status).toBe(503);
+    expect((await sendVoice("voice-retry-0002")).status).toBe(200);
+    expect(transcription).toHaveBeenCalledTimes(2);
+  });
+
+  it("without an id every note is its own turn, as before", async () => {
+    await sendVoice();
+    await sendVoice();
+    expect(runChatTurn).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("voice with photos (2026-10-16)", () => {
   const own = (n: number) => `${USER_ID}/${1_000 + n}.jpg`;
   const send = (paths: string[]) => {

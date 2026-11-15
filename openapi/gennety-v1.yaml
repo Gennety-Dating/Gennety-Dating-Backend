@@ -4197,6 +4197,23 @@ paths:
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
         keeps offering profile changes as a question in words.
+
+        **A reply nobody waited for (app audit 2026-11-15).** The turn runs to
+        the end even when the client disconnects, and the reply is stored in
+        the chat. When every request waiting on the turn (the first send and
+        any retry with the same `clientMessageId`) has disconnected, the reply
+        goes out as an APNs alert: title «Gennety ответил» in the account
+        language, body the reply's first bubble, payload
+        `{ "type": "chat.reply", "sessionId": "<chat>" }`, collapse id per
+        chat. Same on `/v1/chat/voice`. Transactional, so no quiet hours, and
+        no inbox row. A client that comes back resends with the same
+        `clientMessageId` and gets the stored reply.
+
+        **Errors the client shows without a retry.** 429 with `error:
+        "daily_token_budget"` is the day's agent budget; 403 / 409 carry the
+        agent-access refusal (`verification_required`, `banned`,
+        `under_investigation`, `not_onboarded`). Any other 429 is the send
+        rate limit and may be retried.
       requestBody:
         required: true
         content:
@@ -4405,6 +4422,17 @@ paths:
                   description: >-
                     Photos of this turn — storage paths from `/v1/chat/upload`,
                     repeated as one form field each, in the order picked.
+                clientMessageId:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                  description: >-
+                    Optional idempotency key, the same as on `/v1/chat/message`
+                    (app audit 2026-11-15): a retry with the same id within 10
+                    minutes gets the first turn's 200 back without a second
+                    transcription or turn, a duplicate sent while the first is
+                    in flight waits for it, and `/v1/chat/activity` reports the
+                    turn's steps under this id. Only a 200 is remembered.
       responses:
         "200":
           description: Assistant reply plus what was heard
@@ -4477,9 +4505,9 @@ paths:
         status (2026-11-01). Scoped to the caller: someone else's id reads as
         unknown. Unknown, finished and expired ids all answer 200 with
         `{ "step": null, "seq": 0 }`, never 404, because the client polls
-        before its POST is registered. Only `/v1/chat/message` reports steps;
-        a turn sent without a `clientMessageId`, and `/v1/chat/voice`, stay
-        unknown. Limit: 150 requests a minute per user, separate from the send
+        before its POST is registered. `/v1/chat/message` and
+        `/v1/chat/voice` report steps; a turn sent without a
+        `clientMessageId` stays unknown. Limit: 150 requests a minute per user, separate from the send
         limit.
       parameters:
         - name: clientMessageId
@@ -4505,7 +4533,8 @@ paths:
                     description: |
                       Machine key, null when no turn is known: `thinking`,
                       `reading_photo`, `web`, `screenshots`, `wishlist`,
-                      `past_chats`, `profile`, `date`, `writing`. Deliberately
+                      `past_chats`, `profile`, `date`, `matching`, `writing`.
+                      Deliberately
                       not an enum: `enum: [..., null]` breaks the generated
                       Swift client. The client localizes the key and should
                       treat one it does not know as `thinking`.

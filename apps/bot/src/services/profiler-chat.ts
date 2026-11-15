@@ -96,6 +96,58 @@ export function matchProfilerOption(
   return named?.id ?? null;
 }
 
+/**
+ * Openers that start a question to Gennety rather than an answer about
+ * oneself, per language. Whole words at the very start of the message.
+ */
+const ASIDE_OPENERS: readonly RegExp[] = [
+  // Bare «когда» / «где» / «when» start answers too («когда устаю — гуляю»,
+  // «where the music is good»), so only the forms that ask.
+  /^(почему|зачем|сколько|можешь|можно ли|скажи|расскажи|покажи|объясни|подскажи|что такое|а где|а когда|а почему|когда будет|когда будут|когда при[дш]|где мо[йяеи])(?=[\s,?!.]|$)/iu,
+  /^(чому|навіщо|скільки|можеш|скажи|розкажи|покажи|поясни|підкажи|що таке|а де|а коли|а чому|коли буде|коли будуть|де мо[їяє])(?=[\s,?!.]|$)/iu,
+  /^(why|how many|how much|how long|how do|how does|can you|could you|will you|is there|are there|do i|did i|tell me|show me|explain|when is|when will|when do|where is|where are)(?=[\s,?!.]|$)/iu,
+  /^(warum|wie viel|wie lange|kannst du|gibt es|erkl\u00e4r|sag mir|zeig mir|wann ist|wann kommt|wo ist)(?=[\s,?!.]|$)/iu,
+  /^(dlaczego|po co|ile|czy|mo\u017cesz|powiedz|poka\u017c|wyja\u015bnij|kiedy b\u0119dzie|gdzie jest)(?=[\s,?!.]|$)/iu,
+];
+
+/**
+ * The product's own nouns, grouped by subject. A reply naming one is about the
+ * product — unless the question itself is about the same thing (a question on
+ * the person's ideal date is answered with «date»).
+ */
+const ASIDE_TOPICS: readonly RegExp[] = [
+  // The match / the search. Not «матч» or «pair»: a football match and «пару
+  // дней» are answers too.
+  /(м[эе]тч|подбор|\bmatch(?:es|ed)?\b|dopasowan)/iu,
+  // The date that is booked
+  /(свидани|побачен|\bdates?\b|randk)/iu,
+  // Tickets and Premium
+  /(билет|квит[ко]|\btickets?\b|\bbilet|premium|преміум|премиум|подписк|підписк|subskrypc)/iu,
+  // The meeting place, only as the product names it: places in general are
+  // what half the questions ask about.
+  /(место встречи|місце зустрічі|meeting place|\bvenue|treffpunkt|miejsce spotkania)/iu,
+];
+
+/**
+ * Is a message typed under an open «about you» question really something else
+ * — a question to Gennety, or talk about the match, the date, tickets or the
+ * venue — that the concierge must answer (app audit 2026-11-15)? Before this,
+ * whatever came next was stored as the answer: «когда будет пара?» became the
+ * person's view on travel, and they got the next question instead of a reply.
+ *
+ * Deliberately a cheap rule, no model call: a message that is plainly a
+ * question, or names a product subject the question is not about. Anything
+ * else stays the answer, as before.
+ */
+export function profilerReplyIsAside(text: string, questionText: string): boolean {
+  const reply = text.trim();
+  if (!reply) return false;
+  if (reply.includes("?")) return true;
+  const head = reply.toLocaleLowerCase();
+  if (ASIDE_OPENERS.some((opener) => opener.test(head))) return true;
+  return ASIDE_TOPICS.some((topic) => topic.test(reply) && !topic.test(questionText));
+}
+
 async function profileTimeZone(userId: string): Promise<string | null> {
   const profile = await prisma.profile.findUnique({ where: { userId }, select: { timeZone: true } });
   return profile?.timeZone ?? null;
@@ -182,6 +234,10 @@ export async function answerProfilerInChat(input: {
   const batch = await getNativeProfilerBatch(userId, now);
   const live = batch.question?.id === questionId ? batch.question : batch.later?.find((q) => q.id === questionId);
   const optionId = live ? matchProfilerOption(live, text, language) : null;
+  // A question or a product aside goes to the concierge; the profiler
+  // question stays open behind it (it is no longer the chat's last row, so the
+  // next message is an ordinary turn too, and «Сегодня» still asks it).
+  if (!optionId && profilerReplyIsAside(text, live?.text ?? "")) return null;
   const closed = live?.input?.closed === true;
 
   const result = await answerNativeProfilerQuestion(

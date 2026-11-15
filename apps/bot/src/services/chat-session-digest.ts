@@ -557,10 +557,22 @@ export function afterChatTurn(input: {
   userId: string;
   sessionId: string;
   openedNewSession: boolean;
+  /**
+   * The chat is longer than the agent's window and its summary is behind
+   * (app audit 2026-11-15): rewrite it now, so the next turn's «earlier in
+   * this chat» covers what slid out of the window. It writes the title too.
+   */
+  refreshSummary?: boolean;
 }): void {
-  void maybeTitleChatSession(input.sessionId).catch((err: unknown) => {
-    console.warn(`[chat-digest] title for ${input.sessionId} failed:`, err);
-  });
+  if (input.refreshSummary) {
+    void summarizeChatSession(input.sessionId).catch((err: unknown) => {
+      console.warn(`[chat-digest] summary for ${input.sessionId} failed:`, err);
+    });
+  } else {
+    void maybeTitleChatSession(input.sessionId).catch((err: unknown) => {
+      console.warn(`[chat-digest] title for ${input.sessionId} failed:`, err);
+    });
+  }
   if (input.openedNewSession) {
     void summarizeStaleChatSessions(input.userId, { excludeSessionId: input.sessionId }).catch(
       (err: unknown) => {
