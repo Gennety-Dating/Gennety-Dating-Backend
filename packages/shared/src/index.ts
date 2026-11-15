@@ -23,6 +23,7 @@ export {
   STRANDED_HANDOFF_GRACE_MS,
   UNREACHABLE_SILENT_SIDE_GRACE_MS,
   PULSE_ANALYTICS,
+  LAST_MATCH_OUTCOME_WINDOW_MS,
 } from "./constants.js";
 export { CADENCE, CADENCES, resolveCadence, dropOutpacesNotices } from "./cadence.js";
 export {
