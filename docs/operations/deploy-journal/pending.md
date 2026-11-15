@@ -13,6 +13,20 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-15 — app audit fixes (`bcbbb831`, `3828ba6d`, `5f815a96`)**
+
+1. Code: decision `docs/architecture/decisions/2026-11-15-app-audit-fixes.md`. New `POST /v1/me/feedback/attendance`,
+   `lastOutcome` on `/v1/matches/current`, `clientMessageId` on `/v1/chat/voice`, `chat.reply` push, app push legs for
+   expiry and ticket gate, app prompt surface and `get_my_date`. Telegram prompt byte-identical.
+2. Ship: the usual bot build and restart; no migration, no env, no flag. iOS builds after 9fbf97e6 degrade without it
+   (no outcome card, «Нет» in feedback falls back to the form, voice dedupe ignored).
+3. Rollback: previous release directory + restart; no data to undo (`EXPIRED_SILENT` metadata gains `penalised`, read-only extra).
+
+**Check after deploy:** `POST /v1/me/feedback/attendance` without a token → 401 (not 404); `/v1/matches/current` with a
+token returns a `lastOutcome` key.
+
+---
+
 **Deployed 2026-11-13 (was PENDING; production `57c6c510`, 13:01–13:06 UTC, see [2026-11-13-profiler-chat.md](./2026-11-13-profiler-chat.md)) 2026-11-04 — Telegram ticket gate and «Чего хочется?» after iOS variant B, bot confirm labels (webapp build + bot restart; no migration, no env, no flag).**
 
 1. Code: decision `docs/architecture/decisions/2026-11-04-telegram-drop-flow-b.md` (with the founder's review, item 5).
