@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 247 entries
+# Deploy journal index — 248 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-11-16 | Production `be56bf50`: agent video takes (shared TikTok/Reels/YouTube links, taste, looks red lines, trend glossary, `suggest_video`; `AGENT_VIDEO_TAKES_ENABLED` default ON) + app audit fixes (`/v1/me/feedback/attendance`, `lastOutcome`, voice dedupe, reply/expiry/ticket-gate pushes); no migration, no env | [2026-11-16-video-takes-audit-fixes.md](./2026-11-16-video-takes-audit-fixes.md) |
 | Deployed | 2026-11-13 | Production `57c6c510`: in-app chat «about you» questions (`POST /v1/chat/profiler`, reply intercept in `/v1/chat/message`) + Telegram ticket gate variant B + audit overrides (fast-xml-parser 5.12.0); no migration, no env | [2026-11-13-profiler-chat.md](./2026-11-13-profiler-chat.md) |
 | Deployed 2026-11-13 | 2026-11-04 | Telegram ticket gate (offer kept with capsule buttons, no countdown, cover panel two-tap, result waits) + «Чего хочется?» on one screen + bot confirm labels; webapp build + restart, no migration | [pending.md](./pending.md) |
 | Deployed 2026-11-03 | 2026-11-03 | Screenshots/ideas audit fixes + per-user preview env `SCREENSHOT_LIBRARY_USER_IDS`, `MEMORY_IDEAS_USER_IDS` (prod env change PENDING, coordinator); branch `audit/screenshots-backend`, no migration | [pending.md](./pending.md) |

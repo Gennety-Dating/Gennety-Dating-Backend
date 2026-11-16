@@ -13,7 +13,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-16 — agent video takes (phases 1–4)**
+**Deployed 2026-11-16 (was PENDING; production `be56bf50`, 19:02–19:06 UTC, see [2026-11-16-video-takes-audit-fixes.md](./2026-11-16-video-takes-audit-fixes.md)) 2026-11-16 — agent video takes (phases 1–4)**
 
 1. Code: spec `docs/product/domains/agent-video-takes.md`, decision `docs/architecture/decisions/2026-11-16-agent-advisor.md`
    (second entry). Both agents pre-read a shared TikTok / Reels / YouTube link (share sheet reader + cache), carry the
@@ -29,7 +29,7 @@ gives a take; ask «скинь что-нибудь перед свиданием
 
 ---
 
-**PENDING 2026-11-15 — app audit fixes (`bcbbb831`, `3828ba6d`, `5f815a96`)**
+**Deployed 2026-11-16 (was PENDING; production `be56bf50`, see [2026-11-16-video-takes-audit-fixes.md](./2026-11-16-video-takes-audit-fixes.md)) 2026-11-15 — app audit fixes (`bcbbb831`, `3828ba6d`, `5f815a96`)**
 
 1. Code: decision `docs/architecture/decisions/2026-11-15-app-audit-fixes.md`. New `POST /v1/me/feedback/attendance`,
    `lastOutcome` on `/v1/matches/current`, `clientMessageId` on `/v1/chat/voice`, `chat.reply` push, app push legs for
