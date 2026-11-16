@@ -61,6 +61,11 @@ so it uses its default, ON.
 - `POST /v1/me/feedback/attendance` and `GET /v1/chat/sessions` without a token → 401
   `{"error":"Missing bearer token"}` (routes present).
 - Not checked: a live TikTok link in the app chat and the `lastOutcome` key with a real token.
+- Re-checked by the video-takes session, about 19:20 UTC:
+  - `gennety-bot` runs through `tsx` from source, and `@gennety/shared` resolves to `src/index.ts`;
+  - `apps/bot/src/services/agent-video-takes.ts` and `packages/shared/src/agent-takes.ts` are present on the droplet;
+  - `.env` has no `AGENT_VIDEO_TAKES_ENABLED` line, so the default is ON;
+  - the last 1,000 log lines have no errors from video takes.
 
 ## Rollback
 
