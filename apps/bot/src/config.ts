@@ -707,6 +707,11 @@ export const env = {
   /// flag alone turns on collecting, not showing.
   WISHLIST_FEATURE_ENABLED: process.env.WISHLIST_FEATURE_ENABLED === "true",
   SCREENSHOT_LIBRARY_ENABLED: process.env.SCREENSHOT_LIBRARY_ENABLED === "true",
+  /// Agent video takes (decision 2026-11-16, `docs/product/domains/agent-video-takes.md`):
+  /// the chat agent pre-reads a shared TikTok / Reels / YouTube link, carries the
+  /// trend glossary, the taste and looks blocks, and gets `suggest_video`.
+  /// Default ON — `false` turns all of it off on both surfaces.
+  AGENT_VIDEO_TAKES_ENABLED: process.env.AGENT_VIDEO_TAKES_ENABLED !== "false",
   /// Per-user preview of the screenshot library while the flag is off: these
   /// user UUIDs (comma-separated) get the feature as if it were on. Read only
   /// through `services/feature-preview.ts`.

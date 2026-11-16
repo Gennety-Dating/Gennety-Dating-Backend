@@ -231,6 +231,7 @@ export * from "./venue-intent.js";
 export * from "./wishlist-venue.js";
 export * from "./life-rhythm.js";
 export * from "./style-picks.js";
+export * from "./agent-takes.js";
 export {
   normalizeProfileMedia,
   parseProfileMediaItem,

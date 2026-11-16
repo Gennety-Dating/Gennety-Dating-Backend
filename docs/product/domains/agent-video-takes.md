@@ -2,9 +2,11 @@
 
 # Agent video takes — reacting to shared videos, proposing videos, knowing the trends
 
-Status: specification, founder-agreed 2026-11-16. Nothing is built. Phases 1–4
-need no schema change and no new external API. Phases 5 and 6 each wait for
-an explicit founder yes (AGENTS.md rule 5).
+Status: founder-agreed 2026-11-16. Phases 1–4 are built behind
+`AGENT_VIDEO_TAKES_ENABLED` (default on) and not yet deployed; the weekly
+trend routine (phase 3.5) is not set up yet. Phases 1–4 need no schema change
+and no new external API. Phases 5 and 6 each wait for an explicit founder yes
+(AGENTS.md rule 5).
 
 ## Why
 
@@ -117,22 +119,74 @@ These ship with phase 1, not after it.
    posture, sleep, training, good photos.
 4. Signs of self-hatred about looks, disordered eating or body dysmorphia
    switch the conversation to the advisor's safety mode (`agent-advisor.md`
-   phase 5). The agent becomes calm and gives no tactics. It names help in
-   the person's language, using the same source of help lines as the
-   existing safety copy.
-5. The red lines are authored once, in shared constants per language. They
-   are injected beside the stance block and are not spread across the persona
-   text.
+   phase 5). The agent becomes calm and gives no tactics. It suggests
+   talking to someone they trust or to a doctor or psychologist, and, if the
+   person may be in danger right now, their local emergency number. The
+   product has no vetted list of help lines yet, so the agent never names a
+   hotline number; a vetted list per market is a follow-up.
+5. The red lines are authored once, in shared constants
+   (`packages/shared/src/agent-takes.ts`, `LOOKS_RED_LINES`). Like every other
+   model instruction in the product they are written in English; the person
+   hears them in their own language through the reply. They are injected on
+   both surfaces after the base prompt, so the Telegram base prompt stays
+   byte-identical.
 6. Demo mode: identical.
+
+## How the agent knows what is cringe, which memes fit, and what is relevant
+
+The founder asked how the agent will tell cringe from good, share memes, know
+what fits a particular person, and keep up with trends. The answer is that
+none of it is left to the model's general taste.
+
+1. **Cringe or not is a written taste, owned by the product.**
+   - `TASTE_CANON` in shared constants says what Gennety reads as cringe:
+     try-hard, pickup-artist and alpha-grindset content, engagement bait,
+     fake-deep, looks-as-destiny content.
+   - It also says what Gennety reads as good: self-irony, real skill shown
+     plainly, specific over polished, effortless confidence, kindness that is
+     not performed.
+   - The agent judges the content, never the person who made it or sent it.
+     A mixed video gets «this part works, this part does not».
+   - The canon goes into every turn on both surfaces. Changing the product's
+     taste is an edit to one constant, reviewed like any other.
+2. **Each trend comes with its own verdict.** A glossary entry carries
+   Gennety's take, so the verdict on a trend such as mewing or aura farming
+   is a position the founder approved, not a guess.
+3. **Memes.**
+   - A meme the person sends as a picture already reaches the agent through
+     vision, in the app chat and in Telegram.
+   - A meme video sent as a link goes through the phase 1 read.
+   - The taste canon and the glossary decide the reaction.
+   - The agent does not make memes and does not invent links. Memes it
+     proposes come from the curated list (phase 4), where every entry is a
+     verified link with our own words.
+4. **Relevance for a particular person** comes from three signals, strongest
+   first.
+   - The moment: what the conversation is about right now (nerves before a
+     date, after a rejection, doubting their looks, bored). The model passes
+     it to `suggest_video`.
+   - The topic of the conversation, as tags from a fixed vocabulary.
+   - The person's interests: `Profile.hobbies` is free text in five
+     languages and is mapped to the same tags by stems
+     (`VIDEO_TAG_KEYWORDS`).
+   - The person's language comes before English, and a video already sent is
+     never sent again.
+   - A candidate with no overlap is not offered. A random video is worse than
+     none.
+5. **Keeping up with trends** is the glossary, with entries dated and
+   expiring after 60 days, refreshed weekly through phase 3.5. The model's
+   own memory is never the source.
 
 ## Phase 3 — The trend glossary
 
 1. The model's memory lags months behind what people watch. The agent's
    trend knowledge comes from a glossary, not from the model.
-2. The glossary lives in shared constants, authored per language
-   (AGENTS.md rule 8). Each entry carries:
+2. The glossary lives in shared constants (`TREND_GLOSSARY`). The meaning and
+   the take are model guidance in English. The spellings are per language,
+   because they are what people type. Each entry carries:
    - the term and its spellings (for example looksmaxxing, лукс-максинг, aura
-     farming, «фарм ауры»);
+     farming, «фарм ауры»); a trailing `*` marks a stem that matches every
+     inflection;
    - what it means, in one or two sentences;
    - Gennety's take, as a short position the agent may voice;
    - the red line, where one applies (phase 2);
@@ -143,7 +197,8 @@ These ship with phase 1, not after it.
 4. Slang in the glossary is there so the agent understands people. The agent
    may use it rarely and with irony. The anti-try-hard law
    (`voice-and-tone.md` §2) holds.
-5. Keeping it fresh:
+5. Keeping it fresh (not set up yet; the delivery path to the work bot needs
+   the founder's choice):
    - Once a week, a scheduled cloud routine researches current trends and
      drafts changes: new terms, updated takes, and entries to retire.
    - It sends the draft to the founder in the project's work bot. Nothing
@@ -260,6 +315,33 @@ These ship with phase 1, not after it.
    - glossary injection on demand;
    - dropping entries older than 60 days;
    - excluding a video already sent.
+
+## What is built (2026-11-16, not deployed)
+
+1. The shared module is `packages/shared/src/agent-takes.ts`. It holds:
+   - `LOOKS_RED_LINES` and `TASTE_CANON`;
+   - `TREND_GLOSSARY`, with stem matching and the 60-day expiry;
+   - `CURATED_VIDEOS`, with the tag and moment vocabulary and
+     `pickVideoCandidates`.
+2. The bot module is `apps/bot/src/services/agent-video-takes.ts`.
+   - `videoTakeBlocks` adds the taste, the red lines, the video rules, the
+     shared-video block and the trend block to every agent turn.
+   - The video link is looked for in this message and the two before it, so
+     a follow-up question still has the video. The read reuses the share
+     sheet's reader and its cache.
+   - `suggest_video` is a read-only tool. Both surfaces run it through
+     `executeAgentTool`.
+3. The app chat (`chat-agent.ts`) and Telegram (`menu-agent.ts`) append the
+   blocks after the base prompt, so `prompt-tg-baseline.json` is untouched.
+4. In Telegram, a video message's caption now reaches the agent. A video file
+   with no words gets `agentVideoNeedsLink`.
+5. The chat digest prompt records only the topic and the take for a shared
+   video, never the link, the handle or the caption.
+6. `AGENT_VIDEO_TAKES_ENABLED=false` turns all of it off on both surfaces.
+7. The seed data is checked as of 2026-11-16:
+   - 31 glossary entries, from sources dated October–November 2026;
+   - 17 YouTube videos, each verified through oEmbed (title and channel
+     match). Nobody watched them end to end, so their takes stay modest.
 
 ## Build order
 

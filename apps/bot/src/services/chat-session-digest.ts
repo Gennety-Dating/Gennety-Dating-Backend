@@ -78,6 +78,7 @@ summary:
 - In English, whatever language the conversation was in.
 - 3 to 6 sentences: what was discussed, what was decided or done, facts the person shared about themselves, and every person, venue, date or time mentioned — names exactly as written.
 - Only what was said. No speculation, no advice, no judgement.
+- A video or meme they shared: record only its topic and Gennety's take on it — never the link, the author's handle or the caption.
 
 title:
 ${TITLE_RULES(language)}`;

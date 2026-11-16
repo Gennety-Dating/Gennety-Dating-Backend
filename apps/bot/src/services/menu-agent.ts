@@ -28,6 +28,13 @@ import {
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
+import {
+  SUGGEST_VIDEO_TOOL,
+  SUGGEST_VIDEO_TOOL_NAME,
+  executeSuggestVideo,
+  videoTakeBlocks,
+  videoTakesEnabled,
+} from "./agent-video-takes.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
@@ -638,6 +645,8 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   propose_report_partner: "confirm",
   propose_close_account: "confirm",
   open_screen: "open",
+  // Reads the curated video list, writes nothing (`agent-video-takes.ts`).
+  [SUGGEST_VIDEO_TOOL_NAME]: "read",
 };
 
 /**
@@ -1864,6 +1873,9 @@ export async function executeAgentTool(
     case "explain_my_match":
       result = await execExplainMyMatch(telegramId);
       break;
+    case SUGGEST_VIDEO_TOOL_NAME:
+      result = await executeSuggestVideo(telegramId, args);
+      break;
     case "review_my_photos":
       result = await execReviewMyPhotos(telegramId);
       break;
@@ -1955,17 +1967,34 @@ async function runMenuAgentTurnUnqueued(
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
   // Build dynamic system prompt
-  const systemPrompt = await buildSystemPrompt(telegramId);
+  const basePrompt = await buildSystemPrompt(telegramId);
 
   // Load existing post-onboarding history
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { messageHistory: true },
+    select: { messageHistory: true, language: true, profile: { select: { homeCityKey: true } } },
   });
 
   const stored: StoredChatMessage[] = (
     (user?.messageHistory ?? []) as unknown[]
   ).map((m) => m as unknown as StoredChatMessage);
+
+  // Agent video takes (2026-11-16): taste, looks red lines, the shared video
+  // this turn is about and the trends it names. Appended after the base
+  // prompt, so `buildSystemPrompt` itself stays byte-identical.
+  const recentUserTexts = [
+    userMessage,
+    ...recentAgentHistory(stored)
+      .filter((msg) => msg.role === "user" && typeof msg.content === "string")
+      .map((msg) => msg.content as string)
+      .reverse(),
+  ];
+  const takeBlocks = await videoTakeBlocks({
+    recentUserTexts,
+    language: (user?.language ?? "en") as Language,
+    cityKey: user?.profile?.homeCityKey ?? null,
+  });
+  const systemPrompt = [basePrompt, ...takeBlocks].join("\n\n");
 
   // Build conversation: fresh system prompt + recent history + new user msg
   const history: ChatMessage[] = [
@@ -2154,7 +2183,7 @@ async function callOpenAI(
     body: JSON.stringify({
       model: MODELS.agent,
       messages,
-      tools: AGENT_TOOLS,
+      tools: videoTakesEnabled() ? [...AGENT_TOOLS, SUGGEST_VIDEO_TOOL] : AGENT_TOOLS,
       tool_choice: "auto",
       temperature: 0.5,
       // Raised from 512. This budget also covers reasoning tokens, and Cyrillic

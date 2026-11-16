@@ -97,6 +97,7 @@ import {
   isPastChatTool,
 } from "./chat-past-tools.js";
 import { GET_MY_DATE_TOOL, GET_MY_DATE_TOOL_NAME, executeGetMyDate } from "./chat-date-tool.js";
+import { SUGGEST_VIDEO_TOOL, videoTakeBlocks, videoTakesEnabled } from "./agent-video-takes.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -441,7 +442,7 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number]
+  (typeof ALL_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number]
 >;
 
 /**
@@ -452,6 +453,8 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
+    // Runs through the shared executor (`executeAgentTool`), like Telegram.
+    ...(videoTakesEnabled() ? [SUGGEST_VIDEO_TOOL] : []),
     ...(env.WISHLIST_FEATURE_ENABLED ? WISHLIST_TOOLS : []),
     ...(options.wishlistCards ? [PROPOSE_WISHLIST_TOOL] : []),
     ...(options.offerCards ? [OFFER_CHANGE_TOOL] : []),
@@ -664,7 +667,14 @@ async function runTurnInner(
     userId,
     telegramId,
     sessionId,
-    { wishlistCards, offerCards, guideCards, screenshotLibraryOpen, memoryIdeas: ideasOn },
+    {
+      wishlistCards,
+      offerCards,
+      guideCards,
+      screenshotLibraryOpen,
+      memoryIdeas: ideasOn,
+      viewer: { language, cityKey: account.profile?.homeCityKey ?? null },
+    },
   );
   const consent = deps.consent ?? personConsented;
   // The offer a "да" would be answering: the assistant's message right before
@@ -1197,7 +1207,15 @@ async function buildChatMessages(
   userId: string,
   telegramId: bigint,
   sessionId: string,
-  options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotLibraryOpen?: boolean | null; memoryIdeas?: boolean },
+  options: {
+    wishlistCards: boolean;
+    offerCards: boolean;
+    guideCards: boolean;
+    screenshotLibraryOpen?: boolean | null;
+    memoryIdeas?: boolean;
+    /** For the video-takes blocks: the reader's language and city. */
+    viewer?: { language: Language; cityKey: string | null };
+  },
 ): Promise<{
   messages: OpenAIChatMessage[];
   openedNewSession: boolean;
@@ -1235,12 +1253,26 @@ async function buildChatMessages(
   // having said it. Resolved from live rows each turn, so an announcement edited
   // after the chip was sent grounds on what it says now.
   const context = activeChatContext(rows);
-  const [contextBlock, personCard] = await Promise.all([
+  // Agent video takes (2026-11-16): taste, looks red lines, the video a recent
+  // message shared and the trends it names — same blocks as Telegram.
+  const recentUserTexts = rows
+    .filter((row) => row.role === "user" && typeof row.content === "string" && row.content.length > 0)
+    .map((row) => row.content as string)
+    .reverse();
+  const [contextBlock, personCard, takeBlocks] = await Promise.all([
     context ? buildChatContextBlock(userId, context) : Promise.resolve(null),
     // The card must never cost the turn: without it the agent is as it was.
     buildPersonCard(userId).catch((err: unknown) => {
       console.warn("[chat] person card unavailable:", err);
       return null;
+    }),
+    videoTakeBlocks({
+      recentUserTexts,
+      language: options.viewer?.language ?? "en",
+      cityKey: options.viewer?.cityKey ?? null,
+    }).catch((err: unknown) => {
+      console.warn("[chat] video-take blocks unavailable:", err);
+      return [] as string[];
     }),
   ]);
   const system = [
@@ -1262,6 +1294,7 @@ async function buildChatMessages(
 - Removal uses their words as authorization; no Add button or profile offer is needed.
   Confirm briefly only after successful removal. Never change interests or language as part of it.` : null,
     personCard,
+    ...takeBlocks,
     earlier?.block ?? null,
     contextBlock,
   ]

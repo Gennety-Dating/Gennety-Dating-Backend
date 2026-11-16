@@ -49,6 +49,7 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
+import { videoTakesEnabled } from "../../services/agent-video-takes.js";
 import { retirePhotoCards } from "../../services/photo-cards.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 import {
@@ -221,8 +222,19 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   if (!data) {
     if (isPinnedMessageServiceUpdate(ctx)) return;
 
-    const text = ctx.message?.text?.trim();
+    // Agent video takes (2026-11-16): a forwarded video or link post carries
+    // its words in the caption, and a TikTok link there is still a link.
+    const message = ctx.message;
+    const isVideo = Boolean(message?.video || message?.video_note || message?.animation);
+    const text = (
+      message?.text ?? (videoTakesEnabled() && isVideo ? message?.caption : undefined)
+    )?.trim();
     if (!text) {
+      if (videoTakesEnabled() && isVideo) {
+        // Reading video files is phase 6 of the spec; until then, say so.
+        await ctx.reply(t(ctx.session.language, "agentVideoNeedsLink"));
+        return;
+      }
       await showMainMenu(ctx);
       return;
     }

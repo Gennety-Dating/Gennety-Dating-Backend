@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const env = { OPENAI_API_KEY: "k", WISHLIST_FEATURE_ENABLED: true };
+const env = { OPENAI_API_KEY: "k", WISHLIST_FEATURE_ENABLED: true, AGENT_VIDEO_TAKES_ENABLED: true };
 vi.mock("../config.js", () => ({ env }));
 vi.mock("@gennety/db", () => ({ prisma: {}, Prisma: {} }));
 

@@ -13,6 +13,22 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-16 — agent video takes (phases 1–4)**
+
+1. Code: spec `docs/product/domains/agent-video-takes.md`, decision `docs/architecture/decisions/2026-11-16-agent-advisor.md`
+   (second entry). Both agents pre-read a shared TikTok / Reels / YouTube link (share sheet reader + cache), carry the
+   taste, looks red lines and trend glossary, and get the read-only `suggest_video` tool. Telegram passes a video's
+   caption to the agent; a bare video file gets `agentVideoNeedsLink`. Telegram base prompt byte-identical.
+2. Ship: the usual bot build and restart; no migration, no new external API. `AGENT_VIDEO_TAKES_ENABLED` defaults ON —
+   set it to `false` to keep everything dark. Extra cost: one vision call per newly shared video (cached 6 h).
+3. Demo mode: identical (reactions, red lines, glossary, curated list); no proactive sends exist.
+4. Rollback: `AGENT_VIDEO_TAKES_ENABLED=false` + restart, or the previous release directory; nothing is stored.
+
+**Check after deploy:** in the app chat, send a public TikTok link → the reply names what is on the cover/caption and
+gives a take; ask «скинь что-нибудь перед свиданием» → a YouTube link from the curated list.
+
+---
+
 **PENDING 2026-11-15 — app audit fixes (`bcbbb831`, `3828ba6d`, `5f815a96`)**
 
 1. Code: decision `docs/architecture/decisions/2026-11-15-app-audit-fixes.md`. New `POST /v1/me/feedback/attendance`,
