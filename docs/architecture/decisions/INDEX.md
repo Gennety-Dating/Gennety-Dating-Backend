@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 447 entries
+# Decision index — all 448 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-16 | Agent video takes spec: chat pre-reads a shared TikTok/Reels/YouTube link via the share sheet's reader (cover+caption depth) and gives a radical take on the content; looks red lines (no ratings, no `scoreLeague`, anti-harmful-practice, distress → safety mode) ship with it; trend glossary in shared constants, weekly routine drafts and the founder approves; discovery = curated list only, no scraping (no TikTok commercial search API); user-share pool (≥3 sharers) and YouTube Data API wait for separate yes; no proactive video sends before the advisor's; nothing built | [2026-11-16-agent-advisor.md](./2026-11-16-agent-advisor.md) |
 | 2026-11-16 | Agent advisor spec: verdict-first, direct-not-cruel voice; one stance list in shared constants rendered per side («the man pays» voices the existing male-pays-both gate); own-side advice dossier without partner decisions; correspondence screenshots read but never stored; event-only proactive messages with caps; danger switches the voice off; five founder questions open; nothing built | [2026-11-16-agent-advisor.md](./2026-11-16-agent-advisor.md) |
 | 2026-11-15 | App audit fixes without founder decisions: `lastOutcome` on `/v1/matches/current` (72 h, blind rule mirrors Telegram) + Today card; app push legs for expiry and ticket gate; `/v1/me/feedback/attendance` and «Вы встретились?» first; app prompt surface (Telegram byte-identical), `get_my_date`, profiler asides, voice dedupe, `matching` step, `chat.reply` push; Premium expiry push not done (2026-08 decision, premise may be outdated); not deployed | [2026-11-15-app-audit-fixes.md](./2026-11-15-app-audit-fixes.md) |
 | 2026-11-13 | «About you» questions move into the app's chat: `POST /v1/chat/profiler` writes the due question as a chat row; the next plain typed message in that chat is its answer (same rules as `/v1/me/profiler/answer`), the reply is the next question or a closing line, no model call; numbered options for closed questions; voice, chips and «На потом» not done; not deployed | [2026-11-13-profiler-in-app-chat.md](./2026-11-13-profiler-in-app-chat.md) |

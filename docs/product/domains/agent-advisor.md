@@ -21,6 +21,9 @@ only a male user pay for both tickets (`chat-profile-tools.ts`). Women hear
 «pay for both» and get the 24 h deadline (`voice-and-tone.md` §5). The advisor
 gives that culture a voice. It does not invent a new one.
 
+The same voice reacts to shared videos and trends (looksmaxxing, aura
+farming) and owns the looks red lines: `agent-video-takes.md`.
+
 ## Principles
 
 1. **Verdict first.** The first sentence of advice is a position, not
