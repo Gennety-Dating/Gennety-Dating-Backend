@@ -103,7 +103,14 @@ export const ANNOUNCEMENT_INBOX_BATCH = 500;
  */
 export const CHAT_CONTEXT_WINDOW_HOURS = 6;
 
-export const CHAT_CONTEXT_KINDS = ["inbox_item"] as const;
+export const CHAT_CONTEXT_KINDS = ["inbox_item", "chat_quote"] as const;
+
+/**
+ * Longest piece of an agent reply the person can quote into a turn (decision
+ * 2026-11-17). The app trims at a word boundary before sending; the server
+ * refuses anything longer rather than cutting it again.
+ */
+export const CHAT_QUOTE_MAX_CHARS = 300;
 export type ChatContextKind = (typeof CHAT_CONTEXT_KINDS)[number];
 
 /**

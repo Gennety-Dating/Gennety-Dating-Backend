@@ -407,10 +407,14 @@ chatRouter.post(
     // Multipart carries no nested object, so the chip rides as two plain form
     // fields. Checked BEFORE transcription: a refused context must not cost a
     // Whisper call. The chat id likewise.
+    // A quote (2026-11-17) adds its piece as a third field, `contextText`.
     const rawKind: unknown = req.body?.contextKind;
     const rawId: unknown = req.body?.contextId;
+    const rawText: unknown = req.body?.contextText;
     const context = await contextFromRequest(
-      rawKind === undefined && rawId === undefined ? undefined : { kind: rawKind, id: rawId },
+      rawKind === undefined && rawId === undefined
+        ? undefined
+        : { kind: rawKind, id: rawId, ...(rawText === undefined ? {} : { text: rawText }) },
       req.userId!,
       res,
     );

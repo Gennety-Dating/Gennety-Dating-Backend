@@ -4461,10 +4461,17 @@ paths:
                   description: >-
                     With `contextId`, the chat context of this turn — multipart
                     has no nested object, so `ChatContextRef` rides as two
-                    fields. Only `inbox_item` today.
+                    fields (three for a quote). `inbox_item` or `chat_quote`.
                 contextId:
                   type: string
                   format: uuid
+                contextText:
+                  type: string
+                  maxLength: 300
+                  description: >-
+                    `ChatContextRef.text` — required with `contextKind:
+                    chat_quote`, ignored otherwise. Checked before the
+                    transcription, like the other two fields.
                 sessionId:
                   type: string
                   format: uuid
@@ -10525,17 +10532,33 @@ components:
     ChatContextRef:
       type: object
       required: [kind, id]
+      description: |
+        What a turn is about. `inbox_item` — sent from «Обсудить с агентом»;
+        it grounds the turn and the follow-ups of the next six hours.
+
+        `chat_quote` (2026-11-17) — the person quoted a piece of an agent
+        reply, ChatGPT-style. `id` is that reply's message id (the caller's own
+        `assistant` row, else 404); `text` is the piece itself, 1–300
+        characters after whitespace is collapsed (else 400). The model sees it
+        as a line in front of this turn, on this and every later turn of the
+        chat; it does not ground follow-ups the way an inbox chip does.
       properties:
         kind:
           type: string
-          description: "`inbox_item` — the only kind today; a string so a new one breaks no build"
+          description: "`inbox_item` or `chat_quote`; a string so a new one breaks no build"
         id: { type: string, format: uuid }
+        text:
+          type: string
+          maxLength: 300
+          description: The quoted piece — required for `chat_quote`, ignored for `inbox_item`.
 
     ChatContextSummary:
       type: object
       required: [kind, id, title]
       properties:
-        kind: { type: string }
+        kind:
+          type: string
+          description: "`inbox_item` — draw the inbox chip; `chat_quote` — draw the quote line above the bubble, `title` being the quoted piece"
         id: { type: string, format: uuid }
         title:
           type: string

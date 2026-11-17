@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const inboxFindFirst = vi.fn();
+const messageFindFirst = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
     inboxItem: { findFirst: (a: unknown) => inboxFindFirst(a) },
+    message: { findFirst: (a: unknown) => messageFindFirst(a) },
   },
 }));
 
@@ -11,6 +13,7 @@ const {
   activeChatContext,
   buildChatContextBlock,
   parseChatContextRef,
+  quotedTurnText,
   readChatContextSnapshot,
   resolveChatContextSnapshot,
   CONTEXT_FENCE,
@@ -22,6 +25,7 @@ const NOW = new Date("2026-09-13T18:00:00Z");
 
 beforeEach(() => {
   inboxFindFirst.mockReset();
+  messageFindFirst.mockReset();
 });
 
 describe("parseChatContextRef", () => {
@@ -148,5 +152,70 @@ describe("buildChatContextBlock", () => {
   it("returns null once the row is gone, so the chip stays but grounds nothing", async () => {
     inboxFindFirst.mockResolvedValue(null);
     await expect(buildChatContextBlock(USER, snapshot)).resolves.toBeNull();
+  });
+});
+
+describe("chat quote (2026-11-17)", () => {
+  const REPLY = "33333333-3333-4333-8333-333333333333";
+
+  it("parses a quote into one trimmed line", () => {
+    expect(parseChatContextRef({ kind: "chat_quote", id: REPLY, text: "  Лабданум\n и ладан  " })).toEqual({
+      kind: "chat_quote",
+      id: REPLY,
+      text: "Лабданум и ладан",
+    });
+  });
+
+  it.each([
+    ["no text", { kind: "chat_quote", id: REPLY }],
+    ["blank text", { kind: "chat_quote", id: REPLY, text: "  \n " }],
+    ["text over the cap", { kind: "chat_quote", id: REPLY, text: "а".repeat(301) }],
+    ["a bad id", { kind: "chat_quote", id: "nope", text: "Лабданум" }],
+  ])("refuses %s", (_label, raw) => {
+    expect(parseChatContextRef(raw)).toBe("invalid");
+  });
+
+  it("only quotes the caller's own agent reply", async () => {
+    messageFindFirst.mockResolvedValueOnce({ id: REPLY });
+    await expect(
+      resolveChatContextSnapshot(USER, { kind: "chat_quote", id: REPLY, text: "Лабданум" }),
+    ).resolves.toEqual({ kind: "chat_quote", id: REPLY, title: "Лабданум" });
+    expect(messageFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: REPLY, userId: USER, role: "assistant" } }),
+    );
+    messageFindFirst.mockResolvedValueOnce(null);
+    await expect(
+      resolveChatContextSnapshot(USER, { kind: "chat_quote", id: REPLY, text: "Лабданум" }),
+    ).resolves.toBeNull();
+  });
+
+  it("reads a stored quote back for the transcript", () => {
+    expect(readChatContextSnapshot({ kind: "chat_quote", id: REPLY, title: "Лабданум" })).toEqual({
+      kind: "chat_quote",
+      id: REPLY,
+      title: "Лабданум",
+    });
+  });
+
+  it("puts the quote in front of the turn the model sees", () => {
+    const context = { kind: "chat_quote", id: REPLY, title: "Лабданум и ладан" };
+    expect(quotedTurnText("а чем они отличаются?", context)).toBe(
+      "[Replying to this part of your earlier message: «Лабданум и ладан»]\nа чем они отличаются?",
+    );
+    expect(quotedTurnText("", context)).toBe("[Replying to this part of your earlier message: «Лабданум и ладан»]");
+    expect(quotedTurnText("привет", null)).toBe("привет");
+    expect(quotedTurnText("привет", { kind: "inbox_item", id: ITEM, title: "Party" })).toBe("привет");
+  });
+
+  it("never becomes the active context, and does not hide an inbox chip behind it", () => {
+    const inbox = { kind: "inbox_item", id: ITEM, title: "Party" };
+    const quote = { kind: "chat_quote", id: REPLY, title: "Лабданум" };
+    const rows = [
+      { role: "user", context: inbox, createdAt: new Date(NOW.getTime() - 60_000) },
+      { role: "assistant", context: null, createdAt: new Date(NOW.getTime() - 50_000) },
+      { role: "user", context: quote, createdAt: new Date(NOW.getTime() - 10_000) },
+    ];
+    expect(activeChatContext(rows, NOW)).toEqual(inbox);
+    expect(activeChatContext([rows[2]!], NOW)).toBeNull();
   });
 });

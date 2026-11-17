@@ -42,6 +42,7 @@ import { buildSystemPrompt } from "./prompt-builder.js";
 import {
   activeChatContext,
   buildChatContextBlock,
+  quotedTurnText,
   type ChatContextSnapshot,
 } from "./chat-context.js";
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
@@ -1315,13 +1316,16 @@ async function buildChatMessages(
     if (row.role === "user") {
       const images = rowImages(row);
       const earlier = earlierPhotos.get(i);
+      // A quoted piece of an earlier reply rides in front of the turn
+      // (decision 2026-11-17) — on this turn and on every later one.
+      const turnText = quotedTurnText(row.content ?? "", row.context);
       if (!isLast && earlier) {
         // An earlier turn whose photos still ride along, each with its token —
         // so "add the third one to my wishlist" can name it. Attaching to the
         // profile stays limited to the turn being answered, in code
         // (`not_this_turn` above), not by hiding the token.
         const parts: Array<TextPart | ImagePart> = [];
-        if (row.content) parts.push({ type: "text", text: row.content });
+        if (turnText) parts.push({ type: "text", text: turnText });
         for (const { url, path } of earlier.signed) {
           parts.push({ type: "image_url", image_url: { url } });
           parts.push({ type: "text", text: `[imageUrl=${path}]` });
@@ -1335,8 +1339,7 @@ async function buildChatMessages(
       }
       if (isLast && images.length > 0) {
         const parts: Array<TextPart | ImagePart> = [];
-        const txt = row.content ?? "";
-        if (txt) parts.push({ type: "text", text: txt });
+        if (turnText) parts.push({ type: "text", text: turnText });
         // Every photo of the album is signed at once rather than one Storage
         // round-trip after another inside the user's turn — the same single
         // route, bucket and TTL per photo as before. Answers are awaited in
@@ -1367,7 +1370,7 @@ async function buildChatMessages(
           : images.length === 1
             ? "\n[image attached earlier]"
             : "";
-        out.push({ role: "user", content: (row.content ?? "") + suffix });
+        out.push({ role: "user", content: turnText + suffix });
       }
     } else if (row.role === "assistant") {
       // A fallback line stored before 2026-10-15 is not something the agent

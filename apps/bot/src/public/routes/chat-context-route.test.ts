@@ -143,6 +143,55 @@ describe("POST /v1/chat/voice with a context chip", () => {
   });
 });
 
+describe("a quote (2026-11-17)", () => {
+  const REPLY = "44444444-4444-4444-8444-444444444444";
+  const quote = { kind: "chat_quote", id: REPLY, title: "Лабданум и ладан" };
+
+  it("rides a text turn as a checked snapshot", async () => {
+    resolveChatContextSnapshot.mockResolvedValue(quote);
+    const res = await request(app())
+      .post("/v1/chat/message")
+      .set(auth())
+      .send({ text: "а чем отличаются?", context: { kind: "chat_quote", id: REPLY, text: "Лабданум и ладан" } });
+    expect(res.status).toBe(200);
+    expect(resolveChatContextSnapshot).toHaveBeenCalledWith(USER_ID, {
+      kind: "chat_quote",
+      id: REPLY,
+      text: "Лабданум и ладан",
+    });
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ context: quote }));
+  });
+
+  it("rides a voice note as a third form field", async () => {
+    resolveChatContextSnapshot.mockResolvedValue(quote);
+    const res = await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .field("contextKind", "chat_quote")
+      .field("contextId", REPLY)
+      .field("contextText", "Лабданум и ладан")
+      .attach("file", Buffer.from("fake-m4a"), { filename: "v.m4a", contentType: "audio/mp4" });
+    expect(res.status).toBe(200);
+    expect(resolveChatContextSnapshot).toHaveBeenCalledWith(USER_ID, {
+      kind: "chat_quote",
+      id: REPLY,
+      text: "Лабданум и ладан",
+    });
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ context: quote }));
+  });
+
+  it("refuses a voice quote without its text before transcribing", async () => {
+    const res = await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .field("contextKind", "chat_quote")
+      .field("contextId", REPLY)
+      .attach("file", Buffer.from("fake-m4a"), { filename: "v.m4a", contentType: "audio/mp4" });
+    expect(res.status).toBe(400);
+    expect(transcribeVoice).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /v1/chat/history", () => {
   it("returns the chip on the message it was sent with, and omits it elsewhere", async () => {
     messageFindMany.mockResolvedValue([

@@ -1,5 +1,5 @@
 import { prisma, type Prisma } from "@gennety/db";
-import { CHAT_CONTEXT_WINDOW_HOURS, neutralizeUntrusted } from "@gennety/shared";
+import { CHAT_CONTEXT_WINDOW_HOURS, CHAT_QUOTE_MAX_CHARS, neutralizeUntrusted } from "@gennety/shared";
 
 /**
  * Chat context — what "Обсудить с агентом" carries into the agent chat
@@ -15,19 +15,29 @@ import { CHAT_CONTEXT_WINDOW_HOURS, neutralizeUntrusted } from "@gennety/shared"
  * Not a thread: one conversation per person stays the rule (2026-09-04). The
  * context attaches to a message inside it, and stops grounding once the person
  * has been quiet for `CHAT_CONTEXT_WINDOW_HOURS`.
+ *
+ * **A quote (decision 2026-11-17).** `{ kind: "chat_quote", id, text }` — the
+ * person quoted a piece of an agent reply into this turn, ChatGPT-style. `id`
+ * is that reply's `Message` row and must be the caller's own `assistant` row;
+ * `text` is the piece itself (the whole reply or a selection), which the
+ * server keeps as the chip title. Unlike an inbox chip it grounds ONE turn and
+ * lives in the transcript: the agent sees it as a line in front of that user
+ * message (`quotedTurnText`), so it is there on every later turn of the chat
+ * too, and it never becomes the conversation's active context. The text is
+ * the person's own input — it rides in the user role, never in the system
+ * prompt.
  */
 
-export interface ChatContextRef {
-  kind: "inbox_item";
-  id: string;
-}
+export type ChatContextRef =
+  | { kind: "inbox_item"; id: string }
+  | { kind: "chat_quote"; id: string; text: string };
 
 /** What `Message.context` holds and what `/v1/chat/history` returns. */
-export interface ChatContextSnapshot {
-  kind: "inbox_item";
-  id: string;
-  title: string;
-}
+export type ChatContextSnapshot =
+  | { kind: "inbox_item"; id: string; title: string }
+  | { kind: "chat_quote"; id: string; title: string };
+
+export type InboxContextSnapshot = Extract<ChatContextSnapshot, { kind: "inbox_item" }>;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,10 +52,18 @@ export const CONTEXT_FENCE = "CONTEXT_DATA";
 export function parseChatContextRef(raw: unknown): ChatContextRef | null | "invalid" {
   if (raw === undefined || raw === null) return null;
   if (typeof raw !== "object" || Array.isArray(raw)) return "invalid";
-  const { kind, id } = raw as { kind?: unknown; id?: unknown };
-  if (kind !== "inbox_item") return "invalid";
+  const { kind, id, text } = raw as { kind?: unknown; id?: unknown; text?: unknown };
   if (typeof id !== "string" || !UUID_RE.test(id)) return "invalid";
-  return { kind, id };
+  if (kind === "inbox_item") return { kind, id };
+  if (kind !== "chat_quote" || typeof text !== "string") return "invalid";
+  const quote = normalizeQuote(text);
+  if (quote.length === 0 || quote.length > CHAT_QUOTE_MAX_CHARS) return "invalid";
+  return { kind, id, text: quote };
+}
+
+/** One line, outer spaces gone — the shape the chip and the prompt line use. */
+export function normalizeQuote(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /** The snapshot for a ref the caller owns, or `null` when it is not theirs. */
@@ -53,6 +71,13 @@ export async function resolveChatContextSnapshot(
   userId: string,
   ref: ChatContextRef,
 ): Promise<ChatContextSnapshot | null> {
+  if (ref.kind === "chat_quote") {
+    const reply = await prisma.message.findFirst({
+      where: { id: ref.id, userId, role: "assistant" },
+      select: { id: true },
+    });
+    return reply ? { kind: "chat_quote", id: reply.id, title: ref.text } : null;
+  }
   const row = await prisma.inboxItem.findFirst({
     where: { id: ref.id, userId },
     select: { id: true, title: true },
@@ -64,8 +89,21 @@ export async function resolveChatContextSnapshot(
 export function readChatContextSnapshot(value: Prisma.JsonValue | null): ChatContextSnapshot | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const { kind, id, title } = value as Record<string, unknown>;
-  if (kind !== "inbox_item" || typeof id !== "string" || typeof title !== "string") return null;
-  return { kind, id, title };
+  if (typeof id !== "string" || typeof title !== "string") return null;
+  if (kind === "inbox_item" || kind === "chat_quote") return { kind, id, title };
+  return null;
+}
+
+/**
+ * The text the model sees for a user row: a quote rides as one bracketed line
+ * in front of what the person said, so «а почему?» under a quote reads as a
+ * question about that piece. Rows without a quote pass through unchanged.
+ */
+export function quotedTurnText(content: string, context: Prisma.JsonValue | null): string {
+  const snapshot = readChatContextSnapshot(context);
+  if (snapshot?.kind !== "chat_quote") return content;
+  const line = `[Replying to this part of your earlier message: «${snapshot.title}»]`;
+  return content ? `${line}\n${content}` : line;
 }
 
 /**
@@ -76,13 +114,14 @@ export function readChatContextSnapshot(value: Prisma.JsonValue | null): ChatCon
 export function activeChatContext(
   rows: ReadonlyArray<{ role: string; context: Prisma.JsonValue | null; createdAt: Date }>,
   now: Date = new Date(),
-): ChatContextSnapshot | null {
+): InboxContextSnapshot | null {
   const cutoff = now.getTime() - CHAT_CONTEXT_WINDOW_HOURS * 60 * 60 * 1000;
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i]!;
     if (row.role !== "user") continue;
     const snapshot = readChatContextSnapshot(row.context);
-    if (!snapshot) continue;
+    // A quote grounds its own turn through the transcript, not the window.
+    if (!snapshot || snapshot.kind !== "inbox_item") continue;
     return row.createdAt.getTime() >= cutoff ? snapshot : null;
   }
   return null;
@@ -96,7 +135,7 @@ export function activeChatContext(
  */
 export async function buildChatContextBlock(
   userId: string,
-  snapshot: ChatContextSnapshot,
+  snapshot: InboxContextSnapshot,
 ): Promise<string | null> {
   const item = await prisma.inboxItem.findFirst({
     where: { id: snapshot.id, userId },

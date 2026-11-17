@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 448 entries
+# Decision index — all 449 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-17 | App chat quote ChatGPT-style: new context kind `chat_quote` (`id` = own assistant row, `text` ≤ 300) on `/v1/chat/message` and on `/v1/chat/voice` via `contextText`; stored in `messages.context`, no schema change; the model sees a «Replying to …» line in front of the turn in the user role, never as the active context; no substring check; demo same; Telegram unchanged; production deploy approved | [2026-11-17-chat-quote.md](./2026-11-17-chat-quote.md) |
 | 2026-11-16 | Agent video takes spec: chat pre-reads a shared TikTok/Reels/YouTube link via the share sheet's reader (cover+caption depth) and gives a radical take on the content; looks red lines (no ratings, no `scoreLeague`, anti-harmful-practice, distress → safety mode) ship with it; trend glossary in shared constants, weekly routine drafts and the founder approves; discovery = curated list only, no scraping (no TikTok commercial search API); user-share pool (≥3 sharers) and YouTube Data API wait for separate yes; no proactive video sends before the advisor's; phases 1–4 built same day behind `AGENT_VIDEO_TAKES_ENABLED` (default on), 31 glossary entries + 17 verified videos, taste canon answers «what is cringe», weekly routine not set up; not deployed | [2026-11-16-agent-advisor.md](./2026-11-16-agent-advisor.md) |
 | 2026-11-16 | Agent advisor spec: verdict-first, direct-not-cruel voice; one stance list in shared constants rendered per side («the man pays» voices the existing male-pays-both gate); own-side advice dossier without partner decisions; correspondence screenshots read but never stored; event-only proactive messages with caps; danger switches the voice off; five founder questions open; nothing built | [2026-11-16-agent-advisor.md](./2026-11-16-agent-advisor.md) |
 | 2026-11-15 | App audit fixes without founder decisions: `lastOutcome` on `/v1/matches/current` (72 h, blind rule mirrors Telegram) + Today card; app push legs for expiry and ticket gate; `/v1/me/feedback/attendance` and «Вы встретились?» first; app prompt surface (Telegram byte-identical), `get_my_date`, profiler asides, voice dedupe, `matching` step, `chat.reply` push; Premium expiry push not done (2026-08 decision, premise may be outdated); not deployed | [2026-11-15-app-audit-fixes.md](./2026-11-15-app-audit-fixes.md) |
