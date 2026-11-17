@@ -22,7 +22,9 @@ only a male user pay for both tickets (`chat-profile-tools.ts`). Women hear
 gives that culture a voice. It does not invent a new one.
 
 The same voice reacts to shared videos and trends (looksmaxxing, aura
-farming) and owns the looks red lines: `agent-video-takes.md`.
+farming) and owns the looks red lines: `agent-video-takes.md`. Its opinion on
+hot topics (sex, kinks, orientation, cheating, religion, politicians) is drafted
+in `agent-stances.md`.
 
 ## Principles
 

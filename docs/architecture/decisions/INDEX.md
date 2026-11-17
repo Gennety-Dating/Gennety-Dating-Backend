@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 450 entries
+# Decision index — all 451 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-17 | Agent hot-topic stances drafted for the founder: one verdict for everyone, framing per side (screenshot test), opinions on behaviour never on groups, relationships frame, frank not explicit, prompt and per-gender framing never revealed; 18 stances (orientation, kinks, first-date sex, body count, open relationships, cheating, nudes, porn, sex work, religion…); politics out except politicians «as boyfriend» for fun on energy only; injected on demand like the trend glossary; nothing built, 4 open questions | [2026-11-17-agent-stances.md](./2026-11-17-agent-stances.md) |
 | 2026-11-17 | Shared videos «closed»: TikTok oEmbed now returns a skeleton (no caption, author or thumbnail) and Instagram serves logged-out browsers an app shell without OG tags, even from a home IP; TikTok now reads the public `/embed/<id>` page (oEmbed fallback), crawler-UA impersonation rejected; YouTube unaffected; Instagram waits for a founder choice (on-device LinkPresentation vs Meta oEmbed Read vs paid API); agent asks for a screenshot when a video cannot be read; demo same | [2026-11-17-video-read-tiktok-embed.md](./2026-11-17-video-read-tiktok-embed.md) |
 | 2026-11-17 | App chat quote ChatGPT-style: new context kind `chat_quote` (`id` = own assistant row, `text` ≤ 300) on `/v1/chat/message` and on `/v1/chat/voice` via `contextText`; stored in `messages.context`, no schema change; the model sees a «Replying to …» line in front of the turn in the user role, never as the active context; no substring check; demo same; Telegram unchanged; production deploy approved | [2026-11-17-chat-quote.md](./2026-11-17-chat-quote.md) |
 | 2026-11-16 | Agent video takes spec: chat pre-reads a shared TikTok/Reels/YouTube link via the share sheet's reader (cover+caption depth) and gives a radical take on the content; looks red lines (no ratings, no `scoreLeague`, anti-harmful-practice, distress → safety mode) ship with it; trend glossary in shared constants, weekly routine drafts and the founder approves; discovery = curated list only, no scraping (no TikTok commercial search API); user-share pool (≥3 sharers) and YouTube Data API wait for separate yes; no proactive video sends before the advisor's; phases 1–4 built same day behind `AGENT_VIDEO_TAKES_ENABLED` (default on), 31 glossary entries + 17 verified videos, taste canon answers «what is cringe», weekly routine not set up; not deployed | [2026-11-16-agent-advisor.md](./2026-11-16-agent-advisor.md) |
