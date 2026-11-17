@@ -122,41 +122,85 @@ interface TikTokOembed {
   thumbnail_url?: unknown;
 }
 
+function firstString(value: unknown): string | undefined {
+  if (typeof value === "string" && value) return value;
+  if (Array.isArray(value)) return value.find((item): item is string => typeof item === "string" && item.length > 0);
+  return undefined;
+}
+
 /**
- * TikTok publishes an unauthenticated oEmbed endpoint that answers with the
- * caption, the author and a CDN poster URL. It is the cheapest, most stable
- * signal on either platform: no scraping, no HTML shape to track, no login
- * wall.
+ * The state JSON of TikTok's public embed page (`/embed/<id>` — the player a
+ * blog shows for an embedded TikTok). Exported for tests.
+ *
+ * Why not oEmbed: by 2026-11 `tiktok.com/oembed` answers every id — real or
+ * made up — with a bare skeleton (`embed_product_id`, `embed_type`, no title,
+ * no author, no thumbnail). That emptied every TikTok read into `closed`
+ * («TikTok didn't show the video»). The embed page is the same logged-out,
+ * public surface a third-party site loads, and it still carries the caption
+ * (`itemInfos.text`), the cover frames and the author.
+ */
+export function parseTikTokEmbed(html: string): ShortVideoMetadata | null {
+  const match = /<script[^>]+id=["']__FRONTITY_CONNECT_STATE__["'][^>]*>([\s\S]*?)<\/script>/iu.exec(html);
+  if (!match?.[1]) return null;
+  let state: unknown;
+  try {
+    state = JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+  const data = (state as { source?: { data?: Record<string, unknown> } })?.source?.data;
+  if (!data || typeof data !== "object") return null;
+  for (const entry of Object.values(data)) {
+    const videoData = (entry as { videoData?: Record<string, unknown> } | null)?.videoData;
+    if (!videoData || typeof videoData !== "object") continue;
+    const item = (videoData.itemInfos ?? {}) as Record<string, unknown>;
+    const author = (videoData.authorInfos ?? {}) as Record<string, unknown>;
+    const caption = tidyCaption(typeof item.text === "string" ? item.text : undefined);
+    const posterUrl = firstString(item.coversOrigin) ?? firstString(item.covers) ?? firstString(item.coversDynamic);
+    const name = firstString(author.nickName) ?? firstString(author.uniqueId);
+    if (!caption && !posterUrl) continue;
+    return { caption, authorName: name?.slice(0, 100), posterUrl };
+  }
+  return null;
+}
+
+async function readTikTokOembed(
+  ref: ShortVideoRef,
+  options: SafeFetchOptions,
+): Promise<ShortVideoMetadata | null> {
+  const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(ref.url)}`;
+  const page = await fetchPlatformPage(endpoint, options);
+  if (!page.ok) return null;
+  let payload: TikTokOembed;
+  try {
+    payload = JSON.parse(page.body) as TikTokOembed;
+  } catch {
+    return null;
+  }
+  const caption = tidyCaption(typeof payload.title === "string" ? payload.title : undefined);
+  const posterUrl = firstString(payload.thumbnail_url);
+  const authorName = firstString(payload.author_name)?.slice(0, 100);
+  if (!caption && !posterUrl) return null;
+  return { caption, authorName, posterUrl };
+}
+
+/**
+ * TikTok: the public embed page first (see `parseTikTokEmbed`), then oEmbed
+ * in case TikTok fills it again. No login, no cookies, no token — the same
+ * thing any site embedding the video is served.
  */
 async function readTikTok(
   ref: ShortVideoRef,
   options: SafeFetchOptions,
 ): Promise<ShortVideoMetadataResult> {
-  const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(ref.url)}`;
-  const page = await fetchPlatformPage(endpoint, options);
-  if (!page.ok) return { ok: false, error: page.error };
-
-  let payload: TikTokOembed;
-  try {
-    payload = JSON.parse(page.body) as TikTokOembed;
-  } catch {
-    return { ok: false, error: "no_metadata" };
+  if (ref.externalId) {
+    const page = await fetchPlatformPage(`https://www.tiktok.com/embed/${ref.externalId}`, options);
+    const metadata = page.ok ? parseTikTokEmbed(page.body) : null;
+    if (metadata) return { ok: true, ref, metadata };
   }
-
-  const caption = tidyCaption(
-    typeof payload.title === "string" ? payload.title : undefined,
-  );
-  const posterUrl =
-    typeof payload.thumbnail_url === "string" && payload.thumbnail_url
-      ? payload.thumbnail_url
-      : undefined;
-  const authorName =
-    typeof payload.author_name === "string" && payload.author_name
-      ? payload.author_name.slice(0, 100)
-      : undefined;
-
-  if (!caption && !posterUrl) return { ok: false, error: "no_metadata" };
-  return { ok: true, ref, metadata: { caption, authorName, posterUrl } };
+  const fallback = await readTikTokOembed(ref, options);
+  if (!fallback) return { ok: false, error: "no_metadata" };
+  return { ok: true, ref, metadata: fallback };
 }
 
 /**

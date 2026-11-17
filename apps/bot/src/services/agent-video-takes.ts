@@ -70,7 +70,7 @@ export const VIDEO_RULES = `### Videos, memes and trends they send you
   else. When it matters, say so ("по обложке и подписи…"). Never describe
   scenes, sounds or words that are not in the block.
 - A video link with no such block, or a block saying it could not be read:
-  you could not open it. Ask what is in it — never guess.
+  you could not open it. Ask for a screenshot or what is in it — never guess.
 - \`suggest_video\` proposes a video from a hand-picked list. Call it when they
   ask for something to watch, or when a video would genuinely help the moment
   (nerves before a date, after a rejection, doubting their looks, bored). At
@@ -84,8 +84,9 @@ function videoBlock(outcome: ShareVideoReadOutcome): string | null {
   const { video, grounding } = outcome;
   if (video.status === "closed") {
     return `### Video they shared (${video.platform})
-It could not be read: private, removed, blocked or not something you can show.
-You do not know what is in it. Ask them what it is about.`;
+It could not be read: private, removed, hidden from apps by the platform (Instagram
+often is) or not something you can show. You do not know what is in it. Say so
+in a few words and ask for a screenshot of the video or a line on what is in it.`;
   }
   const facts = [
     video.title ? `Title: ${video.title}` : null,

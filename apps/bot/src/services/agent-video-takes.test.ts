@@ -104,7 +104,7 @@ describe("videoTakeBlocks", () => {
     );
     const video = blocks.find((b) => b.startsWith("### Video they shared"));
     expect(video).toContain("could not be read");
-    expect(video).toContain("Ask them");
+    expect(video).toContain("ask for a screenshot");
   });
 
   it("survives a reader that throws", async () => {
