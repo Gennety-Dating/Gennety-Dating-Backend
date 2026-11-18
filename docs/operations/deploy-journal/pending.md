@@ -13,7 +13,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-18 — agent stances on hot topics (phases 3–4)**
+**Deployed 2026-11-18 (was PENDING; production `6a2d2697`, 04:29–04:32 UTC, see [2026-11-18-agent-stances.md](./2026-11-18-agent-stances.md)) 2026-11-18 — agent stances on hot topics (phases 3–4)**
 
 1. Code: spec `docs/product/domains/agent-stances.md`, decision `docs/architecture/decisions/2026-11-17-agent-stances.md`.
    Shared `packages/shared/src/agent-stances.ts` holds the rule block (principles 1–8 and the political boundary) and

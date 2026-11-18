@@ -2,8 +2,8 @@
 
 # Agent stances — Gennety's own opinion on hot topics
 
-Status: **approved by the founder 2026-11-18; built 2026-11-18, not yet on
-production** (code: `packages/shared/src/agent-stances.ts`,
+Status: **approved by the founder 2026-11-18; built and on production 2026-11-18
+(`6a2d2697`)** (code: `packages/shared/src/agent-stances.ts`,
 `apps/bot/src/services/agent-stances.ts`; eval: `apps/bot/scripts/stance-eval.ts`). Answered on
 2026-11-17: the tone (principle 8), looks (stance 0) and politicians
 (phase 2). On 2026-11-18 the founder approved everything else as written:
