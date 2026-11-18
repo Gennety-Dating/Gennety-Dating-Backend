@@ -99,6 +99,7 @@ import {
 } from "./chat-past-tools.js";
 import { GET_MY_DATE_TOOL, GET_MY_DATE_TOOL_NAME, executeGetMyDate } from "./chat-date-tool.js";
 import { SUGGEST_VIDEO_TOOL, videoTakeBlocks, videoTakesEnabled } from "./agent-video-takes.js";
+import { agentStanceBlocks } from "./agent-stances.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -634,7 +635,7 @@ async function runTurnInner(
   // id. Читается один раз за ход вместе с языком, на котором пишутся чеки.
   const account = await prisma.user.findUnique({
     where: { id: userId },
-    select: { telegramId: true, language: true, profile: { select: { homeCityKey: true } } },
+    select: { telegramId: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true } } },
   });
   if (!account) throw new Error(`Unknown user ${userId}`);
   const telegramId = account.telegramId;
@@ -674,7 +675,12 @@ async function runTurnInner(
       guideCards,
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
-      viewer: { language, cityKey: account.profile?.homeCityKey ?? null },
+      viewer: {
+        language,
+        cityKey: account.profile?.homeCityKey ?? null,
+        gender: account.gender ?? null,
+        preference: account.preference ?? null,
+      },
     },
   );
   const consent = deps.consent ?? personConsented;
@@ -1215,7 +1221,7 @@ async function buildChatMessages(
     screenshotLibraryOpen?: boolean | null;
     memoryIdeas?: boolean;
     /** For the video-takes blocks: the reader's language and city. */
-    viewer?: { language: Language; cityKey: string | null };
+    viewer?: { language: Language; cityKey: string | null; gender?: string | null; preference?: string | null };
   },
 ): Promise<{
   messages: OpenAIChatMessage[];
@@ -1296,6 +1302,13 @@ async function buildChatMessages(
   Confirm briefly only after successful removal. Never change interests or language as part of it.` : null,
     personCard,
     ...takeBlocks,
+    // Agent stances (2026-11-18): the hot-topic rules and the positions this
+    // conversation names — same blocks as Telegram.
+    ...agentStanceBlocks({
+      recentUserTexts,
+      gender: options.viewer?.gender ?? null,
+      preference: options.viewer?.preference ?? null,
+    }),
     earlier?.block ?? null,
     contextBlock,
   ]

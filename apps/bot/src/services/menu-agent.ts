@@ -35,6 +35,7 @@ import {
   videoTakeBlocks,
   videoTakesEnabled,
 } from "./agent-video-takes.js";
+import { agentStanceBlocks } from "./agent-stances.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
@@ -1972,7 +1973,7 @@ async function runMenuAgentTurnUnqueued(
   // Load existing post-onboarding history
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { messageHistory: true, language: true, profile: { select: { homeCityKey: true } } },
+    select: { messageHistory: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true } } },
   });
 
   const stored: StoredChatMessage[] = (
@@ -1994,7 +1995,13 @@ async function runMenuAgentTurnUnqueued(
     language: (user?.language ?? "en") as Language,
     cityKey: user?.profile?.homeCityKey ?? null,
   });
-  const systemPrompt = [basePrompt, ...takeBlocks].join("\n\n");
+  // Agent stances (2026-11-18): hot-topic rules and the positions named.
+  const stanceBlocks = agentStanceBlocks({
+    recentUserTexts,
+    gender: user?.gender ?? null,
+    preference: user?.preference ?? null,
+  });
+  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks].join("\n\n");
 
   // Build conversation: fresh system prompt + recent history + new user msg
   const history: ChatMessage[] = [

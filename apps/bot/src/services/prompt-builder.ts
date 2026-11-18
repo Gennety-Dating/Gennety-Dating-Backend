@@ -89,7 +89,7 @@ ${VOICE_SELF_NAME}
  * `BASE_PERSONA` byte for byte; the app's chat is told where its words
  * actually land instead of "Telegram".
  */
-function personaFor(surface: PromptSurface): string {
+export function personaFor(surface: PromptSurface): string {
   if (surface === "tg") return BASE_PERSONA;
   return BASE_PERSONA.replace(
     "each blank-line block is delivered as its own Telegram message",

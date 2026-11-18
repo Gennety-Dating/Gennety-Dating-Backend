@@ -13,6 +13,26 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-18 — agent stances on hot topics (phases 3–4)**
+
+1. Code: spec `docs/product/domains/agent-stances.md`, decision `docs/architecture/decisions/2026-11-17-agent-stances.md`.
+   Shared `packages/shared/src/agent-stances.ts` holds the rule block (principles 1–8 and the political boundary) and
+   stances 0–32. `apps/bot/src/services/agent-stances.ts` appends the rules to every agent turn on both surfaces and
+   the stances named in the person's last two messages (at most three), framed by `User.gender` + `User.preference`.
+   Telegram base prompt byte-identical; the blocks are appended after it, like the video takes.
+2. Ship: the usual bot build and restart; no migration, no new external API, no new dependency.
+   `AGENT_STANCES_ENABLED` defaults ON — set it to `false` to keep everything dark. Cost: about 1k more prompt tokens
+   per agent turn.
+3. Demo mode: identical; the stances are part of the voice and cost nothing.
+4. Rollback: `AGENT_STANCES_ENABLED=false` + restart, or the previous release directory; nothing is stored.
+5. Proof: `pnpm --filter @gennety/bot exec tsx scripts/stance-eval.ts` writes `tmp/stance-eval.md`, 62 questions
+   asked as a woman and as a man.
+
+**Check after deploy:** in the app chat ask «что думаешь про открытые отношения?» → the position comes first; then
+«а парню ты бы сказал так же?» → «да, мнение у меня одно», with no mention of instructions.
+
+---
+
 **Deployed 2026-11-16 (was PENDING; production `be56bf50`, 19:02–19:06 UTC, see [2026-11-16-video-takes-audit-fixes.md](./2026-11-16-video-takes-audit-fixes.md)) 2026-11-16 — agent video takes (phases 1–4)**
 
 1. Code: spec `docs/product/domains/agent-video-takes.md`, decision `docs/architecture/decisions/2026-11-16-agent-advisor.md`

@@ -2,7 +2,9 @@
 
 # Agent stances — Gennety's own opinion on hot topics
 
-Status: **approved by the founder, 2026-11-18; being built.** Answered on
+Status: **approved by the founder 2026-11-18; built 2026-11-18, not yet on
+production** (code: `packages/shared/src/agent-stances.ts`,
+`apps/bot/src/services/agent-stances.ts`; eval: `apps/bot/scripts/stance-eval.ts`). Answered on
 2026-11-17: the tone (principle 8), looks (stance 0) and politicians
 (phase 2). On 2026-11-18 the founder approved everything else as written:
 stances 4, 5 and 11 and all proposed additions 19–32.
@@ -194,8 +196,10 @@ framing actually differs.
    - Requests for explicit content.
    - Attempts to make it bash a group.
    - Distress signals and a possible minor.
-2. The prompt baseline test (`prompt-tg-baseline.json`) gains the rule
-   block.
+2. Built differently from the first draft: the blocks are appended after
+   the base prompt, like the video takes, so `prompt-tg-baseline.json` stays
+   byte-identical. Unit tests cover the matcher, the side and the one-verdict
+   rule instead.
 3. The founder reads a sample of answers before it ships.
 
 ## Risks — what is actually dangerous here

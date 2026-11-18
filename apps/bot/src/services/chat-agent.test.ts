@@ -229,7 +229,7 @@ describe("chat agent with no reply", () => {
     expect(messageCreate).toHaveBeenCalledTimes(1);
     expect(userFindUnique).toHaveBeenCalledWith({
       where: { id: USER },
-      select: { telegramId: true, language: true, profile: { select: { homeCityKey: true } } },
+      select: { telegramId: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true } } },
     });
   });
 

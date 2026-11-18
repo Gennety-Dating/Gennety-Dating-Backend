@@ -712,6 +712,9 @@ export const env = {
   /// trend glossary, the taste and looks blocks, and gets `suggest_video`.
   /// Default ON — `false` turns all of it off on both surfaces.
   AGENT_VIDEO_TAKES_ENABLED: process.env.AGENT_VIDEO_TAKES_ENABLED !== "false",
+  /// Agent stances on hot topics (docs/product/domains/agent-stances.md). On by
+  /// default; "false" drops the rule block and the stances from every turn.
+  AGENT_STANCES_ENABLED: process.env.AGENT_STANCES_ENABLED !== "false",
   /// Per-user preview of the screenshot library while the flag is off: these
   /// user UUIDs (comma-separated) get the feature as if it were on. Read only
   /// through `services/feature-preview.ts`.
