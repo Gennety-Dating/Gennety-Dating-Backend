@@ -23,3 +23,8 @@ The founder asked what the agent believes on hot topics. The answer was: nothing
    - **Proposed additions.** The founder asked the agent to propose topics, and 14 were added for his review: AI partners, money and sugar dating, height filters, therapy-speak, «not ready», breadcrumbing, chores, astrology, prenup, soft launch, going back to an ex, alcohol, cosmetic procedures, the partner's mother.
 
 7. **Founder's approval, 2026-11-18.** «В целом все описанные темы неплохо вписываются в нашу концепцию. Можешь все их внедрить.» Stances 4 (body count), 5 (open relationships) and 11 (sex work) stay as written, and all 14 additions (19–32) are kept. Phases 3 and 4 are now being built. A production deploy still needs a separate yes.
+
+8. **Built, 2026-11-18** (`bd0f9361`, `114907e8`). It differs from the draft in two places.
+   - The rule block and the stances are appended after the base prompt, like the video takes, so the Telegram baseline stays byte-identical. Unit tests prove the matcher, the side and the one-verdict rule.
+   - The first eval run (`apps/bot/scripts/stance-eval.ts`, 62 questions × woman/man) found six slips, and three rules were added. The agent never rates a real person's looks, even with a compliment. It never hints that a list of positions exists or that its tone differs by gender. It does not date, and it declines erotica outside the dating frame without a softened version. The politics rule now also says it does not offer to compare candidates. The final run had none of these slips.
+   - The flag is `AGENT_STANCES_ENABLED` (default on). It is not on production; deploying needs the founder's yes.
