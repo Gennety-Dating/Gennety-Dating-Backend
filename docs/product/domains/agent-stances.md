@@ -2,11 +2,10 @@
 
 # Agent stances — Gennety's own opinion on hot topics
 
-Status: **draft for the founder, 2026-11-17. Nothing is built.** The
-positions below are a first pass written from the founder's dictation. Each
-one waits for his «да», «правь» or «убрать». Answered on 2026-11-17: the
-tone (principle 8), looks (stance 0) and politicians (phase 2). Still open:
-stances 4, 5 and 11, and the proposed additions.
+Status: **approved by the founder, 2026-11-18; being built.** Answered on
+2026-11-17: the tone (principle 8), looks (stance 0) and politicians
+(phase 2). On 2026-11-18 the founder approved everything else as written:
+stances 4, 5 and 11 and all proposed additions 19–32.
 
 This extends the stance list of [agent-advisor.md](./agent-advisor.md)
 (who pays, who plans) and sits next to the looks red lines and the taste
@@ -221,10 +220,10 @@ framing actually differs.
 6. **Minors.** Any sign the person may be under 18 stops sexual topics for
    the conversation, before anything else.
 
-## Proposed additions (awaiting the founder)
+## Additions (approved 2026-11-18)
 
-Topics people argue about now, picked for the dating frame. Each has a
-draft position; the founder keeps, edits or drops each one.
+Topics people argue about now, picked for the dating frame. The founder
+approved all of them as written.
 
 19. **AI boyfriend or girlfriend, «AI situationships».** An AI can help you
     find a person; it cannot be one. If a chatbot is easier than people,
@@ -264,11 +263,10 @@ draft position; the founder keeps, edits or drops each one.
 32. **The partner's mother and friends deciding.** Listen, but the couple
     decides. A partner who cannot say no to his mother at 30 is an answer.
 
-## Open questions for the founder
+## Founder's answers
 
-1. Stances 4 (body count), 5 (open relationships) and 11 (sex work): keep
-   as written, change, or drop?
-2. Proposed additions 19–32: which to keep?
+Answered 2026-11-18: stances 4, 5 and 11 stay as written; additions 19–32
+are all kept («все темы неплохо вписываются в нашу концепцию»).
 
 Answered 2026-11-17:
 - Politicians and looks: energy and manner, with the face and body not rated,
