@@ -13,6 +13,28 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-19 — suggested replies under the agent's message**
+
+1. Code: spec `docs/product/domains/suggested-replies.md`, decision `docs/architecture/decisions/2026-11-19-suggested-replies.md`.
+   `apps/bot/src/services/suggested-replies.ts` owns gates, the chips call (`MODELS.fast`, 2.5 s, fails closed), the
+   code-owned exit line, storage in `messages.attachment` (kind `suggested_replies`) and the tap. Routes:
+   `repliesPending` on `/v1/chat/message` and `/v1/chat/voice`, new `GET /v1/chat/messages/{id}/replies`, `replies` on
+   the newest history row, `suggestion` on a turn. Telegram: one-time reply keyboard in `handlers/menu/router.ts`.
+   Pulse: `services/pulse/replies.ts`, six metrics and the `replies_loop` insight.
+2. Ship: the usual bot build and restart; no migration, no new dependency. New env: `AGENT_SUGGESTED_REPLIES_ENABLED`
+   (default `false`) and `AGENT_SUGGESTED_REPLIES_USER_IDS` (preview list — put the founder's user id here first).
+   With the flag off and the list empty nothing changes. Cost when on: one `MODELS.fast` call (~840 prompt / ~35
+   completion tokens) plus one moderation call per agent turn that passes the gates.
+3. Demo mode: identical; Pulse excludes demo and synthetic accounts.
+4. iOS: builds that send `X-Gennety-Chat-Cards: replies` show chips; older builds see nothing new.
+5. Rollback: set the flag off / empty the list (instant), or the previous release directory. Stored chips are inert
+   JSON on assistant rows.
+6. Proof: `pnpm --filter @gennety/bot exec vitest run src/services/suggested-replies.test.ts src/public/routes/chat-replies-route.test.ts src/services/pulse/replies.test.ts`;
+   live model: `apps/bot/node_modules/.bin/tsx apps/bot/scripts/suggested-replies-eval.ts --runs=2`
+   (2026-11-19: 0/32 failed, chips on 19% of replies, p50 1.3 s). Live: with the founder on the list, «в субботу
+   свидание, нервничаю» in the app → chips may or may not show; «ок спасибо» → none; a long chat after 23:00 → «На
+   сегодня всё» first, tap → one line, no chips.
+
 **PENDING 2026-11-19 — agent concept: offline goal, spine, no attention traps (prompt block)**
 
 1. Code: spec `docs/product/domains/agent-concept.md`, decision `docs/architecture/decisions/2026-11-19-agent-concept.md`.
