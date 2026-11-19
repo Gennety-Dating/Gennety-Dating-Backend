@@ -2,8 +2,9 @@
 
 # Long-term memory — the agent remembers the person like a friend
 
-Status: **specification, founder brief 2026-11-19. Nothing is built.** The
-schema in phase 4 and the screen in phase 7 wait for the founder's «да».
+Status: **approved by the founder 2026-11-19** (schema, screen, Telegram card
+and past-chat search). Being built behind `AGENT_MEMORY_ENABLED`. The screen
+mockup goes to the founder before client work; production waits for «да».
 Decision: `docs/architecture/decisions/2026-11-19-long-term-memory.md`.
 
 The founder, in their words: the agent is a friend who goes along with a

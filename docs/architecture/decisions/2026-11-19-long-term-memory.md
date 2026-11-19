@@ -6,8 +6,14 @@ The founder asked for a «блок долговременных переписо
 who goes along with a person's love life, remembers their conversations, earns
 trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
 
-1. **Proposed, waiting for the founder.** Nothing below is built. The schema,
-   the screen and the open questions in point 6 wait for «да».
+1. **Approved by the founder 2026-11-19** («Да, всё трое»): the schema and
+   migration below, the screen «Что Gennety помнит», and the Telegram person
+   card plus `search_past_chats` in this work (6.1, 6.2, 6.5). Questions 6.3
+   and 6.4 were not answered separately, so they are built as recommended:
+   the writer reads the last 90 days once (`AGENT_MEMORY_BACKFILL_DAYS`), and
+   demo mode behaves as production. Both are one constant or one line to
+   change. The screen still goes to the founder as a mockup before client
+   work. Production and the live migration still wait for an explicit «да».
 2. **Notes, not transcripts.** Memory is a set of short notes in the person's
    language, of five kinds: fact, person, story, followup and date. Notes are
    not a new copy of the chats and not an extension of ideas. Ideas stay what a
