@@ -715,6 +715,10 @@ export const env = {
   /// Agent stances on hot topics (docs/product/domains/agent-stances.md). On by
   /// default; "false" drops the rule block and the stances from every turn.
   AGENT_STANCES_ENABLED: process.env.AGENT_STANCES_ENABLED !== "false",
+  /// Agent concept rules (docs/product/domains/agent-concept.md): offline goal,
+  /// spine, no attention traps, honest memory. On by default; "false" drops the
+  /// block from every turn on both surfaces.
+  AGENT_CONCEPT_ENABLED: process.env.AGENT_CONCEPT_ENABLED !== "false",
   /// Per-user preview of the screenshot library while the flag is off: these
   /// user UUIDs (comma-separated) get the feature as if it were on. Read only
   /// through `services/feature-preview.ts`.

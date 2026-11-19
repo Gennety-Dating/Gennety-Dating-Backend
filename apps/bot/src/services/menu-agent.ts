@@ -36,6 +36,7 @@ import {
   videoTakesEnabled,
 } from "./agent-video-takes.js";
 import { agentStanceBlocks } from "./agent-stances.js";
+import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
@@ -2001,7 +2002,10 @@ async function runMenuAgentTurnUnqueued(
     gender: user?.gender ?? null,
     preference: user?.preference ?? null,
   });
-  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks].join("\n\n");
+  // Agent concept (2026-11-19): offline goal, spine, no attention traps, and
+  // the clock this prompt otherwise lacks — same block as the app.
+  const conceptBlocks = agentConceptBlocks(await loadConceptTurn({ telegramId }));
+  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks, ...conceptBlocks].join("\n\n");
 
   // Build conversation: fresh system prompt + recent history + new user msg
   const history: ChatMessage[] = [

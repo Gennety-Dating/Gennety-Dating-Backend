@@ -13,6 +13,24 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-19 — agent concept: offline goal, spine, no attention traps (prompt block)**
+
+1. Code: spec `docs/product/domains/agent-concept.md`, decision `docs/architecture/decisions/2026-11-19-agent-concept.md`.
+   Shared `packages/shared/src/agent-concept.ts` holds the ten rules and the clock and goal lines;
+   `apps/bot/src/services/agent-concept.ts` appends one block after the stances on both surfaces (one indexed read
+   of `profiles.time_zone` and `relationship_intents` per turn). Telegram base prompt byte-identical.
+2. Ship: the usual bot build and restart; no migration, no new external API, no new dependency.
+   `AGENT_CONCEPT_ENABLED` defaults ON — set it to `false` to keep it dark. Cost: about 900 more prompt tokens per turn.
+3. Demo mode: identical.
+4. Rollback: `AGENT_CONCEPT_ENABLED=false` + restart, or the previous release directory; nothing is stored.
+5. Proof: `pnpm --filter @gennety/bot exec tsx scripts/concept-eval.ts --concept=off|on` writes `tmp/concept-*.json`.
+6. iOS impact: none.
+
+**Check after deploy:** in the app chat write «ладно, я спать» → one short line, no question; write «привет» → a short
+answer with no question chain; in Telegram at night ask anything → a short reply that lets the person sleep.
+
+---
+
 **PENDING 2026-11-19 — chat statuses: watching a video, the chat history, memory**
 
 1. Code: decision `docs/architecture/decisions/2026-11-19-chat-statuses.md`. `apps/bot/src/services/chat-activity.ts`
@@ -26,6 +44,8 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 5. Rollback: the previous release directory; nothing is stored.
 6. Proof: `pnpm --filter @gennety/bot exec vitest run src/services/chat-activity.test.ts src/services/agent-video-takes.test.ts`.
    Live: send a TikTok link from the app and watch «Смотрю видео…»; ask about a saved idea and watch «Вспоминаю…».
+
+---
 
 **Deployed 2026-11-18 (was PENDING; production `6a2d2697`, 04:29–04:32 UTC, see [2026-11-18-agent-stances.md](./2026-11-18-agent-stances.md)) 2026-11-18 — agent stances on hot topics (phases 3–4)**
 

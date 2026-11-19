@@ -100,6 +100,7 @@ import {
 import { GET_MY_DATE_TOOL, GET_MY_DATE_TOOL_NAME, executeGetMyDate } from "./chat-date-tool.js";
 import { SUGGEST_VIDEO_TOOL, videoTakeBlocks, videoTakesEnabled } from "./agent-video-takes.js";
 import { agentStanceBlocks } from "./agent-stances.js";
+import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -1278,7 +1279,7 @@ async function buildChatMessages(
     .filter((row) => row.role === "user" && typeof row.content === "string" && row.content.length > 0)
     .map((row) => row.content as string)
     .reverse();
-  const [contextBlock, personCard, takeBlocks] = await Promise.all([
+  const [contextBlock, personCard, takeBlocks, conceptTurn] = await Promise.all([
     context ? buildChatContextBlock(userId, context) : Promise.resolve(null),
     // The card must never cost the turn: without it the agent is as it was.
     buildPersonCard(userId).catch((err: unknown) => {
@@ -1294,6 +1295,8 @@ async function buildChatMessages(
       console.warn("[chat] video-take blocks unavailable:", err);
       return [] as string[];
     }),
+    // Agent concept (2026-11-19): their clock and their own dating goal.
+    loadConceptTurn({ userId }),
   ]);
   const system = [
     base,
@@ -1322,6 +1325,9 @@ async function buildChatMessages(
       gender: options.viewer?.gender ?? null,
       preference: options.viewer?.preference ?? null,
     }),
+    // Agent concept (2026-11-19): offline goal, spine, no attention traps —
+    // same block as Telegram, after everything it may overrule.
+    ...agentConceptBlocks(conceptTurn),
     earlier?.block ?? null,
     contextBlock,
   ]
