@@ -11,7 +11,7 @@ line is per time of day, and Telegram chips are counted in logs, not Pulse.
 Founder, later the same day: in iOS the chips are tail-less message bubbles on
 the person's side (right-aligned, stacked), not glass capsules under the
 agent's bubble; and reminders are approved as their own feature, after which a
-`remind` step joins the catalogue (Phase 2 point 2 of the iOS section below is
+`remind` step joins the catalogue (Phase 3 point 2, the iOS look, is
 superseded by this).
 
 ## Why
