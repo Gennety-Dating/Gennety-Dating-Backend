@@ -51,15 +51,24 @@ measured in steps taken offline, not in minutes spent in the chat.
    (AGENTS.md rule 1), the stance rules in `packages/shared/src/agent-stances.ts`
    (the prompt is never revealed, the agent never says it answers men and women
    differently) and the consent gate for profile writes are not touched.
+8. **The agent concept wins.** `docs/product/domains/agent-concept.md`
+   (2026-11-19) holds here as it holds in the reply. Rule 5 there: a reply
+   ends on its point, with no «а ещё могу…» menu and at most one offer. So a
+   set of chips is never a menu. Rule 6 there: «пока», «спасибо», «ок», «я
+   спать» get one warm line and nothing after it. So no chips follow them.
 
 ## Phase 1 — The model: when, what and what never
 
-1. **The four kinds.** Each chip has a kind. At most three chips are shown,
-   and at most one of them is a step.
+1. **The four kinds.** Each chip has a kind. A set is one of two shapes,
+   never a mix, so it never reads as a menu of what else the agent can do.
+   - Two or three `answer` options to one question.
+   - At most one `step` and at most one `clarify`.
+   - Either shape may add the `close` exit (point 3).
    - `answer` — a short answer to the question the agent's reply just asked.
      Two or three options that together cover the honest range, one of which
      is usually «not sure» or «other». Shown only when the reply ends in a
-     question with a small set of natural answers.
+     question with a small set of natural answers. Under the agent concept the
+     agent asks only when it truly needs the answer, so these are rare.
    - `step` — one step towards offline that maps to a tool the agent has
      today. Examples: «Покажи моё свидание» (`get_my_date`), «Открой календарь»
      (`open_screen`), «Что идёт в эти выходные?» (`check_event`), «Сменим место»
@@ -83,6 +92,10 @@ measured in steps taken offline, not in minutes spent in the chat.
        path);
      - the turn or the chat is in the safety register (the moderation check
        flags self-harm, violence or a minor, or the latch below is set);
+     - the person's turn is a goodbye, a thanks, an «ок» or «я спать»
+       (agent concept rule 6, a per-language phrase list plus the model's
+       verdict): the reply is one warm line and nothing comes after it, not even
+       the exit;
      - the person tapped `close` and has not written since;
      - chips were shown and ignored on the last two replies in a row (the person
        types instead — they do not need us).
@@ -92,7 +105,9 @@ measured in steps taken offline, not in minutes spent in the chat.
      and when it is unsure.
 3. **The exit appears more as the chat gets longer.** `close` is not shown on a
    short chat. It is added to the set once the chat has 12 turns or has run
-   for 30 minutes, and between 23:00 and 05:00 local time it is the first chip.
+   for 30 minutes. Between 23:00 and 05:00 local time it is the first chip,
+   and the set is cut to the exit plus at most one step, with no `clarify`:
+   at night the agent is never the reason someone stays up.
    When code wants the exit but the model returned nothing, the exit is shown
    alone.
 4. **What never appears.** A chip is dropped by code (a fixed per-language
@@ -115,9 +130,10 @@ measured in steps taken offline, not in minutes spent in the chat.
    buttons.
 6. **The `close` tap.** It sends «На сегодня всё» as the person's message, and
    the answer is a code-owned line from i18n (several variants per language,
-   picked at random), with no model call. Examples: «Хорошо. Иди живи — я тут,
-   когда понадоблюсь.», «Договорились. Удачи в пятницу.» The line has no
-   question and no chips. The line that mentions a date is used only when the
+   picked at random), with no model call. Examples: «Хорошо. Спокойной ночи.»,
+   «Договорились. Удачи в пятницу.» Like every goodbye under agent concept
+   rule 6, the line has no question, no new topic, no «пиши, если что» and no
+   chips. The line that mentions a date is used only when the
    person has one scheduled.
 
 ## Phase 2 — Generation
@@ -131,6 +147,9 @@ measured in steps taken offline, not in minutes spent in the chat.
      before them (text only, no photos), the list of step tools available in
      this turn, the language, and the gate facts above. Roughly 1,000–1,500
      input tokens.
+   - Prompt: its own rules from this spec, followed by the same agent-concept
+     block the reply prompt ends with (`packages/shared/src/agent-concept.ts`),
+     which wins over every line above it. No chip rule contradicts it.
    - Output: strict JSON schema — `{ "show": boolean, "safety": boolean,
      "chips": [ { "kind": "answer" | "step" | "clarify", "text": string,
      "tool"?: string } ] }`, at most 3 chips, about 60–120 output tokens.
