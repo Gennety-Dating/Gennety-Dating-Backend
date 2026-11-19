@@ -271,7 +271,12 @@ way `agent-stances.ts` is.
    be deleted, and there are «Забыть всё» and a switch «Запоминать».
    - The look: each group is an inflated jelly cloud in brand materials
      (ruby, champagne, deep wine, pearl, smoked graphite) holding glass
-     bubbles, one per note. Tapping a cloud zooms into it; tapping a bubble
+     bubbles, one per note. Tapping a cloud does not open a screen: the
+     cloud glides out of its tile to the centre and grows, in focus, while the
+     rest of the overview stays in place under a light blur (founder,
+     2026-11-19, after the model-effort control in ChatGPT). Tapping the
+     blurred area sends it back to its tile with the same spring. Tapping a
+     bubble
      opens a card with the full note, its rows and its source, and «Исправить»
      or «Забыть». Pulling a bubble out past the cloud's edge forgets it, and
      a top toast offers «Отменить» for a few seconds; the client holds the

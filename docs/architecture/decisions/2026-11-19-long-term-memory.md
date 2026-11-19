@@ -176,3 +176,16 @@ trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
    glyph, so either the writer picks one from a fixed list into a new
    nullable `glyph` column (a schema change that needs a yes) or a bubble
    shows a glyph per kind.
+10. **Memory and reminders stay apart** (`agent-reminders.md`, planned the
+    same day). Memory never sends anything: a `followup` or a `date` note
+    only shapes what the agent says when the person comes back. A reminder
+    is the person's own request and is delivered at its time. «Напомни про
+    др Маши» is a reminder for that tool; the date itself is also a memory
+    note, and neither replaces the other.
+11. **Opening a cloud is a focus, not a screen** (founder, 2026-11-19, on
+    the first mockup, with a screen recording of ChatGPT's model-effort
+    control). The tapped cloud lifts out of its tile and springs to the
+    centre in about 0.4 s. The overview stays under a 16 px blur with a light
+    dim. Tapping the blur returns the cloud to its tile. The card opens over
+    the focused cloud and closes back to it. Reduced motion is a cross-fade.
+    Mockup version 2 at the same link.
