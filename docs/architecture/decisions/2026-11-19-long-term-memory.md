@@ -23,7 +23,8 @@ trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
      conversation.
 3. **One memory for both surfaces.** Telegram and the app read and write the
    same notes. Before this, Telegram replayed 24 hours and saw no app chat.
-   Telegram still gets no `search_past_chats`; that is a separate change.
+   The agent audit proposes adding the person card and `search_past_chats` to
+   Telegram in this same work (question 6.5).
 4. **Written after the conversation, by the cheap model, checked by the
    server.** The writer runs where the chat digest already runs. The server
    checks ids, caps, the sensitive filter and the pause. Nothing is written on
@@ -136,6 +137,9 @@ trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
       only, so the agent remembers from the first day.
    4. Demo mode: the same behaviour as production, with notes going away
       with the demo reset. Recommended: yes.
+   5. Telegram also gets the person card and `search_past_chats` in this work,
+      as the agent audit proposed (its principle 8)? Recommended: yes. Both
+      are reads that already exist on the app and need no schema.
 7. **Coordination.** `recall` maps to the `remembering` step, which the
    chat-statuses session introduces. Until it lands, `recall` reports
    `past_chats`. The persona is not edited here; the memory block is its own
