@@ -1,0 +1,142 @@
+<!-- WHEN_TO_READ: You touch the agent's long-term memory: memory notes, the memory writer, the `recall`/`remember`/`update_memory`/`forget_memory` tools, the memory pause, or the `agent_memories` / `agent_memory_state` tables. -->
+
+# 2026-11-19 — long-term memory of the agent
+
+The founder asked for a «блок долговременных переписок»: the agent is a friend
+who goes along with a person's love life, remembers their conversations, earns
+trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
+
+1. **Proposed, waiting for the founder.** Nothing below is built. The schema,
+   the screen and the open questions in point 6 wait for «да».
+2. **Notes, not transcripts.** Memory is a set of short notes in the person's
+   language, of five kinds: fact, person, story, followup and date. Notes are
+   not a new copy of the chats and not an extension of ideas. Ideas stay what a
+   person wants for dates, and notes are their life. Chat summaries stay the
+   retrieval layer for a whole conversation.
+   - Rejected: replaying more raw history. The cost grows with every chat, and
+     the model still does not know what matters.
+   - Rejected: one free-text «about the person» field, the way the advice
+     dossier proposed for the delivery hint. A person cannot delete one line of
+     it, it cannot say whether a story is open, and it rots.
+   - Rejected: putting life facts into `MemoryPreference`. That table feeds
+     venue choice and matching, and notes must feed nothing but the
+     conversation.
+3. **One memory for both surfaces.** Telegram and the app read and write the
+   same notes. Before this, Telegram replayed 24 hours and saw no app chat.
+   Telegram still gets no `search_past_chats`; that is a separate change.
+4. **Written after the conversation, by the cheap model, checked by the
+   server.** The writer runs where the chat digest already runs. The server
+   checks ids, caps, the sensitive filter and the pause. Nothing is written on
+   the reply's path.
+5. **Proposed schema** (additive; no vector index, because a person has at
+   most 120 notes):
+
+   ```prisma
+   model AgentMemory {
+     id              String                       @id @default(uuid()) @db.Uuid
+     userId          String                       @map("user_id") @db.Uuid
+     /// fact | person | story | followup | date
+     kind            String
+     text            String
+     subject         String?
+     dueOn           DateTime?                    @map("due_on") @db.Date
+     recurring       Boolean                      @default(false)
+     /// open | resolved — story and followup only
+     status          String?
+     outcome         String?
+     /// told | noticed
+     provenance      String
+     /// app | telegram
+     surface         String
+     sourceSessionId String?                      @map("source_session_id") @db.Uuid
+     embedding       Unsupported("vector(1536)")?
+     lastSeenAt      DateTime                     @default(now()) @map("last_seen_at")
+     resolvedAt      DateTime?                    @map("resolved_at")
+     createdAt       DateTime                     @default(now()) @map("created_at")
+     updatedAt       DateTime                     @updatedAt @map("updated_at")
+
+     user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+     sourceSession ChatSession? @relation(fields: [sourceSessionId], references: [id], onDelete: SetNull)
+
+     @@index([userId, kind])
+     @@index([userId, updatedAt])
+     @@map("agent_memories")
+   }
+
+   model AgentMemoryState {
+     userId            String    @id @map("user_id") @db.Uuid
+     pausedAt          DateTime? @map("paused_at")
+     telegramScannedAt DateTime? @map("telegram_scanned_at")
+     updatedAt         DateTime  @updatedAt @map("updated_at")
+
+     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+     @@map("agent_memory_state")
+   }
+
+   // chat_sessions gains:
+   //   memoryScannedCount Int @default(0) @map("memory_scanned_count")
+   ```
+
+   Migration `20261119120000_agent_memory`:
+
+   ```sql
+   CREATE TABLE "agent_memories" (
+       "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+       "user_id" UUID NOT NULL,
+       "kind" TEXT NOT NULL,
+       "text" TEXT NOT NULL,
+       "subject" TEXT,
+       "due_on" DATE,
+       "recurring" BOOLEAN NOT NULL DEFAULT false,
+       "status" TEXT,
+       "outcome" TEXT,
+       "provenance" TEXT NOT NULL,
+       "surface" TEXT NOT NULL,
+       "source_session_id" UUID,
+       "embedding" vector(1536),
+       "last_seen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       "resolved_at" TIMESTAMP(3),
+       "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       "updated_at" TIMESTAMP(3) NOT NULL,
+       CONSTRAINT "agent_memories_pkey" PRIMARY KEY ("id")
+   );
+   CREATE INDEX "agent_memories_user_id_kind_idx" ON "agent_memories"("user_id", "kind");
+   CREATE INDEX "agent_memories_user_id_updated_at_idx" ON "agent_memories"("user_id", "updated_at");
+   ALTER TABLE "agent_memories" ADD CONSTRAINT "agent_memories_user_id_fkey"
+       FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+   ALTER TABLE "agent_memories" ADD CONSTRAINT "agent_memories_source_session_id_fkey"
+       FOREIGN KEY ("source_session_id") REFERENCES "chat_sessions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+   CREATE TABLE "agent_memory_state" (
+       "user_id" UUID NOT NULL,
+       "paused_at" TIMESTAMP(3),
+       "telegram_scanned_at" TIMESTAMP(3),
+       "updated_at" TIMESTAMP(3) NOT NULL,
+       CONSTRAINT "agent_memory_state_pkey" PRIMARY KEY ("user_id")
+   );
+   ALTER TABLE "agent_memory_state" ADD CONSTRAINT "agent_memory_state_user_id_fkey"
+       FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+   ALTER TABLE "chat_sessions" ADD COLUMN "memory_scanned_count" INTEGER NOT NULL DEFAULT 0;
+   ```
+
+   Rollback: drop both tables and the column. Existing chats start at
+   `memory_scanned_count = 0`. With the flag on, the writer would read their
+   whole history once. Whether to do that or to start from now is question
+   6.3.
+6. **Open questions for the founder.**
+   1. A screen «Что Gennety помнит» in the app, or memory only through the
+      chat? Recommended: the screen. A friend who remembers earns trust when
+      the person can see and wipe what is kept, and the right of access asks
+      for it anyway. «О чём мы говорили» already exists as the chat list.
+   2. The schema and the migration above.
+   3. Old conversations: does the writer read the existing chats once when the
+      flag goes on, or start from today? Recommended: once, the last 90 days
+      only, so the agent remembers from the first day.
+   4. Demo mode: the same behaviour as production, with notes going away
+      with the demo reset. Recommended: yes.
+7. **Coordination.** `recall` maps to the `remembering` step, which the
+   chat-statuses session introduces. Until it lands, `recall` reports
+   `past_chats`. The persona is not edited here; the memory block is its own
+   module, as the stances are.
