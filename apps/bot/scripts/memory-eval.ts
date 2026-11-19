@@ -34,6 +34,7 @@ const { personaFor } = await import("../src/services/prompt-builder.js");
 const { askWriter, renderTranscript } = await import("../src/services/agent-memory-writer.js");
 const { renderMemoryBlock, parseDay } = await import("../src/services/agent-memory.js");
 const { AGENT_MEMORY_TOOLS } = await import("../src/services/agent-memory-tools.js");
+const { agentConceptBlocks } = await import("../src/services/agent-concept.js");
 const shared = await import("@gennety/shared");
 const { AGENT_MEMORY_RULES, AGENT_MEMORY_STATEFUL_KINDS, AGENT_MEMORY_TEXT_MAX, isNeverRemembered } = shared;
 
@@ -265,7 +266,12 @@ async function agentStage(report: string[]): Promise<{ passed: number; total: nu
   for (const check of CHECKS) {
     // The block is rebuilt each turn from the live store, as on production.
     const block = renderMemoryBlock(notes, now, "Europe/Kyiv");
-    const system = [personaFor("app"), "## Current User Context\n- Name: Саша\n- Preferred language: ru", AGENT_MEMORY_RULES, block].filter(Boolean).join("\n\n");
+    // The concept block rides every live turn too (2026-11-19): memory must
+    // hold up next to «let them go» and «no hooks».
+    const concept = agentConceptBlocks({ now, timeZone: "Europe/Kyiv", relationshipIntents: ["falling"] }, true);
+    const system = [personaFor("app"), "## Current User Context\n- Name: Саша\n- Preferred language: ru", AGENT_MEMORY_RULES, block, ...concept]
+      .filter(Boolean)
+      .join("\n\n");
     const calls: string[] = [];
     const reply = await agentTurn(system, history, check.ask, calls);
     const ok = check.pass(reply, calls);

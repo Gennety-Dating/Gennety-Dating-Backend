@@ -209,9 +209,11 @@ way `agent-stances.ts` is.
 2. **The rules that ride with it,** in English like every prompt block:
    - Use a note only where it fits the conversation. Never list what you
      remember unasked, and never open with a recap.
-   - Ask about an open story or a due followup at most once per chat, and
-     only when the person has room for it, not in the middle of their
-     question.
+   - A due followup is what a friend asks about first: on a bare greeting
+     it is the one question worth asking, because it is about their life out
+     there (this agrees with the concept block's «let them go»). An open
+     story with nothing due gets no question. Once per chat, never in the
+     middle of their own question.
    - Say only what a note or a tool result holds. If a detail is not there,
      say you do not remember it and ask. Never pretend. This is principle 8
      of `agent-concept.md`, applied to memory.
@@ -317,5 +319,8 @@ way `agent-stances.ts` is.
      cinema, so followups are ordered freshest-due first and an old one is
      marked «ask only if it comes up». The writer had stored «завтра», so
      notes now carry dates, never relative words.
+   - After the concept block landed (06d8ed07) the run was repeated with it
+     in the prompt: 5 of 5 and 5 of 5, the greeting answered with one line,
+     «ну что, как прошло кино с Олегом?».
 4. Production and the migration on the live database wait for the
    founder's explicit «да».
