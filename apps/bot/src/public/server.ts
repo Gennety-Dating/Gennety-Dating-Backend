@@ -70,6 +70,7 @@ import { createPrimeTimeAppStoreRouter } from "./routes/prime-time-appstore.js";
 import { createWishlistRouter } from "./routes/wishlist.js";
 import { createScreenshotsRouter } from "./routes/screenshots.js";
 import { createMemoryRouter } from "./routes/memory.js";
+import { createAgentMemoryRouter } from "./routes/agent-memory.js";
 import { createShareRouter } from "./routes/share.js";
 import { createAfterDateRouter } from "./routes/after-date.js";
 import { createPremiumRouter } from "./routes/premium.js";
@@ -447,6 +448,8 @@ app.use("/v1/me/profiler", createNativeProfilerRouter());
 app.use("/v1/me/wishlist", createWishlistRouter());
 app.use("/v1/me/screenshots", createScreenshotsRouter());
 app.use("/v1/me/memory", createMemoryRouter());
+// Long-term memory of the agent (decision 2026-11-19) — not the ideas above.
+app.use("/v1/me/agent-memory", createAgentMemoryRouter());
 // «Поделиться → Gennety» for a short video (decision journal 2026-10-24) —
 // the wishlist's front door, same switch; before `/v1/me` like the rest.
 app.use("/v1/me/share", createShareRouter());

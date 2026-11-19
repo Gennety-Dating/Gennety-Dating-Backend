@@ -456,6 +456,8 @@ model User {
   memoryIdeas               MemoryIdea[]
   memoryPreferences         MemoryPreference[]
   memoryImpressions         MemoryImpression[]
+  agentMemories             AgentMemory[]
+  agentMemoryState          AgentMemoryState?
   screenshotExclusions      ScreenshotExclusion[]
   musicTracks               ProfileMusicTrack[]
   scratchMap                UserScratchMap?
@@ -3143,11 +3145,15 @@ model ChatSession {
   summary           String?
   summaryEmbedding  Unsupported("vector(1536)")? @map("summary_embedding")
   summarizedAtCount Int                          @default(0) @map("summarized_at_count")
+  /// How many non-system messages of this chat the memory writer has read
+  /// (decision 2026-11-19, long-term memory) — like `summarizedAtCount`.
+  memoryScannedCount Int                         @default(0) @map("memory_scanned_count")
   createdAt         DateTime                     @default(now()) @map("created_at")
   updatedAt         DateTime                     @default(now()) @map("updated_at")
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  agentMemories AgentMemory[]
 
   @@index([userId, updatedAt])
   @@map("chat_sessions")
@@ -4192,4 +4198,60 @@ model MemoryImpression {
   @@unique([userId, matchId])
   @@index([ideaId])
   @@map("memory_impressions")
+}
+
+/// One note of the agent's long-term memory about a person (decision
+/// 2026-11-19, spec docs/product/domains/long-term-memory.md). A short line in
+/// the person's language about their life — never a quote, never a
+/// transcript. Read only by this person's own conversations with the agent and
+/// by their «Что Gennety помнит» screen: never by matching, venue choice, a
+/// partner or an admin screen. «Забудь» is a hard delete.
+model AgentMemory {
+  id              String                       @id @default(uuid()) @db.Uuid
+  userId          String                       @map("user_id") @db.Uuid
+  /// fact | person | story | followup | date
+  kind            String
+  text            String
+  /// The person's name and role («Маша, сестра») or a story's label.
+  subject         String?
+  /// date: the day itself; followup: when to ask. A day, no time.
+  dueOn           DateTime?                    @map("due_on") @db.Date
+  /// A birthday or an anniversary comes back every year.
+  recurring       Boolean                      @default(false)
+  /// open | resolved — story and followup only
+  status          String?
+  outcome         String?
+  /// told (they asked to remember) | noticed (picked up from a conversation)
+  provenance      String
+  /// app | telegram — where it was last written from
+  surface         String
+  sourceSessionId String?                      @map("source_session_id") @db.Uuid
+  embedding       Unsupported("vector(1536)")?
+  /// The last time a conversation confirmed or touched it.
+  lastSeenAt      DateTime                     @default(now()) @map("last_seen_at")
+  resolvedAt      DateTime?                    @map("resolved_at")
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceSession ChatSession? @relation(fields: [sourceSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind])
+  @@index([userId, updatedAt])
+  @@map("agent_memories")
+}
+
+/// Per-person memory switch and the Telegram read cursor (decision 2026-11-19).
+/// No row means memory is on and nothing of Telegram has been read.
+model AgentMemoryState {
+  userId            String    @id @map("user_id") @db.Uuid
+  /// Memory is off while set: nothing is written, no block rides a turn.
+  pausedAt          DateTime? @map("paused_at")
+  /// How far the person's Telegram agent turns have been read.
+  telegramScannedAt DateTime? @map("telegram_scanned_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agent_memory_state")
 }

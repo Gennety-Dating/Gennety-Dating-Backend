@@ -11,7 +11,7 @@ import { env } from "../config.js";
  * everyone, a list means only those people, an empty list means nobody.
  */
 
-type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES";
+type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES" | "AGENT_MEMORY";
 
 function previewList(flag: Flag): readonly string[] {
   const raw = (env as Record<string, unknown>)[`${flag}_USER_IDS`];
@@ -40,3 +40,6 @@ export const suggestedRepliesUsers = (): readonly string[] | null => usersOf("AG
 /** On the preview list (never held out). */
 export const suggestedRepliesPreview = (userId: string | null | undefined): boolean =>
   Boolean(userId) && previewList("AGENT_SUGGESTED_REPLIES").includes((userId as string).toLowerCase());
+/** Long-term memory of the agent (`docs/product/domains/long-term-memory.md`). */
+export const agentMemoryOn = (userId: string | null | undefined): boolean => onFor("AGENT_MEMORY", userId);
+export const agentMemoryUsers = (): readonly string[] | null => usersOf("AGENT_MEMORY");

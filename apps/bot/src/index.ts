@@ -66,6 +66,7 @@ import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { chatSessionDigestTick } from "./workers/chat-session-digest.js";
+import { agentMemoryTick } from "./workers/agent-memory.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
@@ -332,6 +333,15 @@ const EMBEDDING_REFRESH_CRON_SCHEDULE =
  */
 const CHAT_SESSION_DIGEST_CRON_SCHEDULE =
   process.env.CHAT_SESSION_DIGEST_CRON_SCHEDULE ?? "2-59/5 * * * *";
+
+/**
+ * Long-term memory writer (decision 2026-11-19): quiet app chats and Telegram
+ * histories with unread messages, ten of each per tick, one cheap-model call
+ * each; plus the hourly expiry of resolved notes. Offset from the digest by two
+ * minutes so the two OpenAI sweeps never start together.
+ */
+const AGENT_MEMORY_CRON_SCHEDULE =
+  process.env.AGENT_MEMORY_CRON_SCHEDULE ?? "4-59/5 * * * *";
 
 /**
  * Verified-selfie retention: GDPR Article 9 requires biometric data is
@@ -685,6 +695,7 @@ function validateSchedules(): void {
       AUTO_UNSUSPEND_CRON_SCHEDULE,
       EMBEDDING_REFRESH_CRON_SCHEDULE,
       CHAT_SESSION_DIGEST_CRON_SCHEDULE,
+      AGENT_MEMORY_CRON_SCHEDULE,
       SELFIE_RETENTION_CRON_SCHEDULE,
       RETENTION_CRON_SCHEDULE,
       SCREENSHOT_LIBRARY_CRON_SCHEDULE,
@@ -1160,6 +1171,21 @@ function registerSchedules(): void {
     ),
   );
   console.log(`[cron] Chat-session digest scheduled: "${CHAT_SESSION_DIGEST_CRON_SCHEDULE}"`);
+
+  // Long-term memory: notes from quiet conversations, and their expiry.
+  cron.schedule(
+    AGENT_MEMORY_CRON_SCHEDULE,
+    guardedTick("agent-memory", () =>
+      agentMemoryTick().then((r) => {
+        if (r.chats + r.telegram + r.expired + r.closed > 0) {
+          console.log(
+            `[agent-memory] chats=${r.chats} telegram=${r.telegram} written=${r.written} failed=${r.failed} expired=${r.expired} closed=${r.closed}`,
+          );
+        }
+      }),
+    ),
+  );
+  console.log(`[cron] Agent memory scheduled: "${AGENT_MEMORY_CRON_SCHEDULE}"`);
 
   // Pinned status banner — discrete countdown to next match dispatch.
   cron.schedule(

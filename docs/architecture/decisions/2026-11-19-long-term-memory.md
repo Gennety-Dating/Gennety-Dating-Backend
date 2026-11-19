@@ -150,3 +150,29 @@ trust and leads them offline. Spec: `docs/product/domains/long-term-memory.md`.
    chat-statuses session introduces. Until it lands, `recall` reports
    `past_chats`. The persona is not edited here; the memory block is its own
    module, as the stances are.
+8. **Built 2026-11-19 (behind `AGENT_MEMORY_ENABLED`, preview list
+   `AGENT_MEMORY_USER_IDS`).** The deviations from the proposal are these.
+   - The screen's API is `/v1/me/agent-memory`, because `/v1/me/memory` is
+     already the ideas API. `GET` groups notes into clusters on the server,
+     so both clients group the same way.
+   - All four memory tools are outside the turn's single write budget,
+     because that budget guards profile changes and «забудь Диму и запомни
+     про Машу» must do both. «Забыть всё» is enforced in code to take two
+     turns: the first call only arms it, and the confirmation counts only
+     on a later turn within ten minutes.
+   - Telegram gets the person card, the memory block and the four tools,
+     plus `search_past_chats` over the app chats. All of it sits behind the
+     same flag.
+   - A followup the writer cannot close in 30 days past its due day is
+     closed without an outcome, not with a made-up sentence.
+   - `recall` reports `remembering`, which chat-statuses landed first
+     (660f4fc4); the other three memory tools report `thinking`.
+9. **Screen look (founder, 2026-11-19).** The founder sent a reference
+   video and asked for the same screen in Gennety's design system: jelly
+   clusters of bubbles, a tap opens a card, pulling a bubble out forgets
+   it, with an undo. Mockup: https://claude.ai/artifact/K3inMXe2ttK16SbnUgV7VU.
+   It waits for «да» before Swift work. Open point: the mockup gives each
+   fact a topical glyph (a cap for КПИ, a house for Подол). The data has no
+   glyph, so either the writer picks one from a fixed list into a new
+   nullable `glyph` column (a schema change that needs a yes) or a bubble
+   shows a glyph per kind.

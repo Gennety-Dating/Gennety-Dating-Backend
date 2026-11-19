@@ -1764,6 +1764,87 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/agent-memory:
+    get:
+      tags: [Memory]
+      operationId: getAgentMemory
+      summary: «Что Gennety помнит» — the agent's notes about the caller, grouped for the screen
+      description: >-
+        Long-term memory (decision 2026-11-19). Readable and deletable with the flag off; `enabled`
+        says whether the agent is writing and reading it now. Clusters come in display order:
+        people and stories by size, then `about`, `stories`, `followups`, `dates`. A kind cluster
+        has `title: null` and the client names it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentMemory" }
+    patch:
+      tags: [Memory]
+      operationId: setAgentMemoryPaused
+      summary: The «Запоминать» switch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties: { paused: { type: boolean } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [paused], properties: { paused: { type: boolean } } }
+        "400": { description: "`bad-request`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  /v1/me/agent-memory/notes:
+    delete:
+      tags: [Memory]
+      operationId: forgetAllAgentMemory
+      summary: «Забыть всё» — every note goes; the chats themselves stay. Ask first on the client.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [forgotten], properties: { forgotten: { type: integer } } }
+
+  /v1/me/agent-memory/notes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Memory]
+      operationId: fixAgentMemoryNote
+      summary: «Исправить» — new text for one note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties: { text: { type: string, maxLength: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentMemoryNote" }
+        "400": { description: "`bad-request`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: "`not-found` or `feature-disabled`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`paused` — memory is off", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: "`never-kept` — health, crisis, beliefs, sex life, money troubles or contact details", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      tags: [Memory]
+      operationId: forgetAgentMemoryNote
+      summary: «Забыть» — a hard delete. The client may hold it a few seconds for «Отменить».
+      responses:
+        "204": { description: Forgotten }
+        "404": { description: "`not-found`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
   /v1/me/memory/ideas:
     get:
       tags: [Memory]
@@ -7867,6 +7948,39 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    AgentMemory:
+      type: object
+      required: [enabled, paused, count, clusters]
+      properties:
+        enabled: { type: boolean }
+        paused: { type: boolean }
+        count: { type: integer }
+        clusters:
+          type: array
+          items:
+            type: object
+            required: [id, kind, title, notes]
+            properties:
+              id: { type: string }
+              kind: { type: string, description: "person | story | about | followups | dates | stories" }
+              title: { type: string, nullable: true }
+              notes: { type: array, items: { $ref: "#/components/schemas/AgentMemoryNote" } }
+    AgentMemoryNote:
+      type: object
+      required: [id, kind, text, subject, date, everyYear, status, outcome, provenance, surface, seenAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, description: "fact | person | story | followup | date" }
+        text: { type: string }
+        subject: { type: string, nullable: true }
+        date: { type: string, format: date, nullable: true }
+        everyYear: { type: boolean }
+        status: { type: string, nullable: true, description: "open | resolved (story, followup)" }
+        outcome: { type: string, nullable: true }
+        provenance: { type: string, description: "told | noticed" }
+        surface: { type: string, description: "app | telegram" }
+        seenAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
     RhythmActivity:
       type: string
       enum: [calm, moderate, active]

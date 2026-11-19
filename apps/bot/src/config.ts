@@ -738,6 +738,12 @@ export const env = {
     process.env.AGENT_SUGGESTED_REPLIES_USER_IDS,
     "AGENT_SUGGESTED_REPLIES_USER_IDS",
   ),
+  /// Long-term memory of the agent (`docs/product/domains/long-term-memory.md`).
+  /// Off: nothing is written, no memory block rides a turn, the tools are
+  /// absent. Forgetting and the screen's delete stay on either way.
+  AGENT_MEMORY_ENABLED: process.env.AGENT_MEMORY_ENABLED === "true",
+  /// Per-user preview of long-term memory, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  AGENT_MEMORY_USER_IDS: parseUserIdList(process.env.AGENT_MEMORY_USER_IDS, "AGENT_MEMORY_USER_IDS"),
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),

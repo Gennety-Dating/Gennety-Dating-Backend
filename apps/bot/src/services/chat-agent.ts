@@ -18,7 +18,7 @@ import {
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
-import { memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
+import { agentMemoryOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -101,6 +101,8 @@ import { GET_MY_DATE_TOOL, GET_MY_DATE_TOOL_NAME, executeGetMyDate } from "./cha
 import { SUGGEST_VIDEO_TOOL, videoTakeBlocks, videoTakesEnabled } from "./agent-video-takes.js";
 import { agentStanceBlocks } from "./agent-stances.js";
 import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
+import { memoryPromptBlocks } from "./agent-memory.js";
+import { AGENT_MEMORY_TOOLS, AGENT_MEMORY_TOOL_KINDS, executeAgentMemoryTool, isAgentMemoryTool } from "./agent-memory-tools.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -445,14 +447,14 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number]
+  (typeof ALL_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number]
 >;
 
 /**
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean }): ToolList {
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
@@ -464,6 +466,8 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
     ...(options.guideCards ? [SHOW_APP_GUIDE_TOOL] : []),
     ...(options.screenshotCards ? SCREENSHOT_TOOLS : ideas ? [CHECK_EVENT_TOOL] : []),
     ...(ideas ? MEMORY_TOOLS : []),
+    // Long-term memory (decision 2026-11-19): the same four tools as Telegram.
+    ...(options.agentMemory ? AGENT_MEMORY_TOOLS : []),
   ];
 }
 
@@ -489,6 +493,7 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   ...PAST_CHAT_TOOL_KINDS,
   ...SCREENSHOT_TOOL_KINDS,
   ...MEMORY_TOOL_KINDS,
+  ...AGENT_MEMORY_TOOL_KINDS,
 };
 
 function toolKind(name: string): string | undefined {
@@ -673,7 +678,8 @@ async function runTurnInner(
   // The shared video is read before the first model call, outside the tool
   // loop, so its status comes from the read itself (decision 2026-11-19).
   let watched = false;
-  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn });
+  const memoryOn = agentMemoryOn(userId);
+  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn });
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, refreshSummary, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
@@ -690,6 +696,7 @@ async function runTurnInner(
         watched = true;
         report("watching_video");
       },
+      agentMemory: memoryOn,
       viewer: {
         language,
         cityKey: account.profile?.homeCityKey ?? null,
@@ -870,6 +877,24 @@ async function runTurnInner(
           tool_call_id: tc.id,
           content: JSON.stringify({ success: true, detail: "A button to their wishlist is shown under your reply. Say it in a few words; don't describe the screen." }),
         });
+        continue;
+      }
+
+      // Long-term memory (`agent-memory-tools.ts`): the person's own words
+      // about their own memory, so no consent check and no write budget.
+      if (isAgentMemoryTool(name)) {
+        if (!memoryOn) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // the executor refuses empty arguments
+        }
+        const result = await executeAgentMemoryTool({ userId, surface: "app", sessionId, turnKey: userRow.id }, name, args);
+        messages.push({ role: "tool", tool_call_id: tc.id, content: result });
         continue;
       }
 
@@ -1231,6 +1256,8 @@ async function buildChatMessages(
     guideCards: boolean;
     screenshotLibraryOpen?: boolean | null;
     memoryIdeas?: boolean;
+    /** Long-term memory is on for this person: its rules and notes ride the prompt. */
+    agentMemory?: boolean;
     /** For the video-takes blocks: the reader's language and city. */
     viewer?: { language: Language; cityKey: string | null; gender?: string | null; preference?: string | null };
     /** A link in this turn's message is about to be read: the status says so. */
@@ -1279,7 +1306,7 @@ async function buildChatMessages(
     .filter((row) => row.role === "user" && typeof row.content === "string" && row.content.length > 0)
     .map((row) => row.content as string)
     .reverse();
-  const [contextBlock, personCard, takeBlocks, conceptTurn] = await Promise.all([
+  const [contextBlock, personCard, takeBlocks, conceptTurn, memoryBlocks] = await Promise.all([
     context ? buildChatContextBlock(userId, context) : Promise.resolve(null),
     // The card must never cost the turn: without it the agent is as it was.
     buildPersonCard(userId).catch((err: unknown) => {
@@ -1297,6 +1324,8 @@ async function buildChatMessages(
     }),
     // Agent concept (2026-11-19): their clock and their own dating goal.
     loadConceptTurn({ userId }),
+    // Never throws: a failed read costs the notes, not the turn.
+    memoryPromptBlocks(userId, { on: options.agentMemory ?? false }),
   ]);
   const system = [
     base,
@@ -1317,6 +1346,8 @@ async function buildChatMessages(
 - Removal uses their words as authorization; no Add button or profile offer is needed.
   Confirm briefly only after successful removal. Never change interests or language as part of it.` : null,
     personCard,
+    // Long-term memory (2026-11-19): what it remembers across chats and Telegram.
+    ...memoryBlocks,
     ...takeBlocks,
     // Agent stances (2026-11-18): the hot-topic rules and the positions this
     // conversation names — same blocks as Telegram.

@@ -9,7 +9,7 @@ const { CHAT_ACTIVITY_STEPS, CHAT_TOOL_STEPS, ChatActivityStore, stepForTool } =
 
 describe("stepForTool", () => {
   it("places every tool the chat agent can be given, and nothing else", () => {
-    const declared = turnTools({ wishlistCards: true, offerCards: true, guideCards: true, screenshotCards: true, memoryIdeas: true }).map(
+    const declared = turnTools({ wishlistCards: true, offerCards: true, guideCards: true, screenshotCards: true, memoryIdeas: true, agentMemory: true }).map(
       (tool) => tool.function.name,
     );
     expect(declared.length).toBeGreaterThan(30);

@@ -538,6 +538,42 @@ digest scan. No vector index: every search is scoped to one person's chats.
 Writers: `services/chat-sessions.ts` (claim, legacy rule, touch, rename) and
 `services/chat-session-digest.ts` (title/summary/embedding, CAS on the counts).
 
+`memoryScannedCount` (2026-11-19) is how many non-system messages the memory
+writer has read (`services/agent-memory-writer.ts`), a CAS like
+`summarizedAtCount`.
+
+### `agent_memories`
+
+The agent's long-term memory of one person (decision 2026-11-19, spec
+`docs/product/domains/long-term-memory.md`). One row is one short note in the
+person's account language.
+
+- `kind`: `fact`, `person`, `story`, `followup` or `date` (strings, not an enum).
+- `text` (≤ 200), `subject` (≤ 60: a person's name and role, or a story label),
+  `outcome` (≤ 200, a closed story or followup).
+- `due_on` (date only) and `recurring` (a yearly day); `status` `open` /
+  `resolved` for story and followup, with `resolved_at`.
+- `provenance`: `told` (the person asked to remember) or `noticed` (the writer).
+  `surface`: `app` or `telegram`, where it was last written from;
+  `source_session_id` → `chat_sessions`, set null when that chat goes.
+- `embedding` `vector(1536)` of subject + text, written by raw SQL; null when the
+  embedding failed (the note is still found by words). No vector index: at most
+  120 notes per person (`AGENT_MEMORY_MAX_NOTES`).
+- `last_seen_at`: the last conversation that confirmed or touched it.
+- Indexes `(user_id, kind)`, `(user_id, updated_at)`. Cascades with the account.
+
+Read only by the person's own agent turns (both surfaces) and
+`/v1/me/agent-memory`; never by matching, venues, a partner or admin. «Забудь»
+is a hard delete. Expiry: resolved notes 180 days after resolution, open
+followups 30 days past due are closed, one-off dates 180 days past
+(`sweepAgentMemory`, hourly inside the `agent-memory` cron).
+
+### `agent_memory_state`
+
+One row per person who has one: `paused_at` (memory off: nothing written, no
+block, `recall` empty) and `telegram_scanned_at` (how far the writer has read
+`users.message_history`, a CAS). No row means memory on and nothing read.
+
 ### `announcements`
 
 Rich in-app announcements written in the admin dashboard

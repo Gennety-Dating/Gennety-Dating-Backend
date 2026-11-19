@@ -227,9 +227,8 @@ way `agent-stances.ts` is.
    query it returns all live notes grouped by kind; that is the answer to
    «что ты обо мне помнишь». Its result says that the conversation itself is
    in `search_past_chats` (app) when a detail is needed. The app status for
-   `recall` is `remembering` («вспоминаю»). Until the chat-statuses session
-   lands that step, `recall` reports `past_chats` and the switch is one line
-   in `CHAT_TOOL_STEPS`.
+   `recall` is `remembering` («Вспоминаю…»), the step the chat-statuses work
+   added the same day.
 4. **Telegram gets the same block and the same four tools** (`recall`,
    `remember`, `update_memory`, `forget_memory`). That is what makes the two
    surfaces one friend. The agent audit (`agent-concept.md`, principle 8 and
@@ -263,20 +262,31 @@ way `agent-stances.ts` is.
    messages after its scanned count, so it does not write the note again from
    the old chat. `search_past_chats` can still find the old chat summary;
    that is the same honest sentence.
-3. **A screen in the app (question to the founder).** «Что Gennety помнит»:
+3. **A screen in the app (approved in principle 2026-11-19; the look follows
+   the founder's reference video, mockup https://claude.ai/artifact/K3inMXe2ttK16SbnUgV7VU
+   waits for «да»).** «Что Gennety помнит»:
    notes grouped as О тебе, Люди, Истории, Договорились, Даты. Each note can
-   be deleted with a swipe, and there are «Забыть всё» and a switch
-   «Запоминать». It is read through `GET /v1/me/memory`, a note goes with
-   `DELETE /v1/me/memory/:id`, everything with `DELETE /v1/me/memory`, and
-   the switch is `PATCH /v1/me/memory`. A mockup goes to the founder before
-   any client work. Telegram has no screen; the chat commands are the
+   be deleted, and there are «Забыть всё» and a switch «Запоминать».
+   - The look: each group is an inflated jelly cloud in brand materials
+     (ruby, champagne, deep wine, pearl, smoked graphite) holding glass
+     bubbles, one per note. Tapping a cloud zooms into it; tapping a bubble
+     opens a card with the full note, its rows and its source, and «Исправить»
+     or «Забыть». Pulling a bubble out past the cloud's edge forgets it, and
+     a top toast offers «Отменить» for a few seconds; the client holds the
+     delete until the toast goes.
+   - The API is `/v1/me/agent-memory`, because `/v1/me/memory` is the ideas
+     API. `GET` returns the notes already grouped into clusters (a person or
+     a story with everything that names them, then «О тебе», stories,
+     «Договорились», «Даты»), `PATCH` is the switch, `PATCH …/notes/:id` is
+     «Исправить», `DELETE …/notes/:id` forgets one, and `DELETE …/notes`
+     forgets all. Telegram has no screen; the chat commands are the
    control there.
 4. **Account deletion and GDPR.** Both tables cascade with the account, and
    `deleteUserAccount` needs no new code. The demo reset is that same
    deletion. The notes are personal data with a clear purpose, shown in full
    on request, deletable one by one or all at once. Resolved stories and
    followups expire 180 days after they were resolved; open followups whose
-   due date passed 30 days ago are closed with «не узнал, чем кончилось».
+   due date passed 30 days ago are closed without an outcome.
    Other notes stay until the person deletes them or the cap pushes them out.
    The retention cron gets that sweep.
 
@@ -289,11 +299,23 @@ way `agent-stances.ts` is.
    puppet partner is never a note, because the demo partner's data never
    reaches the visitor's conversation beyond their date card. The notes go
    with the demo reset, which is a full account deletion.
-3. **Verification before main.** Unit tests for the writer's checks, the
-   never-list, the block order and budget, and the tools. Then a run on the
-   live model: several chats across both surfaces in which the person tells
-   things, then a new chat where the agent should bring the right thing up
-   at the right moment, and one where it is asked about something it was
-   never told and must say it does not remember.
+3. **Verification before main.** Unit tests cover the writer's checks, the
+   never-list, the block order and budget, the tools and the clusters. The
+   live run is `apps/bot/scripts/memory-eval.ts`: the writer reads three
+   earlier conversations (two in the app, one in Telegram) and the agent then
+   answers five turns in a new chat.
+   - On 2026-11-19 two runs in a row passed 5 of 5 writer checks and 5 of 5
+     agent checks. The writer kept the sister, the open story with Oleg and
+     the yearly birthday, and kept neither the anxiety pills nor the
+     Instagram handle. The agent opened with «ну что, как прошло кино с
+     Олегом 22 ноября?», named Masha's birthday and how soon it is, said it
+     did not remember a boy from the pool it was never told about, listed
+     its notes without the health detail, and forgot Oleg on request.
+   - The first runs failed twice and changed the rules. The agent greeted
+     without asking about the open story, so rule 2 now says a friend asks
+     first. It then asked about a three-week-old date instead of yesterday's
+     cinema, so followups are ordered freshest-due first and an old one is
+     marked «ask only if it comes up». The writer had stored «завтра», so
+     notes now carry dates, never relative words.
 4. Production and the migration on the live database wait for the
    founder's explicit «да».

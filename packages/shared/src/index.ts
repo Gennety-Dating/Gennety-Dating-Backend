@@ -234,6 +234,7 @@ export * from "./style-picks.js";
 export * from "./agent-takes.js";
 export * from "./agent-stances.js";
 export * from "./agent-concept.js";
+export * from "./agent-memory.js";
 export {
   normalizeProfileMedia,
   parseProfileMediaItem,

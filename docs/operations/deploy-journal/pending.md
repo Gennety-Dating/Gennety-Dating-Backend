@@ -13,6 +13,27 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-19 — agent long-term memory (needs the founder's «да» for production and the migration)**
+
+1. Code: spec `docs/product/domains/long-term-memory.md`, decision `docs/architecture/decisions/2026-11-19-long-term-memory.md`.
+   Notes in `agent_memories` (five kinds), per-person `agent_memory_state`, `chat_sessions.memory_scanned_count`.
+   Writer `services/agent-memory-writer.ts` (cron `agent-memory`, `4-59/5 * * * *`, one `MODELS.fast` call per quiet
+   conversation), block + tools on both surfaces, Telegram also gets the person card and `search_past_chats`,
+   API `/v1/me/agent-memory`.
+2. Ship: migration `20261119120000_agent_memory` (additive: two tables, one column, no vector index) BEFORE the
+   build; then the usual build and restart. `AGENT_MEMORY_ENABLED` defaults OFF; `AGENT_MEMORY_USER_IDS` turns it
+   on for listed people only. With the flag on, the writer reads the last 90 days of chats once
+   (`AGENT_MEMORY_BACKFILL_DAYS`), ten chats and ten Telegram histories per tick.
+3. Demo mode: the same as production; the notes go with the demo reset (account deletion cascade).
+4. Rollback: flag off + restart (nothing written or read); the tables can stay. Full: drop `agent_memories`,
+   `agent_memory_state` and the column.
+5. Proof: `pnpm --filter @gennety/bot exec tsx scripts/memory-eval.ts` (live models, no DB) — 2026-11-19: writer 5/5,
+   agent 5/5, twice. After deploy with a preview id: talk in Telegram, wait 35 min, then `GET /v1/me/agent-memory`.
+
+---
+
+---
+
 **PENDING 2026-11-19 — suggested replies under the agent's message**
 
 1. Code: spec `docs/product/domains/suggested-replies.md`, decision `docs/architecture/decisions/2026-11-19-suggested-replies.md`.

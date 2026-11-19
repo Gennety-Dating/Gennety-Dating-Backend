@@ -96,6 +96,12 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   ["record_impression", "thinking"],
   ["grant_preference_matching", "thinking"],
   ["revoke_preference", "thinking"],
+  // Long-term memory (decision 2026-11-19): recalling is «Вспоминаю…»; the
+  // other three answer at once.
+  ["recall", "remembering"],
+  ["remember", "thinking"],
+  ["update_memory", "thinking"],
+  ["forget_memory", "thinking"],
   // The screenshot library.
   ["search_screenshots", "screenshots"],
   ["read_screenshot", "screenshots"],
