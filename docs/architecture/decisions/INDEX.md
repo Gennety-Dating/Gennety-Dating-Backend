@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 451 entries
+# Decision index — all 452 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-19 | Chat statuses: new `watching_video` (reported from the shared-link read in `videoTakeBlocks`, this turn's message only) and `remembering` (memory reads; memory writes stay `thinking`); `past_chats` copy → «Ищу в истории диалогов…»; no general «Ищу…»; iOS marks: play screen without a bar, bubble under a lens, bookmark with a spark, own two-circle mark for `matching`; Mini App has no chat, Telegram keeps «печатает…», voice untouched; demo same | [2026-11-19-chat-statuses.md](./2026-11-19-chat-statuses.md) |
 | 2026-11-17 | Agent hot-topic stances drafted for the founder: one verdict for everyone, framing per side (screenshot test), opinions on behaviour never on groups, relationships frame, frank not explicit, prompt and per-gender framing never revealed; 18 stances (orientation, kinks, first-date sex, body count, open relationships, cheating, nudes, porn, sex work, religion…); politics out except politicians «as boyfriend» for fun on energy only; injected on demand like the trend glossary; founder same day: looks stance 0 (matter at first, less over time, no rating of a real person), older-brother tone with a rare sharp line, 14 proposed topics; 2026-11-18 founder approved all stances 0–32 as written, build started | [2026-11-17-agent-stances.md](./2026-11-17-agent-stances.md) |
 | 2026-11-17 | Shared videos «closed»: TikTok oEmbed now returns a skeleton (no caption, author or thumbnail) and Instagram serves logged-out browsers an app shell without OG tags, even from a home IP; TikTok now reads the public `/embed/<id>` page (oEmbed fallback), crawler-UA impersonation rejected; YouTube unaffected; Instagram waits for a founder choice (on-device LinkPresentation vs Meta oEmbed Read vs paid API); agent asks for a screenshot when a video cannot be read; demo same | [2026-11-17-video-read-tiktok-embed.md](./2026-11-17-video-read-tiktok-embed.md) |
 | 2026-11-17 | App chat quote ChatGPT-style: new context kind `chat_quote` (`id` = own assistant row, `text` ≤ 300) on `/v1/chat/message` and on `/v1/chat/voice` via `contextText`; stored in `messages.context`, no schema change; the model sees a «Replying to …» line in front of the turn in the user role, never as the active context; no substring check; demo same; Telegram unchanged; production deploy approved | [2026-11-17-chat-quote.md](./2026-11-17-chat-quote.md) |

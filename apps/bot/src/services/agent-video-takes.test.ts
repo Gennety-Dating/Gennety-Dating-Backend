@@ -97,6 +97,27 @@ describe("videoTakeBlocks", () => {
     expect(blocks.some((b) => b.includes("Mewing routine"))).toBe(true);
   });
 
+  it("reports watching only for a link in this turn's message", async () => {
+    const onWatch = vi.fn();
+    const blocks = await videoTakeBlocks(
+      { recentUserTexts: [`глянь ${TIKTOK}`], language: "ru", cityKey: null, onWatch },
+      { read: readDeps() },
+    );
+    expect(onWatch).toHaveBeenCalledTimes(1);
+    expect(blocks.some((b) => b.includes("Mewing routine"))).toBe(true);
+
+    const followUp = vi.fn();
+    await videoTakeBlocks(
+      { recentUserTexts: ["а челюсть правда вырастет?", TIKTOK], language: "ru", cityKey: null, onWatch: followUp },
+      { read: readDeps() },
+    );
+    expect(followUp).not.toHaveBeenCalled();
+
+    const plain = vi.fn();
+    await videoTakeBlocks({ recentUserTexts: ["привет"], language: "ru", cityKey: null, onWatch: plain }, { read: readDeps() });
+    expect(plain).not.toHaveBeenCalled();
+  });
+
   it("says plainly when the video could not be read", async () => {
     const blocks = await videoTakeBlocks(
       { recentUserTexts: [TIKTOK], language: "en", cityKey: null },

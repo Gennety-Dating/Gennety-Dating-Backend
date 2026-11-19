@@ -13,6 +13,20 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-19 — chat statuses: watching a video, the chat history, memory**
+
+1. Code: decision `docs/architecture/decisions/2026-11-19-chat-statuses.md`. `apps/bot/src/services/chat-activity.ts`
+   adds the steps `watching_video` and `remembering` and gives the memory tools their steps; `videoTakeBlocks` reports
+   `watching_video` right before it reads a link from this turn's message. Contract: description of `step` in
+   `GET /v1/chat/activity` only, no enum, no client regeneration.
+2. Ship: the usual bot build and restart; no migration, no env, no flag, no new dependency.
+3. Demo mode: identical.
+4. iOS: builds with the new marks show the new steps; older builds show them as «Думаю…». Until then `past_chats`
+   reads «Вспоминаю…» on old builds.
+5. Rollback: the previous release directory; nothing is stored.
+6. Proof: `pnpm --filter @gennety/bot exec vitest run src/services/chat-activity.test.ts src/services/agent-video-takes.test.ts`.
+   Live: send a TikTok link from the app and watch «Смотрю видео…»; ask about a saved idea and watch «Вспоминаю…».
+
 **Deployed 2026-11-18 (was PENDING; production `6a2d2697`, 04:29–04:32 UTC, see [2026-11-18-agent-stances.md](./2026-11-18-agent-stances.md)) 2026-11-18 — agent stances on hot topics (phases 3–4)**
 
 1. Code: spec `docs/product/domains/agent-stances.md`, decision `docs/architecture/decisions/2026-11-17-agent-stances.md`.

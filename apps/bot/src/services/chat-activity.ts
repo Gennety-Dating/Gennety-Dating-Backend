@@ -15,10 +15,15 @@ import { BoundedMap } from "../utils/bounded-map.js";
 export const CHAT_ACTIVITY_STEPS = [
   "thinking",
   "reading_photo",
+  // A TikTok / Reels / YouTube link in this turn's message, read before the
+  // first model call (`videoTakeBlocks`), not by a tool. Decision 2026-11-19.
+  "watching_video",
   "web",
   "screenshots",
   "wishlist",
   "past_chats",
+  // Reading the person's memory: saved ideas and preferences. Decision 2026-11-19.
+  "remembering",
   "profile",
   "date",
   "matching",
@@ -67,9 +72,30 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   ["get_my_wishlist", "wishlist"],
   ["remove_wishlist_item", "wishlist"],
   ["propose_wishlist_items", "wishlist"],
-  // Earlier chats.
+  // Earlier chats — «Ищу в истории диалогов…».
   ["search_past_chats", "past_chats"],
   ["read_past_chat", "past_chats"],
+  // Memory reads (`chat-memory.ts`): saved ideas, preferences, places like the
+  // saved ones — «Вспоминаю…». Its writes answer at once and stay on `thinking`,
+  // as does skipping a question, which reads nothing.
+  ["find_ideas", "remembering"],
+  ["idea_questions", "remembering"],
+  ["planning_ideas", "remembering"],
+  ["idea_deletion_scope", "remembering"],
+  ["list_preferences", "remembering"],
+  ["similar_places", "remembering"],
+  ["skip_idea_question", "thinking"],
+  ["set_idea_reminder", "thinking"],
+  ["save_idea", "thinking"],
+  ["update_idea", "thinking"],
+  ["grant_idea_use", "thinking"],
+  ["revoke_idea_use", "thinking"],
+  ["delete_idea", "thinking"],
+  ["confirm_preference", "thinking"],
+  ["use_style_reference", "thinking"],
+  ["record_impression", "thinking"],
+  ["grant_preference_matching", "thinking"],
+  ["revoke_preference", "thinking"],
   // The screenshot library.
   ["search_screenshots", "screenshots"],
   ["read_screenshot", "screenshots"],

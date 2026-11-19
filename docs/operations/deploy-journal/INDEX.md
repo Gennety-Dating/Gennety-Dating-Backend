@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 250 entries
+# Deploy journal index — 251 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-11-19 | Chat statuses `watching_video` (shared-link read) and `remembering` (memory reads); `past_chats` copy in iOS; no migration, no env | [pending.md](./pending.md) |
 | Deployed | 2026-11-18 | Production `6a2d2697`: agent stances on hot topics — rules on every agent turn, stances 0–32 on demand, framing per gender/preference, `AGENT_STANCES_ENABLED` default ON; picomatch high advisory shipped (no fix exists, lint-only path); no migration | [2026-11-18-agent-stances.md](./2026-11-18-agent-stances.md) |
 | Deployed | 2026-11-17 | Production `8af27ab2`: TikTok read from the public `/embed/<id>` page (oEmbed went empty → every TikTok «closed»); agent asks for a screenshot when a video cannot be read; verified on the droplet with 2 live TikToks; Instagram still closed; no migration | [2026-11-17-video-read-tiktok.md](./2026-11-17-video-read-tiktok.md) |
 | Deployed | 2026-11-17 | Production `da7d6061`: app chat quote — `chat_quote` context on `/v1/chat/message` and `/v1/chat/voice` (`contextText`), «Replying to» line for the model; no migration | [2026-11-17-chat-quote.md](./2026-11-17-chat-quote.md) |

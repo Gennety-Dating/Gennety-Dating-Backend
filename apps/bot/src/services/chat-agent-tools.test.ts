@@ -89,6 +89,21 @@ vi.mock("./chat-past-tools.js", async (importOriginal) => {
   };
 });
 
+// The shared-video read is real outside one test; that test plays a link read
+// from this turn's message (`onWatch`), which is all the status cares about.
+const watchVideo = vi.hoisted(() => ({ on: false }));
+vi.mock("./agent-video-takes.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./agent-video-takes.js")>();
+  return {
+    ...original,
+    videoTakeBlocks: async (...args: Parameters<typeof original.videoTakeBlocks>) => {
+      if (!watchVideo.on) return original.videoTakeBlocks(...args);
+      args[0].onWatch?.();
+      return [];
+    },
+  };
+});
+
 /** Ответ модели: сначала вызовы инструментов, потом текст. */
 function completion(calls: Array<{ name: string; args?: string }>) {
   return {
@@ -375,6 +390,20 @@ describe("отчёт о шагах хода", () => {
       { fetchFn },
     );
     expect(seen).toEqual(["reading_photo", "past_chats", "writing"]);
+  });
+
+  it("ссылка на видео в этом сообщении — «смотрю видео» вместо размышления", async () => {
+    watchVideo.on = true;
+    try {
+      const { seen, onStep } = steps();
+      await runChatTurn(
+        { userId: "u1", text: "глянь https://www.tiktok.com/@a/video/7438000000000000000", imageUrls: [], onStep },
+        { fetchFn },
+      );
+      expect(seen).toEqual(["watching_video"]);
+    } finally {
+      watchVideo.on = false;
+    }
   });
 
   it("второй круг инструментов сменяет «пишет» своим шагом", async () => {

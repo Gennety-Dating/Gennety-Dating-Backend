@@ -4595,8 +4595,13 @@ paths:
                     type: [string, "null"]
                     description: |
                       Machine key, null when no turn is known: `thinking`,
-                      `reading_photo`, `web`, `screenshots`, `wishlist`,
-                      `past_chats`, `profile`, `date`, `matching`, `writing`.
+                      `reading_photo`, `watching_video`, `web`, `screenshots`,
+                      `wishlist`, `past_chats`, `remembering`, `profile`,
+                      `date`, `matching`, `writing`. `watching_video` — a
+                      TikTok / Reels / YouTube link in this turn's message is
+                      being read; `past_chats` — searching earlier chats;
+                      `remembering` — reading saved ideas and preferences
+                      (2026-11-19).
                       Deliberately
                       not an enum: `enum: [..., null]` breaks the generated
                       Swift client. The client localizes the key and should

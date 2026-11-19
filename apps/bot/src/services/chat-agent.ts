@@ -662,6 +662,16 @@ async function runTurnInner(
   const screenshotCards = screenshotLibraryOn(userId) && (input.chatCards?.has(SCREENSHOTS_CARD_CLIENT_TOKEN) ?? false);
   // On for everyone with the flag, or for this person on the preview list.
   const ideasOn = memoryIdeasOn(userId);
+  const report = (step: ChatActivityStep): void => {
+    try {
+      input.onStep?.(step);
+    } catch (err) {
+      console.warn("[chat] activity report failed:", err);
+    }
+  };
+  // The shared video is read before the first model call, outside the tool
+  // loop, so its status comes from the read itself (decision 2026-11-19).
+  let watched = false;
   const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn });
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
@@ -675,6 +685,10 @@ async function runTurnInner(
       guideCards,
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
+      onWatch: () => {
+        watched = true;
+        report("watching_video");
+      },
       viewer: {
         language,
         cityKey: account.profile?.homeCityKey ?? null,
@@ -706,14 +720,10 @@ async function runTurnInner(
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
-  const report = (step: ChatActivityStep): void => {
-    try {
-      input.onStep?.(step);
-    } catch (err) {
-      console.warn("[chat] activity report failed:", err);
-    }
-  };
-  report(imageUrls.length > 0 ? "reading_photo" : "thinking");
+  // A photo is read by the first model call; a video was read just before it
+  // and stays on screen while the model takes it in.
+  if (imageUrls.length > 0) report("reading_photo");
+  else if (!watched) report("thinking");
   while (iteration < MAX_TOOL_ITERATIONS) {
     // Whether this call ends in words is known only once it returns. After a
     // tool round it nearly always does, so that is what the person is told; a
@@ -1222,6 +1232,8 @@ async function buildChatMessages(
     memoryIdeas?: boolean;
     /** For the video-takes blocks: the reader's language and city. */
     viewer?: { language: Language; cityKey: string | null; gender?: string | null; preference?: string | null };
+    /** A link in this turn's message is about to be read: the status says so. */
+    onWatch?: () => void;
   },
 ): Promise<{
   messages: OpenAIChatMessage[];
@@ -1277,6 +1289,7 @@ async function buildChatMessages(
       recentUserTexts,
       language: options.viewer?.language ?? "en",
       cityKey: options.viewer?.cityKey ?? null,
+      ...(options.onWatch ? { onWatch: options.onWatch } : {}),
     }).catch((err: unknown) => {
       console.warn("[chat] video-take blocks unavailable:", err);
       return [] as string[];

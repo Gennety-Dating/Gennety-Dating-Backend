@@ -9,7 +9,7 @@ const { CHAT_ACTIVITY_STEPS, CHAT_TOOL_STEPS, ChatActivityStore, stepForTool } =
 
 describe("stepForTool", () => {
   it("places every tool the chat agent can be given, and nothing else", () => {
-    const declared = turnTools({ wishlistCards: true, offerCards: true, guideCards: true, screenshotCards: true }).map(
+    const declared = turnTools({ wishlistCards: true, offerCards: true, guideCards: true, screenshotCards: true, memoryIdeas: true }).map(
       (tool) => tool.function.name,
     );
     expect(declared.length).toBeGreaterThan(30);
@@ -28,6 +28,12 @@ describe("stepForTool", () => {
     ["propose_wishlist_items", "wishlist"],
     ["search_past_chats", "past_chats"],
     ["read_past_chat", "past_chats"],
+    ["find_ideas", "remembering"],
+    ["list_preferences", "remembering"],
+    ["similar_places", "remembering"],
+    ["planning_ideas", "remembering"],
+    ["save_idea", "thinking"],
+    ["record_impression", "thinking"],
     ["get_my_profile", "profile"],
     ["update_profile", "profile"],
     ["attach_profile_photo", "profile"],

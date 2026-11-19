@@ -111,6 +111,12 @@ export interface VideoTakeTurn {
   language: Language;
   cityKey: string | null;
   now?: Date;
+  /**
+   * Called right before a link from THIS turn's message is read, so the app's
+   * status can say «Смотрю видео…» (decision 2026-11-19). A link from an
+   * earlier message is a follow-up: its read is a cache hit and gets no status.
+   */
+  onWatch?: () => void;
 }
 
 /**
@@ -125,13 +131,24 @@ export async function videoTakeBlocks(
   const blocks: string[] = [TASTE_CANON, LOOKS_RED_LINES, VIDEO_RULES];
 
   let url: string | null = null;
-  for (const text of turn.recentUserTexts.slice(0, VIDEO_LINK_LOOKBACK)) {
+  let fromThisTurn = false;
+  for (const [index, text] of turn.recentUserTexts.slice(0, VIDEO_LINK_LOOKBACK).entries()) {
     url = findSharedVideoUrl(text);
-    if (url) break;
+    if (url) {
+      fromThisTurn = index === 0;
+      break;
+    }
   }
 
   let videoText = "";
   if (url) {
+    if (fromThisTurn) {
+      try {
+        turn.onWatch?.();
+      } catch (err) {
+        console.warn("[video-takes] watch report failed:", err);
+      }
+    }
     const outcome = await readSharedVideo(
       url,
       { language: turn.language, cityKey: turn.cityKey },
