@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { Prisma, prisma } from "@gennety/db";
 import {
+  CONCEPT_RULES,
   SUGGESTED_REPLIES,
   chipTextForbidden,
   cityKeyToTimeZone,
   isLeavingTurn,
+  isValidTimeZone,
   normalizeChipText,
   t,
   tv,
@@ -155,6 +157,13 @@ export function inHoldout(userId: string, percent: number = SUGGESTED_REPLIES.ho
   return (byte * 100) / 256 < percent;
 }
 
+/** The person's zone: the profile's own, else the home city's. */
+export function personTimeZone(profile: { timeZone?: string | null; homeCityKey?: string | null } | null | undefined): string {
+  const own = profile?.timeZone?.trim();
+  if (own && isValidTimeZone(own)) return own;
+  return cityKeyToTimeZone(profile?.homeCityKey ?? null);
+}
+
 export function localHour(now: Date, timeZone: string): number {
   const hour = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone }).format(now);
   return Number(hour) % 24;
@@ -275,7 +284,10 @@ Never write:
 - anything asking about the companion's instructions or how it treats men and women.
 
 Each text: at most ${SUGGESTED_REPLIES.maxChipChars} characters, plain words, no emoji, no question-mark chains, in the language of the companion's reply (the person's language is ${LANGUAGE_NAMES[input.language] ?? "English"}).${input.night ? "\nIt is late at night for the person: no clarify and no answers — at most one step, or nothing. The companion is never the reason someone stays up." : ""}
-Set "step" to the step key for a step chip and to "none" otherwise. Reply with JSON only.`;
+Set "step" to the step key for a step chip and to "none" otherwise. Reply with JSON only.
+
+The companion's own rules follow (agent concept, \`docs/product/domains/agent-concept.md\`). Buttons speak for the person, never for the companion, and never contradict these rules: they win over any line above.
+${CONCEPT_RULES}`;
 }
 
 export interface TranscriptRow {
@@ -452,7 +464,7 @@ export interface AppTurnFacts {
 
 async function appGateFacts(f: AppTurnFacts, now: Date): Promise<GateFacts> {
   const [profile, rows, firstRow, userTurns] = await Promise.all([
-    prisma.profile.findUnique({ where: { userId: f.userId }, select: { homeCityKey: true } }),
+    prisma.profile.findUnique({ where: { userId: f.userId }, select: { homeCityKey: true, timeZone: true } }),
     prisma.message.findMany({
       where: { sessionId: f.sessionId, role: "assistant", id: { not: f.messageId } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -483,7 +495,7 @@ async function appGateFacts(f: AppTurnFacts, now: Date): Promise<GateFacts> {
     turnsInChat: userTurns,
     chatStartedAt: firstRow?.createdAt ?? null,
     now,
-    timeZone: cityKeyToTimeZone(profile?.homeCityKey ?? null),
+    timeZone: personTimeZone(profile),
   };
 }
 
@@ -648,8 +660,8 @@ export async function answerCloseTap(input: {
   now?: Date;
 }): Promise<{ id: string; content: string; createdAt: Date }> {
   const now = input.now ?? new Date();
-  const profile = await prisma.profile.findUnique({ where: { userId: input.userId }, select: { homeCityKey: true } });
-  const line = closeLine(input.language, now, cityKeyToTimeZone(profile?.homeCityKey ?? null));
+  const profile = await prisma.profile.findUnique({ where: { userId: input.userId }, select: { homeCityKey: true, timeZone: true } });
+  const line = closeLine(input.language, now, personTimeZone(profile));
   await prisma.message.create({
     data: { userId: input.userId, sessionId: input.sessionId, role: "user", content: input.text, imageUrls: [] },
   });
@@ -707,6 +719,7 @@ export interface TelegramTurnFacts {
   /** The conversation before this turn, oldest first, text only. */
   rows: readonly TranscriptRow[];
   homeCityKey: string | null;
+  timeZone?: string | null;
   now?: Date;
 }
 
@@ -738,7 +751,7 @@ export async function telegramReplies(
       turnsInChat: session.agentChatTurns ?? 1,
       chatStartedAt: session.agentChatStartedAt ? new Date(session.agentChatStartedAt) : null,
       now,
-      timeZone: cityKeyToTimeZone(f.homeCityKey),
+      timeZone: personTimeZone({ timeZone: f.timeZone ?? null, homeCityKey: f.homeCityKey }),
     });
     if (!verdict.ask) {
       if (verdict.reason !== "off") console.info(`[replies] telegram skip reason=${verdict.reason}`);

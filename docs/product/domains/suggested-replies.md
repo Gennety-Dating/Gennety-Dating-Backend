@@ -8,6 +8,11 @@ from this text while building are in
 `docs/architecture/decisions/2026-11-19-suggested-replies.md`: no profiler
 gate (it never applies), no calendar step (`open_screen` has none), the exit
 line is per time of day, and Telegram chips are counted in logs, not Pulse.
+Founder, later the same day: in iOS the chips are tail-less message bubbles on
+the person's side (right-aligned, stacked), not glass capsules under the
+agent's bubble; and reminders are approved as their own feature, after which a
+`remind` step joins the catalogue (Phase 2 point 2 of the iOS section below is
+superseded by this).
 
 ## Why
 

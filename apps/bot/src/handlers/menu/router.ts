@@ -1,6 +1,6 @@
 import { Composer, InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
-import { cityKeyToTimeZone, t } from "@gennety/shared";
+import { t } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { AGENT_DENIAL_COPY, evaluateAgentAccess } from "../../services/agent-access.js";
 import { armMediaClaim } from "../../services/menu-text-claim.js";
@@ -51,6 +51,7 @@ import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
 import {
   closeLine,
+  personTimeZone,
   telegramReplies,
   telegramTranscript,
   telegramTurnBegins,
@@ -259,7 +260,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
           status: true,
           onboardingStep: true,
           suspendedUntil: true,
-          profile: { select: { homeCityKey: true } },
+          profile: { select: { homeCityKey: true, timeZone: true } },
         },
       });
       const access = evaluateAgentAccess(account);
@@ -280,7 +281,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       const tapped = telegramTurnBegins(ctx.session, text);
       if (tapped?.kind === "close") {
         await ctx.reply(
-          closeLine(ctx.session.language, new Date(), cityKeyToTimeZone(account?.profile?.homeCityKey ?? null)),
+          closeLine(ctx.session.language, new Date(), personTimeZone(account?.profile)),
           { reply_markup: { remove_keyboard: true } },
         );
         return;
@@ -304,6 +305,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
                   Array.isArray(row?.messageHistory) ? (row!.messageHistory as Array<{ role: string; content?: unknown }>) : [],
                 ),
                 homeCityKey: account.profile?.homeCityKey ?? null,
+                timeZone: account.profile?.timeZone ?? null,
               }),
             )
             .catch(() => ({}) as TelegramKeyboard)

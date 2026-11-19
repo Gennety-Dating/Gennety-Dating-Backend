@@ -23,6 +23,7 @@ process.env.AGENT_SUGGESTED_REPLIES_ENABLED = "true";
 
 const { MODELS, normalizeChatCompletion } = await import("../src/models.js");
 const { personaFor } = await import("../src/services/prompt-builder.js");
+const { agentConceptBlocks } = await import("../src/services/agent-concept.js");
 const { chipsGate, generateChipSet, textShowsDanger } = await import("../src/services/suggested-replies.js");
 const { callOpenAIJson } = await import("../src/services/openai.js");
 type Lang = "ru" | "en" | "uk" | "de" | "pl";
@@ -68,7 +69,13 @@ function parseArgs(argv: string[]): { out?: string; runs: number } {
 }
 
 async function agentReply(c: EvalCase): Promise<string> {
-  const system = [personaFor("app"), `## Current User Context\n- Name: Саша\n- Preferred language: ${c.lang}`].join("\n\n");
+  const now = new Date(Date.UTC(2026, 10, 19, ((c.hour ?? 14) - 2 + 24) % 24, 10));
+  const system = [
+    personaFor("app"),
+    `## Current User Context\n- Name: Саша\n- Preferred language: ${c.lang}`,
+    // As production since 2026-11-19: the agent concept block ends every turn.
+    ...agentConceptBlocks({ now, timeZone: "Europe/Kyiv", relationshipIntents: ["longterm"], surface: "app" }, true),
+  ].join("\n\n");
   const before = c.before ?? [];
   const messages = [
     { role: "system", content: system },
