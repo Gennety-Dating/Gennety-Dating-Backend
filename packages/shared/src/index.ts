@@ -425,3 +425,4 @@ export {
 export * from "./pulse-screens.js";
 export * from "./screenshots.js";
 export * from "./memory-ideas.js";
+export * from "./suggested-replies.js";

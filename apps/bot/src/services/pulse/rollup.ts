@@ -14,6 +14,7 @@ import {
   replaceMetricDays,
   writeInsights,
 } from "./source.js";
+import { computeReplyRows, detectRepliesLoop, loadRepliesRollup } from "./replies.js";
 
 /**
  * Pulse nightly rollup (docs/product/domains/pulse-analytics.md §5).
@@ -63,7 +64,7 @@ export async function runPulseRollup(now: Date = new Date()): Promise<PulseRollu
   for (let d = from; d <= today; d = shiftDay(d, 1)) days.push(d);
 
   const excluded = await loadExcludedUserIds();
-  const [events, stepEvents, activity, signups, matches, optInUsers, stuck] = await Promise.all([
+  const [events, stepEvents, activity, signups, matches, optInUsers, stuck, replies] = await Promise.all([
     loadClientEvents(fromAt, toAt, excluded),
     loadStepEvents(fromAt, toAt),
     loadActivityDays(fromAt, toAt),
@@ -71,6 +72,11 @@ export async function runPulseRollup(now: Date = new Date()): Promise<PulseRollu
     loadFunnelMatches(fromAt, toAt),
     loadOptInUsers(),
     loadStuckPeople(now),
+    // Suggested replies: a failure here costs these metrics, never the night.
+    loadRepliesRollup(fromAt, toAt, excluded).catch((err: unknown) => {
+      console.warn("[pulse] suggested replies load failed:", err);
+      return null;
+    }),
   ]);
 
   const rows = computeMetricRows({
@@ -83,10 +89,14 @@ export async function runPulseRollup(now: Date = new Date()): Promise<PulseRollu
     matches,
     optInUsers,
   });
+  if (replies) rows.push(...computeReplyRows({ days: new Set(days), ...replies }));
   const computedAt = new Date();
   const written = await replaceMetricDays(from, today, rows, computedAt);
 
-  const drafts = runDetectors({ rows, asOf, stuck, serverSteps: SERVER_ONBOARDING_STEPS });
+  const drafts = [
+    ...runDetectors({ rows, asOf, stuck, serverSteps: SERVER_ONBOARDING_STEPS }),
+    ...(replies ? detectRepliesLoop({ days: new Set(days), ...replies, asOf, minSample: PULSE_ANALYTICS.smallSampleN }) : []),
+  ];
   const { upserted, resolved } = await writeInsights(drafts, computedAt);
 
   return {

@@ -24,6 +24,7 @@ interface ChatCompletionResponse {
     message: { content: string | null };
     finish_reason: string;
   }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
 export interface OpenAICallOptions {
@@ -37,6 +38,10 @@ export interface OpenAICallOptions {
   temperature?: number;
   /** Optional strict Structured Outputs schema. */
   jsonSchema?: { name: string; schema: Record<string, unknown> };
+  /** Abort after this many ms (default 45 s). A timeout returns null like any failure. */
+  timeoutMs?: number;
+  /** Told the token usage of a successful call (measurement only). */
+  onUsage?: (usage: { promptTokens: number; completionTokens: number }) => void;
 }
 
 /**
@@ -85,7 +90,7 @@ export async function callOpenAIJson<T>(
           { role: "user", content: userContent },
         ],
       })),
-      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(options.timeoutMs ?? OPENAI_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -95,6 +100,12 @@ export async function callOpenAIJson<T>(
     }
 
     const json = (await res.json()) as ChatCompletionResponse;
+    if (options.onUsage && json.usage) {
+      options.onUsage({
+        promptTokens: json.usage.prompt_tokens ?? 0,
+        completionTokens: json.usage.completion_tokens ?? 0,
+      });
+    }
     const raw = json.choices[0]?.message?.content?.trim();
     if (!raw) return null;
 

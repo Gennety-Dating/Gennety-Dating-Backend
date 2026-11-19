@@ -2,9 +2,12 @@
 
 # Suggested replies — the next step under the agent's message
 
-Status: specification for the founder's approval, 2026-11-19. Nothing is
-built. Where a question is still open, the default named here is what gets
-built unless the founder says otherwise.
+Status: approved by the founder 2026-11-19 with the four recommended answers
+and built behind `AGENT_SUGGESTED_REPLIES_ENABLED` (default off). Deviations
+from this text while building are in
+`docs/architecture/decisions/2026-11-19-suggested-replies.md`: no profiler
+gate (it never applies), no calendar step (`open_screen` has none), the exit
+line is per time of day, and Telegram chips are counted in logs, not Pulse.
 
 ## Why
 

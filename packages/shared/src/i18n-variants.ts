@@ -29,6 +29,22 @@ export function setVariantRng(fn: VariantRng | null): void {
 
 /** Alternates only — the canonical `i18n.ts` string is implicitly variant 0. */
 const VARIANTS: Partial<Record<TranslationKey, Record<Language, string[]>>> = {
+  // Suggested replies (2026-11-19): the line under «На сегодня всё». Never a
+  // question, never «пиши, если что» (agent concept rule 6).
+  repliesCloseLineNight: {
+    en: ["Good. Sleep well.", "Deal. Rest up."],
+    ru: ["Договорились. Выспись.", "Принято. Отдыхай."],
+    uk: ["Домовились. Виспись.", "Прийнято. Відпочивай."],
+    de: ["Abgemacht. Schlaf gut.", "Gut so. Ruh dich aus."],
+    pl: ["Umowa. Wyśpij się.", "Przyjęte. Odpocznij."],
+  },
+  repliesCloseLineDay: {
+    en: ["Good. Go live your day.", "Okay. Off you go."],
+    ru: ["Хорошо. Иди по делам.", "Принято. Хорошего дня."],
+    uk: ["Добре. Йди у справах.", "Прийнято. Гарного дня."],
+    de: ["Gut. Ab in den Tag.", "Okay. Mach's gut heute."],
+    pl: ["Dobrze. Leć do swoich spraw.", "Przyjęte. Udanego dnia."],
+  },
   venueWaitingPeer: {
     en: [
       "Yours is in. Now we wait for them…",

@@ -58,6 +58,12 @@ export const PULSE_METRIC_NAMES = [
   "money_shown",
   "money_dismissed",
   "analytics_opt_in_share",
+  "agent_replies_shown_share",
+  "agent_replies_tap_rate",
+  "agent_replies_offline_step_7d",
+  "agent_replies_exit_share",
+  "agent_chat_turns_p50",
+  "agent_chat_offline_step_7d",
 ] as const;
 
 export type PulseMetricName = (typeof PULSE_METRIC_NAMES)[number];
@@ -320,6 +326,69 @@ export const PULSE_METRICS: Record<PulseMetricName, PulseMetricDef> = {
     minSample: SMALL,
     source: "users.analytics_opt_in / analytics_opt_in_at",
   },
+  // Suggested replies (docs/product/domains/suggested-replies.md, Phase 4).
+  // Success is a step offline, never time in the chat.
+  agent_replies_shown_share: {
+    name: "agent_replies_shown_share",
+    description: "Доля ответов агента с подсказками у людей, кому они включены (без контрольной группы). Норма 20–40%, выше 50% — проверки слишком мягкие.",
+    unit: "share",
+    grain: "day",
+    dims: "",
+    nMeans: "ответы агента",
+    minSample: SMALL,
+    source: "messages.attachment kind suggested_replies (чат приложения; Telegram пока только в логах)",
+  },
+  agent_replies_tap_rate: {
+    name: "agent_replies_tap_rate",
+    description: "Сколько показанных подсказок данного вида нажали.",
+    unit: "share",
+    grain: "day",
+    dims: "kind ∈ answer | step | clarify | close",
+    nMeans: "наборы, где был этот вид",
+    minSample: SMALL,
+    source: "messages.attachment kind suggested_replies (чат приложения; Telegram пока только в логах)",
+  },
+  agent_replies_offline_step_7d: {
+    name: "agent_replies_offline_step_7d",
+    description: "Главная: доля нажатых подсказок-шагов, после которых за 7 дней был реальный шаг — согласие на пару, состоявшееся свидание или сохранённая идея. Молодые дни ещё дозревают.",
+    unit: "share",
+    grain: "day",
+    dims: "",
+    nMeans: "нажатые шаги (по дню нажатия)",
+    minSample: SMALL,
+    source: "messages.attachment kind suggested_replies (чат приложения; Telegram пока только в логах) + match_events (ACCEPTED, DATE_COMPLETED) + memory_ideas",
+  },
+  agent_replies_exit_share: {
+    name: "agent_replies_exit_share",
+    description: "Доля чатов с подсказками, закрытых через «На сегодня всё». Рост — хорошо.",
+    unit: "share",
+    grain: "day",
+    dims: "",
+    nMeans: "чаты, где были подсказки (по дню начала чата)",
+    minSample: SMALL,
+    source: "messages.attachment kind suggested_replies (чат приложения; Telegram пока только в логах)",
+  },
+  agent_chat_turns_p50: {
+    name: "agent_chat_turns_p50",
+    description: "Медиана реплик человека в чате с агентом: с подсказками и в контрольной группе. Страховка, а не цель — рост при тех же шагах в офлайн значит, что подсказки стали крючком.",
+    unit: "count",
+    grain: "day",
+    dims: "arm ∈ chips | holdout",
+    nMeans: "чаты (по дню начала)",
+    minSample: SMALL,
+    thresholds: { loopRatio: 1.2 },
+    source: "messages (чаты приложения)",
+  },
+  agent_chat_offline_step_7d: {
+    name: "agent_chat_offline_step_7d",
+    description: "Доля чатов с агентом, после которых за 7 дней был реальный шаг: с подсказками и в контрольной группе.",
+    unit: "share",
+    grain: "day",
+    dims: "arm ∈ chips | holdout",
+    nMeans: "чаты (по дню начала)",
+    minSample: SMALL,
+    source: "messages + match_events (ACCEPTED, DATE_COMPLETED) + memory_ideas",
+  },
 };
 
 /** Russian label of a metric for titles ("Показы экрана"). */
@@ -344,4 +413,10 @@ export const PULSE_METRIC_TITLES: Record<PulseMetricName, string> = {
   money_shown: "Показы платных экранов",
   money_dismissed: "Закрытия платных экранов",
   analytics_opt_in_share: "Доля с согласием на аналитику",
+  agent_replies_shown_share: "Доля ответов с подсказками",
+  agent_replies_tap_rate: "Нажатия подсказок",
+  agent_replies_offline_step_7d: "Шаг в офлайн после подсказки",
+  agent_replies_exit_share: "Чаты, закрытые «На сегодня всё»",
+  agent_chat_turns_p50: "Медиана реплик в чате",
+  agent_chat_offline_step_7d: "Шаг в офлайн после чата",
 };

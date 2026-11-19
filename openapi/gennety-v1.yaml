@@ -4248,7 +4248,9 @@ paths:
         route and on `/v1/chat/voice` — comma-separated, case and spaces
         ignored: `wishlist` (`ChatWishlistCard` in `attachment`) and, since
         2026-10-28, `offer` (`ChatChangeOffer` in `offer`) and, since
-        2026-10-29, `guide` (`ChatAppGuide` in `guide`). Sent like
+        2026-10-29, `guide` (`ChatAppGuide` in `guide`) and, since
+        2026-11-19, `replies` (suggested replies — `repliesPending` here,
+        the chips themselves from `GET /v1/chat/messages/{id}/replies`). Sent like
         `X-Gennety-Build`, by the client's middleware, so it is not an
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
@@ -4323,6 +4325,8 @@ paths:
                     while the first is still running waits for it. A turn that
                     failed is not remembered, so its retry runs anew. Omitted or
                     malformed: every send is its own turn, as before.
+                suggestion:
+                  $ref: "#/components/schemas/ChatSuggestionTap"
       responses:
         "200":
           description: Assistant reply
@@ -4389,6 +4393,14 @@ paths:
                       in `X-Gennety-Chat-Cards`. Absent otherwise. Never
                       together with `attachment` or `offer`.
                       Answered through `POST /v1/chat/messages/{id}/offer`.
+                  repliesPending:
+                    type: boolean
+                    description: >-
+                      True when suggested replies are being made for this
+                      reply (decision 2026-11-19) — only for a build that
+                      listed `replies` in `X-Gennety-Chat-Cards`. Show the
+                      reply at once, then ask `GET /v1/chat/messages/{id}/replies`.
+                      Absent means no chips: never ask.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -4521,6 +4533,9 @@ paths:
                   offer: { $ref: "#/components/schemas/ChatChangeOffer" }
                   screenshots: { $ref: "#/components/schemas/ChatScreenshotsCard" }
                   guide: { $ref: "#/components/schemas/ChatAppGuide" }
+                  repliesPending:
+                    type: boolean
+                    description: As on `/v1/chat/message`.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -4673,6 +4688,51 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/chat/messages/{id}/replies:
+    get:
+      tags: [chat]
+      operationId: getChatSuggestedReplies
+      summary: Suggested replies under the newest agent reply
+      description: |
+        The chips under an agent reply (decision 2026-11-19,
+        `docs/product/domains/suggested-replies.md`). Asked once after a
+        turn answered with `repliesPending: true`. Waits up to 3 seconds
+        for chips still being made, then answers. An empty list means no
+        chips — the normal answer most of the time. Chips exist only on the
+        newest agent reply of a chat and only until the person writes: for
+        any older row, or after the person's next message, the list is
+        empty.
+
+        A tap sends an ordinary `POST /v1/chat/message` with the chip's
+        `text` and `suggestion: { messageId, id }`. A `close` chip («На
+        сегодня всё») is answered with one short line written by the server,
+        never with chips.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The assistant message (`message.id` of the turn)
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The chips, possibly none
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [replies]
+                properties:
+                  replies:
+                    type: array
+                    maxItems: 4
+                    items: { $ref: "#/components/schemas/ChatSuggestedReply" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Not a uuid, or not the caller's message — one answer for both
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/chat/messages/{id}/offer:
     post:
@@ -10695,6 +10755,15 @@ components:
               description: >-
                 The «how the app works» card under this assistant reply, as it
                 was shown (the stage is not re-read). Absent on every other row.
+            replies:
+              type: array
+              maxItems: 4
+              items: { $ref: "#/components/schemas/ChatSuggestedReply" }
+              description: >-
+                Suggested replies, so they survive a reload — only on the
+                newest agent reply of the chat, only while the person has not
+                written since, and only for a build that lists `replies` in
+                `X-Gennety-Chat-Cards`. Absent everywhere else.
 
     ScreenshotLibrary:
       type: object
@@ -10858,6 +10927,30 @@ components:
               state: { type: [string, "null"] }
               available: { type: boolean }
               imageUrl: { type: [string, "null"] }
+    ChatSuggestedReply:
+      description: |
+        One chip under an agent reply (decision 2026-11-19). `answer` — a
+        short answer to the agent's question; `step` — a step towards a real
+        date the agent can carry out; `clarify` — ask the agent to unpack
+        its advice; `close` — «На сегодня всё», drawn quieter and last
+        (first at night). `text` is in the person's language and is sent as
+        the message on a tap.
+      type: object
+      required: [id, kind, text]
+      properties:
+        id: { type: string, description: "Stable within this reply, e.g. `r1`." }
+        kind: { type: string, enum: [answer, step, clarify, close] }
+        text: { type: string, maxLength: 40 }
+    ChatSuggestionTap:
+      description: |
+        Sent with a turn that is a chip tap (decision 2026-11-19). Trusted
+        only when it names a chip stored on the caller's newest agent reply
+        in this chat; otherwise the turn is an ordinary typed message.
+      type: object
+      required: [messageId, id]
+      properties:
+        messageId: { type: string, format: uuid }
+        id: { type: string, maxLength: 16 }
     ChatAppGuide:
       description: |
         «How the app works» under a chat reply (decision 2026-10-29): the

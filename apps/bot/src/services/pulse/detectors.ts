@@ -39,7 +39,8 @@ export type InsightKind =
   | "screen_friction"
   | "slow_decision"
   | "anomaly"
-  | "unseen";
+  | "unseen"
+  | "replies_loop";
 
 export interface InsightDraft {
   /** `kind:scope` — unique; a recurring finding is one row. */

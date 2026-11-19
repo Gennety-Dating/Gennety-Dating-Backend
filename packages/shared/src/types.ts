@@ -212,6 +212,20 @@ export interface SessionData {
    */
   photoStagePanelShown: boolean;
   /**
+   * Suggested replies the bot put up as a reply keyboard under the agent's
+   * last message (decision 2026-11-19). A text equal to one of them is a tap;
+   * cleared on the next agent turn. Null when none is up.
+   */
+  agentReplies?: { items: Array<{ id: string; kind: "answer" | "step" | "clarify" | "close"; text: string }>; at: number } | null;
+  /** Agent replies in a row whose chips the person ignored (typed instead). */
+  agentRepliesIgnored?: number;
+  /** When danger was last seen in the agent chat: no chips for the next six hours. */
+  agentRepliesSafetyAt?: number | null;
+  /** When this agent conversation started (first turn after six quiet hours) and how many turns it has. */
+  agentChatStartedAt?: number | null;
+  agentChatTurns?: number;
+  agentChatLastAt?: number | null;
+  /**
    * Telegram message id of the live voice-prompt confirmation card — the
    * "recorded, tap Done" message and its single inline button
    * (VOICE_PROMPT_PRODUCT_SPEC.md §4.1).

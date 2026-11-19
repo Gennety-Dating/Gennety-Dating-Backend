@@ -1,6 +1,6 @@
 import { Composer, InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
-import { t } from "@gennety/shared";
+import { cityKeyToTimeZone, t } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { AGENT_DENIAL_COPY, evaluateAgentAccess } from "../../services/agent-access.js";
 import { armMediaClaim } from "../../services/menu-text-claim.js";
@@ -49,6 +49,13 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
+import {
+  closeLine,
+  telegramReplies,
+  telegramTranscript,
+  telegramTurnBegins,
+  type TelegramKeyboard,
+} from "../../services/suggested-replies.js";
 import { videoTakesEnabled } from "../../services/agent-video-takes.js";
 import { retirePhotoCards } from "../../services/photo-cards.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
@@ -247,7 +254,13 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       // transport (see `services/agent-access.ts`).
       const account = await prisma.user.findUnique({
         where: { telegramId },
-        select: { status: true, onboardingStep: true, suspendedUntil: true },
+        select: {
+          id: true,
+          status: true,
+          onboardingStep: true,
+          suspendedUntil: true,
+          profile: { select: { homeCityKey: true } },
+        },
       });
       const access = evaluateAgentAccess(account);
       if (!access.allowed) {
@@ -261,8 +274,40 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
         return;
       }
 
+      // Suggested replies (decision 2026-11-19): a keyboard tap arrives as
+      // plain text. The exit is answered by code — one line, no model call,
+      // nothing after it (agent concept rule 6).
+      const tapped = telegramTurnBegins(ctx.session, text);
+      if (tapped?.kind === "close") {
+        await ctx.reply(
+          closeLine(ctx.session.language, new Date(), cityKeyToTimeZone(account?.profile?.homeCityKey ?? null)),
+          { reply_markup: { remove_keyboard: true } },
+        );
+        return;
+      }
+
       const result = await runMenuAgentTurn(telegramId, text);
       const bubbles = splitReplyIntoBubbles(result.reply);
+      // Started at once, so the typing beats between bubbles cover it; the last
+      // bubble waits for it (capped by the chips call's own timeout).
+      const chips: Promise<TelegramKeyboard> = account
+        ? prisma.user
+            .findUnique({ where: { telegramId }, select: { messageHistory: true } })
+            .then((row) =>
+              telegramReplies(ctx.session, {
+                userId: account.id,
+                language: ctx.session.language,
+                userText: text,
+                reply: result.reply,
+                hasAction: Boolean(result.action),
+                rows: telegramTranscript(
+                  Array.isArray(row?.messageHistory) ? (row!.messageHistory as Array<{ role: string; content?: unknown }>) : [],
+                ),
+                homeCityKey: account.profile?.homeCityKey ?? null,
+              }),
+            )
+            .catch(() => ({}) as TelegramKeyboard)
+        : Promise.resolve({} as TelegramKeyboard);
       for (let i = 0; i < bubbles.length; i++) {
         if (i > 0) {
           // A beat of "typing…" between bubbles so the split reads as chat,
@@ -272,7 +317,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
             setTimeout(resolve, Math.min(1600, 350 + bubbles[i]!.length * 15)),
           );
         }
-        await ctx.reply(bubbles[i]!);
+        if (i === bubbles.length - 1) {
+          await ctx.reply(bubbles[i]!, await chips);
+        } else {
+          await ctx.reply(bubbles[i]!);
+        }
       }
       // Code-owned confirmation of anything that was actually written, so a
       // profile change is a visible fact rather than the model's own claim.

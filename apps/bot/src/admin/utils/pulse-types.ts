@@ -23,7 +23,8 @@ export type PulseInsightKind =
   | "screen_friction"
   | "slow_decision"
   | "anomaly"
-  | "unseen";
+  | "unseen"
+  | "replies_loop";
 
 /** How much to trust the numbers before reading them. In every response. */
 export interface PulseDataFreshness {

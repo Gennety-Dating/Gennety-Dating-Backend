@@ -11,7 +11,7 @@ import { env } from "../config.js";
  * everyone, a list means only those people, an empty list means nobody.
  */
 
-type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS";
+type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES";
 
 function previewList(flag: Flag): readonly string[] {
   const raw = (env as Record<string, unknown>)[`${flag}_USER_IDS`];
@@ -35,3 +35,8 @@ export const screenshotLibraryOn = (userId: string | null | undefined): boolean 
 export const memoryIdeasOn = (userId: string | null | undefined): boolean => onFor("MEMORY_IDEAS", userId);
 export const screenshotLibraryUsers = (): readonly string[] | null => usersOf("SCREENSHOT_LIBRARY");
 export const memoryIdeasUsers = (): readonly string[] | null => usersOf("MEMORY_IDEAS");
+export const suggestedRepliesOn = (userId: string | null | undefined): boolean => onFor("AGENT_SUGGESTED_REPLIES", userId);
+export const suggestedRepliesUsers = (): readonly string[] | null => usersOf("AGENT_SUGGESTED_REPLIES");
+/** On the preview list (never held out). */
+export const suggestedRepliesPreview = (userId: string | null | undefined): boolean =>
+  Boolean(userId) && previewList("AGENT_SUGGESTED_REPLIES").includes((userId as string).toLowerCase());

@@ -4,7 +4,15 @@ import { MULTIPART_FIELD_LIMITS } from "../../utils/upload-limits.js";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
-import { screenshotLibraryOn } from "../../services/feature-preview.js";
+import { memoryIdeasOn, screenshotLibraryOn } from "../../services/feature-preview.js";
+import {
+  answerCloseTap,
+  appRepliesFor,
+  claimTap,
+  historyReplies,
+  startAppReplies,
+} from "../../services/suggested-replies.js";
+import { REPLIES_CARD_CLIENT_TOKEN, type Language } from "@gennety/shared";
 import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
@@ -68,6 +76,37 @@ function chatCardsOf(req: Request): Set<string> {
       .map((token) => token.trim().toLowerCase())
       .filter(Boolean),
   );
+}
+
+/**
+ * Suggested replies for this reply (decision 2026-11-19): `{ repliesPending:
+ * true }` when the gates passed and the chips call started, `{}` otherwise.
+ * Never holds the reply — the app asks `GET /messages/:id/replies` after.
+ */
+function repliesField(
+  req: Request,
+  turn: { id: string; sessionId: string; content: string; attachment?: unknown; offer?: unknown; guide?: unknown; screenshots?: unknown; action?: unknown },
+  userText: string,
+): { repliesPending?: true } | Promise<{ repliesPending?: true }> {
+  const cards = chatCardsOf(req);
+  // A build that draws no chips costs nothing — not even a tick.
+  if (!cards.has(REPLIES_CARD_CLIENT_TOKEN)) return {};
+  return startAppReplies({
+    userId: req.userId!,
+    sessionId: turn.sessionId,
+    messageId: turn.id,
+    userText,
+    reply: turn.content,
+    replyHasCard: Boolean(turn.attachment || turn.offer || turn.guide || turn.screenshots || turn.action),
+    buildDraws: cards.has(REPLIES_CARD_CLIENT_TOKEN),
+    // Mirrors `turnTools`: `check_event` rides the screenshot tools or ideas.
+    eventsTool: (screenshotLibraryOn(req.userId) && cards.has("screenshots")) || memoryIdeasOn(req.userId),
+  })
+    .catch((err: unknown) => {
+      console.warn("[replies] start failed:", err);
+      return false;
+    })
+    .then((started) => (started ? { repliesPending: true as const } : {}));
 }
 
 /**
@@ -277,6 +316,35 @@ chatRouter.post(
     const clientMessageId = parseClientMessageId(req.body?.clientMessageId);
     const watch = watchClient(req, res, clientMessageId);
     const reply = await watch.follow(chatSends.run(req.userId!, clientMessageId, async () => {
+      // A chip tap (decision 2026-11-19). Trusted only when it names a chip on
+      // the newest agent row of this chat; the exit is answered by code, with
+      // no model call. Any other chip runs as an ordinary turn below.
+      if (req.body?.suggestion && sessionId && text && imageUrls.length === 0) {
+        const chip = await claimTap({
+          userId: req.userId!,
+          sessionId,
+          messageId: req.body.suggestion?.messageId,
+          id: req.body.suggestion?.id,
+          text,
+        }).catch((err: unknown) => {
+          console.warn("[replies] tap claim failed:", err);
+          return null;
+        });
+        if (chip?.kind === "close") {
+          const account = await prisma.user.findUnique({ where: { id: req.userId! }, select: { language: true } });
+          const line = await answerCloseTap({
+            userId: req.userId!,
+            sessionId,
+            text,
+            language: (account?.language ?? "en") as Language,
+          });
+          return {
+            message: { id: line.id, role: "assistant" as const, content: line.content, imageUrl: null, createdAt: line.createdAt.toISOString() },
+            sessionId,
+            uiHint: null,
+          };
+        }
+      }
       // The chat ends with a live «about you» question (decision journal
       // 2026-11-13): this message is its answer, and the reply is the next
       // question or the closing line — no concierge turn. Only a plain typed
@@ -302,6 +370,9 @@ chatRouter.post(
         chatCards: chatCardsOf(req),
         ...(activity ? { onStep: activity.report } : {}),
       }).finally(() => activity?.finish());
+      // Awaited only when it is a promise: a build without chips gets no extra tick.
+      const chipsField = repliesField(req, turn, text);
+      const chipsExtra = chipsField instanceof Promise ? await chipsField : chipsField;
       return {
         message: {
           id: turn.id,
@@ -330,6 +401,7 @@ chatRouter.post(
         // The «how the app works» card (decision 2026-10-29) — omitted when none.
         ...(turn.guide ? { guide: turn.guide } : {}),
         ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
+        ...chipsExtra,
       };
     }).catch((err: unknown) => {
       if (isAgentUnavailable(err)) return null;
@@ -474,6 +546,8 @@ chatRouter.post(
         return { status: 503, body: { error: "agent_unavailable" } };
       }
 
+      const chipsField = repliesField(req, turn, transcript);
+      const chipsExtra = chipsField instanceof Promise ? await chipsField : chipsField;
       return {
         status: 200,
         body: {
@@ -493,6 +567,7 @@ chatRouter.post(
           ...(turn.offer ? { offer: turn.offer } : {}),
           ...(turn.guide ? { guide: turn.guide } : {}),
           ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
+          ...chipsExtra,
         },
       };
     });
@@ -625,6 +700,13 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   const shotViews = await screenshotsCardViews(req.userId as string, shotRows.map((entry) => entry.card)).catch(() => []);
   const shotById = new Map(shotRows.map((entry, i) => [entry.id, shotViews[i]] as const));
 
+  // Chips survive a reload only on the newest row of the chat, until the
+  // person writes (decision 2026-11-19); only for a build that draws them.
+  const chips =
+    sessionId && !before && chatCardsOf(req).has(REPLIES_CARD_CLIENT_TOKEN)
+      ? historyReplies(page, true)
+      : null;
+
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
@@ -650,6 +732,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(rowOffer ? { offer: changeOfferView(rowOffer) } : {}),
       ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
       ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
+      ...(chips && chips.id === row.id ? { replies: chips.replies } : {}),
     };
   });
   console.log(
@@ -761,6 +844,27 @@ chatRouter.post(
  * Read-only and free, so outside `requireAgentAccess` for the same reason as
  * `/history`: a list that went blank on suspension would read as data loss.
  */
+/**
+ * GET /v1/chat/messages/:id/replies — the chips under an agent reply
+ * (decision 2026-11-19). Waits up to `SUGGESTED_REPLIES.pollWaitMs` for a call
+ * still in flight. Empty for any row that is not the newest of its chat. A
+ * read that spends nothing — no agent-access gate or budget, like `/history`.
+ */
+chatRouter.get("/messages/:id/replies", chatActivityLimiter, async (req: Request, res: Response): Promise<void> => {
+  const id = String(req.params.id ?? "").toLowerCase();
+  if (!isUuid(id)) {
+    res.status(404).json({ error: "Unknown message" });
+    return;
+  }
+  const replies = await appRepliesFor(req.userId!, id);
+  if (replies === null) {
+    res.status(404).json({ error: "Unknown message" });
+    return;
+  }
+  res.set("Cache-Control", "no-store");
+  res.json({ replies });
+});
+
 chatRouter.get("/sessions", async (req: Request, res: Response): Promise<void> => {
   const limit = Math.min(
     Math.max(Number(req.query.limit ?? CHAT_SESSIONS_PAGE_DEFAULT) || CHAT_SESSIONS_PAGE_DEFAULT, 1),

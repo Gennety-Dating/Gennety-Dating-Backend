@@ -728,6 +728,16 @@ export const env = {
   MEMORY_IDEAS_ENABLED: process.env.MEMORY_IDEAS_ENABLED === "true",
   /// Per-user preview of ideas, as `SCREENSHOT_LIBRARY_USER_IDS`.
   MEMORY_IDEAS_USER_IDS: parseUserIdList(process.env.MEMORY_IDEAS_USER_IDS, "MEMORY_IDEAS_USER_IDS"),
+  /// Suggested replies under the agent's message
+  /// (`docs/product/domains/suggested-replies.md`). Off: no gate, no model
+  /// call, no field — the chat is exactly as before.
+  AGENT_SUGGESTED_REPLIES_ENABLED: process.env.AGENT_SUGGESTED_REPLIES_ENABLED === "true",
+  /// Per-user preview of suggested replies, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  /// People on this list are never in the holdout.
+  AGENT_SUGGESTED_REPLIES_USER_IDS: parseUserIdList(
+    process.env.AGENT_SUGGESTED_REPLIES_USER_IDS,
+    "AGENT_SUGGESTED_REPLIES_USER_IDS",
+  ),
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),
