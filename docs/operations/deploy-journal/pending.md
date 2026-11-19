@@ -32,8 +32,6 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
----
-
 **PENDING 2026-11-19 — suggested replies under the agent's message**
 
 1. Code: spec `docs/product/domains/suggested-replies.md`, decision `docs/architecture/decisions/2026-11-19-suggested-replies.md`.
