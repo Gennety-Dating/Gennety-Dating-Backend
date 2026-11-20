@@ -15,6 +15,10 @@ import { SUPPORTED_LANGUAGES } from "./types.js";
  * or a deliberate product decision — never "we forgot".
  */
 const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
+  // Vibe cards (decision 2026-11-21): «Aura» is the same word in de/pl, and
+  // «Swag gap» is the trend's own English name in every locale.
+  "vibeAuraTitle",
+  "vibeSwagTitle",
   // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).
   "dateCardSlogan",
   // Pure glyphs / placeholder templates — no prose to translate.
@@ -63,6 +67,15 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
  * both languages, or an explicit product decision — never "we forgot".
  */
 const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
+  // Vibe cards (decision 2026-11-21): words genuinely spelled the same in uk
+  // and ru («Аура», «Стиль», «Кадр», «Подача», «Справа»), plus the English
+  // trend name «Swag gap».
+  "vibeAuraTitle",
+  "vibeSwagTitle",
+  "vibeBarStyle",
+  "vibeBarFrame",
+  "vibeBarPresence",
+  "vibeSideRight",
   // Pure glyphs / placeholder templates / a bare domain — no prose to translate.
   "btnLike",
   "btnDislike",

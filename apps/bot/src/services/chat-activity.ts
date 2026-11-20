@@ -113,6 +113,7 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   // Reads the curated video list — answers at once (`agent-video-takes.ts`).
   ["suggest_video", "thinking"],
   ["show_app_guide", "thinking"],
+  ["show_vibe_card", "thinking"],
   ["offer_cancel_premium", "thinking"],
 ]);
 

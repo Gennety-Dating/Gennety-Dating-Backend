@@ -55,6 +55,7 @@ import {
 } from "../../services/chat-wishlist.js";
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
+import { VIBE_CARD_CLIENT_TOKEN, readVibeCard, vibeCardView } from "../../services/chat-vibe-card.js";
 import { readScreenshotsCard, screenshotsCardViews, type ScreenshotsCard } from "../../services/chat-screenshots.js";
 import {
   answerProfilerInChat,
@@ -86,7 +87,7 @@ function chatCardsOf(req: Request): Set<string> {
  */
 function repliesField(
   req: Request,
-  turn: { id: string; sessionId: string; content: string; attachment?: unknown; offer?: unknown; guide?: unknown; screenshots?: unknown; action?: unknown },
+  turn: { id: string; sessionId: string; content: string; attachment?: unknown; offer?: unknown; guide?: unknown; screenshots?: unknown; vibe?: unknown; action?: unknown },
   userText: string,
 ): { repliesPending?: true } | Promise<{ repliesPending?: true }> {
   const cards = chatCardsOf(req);
@@ -98,7 +99,7 @@ function repliesField(
     messageId: turn.id,
     userText,
     reply: turn.content,
-    replyHasCard: Boolean(turn.attachment || turn.offer || turn.guide || turn.screenshots || turn.action),
+    replyHasCard: Boolean(turn.attachment || turn.offer || turn.guide || turn.screenshots || turn.vibe || turn.action),
     buildDraws: cards.has(REPLIES_CARD_CLIENT_TOKEN),
     // Mirrors `turnTools`: `check_event` rides the screenshot tools or ideas.
     eventsTool: (screenshotLibraryOn(req.userId) && cards.has("screenshots")) || memoryIdeasOn(req.userId),
@@ -402,6 +403,9 @@ chatRouter.post(
         // The «how the app works» card (decision 2026-10-29) — omitted when none.
         ...(turn.guide ? { guide: turn.guide } : {}),
         ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
+        // The vibe card above the reply and the sticker after it (decision 2026-11-21).
+        ...(turn.vibe ? { vibe: turn.vibe } : {}),
+        ...(turn.sticker ? { sticker: turn.sticker } : {}),
         ...chipsExtra,
       };
     }).catch((err: unknown) => {
@@ -568,6 +572,9 @@ chatRouter.post(
           ...(turn.offer ? { offer: turn.offer } : {}),
           ...(turn.guide ? { guide: turn.guide } : {}),
           ...(turn.screenshots ? { screenshots: turn.screenshots } : {}),
+          // The vibe card above the reply and the sticker after it (decision 2026-11-21).
+          ...(turn.vibe ? { vibe: turn.vibe } : {}),
+          ...(turn.sticker ? { sticker: turn.sticker } : {}),
           ...chipsExtra,
         },
       };
@@ -718,6 +725,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ? historyReplies(page, true)
       : null;
 
+  const vibeCardsDrawn = chatCardsOf(req).has(VIBE_CARD_CLIENT_TOKEN);
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
@@ -726,6 +734,8 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
     // builds that asked for it.
     const rowOffer = row.role === "assistant" ? readChangeOffer(row.attachment) : null;
     const rowGuide = row.role === "assistant" ? readAppGuide(row.attachment) : null;
+    // Vibe cards (decision 2026-11-21) only for a build that draws them.
+    const rowVibe = row.role === "assistant" && vibeCardsDrawn ? readVibeCard(row.attachment) : null;
     const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
     return {
       id: row.id,
@@ -742,6 +752,8 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(cardById.get(row.id) ? { attachment: cardById.get(row.id) } : {}),
       ...(rowOffer ? { offer: changeOfferView(rowOffer) } : {}),
       ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
+      ...(rowVibe ? { vibe: vibeCardView(rowVibe) } : {}),
+      ...(rowVibe?.sticker ? { sticker: rowVibe.sticker } : {}),
       ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
       ...(chips && chips.id === row.id ? { replies: chips.replies } : {}),
       ...(reminderById.get(row.id) ? { reminder: reminderById.get(row.id) } : {}),

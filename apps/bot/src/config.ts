@@ -719,6 +719,10 @@ export const env = {
   /// spine, no attention traps, honest memory. On by default; "false" drops the
   /// block from every turn on both surfaces.
   AGENT_CONCEPT_ENABLED: process.env.AGENT_CONCEPT_ENABLED !== "false",
+  /// Vibe cards (docs/product/domains/agent-vibe-cards.md): aura, attractiveness
+  /// and swag gap on a photo, app chat only, for builds that list `vibe` in
+  /// `X-Gennety-Chat-Cards`. On by default; "false" drops the tool and its block.
+  AGENT_VIBE_CARDS_ENABLED: process.env.AGENT_VIBE_CARDS_ENABLED !== "false",
   /// Per-user preview of the screenshot library while the flag is off: these
   /// user UUIDs (comma-separated) get the feature as if it were on. Read only
   /// through `services/feature-preview.ts`.

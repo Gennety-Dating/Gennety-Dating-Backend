@@ -101,6 +101,21 @@ import {
 } from "./chat-past-tools.js";
 import { GET_MY_DATE_TOOL, GET_MY_DATE_TOOL_NAME, executeGetMyDate } from "./chat-date-tool.js";
 import { SUGGEST_VIDEO_TOOL, videoTakeBlocks, videoTakesEnabled } from "./agent-video-takes.js";
+import {
+  SHOW_VIBE_CARD_TOOL,
+  SHOW_VIBE_CARD_TOOL_NAME,
+  VIBE_CARD_ADDENDUM,
+  VIBE_CARD_CLIENT_TOKEN,
+  buildVibeCard,
+  readVibeCard,
+  vibeCardNote,
+  vibeCardView,
+  vibeCardsThisTurn,
+  vibeStickerView,
+  type VibeCard,
+  type VibeCardView,
+} from "./chat-vibe-card.js";
+import { VIBE_SAFETY_LOOKBACK, type AgentSticker } from "@gennety/shared";
 import { agentStanceBlocks } from "./agent-stances.js";
 import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
 import { memoryPromptBlocks } from "./agent-memory.js";
@@ -456,7 +471,7 @@ type ToolList = Array<
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean; reminders?: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean; reminders?: boolean; vibeCards?: boolean }): ToolList {
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
@@ -472,6 +487,8 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
     ...(options.agentMemory ? AGENT_MEMORY_TOOLS : []),
     // Personal reminders (decision 2026-11-20), per person behind the flag.
     ...(options.reminders ? REMINDER_TOOLS : []),
+    // Vibe cards (decision 2026-11-21): a photo on this turn, a build that draws it.
+    ...(options.vibeCards ? [SHOW_VIBE_CARD_TOOL] : []),
   ];
 }
 
@@ -492,6 +509,8 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [OFFER_CHANGE_TOOL_NAME]: "confirm",
   // Reads the person's stage, writes nothing (`chat-app-guide.ts`).
   [SHOW_APP_GUIDE_TOOL_NAME]: "read",
+  // Writes nothing: the card is stored with the reply (`chat-vibe-card.ts`).
+  [SHOW_VIBE_CARD_TOOL_NAME]: "read",
   // Reads their booked date, writes nothing (`chat-date-tool.ts`).
   [GET_MY_DATE_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
@@ -598,6 +617,10 @@ export interface ChatTurnResult {
   offer?: ChangeOfferView;
   /** The «how the app works» card stored under this reply (`messages.attachment`, kind `app_guide`). */
   guide?: AppGuideView;
+  /** The vibe card ABOVE this reply (`messages.attachment`, kind `vibe_card`), decision 2026-11-21. */
+  vibe?: VibeCardView;
+  /** The sticker after this reply, chosen by the server with the vibe card. */
+  sticker?: AgentSticker;
   /** The screenshot-library card, for builds that declared `screenshots`. */
   screenshots?: ScreenshotsCardView;
 }
@@ -683,7 +706,17 @@ async function runTurnInner(
   // loop, so its status comes from the read itself (decision 2026-11-19).
   let watched = false;
   const memoryOn = agentMemoryOn(userId);
-  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId) });
+  // Vibe cards (decision 2026-11-21): the safety word list reads the person's
+  // newest messages in this chat, this one included; read only when a card is
+  // possible at all, and a failed read keeps the tool away.
+  const vibeCards = imageUrls.length > 0 && (input.chatCards?.has(VIBE_CARD_CLIENT_TOKEN) ?? false)
+    ? vibeCardsThisTurn({
+        chatCards: input.chatCards,
+        imageCount: imageUrls.length,
+        recentUserTexts: await recentUserTextsOf(sessionId).catch(() => ["ненавижу себя"]),
+      })
+    : false;
+  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId), vibeCards });
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, refreshSummary, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
@@ -696,6 +729,7 @@ async function runTurnInner(
       guideCards,
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
+      vibeCards,
       remindersZone: agentRemindersOn(userId) ? personTimeZone(account.profile) : null,
       onWatch: () => {
         watched = true;
@@ -730,6 +764,7 @@ async function runTurnInner(
   let offer: ChangeOffer | null = null;
   let guide: AppGuide | null = null;
   let shots: ScreenshotsCard | null = null;
+  let vibe: VibeCard | null = null;
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
@@ -742,7 +777,7 @@ async function runTurnInner(
     // tool round it nearly always does, so that is what the person is told; a
     // further tool call moves the status on to that tool.
     if (iteration > 0) report("writing");
-    const called = await completeWithRetry(messages, fetchFn, { tools });
+    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe ? { allowEmpty: true } : {}) });
     if (!called.ok) {
       failure = called.reason;
       break;
@@ -826,6 +861,33 @@ async function runTurnInner(
         }
       }
 
+      // The vibe card (decision 2026-11-21): validated here, stored with the
+      // reply below, drawn ABOVE it. One card per reply.
+      if (name === SHOW_VIBE_CARD_TOOL_NAME) {
+        if (!vibeCards) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        if (vibe || guide || card || offer || shots) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, error: "one_card_per_reply", instruction: "A card is already in this reply — answer now." }),
+          });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // buildVibeCard refuses it below
+        }
+        const built = buildVibeCard(args, language);
+        if (built.ok) vibe = built.card;
+        messages.push({ role: "tool", tool_call_id: tc.id, content: built.result });
+        continue;
+      }
+
       // The «how the app works» card: the person's stage is read here, the card
       // is stored with the reply below. One card per reply.
       if (name === SHOW_APP_GUIDE_TOOL_NAME) {
@@ -833,7 +895,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (guide || card || offer || shots) {
+        if (guide || card || offer || shots || vibe) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -942,7 +1004,7 @@ async function runTurnInner(
         });
         // One card per reply. A card that cannot be attached must not be reported
         // as shown, or the reply promises cards or a button that are not there (audit F-06).
-        if (outcome.card && (card || offer || guide || shots)) {
+        if (outcome.card && (card || offer || guide || shots || vibe)) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -967,7 +1029,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (offer || card || guide || shots) {
+        if (offer || card || guide || shots || vibe) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -994,7 +1056,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (card || offer || guide || shots) {
+        if (card || offer || guide || shots || vibe) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -1120,7 +1182,7 @@ async function runTurnInner(
     else failure = `closing call: ${closing.reason}`;
   }
 
-  if (!lastReply) {
+  if (!lastReply && !(vibe && !failure)) {
     failure ||= "empty reply";
     console.warn(
       `[chat] turn without a reply (user ${userId}, ${imageUrls.length} photo(s), ${iteration} round(s), writes ${writesUsed}): ${failure}`,
@@ -1139,6 +1201,9 @@ async function runTurnInner(
     } else if (guide) {
       // The card is the explanation; one line above it is enough.
       lastReply = t(language, "guideCardLine");
+    } else if (vibe) {
+      // The card is the answer; the line after it is optional (spec phase 1).
+      lastReply = "";
     } else if (pendingAction) {
       lastReply = fallbackReply(language);
     } else {
@@ -1159,6 +1224,7 @@ async function runTurnInner(
       ...(!card && offer ? { attachment: offer as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && guide ? { attachment: guide as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && !guide && shots ? { attachment: shots as unknown as Prisma.InputJsonValue } : {}),
+      ...(!card && !offer && !guide && !shots && vibe ? { attachment: vibe as unknown as Prisma.InputJsonValue } : {}),
     },
   });
   // One open offer at a time: earlier unanswered cards stop working. A failure
@@ -1207,7 +1273,20 @@ async function runTurnInner(
     ...(offer && !card ? { offer: changeOfferView(offer) } : {}),
     ...(guide && !card && !offer ? { guide: appGuideView(guide) } : {}),
     ...(screenshotsView ? { screenshots: screenshotsView } : {}),
+    ...(vibe && !card && !offer && !guide && !shots ? { vibe: vibeCardView(vibe) } : {}),
+    ...(vibe && !card && !offer && !guide && !shots && vibeStickerView(vibe) ? { sticker: vibeStickerView(vibe)! } : {}),
   };
+}
+
+/** The person's newest messages in this chat, newest first — for the vibe-card safety check. */
+async function recentUserTextsOf(sessionId: string): Promise<string[]> {
+  const rows = await prisma.message.findMany({
+    where: { sessionId, role: "user" },
+    orderBy: { createdAt: "desc" },
+    take: VIBE_SAFETY_LOOKBACK,
+    select: { content: true },
+  });
+  return rows.map((row) => row.content ?? "").filter((text) => text.length > 0);
 }
 
 /**
@@ -1269,6 +1348,8 @@ async function buildChatMessages(
     onWatch?: () => void;
     /** Their zone when the reminder tools are offered this turn (decision 2026-11-20). */
     remindersZone?: string | null;
+    /** The vibe-card tool is offered this turn (decision 2026-11-21). */
+    vibeCards?: boolean;
   },
 ): Promise<{
   messages: OpenAIChatMessage[];
@@ -1369,6 +1450,9 @@ async function buildChatMessages(
     // Agent concept (2026-11-19): offline goal, spine, no attention traps —
     // same block as Telegram, after everything it may overrule.
     ...agentConceptBlocks(conceptTurn),
+    // Vibe cards (decision 2026-11-21): the one approved exception to the looks
+    // red lines, so it comes after the concept block that «wins over any line above».
+    options.vibeCards ? VIBE_CARD_ADDENDUM : null,
     earlier?.block ?? null,
     contextBlock,
   ]
@@ -1465,7 +1549,10 @@ async function buildChatMessages(
       }
       const rowGuide = readAppGuide((row as { attachment?: unknown }).attachment);
       const rowShots = readScreenshotsCard((row as { attachment?: unknown }).attachment);
-      const note = rowCard
+      const rowVibe = readVibeCard((row as { attachment?: unknown }).attachment);
+      const note = rowVibe
+        ? vibeCardNote(rowVibe)
+        : rowCard
         ? wishlistCardNote(rowCard)
         : rowOffer
           ? changeOfferNote(rowOffer)
@@ -1569,6 +1656,8 @@ interface CallOptions {
   tools: ToolList;
   /** `"none"` — the closing call after the tool rounds ran out. */
   toolChoice?: "none";
+  /** A vibe card is already in this reply: an empty line after it is an answer, not a failure. */
+  allowEmpty?: boolean;
 }
 
 async function callOpenAI(
@@ -1604,7 +1693,7 @@ async function callOpenAI(
     const choice = completion.choices?.[0];
     if (!choice) return { ok: false, reason: "no choices" };
     const hasTools = (choice.message.tool_calls?.length ?? 0) > 0;
-    if (!hasTools && !(choice.message.content ?? "").trim()) {
+    if (!hasTools && !options.allowEmpty && !(choice.message.content ?? "").trim()) {
       return { ok: false, reason: `empty content (finish_reason ${choice.finish_reason ?? "?"})` };
     }
     return { ok: true, choice };
