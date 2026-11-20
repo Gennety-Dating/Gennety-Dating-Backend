@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are changing personal reminders the agent sets on request («напомни в пятницу написать ей») — how they are created in the chat, stored, delivered by the worker, answered («Сделал», «Завтра»), listed or cancelled, or the `remind` suggested-reply step. Reminders about saved ideas are `memory-ideas.md`. -->
+<!-- WHEN_TO_READ: You are changing personal reminders the agent sets on request («напомни в пятницу написать ей») — how they are created in the chat, stored, delivered by the worker, answered («Сделано», «Напомни завтра»), listed or cancelled, or the `remind` suggested-reply step. Reminders about saved ideas are `memory-ideas.md`. -->
 
 # Agent reminders — «напомни в пятницу»
 
