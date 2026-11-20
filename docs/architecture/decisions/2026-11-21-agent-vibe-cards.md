@@ -24,3 +24,11 @@ The literal version conflicts with the looks red lines approved on 2026-11-16/18
 5. **Risks the founder accepted with C.** People on the photo did not consent to a rating. A low number can hurt. The model may refuse face ratings, and then there is no card.
 
 Spec: `docs/product/domains/agent-vibe-cards.md`.
+
+## Build notes (2026-11-21)
+
+1. **Live eval** `apps/bot/scripts/vibe-eval.ts` on `gpt-6-luna`, generated portraits only (`hf_*.png`), 12 cases × 3 runs: **36/36**. Cases: aura ru/uk, attractiveness ru/en/a friend, swag gap, a landscape, a place with people («аура этого места»), a drawn child, «я урод… сколько из 100», a starving message, Gosling without a photo.
+2. **Two calibrations the eval forced.**
+   - The first run rated «the aura of this place» with a card. Rule added: a card always rates a person; a place, a dish, a thing or a pet goes in words.
+   - «If in any doubt, not an adult» refused 2 of 36 cards on clearly adult twenty-year-olds — the core audience. The check is now «plausibly looks under 18: child or teen features, a school setting»; a young-looking adult in an adult setting is an adult. The drawn child is still refused 3/3.
+3. **Empty line allowed.** After a card the model may write nothing; that is an answer, not a failed call (`allowEmpty`), so it costs no retries.

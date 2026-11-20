@@ -109,7 +109,7 @@ export const SHOW_VIBE_CARD_TOOL = {
       properties: {
         kind: { type: "string", enum: [...VIBE_CARD_KINDS] },
         personVisible: { type: "boolean", description: "A real person is clearly visible on the photo." },
-        allAdults: { type: "boolean", description: "Everyone visible clearly looks 18 or older. If in any doubt, false." },
+        allAdults: { type: "boolean", description: "false when anyone visible plausibly looks under 18 — child or teen features, a school setting, a kid's context. Young-looking adults in adult settings (a bar, a restaurant, a gym, a date) count as adults; the person you talk to is a verified adult." },
         score: { ...SCORE, description: "aura or attractiveness, 1–100. Not for swag_gap." },
         archetype: { type: "string", description: `aura/attractiveness: 2–3 words, their language, ≤${VIBE_ARCHETYPE_MAX_LEN} chars («Тихая уверенность»).` },
         bars: {
