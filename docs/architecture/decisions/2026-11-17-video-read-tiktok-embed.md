@@ -47,3 +47,10 @@ The founder asked for Pinterest as well: a video pin is read as a video, and a p
 4. **Surfaces.** The iOS share sheet and the agent chat on both surfaces, because `findSharedVideoUrl` uses the same classifier. Telegram therefore gets Pinterest too, since the server reads it itself.
 5. **Demo mode.** Same behaviour.
 6. **Verified live from the Mac.** A photo pin (`99360735500167749`) and a video pin (`487022147210444696`) each returned text, a creator and an image that downloads. `/pin/1/` came back `not_video`.
+
+## 2026-11-20 — TikTok's embed page went empty too; TikTok joins Instagram on the phone
+
+1. **Re-measured on 2026-11-20, from both the droplet and the Mac.** `tiktok.com/embed/<id>` now serves a client-rendered shell without `__FRONTITY_CONNECT_STATE__`: 38 KB from the Mac, 8.6 KB from the droplet. `embed/v2`, `player/v1`, the video page and oEmbed are all empty as well. Every server-side TikTok read is `closed` again, including in Telegram.
+2. **Apple's LinkPresentation still works for TikTok.** It returns «TikTok · <author>» and the cover frame, but no caption.
+3. **Decision.** In the app, TikTok goes through the phone exactly like Instagram. The share sheet sends the preview with the first request, and the chat pre-reads TikTok links before sending. The server-side embed reader stays as the first try in case TikTok restores the state.
+4. **Telegram.** Both platforms are `closed` there, and the agent asks for a screenshot. A server path for TikTok would need either a signed TikTok API or a paid reader, and either one goes back to the founder.
