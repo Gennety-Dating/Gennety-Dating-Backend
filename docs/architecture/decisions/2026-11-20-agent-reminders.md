@@ -14,4 +14,6 @@ On 2026-11-19, while suggested replies were being built, the founder reversed fo
 4. **Retention.** `done`, `cancelled`, and `sent` rows are deleted 30 days after their last change.
 5. **Flag.** `AGENT_REMINDERS_ENABLED` (default off) and `AGENT_REMINDERS_USER_IDS` (preview). Off means no tools and no sends; rows that were set wait.
 6. **Demo mode.** The same as production. The demo does not speed time up. Pulse excludes demo and synthetic accounts.
-7. **Production.** The deploy, with its migration, waits for the founder's yes.
+7. **Wording.** The button reads «Сделано», not «Сделал»: the founder's word is masculine in Russian, and the button is the same for everyone (uk «Зроблено», en «Done», de «Erledigt», pl «Zrobione»).
+8. **The date in the prompt.** The prompts carry the weekday and the clock but never the date, and the first live run set «завтра вечером» two days off. Turns that offer the reminder tools now get a «Reminders» block with today's full date in the person's zone, plus «завтра» and «через неделю» as dates. After it: 0/24 failures in five languages (`apps/bot/scripts/reminders-eval.ts`).
+9. **Production.** The deploy, with its migration, waits for the founder's yes.

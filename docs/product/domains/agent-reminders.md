@@ -102,12 +102,12 @@ back.
 2. **App.** The reminder becomes an assistant row in the chat it was set in.
    If that chat is older than six hours, it goes to a new chat titled with the
    reminder. The row carries a reminder card (`messages.attachment`, kind
-   `agent_reminder`) with two buttons, «Сделал» and «Напомни завтра». A push
+   `agent_reminder`) with two buttons, «Сделано» and «Напомни завтра». A push
    follows: title «Напоминание», body the reminder text, payload
    `{ "type": "chat.reminder", "sessionId" }`, which opens that chat.
 3. **Telegram.** A bot message «Напоминаю: {text}» with two inline buttons,
-   «Сделал» and «Завтра».
-4. **The buttons.** «Сделал» marks the row `done`, answers with one short warm
+   «Сделано» and «Завтра».
+4. **The buttons.** «Сделано» marks the row `done`, answers with one short warm
    line and nothing after it. «Напомни завтра» moves `dueAt` to the same time
    tomorrow (state `snoozed`, then `pending` again), at most three times.
    Ignoring a reminder is fine: it stays `sent`, and nothing nags.
@@ -142,7 +142,7 @@ back.
    question 2). It never reaches the partner or any other person.
 4. **Success in Pulse.** `agent_reminders_set`, `agent_reminders_done_share`
    (done ÷ sent, the north star of this feature: the person did the thing),
-   `agent_reminders_snoozed_share`. A reminder marked «Сделал» counts as an
+   `agent_reminders_snoozed_share`. A reminder marked «Сделано» counts as an
    offline step in the suggested-replies metrics too.
 
 ## Phase 6 — Tests and the live check
@@ -155,7 +155,7 @@ back.
    called only on a real request, the time is right, a date reminder is
    declined, a «come back» reminder is refused.
 3. On the device: set one for two minutes ahead, see the receipt, get the
-   push, tap «Сделал».
+   push, tap «Сделано».
 
 ## Open questions for the founder
 
@@ -163,6 +163,6 @@ back.
    confirmation card first.
 2. The push: shows the reminder text on the lock screen (default — the person
    wrote it for themselves), or only «Напоминание от Gennety».
-3. The buttons: «Сделал» and «Напомни завтра» (default), or no buttons.
+3. The buttons: «Сделано» and «Напомни завтра» (default), or no buttons.
 4. Managing: in the chat only in this version (default), or also a
    «Напоминания» list in the iOS settings.
