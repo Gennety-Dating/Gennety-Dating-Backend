@@ -36,3 +36,14 @@ The founder chose «try reading on the iPhone» (option 1 above). If that fails,
 4. **Telegram.** Unchanged, because no phone sits between the link and our server there. Instagram stays `closed` there, and the agent asks for a screenshot.
 5. **Demo mode.** Same behaviour.
 6. **Downloading the video.** Not built. It would come back only if the preview path fails on real reels.
+
+## 2026-11-20 — Pinterest pins in the share sheet and the agent chat
+
+The founder asked for Pinterest as well: a video pin is read as a video, and a photo pin by its image.
+
+1. **Read path.** The server reads `widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=<id>`, the public JSON that Pinterest's own embed button loads, logged-out. It gives the text (title plus description), the largest image (`736x`/`564x`, on `pinimg.com`, now allowlisted), the creator, and a video list. A video pin can have `is_video: false`, so a non-empty `videos.video_list` counts as video too. Idea pins fall back to their first story image.
+2. **Links.** Any country site counts (`pinterest.com`, `de.pinterest.com`, `pinterest.co.uk`, …), as do slugged pins (`/pin/<slug>--<id>/`) and `pin.it/<code>` stubs (one allowlisted redirect hop). Profiles and boards are not pins and are not read.
+3. **Prompt.** A photo pin tells the model that it sees the pin's image itself, not a cover frame. A video pin reads like any other short video, from its cover and text.
+4. **Surfaces.** The iOS share sheet and the agent chat on both surfaces, because `findSharedVideoUrl` uses the same classifier. Telegram therefore gets Pinterest too, since the server reads it itself.
+5. **Demo mode.** Same behaviour.
+6. **Verified live from the Mac.** A photo pin (`99360735500167749`) and a video pin (`487022147210444696`) each returned text, a creator and an image that downloads. `/pin/1/` came back `not_video`.

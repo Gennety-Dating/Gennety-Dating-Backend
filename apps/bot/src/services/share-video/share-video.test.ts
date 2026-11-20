@@ -10,6 +10,7 @@ const { classifyShareVideoUrl, isSharePosterHost, isShareVideoHost } = await imp
 const {
   authorFromPreviewTitle,
   clearShareVideoCache,
+  parsePinterestPin,
   parseDevicePreview,
   parseShareVideoAnalysis,
   readSharedVideo,
@@ -348,5 +349,63 @@ describe("the phone's link preview (decision 2026-11-20)", () => {
     const d = deps({ metadata: async () => null });
     const result = await readSharedVideo(REEL, { ...viewer, userId: "u1" }, d, null);
     expect(result.ok && result.video.status).toBe("closed");
+  });
+});
+
+describe("Pinterest pins (decision 2026-11-20)", () => {
+  it("classifies pin URLs on any country site, slugged pins and pin.it stubs", () => {
+    expect(classifyShareVideoUrl("https://www.pinterest.com/pin/99360735500167749/")).toEqual({
+      platform: "pinterest",
+      externalId: "99360735500167749",
+      url: "https://www.pinterest.com/pin/99360735500167749/",
+    });
+    expect(classifyShareVideoUrl("https://de.pinterest.com/pin/cozy-flat--99360735500167749/")?.externalId).toBe("99360735500167749");
+    expect(classifyShareVideoUrl("https://pinterest.co.uk/pin/99360735500167749")?.platform).toBe("pinterest");
+    expect(classifyShareVideoUrl("https://pin.it/3xYzAbC")).toEqual({
+      platform: "pinterest",
+      externalId: null,
+      url: "https://pin.it/3xYzAbC",
+    });
+    expect(classifyShareVideoUrl("https://www.pinterest.com/kentbrew/")).toBeNull();
+    expect(classifyShareVideoUrl("https://pinterest.com.evil.tld/pin/99360735500167749/")).toBeNull();
+    expect(isSharePosterHost("i.pinimg.com")).toBe(true);
+    expect(isShareVideoHost("widgets.pinterest.com")).toBe(true);
+  });
+
+  it("reads a photo pin: text, the largest image, the creator", () => {
+    const pin = parsePinterestPin(JSON.stringify({
+      status: "success",
+      data: [{
+        description: "Linen shirt &amp; straw hat",
+        is_video: false,
+        images: { "236x": { url: "https://i.pinimg.com/236x/a.jpg" }, "564x": { url: "https://i.pinimg.com/564x/a.jpg" } },
+        pinner: { full_name: "Kyiv Style", username: "kyivstyle" },
+      }],
+    }));
+    expect(pin).toEqual({
+      caption: "Linen shirt & straw hat",
+      author: "Kyiv Style",
+      posterUrl: "https://i.pinimg.com/564x/a.jpg",
+      video: false,
+    });
+  });
+
+  it("marks a pin with a video list as a video even when is_video is false", () => {
+    const pin = parsePinterestPin(JSON.stringify({
+      data: [{
+        description: " ",
+        is_video: false,
+        images: { "564x": { url: "https://i.pinimg.com/564x/v.jpg" } },
+        videos: { video_list: { V_720P: { thumbnail: "https://i.pinimg.com/videos/thumb.jpg" } } },
+      }],
+    }));
+    expect(pin?.video).toBe(true);
+    expect(pin?.caption).toBeUndefined();
+    expect(pin?.posterUrl).toBe("https://i.pinimg.com/564x/v.jpg");
+  });
+
+  it("is null for an empty or broken answer", () => {
+    expect(parsePinterestPin(JSON.stringify({ data: [null] }))).toBeNull();
+    expect(parsePinterestPin("<html>")).toBeNull();
   });
 });

@@ -2799,7 +2799,8 @@ paths:
       operationId: shareVideoRead
       summary: Read a shared short video (iOS share sheet)
       description: |
-        «Поделиться → Gennety» for a Reel, a TikTok or a YouTube Short
+        «Поделиться → Gennety» for a Reel, a TikTok, a YouTube Short or a
+        Pinterest pin (photo or video, decision 2026-11-20)
         (decision journal 2026-10-24). The server reads only what a logged-out
         browser gets — caption, title, author, cover frame — and one vision
         call turns it into a title, a summary, one interest, one item or place
@@ -9765,7 +9766,7 @@ components:
       required: [status, platform, url, questions]
       properties:
         status: { type: string, enum: [read, closed] }
-        platform: { type: string, enum: [instagram, tiktok, youtube] }
+        platform: { type: string, enum: [instagram, tiktok, youtube, pinterest] }
         url: { type: string, description: "Canonical, tracking-stripped URL" }
         author: { type: string }
         posterUrl: { type: string, description: "https, platform CDN only" }

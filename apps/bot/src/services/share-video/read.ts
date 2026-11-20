@@ -11,6 +11,7 @@ import { fetchShortVideoMetadata, resolveShortVideoRef } from "../short-video/me
 import {
   fetchAllowlistedImage,
   fetchAllowlistedPage,
+  resolveAllowlistedRedirect,
 } from "../short-video/safe-fetch.js";
 import {
   classifyShareVideoUrl,
@@ -74,6 +75,8 @@ export interface ShareVideoMetadata {
   posterUrl?: string | undefined;
   /** The canonical ref after a share stub was resolved. */
   ref: ShareVideoRef;
+  /** Pinterest only: a video pin rather than a photo. */
+  pinVideo?: boolean | undefined;
 }
 
 export interface ShareVideoAnalysis {
@@ -88,6 +91,8 @@ export interface ShareVideoAnalysis {
 
 export interface ShareVideoAnalysisInput {
   platform: ShareVideoPlatform;
+  /** A Pinterest photo pin: there is an image, not a video. */
+  photo?: boolean | undefined;
   caption?: string | undefined;
   author?: string | undefined;
   poster?: Buffer | undefined;
@@ -286,8 +291,85 @@ interface YouTubeOembed {
   thumbnail_url?: unknown;
 }
 
+interface PinterestPin {
+  description?: unknown;
+  title?: unknown;
+  grid_title?: unknown;
+  is_video?: unknown;
+  images?: Record<string, { url?: unknown; width?: unknown } | undefined>;
+  videos?: { video_list?: Record<string, { thumbnail?: unknown } | undefined> } | null;
+  pinner?: { full_name?: unknown; username?: unknown } | null;
+  native_creator?: { full_name?: unknown } | null;
+  story_pin_data?: { pages?: Array<{ blocks?: Array<{ image?: { images?: Record<string, { url?: unknown }> } }> }> } | null;
+}
+
+/**
+ * One pin's widget JSON (`widgets.pinterest.com/v3/pidgets/pins/info`, what
+ * Pinterest's own embed button loads, public and logged-out) → metadata.
+ * Exported for tests.
+ */
+export function parsePinterestPin(json: string): Omit<ShareVideoMetadata, "ref"> & { video: boolean } | null {
+  let pin: PinterestPin | undefined;
+  try {
+    const payload = JSON.parse(json) as { data?: PinterestPin[] | null };
+    pin = payload.data?.[0];
+  } catch {
+    return null;
+  }
+  if (!pin || typeof pin !== "object") return null;
+  const str = (value: unknown): string | undefined =>
+    typeof value === "string" && value.trim()
+      ? value
+          .replace(/&quot;/gu, '"')
+          .replace(/&#0?39;|&apos;/gu, "'")
+          .replace(/&lt;/gu, "<")
+          .replace(/&gt;/gu, ">")
+          .replace(/&amp;/gu, "&")
+      : undefined;
+  const caption = clip([str(pin.title) ?? str(pin.grid_title), str(pin.description)].filter(Boolean).join(". "), 600);
+  const images = pin.images ?? {};
+  const best = ["736x", "564x", "474x", "orig", "237x", "236x"].map((size) => str(images[size]?.url)).find(Boolean);
+  const videoList = Object.values(pin.videos?.video_list ?? {});
+  const videoThumb = videoList.map((entry) => str(entry?.thumbnail)).find(Boolean);
+  const storyImage = pin.story_pin_data?.pages
+    ?.flatMap((page) => page.blocks ?? [])
+    .map((block) => {
+      const sizes = block.image?.images ?? {};
+      return str(sizes["736x"]?.url) ?? str(sizes["originals"]?.url) ?? Object.values(sizes).map((s) => str(s?.url)).find(Boolean);
+    })
+    .find(Boolean);
+  const posterUrl = best ?? videoThumb ?? storyImage;
+  const author = clip(str(pin.native_creator?.full_name) ?? str(pin.pinner?.full_name) ?? str(pin.pinner?.username), 100);
+  if (!caption && !posterUrl) return null;
+  return { caption, author, posterUrl, video: pin.is_video === true || videoList.length > 0 };
+}
+
+async function readPinterest(ref: ShareVideoRef, timeoutMs: number): Promise<ShareVideoMetadata | null> {
+  let id = ref.externalId;
+  if (!id) {
+    const hop = await resolveAllowlistedRedirect(ref.url, isShareVideoHost, { timeoutMs });
+    if (!hop.ok) return null;
+    const resolved = classifyShareVideoUrl(hop.finalUrl);
+    if (resolved?.platform !== "pinterest" || !resolved.externalId) return null;
+    id = resolved.externalId;
+  }
+  const endpoint = `https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=${encodeURIComponent(id)}`;
+  const page = await fetchAllowlistedPage(endpoint, isShareVideoHost, { timeoutMs });
+  if (!page.ok) return null;
+  const pin = parsePinterestPin(page.body);
+  if (!pin) return null;
+  return {
+    ref: { platform: "pinterest", externalId: id, url: `https://www.pinterest.com/pin/${id}/` },
+    caption: pin.caption,
+    author: pin.author,
+    posterUrl: pin.posterUrl,
+    pinVideo: pin.video,
+  };
+}
+
 async function defaultMetadata(ref: ShareVideoRef): Promise<ShareVideoMetadata | null> {
   const timeoutMs = env.SHORT_VIDEO_FETCH_TIMEOUT_MS;
+  if (ref.platform === "pinterest") return readPinterest(ref, timeoutMs);
   if (ref.platform === "youtube") {
     // YouTube's oEmbed is public and stable; the watch page is megabytes of
     // script and adds nothing the title does not already say.
@@ -306,7 +388,7 @@ async function defaultMetadata(ref: ShareVideoRef): Promise<ShareVideoMetadata |
     return { ref, caption, author: clip(payload.author_name, 100), posterUrl };
   }
 
-  const short = { platform: ref.platform, externalId: ref.externalId, url: ref.url };
+  const short = { platform: ref.platform as "tiktok" | "instagram", externalId: ref.externalId, url: ref.url };
   // Instagram metadata already follows redirects and parses that final page.
   // Resolving a share stub first fetched the same reel HTML twice in series.
   const resolved = short.platform === "instagram"
@@ -369,12 +451,19 @@ const ANALYSIS_SCHEMA = {
 
 export function analysisPrompt(input: Omit<ShareVideoAnalysisInput, "poster"> & { hasCover: boolean }): string {
   const language = LANGUAGE_NAMES[input.language];
-  const platform = { tiktok: "TikTok", instagram: "Instagram Reels", youtube: "YouTube" }[input.platform];
+  const platform = { tiktok: "TikTok", instagram: "Instagram Reels", youtube: "YouTube", pinterest: "Pinterest" }[
+    input.platform
+  ];
+  const thing = input.photo ? `${platform} pin (a photo)` : `${platform} video`;
   return [
-    `Someone shared a ${platform} video into a dating app to save what they liked about it.`,
-    input.hasCover
-      ? "You see its COVER FRAME and its caption — not the video itself."
-      : "You only have its caption — there is no cover image.",
+    `Someone shared a ${thing} into a dating app to save what they liked about it.`,
+    input.photo
+      ? input.hasCover
+        ? "You see the PIN'S IMAGE itself and its text."
+        : "You only have the pin's text — there is no image."
+      : input.hasCover
+        ? "You see its COVER FRAME and its caption — not the video itself."
+        : "You only have its caption — there is no cover image.",
     ...(input.caption ? ["", `Caption: "${input.caption.slice(0, 600)}"`] : []),
     ...(input.author ? [`Author: ${input.author.slice(0, 100)}`] : []),
     ...(input.cityKey ? [`The person lives in: ${input.cityKey}.`] : []),
@@ -606,6 +695,7 @@ async function describeVideo(
   const analyzeFn = deps.analyze ?? defaultAnalyze;
   const analysis = await analyzeFn({
     platform: ref.platform,
+    photo: ref.platform === "pinterest" && meta.pinVideo === false,
     caption: meta.caption,
     author: meta.author,
     poster: poster ?? undefined,

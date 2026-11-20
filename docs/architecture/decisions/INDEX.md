@@ -1,7 +1,7 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 487 entries
+# Decision index — all 488 entries
 # Decision index — all 485 entries
 # Decision index — all 453 entries
 # Decision index — all 454 entries
@@ -10,6 +10,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-20 | Pinterest in the share sheet + agent chat: public widget JSON (`widgets.pinterest.com/v3/pidgets/pins/info`) → text, largest image, creator, video flag (a `video_list` counts even with `is_video:false`); country sites, slugged pins, `pin.it` stubs; photo pins prompt as «the pin's image itself»; Telegram gets it too; demo same | [2026-11-17-video-read-tiktok-embed.md](./2026-11-17-video-read-tiktok-embed.md) |
 | 2026-11-20 | Instagram via the phone: the app sends Apple LinkPresentation's title / caption start / cover as optional `preview` on `/v1/me/share/video`; server read first, preview only as fallback, preview-built reads cached per person only (never shared); chat + `/video/ask` find it by `userId`; Telegram unchanged; video download not built (founder's fallback idea) | [2026-11-17-video-read-tiktok-embed.md](./2026-11-17-video-read-tiktok-embed.md) |
 | 2026-11-20 | Personal reminders from the chat («напомни в пятницу»): founder reversed «no reminder step» and approved the plan's four defaults — set at once with a code-owned receipt, push shows the text, «Сделал» / «Напомни завтра» (≤3 snoozes), list and cancel in the chat only; on request only, about life not the chat, no duplicate of date reminders, quiet hours unless an exact time; new additive table `agent_reminders`; 30-day retention; flag off by default; demo same; deploy waits for yes | [2026-11-20-agent-reminders.md](./2026-11-20-agent-reminders.md) |
 | 2026-11-19 | Agent long-term memory approved by the founder (schema, screen, Telegram card + past chats; backfill 90 days and demo as production by default): short notes in the person's language — fact, person, story, followup, date — one memory for Telegram and the app; written after a conversation by `MODELS.fast` beside the chat digest and checked by the server (ids, caps, sensitive filter, pause); a ≤450-token block every turn plus `recall` (`remembering`), `remember`, `update_memory`, `forget_memory`; never health, crisis, special categories, third-party identifiers or partner data; forget is a hard delete, the chat stays; proposed tables `agent_memories`, `agent_memory_state`, column `chat_sessions.memory_scanned_count`, no vector index; screen «Что Gennety помнит» recommended | [2026-11-19-long-term-memory](./2026-11-19-long-term-memory.md) |
