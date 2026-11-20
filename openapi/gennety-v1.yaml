@@ -9726,6 +9726,26 @@ components:
       required: [url]
       properties:
         url: { type: string, maxLength: 2000 }
+        preview:
+          $ref: "#/components/schemas/ShareVideoDevicePreview"
+
+    ShareVideoDevicePreview:
+      type: object
+      description: |
+        What the phone's own link preview (Apple LinkPresentation, the fetcher
+        iMessage uses) saw — decision 2026-11-20. Optional. Used only when the
+        server's own read gets nothing (Instagram), and the resulting read is
+        cached for this person alone. A later call for the same URL by the same
+        person (the sheet's questions, the agent chat) finds it without
+        sending the preview again. The response then has no `posterUrl`: the
+        app shows the cover it already has.
+      properties:
+        title: { type: string, maxLength: 300, description: "LPLinkMetadata.title, e.g. «Name on Instagram»" }
+        summary: { type: string, maxLength: 600, description: "The caption's start, when iOS gave one" }
+        image:
+          type: string
+          format: byte
+          description: Base64 JPEG or PNG cover, downscaled on the phone; at most 300 KB decoded (the JSON body limit is 512 KB)
 
     ShareVideoItem:
       type: object

@@ -8,7 +8,9 @@ vi.mock("@gennety/db", () => ({ prisma: {} }));
 const { classifyShortVideoUrl } = await import("../short-video/links.js");
 const { classifyShareVideoUrl, isSharePosterHost, isShareVideoHost } = await import("./links.js");
 const {
+  authorFromPreviewTitle,
   clearShareVideoCache,
+  parseDevicePreview,
   parseShareVideoAnalysis,
   readSharedVideo,
 } = await import("./read.js");
@@ -283,5 +285,68 @@ describe("addShareInterest", () => {
     expect(await addShareInterest("u", "x".repeat(51), store([]).db)).toEqual({ ok: false, error: "bad-request" });
     expect(await addShareInterest("u", 5, store([]).db)).toEqual({ ok: false, error: "bad-request" });
     expect(await addShareInterest("u", "x", store(null).db)).toEqual({ ok: false, error: "not-found" });
+  });
+});
+
+const REEL = "https://www.instagram.com/reel/C9xYzAbc12/?igsh=1";
+const JPEG_COVER = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)]);
+
+describe("the phone's link preview (decision 2026-11-20)", () => {
+  beforeEach(() => clearShareVideoCache());
+
+  it("parses a preview, refusing an image that is not JPEG/PNG or too big", () => {
+    expect(parseDevicePreview(null)).toBeNull();
+    expect(parseDevicePreview({ title: "  ", summary: "" })).toBeNull();
+    const ok = parseDevicePreview({ title: "Kyiv Coffee on Instagram", image: JPEG_COVER.toString("base64") });
+    expect(ok?.image?.equals(JPEG_COVER)).toBe(true);
+    expect(parseDevicePreview({ title: "x", image: Buffer.from("<svg/>").toString("base64") })?.image).toBeUndefined();
+    const huge = Buffer.concat([JPEG_COVER, Buffer.alloc(400 * 1024)]).toString("base64");
+    expect(parseDevicePreview({ title: "x", image: huge })?.image).toBeUndefined();
+  });
+
+  it("names the author from Instagram and TikTok preview titles in any language", () => {
+    expect(authorFromPreviewTitle("Just An Egg 🥚 в Instagram")).toBe("Just An Egg 🥚");
+    expect(authorFromPreviewTitle("Kyiv Coffee on Instagram: \"flat white\"")).toBe("Kyiv Coffee");
+    expect(authorFromPreviewTitle("TikTok · Zach King")).toBe("Zach King");
+    expect(authorFromPreviewTitle("A caption with no author")).toBeUndefined();
+  });
+
+  it("builds the read from the preview when the server gets nothing, for that person only", async () => {
+    const seen: Array<{ caption?: string | undefined; author?: string | undefined; poster?: Buffer | undefined }> = [];
+    const d = deps({
+      metadata: async () => null,
+      analyze: vi.fn(async (input) => {
+        seen.push(input);
+        return analysis();
+      }),
+    });
+    const preview = { title: "Kyiv Coffee в Instagram", summary: "Лучший флэт уайт на Подоле", image: JPEG_COVER };
+    const mine = await readSharedVideo(REEL, { ...viewer, userId: "u1" }, d, preview);
+    expect(mine.ok && mine.video.status).toBe("read");
+    expect(mine.ok && mine.video.author).toBe("Kyiv Coffee");
+    expect(mine.ok && mine.video.posterUrl).toBeUndefined();
+    expect(seen[0]).toMatchObject({ caption: "Лучший флэт уайт на Подоле", author: "Kyiv Coffee" });
+    expect(seen[0]?.poster?.equals(JPEG_COVER)).toBe(true);
+
+    // The agent's turn and the sheet's questions come without a preview.
+    const again = await readSharedVideo(REEL, { ...viewer, userId: "u1" }, d);
+    expect(again.ok && again.video.status).toBe("read");
+    // Another person never gets the first person's preview-built read.
+    const other = await readSharedVideo(REEL, { ...viewer, userId: "u2" }, d);
+    expect(other.ok && other.video.status).toBe("closed");
+    expect(d.analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers the server's own read when it works", async () => {
+    const d = deps({ analyze: vi.fn(async () => analysis()) });
+    const result = await readSharedVideo(TIKTOK, { ...viewer, userId: "u1" }, d, { title: "TikTok · forged", image: JPEG_COVER });
+    expect(result.ok && result.video.author).toBe("kyiv.coffee");
+    expect(result.ok && result.video.posterUrl).toBe("https://p16-sign.tiktokcdn.com/poster.jpeg");
+  });
+
+  it("stays closed when neither the server nor the preview has anything", async () => {
+    const d = deps({ metadata: async () => null });
+    const result = await readSharedVideo(REEL, { ...viewer, userId: "u1" }, d, null);
+    expect(result.ok && result.video.status).toBe("closed");
   });
 });

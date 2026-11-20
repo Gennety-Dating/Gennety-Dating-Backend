@@ -110,6 +110,8 @@ export interface VideoTakeTurn {
   recentUserTexts: readonly string[];
   language: Language;
   cityKey: string | null;
+  /** Finds a read the app built from this person's own link preview. */
+  userId?: string | undefined;
   now?: Date;
   /**
    * Called right before a link from THIS turn's message is read, so the app's
@@ -151,7 +153,7 @@ export async function videoTakeBlocks(
     }
     const outcome = await readSharedVideo(
       url,
-      { language: turn.language, cityKey: turn.cityKey },
+      { language: turn.language, cityKey: turn.cityKey, userId: turn.userId },
       deps.read,
     ).catch((err: unknown) => {
       console.warn("[video-takes] read failed:", err);

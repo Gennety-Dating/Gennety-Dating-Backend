@@ -95,6 +95,29 @@ export interface ShareVideoAnalysisInput {
   cityKey: string | null;
 }
 
+/**
+ * What the phone itself saw of the link (decision 2026-11-20): Apple's
+ * LinkPresentation — the fetcher iMessage uses for link cards — run on the
+ * person's iPhone. Instagram serves our server an empty app shell, but still
+ * gives Apple's preview the post's title, the start of its caption and the
+ * cover. Used only when the server's own read gets nothing, and the result is
+ * cached for this person alone: the app could send anything, so one person's
+ * preview must never become what another person's link reads as.
+ */
+export interface ShareVideoDevicePreview {
+  /** LPLinkMetadata.title — «Author on Instagram», «TikTok · Author». */
+  title?: string | undefined;
+  /** The caption's start, when iOS gave one. */
+  summary?: string | undefined;
+  /** The cover the phone downloaded: JPEG or PNG, already downscaled. */
+  image?: Buffer | undefined;
+}
+
+export const SHARE_VIDEO_PREVIEW_TITLE_MAX = 300;
+export const SHARE_VIDEO_PREVIEW_SUMMARY_MAX = 600;
+/** Decoded bytes; the app sends a ~720 px JPEG well under this. */
+export const SHARE_VIDEO_PREVIEW_IMAGE_MAX = 300 * 1024;
+
 export interface ShareVideoReadDeps {
   metadata?: (ref: ShareVideoRef) => Promise<ShareVideoMetadata | null>;
   poster?: (url: string) => Promise<Buffer | null>;
@@ -139,6 +162,11 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<ShareVideoReadOutcome>>();
+
+/** The cache key for a read built from one person's own device preview. */
+function personalKey(userId: string, key: string): string {
+  return `device:${userId}|${key}`;
+}
 
 /** Tests only. */
 export function clearShareVideoCache(): void {
@@ -195,6 +223,59 @@ function httpsPoster(raw: string | undefined): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/* ── the phone's preview ────────────────────────────────────────────────── */
+
+function isJpegOrPng(buffer: Buffer): boolean {
+  const jpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const png =
+    buffer.length > 8 &&
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  return jpeg || png;
+}
+
+/**
+ * The request body's `preview` → a clean preview, or null when it carries
+ * nothing usable. Exported for the route and tests.
+ */
+export function parseDevicePreview(raw: unknown): ShareVideoDevicePreview | null {
+  if (!raw || typeof raw !== "object") return null;
+  const body = raw as Record<string, unknown>;
+  const title = clip(body.title, SHARE_VIDEO_PREVIEW_TITLE_MAX);
+  const summary = clip(body.summary, SHARE_VIDEO_PREVIEW_SUMMARY_MAX);
+  let image: Buffer | undefined;
+  if (typeof body.image === "string" && body.image.length <= Math.ceil(SHARE_VIDEO_PREVIEW_IMAGE_MAX / 3) * 4 + 4) {
+    const decoded = Buffer.from(body.image, "base64");
+    if (decoded.length > 0 && decoded.length <= SHARE_VIDEO_PREVIEW_IMAGE_MAX && isJpegOrPng(decoded)) {
+      image = decoded;
+    }
+  }
+  if (!title && !summary && !image) return null;
+  return { title, summary, image };
+}
+
+/**
+ * The author out of a LinkPresentation title. Instagram's reads
+ * «Name on Instagram» / «Name в Instagram» (in the phone's language); TikTok's
+ * «TikTok · Name». Anything else is not an author we can name.
+ */
+export function authorFromPreviewTitle(title: string | undefined): string | undefined {
+  if (!title) return undefined;
+  const instagram = /^(.+?)\s+(?:on|в|у|auf|na|w)\s+Instagram\b/iu.exec(title);
+  if (instagram?.[1]) return clip(instagram[1], 100);
+  const tiktok = /^TikTok\s*[·•|-]\s*(.+)$/iu.exec(title);
+  if (tiktok?.[1]) return clip(tiktok[1], 100);
+  return undefined;
+}
+
+/** The preview as metadata, or null when it says nothing about the video. */
+function metadataFromPreview(ref: ShareVideoRef, preview: ShareVideoDevicePreview): ShareVideoMetadata | null {
+  const author = authorFromPreviewTitle(preview.title);
+  // A title that is not «Author on Instagram» is the post's own text.
+  const caption = preview.summary ?? (author ? undefined : preview.title);
+  if (!caption && !preview.image) return null;
+  return { ref, caption, author };
 }
 
 /* ── default deps ───────────────────────────────────────────────────────── */
@@ -411,10 +492,18 @@ export function parseShareVideoAnalysis(raw: string): ShareVideoAnalysis | null 
 
 /* ── the read ───────────────────────────────────────────────────────────── */
 
+export interface ShareVideoViewer {
+  language: Language;
+  cityKey: string | null;
+  /** Who is asking: finds a read built from this person's own device preview. */
+  userId?: string | undefined;
+}
+
 export async function readSharedVideo(
   rawUrl: string,
-  viewer: { language: Language; cityKey: string | null },
+  viewer: ShareVideoViewer,
   deps: ShareVideoReadDeps = {},
+  preview: ShareVideoDevicePreview | null = null,
 ): Promise<ShareVideoReadOutcome> {
   const ref = classifyShareVideoUrl(rawUrl);
   if (!ref) return { ok: false, error: "not_video" };
@@ -422,22 +511,58 @@ export async function readSharedVideo(
   const now = deps.now ?? Date.now;
   // City affects place suggestions in the prompt, so it is part of both keys.
   const key = `${ref.url}|${viewer.language}|${viewer.cityKey ?? ""}`;
-  const cached = cacheGet(key, now());
-  if (cached) return cached;
-  const pending = inFlight.get(key);
-  if (pending) return pending;
-  const work = readUncachedVideo(ref, viewer, deps, key, now);
-  inFlight.set(key, work);
-  try {
-    return await work;
-  } finally {
-    if (inFlight.get(key) === work) inFlight.delete(key);
+  // This person's own device-built read first: the agent's turn and the
+  // sheet's questions come without a preview and must still find it.
+  if (viewer.userId) {
+    const mine = cacheGet(personalKey(viewer.userId, key), now());
+    if (mine && mine.video.status === "read") return mine;
   }
+  const cached = cacheGet(key, now());
+  if (cached && !(preview && viewer.userId && cached.video.status === "closed")) return cached;
+
+  let shared: ShareVideoReadOutcome;
+  if (cached) {
+    shared = cached;
+  } else {
+    const pending = inFlight.get(key);
+    if (pending) {
+      shared = await pending;
+    } else {
+      const work = readUncachedVideo(ref, viewer, deps, key, now);
+      inFlight.set(key, work);
+      try {
+        shared = await work;
+      } finally {
+        if (inFlight.get(key) === work) inFlight.delete(key);
+      }
+    }
+  }
+  if (!shared.ok || shared.video.status === "read" || !preview || !viewer.userId) return shared;
+  return (await readFromDevicePreview(ref, viewer, deps, preview, personalKey(viewer.userId, key), now)) ?? shared;
+}
+
+/**
+ * The server got nothing; build the read from what the phone saw. Null when
+ * the preview says nothing either, so the caller keeps its `closed`.
+ */
+async function readFromDevicePreview(
+  ref: ShareVideoRef,
+  viewer: ShareVideoViewer,
+  deps: ShareVideoReadDeps,
+  preview: ShareVideoDevicePreview,
+  key: string,
+  now: () => number,
+): Promise<ShareVideoReadOutcome | null> {
+  const meta = metadataFromPreview(ref, preview);
+  if (!meta) return null;
+  const outcome = await describeVideo(ref, viewer, deps, meta, preview.image ?? null, undefined);
+  if (outcome.cache) cachePut(key, outcome.outcome, now());
+  return outcome.outcome;
 }
 
 async function readUncachedVideo(
   ref: ShareVideoRef,
-  viewer: { language: Language; cityKey: string | null },
+  viewer: ShareVideoViewer,
   deps: ShareVideoReadDeps,
   key: string,
   now: () => number,
@@ -459,6 +584,25 @@ async function readUncachedVideo(
   const posterFn = deps.poster ?? defaultPoster;
   const poster = posterUrl ? await posterFn(posterUrl).catch(() => null) : null;
 
+  const described = await describeVideo(ref, viewer, deps, meta, poster, posterUrl);
+  if (described.cache) {
+    cachePut(key, described.outcome, now());
+    if (described.outcome.video.status === "read") {
+      cachePut(`${described.outcome.video.url}|${viewer.language}|${viewer.cityKey ?? ""}`, described.outcome, now());
+    }
+  }
+  return described.outcome;
+}
+
+/** Metadata + cover → the read, through one vision call. Never throws. */
+async function describeVideo(
+  ref: ShareVideoRef,
+  viewer: ShareVideoViewer,
+  deps: ShareVideoReadDeps,
+  meta: ShareVideoMetadata,
+  poster: Buffer | null,
+  posterUrl: string | undefined,
+): Promise<{ outcome: Extract<ShareVideoReadOutcome, { ok: true }>; cache: boolean }> {
   const analyzeFn = deps.analyze ?? defaultAnalyze;
   const analysis = await analyzeFn({
     platform: ref.platform,
@@ -477,8 +621,7 @@ async function readUncachedVideo(
       video: { status: "closed" as const, platform: ref.platform, url: canonical, questions: [] },
       grounding: {},
     };
-    cachePut(key, closed, now());
-    return closed;
+    return { outcome: closed, cache: true };
   }
 
   const video: ShareVideo = {
@@ -499,9 +642,5 @@ async function readUncachedVideo(
     grounding: { caption: meta.caption, coverDescription: analysis?.coverDescription || undefined },
   };
   // A model miss is not cached: the next share of the same reel tries again.
-  if (analysis) {
-    cachePut(key, outcome, now());
-    cachePut(`${canonical}|${viewer.language}|${viewer.cityKey ?? ""}`, outcome, now());
-  }
-  return outcome;
+  return { outcome, cache: Boolean(analysis) };
 }

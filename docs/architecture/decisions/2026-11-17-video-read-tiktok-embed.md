@@ -19,3 +19,20 @@ The founder reported that almost every TikTok or Reels link shared to Gennety en
    - a paid scraping API (Apify and similar, per-request cost, terms-of-service risk).
 4. **Honest dead end.** When a video still cannot be read, the agent's block now tells the model to say so briefly and ask for a screenshot of the video or a line on what is in it. The iOS share-sheet copy `share.video.closed.body` should say the same thing instead of «try another link»; that copy change goes with the Instagram decision.
 5. **Demo mode.** Same behaviour. The read is a public-page fetch plus one vision call, with no paid step and no write outside the chat.
+
+## 2026-11-20 — Instagram: the phone reads the link preview
+
+The founder chose «try reading on the iPhone» (option 1 above). If that fails, the founder suggested downloading the video the way Telegram downloader bots do, with the load kept off our servers.
+
+1. **Measured first.** Apple's LinkPresentation was run on the Mac with the same framework the iPhone has.
+   - `instagram.com/p/BsOGulcndj-/` and its `/reel/` twin returned the title «Just An Egg 🥚 в Instagram», the start of the caption (about 70 characters, ending in «…») and the real post image (400×400 JPEG).
+   - The TikTok link returned «TikTok · Zach King» and a 1024×537 cover frame.
+   - Apple's fetcher gets the tags that our server's fetch does not. It does this from the person's own connection and with Apple's own client, so nothing on our side pretends to be anyone.
+2. **Contract.** `POST /v1/me/share/video` takes an optional `preview` with `title`, `summary` and `image` (base64 JPEG/PNG, at most 300 KB decoded). The rules:
+   - The server's own read always comes first. The preview is used only when that read returns nothing.
+   - A read built from a preview is cached under the person's id and never under the shared URL key. The app could send anything, so one person's preview must never become what another person's link reads as.
+   - The agent chat (`videoTakeBlocks` gets `userId`) and `/video/ask` find that personal read without sending the preview again.
+3. **The caption is truncated.** iOS exposes the caption's start only through `LPLinkMetadata`'s non-public `summary` key. The app reads it defensively (`responds(to:)`, KVC) and sends nothing when it is missing. The title and the cover still go.
+4. **Telegram.** Unchanged, because no phone sits between the link and our server there. Instagram stays `closed` there, and the agent asks for a screenshot.
+5. **Demo mode.** Same behaviour.
+6. **Downloading the video.** Not built. It would come back only if the preview path fails on real reels.

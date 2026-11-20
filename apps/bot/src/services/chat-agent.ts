@@ -1324,6 +1324,7 @@ async function buildChatMessages(
       recentUserTexts,
       language: options.viewer?.language ?? "en",
       cityKey: options.viewer?.cityKey ?? null,
+      userId,
       ...(options.onWatch ? { onWatch: options.onWatch } : {}),
     }).catch((err: unknown) => {
       console.warn("[chat] video-take blocks unavailable:", err);

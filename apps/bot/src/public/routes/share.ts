@@ -5,7 +5,11 @@ import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
 import { shareAskLimiter, shareVideoLimiter } from "../rate-limit.js";
 import { usageGuard } from "../usage-middleware.js";
-import { readSharedVideo, type ShareVideoReadDeps } from "../../services/share-video/read.js";
+import {
+  parseDevicePreview,
+  readSharedVideo,
+  type ShareVideoReadDeps,
+} from "../../services/share-video/read.js";
 import {
   SHARE_ASK_HISTORY_MAX,
   SHARE_ASK_QUESTION_MAX,
@@ -80,12 +84,21 @@ export function createShareRouter(deps: ShareRouterDeps = {}): Router {
   router.use(requireAuth);
 
   router.post("/video", shareVideoLimiter, usageGuard, async (req: Request, res: Response): Promise<void> => {
-    const url = readUrl((req.body ?? {}) as Record<string, unknown>);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const url = readUrl(body);
     if (!url) {
       res.status(400).json({ error: "bad-request" });
       return;
     }
-    const result = await readSharedVideo(url, await viewer(req.userId!), deps.read);
+    // What the phone's own link preview saw (decision 2026-11-20); optional,
+    // used only when the server's read gets nothing, kept for this person.
+    const preview = parseDevicePreview(body.preview);
+    const result = await readSharedVideo(
+      url,
+      { ...(await viewer(req.userId!)), userId: req.userId! },
+      deps.read,
+      preview,
+    );
     if (!result.ok) {
       res.status(400).json({ error: "not-video" });
       return;
@@ -103,8 +116,9 @@ export function createShareRouter(deps: ShareRouterDeps = {}): Router {
       return;
     }
     const who = await viewer(req.userId!);
-    // Cached for six hours after the sheet's own read, so this is free.
-    const read = await readSharedVideo(url, who, deps.read);
+    // Cached for six hours after the sheet's own read, so this is free —
+    // including a read built from this person's device preview.
+    const read = await readSharedVideo(url, { ...who, userId: req.userId! }, deps.read);
     if (!read.ok) {
       res.status(400).json({ error: "not-video" });
       return;
