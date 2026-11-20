@@ -37,6 +37,23 @@ change, `pnpm install` no longer hoists a root `node_modules/.bin/tsx`, so
 (observed live on the 2026-07-17 deploy). Keep the cwd at `/opt/gennety` —
 `.env` resolution is file-relative and unaffected, but stay consistent.
 
+## NGINX HTTP/2 advisory check (2026-11-20)
+
+The DigitalOcean `My Team` inventory listed `Gennety-Dating` as its only
+Droplet. On the host, Caddy owned the public HTTP and HTTPS listeners. The SSH
+audit found no NGINX or OpenResty packages, binaries, or running processes and
+no running containers. CVE-2026-123007 and CVE-2026-123633 therefore did not
+require remediation on this Droplet. Direct HTTPS requests to the Droplet
+confirmed that the public API and calendar endpoints responded and that the
+admin API returned `401` without credentials.
+
+If a future deployment adds NGINX, include both host packages and running
+container images in the audit. For these CVEs, use a fixed upstream release
+(1.30.7 stable or 1.31.9 mainline and later in those branches) or a confirmed
+distribution backport. After updating, verify the running binary or deployed
+image digest and confirm the previous workers have exited. See the
+[NGINX security advisories](https://nginx.org/en/security_advisories.html).
+
 ## Autonomous Deploy Rule
 
 When asked to deploy, use this file as the canonical source and proceed without
