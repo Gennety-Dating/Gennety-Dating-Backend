@@ -69,6 +69,7 @@ import { chatSessionDigestTick } from "./workers/chat-session-digest.js";
 import { agentMemoryTick } from "./workers/agent-memory.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
+import { agentRemindersTick } from "./workers/agent-reminders.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
 import { APP_REVIEW_TICK_SCHEDULE, appReviewPartnerTick } from "./workers/app-review-partner.js";
 import { appReviewConfigurationErrors, isAppReviewEnabled } from "./services/app-review.js";
@@ -1227,6 +1228,11 @@ function registerSchedules(): void {
     guardedTick("memory-ideas", memoryIdeasTick),
     { timezone: CRON_TIMEZONE },
   );
+  // Personal reminders the agent set on request (decision 2026-11-20): every
+  // minute, gated per person by `AGENT_REMINDERS_*` inside the tick.
+  cron.schedule("* * * * *", guardedTick("agent-reminders", () => agentRemindersTick(bot.api)), {
+    timezone: CRON_TIMEZONE,
+  });
 
   // General data retention: expired OTP challenges (including phone numbers
   // of people who never finished signing up, which no user cascade reaches),

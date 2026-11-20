@@ -454,6 +454,7 @@ model User {
   screenshotLibrary         ScreenshotLibrary?
   screenshotItems           ScreenshotItem[]
   memoryIdeas               MemoryIdea[]
+  agentReminders            AgentReminder[]
   memoryPreferences         MemoryPreference[]
   memoryImpressions         MemoryImpression[]
   agentMemories             AgentMemory[]
@@ -4153,6 +4154,43 @@ model MemoryPreference {
   @@unique([userId, facet, value])
   @@index([userId, revokedAt])
   @@map("memory_preferences")
+}
+
+/// A personal reminder the agent set on the person's own request («напомни в
+/// пятницу написать ей») — decision 2026-11-20, spec
+/// `docs/product/domains/agent-reminders.md`. The text is the person's words
+/// about their life, never «come back to the chat». The worker claims a due
+/// row once (`state` pending → sent) and delivers it as an agent message on the
+/// surface it was set on. Finished rows are deleted 30 days after `updatedAt`.
+model AgentReminder {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// The person's words, 1–200 characters.
+  text       String
+  dueAt      DateTime  @map("due_at")
+  /// The IANA zone it was set in: the receipt and the message read in it.
+  timeZone   String    @map("time_zone")
+  /// `app` | `telegram` — where it was set and where it arrives.
+  surface    String
+  /// The app chat it was set in (null in Telegram, or once that chat is gone).
+  sessionId  String?   @map("session_id") @db.Uuid
+  /// pending | sent | done | cancelled
+  state      String    @default("pending")
+  /// The person named the time themselves: it may pass quiet hours.
+  exactTime  Boolean   @default(false) @map("exact_time")
+  /// «Напомни завтра» taps so far (at most three).
+  snoozes    Int       @default(0)
+  sentAt     DateTime? @map("sent_at")
+  answeredAt DateTime? @map("answered_at")
+  /// The agent row it arrived as (app), for the card's buttons.
+  messageId  String?   @map("message_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([state, dueAt])
+  @@index([userId, state])
+  @@map("agent_reminders")
 }
 
 /// An optional «remind me in time». At most one live row per idea, and the

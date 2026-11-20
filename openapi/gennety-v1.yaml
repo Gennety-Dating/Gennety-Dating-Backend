@@ -4331,7 +4331,9 @@ paths:
         2026-10-28, `offer` (`ChatChangeOffer` in `offer`) and, since
         2026-10-29, `guide` (`ChatAppGuide` in `guide`) and, since
         2026-11-19, `replies` (suggested replies — `repliesPending` here,
-        the chips themselves from `GET /v1/chat/messages/{id}/replies`). Sent like
+        the chips themselves from `GET /v1/chat/messages/{id}/replies`) and,
+        since 2026-11-20, `reminder` (`ChatReminderCard` in `reminder` on the
+        history row a personal reminder arrived as). Sent like
         `X-Gennety-Build`, by the client's middleware, so it is not an
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
@@ -4347,6 +4349,15 @@ paths:
         chat. Same on `/v1/chat/voice`. Transactional, so no quiet hours, and
         no inbox row. A client that comes back resends with the same
         `clientMessageId` and gets the stored reply.
+
+        **Personal reminders (2026-11-20).** When the agent sets one on the
+        person's request, the code-owned confirmation («Напомню пт, 21 ноября
+        в 10:00: написать Маше») arrives in `receipts`. When it is due, the
+        server writes an agent row «Напоминаю: …» into the chat it was set in
+        (or a new chat after six quiet hours) with a `ChatReminderCard`, and
+        sends an APNs alert: title «Напоминание», body the reminder text,
+        payload `{ "type": "chat.reminder", "sessionId": "<chat>" }`, which
+        opens that chat. Held in quiet hours unless the person named the time.
 
         **Errors the client shows without a retry.** 429 with `error:
         "daily_token_budget"` is the day's agent budget; 403 / 409 carry the
@@ -4769,6 +4780,64 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/chat/messages/{id}/reminder:
+    post:
+      tags: [chat]
+      operationId: answerChatReminder
+      summary: «Сделано» or «Напомни завтра» under a reminder that arrived in the chat
+      description: |
+        The buttons of a `ChatReminderCard` (decision 2026-11-20). `done`
+        closes the reminder; `tomorrow` moves it to the same time tomorrow
+        (at most three times — then 409). The first answer writes one short
+        agent line into the chat and returns it as `message`; a repeated tap
+        answers the current state, writes nothing and has no `message`.
+        Redraw the card from `reminder`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The agent row the reminder arrived as
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [done, tomorrow] }
+      responses:
+        "200":
+          description: The card after the answer, and the line it earned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reminder]
+                properties:
+                  reminder: { $ref: "#/components/schemas/ChatReminderCard" }
+                  message: { $ref: "#/components/schemas/ChatMessage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Not a uuid, not the caller's message, or a row without a reminder — one answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >-
+            `{ "error": "snooze-limit", "message": "…" }` — moved three times
+            already; show `message` (localised) and keep the card as it is
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, message]
+                properties:
+                  error: { type: string, enum: [snooze-limit] }
+                  message: { type: string }
 
   /v1/chat/messages/{id}/replies:
     get:
@@ -10878,6 +10947,12 @@ components:
                 newest agent reply of the chat, only while the person has not
                 written since, and only for a build that lists `replies` in
                 `X-Gennety-Chat-Cards`. Absent everywhere else.
+            reminder:
+              $ref: "#/components/schemas/ChatReminderCard"
+              description: >-
+                On the agent row a personal reminder arrived as, with its
+                current state — only for a build that lists `reminder` in
+                `X-Gennety-Chat-Cards`. Absent everywhere else.
 
     ScreenshotLibrary:
       type: object
@@ -11055,6 +11130,19 @@ components:
         id: { type: string, description: "Stable within this reply, e.g. `r1`." }
         kind: { type: string, enum: [answer, step, clarify, close] }
         text: { type: string, maxLength: 40 }
+    ChatReminderCard:
+      description: |
+        A personal reminder that arrived in the chat (decision 2026-11-20).
+        `sent` — the buttons «Сделано» / «Напомни завтра» are live
+        (`POST /v1/chat/messages/{id}/reminder`); `done` — answered;
+        `snoozed` — moved to tomorrow (it will arrive again as a new row);
+        `cancelled` — cancelled or gone. `text` is the person's own words.
+      type: object
+      required: [state, text, dueAt]
+      properties:
+        state: { type: string, enum: [sent, done, snoozed, cancelled] }
+        text: { type: string }
+        dueAt: { type: string, format: date-time }
     ChatSuggestionTap:
       description: |
         Sent with a turn that is a chip tap (decision 2026-11-19). Trusted

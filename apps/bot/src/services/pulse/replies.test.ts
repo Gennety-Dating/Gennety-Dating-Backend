@@ -5,6 +5,7 @@ vi.mock("../feature-preview.js", () => ({
   suggestedRepliesOn: () => true,
   suggestedRepliesPreview: () => false,
   suggestedRepliesUsers: () => null,
+  agentRemindersOn: () => false,
 }));
 vi.mock("../chat-sessions.js", () => ({ touchChatSession: async () => undefined }));
 

@@ -16,7 +16,7 @@ import {
 import { MODELS } from "../models.js";
 import { callOpenAIJson, type OpenAICallOptions } from "./openai.js";
 import { moderateTextWithOpenAI } from "./profile-media-validation/openai-moderation.js";
-import { suggestedRepliesOn, suggestedRepliesPreview } from "./feature-preview.js";
+import { agentRemindersOn, suggestedRepliesOn, suggestedRepliesPreview } from "./feature-preview.js";
 import { touchChatSession } from "./chat-sessions.js";
 
 /**
@@ -97,7 +97,7 @@ export function readSuggestedReplies(raw: unknown): SuggestedRepliesAttachment |
 // Steps towards offline — only what the agent can do right now
 // ---------------------------------------------------------------------------
 
-export type StepKey = "my_date" | "venue_change" | "date_feedback" | "events";
+export type StepKey = "my_date" | "venue_change" | "date_feedback" | "events" | "remind";
 
 export interface DateFacts {
   /** A booked date still ahead. */
@@ -113,14 +113,20 @@ const STEP_INTENTS: Record<StepKey, string> = {
   venue_change: "ask to change the place of their booked date",
   date_feedback: "tell the agent how their recent date went",
   events: "ask what is on this weekend or check an event they mentioned",
+  remind: "ask to be reminded later of the one concrete thing the reply told them to do (e.g. «Напомни в пятницу»), only when the reply named such an action and a moment",
 };
 
 /** Steps the person could take through the agent on this turn. */
-export function availableSteps(facts: DateFacts, options: { surface: Surface; eventsTool: boolean }): StepKey[] {
+export function availableSteps(
+  facts: DateFacts,
+  options: { surface: Surface; eventsTool: boolean; reminders?: boolean },
+): StepKey[] {
   const steps: StepKey[] = [];
   if (facts.scheduledDate) steps.push("my_date", "venue_change");
   if (facts.recentDateWithoutFeedback) steps.push("date_feedback");
   if (options.surface === "app" && options.eventsTool) steps.push("events");
+  // Personal reminders (decision 2026-11-20): the agent has `set_reminder`.
+  if (options.reminders) steps.push("remind");
   return steps;
 }
 
@@ -248,7 +254,7 @@ const VERDICT_SCHEMA = {
           properties: {
             kind: { type: "string", enum: ["answer", "step", "clarify"] },
             text: { type: "string" },
-            step: { type: "string", enum: ["none", "my_date", "venue_change", "date_feedback", "events"] },
+            step: { type: "string", enum: ["none", "my_date", "venue_change", "date_feedback", "events", "remind"] },
           },
         },
       },
@@ -557,7 +563,7 @@ export async function startAppReplies(f: AppTurnFacts, deps: GenerateDeps = {}):
       prisma.user.findUnique({ where: { id: f.userId }, select: { language: true } }),
     ]);
     const language = (account?.language ?? "en") as Language;
-    const steps = availableSteps(facts, { surface: "app", eventsTool: f.eventsTool });
+    const steps = availableSteps(facts, { surface: "app", eventsTool: f.eventsTool, reminders: agentRemindersOn(f.userId) });
     const set = await generateChipSet(
       { language, rows, userText: f.userText, reply: f.reply, steps, wantExit, night },
       deps,
@@ -758,7 +764,7 @@ export async function telegramReplies(
       return none();
     }
     const facts = await loadDateFacts(f.userId, now);
-    const steps = availableSteps(facts, { surface: "telegram", eventsTool: false });
+    const steps = availableSteps(facts, { surface: "telegram", eventsTool: false, reminders: agentRemindersOn(f.userId) });
     const set = await generateChipSet(
       { language: f.language, rows: f.rows, userText: f.userText, reply: f.reply, steps, wantExit: verdict.wantExit, night: verdict.night },
       deps,

@@ -2,6 +2,8 @@
 <!-- SOURCE: ARCHITECTURE.md (lines 1606-1972) — migrated 2026-09-01 -->
 
 #<!-- Ideas: /v1/me/memory/* including vibe-question (2026-11-01); docs/product/domains/memory-ideas.md -->
+#<!-- Suggested replies (2026-11-19): GET /v1/chat/messages/{id}/replies, `repliesPending` on /v1/chat/message|voice, `suggestion` on a turn; docs/product/domains/suggested-replies.md -->
+#<!-- Personal reminders (2026-11-20): POST /v1/chat/messages/{id}/reminder; worker `agent-reminders` every minute (`* * * * *`, apps/bot/src/workers/agent-reminders.ts), retention sweep at :07 hourly; Telegram callbacks `rem:done:<id>` / `rem:tmr:<id>`; docs/product/domains/agent-reminders.md -->
 #<!-- Screenshot library: /v1/me/screenshots/*, cron SCREENSHOT_LIBRARY_CRON_SCHEDULE (each minute); docs/product/domains/screenshot-library.md; 2026-11-01 `GET /v1/me/screenshots` gains query `kind`, items gain `kind`, `category` stays four values -->
 
 # Cron & Workers (`apps/bot/src/index.ts`)

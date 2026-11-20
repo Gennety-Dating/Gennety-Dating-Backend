@@ -88,6 +88,20 @@ vi.mock("../../services/suggested-replies.js", async (importOriginal) => {
   };
 });
 
+const answerReminderMessage = vi.fn(async (_u: string, _id: string, _a: string) => ({
+  ok: true as const,
+  reminder: { state: "done", text: "написать Маше", dueAt: "2026-11-21T08:00:00.000Z" },
+  message: { id: "line2", content: "Отлично.", createdAt: new Date("2026-11-21T08:05:00Z") },
+}) as unknown);
+vi.mock("../../services/agent-reminders.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../services/agent-reminders.js")>();
+  return {
+    readReminderCard: original.readReminderCard,
+    reminderCardViews: async () => new Map(),
+    answerReminderMessage: (u: string, id: string, a: string) => answerReminderMessage(u, id, a),
+  };
+});
+
 const { chatRouter } = await import("./chat.js");
 const { JWT_ISSUER, JWT_AUDIENCE } = await import("../jwt.js");
 
@@ -191,5 +205,27 @@ describe("history", () => {
     historyRows = rows().map((r) => (r.id === "a2" ? { ...r, attachment: { ...storedChips, tapped: "r1" } } : r));
     res = await request(app()).get(`/v1/chat/history?sessionId=${CHAT}`).set(auth()).set("X-Gennety-Chat-Cards", "replies");
     expect(JSON.stringify(res.body)).not.toContain('"replies"');
+  });
+});
+
+describe("POST /v1/chat/messages/:id/reminder", () => {
+  const post = (body: unknown, id = MESSAGE) =>
+    request(app()).post(`/v1/chat/messages/${id}/reminder`).set(auth()).send(body as object);
+
+  it("answers «Сделано» with the card and the line", async () => {
+    const res = await post({ action: "done" });
+    expect(res.status).toBe(200);
+    expect(answerReminderMessage).toHaveBeenCalledWith(USER_ID, MESSAGE, "done");
+    expect(res.body).toMatchObject({ reminder: { state: "done" }, message: { id: "line2", role: "assistant", content: "Отлично." } });
+  });
+
+  it("refuses a bad action, a bad id, and says when snoozing is over", async () => {
+    expect((await post({ action: "later" })).status).toBe(400);
+    expect((await post({ action: "done" }, "nope")).status).toBe(404);
+    answerReminderMessage.mockResolvedValueOnce({ ok: false, error: "snooze-limit" });
+    const res = await post({ action: "tomorrow" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("snooze-limit");
+    expect(typeof res.body.message).toBe("string");
   });
 });

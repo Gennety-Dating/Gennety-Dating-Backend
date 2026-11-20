@@ -12,7 +12,8 @@ import {
   historyReplies,
   startAppReplies,
 } from "../../services/suggested-replies.js";
-import { REPLIES_CARD_CLIENT_TOKEN, type Language } from "@gennety/shared";
+import { REMINDER_CARD_CLIENT_TOKEN, REPLIES_CARD_CLIENT_TOKEN, t, type Language } from "@gennety/shared";
+import { answerReminderMessage, readReminderCard, reminderCardViews } from "../../services/agent-reminders.js";
 import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
@@ -700,6 +701,16 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   const shotViews = await screenshotsCardViews(req.userId as string, shotRows.map((entry) => entry.card)).catch(() => []);
   const shotById = new Map(shotRows.map((entry, i) => [entry.id, shotViews[i]] as const));
 
+  // Reminder cards (decision 2026-11-20): the row a reminder arrived as, with
+  // its buttons' current state. Only for a build that draws them; any other
+  // build reads the row's text, «Напоминаю: …».
+  const reminderRows = chatCardsOf(req).has(REMINDER_CARD_CLIENT_TOKEN)
+    ? page
+        .map((row) => ({ messageId: row.id, card: row.role === "assistant" ? readReminderCard(row.attachment) : null }))
+        .filter((entry): entry is { messageId: string; card: NonNullable<ReturnType<typeof readReminderCard>> } => entry.card !== null)
+    : [];
+  const reminderById = await reminderCardViews(reminderRows).catch(() => new Map());
+
   // Chips survive a reload only on the newest row of the chat, until the
   // person writes (decision 2026-11-19); only for a build that draws them.
   const chips =
@@ -733,6 +744,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
       ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
       ...(chips && chips.id === row.id ? { replies: chips.replies } : {}),
+      ...(reminderById.get(row.id) ? { reminder: reminderById.get(row.id) } : {}),
     };
   });
   console.log(
@@ -844,6 +856,49 @@ chatRouter.post(
  * Read-only and free, so outside `requireAgentAccess` for the same reason as
  * `/history`: a list that went blank on suspension would read as data loss.
  */
+/**
+ * POST /v1/chat/messages/:id/reminder — «Сделано» / «Напомни завтра» under a
+ * reminder that arrived in the chat (decision 2026-11-20). Idempotent: a
+ * second tap answers the current state and writes nothing. The short line it
+ * earns goes into the chat once and comes back as `message`.
+ */
+chatRouter.post("/messages/:id/reminder", chatMessageLimiter, async (req: Request, res: Response): Promise<void> => {
+  const id = String(req.params.id ?? "").toLowerCase();
+  const action = req.body?.action;
+  if (action !== "done" && action !== "tomorrow") {
+    res.status(400).json({ error: "action must be done or tomorrow" });
+    return;
+  }
+  if (!isUuid(id)) {
+    res.status(404).json({ error: "Unknown message" });
+    return;
+  }
+  const answer = await answerReminderMessage(req.userId!, id, action);
+  if (!answer.ok) {
+    if (answer.error === "snooze-limit") {
+      const account = await prisma.user.findUnique({ where: { id: req.userId! }, select: { language: true } });
+      res.status(409).json({ error: "snooze-limit", message: t((account?.language ?? "en") as Language, "remindersSnoozeLimit") });
+      return;
+    }
+    res.status(404).json({ error: "Unknown message" });
+    return;
+  }
+  res.json({
+    reminder: answer.reminder,
+    ...(answer.message
+      ? {
+          message: {
+            id: answer.message.id,
+            role: "assistant",
+            content: answer.message.content,
+            imageUrl: null,
+            createdAt: answer.message.createdAt.toISOString(),
+          },
+        }
+      : {}),
+  });
+});
+
 /**
  * GET /v1/chat/messages/:id/replies — the chips under an agent reply
  * (decision 2026-11-19). Waits up to `SUGGESTED_REPLIES.pollWaitMs` for a call

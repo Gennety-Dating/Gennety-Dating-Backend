@@ -17,8 +17,10 @@ import {
   type ScreenshotsCard,
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
+import { REMINDER_TOOLS, REMINDER_TOOL_KINDS, executeReminderTool, isReminderTool, reminderClockBlock } from "./agent-reminders.js";
+import { personTimeZone } from "./suggested-replies.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
-import { agentMemoryOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
+import { agentMemoryOn, agentRemindersOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -447,14 +449,14 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number]
+  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number]
 >;
 
 /**
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean; reminders?: boolean }): ToolList {
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
@@ -468,6 +470,8 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
     ...(ideas ? MEMORY_TOOLS : []),
     // Long-term memory (decision 2026-11-19): the same four tools as Telegram.
     ...(options.agentMemory ? AGENT_MEMORY_TOOLS : []),
+    // Personal reminders (decision 2026-11-20), per person behind the flag.
+    ...(options.reminders ? REMINDER_TOOLS : []),
   ];
 }
 
@@ -497,7 +501,7 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
 };
 
 function toolKind(name: string): string | undefined {
-  return TOOL_KINDS[name] ?? CHAT_TOOL_KINDS[name];
+  return TOOL_KINDS[name] ?? CHAT_TOOL_KINDS[name] ?? REMINDER_TOOL_KINDS[name];
 }
 
 interface OpenAIToolCall {
@@ -641,7 +645,7 @@ async function runTurnInner(
   // id. Читается один раз за ход вместе с языком, на котором пишутся чеки.
   const account = await prisma.user.findUnique({
     where: { id: userId },
-    select: { telegramId: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true } } },
+    select: { telegramId: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true, timeZone: true } } },
   });
   if (!account) throw new Error(`Unknown user ${userId}`);
   const telegramId = account.telegramId;
@@ -679,7 +683,7 @@ async function runTurnInner(
   // loop, so its status comes from the read itself (decision 2026-11-19).
   let watched = false;
   const memoryOn = agentMemoryOn(userId);
-  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn });
+  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId) });
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, refreshSummary, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
@@ -692,6 +696,7 @@ async function runTurnInner(
       guideCards,
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
+      remindersZone: agentRemindersOn(userId) ? personTimeZone(account.profile) : null,
       onWatch: () => {
         watched = true;
         report("watching_video");
@@ -1079,7 +1084,7 @@ async function runTurnInner(
       // что она применилась.
       if (toolKind(name) === "write" && toolReportedSuccess(outcome.result)) {
         writesUsed++;
-        const receipt = outcome.receiptKey ? t(language, outcome.receiptKey) : null;
+        const receipt = ("receipt" in outcome && outcome.receipt) || (outcome.receiptKey ? t(language, outcome.receiptKey) : null);
         if (receipt) receipts.push(receipt);
         // «да» typed under an open offer card, and the agent ran that tool
         // itself: the card is answered, its buttons must not run it again.
@@ -1262,6 +1267,8 @@ async function buildChatMessages(
     viewer?: { language: Language; cityKey: string | null; gender?: string | null; preference?: string | null };
     /** A link in this turn's message is about to be read: the status says so. */
     onWatch?: () => void;
+    /** Their zone when the reminder tools are offered this turn (decision 2026-11-20). */
+    remindersZone?: string | null;
   },
 ): Promise<{
   messages: OpenAIChatMessage[];
@@ -1356,6 +1363,8 @@ async function buildChatMessages(
       gender: options.viewer?.gender ?? null,
       preference: options.viewer?.preference ?? null,
     }),
+    // Personal reminders (2026-11-20): the date `set_reminder` resolves from.
+    options.remindersZone ? reminderClockBlock(new Date(), options.remindersZone) : null,
     // Agent concept (2026-11-19): offline goal, spine, no attention traps —
     // same block as Telegram, after everything it may overrule.
     ...agentConceptBlocks(conceptTurn),
@@ -1718,7 +1727,7 @@ async function executeTool(
   sessionId: string,
   call: OpenAIToolCall,
   wishlistReadItems: Map<string, WishlistToolItem>,
-): Promise<{ result: string; receiptKey: Parameters<typeof t>[1] | null; action: MenuAgentAction | null }> {
+): Promise<{ result: string; receiptKey: Parameters<typeof t>[1] | null; action: MenuAgentAction | null; receipt?: string | null }> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(call.function.arguments || "{}");
@@ -1740,6 +1749,31 @@ async function executeTool(
   // быть не должно — он уже в контексте).
   if (call.function.name === GET_MY_DATE_TOOL_NAME) {
     return { result: await executeGetMyDate(userId), receiptKey: null, action: null };
+  }
+
+  // Personal reminders (decision 2026-11-20): the receipt is code-owned text
+  // with the exact time, not an i18n key.
+  if (isReminderTool(call.function.name)) {
+    if (!agentRemindersOn(userId)) {
+      return { result: JSON.stringify({ success: false, error: "unknown_tool" }), receiptKey: null, action: null };
+    }
+    const account = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { language: true, profile: { select: { timeZone: true, homeCityKey: true } } },
+    });
+    const args = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    const outcome = await executeReminderTool(
+      {
+        userId,
+        surface: "app",
+        sessionId,
+        language: (account?.language ?? "en") as Language,
+        timeZone: personTimeZone(account?.profile),
+      },
+      call.function.name,
+      args,
+    );
+    return { result: outcome.result, receiptKey: null, action: null, receipt: outcome.receipt };
   }
 
   if (isPastChatTool(call.function.name)) {

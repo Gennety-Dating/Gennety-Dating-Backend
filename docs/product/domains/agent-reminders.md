@@ -2,10 +2,11 @@
 
 # Agent reminders — «напомни в пятницу»
 
-Status: plan for the founder's approval, 2026-11-19. Nothing is built. It
-needs a new table, so no code is written before the founder's yes. Where a
-question is open, the default named here is what gets built unless the founder
-says otherwise.
+Status: approved by the founder 2026-11-19 with all four defaults below;
+built behind `AGENT_REMINDERS_ENABLED` (decision
+`docs/architecture/decisions/2026-11-20-agent-reminders.md`). A snooze moves
+`dueAt` and returns the row to `pending` (counted in `snoozes`), so there is no
+`snoozed` state.
 
 ## Why
 

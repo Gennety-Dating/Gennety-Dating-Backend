@@ -59,7 +59,7 @@ export async function loadReplyChats(from: Date, to: Date, excluded: ReadonlySet
 export async function loadOfflineSteps(from: Date, to: Date, userIds: readonly string[]): Promise<OfflineStepRow[]> {
   if (userIds.length === 0) return [];
   const until = new Date(to.getTime() + SUGGESTED_REPLIES.offlineStepWindowMs);
-  const [events, ideas] = await Promise.all([
+  const [events, ideas, reminders] = await Promise.all([
     prisma.matchEvent.findMany({
       where: { actorId: { in: [...userIds] }, actionType: { in: [...OFFLINE_EVENTS] }, createdAt: { gte: from, lt: until } },
       select: { actorId: true, createdAt: true },
@@ -68,10 +68,16 @@ export async function loadOfflineSteps(from: Date, to: Date, userIds: readonly s
       where: { userId: { in: [...userIds] }, createdAt: { gte: from, lt: until } },
       select: { userId: true, createdAt: true },
     }),
+    // «Сделано» on a personal reminder: they did the thing (decision 2026-11-20).
+    prisma.agentReminder.findMany({
+      where: { userId: { in: [...userIds] }, state: "done", answeredAt: { gte: from, lt: until } },
+      select: { userId: true, answeredAt: true },
+    }),
   ]);
   return [
     ...events.map((e) => ({ userId: e.actorId, at: e.createdAt })),
     ...ideas.map((i) => ({ userId: i.userId, at: i.createdAt })),
+    ...reminders.filter((r) => r.answeredAt).map((r) => ({ userId: r.userId, at: r.answeredAt! })),
   ];
 }
 
@@ -248,4 +254,58 @@ export async function loadRepliesRollup(from: Date, to: Date, excluded: Readonly
   const chats = await loadReplyChats(from, to, excluded);
   const steps = await loadOfflineSteps(from, to, [...new Set(chats.map((c) => c.userId))]);
   return { chats, steps, eligible: suggestedRepliesUsers() };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personal reminders (docs/product/domains/agent-reminders.md, Phase 5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReminderRow {
+  userId: string;
+  surface: string;
+  state: string;
+  createdAt: Date;
+  sentAt: Date | null;
+  answeredAt: Date | null;
+  snoozes: number;
+}
+
+export async function loadReminderRows(from: Date, to: Date, excluded: ReadonlySet<string>): Promise<ReminderRow[]> {
+  const rows = await prisma.agentReminder.findMany({
+    where: { OR: [{ createdAt: { gte: from, lt: to } }, { sentAt: { gte: from, lt: to } }, { answeredAt: { gte: from, lt: to } }] },
+    select: { userId: true, surface: true, state: true, createdAt: true, sentAt: true, answeredAt: true, snoozes: true },
+  });
+  return rows.filter((r) => !excluded.has(r.userId));
+}
+
+/**
+ * `sentAt` is cleared by a snooze, so an arrival that was snoozed is dated by
+ * its answer instead — the day the person saw it.
+ */
+export function computeReminderRows(days: ReadonlySet<string>, rows: readonly ReminderRow[]): MetricRow[] {
+  const set = new Map<string, number>();
+  const arrived = new Map<string, { n: number; done: number; snoozed: number }>();
+  for (const r of rows) {
+    const created = `${dayKey(r.createdAt)}|${r.surface}`;
+    if (days.has(dayKey(r.createdAt))) set.set(created, (set.get(created) ?? 0) + 1);
+    const seen = r.sentAt ?? (r.snoozes > 0 ? r.answeredAt : null);
+    if (!seen || (!["sent", "done"].includes(r.state) && r.snoozes === 0)) continue;
+    const day = dayKey(seen);
+    if (!days.has(day)) continue;
+    const a = arrived.get(day) ?? { n: 0, done: 0, snoozed: 0 };
+    a.n++;
+    if (r.state === "done") a.done++;
+    if (r.snoozes > 0) a.snoozed++;
+    arrived.set(day, a);
+  }
+  const out: MetricRow[] = [];
+  for (const [key, n] of set) {
+    const [day, surface] = key.split("|") as [string, string];
+    out.push({ day, metric: "agent_reminders_set", dim: surface, value: n, n });
+  }
+  for (const [day, a] of arrived) {
+    out.push({ day, metric: "agent_reminders_done_share", dim: "", value: a.done / a.n, n: a.n });
+    out.push({ day, metric: "agent_reminders_snoozed_share", dim: "", value: a.snoozed / a.n, n: a.n });
+  }
+  return out;
 }

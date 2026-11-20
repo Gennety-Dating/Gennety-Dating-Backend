@@ -13,6 +13,29 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-20 — personal reminders from the chat («напомни в пятницу») — MIGRATION**
+
+1. Code: spec `docs/product/domains/agent-reminders.md`, decision `docs/architecture/decisions/2026-11-20-agent-reminders.md`.
+   `apps/bot/src/services/agent-reminders.ts` (tools `set_reminder` / `list_reminders` / `cancel_reminder` on both
+   surfaces, code-owned receipt, delivery, «Сделано» / «Напомни завтра», retention), worker
+   `apps/bot/src/workers/agent-reminders.ts` (every minute), Telegram callbacks `handlers/reminders.ts`, route
+   `POST /v1/chat/messages/{id}/reminder`, `reminder` card on history rows, push type `chat.reminder`. The suggested
+   replies gain the `remind` step when reminders are on.
+2. Ship: **migration first** — `20261120090000_agent_reminders` (one new table `agent_reminders`, purely additive),
+   then the usual bot build and restart. New env: `AGENT_REMINDERS_ENABLED` (default `false`) and
+   `AGENT_REMINDERS_USER_IDS` (preview list — the founder's user id first). With the flag off and the list empty the
+   tools are not offered and nothing is sent.
+3. Demo mode: identical; time is not sped up; Pulse excludes demo and synthetic accounts.
+4. iOS: builds that list `reminder` in `X-Gennety-Chat-Cards` draw the card with the two buttons and open the chat
+   from the `chat.reminder` push; older builds read «Напоминаю: …» as plain text and get the push.
+5. Rollback: flag off / empty list (instant). The table can stay; rolling the code back leaves it unread.
+6. Proof: `pnpm --filter @gennety/bot exec vitest run src/services/agent-reminders.test.ts src/public/routes/chat-replies-route.test.ts`;
+   live model: `apps/bot/node_modules/.bin/tsx --env-file=.env apps/bot/scripts/reminders-eval.ts --runs=2`
+   (2026-11-20: 0/24 failed — right dates in five languages, «потом» asks, «come back» refused by code, booked date
+   not duplicated). Live: «напомни через 10 минут выпить воды» → receipt; the reminder arrives with a push; «Сделано».
+
+---
+
 **PENDING 2026-11-19 — agent long-term memory (needs the founder's «да» for production and the migration)**
 
 1. Code: spec `docs/product/domains/long-term-memory.md`, decision `docs/architecture/decisions/2026-11-19-long-term-memory.md`.
@@ -53,6 +76,8 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    (2026-11-19, with the agent-concept block: 0/32 failed, chips on 19% of replies, p50 1.3 s, max 2.3 s). Live: with the founder on the list, «в субботу
    свидание, нервничаю» in the app → chips may or may not show; «ок спасибо» → none; a long chat after 23:00 → «На
    сегодня всё» first, tap → one line, no chips.
+
+---
 
 **PENDING 2026-11-19 — agent concept: offline goal, spine, no attention traps (prompt block)**
 

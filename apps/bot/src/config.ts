@@ -744,6 +744,12 @@ export const env = {
   AGENT_MEMORY_ENABLED: process.env.AGENT_MEMORY_ENABLED === "true",
   /// Per-user preview of long-term memory, as `SCREENSHOT_LIBRARY_USER_IDS`.
   AGENT_MEMORY_USER_IDS: parseUserIdList(process.env.AGENT_MEMORY_USER_IDS, "AGENT_MEMORY_USER_IDS"),
+  /// Personal reminders the agent sets on request
+  /// (`docs/product/domains/agent-reminders.md`). Off: no tools, the worker
+  /// sends nothing; reminders already set wait.
+  AGENT_REMINDERS_ENABLED: process.env.AGENT_REMINDERS_ENABLED === "true",
+  /// Per-user preview of reminders, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  AGENT_REMINDERS_USER_IDS: parseUserIdList(process.env.AGENT_REMINDERS_USER_IDS, "AGENT_REMINDERS_USER_IDS"),
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),

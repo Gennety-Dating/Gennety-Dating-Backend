@@ -11,6 +11,7 @@ import { start } from "./handlers/start.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./handlers/payments.js";
 import { router } from "./handlers/router.js";
 import { matchingRouter } from "./handlers/matching/router.js";
+import { remindersHandler } from "./handlers/reminders.js";
 import { dateRouter } from "./handlers/date/router.js";
 import { profilerRouter } from "./handlers/profiler/router.js";
 import { voiceHandler } from "./handlers/voice.js";
@@ -175,6 +176,9 @@ export function createBot(token: string): Bot<BotContext> {
   // кто уже владеет чатом (менеджер фотографий, прокси-чат, онбординг) — см.
   // шапку `handlers/photo.ts`.
   bot.use(photoHandler);
+
+  // «Сделано» / «Напомни завтра» under a personal reminder (decision 2026-11-20).
+  bot.use(remindersHandler);
 
   // Matching / scheduling flow (only active for completed users)
   bot.use(matchingRouter);

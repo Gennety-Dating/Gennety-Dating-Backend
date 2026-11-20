@@ -4,6 +4,7 @@ vi.mock("@gennety/db", () => ({ prisma: {}, Prisma: { DbNull: null } }));
 vi.mock("./feature-preview.js", () => ({
   suggestedRepliesOn: () => true,
   suggestedRepliesPreview: () => false,
+  agentRemindersOn: () => false,
 }));
 vi.mock("./chat-sessions.js", () => ({ touchChatSession: async () => undefined }));
 vi.mock("./profile-media-validation/openai-moderation.js", () => ({ moderateTextWithOpenAI: async () => ({ ok: true, signals: [] }) }));

@@ -11,6 +11,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { REMINDER_TOOLS, executeReminderTool, isReminderTool, reminderClockBlock } from "./agent-reminders.js";
+import { personTimeZone } from "./suggested-replies.js";
 import { prisma, Prisma, type Theme } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { KeyedLock } from "../utils/keyed-lock.js";
@@ -40,7 +42,7 @@ import { agentStanceBlocks } from "./agent-stances.js";
 import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
 import { memoryPromptBlocks } from "./agent-memory.js";
 import { AGENT_MEMORY_TOOLS, executeAgentMemoryTool, isAgentMemoryTool } from "./agent-memory-tools.js";
-import { agentMemoryOn } from "./feature-preview.js";
+import { agentMemoryOn, agentRemindersOn } from "./feature-preview.js";
 import { buildPersonCard } from "./chat-person-card.js";
 import { PAST_CHAT_TOOLS, executePastChatTool, isPastChatTool } from "./chat-past-tools.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
@@ -1980,8 +1982,10 @@ async function runMenuAgentTurnUnqueued(
   // Load existing post-onboarding history
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true, messageHistory: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true } } },
+    select: { id: true, messageHistory: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true, timeZone: true } } },
   });
+  // Personal reminders (decision 2026-11-20): offered only with the feature on for this person.
+  const remindersOn = Boolean(user && agentRemindersOn(user.id));
 
   const stored: StoredChatMessage[] = (
     (user?.messageHistory ?? []) as unknown[]
@@ -2027,8 +2031,14 @@ async function runMenuAgentTurnUnqueued(
         TELEGRAM_PAST_CHATS_NOTE,
       ]
     : [];
-  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks, ...conceptBlocks, ...memoryBlocks].join("\n\n");
-  const turnTools = memoryUserId ? [...baseTools(), ...AGENT_MEMORY_TOOLS, ...PAST_CHAT_TOOLS] : baseTools();
+  // Personal reminders (decision 2026-11-20): the date the tools resolve from.
+  const reminderBlocks = remindersOn && user ? [reminderClockBlock(new Date(), personTimeZone(user.profile))] : [];
+  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks, ...reminderBlocks, ...conceptBlocks, ...memoryBlocks].join("\n\n");
+  const turnTools = [
+    ...baseTools(),
+    ...(memoryUserId ? [...AGENT_MEMORY_TOOLS, ...PAST_CHAT_TOOLS] : []),
+    ...(remindersOn ? REMINDER_TOOLS : []),
+  ];
   const turnKey = randomUUID();
 
   // Build conversation: fresh system prompt + recent history + new user msg
@@ -2132,6 +2142,29 @@ async function runMenuAgentTurnUnqueued(
                 "You already changed something this turn, so this second change was NOT saved. Tell the user what you changed, name what else you were about to change, and ask them to confirm it in their next message.",
             }),
           });
+          continue;
+        }
+
+        if (isReminderTool(fnName)) {
+          const outcome =
+            remindersOn && user
+              ? await executeReminderTool(
+                  {
+                    userId: user.id,
+                    surface: "telegram",
+                    sessionId: null,
+                    language: (user.language ?? "en") as Language,
+                    timeZone: personTimeZone(user.profile),
+                  },
+                  fnName,
+                  args as Record<string, unknown>,
+                ).catch((err: unknown) => {
+                  console.warn("[reminders] tool failed:", err);
+                  return { result: JSON.stringify({ success: false, error: "tool_failed" }), receipt: null };
+                })
+              : { result: JSON.stringify({ success: false, error: "unknown_tool" }), receipt: null };
+          if (outcome.receipt && toolReportedSuccess(outcome.result)) receipts.push(outcome.receipt);
+          history.push({ role: "tool", tool_call_id: toolCall.id, content: outcome.result });
           continue;
         }
 

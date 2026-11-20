@@ -64,6 +64,9 @@ export const PULSE_METRIC_NAMES = [
   "agent_replies_exit_share",
   "agent_chat_turns_p50",
   "agent_chat_offline_step_7d",
+  "agent_reminders_set",
+  "agent_reminders_done_share",
+  "agent_reminders_snoozed_share",
 ] as const;
 
 export type PulseMetricName = (typeof PULSE_METRIC_NAMES)[number];
@@ -387,7 +390,38 @@ export const PULSE_METRICS: Record<PulseMetricName, PulseMetricDef> = {
     dims: "arm ∈ chips | holdout",
     nMeans: "чаты (по дню начала)",
     minSample: SMALL,
-    source: "messages + match_events (ACCEPTED, DATE_COMPLETED) + memory_ideas",
+    source: "messages + match_events (ACCEPTED, DATE_COMPLETED) + memory_ideas + agent_reminders (done)",
+  },
+  // Personal reminders (docs/product/domains/agent-reminders.md, Phase 5).
+  agent_reminders_set: {
+    name: "agent_reminders_set",
+    description: "Сколько напоминаний поставили за день (по просьбе человека).",
+    unit: "count",
+    grain: "day",
+    dims: "surface ∈ app | telegram",
+    nMeans: "напоминания",
+    minSample: SMALL,
+    source: "agent_reminders.created_at",
+  },
+  agent_reminders_done_share: {
+    name: "agent_reminders_done_share",
+    description: "Главная для напоминаний: доля пришедших напоминаний, на которые человек ответил «Сделано» — он сделал то, что собирался.",
+    unit: "share",
+    grain: "day",
+    dims: "",
+    nMeans: "пришедшие напоминания (по дню прихода)",
+    minSample: SMALL,
+    source: "agent_reminders.sent_at / state",
+  },
+  agent_reminders_snoozed_share: {
+    name: "agent_reminders_snoozed_share",
+    description: "Доля пришедших напоминаний, которые хоть раз перенесли на завтра.",
+    unit: "share",
+    grain: "day",
+    dims: "",
+    nMeans: "пришедшие напоминания (по дню прихода)",
+    minSample: SMALL,
+    source: "agent_reminders.snoozes",
   },
 };
 
@@ -419,4 +453,7 @@ export const PULSE_METRIC_TITLES: Record<PulseMetricName, string> = {
   agent_replies_exit_share: "Чаты, закрытые «На сегодня всё»",
   agent_chat_turns_p50: "Медиана реплик в чате",
   agent_chat_offline_step_7d: "Шаг в офлайн после чата",
+  agent_reminders_set: "Поставлено напоминаний",
+  agent_reminders_done_share: "Напоминания: «Сделано»",
+  agent_reminders_snoozed_share: "Напоминания: перенесли",
 };
