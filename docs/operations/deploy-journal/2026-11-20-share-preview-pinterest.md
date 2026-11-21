@@ -42,5 +42,10 @@ The founder said yes in chat («Да, выкатывай»). There was no migrat
 
 ## Not checked
 
-1. The new iOS build on a phone. It installs separately.
+1. Instagram, TikTok and Pinterest links on the phone, in the share sheet and in the chat. The build itself is installed (see below), but the live links were not tried on it.
 2. A real `pin.it` short link.
+
+## iOS client (2026-11-22)
+
+1. The iOS integration run merged `claude/share-link-preview` into Gennety-iOS `main` as patch-equivalent commits `89904cf3`, `28f15f1a` and `af68d6ce`. The last two fix the Swift 6 build: a `Sendable` box for `LPLinkMetadata`, and the optional chat message text.
+2. Gennety-iOS `main` `9477f78b` was built and installed on «Орел» on 22.11 at 00:34, with 1450/1450 unit tests passing. The integration session reported this.
