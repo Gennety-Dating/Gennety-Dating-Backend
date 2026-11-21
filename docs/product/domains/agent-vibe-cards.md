@@ -47,7 +47,7 @@ lead scene of the agent's promo video. The answer is a card, not a paragraph.
    dieting, steroids or peptides without a doctor, DIY injections, or surgery
    as the answer.
 4. No card, and no number in words, when:
-   - anyone on the photo may be under 18;
+   - anyone on the photo plausibly looks under 18 (child or teen features, a school setting); a young-looking adult in an adult setting counts as an adult;
    - there is no person on the photo;
    - the person shows self-hatred about their looks, disordered eating or body
      dysmorphia — safety mode from `agent-advisor.md` phase 5;
