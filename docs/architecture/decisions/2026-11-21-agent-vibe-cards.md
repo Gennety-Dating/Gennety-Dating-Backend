@@ -32,3 +32,10 @@ Spec: `docs/product/domains/agent-vibe-cards.md`.
    - The first run rated «the aura of this place» with a card. Rule added: a card always rates a person; a place, a dish, a thing or a pet goes in words.
    - «If in any doubt, not an adult» refused 2 of 36 cards on clearly adult twenty-year-olds — the core audience. The check is now «plausibly looks under 18: child or teen features, a school setting»; a young-looking adult in an adult setting is an adult. The drawn child is still refused 3/3.
 3. **Empty line allowed.** After a card the model may write nothing; that is an answer, not a failed call (`allowEmpty`), so it costs no retries.
+
+## Founder on 2026-11-22
+
+1. **The card look is rejected.** «Слишком много текста, слишком мало визуала»: big bold type, few words, more drawing, native to the feed — «не как отдельный блок, а прям продолжение чата… чат оказался доской, на которой что-то нарисовали». The shipped `ChatVibeCardView` is to be replaced.
+2. **Three directions shown, no choice yet** (https://claude.ai/artifact/1HuGdVRDHinrja3jWgcqXZ): A «Силуэт» — the person cut out on the chat ground, the number behind, the aura along the contour; B «Маркер» — the agent draws over the photo and the pluses add up to the score; C «Уровень» — the chat fills with aura to the score. Recommended: A.
+3. **No production deploy of the backend for now** («Пока нет»). `show_vibe_card` stays undeployed.
+4. **Not checked yet**: subject lifting with Apple Vision ran on this Mac on four generated portraits, not on an iPhone. B needs the breakdown as points that sum to the score, which the server does not send today.
