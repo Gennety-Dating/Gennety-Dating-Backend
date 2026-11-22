@@ -516,6 +516,17 @@ describe("fetchPlaceDetails — NOT_FOUND (A13-M16)", () => {
     expect(error).not.toBeInstanceOf(PlaceNotFoundError);
   });
 
+  it("carries Google's reason in the error", async () => {
+    respond(
+      JSON.stringify({ error: { code: 403, message: "The caller does not have permission", status: "PERMISSION_DENIED" } }),
+      403,
+      "application/json",
+    );
+    await expect(fetchPlaceDetails("k", "p1")).rejects.toThrow(
+      "place details failed: 403 PERMISSION_DENIED: The caller does not have permission",
+    );
+  });
+
   it("keeps a server error an ordinary failure", async () => {
     respond(JSON.stringify({ error: { code: 503, status: "UNAVAILABLE" } }), 503, "application/json");
     const error = await fetchPlaceDetails("k", "p1").catch((err: unknown) => err);

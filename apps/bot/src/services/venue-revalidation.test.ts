@@ -200,6 +200,7 @@ describe("venueRevalidationTick", () => {
       },
     });
     expect(res.failed).toBe(1);
+    expect(res.lastFailure).toBe("503 from Places");
     expect(res.deactivated).toBe(0);
     expect(mUpdateMany).not.toHaveBeenCalled();
   });

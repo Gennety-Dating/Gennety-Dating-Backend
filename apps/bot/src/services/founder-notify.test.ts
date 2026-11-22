@@ -78,6 +78,7 @@ import {
   __resetFounderApiForTests,
   __resetHandlerAlertsForTests,
   notifyFounderHandlerError,
+  notifyFounderPlacesOutage,
   type FounderAccountUser,
 } from "./founder-notify.js";
 import { verifyAdSpendLink } from "./founder-ad-spend-link.js";
@@ -118,6 +119,29 @@ beforeEach(() => {
   adSpendFindMany.mockResolvedValue([]);
   eventFindUnique.mockResolvedValue(null);
   __resetFounderApiForTests();
+});
+
+describe("Google Places outage", () => {
+  it("names the reason and where to look", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    await notifyFounderPlacesOutage("down", { failed: 30, reason: "403 PERMISSION_DENIED" });
+    const text = String(sendMessage.mock.calls[0]![1]);
+    expect(text).toContain("ни для одного из 30");
+    expect(text).toContain("403 PERMISSION_DENIED");
+    expect(text).toContain("Billing");
+  });
+
+  it("is silent when the founder feed is off, and survives a failed send", async () => {
+    await notifyFounderPlacesOutage("down", { failed: 30 });
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    __resetFounderApiForTests();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    sendMessage.mockRejectedValueOnce(new Error("down"));
+    await expect(notifyFounderPlacesOutage("recovered")).resolves.toBeUndefined();
+    warn.mockRestore();
+  });
 });
 
 describe("handler-error alerts", () => {

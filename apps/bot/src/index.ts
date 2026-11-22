@@ -88,6 +88,7 @@ import { viralityRollupTick } from "./workers/virality-rollup.js";
 import { formatPulseRollupLog, pulseRollupTick } from "./workers/pulse-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
+import { reportPlacesHealth } from "./services/places-health.js";
 import { prunePlaceCache } from "./services/place-cache.js";
 import { refreshStaleMusicTracks } from "./services/music/profile-music.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
@@ -1416,7 +1417,7 @@ function registerSchedules(): void {
     cron.schedule(
       VENUE_REVALIDATION_CRON_SCHEDULE,
       guardedTick("venue-revalidation", () =>
-        venueRevalidationTick().then((r) => {
+        venueRevalidationTick().then(async (r) => {
           if (r.scanned > 0) {
             // `scanned` counts distinct PLACES (= Places requests), not rows:
             // one request settles all ~5 per-domain copies of a venue.
@@ -1424,6 +1425,9 @@ function registerSchedules(): void {
               `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
             );
           }
+          // The tick never throws on a refused request, so `guardedTick` sees a
+          // healthy job on a night when Google answered nothing at all.
+          await reportPlacesHealth(r);
         }),
       ),
       { timezone: CRON_TIMEZONE },

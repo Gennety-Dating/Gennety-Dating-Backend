@@ -1,4 +1,5 @@
 import { readResponseBuffer } from "../utils/bounded-response.js";
+import { formatPlacesError, readPlacesError } from "../utils/places-error.js";
 
 /**
  * One Google Places photo, fetched for a client — the half two proxies share.
@@ -53,8 +54,7 @@ async function fetchPhotoOnce(url: string, timeoutMs: number): Promise<PhotoAtte
   }
 
   if (!upstream.ok) {
-    await upstream.body?.cancel().catch(() => undefined);
-    const reason = `HTTP ${upstream.status}`;
+    const reason = `HTTP ${formatPlacesError(upstream.status, await readPlacesError(upstream))}${refusedBy(upstream)}`;
     // 5xx / 429 / 408 are the upstream saying "not now"; a 4xx is a verdict.
     const retryable = upstream.status >= 500 || upstream.status === 429 || upstream.status === 408;
     return retryable ? { kind: "transient", reason } : { kind: "permanent", reason };
@@ -72,6 +72,19 @@ async function fetchPhotoOnce(url: string, timeoutMs: number): Promise<PhotoAtte
     // Oversized, or the body died mid-stream. Either way, asking again for the
     // same bytes is not a fix.
     return { kind: "permanent", reason: describeFetchError(err) };
+  }
+}
+
+/**
+ * ` (host)` of whoever answered. `fetch` follows the redirect from Places to
+ * Google's image CDN, so a refusal may be either one's, and they are different
+ * problems. The host only: the Places URL carries the key in its query.
+ */
+function refusedBy(upstream: Response): string {
+  try {
+    return upstream.url ? ` (${new URL(upstream.url).hostname})` : "";
+  } catch {
+    return "";
   }
 }
 

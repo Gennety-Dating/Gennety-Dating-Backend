@@ -13,6 +13,21 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-22 — Google Places outage alert + Google's reason in the log (needs the founder's «да») — no migration**
+
+1. Code: `apps/bot/src/utils/places-error.ts`, `services/places-health.ts`, `services/venue.ts`,
+   `services/venue-revalidation.ts`, `services/founder-notify.ts`, `public/places-photo.ts`, `index.ts`. Decision
+   [2026-11-22-places-outage-alert](../../architecture/decisions/2026-11-22-places-outage-alert.md).
+2. Ship: the usual bot build and restart. No migration, no env, no dependency.
+3. Demo mode: no alert (re-validation is not scheduled there); log lines change. iOS: none.
+4. After the restart: while Places is refused, the first 04:00 Kyiv run sends the alert to the founder bot and
+   `pm2 logs gennety-bot --lines 200 --nostream | grep 'photo proxy failed'` shows `HTTP 403 PERMISSION_DENIED: …`.
+5. Does NOT fix the outage itself: that is the Google Cloud console (billing, key API restrictions, Places API (New)).
+   After it is fixed, stored photo names may be stale: 30 places a night, or `apply-venue-photo-curation.ts --apply`.
+6. Rollback: revert the commit, restart.
+
+---
+
 **PENDING 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
 
 1. Code: spec `docs/product/domains/share-music-playlists.md`, decision

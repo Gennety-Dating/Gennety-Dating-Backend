@@ -745,7 +745,8 @@ floor, and refreshes opening hours. An infra failure never deactivates a venue;
 an explicit Places `NOT_FOUND` (a 404 whose body says so — a place id Google has
 removed) does, immediately, because that venue will never answer again and used
 to stay active with stale hours while taking a slot in every nightly batch
-(audit A13-M16).
+(audit A13-M16). A night in which every place failed is a Places outage and is reported
+to the founder bot (since 2026-11-22).
 
 **Season and weather sink an unsuitable venue, they never remove it
 (feature-flagged `VENUE_SEASON_WEATHER_ENABLED`, added 2026-07-31).** A park in

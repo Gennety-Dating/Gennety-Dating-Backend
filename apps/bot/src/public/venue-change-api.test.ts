@@ -404,6 +404,28 @@ describe("GET /v1/venue-change/photo", () => {
     warn.mockRestore();
   });
 
+  it("logs why and who refused, without the key", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const refusal = new Response(
+      JSON.stringify({ error: { code: 403, message: "The caller does not have permission", status: "PERMISSION_DENIED" } }),
+      { status: 403, headers: { "content-type": "application/json" } },
+    );
+    Object.defineProperty(refusal, "url", {
+      value: "https://places.googleapis.com/v1/places/x/photos/y/media?maxWidthPx=240&key=test-key",
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(refusal));
+
+    await photoRequest();
+
+    const line = warn.mock.calls.map((call) => String(call[0])).find((l) => l.includes("photo proxy failed"));
+    expect(line).toContain(
+      "failed after 1 attempt(s): HTTP 403 PERMISSION_DENIED: The caller does not have permission (places.googleapis.com)",
+    );
+    expect(line).not.toContain("test-key");
+    warn.mockRestore();
+  });
+
   it("logs a rescued blip, the only signal the upstream is degrading", async () => {
     process.env.PLACES_API_KEY = "test-key";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);

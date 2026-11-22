@@ -202,6 +202,8 @@ export interface VenueRevalidationResult {
   deactivated: number;
   refreshed: number;
   failed: number;
+  /** The last failure in the batch, as logged; absent when nothing failed. */
+  lastFailure?: string | undefined;
 }
 
 /** True if a successful Place Details fetch indicates the venue is no longer fit. */
@@ -262,6 +264,7 @@ export async function venueRevalidationTick(
   let deactivated = 0;
   let refreshed = 0;
   let failed = 0;
+  let lastFailure: string | undefined;
 
   for (const target of targets) {
     let details: PlaceDetails;
@@ -290,9 +293,10 @@ export async function venueRevalidationTick(
       // record a verification that never happened, hiding stale hours for a
       // whole cycle. A transient failure clears by itself; retry next tick.
       failed++;
+      lastFailure = err instanceof Error ? err.message : String(err);
       console.warn(
         `[venue-revalidation] details fetch failed for ${target.name} (${target.placeId}):`,
-        err instanceof Error ? err.message : err,
+        lastFailure,
       );
       continue;
     }
@@ -367,5 +371,11 @@ export async function venueRevalidationTick(
   // holds (counting rows would make `deactivated` ~5× while `failed` stayed 1×).
   // Ops consequence worth knowing: the log line in `index.ts` keeps its shape
   // but changes units, so `scanned=30` now means 30 venues / ~150 rows.
-  return { scanned: targets.length, deactivated, refreshed, failed };
+  return {
+    scanned: targets.length,
+    deactivated,
+    refreshed,
+    failed,
+    ...(lastFailure !== undefined ? { lastFailure } : {}),
+  };
 }

@@ -38,6 +38,7 @@
 
 import type { VenueCategory } from "./vibe-parser.js";
 import { curatedPhotoNames, type PlacePhotoMeta } from "./venue-photo-curation.js";
+import { formatPlacesError, readPlacesError } from "../utils/places-error.js";
 
 export interface Venue {
   name: string;
@@ -572,7 +573,8 @@ export async function fetchPlacePhotoNames(
       },
     );
     if (!res.ok) {
-      console.warn(`[venue] photo lookup for ${placeId} failed: ${res.status}`);
+      const reason = formatPlacesError(res.status, await readPlacesError(res));
+      console.warn(`[venue] photo lookup for ${placeId} failed: ${reason}`);
       return null;
     }
     const p = (await res.json()) as PlaceV1;
@@ -723,17 +725,6 @@ export class PlaceNotFoundError extends Error {
   }
 }
 
-/** Is this non-OK Places response the API saying NOT_FOUND in its own words? */
-async function isPlacesNotFound(res: Response): Promise<boolean> {
-  if (res.status !== 404) return false;
-  try {
-    const body = (await res.json()) as { error?: { status?: unknown } };
-    return body.error?.status === "NOT_FOUND";
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Fetch the current state of a single place by its Places resource id
  * (Place Details). Used by the re-validation cron to detect closures / rating
@@ -758,8 +749,9 @@ export async function fetchPlaceDetails(
     },
   );
   if (!res.ok) {
-    if (await isPlacesNotFound(res)) throw new PlaceNotFoundError(placeId);
-    throw new Error(`Places API (New) place details failed: ${res.status}`);
+    const body = await readPlacesError(res);
+    if (res.status === 404 && body.status === "NOT_FOUND") throw new PlaceNotFoundError(placeId);
+    throw new Error(`Places API (New) place details failed: ${formatPlacesError(res.status, body)}`);
   }
   const p = (await res.json()) as PlaceV1;
   return {

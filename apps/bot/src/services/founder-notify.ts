@@ -269,6 +269,32 @@ export async function notifyFounderVenueSelectionFailure(
 }
 
 /**
+ * Google Places refused a whole night's re-validation, or answers again.
+ *
+ * Names what people lose and where to look, because the fix has so far always
+ * been in the Google Cloud console and never in our code.
+ */
+export async function notifyFounderPlacesOutage(
+  state: "down" | "recovered",
+  details: { failed: number; reason?: string | undefined } = { failed: 0 },
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const text =
+    state === "down"
+      ? `⚠️ Google Places не отвечает: ночная проверка мест не прошла ни для одного из ${details.failed}.\n` +
+        `Причина: ${details.reason ?? "не названа"}\n` +
+        `Не работают фото мест, поиск точки выезда и запасной подбор мест.\n` +
+        `Если отказ 403 — Google Cloud: Billing (долг, статус), ограничения API у ключа, включён ли Places API (New).`
+      : `✅ Google Places снова отвечает: ночная проверка мест прошла.`;
+  try {
+    await api.sendMessage(founderChatId(), text);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} places outage notify failed`, err);
+  }
+}
+
+/**
  * Weekly "one venue is taking the city" alert (VENUE_ENGINE_IMPROVEMENT_PLAN
  * part 6). Carries the sample size on purpose: in a city with three dates a
  * 66% share is arithmetic, not a defect, and only the reader can tell those
