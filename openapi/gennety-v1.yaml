@@ -5302,7 +5302,7 @@ paths:
                   deleted: { type: integer }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503":
-          description: A photo could not be erased; nothing was deleted from the chats
+          description: A photo could not be erased; the chats and their messages stay (photos erased before it are gone), try again
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5335,7 +5335,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "503":
-          description: A photo could not be erased; nothing was deleted from the chat, try again
+          description: A photo could not be erased; the chat and its messages stay (photos erased before it are gone), try again
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

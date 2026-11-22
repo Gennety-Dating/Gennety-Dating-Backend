@@ -1006,8 +1006,8 @@ chatRouter.patch("/sessions/:id", async (req: Request, res: Response): Promise<v
 /**
  * DELETE /v1/chat/sessions/:id — gone for good: messages, photos, summary and
  * what the agent could find it by (`chat-session-delete.ts`). A photo that could
- * not be erased stops it (503) and nothing is deleted from the chat; the client
- * may simply try again. An unknown id is a 404 the client reads as «gone».
+ * not be erased stops it (503): the chat and its messages stay, photos erased
+ * before it are gone; the client may simply try again. An unknown id is a 404 the client reads as «gone».
  */
 chatRouter.delete("/sessions/:id", async (req: Request, res: Response): Promise<void> => {
   const outcome = await deleteChatSession(req.userId!, String(req.params.id).toLowerCase(), {
