@@ -2,6 +2,18 @@
 
 # 2026-11-22 — Pinterest Connect: design for approval, connector in Settings, nothing built
 
+## 2026-11-22 — Pinterest Connect: the founder accepts every recommendation; phase 0 next, code after Pinterest's answer
+
+**Kind:** founder decision
+
+**What:** On the design, its mockup and the six open questions the founder answered «Совсем согласен». That settles: placement B (Settings connector beside Apple Health, owner-only «Твой вкус» on the profile) plus the one-time offer card, no onboarding step; pin images to OpenAI's vision model; the encrypted refresh token kept for a monthly update; no secret boards in v1; matching weight 0 with a shadow log; no partner-facing shared-taste line in v1. The answer also covers the schema (`pinterest_connections`, `user_aesthetic_profiles`, `match_score_logs.aesthetic_similarity`), the Pinterest API and the three server secrets as designed.
+
+**Why:** The founder approved the spec as written; the agreed order in it puts Pinterest's written consent before code, so that order stands too.
+
+**What it changes going forward:** Phase 0 is the next step: the founder registers the developer app under a Pinterest business account the founder controls and sends the drafted use-case text and consent email (spec, «Phase 0 texts»). Which account owns the app is still open. Phase 1 code starts only once Pinterest answers yes; a partial yes changes the spec first, a no ends the feature.
+
+**Recorded in:** `docs/product/domains/pinterest-connect.md` («Founder answers», «Phase 0 texts»).
+
 ## 2026-11-22 — Pinterest Connect designed; recommended as a Settings connector with a one-time offer card, not an onboarding step
 
 **Kind:** not done (design waiting for the founder's «да»)

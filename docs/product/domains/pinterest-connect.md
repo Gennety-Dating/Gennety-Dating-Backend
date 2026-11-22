@@ -2,7 +2,9 @@
 
 # Pinterest Connect — aesthetic taste from boards and pins
 
-Status: design for the founder's approval, written 2026-11-22. Nothing is built.
+Status: design approved by the founder on 2026-11-22 («Совсем согласен»: every
+recommendation below stands). Nothing is built. Next is phase 0: the Pinterest
+developer app and Pinterest's written answer. Code starts only after that answer.
 Decision record: `docs/architecture/decisions/2026-11-22-pinterest-connect.md`.
 Mockup: `docs/product/mockups/pinterest-connect.html`.
 
@@ -420,21 +422,70 @@ a new onboarding step).**
    read), the puppet stays unconnected. That is the default to confirm with
    the founder at that point.
 
-## Open questions for the founder
+## Founder answers (2026-11-22)
 
-1. Placement: B plus the one-time offer card, as recommended, or an
-   onboarding step?
-2. Pin images to OpenAI's vision model (recommended, like the screenshot
-   library), or text and dominant colours only (cheaper, much weaker)?
-3. Keep the refresh token for a monthly automatic update (recommended), or a
-   one-time read that keeps no token, like the Spotify import, with
-   «Обновить» meaning a new Pinterest login?
-4. Secret boards: leave them out in v1 (recommended)?
-5. Who writes to Pinterest in phase 0, and from which account: the developer
-   app has to belong to a Pinterest business account the founder controls.
-6. Matching weight 0 with a shadow log first (recommended), as with Tempo
-   Sync?
-7. A partner-facing «общий вкус» line: out of v1 (recommended)?
+The founder accepted every recommendation at once («Совсем согласен»).
+
+1. Placement: B, the Settings connector and the owner-only profile block,
+   plus the one-time offer card. No onboarding step.
+2. Pin images go to OpenAI's vision model (`MODELS.visionFast`), as in the
+   screenshot library.
+3. The refresh token is kept, encrypted, for the monthly automatic update.
+4. Secret boards stay out of v1.
+5. Matching weight starts at 0 with the shadow log.
+6. No partner-facing «общий вкус» line in v1.
+7. Still open: which Pinterest business account owns the developer app and
+   sends the phase 0 email. This spec had no recommendation for it; the
+   founder holds the account, so the drafts below are written for the founder
+   to send.
+
+## Phase 0 texts (drafts for the founder to send)
+
+Placeholders in angle brackets are filled by the founder. No personal data of
+any user is included or needed.
+
+1. **Use-case description for the Trial application** (English, as the
+   developer portal asks).
+   - «Gennety is a dating app that sets people up on real dates. A user can
+     optionally connect their Pinterest account with read-only scopes
+     (user_accounts:read, boards:read, pins:read) to get a short summary of
+     their own visual taste: a colour palette, a few style families, what their
+     boards are about and the kind of places they save. The summary is shown
+     only to that user, who can remove any part of it or disconnect at any
+     time. It also helps us suggest a date venue and outfit advice for that
+     user. We do not store pins, images or board names: they are read once in
+     memory, reduced to a few tags, and discarded. We never write to
+     Pinterest, never show a user's pins or tags to any other user, and never
+     use Pinterest data to train or improve any model. Disconnecting deletes
+     the summary and the tokens immediately. Privacy policy: <policy URL>.»
+2. **Email to Pinterest developer support asking for written consent.**
+   - Subject: «Written consent request: per-user taste summary from a user's
+     own pins (read-only)».
+   - Body: «Hello Pinterest Developer team. We are building <app name>,
+     app id <app id>. Before we build further we would like your written
+     confirmation that the following use is allowed under the Developer and
+     API Terms and the Developer Guidelines effective 2026-08-18.
+     (1) With the user's explicit consent through Pinterest OAuth, we read
+     that user's own public boards and pins (read-only scopes only).
+     (2) We send up to 36 of those pin images, with their titles and alt text,
+     to a model provider (the OpenAI API, under terms that forbid training on
+     our data) to infer a short list of taste tags for that user. This is
+     per-user inference on the user's behalf; no model is trained or improved
+     with Pinterest data.
+     (3) We store only the derived tags (for example "warm neutral palette",
+     "minimal", "interiors", "rooftop view") linked to the user's account in
+     our app, until the user disconnects or 60 days pass without a refresh.
+     Pins, images, board names and Pinterest user identifiers are not stored.
+     (4) The tags are visible only to the user and are used only to serve that
+     user: advice from our in-app assistant, date venue suggestions and, later,
+     a small matching signal. They are never shown to other users, sold,
+     shared with advertisers or combined with other users' Pinterest data.
+     (5) Disconnecting deletes the tags and tokens at once and stops all use.
+     If any part needs to change to comply, please tell us which. Thank you,
+     <name>, <role>, <company>.»
+3. **After the answer.** A yes is recorded in the decision journal with its
+   date and the exact wording, and phase 1 starts. A partial yes changes this
+   spec first. A no ends the feature.
 
 ## Needs the founder's «да» before any code (AGENTS.md rule 5)
 
