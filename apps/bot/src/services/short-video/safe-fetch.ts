@@ -78,6 +78,8 @@ export type SafeFetchResult<T> =
 const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_PAGE_BYTES = 1_500_000;
+/** The ceiling of `SafeFetchOptions.maxBytes`. */
+const MAX_ALLOWLISTED_PAGE_BYTES = 4_000_000;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 /**
@@ -248,6 +250,12 @@ export interface SafeFetchOptions {
   resolver?: typeof lookup;
   /** Extra request headers. Never carries credentials — see the module note. */
   headers?: Record<string, string>;
+  /**
+   * `fetchAllowlistedPage` only: a larger body cap than the default, for a
+   * caller whose page is known to be big (a YouTube playlist page runs past
+   * 1.5 MB). Never above `MAX_ALLOWLISTED_PAGE_BYTES`.
+   */
+  maxBytes?: number;
 }
 
 interface HopResult {
@@ -447,7 +455,8 @@ export async function fetchAllowlistedPage(
 ): Promise<SafeFetchResult<{ body: string; finalUrl: string }>> {
   const hop = await requestWithGuard(url, (next) => allowHost(next.hostname), options);
   if (!hop.ok) return hop;
-  const buffer = await readCapped(hop.response, MAX_PAGE_BYTES);
+  const cap = Math.min(options.maxBytes ?? MAX_PAGE_BYTES, MAX_ALLOWLISTED_PAGE_BYTES);
+  const buffer = await readCapped(hop.response, cap);
   if (!buffer) return { ok: false, error: "too_large" };
   return { ok: true, body: buffer.toString("utf8"), finalUrl: hop.finalUrl };
 }

@@ -201,3 +201,90 @@ export async function getAppleMusicSong(
   seenSongs.set(key, { song, at: Date.now() });
   return { ok: true, value: song };
 }
+
+/** A catalogue playlist or album, read for the share sheet (decision 2026-11-22). */
+export interface AppleMusicCollection {
+  name: string | null;
+  /** The playlist's curator or the album's artist. */
+  author: string | null;
+  coverUrl: string | null;
+  /** Tracks Apple says the list has (albums only); null for a playlist. */
+  total: number | null;
+  songs: StoredMusicTrack[];
+  /** Apple holds more rows than its first page (`relationships.tracks.next`). */
+  more: boolean;
+  /** Rows on the page that are not songs we would pin (music videos, gone songs). */
+  skipped: number;
+}
+
+const COLLECTION_ID: Record<"playlists" | "albums", RegExp> = {
+  playlists: /^pl\.[A-Za-z0-9-]{8,80}$/u,
+  albums: /^[0-9]{1,20}$/u,
+};
+
+/**
+ * «Поделиться → Gennety» on an Apple Music playlist or album: the catalogue's
+ * own first page of tracks (up to 100), same developer token as the song
+ * lookup. Every song read is remembered, so «Добавить N» right after needs no
+ * second call per song.
+ */
+export async function getAppleMusicCollection(
+  kind: "playlists" | "albums",
+  id: string,
+  storefront: string,
+): Promise<MusicResult<AppleMusicCollection>> {
+  if (!appleMusicConfigured()) return { ok: false, error: "not_configured" };
+  if (!COLLECTION_ID[kind].test(id) || !isStorefront(storefront)) return { ok: false, error: "not_found" };
+  const token = appleMusicDeveloperToken();
+  if (!token) return { ok: false, error: "not_configured" };
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/catalog/${storefront}/${kind}/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, error: "upstream_unavailable" };
+  }
+  if (response.status === 404) return { ok: false, error: "not_found" };
+  if (!response.ok) {
+    console.warn(`${LOG_PREFIX} ${kind} lookup failed`, { status: response.status });
+    if (response.status === 401 || response.status === 403) developerToken = null;
+    return { ok: false, error: response.status === 429 ? "rate_limited" : "upstream_unavailable" };
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { ok: false, error: "upstream_unavailable" };
+  }
+  const resource = ((body as { data?: unknown[] } | null)?.data ?? [])[0] as
+    | {
+        attributes?: { name?: unknown; curatorName?: unknown; artistName?: unknown; artwork?: unknown; trackCount?: unknown };
+        relationships?: { tracks?: { data?: unknown; next?: unknown } };
+      }
+    | undefined;
+  if (!resource) return { ok: false, error: "not_found" };
+  const rows = Array.isArray(resource.relationships?.tracks?.data) ? resource.relationships.tracks.data : [];
+  const songs: StoredMusicTrack[] = [];
+  for (const row of rows) {
+    const song = mapAppleMusicSong(row, storefront);
+    if (!song) continue;
+    songs.push(song);
+    seenSongs.set(`${storefront}:${song.trackId}`, { song, at: Date.now() });
+  }
+  const attributes = resource.attributes ?? {};
+  return {
+    ok: true,
+    value: {
+      name: nonEmpty(attributes.name),
+      author: nonEmpty(attributes.curatorName) ?? nonEmpty(attributes.artistName),
+      coverUrl: coverFrom(attributes.artwork),
+      total: typeof attributes.trackCount === "number" ? attributes.trackCount : null,
+      songs,
+      more: typeof resource.relationships?.tracks?.next === "string",
+      skipped: rows.length - songs.length,
+    },
+  };
+}

@@ -197,6 +197,24 @@ export const shareVideoLimiter = make({
   message: { error: "rate_limited" },
 });
 
+/**
+ * Share sheet music (decision 2026-11-22): a playlist read is one page plus up
+ * to 30 catalogue look-ups, so 30 reads an hour; «Добавить» is cheaper.
+ */
+export const shareMusicLimiter = make({
+  windowMs: 3_600_000,
+  limit: 30,
+  keyGenerator: (req): string => `share-music:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate_limited" },
+});
+
+export const shareMusicAddLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => `share-music-add:${req.userId ?? ipKey(req)}`,
+  message: { error: "rate_limited" },
+});
+
 export const shareAskLimiter = make({
   windowMs: 3_600_000,
   limit: 60,

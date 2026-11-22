@@ -72,6 +72,7 @@ import { createScreenshotsRouter } from "./routes/screenshots.js";
 import { createMemoryRouter } from "./routes/memory.js";
 import { createAgentMemoryRouter } from "./routes/agent-memory.js";
 import { createShareRouter } from "./routes/share.js";
+import { createShareMusicRouter } from "./routes/share-music.js";
 import { createAfterDateRouter } from "./routes/after-date.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
@@ -146,6 +147,7 @@ let voicePromptRouter: ReturnType<typeof createVoicePromptRouter> | null = null;
 let profileVideoRouter: ReturnType<typeof createProfileVideoRouter> | null = null;
 let profileMusicRouter: ReturnType<typeof createProfileMusicRouter> | null = null;
 let musicSearchRouter: ReturnType<typeof createMusicSearchRouter> | null = null;
+let shareMusicRouter: ReturnType<typeof createShareMusicRouter> | null = null;
 let spotifyImportRouter: ReturnType<typeof createSpotifyImportRouter> | null = null;
 let nativeFeedbackRouter: ReturnType<typeof createNativeFeedbackRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
@@ -452,6 +454,17 @@ app.use("/v1/me/memory", createMemoryRouter());
 app.use("/v1/me/agent-memory", createAgentMemoryRouter());
 // «Поделиться → Gennety» for a short video (decision journal 2026-10-24) —
 // the wishlist's front door, same switch; before `/v1/me` like the rest.
+// A shared playlist, album or track (decision 2026-11-22) — music on the
+// profile, so the music switch rather than the wishlist's; BEFORE the share
+// router, which 404s everything while the wishlist is off.
+app.use("/v1/me/share/music", (req, res, next) => {
+  if (!env.PROFILE_MUSIC_ENABLED) {
+    res.status(404).json({ error: "profile-music-disabled" });
+    return;
+  }
+  if (!shareMusicRouter) shareMusicRouter = createShareMusicRouter();
+  shareMusicRouter(req, res, next);
+});
 app.use("/v1/me/share", createShareRouter());
 app.use("/v1/me/after-date", createAfterDateRouter());
 
