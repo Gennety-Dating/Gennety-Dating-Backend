@@ -33,8 +33,14 @@ vi.mock("./apple-music.js", async (importOriginal) => ({
 }));
 vi.mock("./spotify-oauth.js", () => ({ clearTopTracksImport: h.clearTopTracksImport }));
 
-const { setProfileMusic, refreshStaleMusicTracks, listProfileMusic, serializeMusicTrack } =
-  await import("./profile-music.js");
+const {
+  appendProfileMusic,
+  profileMusicKeys,
+  setProfileMusic,
+  refreshStaleMusicTracks,
+  listProfileMusic,
+  serializeMusicTrack,
+} = await import("./profile-music.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const A = "4uLU6hMCjMI75M1A2tKUQC";
@@ -45,6 +51,10 @@ const E = "2takcwOaAZWiXQijPHIx7B";
 const SONG = "1440857781";
 const SONG_2 = "1613600188";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
+
+/** `n` distinct well-formed Spotify ids. */
+const ids = (n: number, prefix = "x") =>
+  Array.from({ length: n }, (_, i) => `${prefix}${String(i).padStart(3, "0")}`.padEnd(22, "Q"));
 
 const spotify = (trackId: string) => ({ provider: "spotify", trackId });
 const apple = (trackId: string, storefront = "ua") => ({ provider: "apple_music", trackId, storefront });
@@ -107,11 +117,7 @@ describe("setProfileMusic — refused before anyone is asked", () => {
     ["an Apple song without a storefront", [{ provider: "apple_music", trackId: SONG }], "invalid_tracks"],
     ["an Apple library id", [apple("i.PkdJvPXI2AJgm8")], "invalid_tracks"],
     ["a Spotify id passed as Apple's", [apple(A)], "invalid_tracks"],
-    [
-      "six tracks",
-      [spotify(A), spotify(B), spotify(C), spotify(D), spotify(E), apple(SONG)],
-      "too_many_tracks",
-    ],
+    ["31 tracks", [...ids(30).map(spotify), apple(SONG)], "too_many_tracks"],
     ["the same track twice", [spotify(A), spotify(A)], "duplicate_tracks"],
     ["the same song from two storefronts", [apple(SONG, "ua"), apple(SONG, "us")], "duplicate_tracks"],
   ])("%s", async (_label, input, error) => {
@@ -189,8 +195,8 @@ describe("setProfileMusic — saving", () => {
     expect(h.getTrack).toHaveBeenCalledWith(B, {});
   });
 
-  it("takes five tracks — the cap since 2026-10-19", async () => {
-    const refs = [spotify(A), spotify(B), spotify(C), spotify(D), apple(SONG)];
+  it("takes 30 tracks — the cap since 2026-11-22", async () => {
+    const refs = [...ids(29).map(spotify), apple(SONG)];
     const result = await setProfileMusic(USER, refs);
     expect(result.ok).toBe(true);
     expect(h.createMany).toHaveBeenCalledWith({
@@ -302,5 +308,122 @@ describe("refreshStaleMusicTracks", () => {
     expect(h.getTrack).toHaveBeenCalledTimes(2);
     expect(h.getAppleMusicSong).toHaveBeenCalledTimes(2);
     expect(h.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+/** A stored row as `findMany` returns it for a pinned Spotify track. */
+function pinnedRow(id: string, position = 0) {
+  const t = track(id);
+  return {
+    provider: "spotify",
+    trackId: id,
+    title: t.title,
+    artists: t.artists,
+    albumName: t.albumName,
+    coverUrl: t.coverUrl,
+    trackUrl: t.url,
+    previewUrl: null,
+    explicit: false,
+    storefront: null,
+    isrc: null,
+    refreshedAt: new Date(0),
+    position,
+  };
+}
+
+describe("appendProfileMusic — «Добавить N» from a shared playlist", () => {
+  it("appends after what is pinned and keeps the pinned rows unread", async () => {
+    h.findMany.mockResolvedValue([pinnedRow(A)]);
+    const result = await appendProfileMusic(USER, [spotify(B), apple(SONG)]);
+    expect(result).toMatchObject({
+      ok: true,
+      added: 2,
+      skipped: { duplicate: 0, notFound: 0, overLimit: 0, failed: 0 },
+    });
+    expect(h.getTrack).toHaveBeenCalledTimes(1);
+    expect(h.getTrack).toHaveBeenCalledWith(B, {});
+    expect(h.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ position: 0, trackId: A, refreshedAt: new Date(0) }),
+        expect.objectContaining({ position: 1, trackId: B }),
+        expect.objectContaining({ position: 2, trackId: SONG, storefront: "ua" }),
+      ],
+    });
+    expect(h.clearTopTracksImport).toHaveBeenCalledWith(USER);
+  });
+
+  it("skips an id already pinned, one sent twice, and the same song from another provider", async () => {
+    h.findMany.mockResolvedValue([pinnedRow(A)]);
+    // The Apple song is «Title A» by «Artist» — the pinned Spotify track.
+    h.getAppleMusicSong.mockResolvedValue({
+      ok: true,
+      value: { ...song(SONG), title: `Title ${A} (Remastered)`, artists: "Artist" },
+    });
+    const result = await appendProfileMusic(USER, [spotify(A), spotify(B), spotify(B), apple(SONG)]);
+    expect(result).toMatchObject({ ok: true, added: 1, skipped: { duplicate: 3 } });
+  });
+
+  it("fills only the free slots and never asks the provider about the rest", async () => {
+    h.findMany.mockResolvedValue(ids(28, "p").map((id, i) => pinnedRow(id, i)));
+    const result = await appendProfileMusic(USER, ids(5, "n").map(spotify));
+    expect(result).toMatchObject({ ok: true, added: 2, skipped: { overLimit: 3 } });
+    expect(h.getTrack).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets the next track take the slot of one the provider dropped", async () => {
+    h.findMany.mockResolvedValue(ids(29, "p").map((id, i) => pinnedRow(id, i)));
+    const [gone, next] = ids(2, "n");
+    h.getTrack.mockImplementation(async (id: string) =>
+      id === gone ? { ok: false, error: "not_found" } : { ok: true, value: track(id) },
+    );
+    const result = await appendProfileMusic(USER, [spotify(gone!), spotify(next!)]);
+    expect(result).toMatchObject({ ok: true, added: 1, skipped: { notFound: 1, overLimit: 0 } });
+  });
+
+  it("is refused when the profile is full, before any provider call", async () => {
+    h.findMany.mockResolvedValue(ids(30, "p").map((id, i) => pinnedRow(id, i)));
+    expect(await appendProfileMusic(USER, [spotify(A)])).toEqual({ ok: false, error: "too_many_tracks" });
+    expect(h.getTrack).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed or empty list, or more than one read can hold", async () => {
+    expect(await appendProfileMusic(USER, [])).toEqual({ ok: false, error: "invalid_tracks" });
+    expect(await appendProfileMusic(USER, [{ provider: "youtube", trackId: "x" }])).toEqual({
+      ok: false,
+      error: "invalid_tracks",
+    });
+    expect(await appendProfileMusic(USER, ids(31).map(spotify))).toEqual({
+      ok: false,
+      error: "too_many_tracks",
+    });
+  });
+
+  it("passes the provider's trouble through when nothing could be added, and stops at its quota", async () => {
+    h.getTrack.mockResolvedValue({ ok: false, error: "rate_limited" });
+    expect(await appendProfileMusic(USER, ids(10).map(spotify))).toEqual({
+      ok: false,
+      error: "rate_limited",
+    });
+    expect(h.getTrack.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(h.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps what it could read when the provider fails midway", async () => {
+    const [first, second] = ids(2);
+    h.getTrack.mockImplementation(async (id: string) =>
+      id === first ? { ok: true, value: track(id) } : { ok: false, error: "upstream_unavailable" },
+    );
+    const result = await appendProfileMusic(USER, [spotify(first!), spotify(second!)]);
+    expect(result).toMatchObject({ ok: true, added: 1, skipped: { failed: 1 } });
+  });
+});
+
+describe("profileMusicKeys", () => {
+  it("gives keys and a count, never a title", async () => {
+    h.findMany.mockResolvedValue([pinnedRow(A)]);
+    const keys = await profileMusicKeys(USER);
+    expect(keys.count).toBe(1);
+    expect([...keys.refs]).toEqual([`spotify:${A}`]);
+    expect([...keys.titles]).toEqual([`title ${A.toLowerCase()}|artist`]);
   });
 });

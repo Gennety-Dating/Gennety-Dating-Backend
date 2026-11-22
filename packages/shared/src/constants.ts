@@ -1014,3 +1014,32 @@ export const PULSE_ANALYTICS = {
  * this window the search simply continues without a word about the old pair.
  */
 export const LAST_MATCH_OUTCOME_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Music on the profile (decisions 2026-09-11, 2026-10-19, 2026-11-22): how
+ * many tracks a profile may hold. Five until 2026-11-22, when the founder
+ * raised it to 30 so a shared playlist can land whole; the profile and the
+ * match card still draw the first five and open the rest on a tap.
+ */
+export const PROFILE_MUSIC_MAX_TRACKS = 30;
+
+/**
+ * «Поделиться → Gennety» for a playlist or an album (decision 2026-11-22):
+ * the most tracks one read expands into selectable cards. Equal to the profile
+ * cap on purpose — a read longer than what can be kept would only show cards
+ * that cannot be ticked.
+ */
+export const SHARE_MUSIC_MAX_TRACKS = 30;
+
+/** Catalogue look-ups (match or cover) run at most this many at a time per read. */
+export const SHARE_MUSIC_LOOKUP_CONCURRENCY = 4;
+
+/**
+ * The whole read — page fetch, parse and every catalogue look-up — answers
+ * within this. Tracks still unmatched when it runs out come back unmatched
+ * (`not_found`), and the read is marked `partial`.
+ */
+export const SHARE_MUSIC_READ_BUDGET_MS = 15_000;
+
+/** A read of one playlist URL is reused this long (per URL, not per person). */
+export const SHARE_MUSIC_CACHE_TTL_MS = 60 * 60 * 1000;

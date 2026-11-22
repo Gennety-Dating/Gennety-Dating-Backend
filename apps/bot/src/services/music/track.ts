@@ -74,3 +74,48 @@ export function isHttpsUrl(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * One song across providers and spellings: lower case, accents and
+ * punctuation dropped, «(feat. …)», «- Remastered 2011», «(Official Video)»
+ * and the like cut off the title, artists sorted. Two rows with the same key
+ * are the same song for de-duplication — a Spotify track and the Apple Music
+ * song of one recording, or a YouTube upload matched to either.
+ */
+export function musicTitleKey(title: string, artists: string): string {
+  return `${normalizeMusicTitle(title)}|${normalizeMusicArtists(artists).join(",")}`;
+}
+
+/** The comparable core of a song title. */
+export function normalizeMusicTitle(title: string): string {
+  return foldMusicText(
+    title
+      // Everything in brackets is a version note, a feature or a video label.
+      .replace(/[([{【][^)\]}】]*[)\]}】]/gu, " ")
+      // «Song - Remastered 2011», «Song – Radio Edit», «Song - From "Film"».
+      .replace(/\s[-–—]\s.*$/u, " ")
+      .replace(/\b(?:feat|ft|featuring)\.?\s.*$/iu, " "),
+  );
+}
+
+/** Artist names, folded and sorted; «A & B», «A, B», «A feat. B», «A x B» all split. */
+export function normalizeMusicArtists(artists: string): string[] {
+  return [
+    ...new Set(
+      artists
+        .split(/\s*(?:,|&|\+|\/|;|\band\b|\bx\b|\bи\b|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/iu)
+        .map(foldMusicText)
+        .filter(Boolean),
+    ),
+  ].sort();
+}
+
+function foldMusicText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/ё/gu, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
