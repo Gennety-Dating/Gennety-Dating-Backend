@@ -21,6 +21,7 @@ import {
   listStorageObjects,
   storageBucketState,
 } from "./storage.js";
+import { collectOwnedPaths } from "../utils/owned-paths.js";
 import { unpinKnownStatusBanner } from "./status-banner.js";
 
 /** Cap mirrored from `founder-notify.ts`'s Telegram media-group ceiling. */
@@ -337,30 +338,6 @@ async function downloadFounderPhotoBuffers(
     if (buf) buffers.push(buf);
   }
   return buffers;
-}
-
-function collectOwnedPaths(values: unknown, userId: string): string[] {
-  const paths = new Set<string>();
-  const prefix = `${userId}/`;
-
-  const visit = (value: unknown): void => {
-    if (typeof value === "string") {
-      if (value.startsWith(prefix)) paths.add(value);
-      return;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (value && typeof value === "object") {
-      for (const item of Object.values(value as Record<string, unknown>)) {
-        visit(item);
-      }
-    }
-  };
-
-  visit(values);
-  return [...paths];
 }
 
 /**

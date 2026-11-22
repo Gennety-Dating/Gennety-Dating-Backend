@@ -27,8 +27,10 @@ import {
   normalizeChatSessionTitle,
   ownsChatSession,
   parseChatSessionIdField,
-  renameChatSession,
+  restoreArchivedChats,
+  updateChatSession,
 } from "../../services/chat-sessions.js";
+import { deleteArchivedChats, deleteChatSession } from "../../services/chat-session-delete.js";
 import {
   parseChatContextRef,
   readChatContextSnapshot,
@@ -121,7 +123,10 @@ function repliesField(
  *   GET   /v1/chat/activity       what the turn of a `clientMessageId` is doing now
  *   GET   /v1/chat/history        newest page, `before` pages backwards, `sessionId` = one chat
  *   GET   /v1/chat/sessions       the person's chats, most recently active first
- *   PATCH /v1/chat/sessions/:id   rename a chat
+ *   PATCH /v1/chat/sessions/:id   rename, archive or restore a chat
+ *   DELETE /v1/chat/sessions/:id  delete a chat for good (`?forget=true`: its memory notes too)
+ *   POST   /v1/chat/sessions/archived/restore   every archived chat back
+ *   DELETE /v1/chat/sessions/archived           every archived chat, for good
  *   POST  /v1/chat/messages/:id/wishlist  «Add» / «Not now» on a wishlist card
  *   POST  /v1/chat/messages/:id/offer     accept / decline a change-offer card
  *   GET   /v1/chat/topics         the pre-sessions index, kept for older builds
@@ -939,7 +944,8 @@ chatRouter.get("/sessions", async (req: Request, res: Response): Promise<void> =
   );
   const rawBefore = req.query.before;
   const before = typeof rawBefore === "string" && rawBefore ? rawBefore.toLowerCase() : null;
-  const page = await listChatSessions(req.userId!, { limit, before });
+  const archived = req.query.archived === "true";
+  const page = await listChatSessions(req.userId!, { limit, before, ...(archived ? { archived } : {}) });
   if (!page) {
     res.status(404).json({ error: "Unknown cursor" });
     return;
@@ -947,23 +953,75 @@ chatRouter.get("/sessions", async (req: Request, res: Response): Promise<void> =
   res.json(page);
 });
 
+/** «Забыть записи из чата» of a deletion — only the literal `true` forgets. */
+function forgetOf(req: Request): boolean {
+  return req.query.forget === "true";
+}
+
 /**
- * PATCH /v1/chat/sessions/:id — rename a chat by hand. From then on the
- * automatic titler never touches it. Someone else's chat is the same 404 as
- * one that never existed.
+ * The archive as a whole (decision 2026-11-22). Registered before `/:id`, which
+ * would read `archived` as a chat id.
+ */
+chatRouter.post("/sessions/archived/restore", async (req: Request, res: Response): Promise<void> => {
+  res.json({ restored: await restoreArchivedChats(req.userId!) });
+});
+
+chatRouter.delete("/sessions/archived", async (req: Request, res: Response): Promise<void> => {
+  const result = await deleteArchivedChats(req.userId!, { forget: forgetOf(req) });
+  if (result.outcome === "storage") {
+    res.status(503).json({ error: "storage" });
+    return;
+  }
+  res.json({ deleted: result.deleted });
+});
+
+/**
+ * PATCH /v1/chat/sessions/:id — rename a chat by hand (from then on the
+ * automatic titler never touches it), archive it or bring it back. Someone
+ * else's chat is the same 404 as one that never existed.
  */
 chatRouter.patch("/sessions/:id", async (req: Request, res: Response): Promise<void> => {
-  const title = normalizeChatSessionTitle(req.body?.title);
-  if (title === null) {
+  const rawTitle: unknown = req.body?.title;
+  const archived: unknown = req.body?.archived;
+  if (archived !== undefined && typeof archived !== "boolean") {
+    res.status(400).json({ error: "archived must be a boolean" });
+    return;
+  }
+  const title = rawTitle === undefined ? undefined : normalizeChatSessionTitle(rawTitle);
+  if (title === null || (title === undefined && archived === undefined)) {
     res.status(400).json({ error: "Title must be 1–80 characters" });
     return;
   }
-  const session = await renameChatSession(req.userId!, String(req.params.id).toLowerCase(), title);
+  const session = await updateChatSession(req.userId!, String(req.params.id).toLowerCase(), {
+    ...(title === undefined ? {} : { title }),
+    ...(archived === undefined ? {} : { archived }),
+  });
   if (!session) {
     res.status(404).json({ error: "Unknown chat" });
     return;
   }
   res.json(session);
+});
+
+/**
+ * DELETE /v1/chat/sessions/:id — gone for good: messages, photos, summary and
+ * what the agent could find it by (`chat-session-delete.ts`). A photo that could
+ * not be erased stops it (503) and nothing is deleted from the chat; the client
+ * may simply try again. An unknown id is a 404 the client reads as «gone».
+ */
+chatRouter.delete("/sessions/:id", async (req: Request, res: Response): Promise<void> => {
+  const outcome = await deleteChatSession(req.userId!, String(req.params.id).toLowerCase(), {
+    forget: forgetOf(req),
+  });
+  if (outcome === "unknown") {
+    res.status(404).json({ error: "Unknown chat" });
+    return;
+  }
+  if (outcome === "storage") {
+    res.status(503).json({ error: "storage" });
+    return;
+  }
+  res.status(204).end();
 });
 
 /**

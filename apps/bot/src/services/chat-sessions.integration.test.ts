@@ -27,7 +27,8 @@ import {
   getChatSession,
   listChatSessions,
   listRecentChatSessions,
-  renameChatSession,
+  restoreArchivedChats,
+  updateChatSession,
   touchChatSession,
 } from "./chat-sessions.js";
 import {
@@ -35,6 +36,7 @@ import {
   summarizeChatSession,
   sweepChatSessionDigests,
 } from "./chat-session-digest.js";
+import { deleteChatSession } from "./chat-session-delete.js";
 import { datesAround, readPastChat, searchPastChats } from "./chat-past-tools.js";
 
 const [{ n: vectorInstalled }] = await db.$queryRaw<Array<{ n: number }>>`
@@ -195,11 +197,39 @@ describe("claim, rename, touch, legacy rule", () => {
     const me = await seedUser();
     const other = await seedUser();
     const id = await chat(me.id, [{ role: "user", content: "x", at: T0 }]);
-    expect(await renameChatSession(other.id, id, "Чужое")).toBeNull();
-    const renamed = await renameChatSession(me.id, id, "Про Аню");
+    expect(await updateChatSession(other.id, id, { title: "Чужое" })).toBeNull();
+    const renamed = await updateChatSession(me.id, id, { title: "Про Аню" });
     expect(renamed).toMatchObject({ id, title: "Про Аню", messageCount: 1 });
     expect(await db.chatSession.findUnique({ where: { id } })).toMatchObject({ titleByUser: true });
     expect(await getChatSession(other.id, id)).toBeNull();
+  });
+
+  it("an archived chat leaves the history and Today, comes back by itself, and a deletion takes its messages", async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const id = await chat(me.id, [{ role: "user", content: "x", at: minutes(0) }]);
+    const kept = await chat(me.id, [{ role: "user", content: "y", at: minutes(-900) }]);
+
+    expect(await updateChatSession(other.id, id, { archived: true })).toBeNull();
+    expect((await updateChatSession(me.id, id, { archived: true }))?.archivedAt).not.toBeNull();
+    const history = await listChatSessions(me.id, { limit: 30 });
+    expect(history?.sessions.map((s) => s.id)).toEqual([kept]);
+    expect(history?.archivedCount).toBe(1);
+    expect((await listChatSessions(me.id, { limit: 30, archived: true }))?.sessions.map((s) => s.id)).toEqual([id]);
+    expect((await listRecentChatSessions(me.id, 5)).map((s) => s.id)).toEqual([kept]);
+    // The legacy rule never continues an archived chat by accident.
+    expect(await continueOrOpenChatSession(me.id, minutes(5))).not.toBe(id);
+
+    expect(await claimChatSession(me.id, id)).toBe(true);
+    expect((await listChatSessions(me.id, { limit: 30 }))?.sessions.map((s) => s.id)).toContain(id);
+    await updateChatSession(me.id, id, { archived: true });
+    expect(await restoreArchivedChats(me.id)).toBe(1);
+
+    expect(await deleteChatSession(other.id, id, { forget: true })).toBe("unknown");
+    expect(await deleteChatSession(me.id, id, { forget: true })).toBe("deleted");
+    expect(await db.chatSession.count({ where: { id } })).toBe(0);
+    expect(await db.message.count({ where: { sessionId: id } })).toBe(0);
+    expect(await db.message.count({ where: { sessionId: kept } })).toBe(1);
   });
 
   it("touch only moves forward; the legacy rule reads it", async () => {

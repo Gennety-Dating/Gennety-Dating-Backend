@@ -62,7 +62,14 @@ const listChatSessions = vi.fn(async (_u: string, _o: unknown): Promise<unknown>
   sessions: [],
   hasMore: false,
 }));
-const renameChatSession = vi.fn(async (_u: string, _s: string, _t: string): Promise<unknown> => null);
+const updateChatSession = vi.fn(async (_u: string, _s: string, _c: unknown): Promise<unknown> => null);
+const restoreArchivedChats = vi.fn(async (_u: string) => 0);
+const deleteChatSession = vi.fn(async (_u: string, _s: string, _o: unknown): Promise<string> => "deleted");
+const deleteArchivedChats = vi.fn(async (_u: string, _o: unknown): Promise<unknown> => ({ outcome: "deleted", deleted: 0 }));
+vi.mock("../../services/chat-session-delete.js", () => ({
+  deleteChatSession: (u: string, s: string, o: unknown) => deleteChatSession(u, s, o),
+  deleteArchivedChats: (u: string, o: unknown) => deleteArchivedChats(u, o),
+}));
 vi.mock("../../services/chat-sessions.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../services/chat-sessions.js")>();
   return {
@@ -72,7 +79,8 @@ vi.mock("../../services/chat-sessions.js", async (importOriginal) => {
     claimChatSession: (u: string, s: string) => claimChatSession(u, s),
     ownsChatSession: (u: string, s: string) => ownsChatSession(u, s),
     listChatSessions: (u: string, o: unknown) => listChatSessions(u, o),
-    renameChatSession: (u: string, s: string, t: string) => renameChatSession(u, s, t),
+    updateChatSession: (u: string, s: string, c: unknown) => updateChatSession(u, s, c),
+    restoreArchivedChats: (u: string) => restoreArchivedChats(u),
   };
 });
 
@@ -132,7 +140,7 @@ beforeEach(() => {
   claimChatSession.mockReset().mockResolvedValue(true);
   ownsChatSession.mockReset().mockResolvedValue(true);
   listChatSessions.mockReset().mockResolvedValue({ sessions: [], hasMore: false });
-  renameChatSession.mockReset().mockResolvedValue(null);
+  updateChatSession.mockReset().mockResolvedValue(null);
   messageFindMany.mockReset().mockResolvedValue([]);
   messageFindUnique.mockReset().mockResolvedValue(null);
   signBatch.mockClear();
@@ -245,7 +253,7 @@ describe("GET /v1/chat/sessions", () => {
 
 describe("PATCH /v1/chat/sessions/:id", () => {
   it("renames with the title trimmed and whitespace collapsed", async () => {
-    renameChatSession.mockResolvedValue(session(CHAT, "Про Аню"));
+    updateChatSession.mockResolvedValue(session(CHAT, "Про Аню"));
 
     const res = await request(app())
       .patch(`/v1/chat/sessions/${CHAT}`)
@@ -254,7 +262,7 @@ describe("PATCH /v1/chat/sessions/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.title).toBe("Про Аню");
-    expect(renameChatSession).toHaveBeenCalledWith(USER_ID, CHAT, "Про Аню");
+    expect(updateChatSession).toHaveBeenCalledWith(USER_ID, CHAT, { title: "Про Аню" });
   });
 
   it("an empty, blank, overlong or missing title is a 400 and touches nothing", async () => {
@@ -262,11 +270,11 @@ describe("PATCH /v1/chat/sessions/:id", () => {
       const res = await request(app()).patch(`/v1/chat/sessions/${CHAT}`).set(auth()).send({ title });
       expect(res.status, String(title)).toBe(400);
     }
-    expect(renameChatSession).not.toHaveBeenCalled();
+    expect(updateChatSession).not.toHaveBeenCalled();
   });
 
   it("80 characters is still a title", async () => {
-    renameChatSession.mockResolvedValue(session(CHAT, "x".repeat(80)));
+    updateChatSession.mockResolvedValue(session(CHAT, "x".repeat(80)));
     const res = await request(app())
       .patch(`/v1/chat/sessions/${CHAT}`)
       .set(auth())
@@ -280,6 +288,61 @@ describe("PATCH /v1/chat/sessions/:id", () => {
       .set(auth())
       .send({ title: "Моё" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("the archive and the deletion of chats", () => {
+  it("lists the archive when asked", async () => {
+    await request(app()).get("/v1/chat/sessions?archived=true").set(auth());
+    expect(listChatSessions).toHaveBeenCalledWith(USER_ID, { limit: 30, before: null, archived: true });
+  });
+
+  it("PATCH archives, and may rename in the same call", async () => {
+    updateChatSession.mockResolvedValue(session(CHAT, "x"));
+    const only = await request(app()).patch(`/v1/chat/sessions/${CHAT}`).set(auth()).send({ archived: true });
+    expect(only.status).toBe(200);
+    expect(updateChatSession).toHaveBeenLastCalledWith(USER_ID, CHAT, { archived: true });
+    await request(app()).patch(`/v1/chat/sessions/${CHAT}`).set(auth()).send({ archived: false, title: "Моё" });
+    expect(updateChatSession).toHaveBeenLastCalledWith(USER_ID, CHAT, { title: "Моё", archived: false });
+  });
+
+  it("PATCH refuses a non-boolean archived and a bad title beside a good one", async () => {
+    for (const body of [{ archived: "yes" }, { archived: null }, { archived: true, title: " " }, {}]) {
+      const res = await request(app()).patch(`/v1/chat/sessions/${CHAT}`).set(auth()).send(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(updateChatSession).not.toHaveBeenCalled();
+  });
+
+  it("DELETE forgets only on the literal true", async () => {
+    const res = await request(app()).delete(`/v1/chat/sessions/${CHAT.toUpperCase()}?forget=true`).set(auth());
+    expect(res.status).toBe(204);
+    expect(deleteChatSession).toHaveBeenLastCalledWith(USER_ID, CHAT, { forget: true });
+    await request(app()).delete(`/v1/chat/sessions/${CHAT}?forget=1`).set(auth());
+    expect(deleteChatSession).toHaveBeenLastCalledWith(USER_ID, CHAT, { forget: false });
+  });
+
+  it("DELETE answers 404 for an unknown chat and 503 when a photo stayed", async () => {
+    deleteChatSession.mockResolvedValueOnce("unknown");
+    expect((await request(app()).delete(`/v1/chat/sessions/${OTHER_CHAT}`).set(auth())).status).toBe(404);
+    deleteChatSession.mockResolvedValueOnce("storage");
+    expect((await request(app()).delete(`/v1/chat/sessions/${CHAT}`).set(auth())).status).toBe(503);
+  });
+
+  it("`archived` is the archive, never a chat id", async () => {
+    deleteChatSession.mockClear();
+    deleteArchivedChats.mockResolvedValueOnce({ outcome: "deleted", deleted: 2 });
+    const gone = await request(app()).delete("/v1/chat/sessions/archived?forget=true").set(auth());
+    expect(gone.body).toEqual({ deleted: 2 });
+    expect(deleteArchivedChats).toHaveBeenCalledWith(USER_ID, { forget: true });
+    expect(deleteChatSession).not.toHaveBeenCalled();
+    restoreArchivedChats.mockResolvedValueOnce(3);
+    const back = await request(app()).post("/v1/chat/sessions/archived/restore").set(auth());
+    expect(back.body).toEqual({ restored: 3 });
+  });
+
+  it("needs a token", async () => {
+    expect((await request(app()).delete(`/v1/chat/sessions/${CHAT}`)).status).toBe(401);
   });
 });
 

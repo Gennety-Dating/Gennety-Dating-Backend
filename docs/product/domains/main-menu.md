@@ -706,7 +706,10 @@ Supported first-class flows:
   chat; older chats live in a history list (`GET /v1/chat/sessions`) titled by
   a small model — the topic in 2–6 words in the account language, never the
   person's first line — and can be renamed by hand, after which no model
-  touches the title. Inside a chat the agent sees only that chat (plus the
+  touches the title. Since 2026-11-22 a chat can be archived (out of the list
+  and of Today, still the agent's to recall; the next message in it brings it
+  back) or deleted for good (messages, photos, summary and search; memory notes
+  from it too unless the person keeps them; reminders and wishlist stay). Inside a chat the agent sees only that chat (plus the
   shared system prompt: profile, dates, feed); it reaches older chats only
   when the person refers to something from before or asks about a past date,
   through two read tools — `search_past_chats` (summaries + words) and

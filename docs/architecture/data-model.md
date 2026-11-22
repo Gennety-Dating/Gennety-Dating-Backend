@@ -530,13 +530,16 @@ one chat's rows; other chats reach it through `search_past_chats` /
 | `userId` | → `users`, cascade (the chats go with the account) |
 | `title`, `titleByUser`, `titledAtCount` | Model-written (`MODELS.fast`, account language, 2–6 words, never the opener) or hand-set; `titleByUser` freezes it; `titledAtCount` = non-system message count at the last auto-titling (refresh after +6) |
 | `summary`, `summaryEmbedding`, `summarizedAtCount` | English summary for retrieval + `vector(1536)` of `title + summary` (`text-embedding-3-small`, written by raw SQL — `Unsupported`), and the count it was written at: stale exactly when the chat has grown since |
+| `archivedAt` | 2026-11-22: put away by the person — out of the history list and Today, still searchable by the agent. Cleared by restore and by the next message the person sends in it (`claimChatSession`). A deleted chat has no row |
 | `createdAt` | First message |
 | `updatedAt` | **Newest message**, set by the turn that wrote it — NOT `@updatedAt`, so a rename or a new title never moves a chat to the top of the list |
 
 Index `(user_id, updated_at)` for the list, the legacy six-hour lookup and the
 digest scan. No vector index: every search is scoped to one person's chats.
-Writers: `services/chat-sessions.ts` (claim, legacy rule, touch, rename) and
-`services/chat-session-digest.ts` (title/summary/embedding, CAS on the counts).
+Writers: `services/chat-sessions.ts` (claim, legacy rule, touch, rename, archive),
+`services/chat-session-digest.ts` (title/summary/embedding, CAS on the counts) and
+`services/chat-session-delete.ts` (the row and everything under it, photos first,
+under the person's chat lock `chat-turn-lock.ts`).
 
 `memoryScannedCount` (2026-11-19) is how many non-system messages the memory
 writer has read (`services/agent-memory-writer.ts`), a CAS like

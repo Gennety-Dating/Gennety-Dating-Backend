@@ -48,6 +48,7 @@ import {
   type ChatContextSnapshot,
 } from "./chat-context.js";
 import { continueOrOpenChatSession, touchChatSession } from "./chat-sessions.js";
+import { withChatLock } from "./chat-turn-lock.js";
 import { buildPersonCard } from "./chat-person-card.js";
 import { MEMORY_STRICT_TOOLS, CONSENT_GATED_TOOLS, personConsented, type ConsentQuestion } from "./chat-consent.js";
 import { stepForTool, type ChatActivityStep } from "./chat-activity.js";
@@ -632,8 +633,6 @@ export interface ChatDeps {
   consent?: (question: ConsentQuestion) => Promise<boolean>;
 }
 
-const userLocks = new Map<string, Promise<ChatTurnResult>>();
-
 /**
  * Public entry point. Per-user serial — a second concurrent call from the
  * same user awaits the prior turn so DB inserts don't interleave.
@@ -642,18 +641,7 @@ export async function runChatTurn(
   input: ChatTurnInput,
   deps: ChatDeps = {},
 ): Promise<ChatTurnResult> {
-  const existing = userLocks.get(input.userId);
-  const next = (existing ?? Promise.resolve()).then(() => runTurnInner(input, deps));
-  // Swallow rejection on the lock chain — callers see the original error via `next`.
-  const lockChain = next.catch(() => undefined as unknown as ChatTurnResult);
-  userLocks.set(input.userId, lockChain);
-  try {
-    return await next;
-  } finally {
-    if (userLocks.get(input.userId) === lockChain) {
-      userLocks.delete(input.userId);
-    }
-  }
+  return withChatLock(input.userId, () => runTurnInner(input, deps));
 }
 
 async function runTurnInner(

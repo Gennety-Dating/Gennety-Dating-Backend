@@ -398,8 +398,8 @@ export interface DeliveryDeps {
 
 async function appChatFor(userId: string, sessionId: string | null, now: Date): Promise<string> {
   if (sessionId) {
-    const s = await prisma.chatSession.findUnique({ where: { id: sessionId }, select: { userId: true, updatedAt: true } });
-    if (s && s.userId === userId && now.getTime() - s.updatedAt.getTime() < AGENT_REMINDERS.chatGapMs) return sessionId;
+    const s = await prisma.chatSession.findUnique({ where: { id: sessionId }, select: { userId: true, updatedAt: true, archivedAt: true } });
+    if (s && s.userId === userId && !s.archivedAt && now.getTime() - s.updatedAt.getTime() < AGENT_REMINDERS.chatGapMs) return sessionId;
   }
   const created = await prisma.chatSession.create({ data: { userId }, select: { id: true } });
   return created.id;

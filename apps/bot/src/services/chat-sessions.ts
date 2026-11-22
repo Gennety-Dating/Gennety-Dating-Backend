@@ -40,6 +40,10 @@ export interface ChatSessionDto {
   updatedAt: string;
   /** Non-system messages. */
   messageCount: number;
+  /** When the person archived it; `null` for a chat in the history list. */
+  archivedAt: string | null;
+  /** Memory notes last written from this chat — what a deletion may also forget. */
+  memoryNotes: number;
 }
 
 /**
@@ -59,6 +63,9 @@ export function parseChatSessionIdField(raw: unknown): string | null | "invalid"
  * the caller (`ON CONFLICT DO NOTHING` — two concurrent first messages with the
  * same id create one row, not two and not an error); an id that belongs to
  * someone else answers `false` and changes nothing.
+ *
+ * Writing into an archived chat brings it back (decision 2026-11-22): the
+ * person is talking in it again, so it belongs in the history list.
  */
 export async function claimChatSession(userId: string, sessionId: string): Promise<boolean> {
   await prisma.chatSession.createMany({
@@ -67,9 +74,13 @@ export async function claimChatSession(userId: string, sessionId: string): Promi
   });
   const row = await prisma.chatSession.findUnique({
     where: { id: sessionId },
-    select: { userId: true },
+    select: { userId: true, archivedAt: true },
   });
-  return row?.userId === userId;
+  if (row?.userId !== userId) return false;
+  if (row.archivedAt) {
+    await prisma.chatSession.updateMany({ where: { id: sessionId, userId }, data: { archivedAt: null } });
+  }
+  return true;
 }
 
 /** Is this an existing chat of the caller's? A non-UUID is simply "no". */
@@ -84,7 +95,8 @@ export async function ownsChatSession(userId: string, sessionId: string): Promis
 
 /**
  * The chat a turn with no `sessionId` lands in: the most recently active one
- * while it is under six hours quiet, a new one otherwise.
+ * while it is under six hours quiet, a new one otherwise. An archived chat is
+ * never continued by accident.
  *
  * Runs inside the per-user turn lock (`runChatTurn`), so two concurrent legacy
  * turns of one person cannot both decide to open a chat.
@@ -94,7 +106,7 @@ export async function continueOrOpenChatSession(
   now: Date = new Date(),
 ): Promise<string> {
   const latest = await prisma.chatSession.findFirst({
-    where: { userId },
+    where: { userId, archivedAt: null },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     select: { id: true, updatedAt: true },
   });
@@ -137,6 +149,7 @@ interface SessionRow {
   updated_at: Date;
   message_count: number;
   opener: string | null;
+  archived_at: Date | null;
 }
 
 /**
@@ -165,7 +178,8 @@ async function selectSessions(
       : Prisma.sql`messages m
       WHERE m.session_id = s.id AND m.role <> 'system'`;
   return prisma.$queryRaw<SessionRow[]>`
-    SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener
+    SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener,
+      s.archived_at
     FROM chat_sessions s
     CROSS JOIN LATERAL (
       SELECT count(*)::int AS n
@@ -189,13 +203,15 @@ function sessionTitle(row: Pick<SessionRow, "title" | "opener">): string {
   return row.title ?? condense(row.opener ?? "", CHAT_SESSION_FALLBACK_TITLE_MAX);
 }
 
-export function toChatSessionDto(row: SessionRow): ChatSessionDto {
+export function toChatSessionDto(row: SessionRow, memoryNotes = 0): ChatSessionDto {
   return {
     id: row.id,
     title: sessionTitle(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     messageCount: row.message_count,
+    archivedAt: row.archived_at?.toISOString() ?? null,
+    memoryNotes,
   };
 }
 
@@ -219,7 +235,7 @@ export async function listRecentChatSessions(
   userId: string,
   limit: number,
 ): Promise<RecentChatSessionDto[]> {
-  const rows = await selectSessions(Prisma.sql`s.user_id = ${userId}::uuid`, {
+  const rows = await selectSessions(Prisma.sql`s.user_id = ${userId}::uuid AND s.archived_at IS NULL`, {
     withMessagesOnly: true,
     limit,
     countUpTo: 1,
@@ -234,6 +250,27 @@ export async function listRecentChatSessions(
 export interface ListChatSessionsResult {
   sessions: ChatSessionDto[];
   hasMore: boolean;
+  /** Chats in the archive, whichever list was asked for. */
+  archivedCount: number;
+}
+
+/**
+ * How many memory notes were last written from each chat. A read that fails
+ * (memory not migrated yet) costs the number, never the list.
+ */
+async function memoryNotesOf(userId: string, sessionIds: string[]): Promise<Map<string, number>> {
+  if (sessionIds.length === 0) return new Map();
+  try {
+    const rows = await prisma.agentMemory.groupBy({
+      by: ["sourceSessionId"],
+      where: { userId, sourceSessionId: { in: sessionIds } },
+      _count: { _all: true },
+    });
+    return new Map(rows.flatMap((row) => (row.sourceSessionId ? [[row.sourceSessionId, row._count._all] as const] : [])));
+  } catch (err) {
+    console.warn("[chat] memory note count failed:", err);
+    return new Map();
+  }
 }
 
 /**
@@ -241,12 +278,15 @@ export interface ListChatSessionsResult {
  * non-system message: an id the phone claimed for a turn that never produced a
  * message (a refused voice note) is not a chat anyone had.
  *
+ * `archived` picks the archive instead of the history; one chat is in exactly
+ * one of them.
+ *
  * `before` is a chat id, exclusive, compared on `(updated_at, id)` so ties are
  * total. `null` = the cursor is unknown or not the caller's (404).
  */
 export async function listChatSessions(
   userId: string,
-  opts: { limit: number; before?: string | null },
+  opts: { limit: number; before?: string | null; archived?: boolean },
 ): Promise<ListChatSessionsResult | null> {
   if (opts.before && !(await ownsChatSession(userId, opts.before))) return null;
   // The cursor is compared inside SQL, against its own row — no timestamp ever
@@ -257,14 +297,23 @@ export async function listChatSessions(
         SELECT cur.updated_at, cur.id FROM chat_sessions cur WHERE cur.id = ${opts.before}::uuid
       )`
     : Prisma.empty;
-  const rows = await selectSessions(Prisma.sql`s.user_id = ${userId}::uuid ${cursor}`, {
-    withMessagesOnly: true,
-    limit: opts.limit + 1,
-  });
+  const shelf = opts.archived ? Prisma.sql`AND s.archived_at IS NOT NULL` : Prisma.sql`AND s.archived_at IS NULL`;
+  const [rows, archivedCount] = await Promise.all([
+    selectSessions(Prisma.sql`s.user_id = ${userId}::uuid ${shelf} ${cursor}`, {
+      withMessagesOnly: true,
+      limit: opts.limit + 1,
+    }),
+    prisma.chatSession.count({
+      where: { userId, archivedAt: { not: null }, messages: { some: { role: { not: "system" } } } },
+    }),
+  ]);
   const hasMore = rows.length > opts.limit;
+  const page = hasMore ? rows.slice(0, opts.limit) : rows;
+  const notes = await memoryNotesOf(userId, page.map((row) => row.id));
   return {
-    sessions: (hasMore ? rows.slice(0, opts.limit) : rows).map(toChatSessionDto),
+    sessions: page.map((row) => toChatSessionDto(row, notes.get(row.id) ?? 0)),
     hasMore,
+    archivedCount,
   };
 }
 
@@ -278,24 +327,41 @@ export async function getChatSession(
     Prisma.sql`s.id = ${sessionId}::uuid AND s.user_id = ${userId}::uuid`,
     { withMessagesOnly: false, limit: 1 },
   );
-  return row ? toChatSessionDto(row) : null;
+  if (!row) return null;
+  const notes = await memoryNotesOf(userId, [row.id]);
+  return toChatSessionDto(row, notes.get(row.id) ?? 0);
 }
 
 /**
- * Rename a chat by hand. From here on the titler leaves it alone
- * (`titleByUser`). `null` = unknown / foreign / malformed id (404); the title
- * must already be normalized (`normalizeChatSessionTitle`).
+ * Change a chat: a title typed by the person (`titleByUser` — the titler leaves
+ * it alone from here on), the archive, or both. `null` = unknown / foreign /
+ * malformed id (404); the title must already be normalized
+ * (`normalizeChatSessionTitle`). Neither moves `updatedAt`: a chat that comes
+ * back from the archive returns to its own place in the list.
  */
-export async function renameChatSession(
+export async function updateChatSession(
   userId: string,
   sessionId: string,
-  title: string,
+  change: { title?: string; archived?: boolean },
+  now: Date = new Date(),
 ): Promise<ChatSessionDto | null> {
   if (!isUuid(sessionId)) return null;
   const updated = await prisma.chatSession.updateMany({
     where: { id: sessionId, userId },
-    data: { title, titleByUser: true },
+    data: {
+      ...(change.title === undefined ? {} : { title: change.title, titleByUser: true }),
+      ...(change.archived === undefined ? {} : { archivedAt: change.archived ? now : null }),
+    },
   });
   if (updated.count === 0) return null;
   return getChatSession(userId, sessionId);
+}
+
+/** «Вернуть все»: every archived chat goes back to the history list. */
+export async function restoreArchivedChats(userId: string): Promise<number> {
+  const { count } = await prisma.chatSession.updateMany({
+    where: { userId, archivedAt: { not: null } },
+    data: { archivedAt: null },
+  });
+  return count;
 }

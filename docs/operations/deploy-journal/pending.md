@@ -13,6 +13,22 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-22 — archive and delete agent chats (needs the founder's «да») — migration `20261122190000_chat_session_archive`**
+
+1. Code: `apps/bot/src/services/chat-sessions.ts`, `chat-session-delete.ts`, `chat-turn-lock.ts`, `chat-agent.ts`,
+   `agent-reminders.ts`, `account-deletion.ts` (moved helper), `utils/owned-paths.ts`, `public/routes/chat.ts`, Prisma schema.
+   Decision [2026-11-22-chat-archive-delete](../../architecture/decisions/2026-11-22-chat-archive-delete.md).
+2. Ship: migration FIRST (one nullable column; the new list query names it, so a restart before it breaks
+   `/v1/chat/sessions` and Today's chat rows), `db:generate`, bot build and restart. The deletion also touches
+   `agent_memories` and `agent_reminders`, so `20261119120000` and `20261120090000` must be applied before it. No env.
+3. Demo mode: no branch. iOS: additive; a build without the feature keeps working, a build with it hides the actions until
+   the list answer carries `archivedCount`.
+4. Verify: `GET /v1/chat/sessions?limit=1` has `archivedCount`; on a test account archive → gone from the list and Today →
+   restore; delete a chat with a photo → 204, the object gone from the chat bucket, `search_past_chats` no longer finds it.
+5. Rollback: revert the commit and restart; the column may stay (nullable, unread). Deleted chats cannot come back.
+
+---
+
 **PENDING 2026-11-22 — Google Places outage alert + Google's reason in the log (needs the founder's «да») — no migration**
 
 1. Code: `apps/bot/src/utils/places-error.ts`, `services/places-health.ts`, `services/venue.ts`,

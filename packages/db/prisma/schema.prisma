@@ -3149,6 +3149,10 @@ model ChatSession {
   /// How many non-system messages of this chat the memory writer has read
   /// (decision 2026-11-19, long-term memory) — like `summarizedAtCount`.
   memoryScannedCount Int                         @default(0) @map("memory_scanned_count")
+  /// Put away by the person (decision 2026-11-22): out of the history list and
+  /// of Today, still the agent's to recall. Cleared by «Вернуть» and by the next
+  /// message the person sends in it. A DELETED chat has no row at all.
+  archivedAt        DateTime?                    @map("archived_at")
   createdAt         DateTime                     @default(now()) @map("created_at")
   updatedAt         DateTime                     @default(now()) @map("updated_at")
 

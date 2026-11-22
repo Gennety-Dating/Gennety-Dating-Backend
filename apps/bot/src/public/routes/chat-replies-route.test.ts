@@ -60,7 +60,7 @@ vi.mock("../../services/chat-sessions.js", async (importOriginal) => {
     claimChatSession: async () => true,
     ownsChatSession: async () => true,
     listChatSessions: async () => ({ sessions: [], hasMore: false }),
-    renameChatSession: async () => null,
+    updateChatSession: async () => null,
   };
 });
 vi.mock("../../services/storage.js", () => ({

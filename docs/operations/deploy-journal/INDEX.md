@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING | 2026-11-22 | Archive and delete agent chats: `archived_at`, `DELETE /v1/chat/sessions/{id}`, archive list/restore/delete all; **migration `20261122190000_chat_session_archive` first** (one nullable column; after `20261119120000`, `20261120090000`); no env | [pending.md](./pending.md) |
 | PENDING | 2026-11-22 | Google Places outage alert to the founder bot (a whole re-validation night failed) + Google's reason in photo proxy / Place Details log lines; no migration, no env; does not fix the 403 itself | [pending.md](./pending.md) |
 | PENDING | 2026-11-22 | Dependency override `effect` 3.21.0 → 3.22.4 (GHSA-7589-6fvf-x4pw, via `@prisma/config`): audit green; needs `pnpm install --frozen-lockfile` + `db:generate` on the droplet; no migration, no env | [pending.md](./pending.md) |
 | Deployed | 2026-11-22 | Production, file-scoped `279f10c8` (as `c6cf02ac`): optional `recommendedIosVersion` on `GET /v1/app/config`, env `IOS_RECOMMENDED_APP_VERSION` unset → null; pending packages NOT shipped; shipped with the `effect` high advisory (founder's choice, override owed); no migration | [2026-11-22-ios-soft-update.md](./2026-11-22-ios-soft-update.md) |

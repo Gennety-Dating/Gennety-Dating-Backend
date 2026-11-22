@@ -14,7 +14,9 @@ const db = {
     findFirst: vi.fn(),
     create: vi.fn(),
     updateMany: vi.fn(),
+    count: vi.fn(async () => 0),
   },
+  agentMemory: { groupBy: vi.fn(async (): Promise<unknown[]> => []) },
   $queryRaw: vi.fn(),
 };
 vi.mock("@gennety/db", async (importOriginal) => {
@@ -27,7 +29,8 @@ const {
   continueOrOpenChatSession,
   normalizeChatSessionTitle,
   parseChatSessionIdField,
-  renameChatSession,
+  restoreArchivedChats,
+  updateChatSession,
   toChatSessionDto,
   touchChatSession,
   listChatSessions,
@@ -43,6 +46,8 @@ const NOW = new Date("2026-09-30T12:00:00Z");
 
 beforeEach(() => {
   for (const fn of Object.values(db.chatSession)) fn.mockReset();
+  db.chatSession.count.mockResolvedValue(0);
+  db.agentMemory.groupBy.mockReset().mockResolvedValue([]);
   db.$queryRaw.mockReset().mockResolvedValue([]);
 });
 
@@ -89,6 +94,24 @@ describe("claimChatSession", () => {
     });
   });
 
+  it("a message into an archived chat brings it back", async () => {
+    db.chatSession.createMany.mockResolvedValue({ count: 0 });
+    db.chatSession.findUnique.mockResolvedValue({ userId: USER, archivedAt: NOW });
+
+    expect(await claimChatSession(USER, CHAT)).toBe(true);
+    expect(db.chatSession.updateMany).toHaveBeenCalledWith({
+      where: { id: CHAT, userId: USER },
+      data: { archivedAt: null },
+    });
+  });
+
+  it("someone else's archived chat is not touched", async () => {
+    db.chatSession.createMany.mockResolvedValue({ count: 0 });
+    db.chatSession.findUnique.mockResolvedValue({ userId: OTHER, archivedAt: NOW });
+    expect(await claimChatSession(USER, CHAT)).toBe(false);
+    expect(db.chatSession.updateMany).not.toHaveBeenCalled();
+  });
+
   it("someone else's chat is refused and left as it was", async () => {
     db.chatSession.createMany.mockResolvedValue({ count: 0 });
     db.chatSession.findUnique.mockResolvedValue({ userId: OTHER });
@@ -113,7 +136,7 @@ describe("continueOrOpenChatSession — the legacy six-hour rule", () => {
     expect(db.chatSession.create).not.toHaveBeenCalled();
     expect(db.chatSession.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: USER },
+        where: { userId: USER, archivedAt: null },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       }),
     );
@@ -157,6 +180,7 @@ describe("toChatSessionDto", () => {
     created_at: new Date("2026-09-29T10:00:00Z"),
     updated_at: new Date("2026-09-29T11:00:00Z"),
     message_count: 3,
+    archived_at: null as Date | null,
   };
 
   it("an untitled chat is named by its opening line, condensed", () => {
@@ -197,12 +221,12 @@ describe("the list query", () => {
   }
 
   const LIST_SQL =
-    "SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener " +
+    "SELECT s.id, s.title, s.created_at, s.updated_at, c.n AS message_count, o.content AS opener, s.archived_at " +
     "FROM chat_sessions s CROSS JOIN LATERAL ( SELECT count(*)::int AS n FROM messages m " +
     "WHERE m.session_id = s.id AND m.role <> 'system' ) c LEFT JOIN LATERAL ( SELECT m.content " +
     "FROM messages m WHERE m.session_id = s.id AND m.role <> 'system' AND btrim(m.content) <> '' " +
     "ORDER BY (m.role <> 'user'), m.created_at, m.id LIMIT 1 ) o ON s.title IS NULL " +
-    "WHERE s.user_id = $1::uuid AND c.n > 0 ORDER BY s.updated_at DESC, s.id DESC LIMIT $2";
+    "WHERE s.user_id = $1::uuid AND s.archived_at IS NULL AND c.n > 0 ORDER BY s.updated_at DESC, s.id DESC LIMIT $2";
 
   it("the list counts every message, as it always has", async () => {
     await listChatSessions(USER, { limit: 2 });
@@ -235,7 +259,7 @@ describe("the list query", () => {
   });
 });
 
-describe("listChatSessions / renameChatSession — ownership", () => {
+describe("listChatSessions / updateChatSession — ownership", () => {
   it("a cursor that is not the caller's chat is null (404), and no page is read", async () => {
     db.chatSession.findFirst.mockResolvedValue(null);
     expect(await listChatSessions(USER, { limit: 30, before: CHAT })).toBeNull();
@@ -259,7 +283,7 @@ describe("listChatSessions / renameChatSession — ownership", () => {
 
   it("renaming someone else's chat changes nothing and is null", async () => {
     db.chatSession.updateMany.mockResolvedValue({ count: 0 });
-    expect(await renameChatSession(USER, CHAT, "Моё")).toBeNull();
+    expect(await updateChatSession(USER, CHAT, { title: "Моё" })).toBeNull();
     expect(db.chatSession.updateMany).toHaveBeenCalledWith({
       where: { id: CHAT, userId: USER },
       data: { title: "Моё", titleByUser: true },
@@ -267,7 +291,70 @@ describe("listChatSessions / renameChatSession — ownership", () => {
   });
 
   it("a malformed id never reaches the database", async () => {
-    expect(await renameChatSession(USER, "nope", "x")).toBeNull();
+    expect(await updateChatSession(USER, "nope", { title: "x" })).toBeNull();
     expect(db.chatSession.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("the archive", () => {
+  const row = (id: string, archived_at: Date | null = null) => ({
+    id,
+    title: id,
+    created_at: NOW,
+    updated_at: NOW,
+    message_count: 2,
+    opener: null,
+    archived_at,
+  });
+  const sqlText = () =>
+    (db.$queryRaw.mock.calls.at(-1)! as unknown[])
+      .flatMap((part) => (Array.isArray(part) ? part : [(part as { sql?: string })?.sql ?? ""]))
+      .join(" ");
+
+  it("the history leaves archived chats out, the archive holds only them", async () => {
+    await listChatSessions(USER, { limit: 30 });
+    expect(sqlText()).toContain("archived_at IS NULL");
+    await listChatSessions(USER, { limit: 30, archived: true });
+    expect(sqlText()).toContain("archived_at IS NOT NULL");
+  });
+
+  it("every page carries the archive size and each chat's memory notes", async () => {
+    db.$queryRaw.mockResolvedValue([row(CHAT, NOW)]);
+    db.chatSession.count.mockResolvedValue(4);
+    db.agentMemory.groupBy.mockResolvedValue([{ sourceSessionId: CHAT, _count: { _all: 3 } }]);
+    const page = await listChatSessions(USER, { limit: 30, archived: true });
+    expect(page?.archivedCount).toBe(4);
+    expect(page?.sessions[0]).toMatchObject({ archivedAt: NOW.toISOString(), memoryNotes: 3 });
+  });
+
+  it("a memory read that fails costs the number, not the list", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    db.$queryRaw.mockResolvedValue([row(CHAT)]);
+    db.agentMemory.groupBy.mockRejectedValue(new Error("no table"));
+    const page = await listChatSessions(USER, { limit: 30 });
+    expect(page?.sessions[0]?.memoryNotes).toBe(0);
+  });
+
+  it("archives and restores without touching the title or the order", async () => {
+    db.chatSession.updateMany.mockResolvedValue({ count: 0 });
+    await updateChatSession(USER, CHAT, { archived: true }, NOW);
+    expect(db.chatSession.updateMany).toHaveBeenLastCalledWith({
+      where: { id: CHAT, userId: USER },
+      data: { archivedAt: NOW },
+    });
+    await updateChatSession(USER, CHAT, { archived: false }, NOW);
+    expect(db.chatSession.updateMany).toHaveBeenLastCalledWith({
+      where: { id: CHAT, userId: USER },
+      data: { archivedAt: null },
+    });
+  });
+
+  it("restores everything at once, the caller's own only", async () => {
+    db.chatSession.updateMany.mockResolvedValue({ count: 2 });
+    expect(await restoreArchivedChats(USER)).toBe(2);
+    expect(db.chatSession.updateMany).toHaveBeenCalledWith({
+      where: { userId: USER, archivedAt: { not: null } },
+      data: { archivedAt: null },
+    });
   });
 });

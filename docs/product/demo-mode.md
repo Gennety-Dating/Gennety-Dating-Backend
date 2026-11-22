@@ -1089,6 +1089,12 @@ and the demo is the Telegram bot: no demo surface shows it. The field does not
 depend on the account, so a demo account in the app behaves as anyone else;
 the demo env leaves `IOS_RECOMMENDED_APP_VERSION` empty.
 
+## Archiving and deleting an agent chat needs no branch (2026-11-22)
+
+`/v1/chat/sessions` archive and deletion are native-app only, and the demo is the
+Telegram bot: no demo surface shows them. A demo account in the app acts on its
+own rows in the demo database and its own photos in the demo chat bucket.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

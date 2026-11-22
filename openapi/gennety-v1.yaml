@@ -5219,6 +5219,9 @@ paths:
         first reply and refreshed once the conversation has moved on; until the
         first title lands the server answers with the person's opening line,
         condensed. A title the person set by hand is never overwritten.
+
+        Archived chats (2026-11-22) are not in this list; `archived=true` lists
+        them instead.
       parameters:
         - name: limit
           in: query
@@ -5230,6 +5233,10 @@ paths:
             active before that one. 404 for an id that is unknown or not the
             caller's.
           schema: { type: string }
+        - name: archived
+          in: query
+          description: The archive instead of the history (2026-11-22)
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: Chats, most recently active first
@@ -5243,6 +5250,12 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/ChatSession" }
                   hasMore: { type: boolean }
+                  archivedCount:
+                    type: integer
+                    description: |
+                      Chats in the archive, whichever list was asked for.
+                      Absent from a server without the archive: the client
+                      then offers neither archiving nor deletion.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
           description: Unknown `before` cursor, or one belonging to another user
@@ -5250,15 +5263,96 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/chat/sessions/archived/restore:
+    post:
+      tags: [chat]
+      operationId: restoreArchivedChats
+      summary: Bring every archived chat back to the history
+      responses:
+        "200":
+          description: How many came back
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [restored]
+                properties:
+                  restored: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/chat/sessions/archived:
+    delete:
+      tags: [chat]
+      operationId: deleteArchivedChats
+      summary: Delete every archived chat for good
+      description: The same deletion as `DELETE /v1/chat/sessions/{id}`, for all archived chats.
+      parameters:
+        - name: forget
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: How many were deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503":
+          description: A photo could not be erased; nothing was deleted from the chats
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/chat/sessions/{id}:
+    delete:
+      tags: [chat]
+      operationId: deleteChatSession
+      summary: Delete a chat for good
+      description: |
+        Gone: the messages, the photos sent in it, its summary and everything
+        the agent's search over past chats could find it by. Kept: reminders
+        and wishlist items. With `forget=true` the memory notes last written
+        from this chat (`ChatSession.memoryNotes`) are deleted too. Waits for a
+        reply in flight in any of the person's chats.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: forget
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Unknown chat, or one belonging to another user — nothing left to delete
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: A photo could not be erased; nothing was deleted from the chat, try again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     patch:
       tags: [chat]
       operationId: renameChatSession
-      summary: Rename a chat
+      summary: Rename, archive or restore a chat
       description: |
-        Sets the title by hand. From then on the automatic titler leaves this
-        chat alone. Whitespace is trimmed (runs of it, line breaks included,
-        become one space); an empty title is a 400.
+        `title` sets the title by hand: from then on the automatic titler leaves
+        this chat alone. Whitespace is trimmed (runs of it, line breaks
+        included, become one space); an empty title is a 400.
+
+        `archived` (2026-11-22) puts the chat away or brings it back. An
+        archived chat is out of the history and of Today; the agent still
+        recalls it. The next message sent in it brings it back by itself.
+
+        At least one of the two.
       parameters:
         - name: id
           in: path
@@ -5270,12 +5364,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title]
               properties:
                 title: { type: string, minLength: 1, maxLength: 80 }
+                archived: { type: boolean }
       responses:
         "200":
-          description: The renamed chat
+          description: The changed chat
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ChatSession" }
@@ -11595,6 +11689,13 @@ components:
         messageCount:
           type: integer
           description: Messages in the chat, `system` rows excluded
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When it was archived; null in the history. Absent from a server without the archive.
+        memoryNotes:
+          type: integer
+          description: Memory notes last written from this chat — what a deletion with `forget` removes
 
     ChatTopic:
       type: object
