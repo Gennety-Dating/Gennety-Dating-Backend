@@ -2887,6 +2887,99 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/share/music:
+    post:
+      tags: [me, music]
+      operationId: shareMusicRead
+      summary: Read a shared playlist, album or track (iOS share sheet)
+      description: |
+        Decision 2026-11-22. «Поделиться → Gennety» on a playlist, an album or
+        one track from YouTube Music, YouTube (playlist pages only — a plain
+        video stays with `/v1/me/share/video`), Spotify, Apple Music, Yandex
+        Music or SoundCloud. Every track becomes a card (at most 30); every
+        card that can be pinned and is not on the profile yet comes ticked
+        while the profile has room (`selected`, `selectedCount` = the N of
+        «Добавить N»). A track with no Spotify / Apple Music id of its own is
+        matched in Spotify's catalogue and shown as what will be pinned;
+        `not_found` cards cannot be ticked. `closed`: the provider gave
+        nothing. Up to ~15 s. Cached 1 h per URL (the ticks are per person).
+        Nothing read here reaches any model. Call it BEFORE
+        `/v1/me/share/video`: 400 `not-music` (or 404 from an older server)
+        means fall back to the video read, then the wishlist. Behind
+        `PROFILE_MUSIC_ENABLED` (404 `profile-music-disabled`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: The list as cards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareMusic" }
+        "400":
+          description: "`not-music` (not a playlist, album or track we read) or `bad-request`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: "`rate_limited` (30/h)" }
+
+  /v1/me/share/music/add:
+    post:
+      tags: [me, music]
+      operationId: shareMusicAdd
+      summary: «Добавить N» — append the ticked tracks to the profile's music
+      description: |
+        Decision 2026-11-22. Appends after the pinned set, in the order sent;
+        nothing pinned is removed or re-read. Forgiving where `PUT /v1/me/music`
+        is strict: a track already pinned (same id, or the same song from the
+        other provider), one the provider no longer serves and one past the
+        30-track cap are skipped and counted in `skipped`, not an error. Each
+        new row is the provider's own answer for its id. 409 `too_many_tracks`
+        when the profile is already full; 502 / 503 only when not one track
+        could be read because the provider was out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tracks]
+              properties:
+                tracks:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items: { $ref: "#/components/schemas/MusicTrackRef" }
+      responses:
+        "200":
+          description: The whole set after the add
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareMusicAddResult" }
+        "400":
+          description: "`invalid_tracks` or `too_many_tracks` (more than 30 in one call)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`too_many_tracks` — the profile already holds 30"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { description: "`rate_limited` (60/h)" }
+        "502": { description: "`upstream_unavailable`" }
+        "503": { description: "`rate_limited` / `not_configured` — the provider's quota, not the caller's" }
+
   /v1/me/wishlist/items:
     post:
       tags: [me]
@@ -3351,8 +3444,10 @@ paths:
       operationId: getMyMusic
       summary: The caller's pinned tracks, in display order
       description: |
-        Up to five tracks, Apple Music and Spotify mixed freely (decisions
-        2026-09-11, 2026-10-08; the cap was three until 2026-10-19). 404 while `PROFILE_MUSIC_ENABLED` is off —
+        Up to 30 tracks, Apple Music and Spotify mixed freely (decisions
+        2026-09-11, 2026-10-08; the cap was three until 2026-10-19 and five
+        until 2026-11-22, raised so a shared playlist lands whole — the profile
+        and the match card draw the first five and open the rest on a tap). 404 while `PROFILE_MUSIC_ENABLED` is off —
         which is also how a client learns to hide the section. Display-only:
         the tracks never feed matching or any AI (Spotify Developer Policy;
         the same rule holds for Apple Music).
@@ -3391,7 +3486,7 @@ paths:
               properties:
                 tracks:
                   type: array
-                  maxItems: 5
+                  maxItems: 30
                   items: { $ref: "#/components/schemas/MusicTrackRef" }
       responses:
         "200":
@@ -9826,6 +9921,85 @@ components:
       required: [label]
       properties:
         label: { type: string, minLength: 1, maxLength: 50 }
+
+    ShareMusic:
+      type: object
+      description: |
+        A shared playlist, album or track as the share sheet draws it
+        (decision 2026-11-22). Draw the provider's branding on a card whose
+        `match.provider` is `spotify` (logo) or `apple_music` (badge): the
+        title, artists and cover then ARE that provider's.
+      required:
+        [status, source, kind, url, title, author, coverUrl, total, truncated, partial, slotsLeft, selectedCount, tracks]
+      properties:
+        status: { type: string, enum: [read, closed] }
+        source:
+          type: string
+          description: A client draws a generic note for a value it does not know.
+          enum: [youtube_music, youtube, spotify, apple_music, yandex_music, soundcloud]
+        kind: { type: string, enum: [playlist, album, track] }
+        url: { type: string, description: Canonical link of what was shared }
+        title: { type: [string, "null"] }
+        author: { type: [string, "null"], description: "A playlist's owner or an album's artist" }
+        coverUrl: { type: [string, "null"], description: "The provider's CDN image — render as is" }
+        total: { type: [integer, "null"], description: How many tracks the provider says the list has }
+        truncated:
+          type: boolean
+          description: The list is longer than the cards (the 30 cap, or the provider's first page)
+        partial:
+          type: boolean
+          description: Some rows were unreadable or some look-ups did not finish — a retry may show more
+        slotsLeft: { type: integer, minimum: 0, maximum: 30, description: "Free places in the profile's music" }
+        selectedCount: { type: integer, minimum: 0, description: "Cards ticked by default — the N of «Добавить N»" }
+        tracks:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/ShareMusicTrack" }
+
+    ShareMusicTrack:
+      type: object
+      required: [key, title, artists, albumName, coverUrl, sourceUrl, match, state, selected]
+      properties:
+        key: { type: string, description: Stable within one read }
+        title: { type: string }
+        artists: { type: string, description: "Joined with \", \"; may be empty when the source did not say" }
+        albumName: { type: [string, "null"] }
+        coverUrl: { type: [string, "null"] }
+        sourceUrl: { type: [string, "null"], description: The track on the shared source }
+        match:
+          description: What «Добавить» sends back for this card; null → `not_found`, cannot be ticked
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [provider, trackId, storefront, url]
+              properties:
+                provider: { $ref: "#/components/schemas/MusicProvider" }
+                trackId: { type: string }
+                storefront: { type: [string, "null"], description: "`apple_music` only" }
+                url: { type: string }
+        state:
+          type: string
+          description: "`added` — already on the profile; `not_found` — no catalogue match. A client treats an unknown value like `not_found`."
+          enum: [new, added, not_found]
+        selected: { type: boolean, description: "Ticked by default (`new`, while the profile has room)" }
+
+    ShareMusicAddResult:
+      type: object
+      required: [tracks, added, skipped]
+      properties:
+        tracks:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/MusicTrack" }
+        added: { type: integer, minimum: 0 }
+        skipped:
+          type: object
+          required: [duplicate, notFound, overLimit, failed]
+          properties:
+            duplicate: { type: integer, minimum: 0 }
+            notFound: { type: integer, minimum: 0 }
+            overLimit: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
 
     ShareInterestResult:
       type: object

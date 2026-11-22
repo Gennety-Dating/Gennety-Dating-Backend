@@ -14,7 +14,7 @@ import {
  * Music on the profile (decision 2026-09-11), native client (JWT).
  *
  *   GET /v1/me/music          — the caller's pinned tracks, in order
- *   PUT /v1/me/music          — replace them with `{ tracks }` (0..3), each
+ *   PUT /v1/me/music          — replace them with `{ tracks }` (0..30), each
  *                               `{ provider, trackId, storefront? }`; the
  *                               pre-2026-10-08 `{ trackIds }` still saves
  *   GET /v1/music/search?q=   — Spotify catalogue search, no Spotify login
