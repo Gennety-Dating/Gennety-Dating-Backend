@@ -28,6 +28,20 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+**PENDING 2026-11-22 — dependency override `effect` 3.22.4 (GHSA-7589-6fvf-x4pw; needs the founder's «да») — no migration**
+
+1. Code: root `package.json` `pnpm.overrides` + `pnpm-lock.yaml`; `effect` 3.21.0 → 3.22.4, path
+   `packages/db > prisma > @prisma/config > effect`. Closes the fix owed by
+   [2026-11-22-ios-soft-update.md](./2026-11-22-ios-soft-update.md). Prisma's config loader only, not the request path.
+2. Ship: sync `package.json` and `pnpm-lock.yaml` together, then `pnpm install --frozen-lockfile` and
+   `pnpm --filter @gennety/db db:generate` on the droplet, bot restart. No migration, no env. Goes out with the next
+   full deploy; a file-scoped one that skips both files leaves production on 3.21.0.
+3. Demo mode: no behaviour change; the demo picks it up on its next deploy. iOS: none.
+4. Rollback: revert the commit, `pnpm install --frozen-lockfile`, `db:generate`, restart.
+5. Proof: `pnpm security:audit` (clean), `pnpm --filter @gennety/db exec prisma --version`, `pnpm --filter @gennety/db db:generate`.
+
+---
+
 **PENDING 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
 
 1. Code: spec `docs/product/domains/share-music-playlists.md`, decision

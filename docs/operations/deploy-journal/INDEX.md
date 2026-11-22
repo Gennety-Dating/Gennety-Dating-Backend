@@ -1,13 +1,14 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 256 entries
+# Deploy journal index — 257 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
 | PENDING | 2026-11-22 | Google Places outage alert to the founder bot (a whole re-validation night failed) + Google's reason in photo proxy / Place Details log lines; no migration, no env; does not fix the 403 itself | [pending.md](./pending.md) |
+| PENDING | 2026-11-22 | Dependency override `effect` 3.21.0 → 3.22.4 (GHSA-7589-6fvf-x4pw, via `@prisma/config`): audit green; needs `pnpm install --frozen-lockfile` + `db:generate` on the droplet; no migration, no env | [pending.md](./pending.md) |
 | Deployed | 2026-11-22 | Production, file-scoped `279f10c8` (as `c6cf02ac`): optional `recommendedIosVersion` on `GET /v1/app/config`, env `IOS_RECOMMENDED_APP_VERSION` unset → null; pending packages NOT shipped; shipped with the `effect` high advisory (founder's choice, override owed); no migration | [2026-11-22-ios-soft-update.md](./2026-11-22-ios-soft-update.md) |
 | PENDING | 2026-11-22 | Shared playlists → profile music: `POST /v1/me/share/music` + `/add` (YouTube Music, YouTube, Spotify, Apple Music, Yandex Music, SoundCloud), profile music cap 5 → 30; no migration, no new env (behind `PROFILE_MUSIC_ENABLED`); live check per provider first; deploy waits for the founder's «да» | [pending.md](./pending.md) |
 | Deployed | 2026-11-20 | Production `6a2d2697` + file-scoped `386af2db`/`155e2b91` (as `213cdbc2`/`876de4c8`): optional phone `preview` on `/v1/me/share/video` (per-person cache), Pinterest pins photo+video; PENDING packages NOT shipped; TikTok server read empty again; no migration | [2026-11-20-share-preview-pinterest.md](./2026-11-20-share-preview-pinterest.md) |
