@@ -13,6 +13,33 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
+
+1. Code: spec `docs/product/domains/share-music-playlists.md`, decision
+   `docs/architecture/decisions/2026-11-22-share-music-playlists.md`. `apps/bot/src/services/share-music/` (links,
+   parsers, matching, read), routes `POST /v1/me/share/music` and `/v1/me/share/music/add`
+   (`public/routes/share-music.ts`, mounted before `/v1/me/share`), `appendProfileMusic` / `profileMusicKeys` and the
+   cap `PROFILE_MUSIC_MAX_TRACKS` 5 → 30 (`packages/shared/src/constants.ts`), nightly music refresh batch 200 → 1000,
+   `getAppleMusicCollection`, `fetchAllowlistedPage` `maxBytes`. Commits `87b3c34`, `e3811b2`, `dc9c046` and the docs after.
+2. Ship: the usual bot build and restart. No migration, no new env — behind the existing `PROFILE_MUSIC_ENABLED`
+   (and `SPOTIFY_CLIENT_ID` / `_SECRET` for matching; Apple Music lists use the MusicKit key when set).
+3. Demo mode: nothing to branch (iOS-only routes; the puppet has no music).
+4. iOS: additive. Builds without the change behave as today (wishlist fallback). The new sheet, the call order
+   (`/share/music` first) and the profile's «Ещё N» are spec phase 8. `PUT /v1/me/music` now accepts up to 30 — an older
+   editor still stops at five on its own.
+5. Rollback: `git revert` the share-music commit (routes disappear → the app falls back), or set
+   `PROFILE_MUSIC_ENABLED=false` (hides all music). Profiles that already hold more than five tracks keep them; a revert
+   of the cap only refuses new saves above five.
+6. Proof: `pnpm --filter @gennety/bot exec vitest run src/services/share-music src/public/routes/share-music.test.ts src/services/music src/public/routes/music.test.ts`.
+   **Live check first (the build container could not reach any provider; fixtures mirror known shapes):** from the
+   droplet, with a test user's JWT, `POST /v1/me/share/music` once per provider — a `music.youtube.com/playlist?list=`
+   link (the founder's), a YouTube Music album (`browse/MPREb_…`), an `open.spotify.com/playlist/…`, a
+   `music.apple.com/…/playlist/…`, a `music.yandex.ru/album/…`, a `soundcloud.com/…/sets/…` — expect `status: read`
+   and `selectedCount > 0`; then `/add` with two refs and `GET /v1/me/music`. Any `closed` → capture the body and
+   replace that provider's fixture.
+
+---
+
 **PENDING 2026-11-20 — personal reminders from the chat («напомни в пятницу») — MIGRATION**
 
 1. Code: spec `docs/product/domains/agent-reminders.md`, decision `docs/architecture/decisions/2026-11-20-agent-reminders.md`.

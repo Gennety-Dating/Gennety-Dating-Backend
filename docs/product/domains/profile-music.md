@@ -5,8 +5,10 @@
 > **Status:** built 2026-09-11, shipped dark — `PROFILE_MUSIC_ENABLED` and
 > `SPOTIFY_TOP_TRACKS_ENABLED` are both off by default. Apple Music added
 > 2026-10-08 as the main provider; it is on wherever the MusicKit key is set.
-> Decisions: the 2026-09-11, 2026-10-08 and 2026-10-19 (cap 3 → 5) entries in the
-> [decision index](../../architecture/decisions/INDEX.md).
+> Decisions: the 2026-09-11, 2026-10-08, 2026-10-19 (cap 3 → 5) and 2026-11-22
+> (cap 5 → 30, shared playlists) entries in the
+> [decision index](../../architecture/decisions/INDEX.md). Shared playlists:
+> [share-music-playlists.md](./share-music-playlists.md).
 > Architecture: [integrations](../../architecture/integrations.md) (Spotify Web
 > API row), [data model](../../architecture/data-model.md) (`profile_music_tracks`),
 > [API surface](../../architecture/api-surface.md) (`/v1/me/music`,
@@ -14,8 +16,10 @@
 
 ## What it is
 
-A person may pin up to **five** tracks to their profile, from Apple Music or
-Spotify, mixed freely. They see them on their own profile; their **match
+A person may pin up to **30** tracks to their profile, from Apple Music or
+Spotify, mixed freely (five until 2026-11-22, raised so a shared playlist lands
+whole; the profile and the pitch draw the first five and open the rest on a
+tap). They see them on their own profile; their **match
 partner** sees them on the pitch. Nobody else does — the same reach as partner
 photos.
 
@@ -23,14 +27,18 @@ Three ways to pick:
 
 1. **My Apple Music** — the main path (decision 2026-10-08). The iPhone asks
    the system for Apple Music access (MusicKit) and reads what the person
-   recently played; they tick up to five (three until 2026-10-19). The server receives only the
+   recently played; they tick tracks up to the cap (three until 2026-10-19, five until 2026-11-22). The server receives only the
    catalogue song ids and the account's storefront, and reads the metadata
    from the Apple Music API with Gennety's MusicKit key. No user cap; an
    empty history (no subscription, nothing played) falls back to search.
 2. **Search** — everyone. Spotify's catalogue, no Spotify login.
-3. **Import my Spotify top tracks** — behind a second flag. One Spotify consent screen,
+3. **Share a playlist** (2026-11-22) — «Поделиться → Gennety» on a playlist,
+   album or track from YouTube Music, YouTube, Spotify, Apple Music, Yandex
+   Music or SoundCloud: every track a card, all ticked, «Добавить N» appends
+   them. See [share-music-playlists.md](./share-music-playlists.md).
+4. **Import my Spotify top tracks** — behind a second flag. One Spotify consent screen,
    then the person's 15 most-played tracks of roughly the last six months, from
-   which they pick up to five. Built and switched off: since 2026-02 a
+   which they pick up to the cap. Built and switched off: since 2026-02 a
    development-mode Spotify app admits at most five hand-allow-listed accounts,
    and Extended Quota is granted only to organisations with ≥250k MAU. Anyone
    else gets Spotify's 403, and the app says so and offers search instead.
@@ -67,7 +75,8 @@ Three ways to pick:
 
 | Surface | What |
 |---|---|
-| iOS profile editor | A "Music" section: up to five tracks, saved the moment they change (like photos, not through the editor's Save button) |
+| iOS profile editor | A "Music" section: up to 30 tracks (first five shown, the rest behind «Ещё N»), saved the moment they change (like photos, not through the editor's Save button) |
+| iOS share extension | A shared playlist, album or track → cards, «Добавить N» (`/v1/me/share/music`) |
 | iOS picker sheet | "My Apple Music" while `features.appleMusic` is true; Spotify search; "Connect Spotify" only while `features.spotifyTopTracks` is true |
 | iOS own profile | The pinned tracks under "About" |
 | iOS pitch | The partner's tracks (`SerializedMatch.partnerMusicTracks`) |

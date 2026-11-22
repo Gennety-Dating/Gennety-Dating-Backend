@@ -1291,9 +1291,13 @@ profile dirty and refreshes in one place) and read by `handlers/matching/pitch.t
 
 ### `profile_music_tracks`
 
-Up to five tracks a person pinned to their profile (decisions 2026-09-11,
-2026-10-08, 2026-10-19 — three until then), Apple Music and Spotify mixed:
-`position` 0..4 (no DB check — the cap is `MAX_PROFILE_TRACKS` in code),
+Up to 30 tracks a person pinned to their profile (decisions 2026-09-11,
+2026-10-08, 2026-10-19, 2026-11-22 — three, then five, then 30 for shared
+playlists), Apple Music and Spotify mixed:
+`position` 0..29 (no DB check — the cap is `PROFILE_MUSIC_MAX_TRACKS` in shared
+constants; the `schema.prisma` doc comment still says five and 0..4 and is
+corrected with the next migration, since the schema file is not touched without
+the founder),
 `@@unique([userId, position])` + `@@unique([userId, provider, trackId])`,
 `onDelete: Cascade`. `provider` is `spotify` | `apple_music` (text, checked in
 code); `trackId` is the provider's id; `storefront` the Apple Music country the
