@@ -1082,6 +1082,13 @@ going from five to 30 changes nothing it shows. No gate, paid step or
 negotiation step is added; an iOS build pointed at the demo API would get the
 production behaviour.
 
+## The soft iOS update hint needs no branch (2026-11-22)
+
+`recommendedIosVersion` on `GET /v1/app/config` is read by the native app only,
+and the demo is the Telegram bot: no demo surface shows it. The field does not
+depend on the account, so a demo account in the app behaves as anyone else;
+the demo env leaves `IOS_RECOMMENDED_APP_VERSION` empty.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

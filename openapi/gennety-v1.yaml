@@ -9155,6 +9155,13 @@ components:
         minSupportedIosVersion:
           type: [string, "null"]
           description: Semver floor; a lower client build must block behind an update screen
+        recommendedIosVersion:
+          type: [string, "null"]
+          description: |
+            The newest version worth offering (added 2026-11-22). A lower client
+            build keeps working and only shows a dismissible "new version" hint.
+            Null or absent → no hint; absent on older servers. A build below
+            `minSupportedIosVersion` shows the forced screen instead.
         minIosBuild:
           type: [integer, "null"]
           description: |

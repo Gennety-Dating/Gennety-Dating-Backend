@@ -1,7 +1,7 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 490 entries
+# Decision index — all 491 entries
 # Decision index — all 485 entries
 # Decision index — all 453 entries
 # Decision index — all 454 entries
@@ -10,6 +10,7 @@ Grep this file, then read the one entry you need. Protocol: [README.md](./README
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-11-22 | Soft iOS update hint reads its version from our backend (founder «Наш бэкенд» over iTunes Lookup): optional `recommendedIosVersion` on `/v1/app/config`, env `IOS_RECOMMENDED_APP_VERSION`, empty → no hint; separate from the forced floor; the client refuses while its App Store link is the placeholder; deploy and the value wait for «да» | [2026-11-22-ios-soft-update.md](./2026-11-22-ios-soft-update.md) |
 | 2026-11-22 | Shared playlists → the profile's music: founder chose to raise the music cap 5 → 30 (`PROFILE_MUSIC_MAX_TRACKS`, no migration; profile and pitch draw five + «Ещё N»); `POST /v1/me/share/music` reads YouTube Music / YouTube playlists + albums, Spotify, Apple Music, Yandex Music, SoundCloud (and single tracks) into ≤30 cards, all ticked while there is room, `added` marked; no new key (embed / page / oEmbed / public JSON; Apple via the existing MusicKit key); id-less tracks matched in Spotify search on exact core name + shared artist, else `not_found`; `/add` appends, skips and counts duplicates / dropped / over cap; nothing to a model; plain YouTube videos stay with `/share/video`; SoundCloud stubs and YouTube pages past the first not read (keyed APIs → ask); demo nothing to branch | [2026-11-22-share-music-playlists.md](./2026-11-22-share-music-playlists.md) |
 | 2026-11-22 | Pinterest Connect: founder «Совсем согласен» — every recommendation accepted (Settings connector + one-time offer card, no onboarding step; pin images to OpenAI vision; encrypted refresh token, monthly update; no secret boards; matching weight 0 + shadow log; no partner shared-taste line); schema, API and secrets approved as designed; phase 0 next (developer app + written consent email, drafts in the spec); code only after Pinterest says yes; app-owning account still open | [2026-11-22-pinterest-connect.md](./2026-11-22-pinterest-connect.md) |
 | 2026-11-22 | Pinterest Connect designed, not built: recommended as a Settings connector beside Apple Health + owner-only «Твой вкус» on the profile + one soft offer card after onboarding, not an onboarding step (Trial serves only the owner account; Standard needs a video review); read-only `user_accounts:read` `boards:read` `pins:read`, no secret boards; pins never stored, only closed-list tags (palette, styles, domains, place vibes, dress code) after a sensitive-topic filter; owner card, agent block, venue reweight in the diversity band, `V_aesthetic` weight 0; partner never sees it; Pinterest's 2026-08-18 terms (no AI/ML building on Pinterest Data, no joining with PII) → phase 0 asks Pinterest in writing first; widget-JSON board reading rejected; demo shows nothing (iOS-only v1); schema, API and secrets wait for «да» | [2026-11-22-pinterest-connect.md](./2026-11-22-pinterest-connect.md) |

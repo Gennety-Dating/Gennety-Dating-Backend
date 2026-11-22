@@ -635,6 +635,12 @@ Required/high-impact env keys:
   `minSupportedIosVersion`; set e.g. `1.2.0` only to retire a broken/insecure
   old build — every older client blocks behind an "update the app" screen.
   Toggled live with `pm2 restart gennety-bot --update-env`; no schema change.
+- Native iOS app, soft hint: `IOS_RECOMMENDED_APP_VERSION` (optional, default
+  empty → no hint). Served as `recommendedIosVersion`; older clients keep
+  working and see a dismissible "new version" mascot and button. Set it only
+  when that version is live in the App Store **and** the installed clients
+  carry the real App Store link (the client refuses to show the hint on the
+  placeholder link). The value is the founder's call; toggled the same way.
 - Native-app phone rail (`/v1/auth/phone/*`, shares the Registration v2
   `PHONE_AUTH_ENABLED` gate — 404 while off): `TWILIO_ACCOUNT_SID` /
   `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` (**primary rail** —

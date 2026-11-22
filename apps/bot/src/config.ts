@@ -117,6 +117,12 @@ export const env = {
   /// Empty (default) → no forced update. Set e.g. "1.2.0" only when an old
   /// build must be retired (broken contract, security issue).
   IOS_MIN_SUPPORTED_APP_VERSION: process.env.IOS_MIN_SUPPORTED_APP_VERSION ?? "",
+  /// The soft twin of the switch above: the newest version worth offering,
+  /// served by `GET /v1/app/config` as `recommendedIosVersion`. A client below
+  /// it keeps working and only sees a dismissible "new version" hint. Empty
+  /// (default) → null → no hint. Raise it only once that version is live in
+  /// the App Store.
+  IOS_RECOMMENDED_APP_VERSION: process.env.IOS_RECOMMENDED_APP_VERSION?.trim() ?? "",
   /// Server-enforced twin of the switch above, by build number (audit C-23).
   /// The iOS client sends `X-Gennety-Build: <CFBundleVersion>` on every call;
   /// a value below this floor answers 426 `{ error: "update_required" }` on

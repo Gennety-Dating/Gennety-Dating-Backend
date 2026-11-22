@@ -36,6 +36,25 @@ describe("GET /v1/app/config", () => {
     expect(res.body.minIosBuild).toBeNull();
   });
 
+  // The soft "new version" hint (2026-11-22): nothing to show until the
+  // founder names a version, and it never doubles as the forced floor.
+  it("serves the recommended version only when it is set", async () => {
+    const mutable = env as { -readonly [K in keyof typeof env]: (typeof env)[K] };
+    const saved = mutable.IOS_RECOMMENDED_APP_VERSION;
+    try {
+      mutable.IOS_RECOMMENDED_APP_VERSION = "";
+      let res = await request(buildApp()).get("/v1/app/config");
+      expect(res.body.recommendedIosVersion).toBeNull();
+      const floor = res.body.minSupportedIosVersion;
+      mutable.IOS_RECOMMENDED_APP_VERSION = "1.4.0";
+      res = await request(buildApp()).get("/v1/app/config");
+      expect(res.body.recommendedIosVersion).toBe("1.4.0");
+      expect(res.body.minSupportedIosVersion).toBe(floor);
+    } finally {
+      mutable.IOS_RECOMMENDED_APP_VERSION = saved;
+    }
+  });
+
   it("advertises the launched markets so the client can gate the city step", async () => {
     const res = await request(buildApp()).get("/v1/app/config");
     expect(res.body.supportedCities).toEqual([
@@ -57,6 +76,7 @@ describe("GET /v1/app/config", () => {
       "minIosBuild",
       "minSupportedIosVersion",
       "primeTimeProduct",
+      "recommendedIosVersion",
       "serverNow",
       "supportedCities",
       "ticketProducts",

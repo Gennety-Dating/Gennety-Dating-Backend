@@ -63,6 +63,10 @@ appConfigRouter.get("/config", optionalAuth, (req: Request, res: Response) => {
   const primeTimePass = primeTimeAppleRailLive();
   res.json({
     minSupportedIosVersion: env.IOS_MIN_SUPPORTED_APP_VERSION || null,
+    // The soft hint (2026-11-22): a lower build shows "a new version is out"
+    // and keeps working. Null by default, and below `minSupportedIosVersion`
+    // the forced screen wins on the client.
+    recommendedIosVersion: env.IOS_RECOMMENDED_APP_VERSION || null,
     // The build-number floor the server enforces with 426 (`MIN_IOS_BUILD`,
     // audit C-23). Additive and informational — null while the gate is off.
     minIosBuild: env.MIN_IOS_BUILD > 0 ? env.MIN_IOS_BUILD : null,
