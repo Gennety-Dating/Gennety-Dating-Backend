@@ -107,7 +107,7 @@ describe("which turns get show_vibe_card", () => {
     await runChatTurn({ userId: USER, text: "какая у меня аура?", imageUrls: PHOTO, chatCards: VIBE }, { fetchFn, consent });
     expect(toolNames()).toContain("show_vibe_card");
     expect(system()).toContain("Rating a photo — the vibe card");
-    expect(system().trimEnd().endsWith("short, specific to THIS photo.")).toBe(true);
+    expect(system().trimEnd().endsWith("no explanation («Тихая уверенность», «Она могнула»).")).toBe(true);
   });
 
   it("no photo on this turn: no tool, no rules", async () => {
@@ -144,10 +144,11 @@ describe("the card", () => {
     expect(stored).toMatchObject({ kind: "vibe_card", cardKind: "aura" });
   });
 
-  it("a reply with no line after the card is fine — the card is the answer", async () => {
+  it("a reply with no line after the card says the card's step — the app does not draw it", async () => {
     queue = [calls([{ name: "show_vibe_card", args: { ...AURA, sticker: false } }]), line("")];
     const turn = await runChatTurn({ userId: USER, text: "какая у меня аура?", imageUrls: PHOTO, chatCards: VIBE }, { fetchFn, consent });
-    expect(turn.content).toBe("");
+    expect(turn.content).toBe(turn.vibe!.steps[0]!.text);
+    expect(turn.content.length).toBeGreaterThan(0);
     expect(turn.vibe).toBeDefined();
     expect(turn.sticker).toBeUndefined();
   });

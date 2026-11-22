@@ -75,7 +75,7 @@ describe("buildVibeCard", () => {
     expect(out.card.score).toBe(34);
     expect(out.card.people.map((p) => p.label)).toEqual(["Слева", "он"]);
     expect(out.card.people[1]!.freshnessLabel).toBe("устарело");
-    expect(out.card.verdict).toBe("Она могнула, против");
+    expect(out.card.verdict).toBe("Она могнула");
     expect(out.card.steps).toHaveLength(2);
     expect(out.card.sticker).toBeNull();
   });
@@ -97,8 +97,8 @@ describe("buildVibeCard", () => {
   it("cuts long texts at a word", () => {
     const out = buildVibeCard({ ...aura, archetype: "Очень длинный архетип который точно не влезет в карточку" }, "ru");
     if (!out.ok) throw new Error("refused");
-    expect([...out.card.archetype!].length).toBeLessThanOrEqual(32);
-    expect(out.card.archetype!.endsWith("…")).toBe(true);
+    expect([...out.card.archetype!].length).toBeLessThanOrEqual(26);
+    expect(out.card.archetype).toBe("Очень длинный архетип");
   });
 
   it("the tool requires the two checks", () => {
@@ -168,4 +168,16 @@ describe("safety words", () => {
       expect(vibeSafetyHit([text])).toBe(false);
     },
   );
+
+  it("the big words are whole: no ellipsis, the first clause only", () => {
+    const build = (archetype: string) => {
+      const out = buildVibeCard({ kind: "aura", personVisible: true, allAdults: true, score: 80, archetype, bars: {}, steps: [{ text: "Чуть больше света." }] }, "ru");
+      return out.ok ? out.card.archetype : null;
+    };
+    expect(build("Тихая уверенность")).toBe("Тихая уверенность");
+    expect(build("Тихая уверенность — и это заметно")).toBe("Тихая уверенность");
+    expect(build("Он могнул на гончарном круге сегодня")).toBe("Он могнул на гончарном");
+    expect(build("Очень спокойная сила в самом деле")).toBe("Очень спокойная сила");
+    expect(build("Clean-cut intensity")).toBe("Clean-cut intensity");
+  });
 });

@@ -111,6 +111,7 @@ import {
   vibeCardNote,
   vibeCardView,
   vibeCardsThisTurn,
+  vibeStepLine,
   vibeStickerView,
   type VibeCard,
   type VibeCardView,
@@ -1202,7 +1203,7 @@ async function runTurnInner(
       // The card is the explanation; one line above it is enough.
       lastReply = t(language, "guideCardLine");
     } else if (vibe) {
-      // The card is the answer; the line after it is optional (spec phase 1).
+      // The drawing is the answer; the step goes under it (below).
       lastReply = "";
     } else if (pendingAction) {
       lastReply = fallbackReply(language);
@@ -1213,6 +1214,8 @@ async function runTurnInner(
       throw new ChatAgentUnavailableError(failure);
     }
   }
+  // No line after the drawing: the app does not draw the step, so say it here.
+  if (vibe && !lastReply) lastReply = vibeStepLine(vibe);
 
   const persisted = await prisma.message.create({
     data: {

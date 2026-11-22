@@ -16,10 +16,14 @@ lead scene of the agent's promo video. The answer is a card, not a paragraph.
 ## Phase 1 — What the person sees
 
 1. The person attaches a photo and asks. The reply arrives in a fixed order:
-   - the card, with its entrance animation;
-   - optionally, one ordinary line from the agent (it never repeats the
-     numbers);
-   - optionally, one sticker.
+   - the drawing, right on the chat ground, with its entrance animation
+     (founder, 2026-11-22, variant A «Силуэт»): the person cut out of the photo
+     on the phone, the number behind them, the aura along the contour, two or
+     three words in huge type; no plate, bars, chips, steps or footnote;
+   - one short sentence from the agent: the step that would raise the number
+     (it never repeats the numbers; when the model writes none, the server
+     sends the card's first step);
+   - optionally, one sticker, pasted onto the drawing.
 2. Three kinds of card.
    - **Aura.** Aura percent («сила ауры»), an archetype in two or three words,
      three bars — energy, style, frame — up to three short «reads» from the
@@ -33,7 +37,8 @@ lead scene of the agent's promo video. The answer is a card, not a paragraph.
      score. The gap is the difference of the two scores, computed on the
      server. A verdict — who mogs whom, said straight — and up to two steps
      that close the gap before the date.
-3. Every card says it is a reading of this one photo, and has a share button.
+3. The payload still carries bars, reads, steps and the footnote; the app does
+   not draw them. Sharing is a long press on the drawing.
 
 ## Phase 2 — Rules for the agent
 

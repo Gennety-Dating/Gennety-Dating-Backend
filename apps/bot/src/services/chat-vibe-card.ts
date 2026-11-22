@@ -128,7 +128,7 @@ export const SHOW_VIBE_CARD_TOOL = {
           type: "array",
           minItems: 2,
           maxItems: 2,
-          description: "swag_gap only: the two people, left to right.",
+          description: "swag_gap only: the two people. Two photos: in the order the photos were sent. One photo: left to right.",
           items: {
             type: "object",
             additionalProperties: false,
@@ -141,7 +141,7 @@ export const SHOW_VIBE_CARD_TOOL = {
             },
           },
         },
-        verdict: { type: "string", description: `swag_gap: who mogs whom, said straight, ≤${VIBE_VERDICT_MAX_LEN} chars («Она могнула, и это не близко»).` },
+        verdict: { type: "string", description: `swag_gap: who mogs whom in two or three words and nothing else — who and the verb, ≤${VIBE_VERDICT_MAX_LEN} chars («Она могнула», «Он могнул», «Ничья»).` },
         steps: {
           type: "array",
           minItems: 1,
@@ -200,6 +200,16 @@ function cut(raw: unknown, max: number): string {
   const head = chars.slice(0, max - 1).join("");
   const space = head.lastIndexOf(" ");
   return `${(space > max * 0.6 ? head.slice(0, space) : head).trimEnd()}…`;
+}
+
+/** Huge type cannot end in «…»: whole words only, never a dangling preposition. */
+function headline(raw: unknown, max: number): string {
+  const clean = cut(raw, 400).split(/\s+[—–-]\s+|[,.;:!]/)[0]!.trim();
+  if ([...clean].length <= max) return clean;
+  const words = clean.split(" ");
+  while (words.length > 1 && [...words.join(" ")].length > max) words.pop();
+  while (words.length > 2 && [...words.at(-1)!].length <= 2) words.pop();
+  return [...words.join(" ")].slice(0, max).join("");
 }
 
 /** Numbers in words have no place on a card's text: the card carries them. */
@@ -295,7 +305,7 @@ export function buildVibeCard(args: unknown, language: Language): VibeCardOutcom
       bars: [],
       reads: [],
       people,
-      verdict: cut(noScores(cut(a.verdict, VIBE_VERDICT_MAX_LEN * 2)), VIBE_VERDICT_MAX_LEN) || null,
+      verdict: headline(noScores(cut(a.verdict, 400)), VIBE_VERDICT_MAX_LEN) || null,
       stepsTitle: t(language, "vibeGapStepsTitle"),
       sticker: null,
     };
@@ -318,7 +328,7 @@ export function buildVibeCard(args: unknown, language: Language): VibeCardOutcom
       title: t(language, kind === "aura" ? "vibeAuraTitle" : "vibeAttractTitle"),
       score,
       scoreLabel: t(language, kind === "aura" ? "vibeAuraScore" : "vibeAttractScore"),
-      archetype: cut(a.archetype, VIBE_ARCHETYPE_MAX_LEN) || null,
+      archetype: headline(noScores(cut(a.archetype, 400)), VIBE_ARCHETYPE_MAX_LEN) || null,
       bars,
       reads,
       people: [],
@@ -334,9 +344,10 @@ export function buildVibeCard(args: unknown, language: Language): VibeCardOutcom
     card,
     result: JSON.stringify({
       success: true,
-      shown: "The card is in the chat ABOVE your reply, with every number on it.",
+      shown: "The drawing is in the chat ABOVE your reply: the number and two or three words. The steps are NOT on it.",
+      stepToSay: vibeStepLine(card),
       instruction:
-        "Now reply with at most one short line of your own — a reaction in your voice, in their language — or nothing at all. Never repeat a number, a percent or the verdict; do not describe the card.",
+        "Now write exactly one short sentence in your voice, in their language, up to 90 characters: stepToSay, as concrete advice. Never repeat a number, a percent or the verdict; no praise instead of the step; do not describe the drawing.",
     }),
   };
 }
@@ -385,6 +396,16 @@ export function vibeCardView(card: VibeCard): VibeCardView {
 /** The sticker after the reply — `ChatSticker` in the contract — or null. */
 export function vibeStickerView(card: VibeCard): AgentSticker | null {
   return card.sticker;
+}
+
+/**
+ * The line under the drawing when the model wrote none: the app does not draw
+ * the steps, and every rating carries one (decision 2026-11-22).
+ */
+export function vibeStepLine(card: VibeCard): string {
+  const step = card.steps[0];
+  if (!step) return "";
+  return step.who ? `${step.who}: ${step.text}` : step.text;
 }
 
 /** What the model reads under its own earlier reply. */

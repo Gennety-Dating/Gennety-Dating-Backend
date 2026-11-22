@@ -27,14 +27,15 @@ export type AgentStickerCaption = (typeof AGENT_STICKER_CAPTIONS)[number];
 
 export const VIBE_SCORE_MIN = 1;
 export const VIBE_SCORE_MAX = 100;
-export const VIBE_ARCHETYPE_MAX_LEN = 32;
+/** The app sets these in display type across the whole chat (founder, 2026-11-22): two or three words. */
+export const VIBE_ARCHETYPE_MAX_LEN = 26;
 export const VIBE_READ_MAX_LEN = 32;
 export const VIBE_READS_MAX = 3;
 export const VIBE_STEP_MAX_LEN = 120;
 export const VIBE_STEPS_MAX = 2;
 export const VIBE_PERSON_LABEL_MAX_LEN = 16;
 export const VIBE_STYLE_MAX_LEN = 28;
-export const VIBE_VERDICT_MAX_LEN = 60;
+export const VIBE_VERDICT_MAX_LEN = 26;
 
 /** Bars per single-person kind, in display order. */
 export const VIBE_BARS = {
@@ -154,8 +155,11 @@ above, for this card only. Rules:
    instead, without a lecture.
 5. The matching algorithm's attractiveness factor stays internal. Never link
    the card to their matches ("that's why you get such matches").
-6. After the card, at most one short line of your own — a reaction, never the
-   numbers again — or nothing. Ask for a sticker (sticker: true) only when the
-   moment is light and fun.
+6. After the card, exactly one short sentence of your own, up to 90 characters:
+   the step that would raise the number, said the way a friend would. The app
+   draws only the number and a couple of words, so this sentence is where the
+   step lives. Never the numbers again. Ask for a sticker (sticker: true) only
+   when the moment is light and fun.
 7. Labels, archetype, reads, verdict and steps are in the person's language,
-   short, specific to THIS photo.`;
+   short, specific to THIS photo. Archetype and verdict are set in huge type:
+   two or three words, no explanation («Тихая уверенность», «Она могнула»).`;
