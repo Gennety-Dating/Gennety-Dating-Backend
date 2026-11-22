@@ -18,4 +18,4 @@
 
 **Rejected:** iTunes Lookup (a new external service, works only for a published app, no control over the moment); reusing `minSupportedIosVersion` (that one locks the app).
 
-**Not decided here:** the production deploy and the value itself. Both need the founder's separate «да».
+**Not decided here:** the value itself, which needs the founder's separate «да». The code went to production on 2026-11-22 with the value empty (deploy journal, same date).

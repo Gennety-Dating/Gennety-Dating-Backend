@@ -7,7 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
-| PENDING | 2026-11-22 | Soft iOS update hint: optional `recommendedIosVersion` on `GET /v1/app/config`, new env `IOS_RECOMMENDED_APP_VERSION` (empty = off, do not set until the App Store link is real); no migration; deploy waits for the founder | [pending.md](./pending.md) |
+| Deployed | 2026-11-22 | Production, file-scoped `279f10c8` (as `c6cf02ac`): optional `recommendedIosVersion` on `GET /v1/app/config`, env `IOS_RECOMMENDED_APP_VERSION` unset → null; pending packages NOT shipped; shipped with the `effect` high advisory (founder's choice, override owed); no migration | [2026-11-22-ios-soft-update.md](./2026-11-22-ios-soft-update.md) |
 | PENDING | 2026-11-22 | Shared playlists → profile music: `POST /v1/me/share/music` + `/add` (YouTube Music, YouTube, Spotify, Apple Music, Yandex Music, SoundCloud), profile music cap 5 → 30; no migration, no new env (behind `PROFILE_MUSIC_ENABLED`); live check per provider first; deploy waits for the founder's «да» | [pending.md](./pending.md) |
 | Deployed | 2026-11-20 | Production `6a2d2697` + file-scoped `386af2db`/`155e2b91` (as `213cdbc2`/`876de4c8`): optional phone `preview` on `/v1/me/share/video` (per-person cache), Pinterest pins photo+video; PENDING packages NOT shipped; TikTok server read empty again; no migration | [2026-11-20-share-preview-pinterest.md](./2026-11-20-share-preview-pinterest.md) |
 | PENDING | 2026-11-20 | Personal reminders from the chat: tools on both surfaces, worker every minute, «Сделано» / «Напомни завтра», `chat.reminder` push; **migration `20261120090000_agent_reminders` first** (one additive table); env `AGENT_REMINDERS_ENABLED` (off) + `_USER_IDS` | [pending.md](./pending.md) |

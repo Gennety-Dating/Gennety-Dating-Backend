@@ -13,20 +13,6 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-22 — soft iOS update hint, `recommendedIosVersion` (needs the founder's «да» to deploy) — no migration**
-
-1. Code: decision `docs/architecture/decisions/2026-11-22-ios-soft-update.md`. One optional field on
-   `GET /v1/app/config` (`apps/bot/src/public/routes/app-config.ts`) from env `IOS_RECOMMENDED_APP_VERSION`.
-2. Ship: the usual bot build and restart. New env, optional; **leave it empty**. Setting a value is a separate founder
-   «да», and only after that version is live in the App Store and the installed app carries the real App Store link.
-3. Demo mode: nothing to branch (read by the iOS app only).
-4. iOS: additive. Older builds ignore the field; the new client shows nothing while it is null or absent.
-5. Rollback: empty the env and restart (the hint disappears on the next config load), or `git revert` the commit.
-6. Proof: `pnpm --filter @gennety/bot exec vitest run src/public/app-config.test.ts`; after the deploy
-   `GET /v1/app/config` answers `recommendedIosVersion: null`.
-
----
-
 **PENDING 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
 
 1. Code: spec `docs/product/domains/share-music-playlists.md`, decision
