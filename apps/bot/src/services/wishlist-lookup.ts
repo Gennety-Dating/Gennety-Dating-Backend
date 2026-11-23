@@ -1359,10 +1359,10 @@ function catalogCacheKey(item: WishlistCatalogItem, language: Language): string 
 export async function catalogImageFor(
   item: WishlistCatalogItem,
   language: Language,
+  now: Date = new Date(),
 ): Promise<{ imageUrl: string | null; productUrl: string | null }> {
   const none = { imageUrl: null, productUrl: null };
   if (!item.query) return none;
-  const now = new Date();
   const languages = language === CATALOG_WARM_LANGUAGE ? [language] : [language, CATALOG_WARM_LANGUAGE];
   for (const lang of languages) {
     const key = catalogCacheKey(item, lang);

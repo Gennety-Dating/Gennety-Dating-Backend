@@ -930,12 +930,12 @@ describe("lookupWishlistEntry — link", () => {
 describe("catalog photos", () => {
   it("warms brand items once (in English) and serves their photo in any language from cache", async () => {
     const item = wishlistCatalogItem("chloe-eau-de-parfum")!;
-    expect(await catalogImageFor(item, "ru")).toEqual({ imageUrl: null, productUrl: null });
+    expect(await catalogImageFor(item, "ru", NOW)).toEqual({ imageUrl: null, productUrl: null });
 
     // The warm-up runs without an injected fetch, like the cron does.
     vi.stubGlobal("fetch", searchFetch());
     expect(await warmWishlistCatalog(1, NOW)).toBe(1);
-    expect(await catalogImageFor(item, "ru")).toEqual({
+    expect(await catalogImageFor(item, "ru", NOW)).toEqual({
       imageUrl: "https://www.notino.de/images/chloe-edp.jpg",
       productUrl: "https://www.notino.de/chloe/chloe-eau-de-parfum/",
     });
@@ -947,7 +947,7 @@ describe("catalog photos", () => {
   });
 
   it("has nothing to say about a generic item", async () => {
-    expect(await catalogImageFor(wishlistCatalogItem("peonies")!, "en")).toEqual({
+    expect(await catalogImageFor(wishlistCatalogItem("peonies")!, "en", NOW)).toEqual({
       imageUrl: null,
       productUrl: null,
     });

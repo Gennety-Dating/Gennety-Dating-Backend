@@ -26,6 +26,13 @@ process.env.ADMIN_PORT ??= "3100";
 process.env.ADMIN_DASHBOARD_ORIGIN ??= "*";
 process.env.WEBAPP_URL ??= "https://test.invalid/calendar";
 
+// Storage buckets are pinned to the production defaults from `config.ts`, not
+// `??=`: a developer's `.env.local` points them at dev buckets, and tests assert
+// the bucket name in storage calls. dotenv never overwrites a set key, so this
+// wins over `.env.local` / `.env`.
+process.env.SUPABASE_SELFIE_BUCKET = "selfies";
+process.env.SUPABASE_VOICE_BUCKET = "voice-prompts";
+
 // Clear secrets that, if present in `.env`, would leak into tests and either
 // hit live services or change branching behaviour. Tests that need these
 // should set them explicitly via `vi.mock("../config.js", ...)`.
