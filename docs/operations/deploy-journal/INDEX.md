@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 257 entries
+# Deploy journal index — 258 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-11-23 | Production, file-scoped `3578058c` (vibe commits on `c6cf02ac`): agent vibe cards — `show_vibe_card`, fields `vibe` + `sticker`, token `vibe`, step in the reply line; no migration, no env (`AGENT_VIBE_CARDS_ENABLED` unset → on); pending packages NOT shipped; `effect` high advisory unchanged; next file-scoped deploy starts from `3578058c` | [2026-11-23-vibe-cards.md](./2026-11-23-vibe-cards.md) |
 | PENDING | 2026-11-22 | Archive and delete agent chats: `archived_at`, `DELETE /v1/chat/sessions/{id}`, archive list/restore/delete all; **migration `20261122190000_chat_session_archive` first** (one nullable column; after `20261119120000`, `20261120090000`); no env | [pending.md](./pending.md) |
 | PENDING | 2026-11-22 | Google Places outage alert to the founder bot (a whole re-validation night failed) + Google's reason in photo proxy / Place Details log lines; no migration, no env; does not fix the 403 itself | [pending.md](./pending.md) |
 | PENDING | 2026-11-22 | Dependency override `effect` 3.21.0 → 3.22.4 (GHSA-7589-6fvf-x4pw, via `@prisma/config`): audit green; needs `pnpm install --frozen-lockfile` + `db:generate` on the droplet; no migration, no env | [pending.md](./pending.md) |
