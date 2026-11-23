@@ -13,7 +13,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-22 — archive and delete agent chats (needs the founder's «да») — migration `20261122190000_chat_session_archive`**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-22 — archive and delete agent chats (needs the founder's «да») — migration `20261122190000_chat_session_archive`**
 
 1. Code: `apps/bot/src/services/chat-sessions.ts`, `chat-session-delete.ts`, `chat-turn-lock.ts`, `chat-agent.ts`,
    `agent-reminders.ts`, `account-deletion.ts` (moved helper), `utils/owned-paths.ts`, `public/routes/chat.ts`, Prisma schema.
@@ -29,7 +29,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-22 — Google Places outage alert + Google's reason in the log (needs the founder's «да») — no migration**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-22 — Google Places outage alert + Google's reason in the log (needs the founder's «да») — no migration**
 
 1. Code: `apps/bot/src/utils/places-error.ts`, `services/places-health.ts`, `services/venue.ts`,
    `services/venue-revalidation.ts`, `services/founder-notify.ts`, `public/places-photo.ts`, `index.ts`. Decision
@@ -44,7 +44,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-22 — dependency override `effect` 3.22.4 (GHSA-7589-6fvf-x4pw; needs the founder's «да») — no migration**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-22 — dependency override `effect` 3.22.4 (GHSA-7589-6fvf-x4pw; needs the founder's «да») — no migration**
 
 1. Code: root `package.json` `pnpm.overrides` + `pnpm-lock.yaml`; `effect` 3.21.0 → 3.22.4, path
    `packages/db > prisma > @prisma/config > effect`. Closes the fix owed by
@@ -58,7 +58,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-22 — shared playlists into the profile's music (needs the founder's «да» to deploy) — no migration**
 
 1. Code: spec `docs/product/domains/share-music-playlists.md`, decision
    `docs/architecture/decisions/2026-11-22-share-music-playlists.md`. `apps/bot/src/services/share-music/` (links,
@@ -85,7 +85,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-20 — personal reminders from the chat («напомни в пятницу») — MIGRATION**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-20 — personal reminders from the chat («напомни в пятницу») — MIGRATION**
 
 1. Code: spec `docs/product/domains/agent-reminders.md`, decision `docs/architecture/decisions/2026-11-20-agent-reminders.md`.
    `apps/bot/src/services/agent-reminders.ts` (tools `set_reminder` / `list_reminders` / `cancel_reminder` on both
@@ -108,7 +108,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-19 — agent long-term memory (needs the founder's «да» for production and the migration)**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-19 — agent long-term memory (needs the founder's «да» for production and the migration)**
 
 1. Code: spec `docs/product/domains/long-term-memory.md`, decision `docs/architecture/decisions/2026-11-19-long-term-memory.md`.
    Notes in `agent_memories` (five kinds), per-person `agent_memory_state`, `chat_sessions.memory_scanned_count`.
@@ -127,7 +127,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-19 — suggested replies under the agent's message**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-19 — suggested replies under the agent's message**
 
 1. Code: spec `docs/product/domains/suggested-replies.md`, decision `docs/architecture/decisions/2026-11-19-suggested-replies.md`.
    `apps/bot/src/services/suggested-replies.ts` owns gates, the chips call (`MODELS.fast`, 2.5 s, fails closed), the
@@ -151,7 +151,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-**PENDING 2026-11-19 — agent concept: offline goal, spine, no attention traps (prompt block)**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-19 — agent concept: offline goal, spine, no attention traps (prompt block)**
 
 1. Code: spec `docs/product/domains/agent-concept.md`, decision `docs/architecture/decisions/2026-11-19-agent-concept.md`.
    Shared `packages/shared/src/agent-concept.ts` holds the ten rules and the clock and goal lines;
@@ -169,7 +169,7 @@ answer with no question chain; in Telegram at night ask anything → a short rep
 
 ---
 
-**PENDING 2026-11-19 — chat statuses: watching a video, the chat history, memory**
+**Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-19 — chat statuses: watching a video, the chat history, memory**
 
 1. Code: decision `docs/architecture/decisions/2026-11-19-chat-statuses.md`. `apps/bot/src/services/chat-activity.ts`
    adds the steps `watching_video` and `remembering` and gives the memory tools their steps; `videoTakeBlocks` reports
