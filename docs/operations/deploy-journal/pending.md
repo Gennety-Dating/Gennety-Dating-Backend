@@ -13,7 +13,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
-**PENDING** 2026-11-24 — emoji reactions in the agent chat, step 1 (needs the founder's «да») — main `c013c8b4`
+**Deployed 2026-11-24 (was PENDING; production `75c13ccd`, founder preview, see [2026-11-24-agent-reactions.md](./2026-11-24-agent-reactions.md))** 2026-11-24 — emoji reactions in the agent chat, step 1 — main `c013c8b4`
 
 1. Code: `packages/shared/src/agent-reactions.ts`, `apps/bot/src/services/chat-reactions.ts`, `chat-agent.ts` (`react` tool
    behind a server guard), `feature-preview.ts`, `public/routes/chat.ts`, Prisma schema. Decision
