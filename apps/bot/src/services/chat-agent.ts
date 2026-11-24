@@ -20,7 +20,21 @@ import {
 import { REMINDER_TOOLS, REMINDER_TOOL_KINDS, executeReminderTool, isReminderTool, reminderClockBlock } from "./agent-reminders.js";
 import { personTimeZone } from "./suggested-replies.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
-import { agentMemoryOn, agentRemindersOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
+import { agentMemoryOn, agentReactionsOn, agentRemindersOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
+import {
+  AGENT_REACTION_ADDENDUM,
+  REACT_TOOL_NAME,
+  agentReactionGate,
+  assistantReactionNote,
+  checkAgentReaction,
+  loadAgentReactionFacts,
+  personReactionsBlock,
+  reactTool,
+  userRowReactionNote,
+  type AgentReactionGate,
+  type ChatReactionTurn,
+  type ReactTool,
+} from "./chat-reactions.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
@@ -466,7 +480,7 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number]
+  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number] | ReactTool
 >;
 
 /**
@@ -515,6 +529,8 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [SHOW_VIBE_CARD_TOOL_NAME]: "read",
   // Reads their booked date, writes nothing (`chat-date-tool.ts`).
   [GET_MY_DATE_TOOL_NAME]: "read",
+  // Writes only the reaction on their message, never the profile (`chat-reactions.ts`).
+  [REACT_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
   ...SCREENSHOT_TOOL_KINDS,
   ...MEMORY_TOOL_KINDS,
@@ -594,6 +610,13 @@ export interface ChatTurnInput {
    * changes nothing in the turn, and absent or throwing it costs nothing.
    */
   onStep?: (step: ChatActivityStep) => void;
+  /**
+   * This build draws reactions and the feature is on for the person
+   * (`chatReactionsDrawn`, decision 2026-11-24). Only then may the agent react
+   * — and only then may the turn end in a reaction with no reply
+   * ({@link ChatReactionTurn}). Absent, every turn ends in a message.
+   */
+  reactionsDrawn?: boolean;
 }
 
 export interface ChatTurnResult {
@@ -625,7 +648,13 @@ export interface ChatTurnResult {
   sticker?: AgentSticker;
   /** The screenshot-library card, for builds that declared `screenshots`. */
   screenshots?: ScreenshotsCardView;
+  /** The stored id of the person's message of this turn. */
+  userMessageId: string;
+  /** Gennety also reacted to the person's message (decision 2026-11-24). */
+  agentReaction?: { messageId: string; emoji: string };
 }
+
+export type { ChatReactionTurn } from "./chat-reactions.js";
 
 export interface ChatDeps {
   fetchFn?: typeof fetch;
@@ -637,17 +666,20 @@ export interface ChatDeps {
  * Public entry point. Per-user serial — a second concurrent call from the
  * same user awaits the prior turn so DB inserts don't interleave.
  */
+export function runChatTurn(input: ChatTurnInput & { reactionsDrawn: true }, deps?: ChatDeps): Promise<ChatTurnResult | ChatReactionTurn>;
+export function runChatTurn(input: ChatTurnInput & { reactionsDrawn?: false }, deps?: ChatDeps): Promise<ChatTurnResult>;
+export function runChatTurn(input: ChatTurnInput, deps?: ChatDeps): Promise<ChatTurnResult | ChatReactionTurn>;
 export async function runChatTurn(
   input: ChatTurnInput,
   deps: ChatDeps = {},
-): Promise<ChatTurnResult> {
+): Promise<ChatTurnResult | ChatReactionTurn> {
   return withChatLock(input.userId, () => runTurnInner(input, deps));
 }
 
 async function runTurnInner(
   input: ChatTurnInput,
   deps: ChatDeps,
-): Promise<ChatTurnResult> {
+): Promise<ChatTurnResult | ChatReactionTurn> {
   const { userId, text, imageUrls } = input;
   const context = input.context ?? null;
   const fetchFn = deps.fetchFn ?? openaiFetch;
@@ -705,7 +737,22 @@ async function runTurnInner(
         recentUserTexts: await recentUserTextsOf(sessionId).catch(() => ["ненавижу себя"]),
       })
     : false;
-  const tools = turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId), vibeCards });
+  // Gennety's reaction (decision 2026-11-24): decided by the server before the
+  // model is called; the tool exists only on a turn the guard lets through. An
+  // unreadable chat counts as «no»: the turn is answered in words.
+  const reactionGate: AgentReactionGate | null = input.reactionsDrawn
+    ? await loadAgentReactionFacts(sessionId)
+        .then((facts) => agentReactionGate({ ...facts, userText: text, imageCount: imageUrls.length, hasContext: Boolean(context) }))
+        .catch((err: unknown) => {
+          console.warn("[chat] reaction facts unavailable:", err instanceof Error ? err.name : "error");
+          return null;
+        })
+    : null;
+  const reactOffered = reactionGate?.ok === true;
+  const tools: ToolList = [
+    ...turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId), vibeCards }),
+    ...(reactionGate?.ok ? [reactTool(reactionGate.emoji)] : []),
+  ];
   // Unreadable counts as not connected: the find request still gets its answer.
   const screenshotLibraryOpen = screenshotCards ? await isScreenshotLibraryOpen(userId).catch(() => false) : null;
   const { messages, openedNewSession, refreshSummary, visiblePhotos, openCardItems, openOffer } = await buildChatMessages(
@@ -719,6 +766,8 @@ async function runTurnInner(
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
       vibeCards,
+      reactionsOn: agentReactionsOn(userId),
+      reactOffered,
       remindersZone: agentRemindersOn(userId) ? personTimeZone(account.profile) : null,
       onWatch: () => {
         watched = true;
@@ -754,6 +803,7 @@ async function runTurnInner(
   let guide: AppGuide | null = null;
   let shots: ScreenshotsCard | null = null;
   let vibe: VibeCard | null = null;
+  let agentReaction: string | null = null;
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
@@ -766,7 +816,8 @@ async function runTurnInner(
     // tool round it nearly always does, so that is what the person is told; a
     // further tool call moves the status on to that tool.
     if (iteration > 0) report("writing");
-    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe ? { allowEmpty: true } : {}) });
+    // After a card or a reaction an empty line is an answer, not a failure.
+    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe || agentReaction ? { allowEmpty: true } : {}) });
     if (!called.ok) {
       failure = called.reason;
       break;
@@ -848,6 +899,19 @@ async function runTurnInner(
           });
           continue;
         }
+      }
+
+      // Gennety's reaction (decision 2026-11-24): checked here, written onto the
+      // person's row below. Refused, the model answers in words in this loop.
+      if (name === REACT_TOOL_NAME) {
+        if (!reactOffered) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        const checked = checkAgentReaction(tc.function.arguments, { gate: reactionGate, already: agentReaction !== null, onPhoto: imageUrls.length > 0 });
+        if (checked.ok) agentReaction = checked.emoji;
+        messages.push({ role: "tool", tool_call_id: tc.id, content: checked.result });
+        continue;
       }
 
       // The vibe card (decision 2026-11-21): validated here, stored with the
@@ -1171,6 +1235,19 @@ async function runTurnInner(
     else failure = `closing call: ${closing.reason}`;
   }
 
+  // Gennety reacted and wrote nothing (decision 2026-11-24): the reaction is
+  // the answer — on the person's row, with no assistant row at all. Reached
+  // only on a build that draws reactions: the tool exists nowhere else. A
+  // turn that also changed something or made a card or a button keeps a
+  // reply (below), so a receipt is never lost behind an emoji.
+  const somethingToSay = receipts.length > 0 || Boolean(card || offer || guide || shots || vibe || pendingAction);
+  if (!lastReply && agentReaction && input.reactionsDrawn && !somethingToSay) {
+    await prisma.message.update({ where: { id: userRow.id }, data: { agentReaction, reactedAt: new Date() } });
+    await touchChatSession(sessionId, userRow.createdAt);
+    afterChatTurn({ userId, sessionId, openedNewSession, refreshSummary });
+    return { kind: "reaction", sessionId, userMessageId: userRow.id, agentReaction: { messageId: userRow.id, emoji: agentReaction } };
+  }
+
   if (!lastReply && !(vibe && !failure)) {
     failure ||= "empty reply";
     console.warn(
@@ -1243,6 +1320,17 @@ async function runTurnInner(
         return [] as ScreenshotsCardView[];
       })
     : [];
+  // A reaction beside the words: on the person's row. Its failure costs the
+  // reaction, never the reply.
+  const reacted = agentReaction
+    ? await prisma.message
+        .update({ where: { id: userRow.id }, data: { agentReaction, reactedAt: new Date() } })
+        .then(() => true)
+        .catch((err: unknown) => {
+          console.warn("[chat] agent reaction not stored:", err instanceof Error ? err.name : "error");
+          return false;
+        })
+    : false;
   // The chat's `updatedAt` is its newest message — what the history list sorts
   // by and the legacy six-hour rule reads. Awaited: the list must agree with
   // the reply the moment the reply is on screen.
@@ -1258,6 +1346,8 @@ async function runTurnInner(
     imageUrl: null,
     createdAt: persisted.createdAt,
     sessionId,
+    userMessageId: userRow.id,
+    ...(reacted && agentReaction ? { agentReaction: { messageId: userRow.id, emoji: agentReaction } } : {}),
     ...(receipts.length > 0 ? { receipts } : {}),
     ...(pendingAction ? { action: pendingAction } : {}),
     ...(attachment ? { attachment } : {}),
@@ -1341,6 +1431,10 @@ async function buildChatMessages(
     remindersZone?: string | null;
     /** The vibe-card tool is offered this turn (decision 2026-11-21). */
     vibeCards?: boolean;
+    /** Reactions are on for this person: theirs are named to the model (decision 2026-11-24). */
+    reactionsOn?: boolean;
+    /** `react` is offered this turn: its rules ride the prompt. */
+    reactOffered?: boolean;
   },
 ): Promise<{
   messages: OpenAIChatMessage[];
@@ -1444,6 +1538,10 @@ async function buildChatMessages(
     // Vibe cards (decision 2026-11-21): the one approved exception to the looks
     // red lines, so it comes after the concept block that «wins over any line above».
     options.vibeCards ? VIBE_CARD_ADDENDUM : null,
+    // Reactions (decision 2026-11-24): what the person reacted to since their
+    // previous message, and the rules of Gennety's own on a turn that may react.
+    options.reactionsOn ? personReactionsBlock(rows) : null,
+    options.reactOffered ? AGENT_REACTION_ADDENDUM : null,
     earlier?.block ?? null,
     contextBlock,
   ]
@@ -1466,7 +1564,10 @@ async function buildChatMessages(
       const earlier = earlierPhotos.get(i);
       // A quoted piece of an earlier reply rides in front of the turn
       // (decision 2026-11-17) — on this turn and on every later one.
-      const turnText = quotedTurnText(row.content ?? "", row.context);
+      const reactedNote = options.reactionsOn ? userRowReactionNote(row) : null;
+      const turnText = reactedNote
+        ? `${quotedTurnText(row.content ?? "", row.context)}\n${reactedNote}`
+        : quotedTurnText(row.content ?? "", row.context);
       if (!isLast && earlier) {
         // An earlier turn whose photos still ride along, each with its token —
         // so "add the third one to my wishlist" can name it. Attaching to the
@@ -1552,7 +1653,9 @@ async function buildChatMessages(
             : rowShots
               ? screenshotsCardNote(rowShots)
               : null;
-      out.push({ role: "assistant", content: note ? `${content}\n${note}` : content });
+      const reactionNote = options.reactionsOn ? assistantReactionNote(row) : null;
+      const notes = [note, reactionNote].filter(Boolean).join("\n");
+      out.push({ role: "assistant", content: notes ? `${content}\n${notes}` : content });
     }
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
