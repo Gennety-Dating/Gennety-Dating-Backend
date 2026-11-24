@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Server } from "node:http";
 import express from "express";
 import request from "supertest";
 import jwt from "jsonwebtoken";
@@ -70,12 +71,27 @@ vi.mock("../../services/whisper.js", () => ({
 const { chatRouter } = await import("./chat.js");
 const { JWT_ISSUER, JWT_AUDIENCE } = await import("../jwt.js");
 
-function app() {
+/**
+ * One server, bound to 127.0.0.1 explicitly. Handed a bare app, supertest
+ * listens on the wildcard `::` and then connects to `127.0.0.1:<port>`; on
+ * macOS another process (a parallel test run) may bind `127.0.0.1` on that
+ * same port, and its socket wins — the request lands in a foreign app and
+ * comes back 404 or without ever reaching `runChatTurn`. A specific bind
+ * cannot be shadowed.
+ */
+let server: Server;
+beforeAll(async () => {
   const a = express();
   a.use(express.json());
   a.use("/v1/chat", chatRouter);
-  return a;
-}
+  server = await new Promise<Server>((resolve) => {
+    const s = a.listen(0, "127.0.0.1", () => resolve(s));
+  });
+});
+afterAll(async () => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+});
+const app = () => server;
 const auth = (sub = USER_ID) => ({
   Authorization: `Bearer ${jwt.sign({ sub, typ: "access" }, JWT_SECRET, {
     issuer: JWT_ISSUER,
