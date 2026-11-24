@@ -4430,7 +4430,11 @@ paths:
         the chips themselves from `GET /v1/chat/messages/{id}/replies`) and,
         since 2026-11-20, `reminder` (`ChatReminderCard` in `reminder` on the
         history row a personal reminder arrived as) and, since 2026-11-21,
-        `vibe` (`ChatVibeCard` in `vibe` and `ChatSticker` in `sticker`). Sent like
+        `vibe` (`ChatVibeCard` in `vibe` and `ChatSticker` in `sticker`) and,
+        since 2026-11-24, `reactions` (emoji reactions: `reactions` on every
+        history row, `PUT /v1/chat/messages/{id}/reaction`, `agentReaction`
+        here — and a turn Gennety answered with a reaction alone, without
+        `message`). Sent like
         `X-Gennety-Build`, by the client's middleware, so it is not an
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
@@ -4455,6 +4459,16 @@ paths:
         sends an APNs alert: title «Напоминание», body the reminder text,
         payload `{ "type": "chat.reminder", "sessionId": "<chat>" }`, which
         opens that chat. Held in quiet hours unless the person named the time.
+
+        **Reactions (2026-11-24).** For a build that lists `reactions` while
+        the feature is on for the person, Gennety may answer a message that
+        closes the topic («ок, спасибо», «понял», 👍) with an emoji on it
+        instead of words: `agentReaction` names the person's message
+        (`userMessageId`) and the emoji, and `message` is absent — draw the
+        emoji on the person's bubble and no reply bubble. The server allows it
+        rarely (at most one per five of the person's messages, never two in a
+        row, never after sad, anxious, complaint, cancellation or danger
+        words). A build that does not list `reactions` always gets `message`.
 
         **Errors the client shows without a retry.** 429 with `error:
         "daily_token_budget"` is the day's agent budget; 403 / 409 carry the
@@ -4523,9 +4537,26 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [message]
                 properties:
-                  message: { $ref: "#/components/schemas/ChatMessage" }
+                  message:
+                    $ref: "#/components/schemas/ChatMessage"
+                    description: >-
+                      The reply. Always present for a build that does not list
+                      `reactions` in `X-Gennety-Chat-Cards`. For one that does,
+                      absent when Gennety answered with `agentReaction` alone.
+                  userMessageId:
+                    type: string
+                    format: uuid
+                    description: >-
+                      The stored id of the person's message of this turn — the
+                      id `agentReaction` names and `/v1/chat/history` returns.
+                      Optional so a build talking to an older server decodes.
+                  agentReaction:
+                    $ref: "#/components/schemas/ChatAgentReaction"
+                    description: >-
+                      Gennety reacted to the person's message of this turn
+                      (decision 2026-11-24) — only for a build that listed
+                      `reactions`. With `message` absent it is the whole answer.
                   sessionId:
                     type: string
                     description: >-
@@ -4717,9 +4748,18 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [message, transcript]
+                required: [transcript]
                 properties:
-                  message: { $ref: "#/components/schemas/ChatMessage" }
+                  message:
+                    $ref: "#/components/schemas/ChatMessage"
+                    description: As on `/v1/chat/message` — absent only for a build that listed `reactions` when Gennety answered with `agentReaction` alone.
+                  userMessageId:
+                    type: string
+                    format: uuid
+                    description: As on `/v1/chat/message`.
+                  agentReaction:
+                    $ref: "#/components/schemas/ChatAgentReaction"
+                    description: As on `/v1/chat/message`.
                   sessionId:
                     type: string
                     description: The chat the turn landed in (optional, as on `/v1/chat/message`)
@@ -5064,6 +5104,77 @@ paths:
                 properties:
                   error: { type: string, enum: [change-failed] }
                   message: { type: string }
+
+  /v1/chat/messages/{id}/reaction:
+    put:
+      tags: [chat]
+      operationId: reactToChatMessage
+      summary: The person's emoji reaction on one of Gennety's replies
+      description: |
+        Emoji reactions in the app chat (decision 2026-11-24). One reaction per
+        side per message, from the proxy chat's five: ❤ 👍 🔥 🤣 🙏. `❤` is
+        stored and returned WITHOUT the variation selector (Telegram's
+        spelling); the red `❤️` is accepted and folded to it — add U+FE0F for
+        display only.
+
+        `{ "emoji": "❤" }` sets or replaces the reaction; `{ "emoji": null }`,
+        `{}`, or the emoji already there takes it off. Answers the message's
+        reactions as they now are — redraw from them.
+
+        A reaction starts no turn. The next turn's agent is told what the person
+        reacted to; a reaction is never a yes — offers and cards still wait for
+        their tap.
+
+        Only for a build that lists `reactions` in `X-Gennety-Chat-Cards`, while
+        the feature is on for the person (`AGENT_REACTIONS_ENABLED` /
+        `AGENT_REACTIONS_USER_IDS`); otherwise 404, as if the route did not exist.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: An assistant message of the caller's (`message.id` of a turn, or a history row)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emoji:
+                  type: [string, "null"]
+                  description: One of ❤ 👍 🔥 🤣 🙏 (❤️ accepted), or null / absent to take it off.
+      responses:
+        "200":
+          description: The message's reactions after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatReactions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            `not-found` — the feature is off, the build did not list
+            `reactions`, the id is not a uuid, or not the caller's message: one
+            answer for all
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`not-assistant` — only Gennety's replies take the person's reaction"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`bad-reaction` — an emoji outside the set of five, or not a string"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/chat/messages/{id}/wishlist:
     post:
@@ -11273,6 +11384,39 @@ components:
                 On the agent row a personal reminder arrived as, with its
                 current state — only for a build that lists `reminder` in
                 `X-Gennety-Chat-Cards`. Absent everywhere else.
+            reactions:
+              $ref: "#/components/schemas/ChatReactions"
+              description: >-
+                Emoji reactions on this row (decision 2026-11-24) — present on
+                EVERY row, both sides possibly null, only for a build that
+                lists `reactions` in `X-Gennety-Chat-Cards` while the feature
+                is on for the person; absent otherwise. Presence is the signal
+                to show the reaction UI.
+
+    ChatReactions:
+      type: object
+      description: >-
+        The reactions on one chat message (decision 2026-11-24). `user` — the
+        person's, only ever on Gennety's replies; `agent` — Gennety's, only
+        ever on the person's messages. One of ❤ 👍 🔥 🤣 🙏 (`❤` without the
+        variation selector) or null.
+      required: [user, agent]
+      properties:
+        user: { type: [string, "null"] }
+        agent: { type: [string, "null"] }
+
+    ChatAgentReaction:
+      type: object
+      description: Gennety's reaction on the person's message of this turn.
+      required: [messageId, emoji]
+      properties:
+        messageId:
+          type: string
+          format: uuid
+          description: The person's message (= `userMessageId`).
+        emoji:
+          type: string
+          description: 🙏, 👍 or ❤ today (step 1); any of the five later.
 
     ScreenshotLibrary:
       type: object
