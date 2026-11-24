@@ -13,6 +13,24 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING** 2026-11-24 — emoji reactions in the agent chat, step 1 (needs the founder's «да») — main `c013c8b4`
+
+1. Code: `packages/shared/src/agent-reactions.ts`, `apps/bot/src/services/chat-reactions.ts`, `chat-agent.ts` (`react` tool
+   behind a server guard), `feature-preview.ts`, `public/routes/chat.ts`, Prisma schema. Decision
+   [2026-11-24-agent-reactions](../../architecture/decisions/2026-11-24-agent-reactions.md), spec
+   `docs/product/domains/agent-reactions.md`.
+2. Ship: migration `20261124120000_chat_message_reactions` FIRST (three nullable columns on `messages`; the history read
+   names them), `db:generate`, bot build and restart. Env: `AGENT_REACTIONS_ENABLED=false` and
+   `AGENT_REACTIONS_USER_IDS=<founder uuid>` for the founder preview (or `true` for everyone).
+3. Demo mode: same rules, no branch. iOS: only builds that send `reactions` in `X-Gennety-Chat-Cards` see anything;
+   older builds never get a turn without `message`.
+4. Verify: with the gate on for the founder, `GET /v1/chat/history` rows carry `reactions`; `PUT
+   /v1/chat/messages/{id}/reaction` `{"emoji":"👍"}` on an assistant row → 200; «ок, спасибо» after a closed topic can
+   end in 🙏 with no text, at most once per five messages.
+5. Rollback: unset the env (feature off) or revert and restart; the columns may stay (nullable, unread).
+
+---
+
 **Deployed 2026-11-24 (was PENDING; production `35661eb5`, see [2026-11-24-full-main.md](./2026-11-24-full-main.md)) 2026-11-22 — archive and delete agent chats (needs the founder's «да») — migration `20261122190000_chat_session_archive`**
 
 1. Code: `apps/bot/src/services/chat-sessions.ts`, `chat-session-delete.ts`, `chat-turn-lock.ts`, `chat-agent.ts`,
