@@ -17,6 +17,13 @@ import { answerReminderMessage, readReminderCard, reminderCardViews } from "../.
 import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatActivityLimiter, chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
+import {
+  chatReactionsDrawn,
+  isReactionTurn,
+  reactionsView,
+  setPersonReaction,
+  type ChatReactionTurn,
+} from "../../services/chat-reactions.js";
 import { chatActivity } from "../../services/chat-activity.js";
 import { chatReplyWaiters, sendChatReplyPush } from "../../services/chat-reply-push.js";
 import { randomUUID } from "node:crypto";
@@ -114,6 +121,29 @@ function repliesField(
 }
 
 /**
+ * The body of a turn Gennety answered with a reaction and no words (decision
+ * 2026-11-24): no `message` at all. Reached only by a build that sent
+ * `reactions` — `runChatTurn` offers the tool nowhere else — so an older build
+ * never sees a turn without `message`.
+ */
+function reactionTurnBody(turn: ChatReactionTurn): Record<string, unknown> {
+  return {
+    sessionId: turn.sessionId,
+    uiHint: null,
+    userMessageId: turn.userMessageId,
+    agentReaction: turn.agentReaction,
+  };
+}
+
+/** `userMessageId` on every turn, `agentReaction` when Gennety also reacted. */
+function turnReactionFields(turn: { userMessageId?: string; agentReaction?: { messageId: string; emoji: string } }): Record<string, unknown> {
+  return {
+    ...(turn.userMessageId ? { userMessageId: turn.userMessageId } : {}),
+    ...(turn.agentReaction ? { agentReaction: turn.agentReaction } : {}),
+  };
+}
+
+/**
  * Gennety chat agent — multimodal AI chat for the mobile app.
  *
  * Endpoints:
@@ -129,6 +159,7 @@ function repliesField(
  *   DELETE /v1/chat/sessions/archived           every archived chat, for good
  *   POST  /v1/chat/messages/:id/wishlist  «Add» / «Not now» on a wishlist card
  *   POST  /v1/chat/messages/:id/offer     accept / decline a change-offer card
+ *   PUT   /v1/chat/messages/:id/reaction  the person's emoji on a reply of Gennety's
  *   GET   /v1/chat/topics         the pre-sessions index, kept for older builds
  *
  * Chats (decision journal 2026-09-30): every turn lands in one chat — the one
@@ -349,6 +380,7 @@ chatRouter.post(
             message: { id: line.id, role: "assistant" as const, content: line.content, imageUrl: null, createdAt: line.createdAt.toISOString() },
             sessionId,
             uiHint: null,
+            ...(line.userMessageId ? { userMessageId: line.userMessageId } : {}),
           };
         }
       }
@@ -363,7 +395,7 @@ chatRouter.post(
           console.warn("[chat] profiler answer in chat failed:", err);
           return null;
         });
-        if (answered) return { message: profilerMessageView(answered.reply), sessionId, uiHint: null };
+        if (answered) return { message: profilerMessageView(answered.reply), sessionId, uiHint: null, userMessageId: answered.user.id };
       }
       // Inside `run`: a retry answered from `chatSends` starts no turn, so it
       // must not start a status either. No id, nothing the phone could poll.
@@ -375,8 +407,12 @@ chatRouter.post(
         context,
         sessionId,
         chatCards: chatCardsOf(req),
+        reactionsDrawn: chatReactionsDrawn(req.userId, chatCardsOf(req)),
         ...(activity ? { onStep: activity.report } : {}),
       }).finally(() => activity?.finish());
+      // Gennety reacted instead of answering (decision 2026-11-24): no
+      // `message`. Only a build that sent `reactions` can get here.
+      if (isReactionTurn(turn)) return reactionTurnBody(turn);
       // Awaited only when it is a promise: a build without chips gets no extra tick.
       const chipsField = repliesField(req, turn, text);
       const chipsExtra = chipsField instanceof Promise ? await chipsField : chipsField;
@@ -389,6 +425,7 @@ chatRouter.post(
           createdAt: turn.createdAt.toISOString(),
         },
         sessionId: turn.sessionId,
+        ...turnReactionFields(turn),
         // Hybrid-chat contract slot (same shape as the interview's uiHint).
         // Chat turns are free-form, so no hint is derived yet — the field
         // exists so the generated client handles both surfaces uniformly.
@@ -543,6 +580,7 @@ chatRouter.post(
         context,
         sessionId,
         chatCards: chatCardsOf(req),
+        reactionsDrawn: chatReactionsDrawn(req.userId, chatCardsOf(req)),
         ...(activity ? { onStep: activity.report } : {}),
       })
         .catch((err: unknown) => {
@@ -555,6 +593,7 @@ chatRouter.post(
       if (!turn) {
         return { status: 503, body: { error: "agent_unavailable" } };
       }
+      if (isReactionTurn(turn)) return { status: 200, body: { ...reactionTurnBody(turn), transcript } };
 
       const chipsField = repliesField(req, turn, transcript);
       const chipsExtra = chipsField instanceof Promise ? await chipsField : chipsField;
@@ -571,6 +610,7 @@ chatRouter.post(
           sessionId: turn.sessionId,
           uiHint: null,
           transcript,
+          ...turnReactionFields(turn),
           ...(turn.receipts ? { receipts: turn.receipts } : {}),
           ...(turn.action ? { action: turn.action } : {}),
           ...(turn.attachment ? { attachment: turn.attachment } : {}),
@@ -731,6 +771,10 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       : null;
 
   const vibeCardsDrawn = chatCardsOf(req).has(VIBE_CARD_CLIENT_TOKEN);
+  // Reactions (decision 2026-11-24): on every row, both sides possibly null,
+  // only for a build that draws them with the feature on — the app reads the
+  // field's presence as «show the reaction UI».
+  const reactionsDrawn = chatReactionsDrawn(req.userId, chatCardsOf(req));
   let cursor = 0;
   const messages = page.map((row, i) => {
     const rowPaths = images[i]!;
@@ -762,6 +806,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
       ...(chips && chips.id === row.id ? { replies: chips.replies } : {}),
       ...(reminderById.get(row.id) ? { reminder: reminderById.get(row.id) } : {}),
+      ...(reactionsDrawn ? { reactions: reactionsView(row) } : {}),
     };
   });
   console.log(
@@ -769,6 +814,49 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   );
   res.json({ messages, hasMore });
 });
+
+/**
+ * PUT /v1/chat/messages/:id/reaction — the person's emoji on one of Gennety's
+ * replies (decision 2026-11-24). `{ "emoji": "❤" }` sets or replaces it;
+ * `{ "emoji": null }`, `{}` or the emoji already there takes it off. Answers
+ * the row's `ChatReactions` (`{ user, agent }`).
+ *
+ * PUT, as in the proxy chat: one reaction per side per message. Starts no turn
+ * — the next turn's prompt names it. 404 when the feature is off or the build
+ * did not send `reactions` (the endpoint does not exist for it), and for
+ * someone else's message; 409 for a row that is not Gennety's reply; 422 for
+ * an emoji outside the set of five.
+ *
+ * Writes nothing a turn spends, so no `usageGuard`; like the other card
+ * answers it asks `requireAgentAccess`.
+ */
+chatRouter.put(
+  "/messages/:id/reaction",
+  requireAgentAccess,
+  chatActivityLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = String(req.params.id ?? "").toLowerCase();
+    if (!chatReactionsDrawn(req.userId, chatCardsOf(req)) || !isUuid(id)) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    // An absent field is «take it off», as in the proxy chat: the generated
+    // Swift client drops a nil optional, so its un-react arrives as `{}`.
+    const fields = (req.body ?? {}) as { emoji?: unknown; reaction?: unknown };
+    const raw = fields.emoji !== undefined ? fields.emoji : (fields.reaction ?? null);
+    if (raw !== null && typeof raw !== "string") {
+      res.status(422).json({ error: "bad-reaction" });
+      return;
+    }
+    const result = await setPersonReaction({ userId: req.userId!, messageId: id, emoji: raw });
+    if (!result.ok) {
+      const status = result.error === "not-found" ? 404 : result.error === "not-assistant" ? 409 : 422;
+      res.status(status).json({ error: result.error });
+      return;
+    }
+    res.json(result.reactions);
+  },
+);
 
 /**
  * POST /v1/chat/messages/:id/wishlist — the person's answer to a wishlist card

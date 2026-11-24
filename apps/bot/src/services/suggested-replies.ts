@@ -664,18 +664,18 @@ export async function answerCloseTap(input: {
   text: string;
   language: Language;
   now?: Date;
-}): Promise<{ id: string; content: string; createdAt: Date }> {
+}): Promise<{ id: string; content: string; createdAt: Date; userMessageId: string }> {
   const now = input.now ?? new Date();
   const profile = await prisma.profile.findUnique({ where: { userId: input.userId }, select: { homeCityKey: true, timeZone: true } });
   const line = closeLine(input.language, now, personTimeZone(profile));
-  await prisma.message.create({
+  const asked = await prisma.message.create({
     data: { userId: input.userId, sessionId: input.sessionId, role: "user", content: input.text, imageUrls: [] },
   });
   const reply = await prisma.message.create({
     data: { userId: input.userId, sessionId: input.sessionId, role: "assistant", content: line, imageUrls: [] },
   });
   await touchChatSession(input.sessionId, reply.createdAt).catch(() => undefined);
-  return { id: reply.id, content: reply.content, createdAt: reply.createdAt };
+  return { id: reply.id, content: reply.content, createdAt: reply.createdAt, userMessageId: asked.id };
 }
 
 // ---------------------------------------------------------------------------
