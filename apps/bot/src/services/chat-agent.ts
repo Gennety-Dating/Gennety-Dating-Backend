@@ -1242,10 +1242,21 @@ async function runTurnInner(
   // reply (below), so a receipt is never lost behind an emoji.
   const somethingToSay = receipts.length > 0 || Boolean(card || offer || guide || shots || vibe || pendingAction);
   if (!lastReply && agentReaction && input.reactionsDrawn && !somethingToSay) {
-    await prisma.message.update({ where: { id: userRow.id }, data: { agentReaction, reactedAt: new Date() } });
-    await touchChatSession(sessionId, userRow.createdAt);
-    afterChatTurn({ userId, sessionId, openedNewSession, refreshSummary });
-    return { kind: "reaction", sessionId, userMessageId: userRow.id, agentReaction: { messageId: userRow.id, emoji: agentReaction } };
+    // Unstored, the reaction is no answer: the turn falls through to the
+    // outage path below (row taken back, 503, the app's retry replays it).
+    const stored = await prisma.message
+      .update({ where: { id: userRow.id }, data: { agentReaction, reactedAt: new Date() } })
+      .then(() => true)
+      .catch((err: unknown) => {
+        console.warn("[chat] agent reaction not stored:", err instanceof Error ? err.name : "error");
+        return false;
+      });
+    if (stored) {
+      await touchChatSession(sessionId, userRow.createdAt);
+      afterChatTurn({ userId, sessionId, openedNewSession, refreshSummary });
+      return { kind: "reaction", sessionId, userMessageId: userRow.id, agentReaction: { messageId: userRow.id, emoji: agentReaction } };
+    }
+    agentReaction = null;
   }
 
   if (!lastReply && !(vibe && !failure)) {
