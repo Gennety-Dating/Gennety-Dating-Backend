@@ -5,6 +5,7 @@ import {
   PROXY_MAX_MESSAGE_LEN,
   PROXY_OPEN_HOURS,
   PROXY_CLOSE_AFTER_HOURS,
+  REACTION_EMOJI,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { getMainBotApi } from "./main-bot-api.js";
@@ -79,7 +80,8 @@ export type ProxyChatRefusal =
  * carries 🤣 and not 😂, and an emoji that works on one rail only is worse
  * than one fewer.
  */
-export const PROXY_REACTIONS = ["❤", "👍", "🔥", "🤣", "🙏"] as const;
+// Shared since 2026-11-24: the app chat with Gennety offers the same five.
+export const PROXY_REACTIONS = REACTION_EMOJI;
 export type ProxyReaction = (typeof PROXY_REACTIONS)[number];
 
 export function isProxyReaction(value: string): value is ProxyReaction {

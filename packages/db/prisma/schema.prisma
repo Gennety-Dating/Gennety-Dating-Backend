@@ -3076,12 +3076,12 @@ enum MessageRole {
 /// have only it, and an older client reading history still gets one photo
 /// instead of none. Write both, read `imageUrls` first and fall back.
 model Message {
-  id        String      @id @default(uuid()) @db.Uuid
-  userId    String      @map("user_id") @db.Uuid
-  role      MessageRole
-  content   String      @db.Text
-  imageUrl  String?     @map("image_url")
-  imageUrls String[]    @default([]) @map("image_urls")
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @map("user_id") @db.Uuid
+  role          MessageRole
+  content       String      @db.Text
+  imageUrl      String?     @map("image_url")
+  imageUrls     String[]    @default([]) @map("image_urls")
   /// What the person was looking at when they wrote this turn — set only on a
   /// `user` row sent from "Обсудить с агентом" (decision 2026-09-13).
   /// `{ kind: "inbox_item", inboxItemId, title }`.
@@ -3091,21 +3091,30 @@ model Message {
   /// agent's grounding is resolved from the live rows at turn time
   /// (`services/chat-context.ts`); when those are gone the chip stays and the
   /// agent simply has nothing more to add.
-  context   Json?
+  context       Json?
   /// The chat this row belongs to (decision journal 2026-09-30). Nullable only
   /// for safety: every writer sets it, and the migration that added it put
   /// every older row into a chat by the six-hour rule. `/v1/chat/history`
   /// without `sessionId` still pages the whole stream across chats — what
   /// older app builds read.
-  sessionId String?     @map("session_id") @db.Uuid
+  sessionId     String?     @map("session_id") @db.Uuid
   /// A native card under an `assistant` row (decision 2026-10-15): today only
   /// the chat agent's wishlist proposal —
   /// `{ kind: "wishlist_proposal", state, items[], savedKeys[] }`, shape and
   /// transitions in `apps/bot/src/services/chat-wishlist.ts`. Stored so the
   /// card and its answer survive a reload, and so the next turn's model knows
   /// what the person saved. Null on every other row.
-  attachment Json?
-  createdAt DateTime    @default(now()) @map("created_at")
+  attachment    Json?
+  /// Emoji reactions in the app chat (decision 2026-11-24), one per side per
+  /// row, from the proxy chat's closed set of five (`REACTION_EMOJI`, `❤`
+  /// without the variation selector). `userReaction` — the person's, only on
+  /// `assistant` rows; `agentReaction` — Gennety's, only on `user` rows.
+  /// `reactedAt` is the newest change of either: the next turn's prompt names
+  /// a reaction set since the person's previous message. Null everywhere else.
+  userReaction  String?     @map("user_reaction")
+  agentReaction String?     @map("agent_reaction")
+  reactedAt     DateTime?   @map("reacted_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
 
   user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   session ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)

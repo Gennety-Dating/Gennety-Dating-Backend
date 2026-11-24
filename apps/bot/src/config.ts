@@ -760,6 +760,13 @@ export const env = {
   AGENT_REMINDERS_ENABLED: process.env.AGENT_REMINDERS_ENABLED === "true",
   /// Per-user preview of reminders, as `SCREENSHOT_LIBRARY_USER_IDS`.
   AGENT_REMINDERS_USER_IDS: parseUserIdList(process.env.AGENT_REMINDERS_USER_IDS, "AGENT_REMINDERS_USER_IDS"),
+  /// Emoji reactions in the app chat (`docs/product/domains/agent-reactions.md`),
+  /// for builds that list `reactions` in `X-Gennety-Chat-Cards`. Off: no
+  /// `reactions` on history rows, the reaction endpoint answers 404, the agent
+  /// has no `react` tool. Reactions already stored stay in the table.
+  AGENT_REACTIONS_ENABLED: process.env.AGENT_REACTIONS_ENABLED === "true",
+  /// Per-user preview of reactions, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  AGENT_REACTIONS_USER_IDS: parseUserIdList(process.env.AGENT_REACTIONS_USER_IDS, "AGENT_REACTIONS_USER_IDS"),
   /// Telegram Stars price of one cheat sheet. 150⭐ ≈ $2.99 at the ticket rate
   /// ($0.02/⭐) — the founder's price; Telegram names the real sum in its sheet.
   WISHLIST_UNLOCK_STARS: Number(process.env.WISHLIST_UNLOCK_STARS ?? "150"),

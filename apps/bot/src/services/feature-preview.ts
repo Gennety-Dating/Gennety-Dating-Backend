@@ -11,7 +11,7 @@ import { env } from "../config.js";
  * everyone, a list means only those people, an empty list means nobody.
  */
 
-type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES" | "AGENT_MEMORY" | "AGENT_REMINDERS";
+type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES" | "AGENT_MEMORY" | "AGENT_REMINDERS" | "AGENT_REACTIONS";
 
 function previewList(flag: Flag): readonly string[] {
   const raw = (env as Record<string, unknown>)[`${flag}_USER_IDS`];
@@ -45,3 +45,5 @@ export const agentMemoryOn = (userId: string | null | undefined): boolean => onF
 export const agentMemoryUsers = (): readonly string[] | null => usersOf("AGENT_MEMORY");
 export const agentRemindersOn = (userId: string | null | undefined): boolean => onFor("AGENT_REMINDERS", userId);
 export const agentRemindersUsers = (): readonly string[] | null => usersOf("AGENT_REMINDERS");
+/** Emoji reactions in the app chat (`docs/product/domains/agent-reactions.md`). */
+export const agentReactionsOn = (userId: string | null | undefined): boolean => onFor("AGENT_REACTIONS", userId);
