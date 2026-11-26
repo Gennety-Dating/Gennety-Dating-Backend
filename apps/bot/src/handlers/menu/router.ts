@@ -39,6 +39,7 @@ import {
   handleSettingsLanguageSet,
   handleSettingsThemeOpen,
   handleSettingsProfilerToggle,
+  handleSettingsOnlyDatesToggle,
   handleSettingsThemeSet,
   handleDeleteAccountStart,
   handleFreezeAccount,
@@ -441,6 +442,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     case "menu:settings:profiler":
       await handleSettingsProfilerToggle(ctx);
+      return;
+    case "menu:settings:onlydates":
+      await handleSettingsOnlyDatesToggle(ctx);
       return;
     case "menu:settings:delete":
       await handleDeleteAccountStart(ctx);

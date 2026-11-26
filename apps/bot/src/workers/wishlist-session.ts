@@ -2,6 +2,7 @@ import { prisma } from "@gennety/db";
 import { afterDateT, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { sendPushToUser } from "../services/push.js";
+import { NOT_ONLY_MY_DATES } from "../services/notification-mute.js";
 import { hasActiveDatePlanning } from "../services/profiler.js";
 import { isQuietHourLocal, nextWindowAt, resolveZone } from "../services/profiler-schedule.js";
 import { openWishlistSession, wishlistSessionEligible } from "../services/wishlist.js";
@@ -45,6 +46,8 @@ export async function wishlistSessionTick(
         status: "active",
         onboardingStep: "completed",
         platform: { in: ["mobile", "both"] },
+        // «Только мои свидания» (agent concept phase 4 item 6).
+        ...NOT_ONLY_MY_DATES,
       },
     },
     select: {

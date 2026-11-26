@@ -497,4 +497,11 @@ describe("verification-stall nudges (Registration v2)", () => {
       expect(prompt).not.toContain("bring them back");
     });
   });
+
+  it("«only my dates» leaves muted people out of the onboarding chain (phase 4 item 6)", async () => {
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await reEngagementTick(createMockApi(), { fetchFn: vi.fn(), now: DAY_TIME });
+    const where = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0].where;
+    expect(where.notifyOnlyDates).toBe(false);
+  });
 });

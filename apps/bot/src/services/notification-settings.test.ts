@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
-  prisma: { profile: { findUnique: vi.fn() } },
+  prisma: { user: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue({}) } },
 }));
 vi.mock("./profiler.js", () => ({
   setProfilerEnabled: vi.fn().mockResolvedValue({ releasedMessageId: 9 }),
@@ -16,7 +16,8 @@ import {
 } from "./notification-settings.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mFind = (prisma.profile as unknown as { findUnique: MockFn }).findUnique;
+const mFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
+const mUserUpdate = (prisma.user as unknown as { update: MockFn }).update;
 const NOW = new Date("2026-11-26T08:00:00Z");
 
 beforeEach(() => vi.clearAllMocks());
@@ -24,6 +25,9 @@ beforeEach(() => vi.clearAllMocks());
 describe("parseNotificationSettingsPatch", () => {
   it("accepts a boolean switch", () => {
     expect(parseNotificationSettingsPatch({ profilerQuestions: false })).toEqual({ patch: { profilerQuestions: false } });
+    expect(parseNotificationSettingsPatch({ onlyMyDates: true, profilerQuestions: true })).toEqual({
+      patch: { onlyMyDates: true, profilerQuestions: true },
+    });
   });
   it.each([
     [null, "Body must be an object"],
@@ -38,17 +42,18 @@ describe("parseNotificationSettingsPatch", () => {
 
 describe("getNotificationSettings", () => {
   it("is on for a person who never touched it", async () => {
-    mFind.mockResolvedValue({ profilerOptedOutAt: null, profilerPausedUntil: null });
-    expect(await getNotificationSettings("u1", NOW)).toMatchObject({ profilerQuestions: true, profilerPausedUntil: null });
+    mFind.mockResolvedValue({ notifyOnlyDates: false, profile: { profilerOptedOutAt: null, profilerPausedUntil: null } });
+    expect(await getNotificationSettings("u1", NOW)).toEqual({ profilerQuestions: true, profilerPausedUntil: null, onlyMyDates: false });
   });
   it("reports the switch and a pause still running, never an old one", async () => {
     const until = new Date(NOW.getTime() + 86_400_000);
-    mFind.mockResolvedValueOnce({ profilerOptedOutAt: NOW, profilerPausedUntil: until });
+    mFind.mockResolvedValueOnce({ notifyOnlyDates: true, profile: { profilerOptedOutAt: NOW, profilerPausedUntil: until } });
     expect(await getNotificationSettings("u1", NOW)).toMatchObject({
       profilerQuestions: false,
       profilerPausedUntil: until.toISOString(),
+      onlyMyDates: true,
     });
-    mFind.mockResolvedValueOnce({ profilerOptedOutAt: null, profilerPausedUntil: new Date(NOW.getTime() - 1) });
+    mFind.mockResolvedValueOnce({ notifyOnlyDates: false, profile: { profilerOptedOutAt: null, profilerPausedUntil: new Date(NOW.getTime() - 1) } });
     expect((await getNotificationSettings("u1", NOW)).profilerPausedUntil).toBeNull();
   });
 });
@@ -58,5 +63,13 @@ describe("applyNotificationSettings", () => {
     const res = await applyNotificationSettings("u1", { profilerQuestions: false }, NOW);
     expect(setProfilerEnabled).toHaveBeenCalledWith("u1", false, NOW);
     expect(res.releasedMessageId).toBe(9);
+  });
+});
+
+describe("applyNotificationSettings — only my dates (phase 4 item 6)", () => {
+  it("writes User.notifyOnlyDates and leaves the Profiler alone", async () => {
+    await applyNotificationSettings("u1", { onlyMyDates: true }, NOW);
+    expect(mUserUpdate).toHaveBeenCalledWith({ where: { id: "u1" }, data: { notifyOnlyDates: true } });
+    expect(setProfilerEnabled).not.toHaveBeenCalled();
   });
 });

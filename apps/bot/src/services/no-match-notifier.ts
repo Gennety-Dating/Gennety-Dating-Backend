@@ -17,6 +17,7 @@ import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
+import { NOT_ONLY_MY_DATES } from "./notification-mute.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
@@ -410,6 +411,9 @@ export async function sendNoMatchNotices(
         // WITHOUT a claim, so the claim alone can no longer move the read
         // forward — re-reading from the start would return the same page.
         ...(afterId ? { id: { gt: afterId } } : {}),
+        // «Только мои свидания» (agent concept phase 4 item 6): a waiting
+        // notice is not about a date of theirs.
+        ...NOT_ONLY_MY_DATES,
         status: "active",
         onboardingStep: "completed",
         // An account created after the drop was not in it, and must not be told

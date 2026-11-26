@@ -1777,6 +1777,8 @@ paths:
         больше» as an answer sets the same switch. `profilerPausedUntil` is
         read only: the 14-day Telegram pause after two ignored batches in a
         row (null when none is running); the app's own pull is not held by it.
+        `onlyMyDates: true` is the per-type mute («только мои свидания»): only
+        messages about the person's own matches and dates; see the schema.
       responses:
         "200":
           description: OK
@@ -9684,7 +9686,7 @@ components:
 
     NotificationSettings:
       type: object
-      required: [profilerQuestions, profilerPausedUntil]
+      required: [profilerQuestions, profilerPausedUntil, onlyMyDates]
       properties:
         profilerQuestions:
           type: boolean
@@ -9694,12 +9696,24 @@ components:
           format: date-time
           nullable: true
           description: Read only. End of the 14-day Telegram pause after two ignored batches; null when none.
+        onlyMyDates:
+          type: boolean
+          description: |
+            «Только мои свидания» — the per-type mute. Default false. When true,
+            Gennety sends on its own only what is about the person's own
+            matches and dates (pitches, scheduling, the date itself, safety,
+            verification, billing, reminders they asked for). Muted: Profiler
+            batches, onboarding re-engagement, announcement pushes (the inbox
+            row is still written), waiting notices, pushed Rematch offers, the
+            wishlist session push, idea reminders not tied to a match,
+            referral-reward messages.
     NotificationSettingsPatch:
       type: object
       minProperties: 1
       additionalProperties: false
       properties:
         profilerQuestions: { type: boolean }
+        onlyMyDates: { type: boolean }
     Theme:
       type: string
       enum: [light, dark]

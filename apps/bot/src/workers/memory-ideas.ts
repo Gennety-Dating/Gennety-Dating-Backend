@@ -4,6 +4,7 @@ import { memoryIdeasUsers } from "../services/feature-preview.js";
 import { dropScreenshotSources } from "../services/memory-ideas.js";
 import { reconcilePlans } from "../services/memory-planning.js";
 import { sendPushToUser } from "../services/push.js";
+import { mutedByOnlyMyDates } from "../services/notification-mute.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -70,7 +71,10 @@ export async function sendDueReminders(now: Date = new Date(), deps: ReminderDep
       ? (await prisma.userBlock.count({ where: { OR: [{ blockerId: planMatch.userAId, blockedId: planMatch.userBId }, { blockerId: planMatch.userBId, blockedId: planMatch.userAId }] } })) > 0
       : false;
     const usable = usableForOwnDates({ ...idea, intent: idea.intent as MemoryIntent, reason: idea.reason as MemoryReason | null });
-    if (!usable || blocked || !idea.eventAt || idea.eventAt <= now || idea.eventCheck === "outdated") {
+    // «Только мои свидания» (agent concept phase 4 item 6): an idea not tied to
+    // a planned match is not about a date of theirs — cancelled, not pushed.
+    const muted = !idea.plannedMatchId && (await mutedByOnlyMyDates(reminder.userId, "idea_reminder"));
+    if (muted || !usable || blocked || !idea.eventAt || idea.eventAt <= now || idea.eventCheck === "outdated") {
       await prisma.memoryReminder.updateMany({ where: { id: reminder.id, state: "pending" }, data: { state: "cancelled" } });
       continue;
     }

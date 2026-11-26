@@ -134,3 +134,12 @@ describe("profilerTick — off switch and ignored pause (phase 4 item 1)", () =>
     ]);
   });
 });
+
+describe("profilerTick — «only my dates» (phase 4 item 6)", () => {
+  it("leaves muted people out of the dispatch", async () => {
+    queries([], [], []);
+    await profilerTick(api, NOW);
+    const dueQuery = mFindMany.mock.calls[2]![0] as { where: { user: Record<string, unknown> } };
+    expect(dueQuery.where.user.notifyOnlyDates).toBe(false);
+  });
+});

@@ -23,18 +23,23 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    - item 3 — the expired-match notice no longer carries the Rematch offer; no schema.
    - item 4 — campus drop and the T+24h feedback prompt wait out quiet hours (23:00–09:00 Kyiv); no schema.
    - item 5 — one announcement push per person per week; the inbox row is still written; no schema.
+   - item 6 — «только мои свидания» per-type mute: `users.notify_only_dates`, every non-date proactive sender skips a
+     muted person, Settings toggle, `onlyMyDates` on `/v1/me/notifications`.
 2. Ship: migrations FIRST, in order (all additive, the new code reads the columns):
    - `20261126100000_profiler_pause_off_switch` — three columns on `profiles`.
+   - `20261126120000_notify_only_dates` — one boolean on `users`.
    Then `db:generate`, the shared + bot build and restart. No new env, no flag: the changes are live with the deploy.
 3. Demo mode: the same behaviour, no branch; demo state goes with the demo reset.
 4. iOS: nothing breaks for old builds. The settings toggles need `GET/PATCH /v1/me/notifications` (see
    `openapi/gennety-v1.yaml`).
 5. Verify: `PATCH /v1/me/notifications {"profilerQuestions":false}` → 200 `{ "profilerQuestions": false, ... }`, then
-   `GET /v1/me/profiler` → `{}`; in Telegram ⚙️ Settings shows «💬 Вопросы о тебе: выкл»; the `[profiler]` cron line
+   `GET /v1/me/profiler` → `{}`; `PATCH {"onlyMyDates":true}` → `"onlyMyDates": true`; in Telegram ⚙️ Settings shows
+   «💬 Вопросы о тебе: выкл» and «🔕 Только мои свидания: вкл»; the `[profiler]` cron line
    keeps logging.
 6. Rollback: revert the commits and restart. The columns may stay (unread by the old code; defaults harmless). To drop
    them: `ALTER TABLE profiles DROP COLUMN profiler_ignored_streak, DROP COLUMN profiler_paused_until, DROP COLUMN
-   profiler_opted_out_at;` — this loses who switched the Profiler off.
+   profiler_opted_out_at;` and `ALTER TABLE users DROP COLUMN notify_only_dates;` — this loses who switched the Profiler
+   off and who muted everything but their dates.
 
 **Deployed 2026-11-24 (was PENDING; production `75c13ccd`, founder preview, see [2026-11-24-agent-reactions.md](./2026-11-24-agent-reactions.md))** 2026-11-24 — emoji reactions in the agent chat, step 1 — main `c013c8b4`
 

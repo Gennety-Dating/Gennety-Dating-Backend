@@ -218,6 +218,13 @@ describe("sendNoMatchNotices", () => {
     }
   });
 
+  it("«only my dates» leaves muted people out of the waiting notices (phase 4 item 6)", async () => {
+    mUserFindMany.mockResolvedValueOnce([]);
+    await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+    const arg = mUserFindMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(arg.where.notifyOnlyDates).toBe(false);
+  });
+
   it("(A13-H10) only considers accounts that existed when the drop ran", async () => {
     mUserFindMany.mockResolvedValueOnce([]);
 

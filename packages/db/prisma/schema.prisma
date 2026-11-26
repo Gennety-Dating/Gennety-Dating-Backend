@@ -421,6 +421,15 @@ model User {
   /// (verified-after-skip, unfreeze on `/start`) never re-sends. Null = never
   /// notified.
   founderNotifiedAt        DateTime?          @map("founder_notified_at")
+  /// «Только мои свидания» (agent concept phase 4 item 6, founder 2026-11-26):
+  /// the per-type mute. True = Gennety sends on its own only what is about the
+  /// person's own matches and dates (pitches, scheduling, the date itself,
+  /// safety, verification, money receipts, reminders they asked for). Muted:
+  /// Profiler batches, onboarding re-engagement, announcement pushes (the
+  /// inbox row is still written), waiting notices, Rematch offers, the
+  /// wishlist session push, idea reminders not tied to a match, referral
+  /// rewards. Settable from the bot's Settings and `PATCH /v1/me/notifications`.
+  notifyOnlyDates          Boolean            @default(false) @map("notify_only_dates")
   /// Non-null on a SYNTHETIC test profile — a hand-seeded account that exists
   /// only to balance the gender skew in a friends-and-family production test
   /// (PRODUCT_SPEC §3.1c). It is an ordinary `User` + `Profile` in every other

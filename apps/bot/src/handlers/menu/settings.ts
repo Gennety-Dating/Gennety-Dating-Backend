@@ -54,6 +54,11 @@ async function renderSettings(ctx: BotContext): Promise<void> {
         t(lang, notifications.profilerQuestions ? "settingsProfilerOn" : "settingsProfilerOff"),
         "menu:settings:profiler",
       )
+      .row()
+      .text(
+        t(lang, notifications.onlyMyDates ? "settingsOnlyDatesOn" : "settingsOnlyDatesOff"),
+        "menu:settings:onlydates",
+      )
       .row();
   }
   keyboard
@@ -347,5 +352,21 @@ export async function handleSettingsProfilerToggle(ctx: BotContext): Promise<voi
     await stripQuestionKeyboard(ctx.api, BigInt(ctx.from.id), releasedMessageId);
   }
   await ctx.reply(t(lang, enabled ? "settingsProfilerNowOn" : "settingsProfilerNowOff"));
+  await renderSettings(ctx);
+}
+
+/**
+ * Settings → «Только мои свидания»: the per-type mute (agent concept phase 4
+ * item 6). What it silences: `services/notification-mute.ts`.
+ */
+export async function handleSettingsOnlyDatesToggle(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery().catch(() => {});
+  const lang = ctx.session.language;
+  const userId = await settingsUserId(ctx);
+  if (!userId) return;
+  const current = await getNotificationSettings(userId);
+  const onlyMyDates = !current.onlyMyDates;
+  await applyNotificationSettings(userId, { onlyMyDates });
+  await ctx.reply(t(lang, onlyMyDates ? "settingsOnlyDatesNowOn" : "settingsOnlyDatesNowOff"));
   await renderSettings(ctx);
 }

@@ -19,6 +19,8 @@ vi.mock("../../config.js", () => ({
   env: { REMATCH_FEATURE_ENABLED: true, REMATCH_PRICE_USD_DISPLAY: "$2.99" },
 }));
 vi.mock("../../services/rematch.js", () => ({ checkRematchEligibility: vi.fn() }));
+const mutedByOnlyMyDates = vi.fn().mockResolvedValue(false);
+vi.mock("../../services/notification-mute.js", () => ({ mutedByOnlyMyDates: (...a: unknown[]) => mutedByOnlyMyDates(...a) }));
 vi.mock("../../services/rematch-card.js", () => ({ renderRematchCard: vi.fn() }));
 
 import { prisma } from "@gennety/db";
@@ -78,6 +80,19 @@ describe("rematch offer delivery", () => {
     expect(a.sendPhoto).not.toHaveBeenCalled();
     expect(a.sendMessage).not.toHaveBeenCalled();
     expect(findUnique.mock.calls[0]![0].select).toMatchObject({ platform: true });
+  });
+
+  it("«only my dates» silences a pushed offer but never the person's own tap (phase 4 item 6)", async () => {
+    mutedByOnlyMyDates.mockResolvedValueOnce(true);
+    const a = api();
+    expect(await sendRematchOfferIfEligible(a as never, "buyer-1", "famine")).toBe(false);
+    expect(a.sendPhoto).not.toHaveBeenCalled();
+    expect(mutedByOnlyMyDates).toHaveBeenCalledWith("buyer-1", "rematch_offer");
+
+    mutedByOnlyMyDates.mockClear().mockResolvedValue(true);
+    await sendRematchOfferIfEligible(a as never, "buyer-1", "neutral");
+    expect(mutedByOnlyMyDates).not.toHaveBeenCalled();
+    mutedByOnlyMyDates.mockResolvedValue(false);
   });
 
   it("does not protect the card — there is no partner on it to protect", async () => {

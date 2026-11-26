@@ -23,7 +23,7 @@ import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendMemeCard } from "./meme-reveal.js";
 import { runMorningAfterTick } from "./morning-after.js";
 import { sendPushToUser } from "./push.js";
-import { isQuietHours } from "../workers/quiet-hours.js";
+import { DEFAULT_TIME_ZONE, isQuietHourIn } from "@gennety/shared";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
   advanceDateDayActivities,
@@ -656,10 +656,12 @@ export async function runDateLifecycleTick(
   const feedbackThreshold = new Date(now.getTime() - FEEDBACK_DELAY_HOURS * 60 * 60 * 1000);
 
   // Quiet hours (agent concept phase 4 item 4, founder 2026-11-26): the
-  // prompt waits for the first tick after 09:00 Kyiv, like the other nudges.
+  // prompt waits for the first tick after 09:00 Kyiv, like the other nudges
+  // (the same window as `workers/quiet-hours.ts`, read from shared so this
+  // service does not import the worker layer).
   // The status still turns `completed` on time — only the message waits, and
   // `feedbackPromptedAt: null` keeps the row due for that morning tick.
-  if (isQuietHours(now)) {
+  if (isQuietHourIn(now, DEFAULT_TIME_ZONE)) {
     await prisma.match.updateMany({
       where: { status: "scheduled", agreedTime: { lte: feedbackThreshold }, feedbackPromptedAt: null },
       data: { status: "completed" },

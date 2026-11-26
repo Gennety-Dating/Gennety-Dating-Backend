@@ -20,6 +20,7 @@ import type { BotContext } from "../../session.js";
 import { checkRematchEligibility } from "../../services/rematch.js";
 import { renderRematchCard, type RematchCardTheme } from "../../services/rematch-card.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
+import { mutedByOnlyMyDates } from "../../services/notification-mute.js";
 
 /** Bot API caps a photo caption at 1024 chars; a plain text message gets 4096. */
 const CAPTION_LIMIT = 1024;
@@ -55,6 +56,11 @@ export async function sendRematchOfferIfEligible(
   now: Date = new Date(),
 ): Promise<boolean> {
   if (!env.REMATCH_FEATURE_ENABLED) return false;
+  // «Только мои свидания» (agent concept phase 4 item 6) silences the pushed
+  // offers. `neutral` is the person's own tap on the entry — always answered.
+  if (variant !== "neutral" && (await mutedByOnlyMyDates(userId, "rematch_offer").catch(() => false))) {
+    return false;
+  }
 
   const eligibility = await checkRematchEligibility(userId, now).catch(() => null);
   if (!eligibility?.ok) return false;

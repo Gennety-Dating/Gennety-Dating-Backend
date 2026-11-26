@@ -94,3 +94,31 @@ proactive senders, not from the agent. Each item below changes one of them.
    A push APNs refused (no token) still counts, so the cap errs quiet.
 3. Not capped: the admin preview (one founder-picked account).
 4. Demo mode: the fan-out is not scheduled in demo; nothing changes there.
+
+## Item 6 — The per-type mute «only my dates» (built)
+
+1. Schema approved with the founder's answer: `users.notify_only_dates`
+   (`BOOLEAN NOT NULL DEFAULT false`), additive migration
+   `20261126120000_notify_only_dates`.
+2. **What «my dates» means (decided in the build).** A message is about the
+   person's own dates when it concerns a match they are in or a date they
+   have: pitches (scheduled, campus, the app's drop push), match nudges,
+   scheduling, venue and ticket flow, the date lifecycle, the proxy chat,
+   cancellations, safety. Also never muted: verification (mandatory), refunds
+   and billing notices, an idea reminder for a planned date, the personal
+   reminders the person asked for, the agent's answers to their own turn.
+3. Muted, each in its own sender: Profiler batches, onboarding
+   re-engagement, announcement pushes (the inbox row is still written and
+   held like the weekly cap), waiting notices, pushed Rematch offers (the
+   person's own tap on the entry is always answered), the wishlist session
+   push, idea reminders not tied to a planned match (cancelled), and
+   referral-reward messages (the tickets are still credited).
+4. Premium renewal reminders stay unmuted on purpose: for an auto-renewing
+   period they are the notice before a charge.
+5. One list for the next sender: `services/notification-mute.ts`.
+6. Toggle in the bot's ⚙️ Settings and `PATCH /v1/me/notifications
+   { onlyMyDates }` (OpenAPI). The Mini App has no settings screen (see
+   item 1).
+7. Demo mode: the same switch and the same senders; the demo runs fewer of
+   them (no announcement fan-out, no waiting notices), so there is less to
+   mute.

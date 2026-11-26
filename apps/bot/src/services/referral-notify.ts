@@ -4,6 +4,7 @@ import { type Language, t } from "@gennety/shared";
 import { env } from "../config.js";
 import { grantReferralRewardsForVerifiedInvitee, type ReferralRewardResult } from "./referral.js";
 import { sendPushToUser } from "./push.js";
+import { mutedByOnlyMyDates } from "./notification-mute.js";
 
 /** Localized safety-net name for the (effectively unreachable) no-firstName case. */
 const GENERIC_FRIEND: Record<Language, string> = {
@@ -59,6 +60,9 @@ async function notifyReferrerReward(
     }),
   ]);
   if (!referrer) return;
+  // «Только мои свидания» (agent concept phase 4 item 6): the tickets are
+  // already credited; only the message is skipped.
+  if (await mutedByOnlyMyDates(result.referrerId, "referral_reward").catch(() => false)) return;
 
   const lang = (referrer.language ?? "en") as Language;
   // Invitees always have a firstName by the time they verify (required onboarding

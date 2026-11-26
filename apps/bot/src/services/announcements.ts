@@ -9,6 +9,7 @@ import {
 } from "@gennety/shared";
 import { isQuietHours } from "../workers/quiet-hours.js";
 import { sendPushToUser } from "./push.js";
+import { mutedByOnlyMyDates } from "./notification-mute.js";
 import { pushReachable } from "./telegram-reach.js";
 import {
   createAnnouncementAssetSignedUrl,
@@ -756,7 +757,12 @@ async function pushPending(a: Deliverable, deps: PushDeps): Promise<{ pushed: nu
       // item 5). The row stays in the inbox; it is marked handled with
       // `pushedAt = createdAt`, the "held by the cap" marker, so it never
       // counts as a push itself.
-      if (!row.readAt && (await announcementPushedWithinGap(row.userId, a.id, deps.now()))) {
+      // «Только мои свидания» (item 6) holds it the same way, inbox row kept.
+      if (
+        !row.readAt &&
+        ((await mutedByOnlyMyDates(row.userId, "announcement")) ||
+          (await announcementPushedWithinGap(row.userId, a.id, deps.now())))
+      ) {
         await prisma.inboxItem.update({ where: { id: row.id }, data: { pushedAt: row.createdAt } });
         continue;
       }

@@ -247,8 +247,21 @@ the founder's separate «да» for the deploy and the migrations.
    per week (`ANNOUNCEMENT_PUSH_MIN_GAP_MS`); the inbox row is still written.
    No schema: a held row is marked `pushedAt = createdAt`
    (`services/announcements.ts`, `announcementPushedWithinGap`).
-6. **A per-type mute** («only my dates») in settings. It needs a schema
-   field, so it is asked separately. Recommendation: yes, after 1–5.
+6. **A per-type mute («only my dates») — built.** `User.notifyOnlyDates`
+   (migration `20261126120000_notify_only_dates`, approved with the answer).
+   On: Gennety sends on its own only what is about the person's own matches
+   and dates. Muted, each in its sender: Profiler batches, onboarding
+   re-engagement, announcement pushes (the inbox row is still written),
+   waiting notices, pushed Rematch offers (a tap on the entry still opens
+   it), the wishlist session push, idea reminders not tied to a planned
+   match, referral-reward messages (tickets still credited). Never muted:
+   pitches and match nudges, scheduling, venue and ticket flow, the date
+   lifecycle, the proxy chat, cancellations and safety, verification,
+   refunds and billing notices (Premium renewal reminders included), the
+   person's own reminders, and the agent's answers. The list is
+   `services/notification-mute.ts`; a new proactive sender adds itself there.
+   Toggle: the bot's ⚙️ Settings («🔕 Только мои свидания») and
+   `PATCH /v1/me/notifications { onlyMyDates }`.
 7. **The pinned countdown banner.** Keep it: it is information that is
    already on screen, not a new ping. Recommendation: keep.
 8. **Telegram memory.** Give the Telegram agent the app's person card and its

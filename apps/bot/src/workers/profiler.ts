@@ -10,6 +10,7 @@ import {
   hasActiveDatePlanning,
   startProfilerBatch,
 } from "../services/profiler.js";
+import { NOT_ONLY_MY_DATES } from "../services/notification-mute.js";
 
 /**
  * Profiler scheduler tick (PRODUCT_SPEC §Phase 1b). Runs on a cron (default
@@ -143,6 +144,8 @@ export async function profilerTick(
       profilerOptedOutAt: null,
       OR: [{ profilerPausedUntil: null }, { profilerPausedUntil: { lte: now } }],
       user: {
+        // «Только мои свидания» (phase 4 item 6) silences the batches too.
+        ...NOT_ONLY_MY_DATES,
         status: "active",
         onboardingStep: "completed",
         // A positive telegramId no longer means the bot can reach them:

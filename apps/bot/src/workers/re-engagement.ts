@@ -16,6 +16,7 @@ import {
   reEngagementStopPatch,
   touchTimeFor,
 } from "./re-engagement-schedule.js";
+import { NOT_ONLY_MY_DATES } from "../services/notification-mute.js";
 
 /**
  * Re-engagement worker for abandoned onboarding sessions.
@@ -92,6 +93,8 @@ export async function reEngagementTick(
       // apply `onboardingActivityPatch`, so a touch that fell due while they
       // were waiting cannot fire the second they come back.
       cityWaitlistEntry: { is: null },
+      // «Только мои свидания» (agent concept phase 4 item 6).
+      ...NOT_ONLY_MY_DATES,
     },
     select: {
       telegramId: true,

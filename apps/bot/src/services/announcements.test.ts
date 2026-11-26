@@ -358,6 +358,23 @@ describe("announcementFanoutTick", () => {
     expect(result.pushed).toBe(1);
   });
 
+  it("«only my dates» holds the push and keeps the inbox row (phase 4 item 6)", async () => {
+    const written = new Date("2026-09-13T11:00:00Z");
+    db.inboxItem.findMany
+      .mockResolvedValueOnce([{ id: "r1", userId: USER, readAt: null, createdAt: written }])
+      .mockResolvedValueOnce([]);
+    db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    db.user.findUnique.mockImplementation(async (args: { select: Record<string, unknown> }) =>
+      "notifyOnlyDates" in args.select ? { notifyOnlyDates: true } : { inboxItems: [] },
+    );
+
+    await announcementFanoutTick({ ...deps(), send: sendPushToUser });
+
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(db.inboxItem.createMany).toHaveBeenCalled();
+    expect(db.inboxItem.update).toHaveBeenCalledWith({ where: { id: "r1" }, data: { pushedAt: written } });
+  });
+
   it("does not ring a phone about something already read in the app", async () => {
     db.inboxItem.findMany.mockResolvedValueOnce([{ id: "r1", userId: USER, readAt: NOW }]).mockResolvedValueOnce([]);
     db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
