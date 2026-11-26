@@ -11,7 +11,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — token budget: cached tokens at a tenth + usage log + cache-friendly request (2026-11-26)
+## **Deployed 2026-11-26 (was PENDING; production `83f8376e`, see [2026-11-26-token-budget.md](./2026-11-26-token-budget.md))** — token budget: cached tokens at a tenth + usage log + cache-friendly request (2026-11-26)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`.
 Code only: no schema, no migration, no required env. Optional env:

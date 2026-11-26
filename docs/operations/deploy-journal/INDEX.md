@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 259 entries
+# Deploy journal index — 260 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-11-26 | Production `83f8376e` (on `ca1e08a6`): token budget — cached prompt tokens counted at a tenth, `[llm-usage]` / `[chat] turn usage` log, app chat request laid out for the prompt cache (rules → history → live), history window 30–39 rows, per-person `prompt_cache_key`, Telegram rules-first; no migration, no env, no dependency; synced without `--delete` | [2026-11-26-token-budget.md](./2026-11-26-token-budget.md) |
 | Deployed | 2026-11-26 | Production `ca1e08a6` (token-budget commits after it NOT shipped): agent concept phase 4 — proactive senders (Profiler pause + off switch, re-engagement lifetime cap, no Rematch on expiry, quiet hours for campus drop / T+24h, weekly announcement cap, «только мои свидания» mute); **two additive migrations** `20261126100000`, `20261126120000`; `/v1/me/notifications`; no env; CI green, synced without `--delete` | [2026-11-26-agent-concept-phase4.md](./2026-11-26-agent-concept-phase4.md) |
 | Deployed | 2026-11-24 | Production, full main `75c13ccd`: emoji reactions in the agent chat, step 1 (person reacts to Gennety, Gennety 🙏 behind a server guard); **migration `20261124120000_chat_message_reactions`** (three nullable columns); `AGENT_REACTIONS_USER_IDS` = founder only, `_ENABLED` unset | [2026-11-24-agent-reactions.md](./2026-11-24-agent-reactions.md) |
 | Deployed | 2026-11-24 | Production, full main `35661eb5` (was file-scoped `3578058c`): chat archive + deletion, agent long-term memory, reminders, suggested replies, agent concept, chat statuses, shared playlists, Places alert, `effect` 3.22.4; **three additive migrations** `20261119120000`, `20261120090000`, `20261122190000`; flags untouched (memory, replies, reminders dark); audit clean | [2026-11-24-full-main.md](./2026-11-24-full-main.md) |
