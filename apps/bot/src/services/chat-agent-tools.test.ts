@@ -51,6 +51,7 @@ vi.mock("./menu-agent.js", () => ({
 }));
 vi.mock("./prompt-builder.js", () => ({
   buildSystemPrompt: (id: bigint) => buildSystemPrompt(id),
+  buildSystemPromptParts: async (id: bigint) => ({ stable: await buildSystemPrompt(id), live: "" }),
 }));
 
 type ChatToolResult = import("./chat-profile-tools.js").ChatToolResult;

@@ -57,6 +57,7 @@ vi.mock("./menu-agent.js", () => ({
 const buildSystemPrompt = vi.fn(async (_tg: bigint, _surface?: string) => "ОБЩИЙ ПРОМПТ");
 vi.mock("./prompt-builder.js", () => ({
   buildSystemPrompt: (tg: bigint, surface?: string) => buildSystemPrompt(tg, surface),
+  buildSystemPromptParts: async (tg: bigint, surface?: string) => ({ stable: await buildSystemPrompt(tg, surface), live: "" }),
 }));
 vi.mock("./chat-profile-tools.js", () => ({
   applyChatProfilePatch: async () => ({ ok: true }),
@@ -120,7 +121,13 @@ beforeEach(() => {
   afterChatTurn.mockClear();
 });
 
-const system = () => String(sent[0]!.messages[0]!.content);
+// Every system message of the first call: the fixed rules, the chat summary
+// and the live part before the person's message (decision 2026-11-26).
+const system = () =>
+  sent[0]!.messages
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content))
+    .join("\n\n");
 const toolReply = (turn: number, id = "c0") =>
   JSON.parse(String(sent[turn]!.messages.find((m) => m.role === "tool" && m.tool_call_id === id)!.content));
 const turn = (text = "привет") => runChatTurn({ userId: USER, text, imageUrls: [] }, { fetchFn, consent });

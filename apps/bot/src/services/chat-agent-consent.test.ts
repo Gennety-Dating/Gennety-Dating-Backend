@@ -27,7 +27,10 @@ vi.mock("../config.js", () => ({ env: { OPENAI_API_KEY: "sk-test" } }));
 vi.mock("./storage.js", () => ({ createChatImageSignedUrl: async () => null }));
 vi.mock("./openai-fetch.js", () => ({ openaiFetch: vi.fn() }));
 vi.mock("./chat-profile-tools.js", () => ({ applyChatProfilePatch: vi.fn(), attachChatProfilePhoto: vi.fn() }));
-vi.mock("./prompt-builder.js", () => ({ buildSystemPrompt: vi.fn(async () => "SYSTEM") }));
+vi.mock("./prompt-builder.js", () => ({
+  buildSystemPrompt: vi.fn(async () => "SYSTEM"),
+  buildSystemPromptParts: async () => ({ stable: "SYSTEM", live: "" }),
+}));
 const executeAgentTool = vi.fn();
 vi.mock("./menu-agent.js", () => ({
   AGENT_TOOLS: [],

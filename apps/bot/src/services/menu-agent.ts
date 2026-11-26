@@ -30,7 +30,8 @@ import {
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
-import { buildSystemPrompt } from "./prompt-builder.js";
+import { buildSystemPromptParts } from "./prompt-builder.js";
+import { LIVE_PART_HEADER, joinPromptPart, splitRuleBlocks } from "./prompt-layout.js";
 import {
   SUGGEST_VIDEO_TOOL,
   SUGGEST_VIDEO_TOOL_NAME,
@@ -1976,7 +1977,8 @@ async function runMenuAgentTurnUnqueued(
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
   // Build dynamic system prompt
-  const basePrompt = await buildSystemPrompt(telegramId);
+  // Two halves (decision 2026-11-26): fixed rules first, live data last.
+  const { stable: basePrompt, live: baseLive } = await buildSystemPromptParts(telegramId);
 
   // Load existing post-onboarding history
   const user = await prisma.user.findUnique({
@@ -2021,7 +2023,29 @@ async function runMenuAgentTurnUnqueued(
   const memoryBlocks = memoryTurn.blocks;
   // Personal reminders (decision 2026-11-20): the date the tools resolve from.
   const reminderBlocks = remindersOn && user ? [reminderClockBlock(new Date(), personTimeZone(user.profile))] : [];
-  const systemPrompt = [basePrompt, ...takeBlocks, ...stanceBlocks, ...reminderBlocks, ...conceptBlocks, ...memoryBlocks].join("\n\n");
+  // Cache-friendly order (decision 2026-11-26): every fixed rule in its old
+  // order, then the live part — context, clock, this turn's video and
+  // positions, the person's card and notes — in its old order.
+  const takes = splitRuleBlocks(takeBlocks);
+  const stances = splitRuleBlocks(stanceBlocks);
+  const concept = splitRuleBlocks(conceptBlocks);
+  const memory = splitRuleBlocks(memoryBlocks);
+  const livePart = joinPromptPart([
+    baseLive,
+    ...takes.live,
+    ...stances.live,
+    ...reminderBlocks,
+    ...concept.live,
+    ...memory.live,
+  ]);
+  const systemPrompt = joinPromptPart([
+    basePrompt,
+    ...takes.rules,
+    ...stances.rules,
+    ...concept.rules,
+    ...memory.rules,
+    livePart ? `${LIVE_PART_HEADER}\n\n${livePart}` : null,
+  ]);
   const turnTools = [
     ...baseTools(),
     ...memoryTurn.tools,

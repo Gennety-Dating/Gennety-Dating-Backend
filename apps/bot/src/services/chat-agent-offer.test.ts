@@ -42,7 +42,10 @@ vi.mock("./menu-agent.js", () => ({
   toolReportedSuccess: (r: string) => JSON.parse(r).success === true,
   executeAgentTool: (tg: bigint, name: string, args: unknown) => executeAgentTool(tg, name, args),
 }));
-vi.mock("./prompt-builder.js", () => ({ buildSystemPrompt: async () => "ОБЩИЙ ПРОМПТ" }));
+vi.mock("./prompt-builder.js", () => ({
+  buildSystemPrompt: async () => "ОБЩИЙ ПРОМПТ",
+  buildSystemPromptParts: async () => ({ stable: "ОБЩИЙ ПРОМПТ", live: "" }),
+}));
 vi.mock("./chat-profile-tools.js", () => ({
   applyChatProfilePatch: async () => ({ ok: true }),
   attachChatProfilePhoto: async () => ({ ok: true }),

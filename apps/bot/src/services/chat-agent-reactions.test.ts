@@ -38,7 +38,10 @@ vi.mock("./menu-agent.js", () => ({
   toolReportedSuccess: (r: string) => JSON.parse(r).success === true,
   executeAgentTool: async () => ({ result: "{}", receiptKey: null, action: null }),
 }));
-vi.mock("./prompt-builder.js", () => ({ buildSystemPrompt: async () => "ОБЩИЙ ПРОМПТ" }));
+vi.mock("./prompt-builder.js", () => ({
+  buildSystemPrompt: async () => "ОБЩИЙ ПРОМПТ",
+  buildSystemPromptParts: async () => ({ stable: "ОБЩИЙ ПРОМПТ", live: "" }),
+}));
 vi.mock("./chat-profile-tools.js", () => ({
   applyChatProfilePatch: async () => ({ ok: true }),
   attachChatProfilePhoto: async () => ({ ok: true }),
@@ -110,7 +113,13 @@ beforeEach(() => {
 });
 
 const toolNames = () => sent[0]!.tools.map((tool) => tool.function.name);
-const system = () => String(sent[0]!.messages[0]!.content);
+// Every system message of the first call: the fixed rules, the chat summary
+// and the live part before the person's message (decision 2026-11-26).
+const system = () =>
+  sent[0]!.messages
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content))
+    .join("\n\n");
 const assistantCreates = () => messageCreate.mock.calls.filter((c) => c[0].data.role === "assistant");
 
 describe("which turns get react", () => {

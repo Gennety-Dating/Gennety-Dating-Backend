@@ -1,6 +1,6 @@
 <!-- WHEN_TO_READ: A person hits «На сегодня я выговорился» / 429 `daily_token_budget` sooner than expected, you touch `LLM_*_TOKEN_BUDGET`, `services/token-usage.ts`, the `[llm-usage]` / `[chat] turn usage` log lines, or the detail of earlier photos in the app chat context. -->
 
-# 2026-11-26 — token budget: cached tokens at a tenth, measured per call
+# 2026-11-26 — token budget: cached tokens at a tenth, measured per call; request laid out for the cache
 
 **Kind:** founder request («Да, замер и правка» on 2026-11-26) after the
 founder hit the daily agent limit in the iOS chat after what felt like a
@@ -42,6 +42,63 @@ OpenAI serves the repeated prefix from its prompt cache at about a tenth.
 2. The history window (30 rows), the tool rounds (up to 5 + a closing call)
    and the 180 000 ceiling are unchanged. Decide them from the new log lines.
 3. Counters stay in memory (reset on restart), as before.
+
+## Part 2 — the request laid out for the cache (same day)
+
+**Kind:** founder request («Построй план … и реализуй его полностью» on
+2026-11-26), with the condition «без ухудшения качества общения».
+
+**Why.** The provider reuses a prompt only up to the first token that changed
+since the previous call. Three things broke it early on every turn: the live
+data (person card, notes, the clock to the minute) sat in the middle of the
+system prompt, in front of ~13k characters of fixed rules; the live part sat
+before the history, so the history was never reused; and the 30-row window
+moved every turn, so the history's start changed every turn anyway.
+
+1. Layout of an app chat call: the fixed rules (persona, playbook, the chat
+   addenda, then memory, taste, looks, video, stance and concept rules in
+   their old order) → «Earlier in this chat» as its own system message → the
+   history → one system message «This turn — live data» (the person's
+   context, timeline and language, the person card, memory notes, the shared
+   video, the positions named, the reminder clock, «This person, for the rules
+   above», the vibe and reaction rules offered this turn, the context chip) →
+   the person's message. No text was dropped or reworded; `splitRuleBlocks`
+   (`services/prompt-layout.ts`) only moves the rule texts in front.
+   `buildSystemPromptParts` gives the shared prompt in its two halves;
+   `buildSystemPrompt` still returns exactly the old string.
+2. The history window shows 30–39 rows, starting on a multiple of ten
+   (`steppedWindowSize`, one `count` per long chat): never fewer rows than
+   before, and the same first row for ten new rows. A failed count gives the
+   old 30.
+3. App chat calls carry `prompt_cache_key` = a SHA-256 slice of the user id
+   (never the id itself). A 400 that names the parameter switches it off for
+   the process and the call is retried at once without it, so it can never
+   cost a reply. `LLM_PROMPT_CACHE_KEY=false` never sends it.
+4. The Telegram agent gets the same order inside its single system message:
+   fixed rules first, then the live part under the same header. Its 12-message
+   history and its calls are unchanged (no cache key there).
+
+**Measured** with the real prompt builder, two turns a minute apart in a
+45-row chat, the second after one exchange: the part of the request equal to
+the previous call (what the cache can serve) went from 73.9 % to 92.8 %;
+fresh characters per call from ~17.7k to ~5k.
+
+**Deliberately not done**, each because it would cost quality or needs data
+first:
+
+1. Shrinking photos on upload: OpenAI already scales them, and a phone
+   screenshot cut to 1024 px loses the small text the agent reads; the server
+   also has no image library (a new dependency needs its own «да»).
+2. Rewording tool descriptions or trimming the persona and playbook: after
+   the reorder they sit in the cached prefix, counted at a tenth; rewording
+   without the live evals risks how the agent behaves for a small gain.
+3. Preloading facts to save tool rounds: needs the `[chat] turn usage` lines
+   from production to know which rounds happen. Rounds now mostly re-read the
+   cached prefix.
+4. The shared-video reader (one fast vision call on the cover, cached six
+   hours), voice (Whisper) and onboarding were checked and left as they are.
+5. Earlier photos are still signed afresh each turn, so the history stops
+   being a cache hit at the first earlier photo (within the last eight rows).
 
 ## Deploy
 

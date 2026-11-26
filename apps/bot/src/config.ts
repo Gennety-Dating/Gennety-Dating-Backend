@@ -1196,6 +1196,10 @@ export const env = {
   /// counted) and one `[chat] turn usage` line per chat turn — the measurement
   /// behind the weight above. "false" silences both.
   LLM_USAGE_LOG: process.env.LLM_USAGE_LOG !== "false",
+  /// Send `prompt_cache_key` (a hash of the person's id) on agent chat calls so
+  /// their requests land on the same prompt cache (decision 2026-11-26). A 400
+  /// naming the parameter switches it off for the process. "false" = never send.
+  LLM_PROMPT_CACHE_KEY: process.env.LLM_PROMPT_CACHE_KEY !== "false",
 
   // ── Demo mode (DEMO_MODE.md) ────────────────────────────────
   /// Master switch for the investor/friends demo runtime. **Production never

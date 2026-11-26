@@ -11,11 +11,16 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — token budget: cached tokens at a tenth + usage log (2026-11-26)
+## **PENDING** — token budget: cached tokens at a tenth + usage log + cache-friendly request (2026-11-26)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`.
 Code only: no schema, no migration, no required env. Optional env:
-`LLM_CACHED_TOKEN_WEIGHT` (default `0.1`), `LLM_USAGE_LOG` (default on).
+`LLM_CACHED_TOKEN_WEIGHT` (default `0.1`), `LLM_USAGE_LOG` (default on),
+`LLM_PROMPT_CACHE_KEY` (default on; a 400 naming it switches it off by itself).
+Part 2 (same block): app chat request laid out rules → history → live data,
+history window 30–39 rows, Telegram rules-first. Watch after deploy: no
+`prompt_cache_key refused` warning, and `cached` close to `prompt` from the
+second message of a chat on.
 Demo mode: same code and defaults, no flow change. iOS: none (same 429 body).
 
 ```bash
@@ -25,7 +30,8 @@ pm2 logs gennety-bot --lines 200 --nostream | grep -E "\[llm-usage\]|\[chat\] tu
 ```
 
 **Rollback:** `LLM_CACHED_TOKEN_WEIGHT=1` + `pm2 restart gennety-bot --update-env`
-restores the old count; or revert the commit.
+restores the old count; `LLM_PROMPT_CACHE_KEY=false` drops the key; the layout
+goes back only by reverting its commit.
 
 ---
 

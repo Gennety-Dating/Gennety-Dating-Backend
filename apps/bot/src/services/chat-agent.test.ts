@@ -39,6 +39,7 @@ vi.mock("./chat-profile-tools.js", () => ({
 // пол-базы.
 vi.mock("./prompt-builder.js", () => ({
   buildSystemPrompt: vi.fn(async () => "SYSTEM"),
+  buildSystemPromptParts: async () => ({ stable: "SYSTEM", live: "" }),
 }));
 vi.mock("./menu-agent.js", () => ({
   AGENT_TOOLS: [],
@@ -633,7 +634,9 @@ describe("chat agent after the perfume chat", () => {
 
     await runChatTurn({ userId: USER, text: "привет", imageUrls: [], sessionId: CHAT }, { fetchFn });
 
-    expect(String(seen[0]!.messages[0]!.content)).toContain("- Interests: perfume");
+    // The card is live data: the system message right before their message.
+    const live = seen[0]!.messages.filter((m) => m.role === "system").map((m) => String(m.content)).join("\n\n");
+    expect(live).toContain("- Interests: perfume");
   });
 
   it("a card that cannot be built does not cost the turn", async () => {

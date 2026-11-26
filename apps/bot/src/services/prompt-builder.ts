@@ -905,6 +905,21 @@ export async function buildSystemPrompt(
   telegramId: bigint,
   surface: PromptSurface = "tg",
 ): Promise<string> {
+  const { stable, live } = await buildSystemPromptParts(telegramId, surface);
+  return `${stable}\n\n${live}`;
+}
+
+/**
+ * The same prompt in its two halves (decision 2026-11-26): `stable` — persona,
+ * playbook and the operator notes, the same for every person on a surface —
+ * and `live` — this person's context, timeline and language. A caller that
+ * adds blocks of its own puts its fixed rules between the two, so the
+ * provider's prompt cache covers everything up to the live half.
+ */
+export async function buildSystemPromptParts(
+  telegramId: bigint,
+  surface: PromptSurface = "tg",
+): Promise<{ stable: string; live: string }> {
   const [knowledge, userCtx] = await Promise.all([
     fetchKnowledgeBase(),
     fetchUserContext(telegramId, surface),
@@ -1000,10 +1015,11 @@ English on a bare emoji, which reads as it having lost the thread.${pendingSecti
     ? `\n\n## Operator Knowledge Base (extra notes)\n${knowledge}`
     : "";
 
-  return `${personaFor(surface)}
+  return {
+    stable: `${personaFor(surface)}
 
 ## Product Playbook
-${playbook}${knowledgeSection}
-
-${userSection}`;
+${playbook}${knowledgeSection}`,
+    live: userSection,
+  };
 }
