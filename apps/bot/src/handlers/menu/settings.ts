@@ -11,6 +11,11 @@ import {
 import { freezeAccount } from "../../services/account-status-transitions.js";
 import { setUserLanguage, setUserTheme } from "../../services/user-preferences.js";
 import {
+  applyNotificationSettings,
+  getNotificationSettings,
+} from "../../services/notification-settings.js";
+import { stripQuestionKeyboard } from "../../services/profiler.js";
+import {
   consumePendingAccountAction,
   invalidatePendingAccountAction,
   newAccountActionNonce,
@@ -32,13 +37,26 @@ const VALID_THEMES = new Set<Theme>(["light", "dark"]);
  */
 async function renderSettings(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
+  const userId = await settingsUserId(ctx);
+  const notifications = userId ? await getNotificationSettings(userId) : null;
 
   const keyboard = new InlineKeyboard();
   keyboard
     .text(t(lang, "settingsLanguage"), "menu:settings:lang")
     .row()
     .text(t(lang, "settingsTheme"), "menu:settings:theme")
-    .row()
+    .row();
+  // What Gennety sends on its own (agent concept phase 4, founder 2026-11-26).
+  // The label states the current value; a tap flips it.
+  if (notifications) {
+    keyboard
+      .text(
+        t(lang, notifications.profilerQuestions ? "settingsProfilerOn" : "settingsProfilerOff"),
+        "menu:settings:profiler",
+      )
+      .row();
+  }
+  keyboard
     .text(t(lang, "settingsDeleteAccount"), "menu:settings:delete")
     .row()
     .text(t(lang, "menuBack"), "menu:back");
@@ -302,4 +320,32 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
   });
 
   await ctx.reply(t(lang, "deleteAccountDone"), { parse_mode: "Markdown" });
+}
+
+async function settingsUserId(ctx: BotContext): Promise<string | null> {
+  if (!ctx.from) return null;
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from.id) },
+    select: { id: true },
+  });
+  return user?.id ?? null;
+}
+
+/**
+ * Settings → «Вопросы о тебе»: flip the Profiler's off switch (agent concept
+ * phase 4 item 1). Off releases a live question and strips its Skip button.
+ */
+export async function handleSettingsProfilerToggle(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery().catch(() => {});
+  const lang = ctx.session.language;
+  const userId = await settingsUserId(ctx);
+  if (!userId) return;
+  const current = await getNotificationSettings(userId);
+  const enabled = !current.profilerQuestions;
+  const { releasedMessageId } = await applyNotificationSettings(userId, { profilerQuestions: enabled });
+  if (releasedMessageId && ctx.from) {
+    await stripQuestionKeyboard(ctx.api, BigInt(ctx.from.id), releasedMessageId);
+  }
+  await ctx.reply(t(lang, enabled ? "settingsProfilerNowOn" : "settingsProfilerNowOff"));
+  await renderSettings(ctx);
 }

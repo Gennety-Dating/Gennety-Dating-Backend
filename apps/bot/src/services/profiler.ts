@@ -8,6 +8,8 @@ import {
   type Language,
   PROFILER_MAX_ANSWER_LEN,
   PROFILER_FINISH_SHIMMER_MS,
+  PROFILER_IGNORED_BATCHES_LIMIT,
+  PROFILER_IGNORED_PAUSE_MS,
   profilerQuestionById,
   profilerQuestionText,
   type ProfilerAnswerSource,
@@ -645,6 +647,7 @@ export async function expireStalledProfilerQuestion(
     where: { userId },
     select: {
       profilerActiveQuestionId: true,
+      profilerIgnoredStreak: true,
       timeZone: true,
       user: { select: { telegramId: true } },
     },
@@ -701,9 +704,30 @@ export async function expireStalledProfilerQuestion(
       profilerQuestionMessageId: null,
       profilerBatchRemaining: 0,
       profilerNextAt: nextWindowAt(now, resolveZone(profile?.timeZone ?? null)),
+      // Only a question that sat in the Telegram chat counts as an ignored
+      // batch: an app-opened one (no message id) was never pushed at anyone.
+      ...(claim.messageId ? ignoredStreakPatch(profile?.profilerIgnoredStreak ?? 0, now) : {}),
     },
   });
   return true;
+}
+
+/**
+ * Agent concept phase 4 item 1 (founder 2026-11-26): one more Telegram
+ * question let stall. At `PROFILER_IGNORED_BATCHES_LIMIT` in a row the worker
+ * stops sending batches for `PROFILER_IGNORED_PAUSE_MS`; the count starts over
+ * so the pause is never extended silently.
+ */
+export function ignoredStreakPatch(
+  streak: number,
+  now: Date,
+): { profilerIgnoredStreak: number; profilerPausedUntil?: Date } {
+  const next = streak + 1;
+  if (next < PROFILER_IGNORED_BATCHES_LIMIT) return { profilerIgnoredStreak: next };
+  return {
+    profilerIgnoredStreak: 0,
+    profilerPausedUntil: new Date(now.getTime() + PROFILER_IGNORED_PAUSE_MS),
+  };
 }
 
 /** Quiesce the Profiler for a user with no pending questions. Silent (spec §2.5). */
@@ -968,8 +992,9 @@ export async function upsertProfilerAnswer(
   cycleId: string,
   media?: { fileId: string; kind: "photo" | "sticker"; sourceUrl?: string },
   quick?: { optionIds: string[]; source: ProfilerAnswerSource },
-  db: Pick<Prisma.TransactionClient, "profilerAnswer"> = prisma,
+  db: Pick<Prisma.TransactionClient, "profilerAnswer" | "profile"> = prisma,
 ): Promise<void> {
+  await resetIgnoredStreak(userId, db);
   const mediaFields = {
     memeFileId: media?.fileId ?? null,
     memeKind: media?.kind ?? null,
@@ -1023,13 +1048,30 @@ export async function upsertProfilerAnswer(
   }
 }
 
+/**
+ * An answer or a skip, on either surface, is the person engaging: the run of
+ * ignored Telegram questions is over (phase 4 item 1). Guarded so a person
+ * who never ignored one costs no write. Runs on the caller's client so the
+ * card path's transaction does not wait on its own row lock.
+ */
+async function resetIgnoredStreak(
+  userId: string,
+  db: Pick<Prisma.TransactionClient, "profile">,
+): Promise<void> {
+  await db.profile.updateMany({
+    where: { userId, profilerIgnoredStreak: { gt: 0 } },
+    data: { profilerIgnoredStreak: 0 },
+  });
+}
+
 /** Write the one-time-return skip state for a question (`skipTransition`). */
 export async function upsertProfilerSkip(
   userId: string,
   question: ProfilerQuestion,
   cycleId: string,
-  db: Pick<Prisma.TransactionClient, "profilerAnswer"> = prisma,
+  db: Pick<Prisma.TransactionClient, "profilerAnswer" | "profile"> = prisma,
 ): Promise<void> {
+  await resetIgnoredStreak(userId, db);
   const existing = await db.profilerAnswer.findUnique({
     where: { userId_questionId: { userId, questionId: question.id } },
     select: {
@@ -1187,4 +1229,90 @@ export async function recordProfilerCardAnswer(
   return recordProfilerAnswer(api, userId, questionId, answer.answerText, {
     quick: { optionIds: answer.optionIds, source: answer.source }, expectedMessageId,
   });
+}
+
+/**
+ * The person's Profiler off switch (agent concept phase 4 item 1, founder
+ * 2026-11-26): «не спрашивай больше», the Settings toggle and
+ * `PATCH /v1/me/notifications` all land here.
+ *
+ * Off: stamps `profilerOptedOutAt` and releases a live question, so neither
+ * the worker nor the app's pull asks anything more. Answers already given stay
+ * and keep feeding icebreakers and hints.
+ * On: clears the switch, the 14-day pause and the ignored count, and re-arms
+ * the schedule at the next local window when nothing is armed — the person
+ * asked for questions, so the next window is the honest first moment.
+ * Returns the stale Telegram message id of a released question (if any) so a
+ * caller with a bot can strip its Skip button.
+ */
+export async function setProfilerEnabled(
+  userId: string,
+  enabled: boolean,
+  now: Date = new Date(),
+): Promise<{ releasedMessageId: number | null }> {
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: {
+      timeZone: true,
+      profilerStartedAt: true,
+      profilerNextAt: true,
+      profilerOptedOutAt: true,
+      profilerQuestionMessageId: true,
+    },
+  });
+  if (!profile) return { releasedMessageId: null };
+  if (!enabled) {
+    await prisma.profile.update({
+      where: { userId },
+      data: {
+        profilerOptedOutAt: profile.profilerOptedOutAt ?? now,
+        profilerActiveQuestionId: null,
+        profilerAnswerWindowUntil: null,
+        profilerQuestionMessageId: null,
+        profilerBatchRemaining: 0,
+      },
+    });
+    return { releasedMessageId: profile.profilerQuestionMessageId ?? null };
+  }
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      profilerOptedOutAt: null,
+      profilerPausedUntil: null,
+      profilerIgnoredStreak: 0,
+      ...(profile.profilerStartedAt && !profile.profilerNextAt
+        ? { profilerNextAt: nextWindowAt(now, resolveZone(profile.timeZone)) }
+        : {}),
+    },
+  });
+  return { releasedMessageId: null };
+}
+
+/**
+ * «Не спрашивай больше» typed as the reply to a live question: recorded as a
+ * skip (it is not an answer), the Profiler is switched off, and one line says
+ * how to turn it back on. Never a confirmation step — the person was clear.
+ */
+export async function recordProfilerStop(
+  api: Api<RawApi>,
+  userId: string,
+  questionId: string,
+  options: { now?: Date } = {},
+): Promise<boolean> {
+  const question = profilerQuestionById(questionId);
+  if (!question) return false;
+  const now = options.now ?? new Date();
+  const claim = await claimActiveQuestion(userId, questionId);
+  if (!claim.claimed) return false;
+  await upsertProfilerSkip(userId, question, profilerCycleId(now));
+  await setProfilerEnabled(userId, false, now);
+  const state = await loadProfilerState(userId);
+  if (!state || state.telegramId <= 0n) return true;
+  await stripQuestionKeyboard(api, state.telegramId, claim.messageId, question.id);
+  try {
+    await api.sendMessage(Number(state.telegramId), t(state.language, "profilerOptOutAck"));
+  } catch {
+    // The switch already landed; a failed ack must not undo it.
+  }
+  return true;
 }

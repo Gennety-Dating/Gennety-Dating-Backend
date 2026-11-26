@@ -27,6 +27,8 @@ import {
  *   3. **Dispatch** — start a batch for every user whose `profilerNextAt` is
  *      due, deferring out of the user's local quiet hours and while the user is
  *      mid date-negotiation (pitch decision / scheduling / venue selection).
+ *      Never for a person who switched the Profiler off, or inside the 14-day
+ *      pause after two ignored batches in a row (agent concept phase 4 item 1).
  *
  * Serves Telegram-reachable users only. App-only accounts (`platform = mobile`)
  * are never touched here: the native app PULLS its batches through
@@ -136,6 +138,10 @@ export async function profilerTick(
     where: {
       profilerNextAt: { lte: now },
       profilerActiveQuestionId: null,
+      // Phase 4 item 1 (founder 2026-11-26): the person's off switch, and the
+      // 14-day pause after two ignored Telegram batches in a row.
+      profilerOptedOutAt: null,
+      OR: [{ profilerPausedUntil: null }, { profilerPausedUntil: { lte: now } }],
       user: {
         status: "active",
         onboardingStep: "completed",

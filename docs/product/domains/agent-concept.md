@@ -204,14 +204,26 @@ Results on 2026-11-19 (`gpt-6-luna` answering, `gpt-6.1-sol` judging):
 8. Not covered: tools (the eval has none), voice and photos, languages other
    than Russian. One run costs about 200 short completions.
 
-## Phase 4 — Changes that wait for the founder
+## Phase 4 — Changes that waited for the founder
 
-These change a user flow or a product rule, so they are not built. Each has a
-recommendation.
+These change a user flow or a product rule. On 2026-11-26 the founder answered
+«Да, внедряй» to all nine as written (decision
+[2026-11-26-agent-concept-phase4.md](../../architecture/decisions/2026-11-26-agent-concept-phase4.md)).
+Each item says whether it is built, kept or waiting. Not on production until
+the founder's separate «да» for the deploy and the migrations.
 
-1. **Profiler batches in Telegram.** Stop after two ignored batches in a row
-   for 14 days, and give «не спрашивай больше» a real off switch in settings.
-   Recommendation: yes.
+1. **Profiler batches in Telegram — built.** Two ignored Telegram questions
+   in a row pause Telegram batches for 14 days; any answer or skip resets the
+   count; the app's own pull is not held. «Не спрашивай больше» (typed in
+   Telegram or the app) is a skip plus a persistent off switch: no question
+   on either surface until it is turned back on. The switch is in the bot's
+   ⚙️ Settings («💬 Вопросы о тебе») and at `GET/PATCH /v1/me/notifications`
+   `{ profilerQuestions }`; the Mini App has no settings screen. Code:
+   `services/profiler.ts` (`ignoredStreakPatch`, `setProfilerEnabled`,
+   `recordProfilerStop`), `services/profiler-intent.ts`
+   (`isProfilerStopRequest`), `workers/profiler.ts`,
+   `services/notification-settings.ts`. Migration
+   `20261126100000_profiler_pause_off_switch`.
 2. **Onboarding re-engagement.** Cap the chain at five touches per account
    for life instead of restarting it, and change the LLM brief from «bring
    them back» to «name the one step left». Recommendation: yes.

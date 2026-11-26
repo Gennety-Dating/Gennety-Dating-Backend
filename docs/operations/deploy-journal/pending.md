@@ -13,6 +13,25 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-26 — agent concept phase 4: the proactive senders (needs the founder's separate «да» for the deploy and the migrations)**
+
+1. Code: decision [2026-11-26-agent-concept-phase4](../../architecture/decisions/2026-11-26-agent-concept-phase4.md),
+   spec `docs/product/domains/agent-concept.md` phase 4. Items, one commit each on `main`:
+   - item 1 — Profiler: 14-day Telegram pause after two ignored batches, «не спрашивай больше» off switch, Settings
+     toggle, `GET/PATCH /v1/me/notifications`.
+2. Ship: migrations FIRST, in order (all additive, the new code reads the columns):
+   - `20261126100000_profiler_pause_off_switch` — three columns on `profiles`.
+   Then `db:generate`, the shared + bot build and restart. No new env, no flag: the changes are live with the deploy.
+3. Demo mode: the same behaviour, no branch; demo state goes with the demo reset.
+4. iOS: nothing breaks for old builds. The settings toggles need `GET/PATCH /v1/me/notifications` (see
+   `openapi/gennety-v1.yaml`).
+5. Verify: `PATCH /v1/me/notifications {"profilerQuestions":false}` → 200 `{ "profilerQuestions": false, ... }`, then
+   `GET /v1/me/profiler` → `{}`; in Telegram ⚙️ Settings shows «💬 Вопросы о тебе: выкл»; the `[profiler]` cron line
+   keeps logging.
+6. Rollback: revert the commits and restart. The columns may stay (unread by the old code; defaults harmless). To drop
+   them: `ALTER TABLE profiles DROP COLUMN profiler_ignored_streak, DROP COLUMN profiler_paused_until, DROP COLUMN
+   profiler_opted_out_at;` — this loses who switched the Profiler off.
+
 **Deployed 2026-11-24 (was PENDING; production `75c13ccd`, founder preview, see [2026-11-24-agent-reactions.md](./2026-11-24-agent-reactions.md))** 2026-11-24 — emoji reactions in the agent chat, step 1 — main `c013c8b4`
 
 1. Code: `packages/shared/src/agent-reactions.ts`, `apps/bot/src/services/chat-reactions.ts`, `chat-agent.ts` (`react` tool

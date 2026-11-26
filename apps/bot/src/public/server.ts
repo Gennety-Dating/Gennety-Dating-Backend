@@ -71,6 +71,7 @@ import { createWishlistRouter } from "./routes/wishlist.js";
 import { createScreenshotsRouter } from "./routes/screenshots.js";
 import { createMemoryRouter } from "./routes/memory.js";
 import { createAgentMemoryRouter } from "./routes/agent-memory.js";
+import { createNotificationSettingsRouter } from "./routes/notification-settings.js";
 import { createShareRouter } from "./routes/share.js";
 import { createShareMusicRouter } from "./routes/share-music.js";
 import { createAfterDateRouter } from "./routes/after-date.js";
@@ -452,6 +453,9 @@ app.use("/v1/me/screenshots", createScreenshotsRouter());
 app.use("/v1/me/memory", createMemoryRouter());
 // Long-term memory of the agent (decision 2026-11-19) — not the ideas above.
 app.use("/v1/me/agent-memory", createAgentMemoryRouter());
+// What Gennety sends on its own: the Profiler off switch and the per-type
+// mute (agent concept phase 4, founder 2026-11-26). Before `/v1/me`.
+app.use("/v1/me/notifications", createNotificationSettingsRouter());
 // «Поделиться → Gennety» for a short video (decision journal 2026-10-24) —
 // the wishlist's front door, same switch; before `/v1/me` like the rest.
 // A shared playlist, album or track (decision 2026-11-22) — music on the

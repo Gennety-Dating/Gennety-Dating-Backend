@@ -15,7 +15,7 @@ import {
 } from "@gennety/shared";
 import { getMainBotApi } from "./main-bot-api.js";
 import { getNextBatchDate } from "./next-batch.js";
-import { isProfilerRefusal } from "./profiler-intent.js";
+import { isProfilerRefusal, isProfilerStopRequest } from "./profiler-intent.js";
 import {
   batchSizeFor,
   isRushMode,
@@ -37,6 +37,7 @@ import {
   upsertProfilerAnswer,
   upsertProfilerPostpone,
   upsertProfilerSkip,
+  setProfilerEnabled,
   type ProfilerUserState,
 } from "./profiler.js";
 import {
@@ -310,6 +311,7 @@ async function resumeOrOpenBatch(
           profilerActiveQuestionId: true,
           profilerBatchRemaining: true,
           profilerQuestionMessageId: true,
+          profilerOptedOutAt: true,
         },
       },
     },
@@ -320,7 +322,10 @@ async function resumeOrOpenBatch(
     !profile ||
     user.status !== "active" ||
     user.onboardingStep !== "completed" ||
-    !user.gender
+    !user.gender ||
+    // The person's off switch (agent concept phase 4 item 1): no question on
+    // either surface. The 14-day ignored pause is Telegram's only.
+    profile.profilerOptedOutAt
   ) {
     return { batch: {}, language: null };
   }
@@ -481,6 +486,9 @@ export async function answerNativeProfilerQuestion(
   let language: Language | null = null;
   let quick: { answerText: string; optionIds: string[]; source: ProfilerAnswerSource } | null = null;
   let refusal = false;
+  // «Не спрашивай больше» typed in the app: a skip plus the off switch
+  // (agent concept phase 4 item 1), the same as in Telegram.
+  let stop = false;
   if (reply.kind === "text") {
     language = await userLanguage(userId);
     const composed = composeProfilerAnswerText(
@@ -493,10 +501,12 @@ export async function answerNativeProfilerQuestion(
     );
     if (!composed.ok) return { ok: false, error: composed.error };
     quick = composed;
-    refusal = composed.optionIds.length === 0 && !reply.withPhoto && isProfilerRefusal(reply.text);
+    stop = composed.optionIds.length === 0 && !reply.withPhoto && isProfilerStopRequest(reply.text);
+    refusal = stop || (composed.optionIds.length === 0 && !reply.withPhoto && isProfilerRefusal(reply.text));
   }
 
   if (await isPostponed(userId, questionId)) {
+    if (stop) await setProfilerEnabled(userId, false, now);
     return resolveLater(userId, question, reply, quick, refusal, language, now);
   }
 
@@ -524,6 +534,10 @@ export async function answerNativeProfilerQuestion(
   if (!state) return { ok: true, outcome: "done" };
   await retireTelegramCopy(state, claim.messageId, question.id);
 
+  if (stop) {
+    await setProfilerEnabled(userId, false, now);
+    return { ok: true, outcome: "paused" };
+  }
   if (refusal) {
     await pauseBatchUntilNextWindow(userId, now, state.timeZone);
     return { ok: true, outcome: "paused" };

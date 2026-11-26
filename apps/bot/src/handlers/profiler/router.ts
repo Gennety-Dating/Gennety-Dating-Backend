@@ -18,6 +18,7 @@ import {
   recordProfilerAnswer,
   recordProfilerCardAnswer,
   recordProfilerRefusal,
+  recordProfilerStop,
   recordProfilerSkip,
   resolveProfilerCapture,
 } from "../../services/profiler.js";
@@ -34,7 +35,7 @@ import {
 import { readMemeImage } from "../../services/vision/read-meme.js";
 import { env } from "../../config.js";
 import { downloadTelegramFile } from "../../services/storage.js";
-import { isProfilerRefusal } from "../../services/profiler-intent.js";
+import { isProfilerRefusal, isProfilerStopRequest } from "../../services/profiler-intent.js";
 import { isLikelyMetaQuestion } from "../../services/onboarding-collector.js";
 
 /**
@@ -101,6 +102,13 @@ async function flushAnswer(acc: AnswerAccumulator): Promise<void> {
   // A refusal is not an answer. Classified on the COALESCED text rather than
   // per line, so "не хочу" split across two messages is still read once and as
   // a whole — the same reason the buffer exists at all.
+  // «Не спрашивай больше» is the off switch, not a one-off refusal (agent
+  // concept phase 4 item 1). Checked first: some of its phrases used to be
+  // refusals, and a refusal only pauses to the next window.
+  if (isProfilerStopRequest(text) && !acc.quick?.optionIds.length) {
+    await recordProfilerStop(acc.api, acc.userId, acc.questionId);
+    return;
+  }
   if (isProfilerRefusal(text) && !acc.quick?.optionIds.length) {
     await recordProfilerRefusal(acc.api, acc.userId, acc.questionId);
     return;

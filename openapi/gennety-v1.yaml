@@ -1764,6 +1764,48 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/notifications:
+    get:
+      tags: [me]
+      operationId: getNotificationSettings
+      summary: What Gennety may send on its own (Settings switches)
+      description: |
+        Agent concept phase 4 (founder 2026-11-26). The Telegram Settings menu
+        writes the same columns. `profilerQuestions: false` stops every
+        Profiler question on both surfaces — the worker sends no Telegram
+        batch and `GET /v1/me/profiler` answers `{}`. Typing «не спрашивай
+        больше» as an answer sets the same switch. `profilerPausedUntil` is
+        read only: the 14-day Telegram pause after two ignored batches in a
+        row (null when none is running); the app's own pull is not held by it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [me]
+      operationId: patchNotificationSettings
+      summary: Flip one or more Settings switches
+      description: |
+        Only the writable fields, each a boolean; unknown fields and an empty
+        body are refused with 400. Answers the full settings after the write.
+        Turning `profilerQuestions` back on clears the 14-day pause too.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationSettingsPatch" }
+      responses:
+        "200":
+          description: Settings after the write
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /v1/me/agent-memory:
     get:
       tags: [Memory]
@@ -9640,6 +9682,24 @@ components:
       type: string
       enum: [campus_only, citywide]
 
+    NotificationSettings:
+      type: object
+      required: [profilerQuestions, profilerPausedUntil]
+      properties:
+        profilerQuestions:
+          type: boolean
+          description: Profiler questions about the person, on both surfaces. Default true.
+        profilerPausedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: Read only. End of the 14-day Telegram pause after two ignored batches; null when none.
+    NotificationSettingsPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        profilerQuestions: { type: boolean }
     Theme:
       type: string
       enum: [light, dark]

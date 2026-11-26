@@ -83,6 +83,13 @@ function buildApp() {
   return app;
 }
 
+/** Claims on the live question (the ignored-streak reset is a different write). */
+function claimsOfLiveQuestion(): unknown[] {
+  return profileUpdateMany.mock.calls.filter(
+    (c) => (c[0] as { where?: Record<string, unknown> }).where?.profilerActiveQuestionId !== undefined,
+  );
+}
+
 function text(id: string, lang: "en" | "ru" = "en"): string {
   return profilerQuestionText(profilerQuestionById(id)!, lang);
 }
@@ -237,6 +244,15 @@ describe("GET /v1/me/profiler", () => {
     expect(res.body).toEqual({});
     expect(profileUpdateMany).not.toHaveBeenCalled();
     expect(profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("answers {} and opens nothing once the person switched the Profiler off", async () => {
+    userFindUnique.mockResolvedValue(getUser({ profilerStartedAt: NOW, profilerNextAt: NOW, profilerOptedOutAt: NOW }));
+
+    const res = await request(buildApp()).get("/v1/me/profiler");
+
+    expect(res.body).toEqual({});
+    expect(profileUpdateMany).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -521,6 +537,24 @@ describe("POST /v1/me/profiler/answer", () => {
     });
   });
 
+  it("«не спрашивай больше» typed in the app is a skip plus the off switch (phase 4 item 1)", async () => {
+    userFindUnique.mockResolvedValue(stateUser(2, []));
+    profileFindUnique.mockResolvedValue({
+      timeZone: "Europe/Kyiv", profilerStartedAt: NOW, profilerNextAt: null,
+      profilerOptedOutAt: null, profilerQuestionMessageId: null,
+    });
+
+    const res = await request(buildApp())
+      .post("/v1/me/profiler/answer")
+      .send({ questionId: FEMALE[0], text: "Не спрашивай больше" });
+
+    expect(res.body).toEqual({ outcome: "paused" });
+    const upsert = answerUpsert.mock.calls[0]![0] as { create: Record<string, unknown> };
+    expect(upsert.create).toMatchObject({ answerText: null, skipped: true });
+    const off = profileUpdate.mock.calls.map((c) => c[0].data).find((d) => d.profilerOptedOutAt);
+    expect(off?.profilerOptedOutAt).toBeInstanceOf(Date);
+  });
+
   it("keeps the answer but pauses the batch when a negotiation started mid-batch", async () => {
     userFindUnique.mockResolvedValue(stateUser(2, [answered(FEMALE[0]!)]));
     matchFindFirst.mockResolvedValue({ id: "m1" });
@@ -703,7 +737,7 @@ describe("quick answers and «На потом»", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ outcome: "done" });
     // The live question is not touched.
-    expect(profileUpdateMany).not.toHaveBeenCalled();
+    expect(claimsOfLiveQuestion()).toEqual([]);
     expect(profileUpdate).not.toHaveBeenCalled();
     expect(upsertOf().update).toEqual(
       expect.objectContaining({ answerText: "Lavender", optionIds: ["lavender"], postponedAt: null }),
@@ -727,7 +761,7 @@ describe("quick answers and «На потом»", () => {
 
     expect(res.body).toEqual({ outcome: "done" });
     expect(upsertOf().update).toEqual(expect.objectContaining({ skipped: true, postponedAt: null }));
-    expect(profileUpdateMany).not.toHaveBeenCalled();
+    expect(claimsOfLiveQuestion()).toEqual([]);
   });
 
   it("GET lists «На потом» even when no batch is due", async () => {

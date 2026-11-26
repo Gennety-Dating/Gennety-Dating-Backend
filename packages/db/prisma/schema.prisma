@@ -1263,6 +1263,19 @@ model Profile {
   profilerBatchRemaining    Int                          @default(0) @map("profiler_batch_remaining")
   profilerAnswerWindowUntil DateTime?                    @map("profiler_answer_window_until")
   profilerQuestionMessageId Int?                         @map("profiler_question_message_id")
+  /// Agent concept phase 4 item 1 (founder 2026-11-26). Telegram batches only:
+  ///   - `profilerIgnoredStreak`: Telegram questions in a row the person let
+  ///     stall with no answer and no skip. Any answer or skip, on either
+  ///     surface, resets it. At `PROFILER_IGNORED_BATCHES_LIMIT` the worker
+  ///     pauses Telegram batches for `PROFILER_IGNORED_PAUSE_MS` and resets it.
+  ///   - `profilerPausedUntil`: that pause. The worker sends no batch before
+  ///     it; the app's own pull (`GET /v1/me/profiler`) is not held.
+  ///   - `profilerOptedOutAt`: the person's off switch («не спрашивай
+  ///     больше», Settings, `PATCH /v1/me/notifications`). While set, no
+  ///     Profiler question is asked on either surface. Null = on.
+  profilerIgnoredStreak     Int                          @default(0) @map("profiler_ignored_streak")
+  profilerPausedUntil       DateTime?                    @map("profiler_paused_until")
+  profilerOptedOutAt        DateTime?                    @map("profiler_opted_out_at")
   /// Date Wishlist session (decision 2026-10-08): it takes the slot of ONE
   /// Profiler batch, never the first, so the app's «Сегодня» alternates
   /// questions with the agent that builds the wishlist.

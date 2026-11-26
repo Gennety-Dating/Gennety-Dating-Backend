@@ -121,3 +121,16 @@ describe("profilerTick — dispatch still works", () => {
     expect(mStart).not.toHaveBeenCalled();
   });
 });
+
+describe("profilerTick — off switch and ignored pause (phase 4 item 1)", () => {
+  it("never dispatches to a person who switched the Profiler off or is inside the 14-day pause", async () => {
+    queries([], [], []);
+    await profilerTick(api, NOW);
+    const dueQuery = mFindMany.mock.calls[2]![0] as { where: Record<string, unknown> };
+    expect(dueQuery.where.profilerOptedOutAt).toBeNull();
+    expect(dueQuery.where.OR).toEqual([
+      { profilerPausedUntil: null },
+      { profilerPausedUntil: { lte: NOW } },
+    ]);
+  });
+});

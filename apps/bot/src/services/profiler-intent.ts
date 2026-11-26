@@ -83,3 +83,45 @@ export function isProfilerRefusal(text: string): boolean {
 
   return PROFILER_REFUSAL_SET.has(normalized);
 }
+
+/**
+ * Whole utterances that ask the Profiler to stop for good, not just skip this
+ * one (agent concept phase 4 item 1, founder 2026-11-26). Checked BEFORE
+ * `isProfilerRefusal`, on the same complete-utterance rule, so «не спрашивай»
+ * alone stays a one-off refusal and only an explicit «больше» / «anymore» /
+ * «хватит вопросов» turns the Profiler off. Turning it back on is in Settings.
+ */
+const PROFILER_STOP_PHRASES: readonly string[] = [
+  // en
+  "stop asking", "stop asking me", "don't ask anymore", "dont ask anymore",
+  "don't ask me anymore", "dont ask me anymore", "no more questions",
+  "stop the questions", "enough questions",
+  // ru
+  "не спрашивай больше", "больше не спрашивай", "больше не спрашивай меня",
+  "не спрашивай меня больше", "хватит вопросов", "хватит спрашивать",
+  "больше никаких вопросов", "не задавай больше вопросов",
+  "больше не задавай вопросов", "не надо больше вопросов",
+  // uk
+  "не питай більше", "більше не питай", "досить питань", "досить питати",
+  "більше ніяких питань", "не став більше питань",
+  // de
+  "frag nicht mehr", "frag mich nicht mehr", "keine fragen mehr",
+  "hör auf zu fragen", "hor auf zu fragen",
+  // pl
+  "nie pytaj więcej", "nie pytaj wiecej", "więcej nie pytaj", "wiecej nie pytaj",
+  "koniec pytań", "koniec pytan", "dość pytań", "dosc pytan",
+];
+
+const PROFILER_STOP_SET = new Set(PROFILER_STOP_PHRASES);
+
+/** True when the whole message asks the Profiler to stop asking for good. */
+export function isProfilerStopRequest(text: string): boolean {
+  const normalized = text
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[.!?…]+$/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!normalized || normalized.length > MAX_REFUSAL_LEN) return false;
+  return PROFILER_STOP_SET.has(normalized);
+}

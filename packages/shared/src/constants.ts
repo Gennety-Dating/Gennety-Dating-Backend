@@ -662,6 +662,14 @@ export const PROFILER_LATER_MAX = 3;
  */
 export const PROFILER_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 /**
+ * Agent concept phase 4 item 1 (founder 2026-11-26): Telegram Profiler
+ * questions the person let stall in a row (no answer, no skip) before the
+ * worker stops sending batches for `PROFILER_IGNORED_PAUSE_MS`. Any answer or
+ * skip resets the count. The app's own pull is not held.
+ */
+export const PROFILER_IGNORED_BATCHES_LIMIT = 2;
+export const PROFILER_IGNORED_PAUSE_MS = 14 * 24 * 60 * 60 * 1000;
+/**
  * How long plain text is *unconditionally* treated as the answer to the
  * question on screen.
  *
