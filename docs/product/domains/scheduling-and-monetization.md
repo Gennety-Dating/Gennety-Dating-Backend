@@ -2022,8 +2022,9 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](rematch.md).
   2026-10-03 cadence report. The profile cooldown is unchanged.
 - **Pain-triggered entry points only** (no menu row): the no-match DM (at most once per 7 days in either profile),
   and any match that died without a date — an explicit decline (his, hers, or
-  both; the primary case), the same decision taken from the iOS app, or a proposal-deadline
-  expiry (daily: next batch minus 30 min, minimum 90 min; weekly: 24 h). The offer fires only once the match is terminal and the outcome
+  both; the primary case), the same decision taken from the iOS app. A proposal-deadline
+  expiry no longer sends it (agent concept phase 4 item 3, 2026-11-26): that
+  notice is a care message; Rematch stays on the screen. The offer fires only once the match is terminal and the outcome
   reveals have landed, never to a first decider whose match is still live. It
   states before payment that it buys an introduction, not a date.
 - **Money rule.** Payment buys a pitch. A decline, a ghost, or a failed

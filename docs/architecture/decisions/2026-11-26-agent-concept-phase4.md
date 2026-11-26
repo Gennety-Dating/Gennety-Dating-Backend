@@ -58,3 +58,12 @@ proactive senders, not from the agent. Each item below changes one of them.
 4. Not changed: the verification-stall reminder, which the audit kept; it
    still re-arms at the verification CTA.
 5. Demo mode: the demo bot runs the same worker; nothing to branch.
+
+## Item 3 — Paid offers on care messages (built)
+
+1. The expired-match notice no longer sends the Rematch offer. Rematch stays
+   on the screen: the pinned banner entry and the concierge.
+2. Kept as they are: the next-date discount on the waiting notices
+   (`no-match-notifier.ts`), and the Rematch offer after an explicit decline,
+   which is the product's own pull moment and was not part of this item.
+3. Demo mode: the demo has no paid Rematch to sell; nothing to branch.

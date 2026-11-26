@@ -241,7 +241,10 @@ derived from these rows, so there is no counter to drift.
    - **the mobile twin** (`public/matches-service.ts`) — a decision taken in the
      iOS app still frees a *Telegram* participant, who would otherwise lose the
      offer purely because their partner used the other client.
-   - **TTL expiry** (`expiry-notify.ts`) — nobody answered within 24 h.
+   - ~~**TTL expiry** (`expiry-notify.ts`) — nobody answered within 24 h.~~
+     Removed 2026-11-26 (agent concept phase 4 item 3): the expired-match
+     notice is a care message and carries no paid offer. Rematch stays on the
+     screen — the pinned banner entry and the concierge.
 
    Fired only after the `proposed → cancelled` CAS is won (so a concurrent
    decision cannot double-send) and only after the outcome reveals have landed,

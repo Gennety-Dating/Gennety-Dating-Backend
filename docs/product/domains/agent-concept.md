@@ -232,10 +232,11 @@ the founder's separate «да» for the deploy and the migrations.
    schema change. Code: `workers/re-engagement.ts`,
    `workers/re-engagement-schedule.ts` (`touchTimeFor`). The
    verification-stall reminder (kept by the audit) is untouched.
-3. **Paid offers on care messages.** Keep the next-date discount on the
-   waiting notices, because it leads to a real date. Drop the Rematch offer
-   from the expired-match notice and leave it on the screen.
-   Recommendation: yes for dropping Rematch there.
+3. **Paid offers on care messages — built.** The expired-match notice
+   (`services/expiry-notify.ts`) no longer sends the Rematch offer; Rematch
+   stays on the screen (pinned banner entry, concierge) and after an explicit
+   decline. The next-date discount on the waiting notices is kept
+   unchanged, because it leads to a real date.
 4. **Quiet hours for the campus drop and the T+24h feedback prompt.** Defer
    them to the next allowed window like the other nudges.
    Recommendation: yes.

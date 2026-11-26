@@ -4,7 +4,6 @@ import { t, type Language, type TranslationKey } from "@gennety/shared";
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import { sendPushToUser } from "./push.js";
-import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import {
   renderExpiryCard,
   type ExpiryCardTheme,
@@ -306,12 +305,10 @@ export async function sendExpiryNotifications(
         });
       }
       notified++;
-      // Rematch offer (REMATCH_PRODUCT_SPEC.md, D4) — the second pain moment:
-      // the match window closed with no date. The match is already terminal
-      // (`expired`) by the time this runs, so the single-live-match eligibility
-      // check inside the sender passes. Self-gating (flag, male-only, D3 limits)
-      // lives there, so this is inert for anyone who can't or shouldn't buy.
-      await sendRematchOfferIfEligible(api, side.userId, "failed").catch(() => {});
+      // No Rematch offer here any more (agent concept phase 4 item 3, founder
+      // 2026-11-26): a paid offer must not ride on a care message. Rematch
+      // stays where the person goes for it — the pinned banner's entry and
+      // the concierge (`handleRematchOpenCallback`), never pushed with this notice.
     } catch (err) {
       failed++;
       const message = err instanceof Error ? err.message : String(err);

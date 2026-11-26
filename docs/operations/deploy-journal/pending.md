@@ -20,6 +20,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    - item 1 — Profiler: 14-day Telegram pause after two ignored batches, «не спрашивай больше» off switch, Settings
      toggle, `GET/PATCH /v1/me/notifications`.
    - item 2 — onboarding re-engagement: five touches per account for life, brief «name the one step left»; no schema.
+   - item 3 — the expired-match notice no longer carries the Rematch offer; no schema.
 2. Ship: migrations FIRST, in order (all additive, the new code reads the columns):
    - `20261126100000_profiler_pause_off_switch` — three columns on `profiles`.
    Then `db:generate`, the shared + bot build and restart. No new env, no flag: the changes are live with the deploy.

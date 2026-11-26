@@ -7,6 +7,8 @@ const renderExpiryCard = vi.fn();
 vi.mock("./expiry-card.js", () => ({ renderExpiryCard }));
 const sendPushToUser = vi.fn();
 vi.mock("./push.js", () => ({ sendPushToUser }));
+const sendRematchOfferIfEligible = vi.fn().mockResolvedValue(true);
+vi.mock("../handlers/matching/rematch.js", () => ({ sendRematchOfferIfEligible }));
 
 const { sendExpiryNotifications, buildCard } = await import("./expiry-notify.js");
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
@@ -353,5 +355,24 @@ describe("sendExpiryNotifications", () => {
 
     expect(r.notified).toBe(1);
     expect(r.failed).toBe(1);
+  });
+});
+
+describe("no paid offer on the care message (agent concept phase 4 item 3)", () => {
+  it("sends the expiry notice to both sides and no Rematch offer", async () => {
+    renderExpiryCard.mockResolvedValue(Buffer.from("png"));
+    const api = makeApi();
+    const m = matchWith(
+      side({ side: "A", role: "silent", offenseCount: 1, penalised: false }),
+      side({ side: "B", userId: "user-b", telegramId: 200n, language: "ru", pitchMessageId: 22, role: "responder" }),
+    );
+    const r = await sendExpiryNotifications(api as never, [m], 0);
+    expect(r.notified).toBe(2);
+    expect(sendRematchOfferIfEligible).not.toHaveBeenCalled();
+    const texts = [
+      ...api.sendMessage.mock.calls.map((c: unknown[]) => String(c[1])),
+      ...api.sendPhoto.mock.calls.map((c: unknown[]) => String((c[2] as { caption?: string })?.caption ?? "")),
+    ].join(" ");
+    expect(texts).not.toMatch(/rematch|реванш|ещё один шанс/i);
   });
 });
