@@ -601,6 +601,13 @@ export interface ChatTurnInput {
   userId: string;
   text: string;
   /**
+   * What the person had typed in the field before recording a voice note
+   * (decision 2026-11-26): stored as its own user message right before
+   * `text` — two bubbles in the feed — and answered in this one turn, so
+   * Gennety replies once, having heard both. Only `/voice` sets it.
+   */
+  leadText?: string;
+  /**
    * Снимки хода, в порядке выбора (до десяти — альбом). Пусто — реплика без
    * вложения. Первый ложится и в `imageUrl` строки: сборки, которые про
    * список не знают, читают его.
@@ -672,6 +679,8 @@ export interface ChatTurnResult {
   screenshots?: ScreenshotsCardView;
   /** The stored id of the person's message of this turn. */
   userMessageId: string;
+  /** The stored id of the typed message before it (`leadText`), when there was one. */
+  leadMessageId?: string;
   /** Gennety also reacted to the person's message (decision 2026-11-24). */
   agentReaction?: { messageId: string; emoji: string };
 }
@@ -718,6 +727,12 @@ async function runTurnInner(
   const language = (account.language ?? "en") as Language;
   const sessionId = input.sessionId ?? (await continueOrOpenChatSession(userId));
 
+  // The typed text first, then the note: the feed and the history read them
+  // in this order (decision 2026-11-26).
+  const leadText = input.leadText?.trim() ?? "";
+  const leadRow = leadText
+    ? await prisma.message.create({ data: { userId, sessionId, role: "user", content: leadText } })
+    : null;
   const userRow = await prisma.message.create({
     data: {
       userId,
@@ -791,6 +806,7 @@ async function runTurnInner(
       reactionsOn: agentReactionsOn(userId),
       reactOffered,
       remindersZone: agentRemindersOn(userId) ? personTimeZone(account.profile) : null,
+      ...(leadRow ? { thisTurnTexts: 2 } : {}),
       onWatch: () => {
         watched = true;
         report("watching_video");
@@ -1286,7 +1302,7 @@ async function runTurnInner(
     if (stored) {
       await touchChatSession(sessionId, userRow.createdAt);
       afterChatTurn({ userId, sessionId, openedNewSession, refreshSummary });
-      return { kind: "reaction", sessionId, userMessageId: userRow.id, agentReaction: { messageId: userRow.id, emoji: agentReaction } };
+      return { kind: "reaction", sessionId, userMessageId: userRow.id, ...(leadRow ? { leadMessageId: leadRow.id } : {}), agentReaction: { messageId: userRow.id, emoji: agentReaction } };
     }
     agentReaction = null;
   }
@@ -1390,6 +1406,7 @@ async function runTurnInner(
     createdAt: persisted.createdAt,
     sessionId,
     userMessageId: userRow.id,
+    ...(leadRow ? { leadMessageId: leadRow.id } : {}),
     ...(reacted && agentReaction ? { agentReaction: { messageId: userRow.id, emoji: agentReaction } } : {}),
     ...(receipts.length > 0 ? { receipts } : {}),
     ...(pendingAction ? { action: pendingAction } : {}),
@@ -1470,6 +1487,8 @@ async function buildChatMessages(
     viewer?: { language: Language; cityKey: string | null; gender?: string | null; preference?: string | null };
     /** A link in this turn's message is about to be read: the status says so. */
     onWatch?: () => void;
+    /** User messages this turn stored: 2 with a typed lead before a voice note. */
+    thisTurnTexts?: number;
     /** Their zone when the reminder tools are offered this turn (decision 2026-11-20). */
     remindersZone?: string | null;
     /** The vibe-card tool is offered this turn (decision 2026-11-21). */
@@ -1543,6 +1562,7 @@ async function buildChatMessages(
       cityKey: options.viewer?.cityKey ?? null,
       userId,
       ...(options.onWatch ? { onWatch: options.onWatch } : {}),
+      ...(options.thisTurnTexts ? { thisTurnTexts: options.thisTurnTexts } : {}),
     }).catch((err: unknown) => {
       console.warn("[chat] video-take blocks unavailable:", err);
       return [] as string[];

@@ -310,6 +310,8 @@ export interface ChatReactionTurn {
   kind: "reaction";
   sessionId: string;
   userMessageId: string;
+  /** The typed message stored before the note (decision 2026-11-26). */
+  leadMessageId?: string;
   agentReaction: { messageId: string; emoji: string };
 }
 

@@ -131,14 +131,16 @@ function reactionTurnBody(turn: ChatReactionTurn): Record<string, unknown> {
     sessionId: turn.sessionId,
     uiHint: null,
     userMessageId: turn.userMessageId,
+    ...(turn.leadMessageId ? { leadMessageId: turn.leadMessageId } : {}),
     agentReaction: turn.agentReaction,
   };
 }
 
 /** `userMessageId` on every turn, `agentReaction` when Gennety also reacted. */
-function turnReactionFields(turn: { userMessageId?: string; agentReaction?: { messageId: string; emoji: string } }): Record<string, unknown> {
+function turnReactionFields(turn: { userMessageId?: string; leadMessageId?: string; agentReaction?: { messageId: string; emoji: string } }): Record<string, unknown> {
   return {
     ...(turn.userMessageId ? { userMessageId: turn.userMessageId } : {}),
+    ...(turn.leadMessageId ? { leadMessageId: turn.leadMessageId } : {}),
     ...(turn.agentReaction ? { agentReaction: turn.agentReaction } : {}),
   };
 }
@@ -542,6 +544,15 @@ chatRouter.post(
     if (sessionId === false) return;
     const imageUrls = turnImageUrls(undefined, req.body?.imageUrls);
     if (!imagesAllowed(imageUrls, req.userId!, res)) return;
+    // What was typed in the field before recording (decision 2026-11-26):
+    // its own message before the note, answered in the same turn. The same
+    // limit as `/message`, checked before transcription.
+    const rawLead: unknown = req.body?.text;
+    const leadText = typeof rawLead === "string" ? rawLead.trim() : "";
+    if (exceedsVisibleLength(leadText, CHAT_TEXT_MAX_LENGTH)) {
+      res.status(413).json({ error: "message_too_long", maxLength: CHAT_TEXT_MAX_LENGTH });
+      return;
+    }
 
     // The same idempotency and status as `/message` (app audit 2026-11-15):
     // a retry of a note whose answer was lost gets that answer back instead
@@ -576,6 +587,7 @@ chatRouter.post(
       const turn = await runChatTurn({
         userId: req.userId!,
         text: transcript,
+        ...(leadText ? { leadText } : {}),
         imageUrls,
         context,
         sessionId,

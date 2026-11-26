@@ -119,6 +119,11 @@ export interface VideoTakeTurn {
    * earlier message is a follow-up: its read is a cache hit and gets no status.
    */
   onWatch?: () => void;
+  /**
+   * How many of `recentUserTexts` belong to this turn: 2 when a voice note
+   * carried the text typed before it (decision 2026-11-26). Default 1.
+   */
+  thisTurnTexts?: number;
 }
 
 /**
@@ -137,7 +142,7 @@ export async function videoTakeBlocks(
   for (const [index, text] of turn.recentUserTexts.slice(0, VIDEO_LINK_LOOKBACK).entries()) {
     url = findSharedVideoUrl(text);
     if (url) {
-      fromThisTurn = index === 0;
+      fromThisTurn = index < (turn.thisTurnTexts ?? 1);
       break;
     }
   }
@@ -171,7 +176,7 @@ export async function videoTakeBlocks(
     }
   }
 
-  const trendText = [turn.recentUserTexts[0] ?? "", videoText].join(" \n ");
+  const trendText = [...turn.recentUserTexts.slice(0, turn.thisTurnTexts ?? 1), videoText].join(" \n ");
   const trends = trendGlossaryBlock(matchTrendEntries(trendText, turn.now ? { now: turn.now } : {}));
   if (trends) blocks.push(trends);
   return blocks;

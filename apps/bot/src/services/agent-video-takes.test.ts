@@ -113,6 +113,15 @@ describe("videoTakeBlocks", () => {
     );
     expect(followUp).not.toHaveBeenCalled();
 
+    // A voice note carrying the text typed before it (decision 2026-11-26):
+    // the link in the typed half is this turn's.
+    const lead = vi.fn();
+    await videoTakeBlocks(
+      { recentUserTexts: ["вот что думаю про него", `глянь ${TIKTOK}`], language: "ru", cityKey: null, onWatch: lead, thisTurnTexts: 2 },
+      { read: readDeps() },
+    );
+    expect(lead).toHaveBeenCalledTimes(1);
+
     const plain = vi.fn();
     await videoTakeBlocks({ recentUserTexts: ["привет"], language: "ru", cityKey: null, onWatch: plain }, { read: readDeps() });
     expect(plain).not.toHaveBeenCalled();

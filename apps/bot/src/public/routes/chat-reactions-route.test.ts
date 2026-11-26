@@ -40,7 +40,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-type TurnInput = { chatCards?: ReadonlySet<string>; reactionsDrawn?: boolean };
+type TurnInput = { chatCards?: ReadonlySet<string>; reactionsDrawn?: boolean; leadText?: string };
 let turnResult: Record<string, unknown> = {};
 const runChatTurn = vi.fn(async (_input: TurnInput) => turnResult);
 vi.mock("../../services/chat-agent.js", () => ({
@@ -236,6 +236,37 @@ describe("turn responses", () => {
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty("message");
     expect(res.body).toMatchObject({ transcript: "ок, спасибо", userMessageId: "u1", agentReaction: { emoji: "🙏" } });
+  });
+
+  it("voice with the text typed before it: one turn, the text as its lead (decision 2026-11-26)", async () => {
+    turnResult = { ...turnResult, leadMessageId: "l1" };
+    const res = await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .field("text", "  глянь https://www.instagram.com/reel/abc/  ")
+      .attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+    expect(res.status).toBe(200);
+    expect(runChatTurn).toHaveBeenCalledTimes(1);
+    expect(runChatTurn.mock.calls[0]![0].leadText).toBe("глянь https://www.instagram.com/reel/abc/");
+    expect(res.body.leadMessageId).toBe("l1");
+  });
+
+  it("voice: blank text is no lead, and an overlong one is refused before transcription", async () => {
+    await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .field("text", "   ")
+      .attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+    expect(runChatTurn.mock.calls[0]![0]).not.toHaveProperty("leadText");
+
+    runChatTurn.mockClear();
+    const res = await request(app())
+      .post("/v1/chat/voice")
+      .set(auth())
+      .field("text", "а".repeat(4_001))
+      .attach("file", Buffer.from("audio"), { filename: "v.m4a", contentType: "audio/m4a" });
+    expect(res.status).toBe(413);
+    expect(runChatTurn).not.toHaveBeenCalled();
   });
 
   it("voice on an older build keeps `message`", async () => {

@@ -4774,6 +4774,15 @@ paths:
                   description: >-
                     Photos of this turn — storage paths from `/v1/chat/upload`,
                     repeated as one form field each, in the order picked.
+                text:
+                  type: string
+                  description: >-
+                    What was typed in the field before the note was recorded
+                    (decision 2026-11-26). Stored as its own user message right
+                    before the note and answered in this same turn, so Gennety
+                    replies once. Same length limit as `text` on
+                    `/v1/chat/message` (413 `message_too_long`), checked before
+                    the transcription.
                 clientMessageId:
                   type: string
                   minLength: 8
@@ -4801,6 +4810,10 @@ paths:
                     type: string
                     format: uuid
                     description: As on `/v1/chat/message`.
+                  leadMessageId:
+                    type: string
+                    format: uuid
+                    description: The stored id of the typed message sent with `text`, when there was one.
                   agentReaction:
                     $ref: "#/components/schemas/ChatAgentReaction"
                     description: As on `/v1/chat/message`.
