@@ -13,6 +13,43 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 # Gennety Dating Deploy
 
+**PENDING 2026-11-26 — place scenes in the app chat + the proactive place tip (NOT DEPLOYED — waits for the founder's «да»)**
+
+1. Code: branch `feat/place-scenes` (not on `main`), decision
+   [2026-11-26-agent-place-scenes](../../architecture/decisions/2026-11-26-agent-place-scenes.md), spec
+   `docs/product/domains/agent-place-scenes.md`. iOS counterpart: `Gennety-iOS` branch `claude/chat-scenes` (the
+   contract), scenes drawn by the iOS sessions; the server is useless to a build that does not send `places`.
+2. Files to ship (base: production `75c13ccd`; since then `main` changed only `notification-mute.ts` (new) and
+   `i18n.ts` among these, both from agent concept phase 4):
+   - changed: `openapi/gennety-v1.yaml`, `packages/shared/src/index.ts`, `packages/shared/src/i18n.ts`,
+     `apps/bot/src/config.ts`, `apps/bot/src/index.ts`, `apps/bot/src/services/chat-agent.ts`,
+     `apps/bot/src/services/chat-activity.ts`, `apps/bot/src/services/feature-preview.ts`,
+     `apps/bot/src/services/notification-mute.ts`, `apps/bot/src/public/routes/chat.ts`;
+   - new: `packages/shared/src/place-scenes.ts`, `apps/bot/src/services/place-catalog.ts`,
+     `apps/bot/src/services/chat-place-scene.ts`, `apps/bot/src/services/place-tips.ts`,
+     `apps/bot/src/workers/place-tips.ts`;
+   - tests (ship with the code, not needed at runtime): `packages/shared/src/i18n.test.ts`,
+     `apps/bot/src/services/chat-activity.test.ts`, `notification-mute.test.ts`, `place-catalog.test.ts`,
+     `chat-place-scene.test.ts`, `chat-agent-places.test.ts`, `place-tips.test.ts`,
+     `apps/bot/src/public/routes/chat-places-route.test.ts`; `.env.example` is documentation only.
+3. Order: **after agent concept phase 4** (or together with it): `place-tips.ts` reads `users.notify_only_dates`
+   (migration `20261126120000_notify_only_dates`) and imports `notification-mute.ts`. A scenes-only deploy before
+   that is possible by leaving out `index.ts`, `place-tips.ts`, `workers/place-tips.ts`, `feature-preview.ts` and
+   `notification-mute.ts` — then there is no tip worker at all.
+4. No migration of its own, no new dependency, no external API call (delivery links are URLs).
+5. Env: none required. `AGENT_PLACE_SCENES_ENABLED` unset → on for builds that send `places`. The tip stays dark:
+   `AGENT_PLACE_TIPS_ENABLED` unset → off; to try it, set `AGENT_PLACE_TIPS_USER_IDS=<founder uuid>`.
+6. Demo mode: the same; the demo bot is Telegram and never gets the tools; the tip needs an app account.
+7. Verify (read-only on the droplet): `turnTools({ ..., placeScenes: true, myPlaces: true })` lists `search_venues`,
+   `get_my_places`, `show_place_scene`; on «Орёл» ask «куда сходить на кофе рядом с Подолом» — the reply carries
+   `place` (kind `picks`), history returns it on reload; `GET /v1/chat/history` without `places` in the header has
+   no `place`. Tip: with the founder on the preview list, the `[place-tips] sent=1` line appears in daytime at most
+   once per three days.
+8. Rollback: `AGENT_PLACE_SCENES_ENABLED=false` + restart drops the tools and the block; `AGENT_PLACE_TIPS_*`
+   empty stops the tip. Stored scenes stay as rows; old builds see the text.
+
+---
+
 **PENDING 2026-11-26 — agent concept phase 4: the proactive senders (needs the founder's separate «да» for the deploy and the migrations)**
 
 1. Code: decision [2026-11-26-agent-concept-phase4](../../architecture/decisions/2026-11-26-agent-concept-phase4.md),

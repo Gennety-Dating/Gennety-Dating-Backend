@@ -70,6 +70,7 @@ import { agentMemoryTick } from "./workers/agent-memory.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { agentRemindersTick } from "./workers/agent-reminders.js";
+import { placeTipsTick } from "./workers/place-tips.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
 import { APP_REVIEW_TICK_SCHEDULE, appReviewPartnerTick } from "./workers/app-review-partner.js";
 import { appReviewConfigurationErrors, isAppReviewEnabled } from "./services/app-review.js";
@@ -1232,6 +1233,11 @@ function registerSchedules(): void {
   // Personal reminders the agent set on request (decision 2026-11-20): every
   // minute, gated per person by `AGENT_REMINDERS_*` inside the tick.
   cron.schedule("* * * * *", guardedTick("agent-reminders", () => agentRemindersTick(bot.api)), {
+    timezone: CRON_TIMEZONE,
+  });
+  // Proactive place tips (decision 2026-11-26): every 30 minutes, gated per
+  // person by `AGENT_PLACE_TIPS_*` inside the tick; off and empty by default.
+  cron.schedule("*/30 * * * *", guardedTick("place-tips", () => placeTipsTick()), {
     timezone: CRON_TIMEZONE,
   });
 

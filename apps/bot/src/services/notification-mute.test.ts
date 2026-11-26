@@ -51,6 +51,7 @@ describe("mutedByOnlyMyDates", () => {
     expect([...ONLY_MY_DATES_MUTED_KINDS]).toEqual([
       "profiler", "re_engagement", "announcement", "waiting_notice",
       "rematch_offer", "wishlist_session", "idea_reminder", "referral_reward",
+      "place_tip",
     ]);
   });
 });

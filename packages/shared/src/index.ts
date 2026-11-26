@@ -240,6 +240,7 @@ export * from "./agent-takes.js";
 export * from "./agent-stances.js";
 export * from "./agent-concept.js";
 export * from "./vibe-cards.js";
+export * from "./place-scenes.js";
 export * from "./agent-memory.js";
 export {
   normalizeProfileMedia,

@@ -131,6 +131,24 @@ import {
   type VibeCard,
   type VibeCardView,
 } from "./chat-vibe-card.js";
+import {
+  GET_MY_PLACES_TOOL,
+  GET_MY_PLACES_TOOL_NAME,
+  PLACE_SCENE_ADDENDUM,
+  PlaceTurn,
+  SEARCH_VENUES_TOOL,
+  SEARCH_VENUES_TOOL_NAME,
+  SHOW_PLACE_SCENE_TOOL,
+  SHOW_PLACE_SCENE_TOOL_NAME,
+  placeSceneNote,
+  placeScenesThisTurn,
+  readPlaceScene,
+  runGetMyPlaces,
+  runSearchVenues,
+  runShowPlaceScene,
+  type PlaceScene,
+} from "./chat-place-scene.js";
+import { placeCityOf } from "./place-catalog.js";
 import { VIBE_SAFETY_LOOKBACK, type AgentSticker } from "@gennety/shared";
 import { agentStanceBlocks } from "./agent-stances.js";
 import { agentConceptBlocks, loadConceptTurn } from "./agent-concept.js";
@@ -480,14 +498,14 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number] | ReactTool
+  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number] | ReactTool | typeof SEARCH_VENUES_TOOL | typeof GET_MY_PLACES_TOOL | typeof SHOW_PLACE_SCENE_TOOL
 >;
 
 /**
  * The turn's tools: a build that draws the wishlist card also gets the tool
  * that makes one, a build that draws the offer card gets `offer_change`.
  */
-export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean; reminders?: boolean; vibeCards?: boolean }): ToolList {
+export function turnTools(options: { wishlistCards: boolean; offerCards: boolean; guideCards: boolean; screenshotCards: boolean; memoryIdeas?: boolean; agentMemory?: boolean; reminders?: boolean; vibeCards?: boolean; placeScenes?: boolean; myPlaces?: boolean }): ToolList {
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
@@ -505,6 +523,10 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
     ...(options.reminders ? REMINDER_TOOLS : []),
     // Vibe cards (decision 2026-11-21): a photo on this turn, a build that draws it.
     ...(options.vibeCards ? [SHOW_VIBE_CARD_TOOL] : []),
+    // Place scenes (decision 2026-11-26): a build that draws them. Their
+    // regular places only with the frequent-places opt-in.
+    ...(options.placeScenes ? [SEARCH_VENUES_TOOL, SHOW_PLACE_SCENE_TOOL] : []),
+    ...(options.placeScenes && options.myPlaces ? [GET_MY_PLACES_TOOL] : []),
   ];
 }
 
@@ -527,6 +549,10 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [SHOW_APP_GUIDE_TOOL_NAME]: "read",
   // Writes nothing: the card is stored with the reply (`chat-vibe-card.ts`).
   [SHOW_VIBE_CARD_TOOL_NAME]: "read",
+  // Read the catalog and their regular places; the scene is stored with the reply (`chat-place-scene.ts`).
+  [SEARCH_VENUES_TOOL_NAME]: "read",
+  [GET_MY_PLACES_TOOL_NAME]: "read",
+  [SHOW_PLACE_SCENE_TOOL_NAME]: "read",
   // Reads their booked date, writes nothing (`chat-date-tool.ts`).
   [GET_MY_DATE_TOOL_NAME]: "read",
   // Writes only the reaction on their message, never the profile (`chat-reactions.ts`).
@@ -646,6 +672,12 @@ export interface ChatTurnResult {
   vibe?: VibeCardView;
   /** The sticker after this reply, chosen by the server with the vibe card. */
   sticker?: AgentSticker;
+  /**
+   * The place scene AFTER this reply (`messages.attachment`, kind
+   * `place_scene`), decision 2026-11-26 — as stored: the route signs its
+   * photo links (`placeSceneView`).
+   */
+  place?: PlaceScene;
   /** The screenshot-library card, for builds that declared `screenshots`. */
   screenshots?: ScreenshotsCardView;
   /** The stored id of the person's message of this turn. */
@@ -689,7 +721,7 @@ async function runTurnInner(
   // id. Читается один раз за ход вместе с языком, на котором пишутся чеки.
   const account = await prisma.user.findUnique({
     where: { id: userId },
-    select: { telegramId: true, language: true, gender: true, preference: true, profile: { select: { homeCityKey: true, timeZone: true } } },
+    select: { telegramId: true, language: true, gender: true, preference: true, frequentPlacesOptIn: true, profile: { select: { homeCityKey: true, timeZone: true } } },
   });
   if (!account) throw new Error(`Unknown user ${userId}`);
   const telegramId = account.telegramId;
@@ -749,8 +781,14 @@ async function runTurnInner(
         })
     : null;
   const reactOffered = reactionGate?.ok === true;
+  // Place scenes (decision 2026-11-26): the catalog and their regular places
+  // are read only when a place tool is called.
+  const placeScenes = placeScenesThisTurn(input.chatCards);
+  const placeTurn = placeScenes
+    ? new PlaceTurn({ userId, cityKey: placeCityOf(account.profile?.homeCityKey), language, regularsOn: account.frequentPlacesOptIn === true })
+    : null;
   const tools: ToolList = [
-    ...turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId), vibeCards }),
+    ...turnTools({ wishlistCards, offerCards, guideCards, screenshotCards, memoryIdeas: ideasOn, agentMemory: memoryOn, reminders: agentRemindersOn(userId), vibeCards, placeScenes, myPlaces: account.frequentPlacesOptIn === true }),
     ...(reactionGate?.ok ? [reactTool(reactionGate.emoji)] : []),
   ];
   // Unreadable counts as not connected: the find request still gets its answer.
@@ -766,6 +804,7 @@ async function runTurnInner(
       screenshotLibraryOpen,
       memoryIdeas: ideasOn,
       vibeCards,
+      placeScenes,
       reactionsOn: agentReactionsOn(userId),
       reactOffered,
       remindersZone: agentRemindersOn(userId) ? personTimeZone(account.profile) : null,
@@ -803,6 +842,7 @@ async function runTurnInner(
   let guide: AppGuide | null = null;
   let shots: ScreenshotsCard | null = null;
   let vibe: VibeCard | null = null;
+  let place: PlaceScene | null = null;
   let agentReaction: string | null = null;
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
@@ -817,7 +857,7 @@ async function runTurnInner(
     // further tool call moves the status on to that tool.
     if (iteration > 0) report("writing");
     // After a card or a reaction an empty line is an answer, not a failure.
-    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe || agentReaction ? { allowEmpty: true } : {}) });
+    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe || place || agentReaction ? { allowEmpty: true } : {}) });
     if (!called.ok) {
       failure = called.reason;
       break;
@@ -921,7 +961,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (vibe || guide || card || offer || shots) {
+        if (vibe || guide || card || offer || shots || place) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -941,6 +981,46 @@ async function runTurnInner(
         continue;
       }
 
+      // Place scenes (decision 2026-11-26): the two reads answer the model; the
+      // scene is validated here, stored with the reply below, drawn AFTER it.
+      if (name === SEARCH_VENUES_TOOL_NAME || name === GET_MY_PLACES_TOOL_NAME || name === SHOW_PLACE_SCENE_TOOL_NAME) {
+        if (!placeTurn || (name === GET_MY_PLACES_TOOL_NAME && !account.frequentPlacesOptIn)) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        let args: unknown = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          // every place tool reads missing arguments as empty
+        }
+        if (name === SHOW_PLACE_SCENE_TOOL_NAME && (place || vibe || guide || card || offer || shots)) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, error: "one_card_per_reply", instruction: "A scene or card is already in this reply — answer now." }),
+          });
+          continue;
+        }
+        // The catalog failing costs that one look, never the answer.
+        const failed = JSON.stringify({ success: false, error: "tool_failed", instruction: "Places could not be read now. Answer in words, no scene." });
+        if (name === SHOW_PLACE_SCENE_TOOL_NAME) {
+          const built = await runShowPlaceScene(placeTurn, args).catch((err: unknown) => {
+            console.warn("[chat] place scene failed:", err instanceof Error ? err.name : "error");
+            return { ok: false as const, result: failed };
+          });
+          if (built.ok) place = built.scene;
+          messages.push({ role: "tool", tool_call_id: tc.id, content: built.result });
+          continue;
+        }
+        const result = await (name === SEARCH_VENUES_TOOL_NAME ? runSearchVenues(placeTurn, args) : runGetMyPlaces(placeTurn)).catch((err: unknown) => {
+          console.warn(`[chat] tool ${name} threw:`, err instanceof Error ? err.name : "error");
+          return failed;
+        });
+        messages.push({ role: "tool", tool_call_id: tc.id, content: result });
+        continue;
+      }
+
       // The «how the app works» card: the person's stage is read here, the card
       // is stored with the reply below. One card per reply.
       if (name === SHOW_APP_GUIDE_TOOL_NAME) {
@@ -948,7 +1028,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (guide || card || offer || shots || vibe) {
+        if (guide || card || offer || shots || vibe || place) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -1057,7 +1137,7 @@ async function runTurnInner(
         });
         // One card per reply. A card that cannot be attached must not be reported
         // as shown, or the reply promises cards or a button that are not there (audit F-06).
-        if (outcome.card && (card || offer || guide || shots || vibe)) {
+        if (outcome.card && (card || offer || guide || shots || vibe || place)) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -1082,7 +1162,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (offer || card || guide || shots || vibe) {
+        if (offer || card || guide || shots || vibe || place) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -1109,7 +1189,7 @@ async function runTurnInner(
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
           continue;
         }
-        if (card || offer || guide || shots || vibe) {
+        if (card || offer || guide || shots || vibe || place) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -1240,7 +1320,7 @@ async function runTurnInner(
   // only on a build that draws reactions: the tool exists nowhere else. A
   // turn that also changed something or made a card or a button keeps a
   // reply (below), so a receipt is never lost behind an emoji.
-  const somethingToSay = receipts.length > 0 || Boolean(card || offer || guide || shots || vibe || pendingAction);
+  const somethingToSay = receipts.length > 0 || Boolean(card || offer || guide || shots || vibe || place || pendingAction);
   if (!lastReply && agentReaction && input.reactionsDrawn && !somethingToSay) {
     // Unstored, the reaction is no answer: the turn falls through to the
     // outage path below (row taken back, 503, the app's retry replays it).
@@ -1281,6 +1361,9 @@ async function runTurnInner(
     } else if (vibe) {
       // The drawing is the answer; the step goes under it (below).
       lastReply = "";
+    } else if (place) {
+      // The scene is the answer; one line above it is enough.
+      lastReply = t(language, "placeSceneLine");
     } else if (pendingAction) {
       lastReply = fallbackReply(language);
     } else {
@@ -1304,6 +1387,7 @@ async function runTurnInner(
       ...(!card && !offer && guide ? { attachment: guide as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && !guide && shots ? { attachment: shots as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && !guide && !shots && vibe ? { attachment: vibe as unknown as Prisma.InputJsonValue } : {}),
+      ...(!card && !offer && !guide && !shots && !vibe && place ? { attachment: place as unknown as Prisma.InputJsonValue } : {}),
     },
   });
   // One open offer at a time: earlier unanswered cards stop working. A failure
@@ -1367,6 +1451,7 @@ async function runTurnInner(
     ...(screenshotsView ? { screenshots: screenshotsView } : {}),
     ...(vibe && !card && !offer && !guide && !shots ? { vibe: vibeCardView(vibe) } : {}),
     ...(vibe && !card && !offer && !guide && !shots && vibeStickerView(vibe) ? { sticker: vibeStickerView(vibe)! } : {}),
+    ...(place && !card && !offer && !guide && !shots && !vibe ? { place } : {}),
   };
 }
 
@@ -1442,6 +1527,8 @@ async function buildChatMessages(
     remindersZone?: string | null;
     /** The vibe-card tool is offered this turn (decision 2026-11-21). */
     vibeCards?: boolean;
+    /** The place tools are offered this turn (decision 2026-11-26). */
+    placeScenes?: boolean;
     /** Reactions are on for this person: theirs are named to the model (decision 2026-11-24). */
     reactionsOn?: boolean;
     /** `react` is offered this turn: its rules ride the prompt. */
@@ -1549,6 +1636,8 @@ async function buildChatMessages(
     // Vibe cards (decision 2026-11-21): the one approved exception to the looks
     // red lines, so it comes after the concept block that «wins over any line above».
     options.vibeCards ? VIBE_CARD_ADDENDUM : null,
+    // Place scenes (decision 2026-11-26): search, then one scene.
+    options.placeScenes ? PLACE_SCENE_ADDENDUM : null,
     // Reactions (decision 2026-11-24): what the person reacted to since their
     // previous message, and the rules of Gennety's own on a turn that may react.
     options.reactionsOn ? personReactionsBlock(rows) : null,
@@ -1653,8 +1742,11 @@ async function buildChatMessages(
       const rowGuide = readAppGuide((row as { attachment?: unknown }).attachment);
       const rowShots = readScreenshotsCard((row as { attachment?: unknown }).attachment);
       const rowVibe = readVibeCard((row as { attachment?: unknown }).attachment);
+      const rowPlace = rowVibe ? null : readPlaceScene((row as { attachment?: unknown }).attachment);
       const note = rowVibe
         ? vibeCardNote(rowVibe)
+        : rowPlace
+        ? placeSceneNote(rowPlace)
         : rowCard
         ? wishlistCardNote(rowCard)
         : rowOffer

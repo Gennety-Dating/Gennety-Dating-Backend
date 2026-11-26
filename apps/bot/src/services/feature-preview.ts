@@ -11,7 +11,7 @@ import { env } from "../config.js";
  * everyone, a list means only those people, an empty list means nobody.
  */
 
-type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES" | "AGENT_MEMORY" | "AGENT_REMINDERS" | "AGENT_REACTIONS";
+type Flag = "SCREENSHOT_LIBRARY" | "MEMORY_IDEAS" | "AGENT_SUGGESTED_REPLIES" | "AGENT_MEMORY" | "AGENT_REMINDERS" | "AGENT_REACTIONS" | "AGENT_PLACE_TIPS";
 
 function previewList(flag: Flag): readonly string[] {
   const raw = (env as Record<string, unknown>)[`${flag}_USER_IDS`];
@@ -47,3 +47,6 @@ export const agentRemindersOn = (userId: string | null | undefined): boolean => 
 export const agentRemindersUsers = (): readonly string[] | null => usersOf("AGENT_REMINDERS");
 /** Emoji reactions in the app chat (`docs/product/domains/agent-reactions.md`). */
 export const agentReactionsOn = (userId: string | null | undefined): boolean => onFor("AGENT_REACTIONS", userId);
+/** Proactive place tips (`docs/product/domains/agent-place-scenes.md`, phase 5). */
+export const placeTipsOn = (userId: string | null | undefined): boolean => onFor("AGENT_PLACE_TIPS", userId);
+export const placeTipsUsers = (): readonly string[] | null => usersOf("AGENT_PLACE_TIPS");

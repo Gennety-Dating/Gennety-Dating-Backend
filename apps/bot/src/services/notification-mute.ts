@@ -15,7 +15,8 @@ import { prisma } from "@gennety/db";
  * - `rematch_offer` — pushed Rematch offers (a tap on the entry still opens it);
  * - `wishlist_session` — the wishlist session push;
  * - `idea_reminder` — an idea reminder not tied to a planned match;
- * - `referral_reward` — «your friend joined» (the tickets are still credited).
+ * - `referral_reward` — «your friend joined» (the tickets are still credited);
+ * - `place_tip` — the proactive place tip (`place-tips.ts`, decision 2026-11-26).
  *
  * Never muted: pitches and match nudges, scheduling, venue and ticket flow,
  * the date lifecycle (T-5h, T-90m, Date Terminal, T+24h, the Morning After),
@@ -32,6 +33,7 @@ export const ONLY_MY_DATES_MUTED_KINDS = [
   "wishlist_session",
   "idea_reminder",
   "referral_reward",
+  "place_tip",
 ] as const;
 export type OnlyMyDatesMutedKind = (typeof ONLY_MY_DATES_MUTED_KINDS)[number];
 

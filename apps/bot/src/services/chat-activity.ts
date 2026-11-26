@@ -114,6 +114,11 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   ["suggest_video", "thinking"],
   ["show_app_guide", "thinking"],
   ["show_vibe_card", "thinking"],
+  // Place scenes (decision 2026-11-26): the catalog answers at once; their
+  // own places read as «Вспоминаю…».
+  ["search_venues", "thinking"],
+  ["get_my_places", "remembering"],
+  ["show_place_scene", "thinking"],
   ["offer_cancel_premium", "thinking"],
 ]);
 

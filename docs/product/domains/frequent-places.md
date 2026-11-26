@@ -112,6 +112,13 @@ most two of one category.
   The owner's list carries no coordinate fields (the fences carry circles, as
   before).
 
+- **The chat agent** (decision 2026-11-26, `agent-place-scenes.md`). With the
+  opt-in on, the app agent's `get_my_places` reads the top five places by
+  distinct days in the last 60 (two days at least, hidden places out) for
+  place scenes and the proactive place tip. The model gets names, ids and day
+  counts — never the days or coordinates. Off, the tool is not offered and no
+  tip is sent.
+
 ### Demo mode
 
 No puppet branch: the feature is one-sided. The block stays empty in the demo —

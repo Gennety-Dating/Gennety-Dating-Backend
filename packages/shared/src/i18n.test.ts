@@ -15,6 +15,13 @@ import { SUPPORTED_LANGUAGES } from "./types.js";
  * or a deliberate product decision — never "we forgot".
  */
 const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
+  // Place scenes (decision 2026-11-26): category words spelled the same in
+  // de/pl and English («Café», «Restaurant», «Park», «Museum», «Bar»).
+  "placeCategoryCafe",
+  "placeCategoryRestaurant",
+  "placeCategoryPark",
+  "placeCategoryMuseum",
+  "placeCategoryLounge",
   // Vibe cards (decision 2026-11-21): «Aura» is the same word in de/pl, and
   // «Swag gap» is the trend's own English name in every locale.
   "vibeAuraTitle",
@@ -67,6 +74,17 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
  * both languages, or an explicit product decision — never "we forgot".
  */
 const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
+  // Place scenes (decision 2026-11-26): category words and short labels spelled
+  // the same in uk and ru («Кафе», «Ресторан», «Парк», «Музей», «Бар»,
+  // «Рейтинг», «Чек», «до {time}»).
+  "placeCategoryCafe",
+  "placeCategoryRestaurant",
+  "placeCategoryPark",
+  "placeCategoryMuseum",
+  "placeCategoryLounge",
+  "placeOpenUntil",
+  "placeVersusRating",
+  "placeVersusPrice",
   // Vibe cards (decision 2026-11-21): words genuinely spelled the same in uk
   // and ru («Аура», «Стиль», «Кадр», «Подача», «Справа»), plus the English
   // trend name «Swag gap».

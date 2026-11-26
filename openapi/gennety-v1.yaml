@@ -4478,7 +4478,8 @@ paths:
         since 2026-11-24, `reactions` (emoji reactions: `reactions` on every
         history row, `PUT /v1/chat/messages/{id}/reaction`, `agentReaction`
         here — and a turn Gennety answered with a reaction alone, without
-        `message`). Sent like
+        `message`) and, since 2026-11-26, `places` (`ChatPlaceScene` in
+        `place`, drawn after the reply; also on history rows). Sent like
         `X-Gennety-Build`, by the client's middleware, so it is not an
         operation parameter. A build that sends nothing never gets a card, and
         the agent gets no tool that would make one — without `offer` the agent
@@ -4670,6 +4671,12 @@ paths:
                     description: >-
                       A sticker the server chose to follow the reply, drawn
                       AFTER the text. Only with `vibe` today. Absent otherwise.
+                  place:
+                    $ref: "#/components/schemas/ChatPlaceScene"
+                    description: >-
+                      Place scene for this turn (decision 2026-11-26) — only for
+                      a build that listed `places` in `X-Gennety-Chat-Cards`.
+                      Drawn AFTER the reply text. Never together with another card.
                   repliesPending:
                     type: boolean
                     description: >-
@@ -4821,6 +4828,7 @@ paths:
                   guide: { $ref: "#/components/schemas/ChatAppGuide" }
                   vibe: { $ref: "#/components/schemas/ChatVibeCard" }
                   sticker: { $ref: "#/components/schemas/ChatSticker" }
+                  place: { $ref: "#/components/schemas/ChatPlaceScene" }
                   repliesPending:
                     type: boolean
                     description: As on `/v1/chat/message`.
@@ -11443,6 +11451,11 @@ components:
             sticker:
               $ref: "#/components/schemas/ChatSticker"
               description: The sticker after this reply, with its `vibe` card.
+            place:
+              $ref: "#/components/schemas/ChatPlaceScene"
+              description: >-
+                The place scene after this assistant reply, as it was shown —
+                only for a build that lists `places` in `X-Gennety-Chat-Cards`.
             replies:
               type: array
               maxItems: 4
@@ -11798,6 +11811,123 @@ components:
         footnote: { type: string, description: "«Оценка по одному этому фото»." }
         shareLabel: { type: string }
 
+    ChatPlaceScene:
+      description: |
+        A place scene under an assistant reply (decision 2026-11-26, spec
+        `docs/product/chat-place-scenes-plan.md` in the iOS repo): a venue,
+        picks, the person's regular places, delivery, opening hours, a walk
+        or a duel of two venues, drawn as a custom animated scene with its own
+        sound and haptic — not a bubble. Drawn AFTER the reply text. Every
+        label is already in the person's language. One scene per reply;
+        never together with another card. Only for a build that lists
+        `places` in `X-Gennety-Chat-Cards`. An unknown `kind` is skipped by
+        the client (the text still shows).
+      type: object
+      required: [kind, title, venues]
+      properties:
+        kind:
+          type: string
+          description: >-
+            venue | picks | regulars | delivery | hours | route | versus.
+        title: { type: string, description: "Short headline, ≤ 40 chars." }
+        subtitle: { type: string, nullable: true, description: "One line under the title, ≤ 80 chars." }
+        venues:
+          type: array
+          minItems: 1
+          maxItems: 3
+          description: >-
+            venue/hours/route/delivery/regulars: 1 (the recommended one);
+            picks: 2–3; versus: exactly 2 (A then B).
+          items: { $ref: "#/components/schemas/ChatPlaceVenue" }
+        anchors:
+          type: array
+          maxItems: 8
+          description: >-
+            regulars: the person's frequent places (only with the person's
+            frequent-places opt-in); route: one start point. Empty otherwise.
+          items: { $ref: "#/components/schemas/ChatPlaceAnchor" }
+        dishes:
+          type: array
+          maxItems: 3
+          description: delivery only — dishes worth ordering, grounded in reviews.
+          items: { $ref: "#/components/schemas/ChatPlaceDish" }
+        links:
+          type: array
+          maxItems: 3
+          description: delivery (glovo, bolt) and maps links. Opened outside the app.
+          items: { $ref: "#/components/schemas/ChatPlaceLink" }
+        versus:
+          $ref: "#/components/schemas/ChatPlaceVersus"
+        footnote: { type: string, nullable: true }
+    ChatPlaceVenue:
+      type: object
+      required: [id, name, lat, lng]
+      properties:
+        id: { type: string, description: "CuratedVenue id or Google place id." }
+        name: { type: string }
+        categoryLabel: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        lat: { type: number }
+        lng: { type: number }
+        photoUrl: { type: string, nullable: true }
+        rating: { type: number, nullable: true }
+        ratingCount: { type: integer, nullable: true }
+        priceLevel: { type: integer, nullable: true, minimum: 0, maximum: 4 }
+        openNow: { type: boolean, nullable: true }
+        hoursLabel: { type: string, nullable: true, description: "e.g. «до 23:00», «откроется в 9:00»." }
+        today:
+          type: array
+          description: Today's opening intervals, local "HH:mm"; close may be past midnight ("02:00").
+          items:
+            type: object
+            required: [open, close]
+            properties:
+              open: { type: string }
+              close: { type: string }
+        nowLocal: { type: string, nullable: true, description: "Venue-local time of the answer, \"HH:mm\"." }
+        walkMinutes: { type: integer, nullable: true }
+        distanceM: { type: integer, nullable: true }
+        reason: { type: string, nullable: true, description: "Why this one for the person, ≤ 70 chars." }
+        tags: { type: array, items: { type: string }, maxItems: 3 }
+    ChatPlaceAnchor:
+      type: object
+      required: [label, lat, lng]
+      properties:
+        label: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        visits: { type: integer, nullable: true }
+    ChatPlaceDish:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        note: { type: string, nullable: true }
+        price: { type: string, nullable: true }
+    ChatPlaceLink:
+      type: object
+      required: [provider, label, url]
+      properties:
+        provider: { type: string, description: "glovo | bolt | wolt | maps | web" }
+        label: { type: string }
+        url: { type: string }
+    ChatPlaceVersus:
+      type: object
+      required: [winner, rows]
+      properties:
+        winner: { type: string, description: "a | b | tie" }
+        verdict: { type: string, nullable: true }
+        rows:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [label, a, b, better]
+            properties:
+              label: { type: string }
+              a: { type: string }
+              b: { type: string }
+              better: { type: string, description: "a | b | tie" }
     ChatSticker:
       description: |
         An agent sticker after a reply (decision 2026-11-21). Chosen by the

@@ -729,6 +729,16 @@ export const env = {
   /// and swag gap on a photo, app chat only, for builds that list `vibe` in
   /// `X-Gennety-Chat-Cards`. On by default; "false" drops the tool and its block.
   AGENT_VIBE_CARDS_ENABLED: process.env.AGENT_VIBE_CARDS_ENABLED !== "false",
+  /// Place scenes (decision 2026-11-26, `docs/product/domains/agent-place-scenes.md`):
+  /// `search_venues`, `get_my_places` and `show_place_scene`, app chat only, for
+  /// builds that list `places` in `X-Gennety-Chat-Cards`. On by default like the
+  /// vibe cards; "false" drops the tools and their block from every turn.
+  AGENT_PLACE_SCENES_ENABLED: process.env.AGENT_PLACE_SCENES_ENABLED !== "false",
+  /// Proactive place tips (agent-advisor phase 4 for places): a `regulars` scene
+  /// near the person's regular places, at most once per 3 days. Off by default.
+  AGENT_PLACE_TIPS_ENABLED: process.env.AGENT_PLACE_TIPS_ENABLED === "true",
+  /// Per-user preview of place tips, as `SCREENSHOT_LIBRARY_USER_IDS`.
+  AGENT_PLACE_TIPS_USER_IDS: parseUserIdList(process.env.AGENT_PLACE_TIPS_USER_IDS, "AGENT_PLACE_TIPS_USER_IDS"),
   /// Per-user preview of the screenshot library while the flag is off: these
   /// user UUIDs (comma-separated) get the feature as if it were on. Read only
   /// through `services/feature-preview.ts`.

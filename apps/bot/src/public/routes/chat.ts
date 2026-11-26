@@ -65,6 +65,9 @@ import {
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
 import { VIBE_CARD_CLIENT_TOKEN, readVibeCard, vibeCardView } from "../../services/chat-vibe-card.js";
+import { PLACE_SCENE_CLIENT_TOKEN, placeSceneView, readPlaceScene, type PlaceScene } from "../../services/chat-place-scene.js";
+import { ALLOWED_PHOTO_WIDTHS } from "../places-photo.js";
+import { venuePhotoUrl } from "../showcase-photos.js";
 import { readScreenshotsCard, screenshotsCardViews, type ScreenshotsCard } from "../../services/chat-screenshots.js";
 import {
   answerProfilerInChat,
@@ -72,6 +75,15 @@ import {
   postDueProfilerQuestion,
   type ProfilerChatRow,
 } from "../../services/profiler-chat.js";
+
+/**
+ * A place scene as `ChatPlaceScene`, its photos signed now at the card width
+ * (`/v1/venues/:id/photo`, valid a day) — on the live reply and on every
+ * history read, because a stored link would expire.
+ */
+function placeView(scene: PlaceScene, now: number = Date.now()) {
+  return placeSceneView(scene, (venueId) => venuePhotoUrl(venueId, ALLOWED_PHOTO_WIDTHS[1], now));
+}
 
 /**
  * Native cards this build draws under a reply (decision 2026-10-15): the
@@ -96,7 +108,7 @@ function chatCardsOf(req: Request): Set<string> {
  */
 function repliesField(
   req: Request,
-  turn: { id: string; sessionId: string; content: string; attachment?: unknown; offer?: unknown; guide?: unknown; screenshots?: unknown; vibe?: unknown; action?: unknown },
+  turn: { id: string; sessionId: string; content: string; attachment?: unknown; offer?: unknown; guide?: unknown; screenshots?: unknown; vibe?: unknown; place?: unknown; action?: unknown },
   userText: string,
 ): { repliesPending?: true } | Promise<{ repliesPending?: true }> {
   const cards = chatCardsOf(req);
@@ -108,7 +120,7 @@ function repliesField(
     messageId: turn.id,
     userText,
     reply: turn.content,
-    replyHasCard: Boolean(turn.attachment || turn.offer || turn.guide || turn.screenshots || turn.vibe || turn.action),
+    replyHasCard: Boolean(turn.attachment || turn.offer || turn.guide || turn.screenshots || turn.vibe || turn.place || turn.action),
     buildDraws: cards.has(REPLIES_CARD_CLIENT_TOKEN),
     // Mirrors `turnTools`: `check_event` rides the screenshot tools or ideas.
     eventsTool: (screenshotLibraryOn(req.userId) && cards.has("screenshots")) || memoryIdeasOn(req.userId),
@@ -448,6 +460,8 @@ chatRouter.post(
         // The vibe card above the reply and the sticker after it (decision 2026-11-21).
         ...(turn.vibe ? { vibe: turn.vibe } : {}),
         ...(turn.sticker ? { sticker: turn.sticker } : {}),
+        // The place scene after the reply (decision 2026-11-26).
+        ...(turn.place ? { place: placeView(turn.place) } : {}),
         ...chipsExtra,
       };
     }).catch((err: unknown) => {
@@ -620,6 +634,8 @@ chatRouter.post(
           // The vibe card above the reply and the sticker after it (decision 2026-11-21).
           ...(turn.vibe ? { vibe: turn.vibe } : {}),
           ...(turn.sticker ? { sticker: turn.sticker } : {}),
+          // The place scene after the reply (decision 2026-11-26).
+          ...(turn.place ? { place: placeView(turn.place) } : {}),
           ...chipsExtra,
         },
       };
@@ -771,6 +787,11 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       : null;
 
   const vibeCardsDrawn = chatCardsOf(req).has(VIBE_CARD_CLIENT_TOKEN);
+  // Place scenes (decision 2026-11-26): drawn as shown, photo links signed now.
+  // Only for a build that draws them; not behind the flag, like the vibe card —
+  // a scene already in a chat stays in it.
+  const placeScenesDrawn = chatCardsOf(req).has(PLACE_SCENE_CLIENT_TOKEN);
+  const historyNow = Date.now();
   // Reactions (decision 2026-11-24): on every row, both sides possibly null,
   // only for a build that draws them with the feature on — the app reads the
   // field's presence as «show the reaction UI».
@@ -785,6 +806,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
     const rowGuide = row.role === "assistant" ? readAppGuide(row.attachment) : null;
     // Vibe cards (decision 2026-11-21) only for a build that draws them.
     const rowVibe = row.role === "assistant" && vibeCardsDrawn ? readVibeCard(row.attachment) : null;
+    const rowPlace = row.role === "assistant" && placeScenesDrawn ? readPlaceScene(row.attachment) : null;
     const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
     return {
       id: row.id,
@@ -803,6 +825,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       ...(rowGuide ? { guide: appGuideView(rowGuide) } : {}),
       ...(rowVibe ? { vibe: vibeCardView(rowVibe) } : {}),
       ...(rowVibe?.sticker ? { sticker: rowVibe.sticker } : {}),
+      ...(rowPlace ? { place: placeView(rowPlace, historyNow) } : {}),
       ...(shotById.get(row.id) ? { screenshots: shotById.get(row.id) } : {}),
       ...(chips && chips.id === row.id ? { replies: chips.replies } : {}),
       ...(reminderById.get(row.id) ? { reminder: reminderById.get(row.id) } : {}),
