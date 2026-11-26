@@ -237,9 +237,12 @@ the founder's separate «да» for the deploy and the migrations.
    stays on the screen (pinned banner entry, concierge) and after an explicit
    decline. The next-date discount on the waiting notices is kept
    unchanged, because it leads to a real date.
-4. **Quiet hours for the campus drop and the T+24h feedback prompt.** Defer
-   them to the next allowed window like the other nudges.
-   Recommendation: yes.
+4. **Quiet hours for the campus drop and the T+24h feedback prompt —
+   built.** Both wait for the first tick after 09:00 Kyiv, like the other
+   nudges (`workers/quiet-hours.ts`). The campus drop creates nothing at
+   night (`workers/campus-drop.ts`), so no proposal deadline starts while the
+   person sleeps. The T+24h prompt and its push are held, while the match
+   still turns `completed` on time (`services/date-lifecycle.ts`).
 5. **Announcements cap.** At most one announcement push per person per
    week; the inbox row is still written. Recommendation: yes.
 6. **A per-type mute** («only my dates») in settings. It needs a schema

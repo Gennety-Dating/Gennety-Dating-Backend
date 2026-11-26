@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { campusRadarTick } from "../services/campus-radar.js";
 import { dispatchMatches } from "../services/dispatch-queue.js";
+import { isQuietHours } from "./quiet-hours.js";
 
 /**
  * Hourly sweep for the Bonus Campus Drop (PRODUCT_SPEC §Campus Radar).
@@ -14,7 +15,12 @@ import { dispatchMatches } from "../services/dispatch-queue.js";
  * is cheap when nothing is happening (two grouped counts) and everything it
  * could do is bounded by the cooldown anyway.
  */
-export async function campusDropTick(api: Api<RawApi>): Promise<void> {
+export async function campusDropTick(api: Api<RawApi>, now: Date = new Date()): Promise<void> {
+  // Quiet hours (agent concept phase 4 item 4, founder 2026-11-26): a drop is
+  // a pitch, so it waits for the first hourly tick after 09:00 Kyiv, like the
+  // other nudges. Nothing is created at night either, so no proposal's
+  // deadline starts running while the person sleeps.
+  if (isQuietHours(now)) return;
   try {
     const result = await campusRadarTick();
     // Silent on the ordinary tick. A campus that earned a drop and was

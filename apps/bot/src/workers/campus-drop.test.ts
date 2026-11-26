@@ -11,6 +11,8 @@ import { campusDropTick } from "./campus-drop.js";
 const radar = campusRadarTick as unknown as ReturnType<typeof vi.fn>;
 const dispatch = dispatchMatches as unknown as ReturnType<typeof vi.fn>;
 const api = {} as Api<RawApi>;
+// 12:00 Kyiv — outside quiet hours, so the tick runs.
+const DAY = new Date("2026-11-26T10:00:00Z");
 
 describe("campusDropTick", () => {
   // A13-M24: the tick used to log and swallow, so `guardedTick` counted every
@@ -19,7 +21,7 @@ describe("campusDropTick", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     radar.mockRejectedValueOnce(new Error("allocator down"));
 
-    await expect(campusDropTick(api)).rejects.toThrow("allocator down");
+    await expect(campusDropTick(api, DAY)).rejects.toThrow("allocator down");
     expect(error).toHaveBeenCalledWith("[campus-drop] tick failed:", expect.any(Error));
     error.mockRestore();
   });
@@ -28,7 +30,7 @@ describe("campusDropTick", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     radar.mockResolvedValueOnce({ scanned: 3, dropped: [], matchIds: [] });
 
-    await expect(campusDropTick(api)).resolves.toBeUndefined();
+    await expect(campusDropTick(api, DAY)).resolves.toBeUndefined();
     expect(log).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
     log.mockRestore();
@@ -41,9 +43,18 @@ describe("campusDropTick", () => {
     radar.mockResolvedValueOnce({ scanned: 1, dropped: ["kpi.ua"], matchIds: ["m1", "m2"] });
     dispatch.mockResolvedValueOnce({ dispatched: 2, failed: 0, errors: [], undelivered: [] });
 
-    await campusDropTick(api);
+    await campusDropTick(api, DAY);
 
     expect(dispatch).toHaveBeenCalledWith(api, ["m1", "m2"]);
     log.mockRestore();
+  });
+
+  it("waits out quiet hours: no drop is created or dispatched at night (phase 4 item 4)", async () => {
+    radar.mockClear();
+    dispatch.mockClear();
+    // 02:00 Kyiv
+    await campusDropTick(api, new Date("2026-11-26T00:00:00Z"));
+    expect(radar).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

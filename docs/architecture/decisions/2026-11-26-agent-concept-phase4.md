@@ -67,3 +67,17 @@ proactive senders, not from the agent. Each item below changes one of them.
    (`no-match-notifier.ts`), and the Rematch offer after an explicit decline,
    which is the product's own pull moment and was not part of this item.
 3. Demo mode: the demo has no paid Rematch to sell; nothing to branch.
+
+## Item 4 — Quiet hours for the campus drop and the T+24h prompt (built)
+
+1. Both use the same Kyiv window as match nudges and re-engagement
+   (`workers/quiet-hours.ts`, 23:00–09:00) and wait for the first tick after
+   09:00. The zone is Kyiv on purpose: it is the window the other nudges use,
+   and one market has one night.
+2. The campus drop's hourly tick does nothing at night. Nothing is created
+   either, so a pitch's 24-hour deadline never starts while the person sleeps.
+3. The T+24h prompt (Telegram question and app push) is held; the match still
+   turns `completed` on time, and `feedbackPromptedAt: null` keeps it due for
+   the morning tick.
+4. Demo mode: the demo runs no campus drop; the T+24h prompt follows the same
+   window there.

@@ -930,7 +930,7 @@ describe("date-lifecycle tick", () => {
   });
 
   it("asks whether the date happened at T+24h, before the feedback form", async () => {
-    const agreedTime = new Date("2026-04-08T19:00:00Z");
+    const agreedTime = new Date("2026-04-08T15:00:00Z");  // T+25h = 19:00 Kyiv, outside quiet hours
     // now = 25h after the date
     const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
 
@@ -990,7 +990,7 @@ describe("date-lifecycle tick", () => {
     // date (a profile read failing, a row cascaded away by an account deletion
     // mid-loop) aborted the whole tick — and with it the `scheduled →
     // completed` flip and the attendance question for every past date.
-    const agreedTime = new Date("2026-04-08T19:00:00Z");
+    const agreedTime = new Date("2026-04-08T15:00:00Z");  // T+25h = 19:00 Kyiv, outside quiet hours
     const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
     stubLifecycleQueries({
       upcoming: [
@@ -1020,6 +1020,33 @@ describe("date-lifecycle tick", () => {
 
     expect(result.icebreakers).toBe(0);
     expect(result.feedbacks).toBe(1);
+  });
+
+  it("holds the T+24h prompt in quiet hours but still completes the date (phase 4 item 4)", async () => {
+    const agreedTime = new Date("2026-04-08T19:00:00Z");
+    // T+25h = 23:00 Kyiv (UTC+3) — quiet hours
+    const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
+    stubLifecycleQueries({
+      feedback: [
+        {
+          id: "match-q",
+          agreedTime,
+          userA: { id: "ua-q", telegramId: 3001n, language: "en", theme: "light" },
+          userB: { id: "ub-q", telegramId: 3002n, language: "uk", theme: "dark" },
+        },
+      ],
+    });
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+
+    const result = await runDateLifecycleTick(api, now);
+
+    expect(result.feedbacks).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalledWith(3001, expect.anything(), expect.anything());
+    const calls = mMatch.updateMany.mock.calls.map((c: any[]) => c[0]);
+    const completion = calls.find((c: any) => c.data?.status === "completed" && !("feedbackPromptedAt" in c.data));
+    expect(completion?.where).toMatchObject({ status: "scheduled", feedbackPromptedAt: null });
+    expect(calls.some((c: any) => c.data?.feedbackPromptedAt)).toBe(false);
   });
 
   it("does NOT re-prompt feedback once feedbackPromptedAt is set (C-1)", async () => {

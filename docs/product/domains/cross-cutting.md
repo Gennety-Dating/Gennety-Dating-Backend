@@ -157,7 +157,12 @@ A test checks every HTML entry's module for the call.
 ### Quiet Hours
 
 23:00–09:00 Europe/Kyiv. Enforced inside the **re-engagement** and
-**match-nudge** workers (deferred to next 13:00 / next allowed window).
+**match-nudge** workers (deferred to next 13:00 / next allowed window), and
+since 2026-11-26 (agent concept phase 4 item 4) for the **campus drop** (the
+hourly tick does nothing at night, so no drop is created or pitched before
+the first tick after 09:00) and the **T+24h feedback prompt** (held to the
+first tick after 09:00; the match still turns `completed` on time, only the
+message and its push wait).
 Pinned status-banner edits and the proposal-countdown button re-render are
 exempt (no notifications) — they only re-edit an existing message's markup.
 (The match-nudge deadline heads-up IS a notification, so it stays under the
