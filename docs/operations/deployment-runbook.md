@@ -837,7 +837,9 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `BOT_FLOOD_BURST_WINDOW_MS` (`60000`), `BOT_FLOOD_SUSTAINED_LIMIT` (`300`) /
   `BOT_FLOOD_SUSTAINED_WINDOW_MS` (`3600000`), `LLM_TOKEN_BUDGET_ENABLED`
   (default `true`), `LLM_USER_DAILY_TOKEN_BUDGET` (`180000`),
-  `LLM_GLOBAL_HOURLY_TOKEN_BUDGET` (`0` = global breaker off). Thresholds are
+  `LLM_GLOBAL_HOURLY_TOKEN_BUDGET` (`0` = global breaker off),
+  `LLM_CACHED_TOKEN_WEIGHT` (`0.1` — a cached prompt token's share in both
+  budgets), `LLM_USAGE_LOG` (default on — `[llm-usage]` lines). Thresholds are
   deliberately loose so normal fast use never trips them. Counters are in-memory
   (single PM2 process) and reset on restart — no `db:push`, toggled live with
   `pm2 restart gennety-bot --update-env`. Whisper (audio) stays under the

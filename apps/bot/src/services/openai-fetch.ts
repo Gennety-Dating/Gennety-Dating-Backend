@@ -1,5 +1,7 @@
+import { env } from "../config.js";
 import { normalizeChatCompletion } from "../models.js";
 import { currentUsageKey } from "./usage-context.js";
+import { usageOf } from "./token-usage.js";
 import { usageLimiter } from "./usage-limiter.js";
 
 /**
@@ -7,7 +9,8 @@ import { usageLimiter } from "./usage-limiter.js";
  * usage. Every OpenAI `chat/completions` and `embeddings` response carries an
  * exact, server-counted `usage` object; this wrapper reads
  * `usage.total_tokens` (falling back to prompt+completion) and attributes it to
- * the ambient spender (services/usage-context.ts) plus the global counter,
+ * the ambient spender (services/usage-context.ts) plus the global counter
+ * (cached prompt tokens at a weight, see `usageOf`),
  * then returns the **untouched** response so each call site's own `.json()` /
  * `.text()` parsing keeps working.
  *
@@ -21,12 +24,15 @@ import { usageLimiter } from "./usage-limiter.js";
  */
 
 interface UsagePayload {
+  model?: string;
   usage?: {
     total_tokens?: number;
     prompt_tokens?: number;
     completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
   };
 }
+
 
 const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
 
@@ -80,14 +86,6 @@ function sameTopLevelEntries(
   return true;
 }
 
-function extractTotalTokens(body: unknown): number {
-  const usage = (body as UsagePayload | null)?.usage;
-  if (!usage) return 0;
-  if (typeof usage.total_tokens === "number") return usage.total_tokens;
-  const prompt = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0;
-  const completion = typeof usage.completion_tokens === "number" ? usage.completion_tokens : 0;
-  return prompt + completion;
-}
 
 export const openaiFetch: typeof fetch = async (input, init) => {
   const requestInit = normalizeChatCompletionBody(input, init);
@@ -109,8 +107,15 @@ export const openaiFetch: typeof fetch = async (input, init) => {
       void clone
         .json()
         .then((body: unknown) => {
-          const total = extractTotalTokens(body);
-          if (total > 0) usageLimiter.recordTokens(key, total);
+          const usage = usageOf(body);
+          if (!usage) return;
+          if (usage.counted > 0) usageLimiter.recordTokens(key, usage.counted);
+          if (env.LLM_USAGE_LOG) {
+            const model = (body as UsagePayload | null)?.model ?? "?";
+            console.info(
+              `[llm-usage] key=${key ?? "-"} model=${model} prompt=${usage.prompt} cached=${usage.cached} completion=${usage.completion} counted=${usage.counted}`,
+            );
+          }
         })
         .catch(() => {
           /* best-effort: never let token accounting surface an error */

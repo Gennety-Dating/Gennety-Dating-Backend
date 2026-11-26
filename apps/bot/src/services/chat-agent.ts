@@ -37,6 +37,7 @@ import {
 } from "./chat-reactions.js";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
+import { usageOf, type CallUsage } from "./token-usage.js";
 import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -573,6 +574,25 @@ interface ChatCompletionResponse {
     };
     finish_reason: string;
   }>;
+  usage?: unknown;
+}
+
+/** What one chat turn spent across all its model calls — the `[chat] turn usage` line. */
+interface TurnTally {
+  calls: number;
+  prompt: number;
+  cached: number;
+  completion: number;
+  counted: number;
+}
+
+function addUsage(tally: TurnTally, usage: CallUsage | null): void {
+  tally.calls++;
+  if (!usage) return;
+  tally.prompt += usage.prompt;
+  tally.cached += usage.cached;
+  tally.completion += usage.completion;
+  tally.counted += usage.counted;
 }
 
 export interface ChatTurnInput {
@@ -807,6 +827,7 @@ async function runTurnInner(
   const screenshotTurn = newScreenshotTurnState();
   /** A typed yes that ran the open offer's tool: its card turns `accepted`. */
   let answeredOffer: { messageId: string; receipt: string | null } | null = null;
+  const tally: TurnTally = { calls: 0, prompt: 0, cached: 0, completion: 0, counted: 0 };
   // A photo is read by the first model call; a video was read just before it
   // and stays on screen while the model takes it in.
   if (imageUrls.length > 0) report("reading_photo");
@@ -817,7 +838,7 @@ async function runTurnInner(
     // further tool call moves the status on to that tool.
     if (iteration > 0) report("writing");
     // After a card or a reaction an empty line is an answer, not a failure.
-    const called = await completeWithRetry(messages, fetchFn, { tools, ...(vibe || agentReaction ? { allowEmpty: true } : {}) });
+    const called = await completeWithRetry(messages, fetchFn, { tools, tally, ...(vibe || agentReaction ? { allowEmpty: true } : {}) });
     if (!called.ok) {
       failure = called.reason;
       break;
@@ -1230,9 +1251,17 @@ async function runTurnInner(
   // tools off, so the turn ends in words about what was done, not a fallback.
   if (!lastReply && !failure && iteration >= MAX_TOOL_ITERATIONS) {
     report("writing");
-    const closing = await completeWithRetry(messages, fetchFn, { tools, toolChoice: "none" });
+    const closing = await completeWithRetry(messages, fetchFn, { tools, tally, toolChoice: "none" });
     if (closing.ok) lastReply = finishReply(closing.choice);
     else failure = `closing call: ${closing.reason}`;
+  }
+
+  // The measurement behind the cached-token weight (decision 2026-11-26): how
+  // many calls one message cost and how much of the prompt the cache served.
+  if (env.LLM_USAGE_LOG) {
+    console.info(
+      `[chat] turn usage user=${userId} calls=${tally.calls} images=${countImages(messages)} prompt=${tally.prompt} cached=${tally.cached} completion=${tally.completion} counted=${tally.counted}`,
+    );
   }
 
   // Gennety reacted and wrote nothing (decision 2026-11-24): the reaction is
@@ -1587,7 +1616,11 @@ async function buildChatMessages(
         const parts: Array<TextPart | ImagePart> = [];
         if (turnText) parts.push({ type: "text", text: turnText });
         for (const { url, path } of earlier.signed) {
-          parts.push({ type: "image_url", image_url: { url } });
+          // Low detail (decision 2026-11-26): the photo was read in full on its
+          // own turn and the reply about it is in the history; here it only
+          // has to stay recognisable, at ~85 tokens instead of 1–1.5k, on
+          // every later call of every later turn.
+          parts.push({ type: "image_url", image_url: { url, detail: "low" } });
           parts.push({ type: "text", text: `[imageUrl=${path}]` });
           visiblePhotos.add(path);
         }
@@ -1763,6 +1796,19 @@ interface CallOptions {
   toolChoice?: "none";
   /** A vibe card is already in this reply: an empty line after it is an answer, not a failure. */
   allowEmpty?: boolean;
+  /** The turn's running spend; every answered call adds to it, retries included. */
+  tally?: TurnTally;
+}
+
+/** Photos the model is shown in this context, the turn's own and earlier ones. */
+function countImages(messages: OpenAIChatMessage[]): number {
+  let n = 0;
+  for (const message of messages) {
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) if ((part as { type?: unknown }).type === "image_url") n++;
+  }
+  return n;
 }
 
 async function callOpenAI(
@@ -1795,6 +1841,7 @@ async function callOpenAI(
       return { ok: false, reason: `HTTP ${res.status}`, status: res.status };
     }
     const completion = (await res.json()) as ChatCompletionResponse;
+    if (options.tally) addUsage(options.tally, usageOf(completion));
     const choice = completion.choices?.[0];
     if (!choice) return { ok: false, reason: "no choices" };
     const hasTools = (choice.message.tool_calls?.length ?? 0) > 0;

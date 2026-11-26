@@ -11,6 +11,24 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+## **PENDING** — token budget: cached tokens at a tenth + usage log (2026-11-26)
+
+Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`.
+Code only: no schema, no migration, no required env. Optional env:
+`LLM_CACHED_TOKEN_WEIGHT` (default `0.1`), `LLM_USAGE_LOG` (default on).
+Demo mode: same code and defaults, no flow change. iOS: none (same 429 body).
+
+```bash
+# after deploy + one app chat message:
+pm2 logs gennety-bot --lines 200 --nostream | grep -E "\[llm-usage\]|\[chat\] turn usage"
+# → counted far below prompt when cached is high; calls=1–2 for a plain turn
+```
+
+**Rollback:** `LLM_CACHED_TOKEN_WEIGHT=1` + `pm2 restart gennety-bot --update-env`
+restores the old count; or revert the commit.
+
+---
+
 # Gennety Dating Deploy
 
 **PENDING 2026-11-26 — agent concept phase 4: the proactive senders (needs the founder's separate «да» for the deploy and the migrations)**

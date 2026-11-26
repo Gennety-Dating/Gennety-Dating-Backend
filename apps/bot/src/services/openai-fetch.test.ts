@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { normalizeChatCompletion } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
+import { usageOf } from "./token-usage.js";
 import { runWithUsage } from "./usage-context.js";
 import { usageLimiter } from "./usage-limiter.js";
 
@@ -59,6 +60,37 @@ describe("openaiFetch token metering", () => {
     expect(parsed).toEqual(body);
     await flush();
     expect(record).toHaveBeenCalledWith("tg:42", 955);
+  });
+
+  it("counts cached prompt tokens at a tenth and logs the split", async () => {
+    const body = {
+      model: "gpt-6-luna",
+      usage: {
+        prompt_tokens: 10_000,
+        completion_tokens: 200,
+        total_tokens: 10_200,
+        prompt_tokens_details: { cached_tokens: 9_000 },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
+    const record = vi.spyOn(usageLimiter, "recordTokens").mockImplementation(() => {});
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    await runWithUsage("user:u1", () => openaiFetch("https://api.openai.com/v1/chat/completions"));
+    await flush();
+
+    // 1 000 fresh + 9 000 cached × 0.1 + 200 completion.
+    expect(record).toHaveBeenCalledWith("user:u1", 2_100);
+    expect(log).toHaveBeenCalledWith(
+      "[llm-usage] key=user:u1 model=gpt-6-luna prompt=10000 cached=9000 completion=200 counted=2100",
+    );
+  });
+
+  it("usageOf: weight 1 is the old whole count; cached never exceeds the prompt", () => {
+    const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110, prompt_tokens_details: { cached_tokens: 500 } };
+    expect(usageOf({ usage }, 1)?.counted).toBe(110);
+    expect(usageOf({ usage }, 0)).toEqual({ prompt: 100, cached: 100, completion: 10, counted: 10 });
+    expect(usageOf({}, 0.1)).toBeNull();
   });
 
   it("falls back to prompt+completion when total_tokens is absent", async () => {

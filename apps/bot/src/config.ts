@@ -1184,6 +1184,18 @@ export const env = {
   LLM_GLOBAL_HOURLY_TOKEN_BUDGET: Number(
     process.env.LLM_GLOBAL_HOURLY_TOKEN_BUDGET ?? "0",
   ),
+  /// Weight of a cached prompt token in both budgets above (decision
+  /// 2026-11-26). OpenAI bills a cached input token at about a tenth of a fresh
+  /// one; counting it whole made the system prompt and history, re-sent on
+  /// every call, exhaust a person's day in a handful of turns. 1 restores the
+  /// old whole-token count; the value is clamped to 0..1.
+  LLM_CACHED_TOKEN_WEIGHT: ((raw: number) => (Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.1))(
+    Number(process.env.LLM_CACHED_TOKEN_WEIGHT ?? "0.1"),
+  ),
+  /// One `[llm-usage]` log line per OpenAI call (prompt, cached, completion,
+  /// counted) and one `[chat] turn usage` line per chat turn — the measurement
+  /// behind the weight above. "false" silences both.
+  LLM_USAGE_LOG: process.env.LLM_USAGE_LOG !== "false",
 
   // ── Demo mode (DEMO_MODE.md) ────────────────────────────────
   /// Master switch for the investor/friends demo runtime. **Production never
