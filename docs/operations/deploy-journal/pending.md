@@ -37,7 +37,7 @@ goes back only by reverting its commit.
 
 # Gennety Dating Deploy
 
-**PENDING 2026-11-26 — agent concept phase 4: the proactive senders (needs the founder's separate «да» for the deploy and the migrations)**
+**Deployed 2026-11-26 (was PENDING; production `ca1e08a6`, see [2026-11-26-agent-concept-phase4.md](./2026-11-26-agent-concept-phase4.md)) 2026-11-26 — agent concept phase 4: the proactive senders**
 
 1. Code: decision [2026-11-26-agent-concept-phase4](../../architecture/decisions/2026-11-26-agent-concept-phase4.md),
    spec `docs/product/domains/agent-concept.md` phase 4. Items, one commit each on `main`:

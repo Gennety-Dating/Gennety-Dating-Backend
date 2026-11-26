@@ -7,8 +7,9 @@ adaptation built the same day** (code: `packages/shared/src/agent-concept.ts`,
 `apps/bot/src/services/agent-concept.ts`, flag `AGENT_CONCEPT_ENABLED`;
 eval: `apps/bot/scripts/concept-eval.ts`; decision
 [2026-11-19-agent-concept.md](../../architecture/decisions/2026-11-19-agent-concept.md)).
-Product-flow changes found by the audit wait for the founder (phase 4 below).
-Not on production until the founder says yes.
+The prompt block has been on production since 2026-11-24 (`35661eb5`). The
+product-flow changes found by the audit (phase 4 below) have been on
+production since 2026-11-26 (`ca1e08a6`).
 
 Other sessions read this file and add their own agent hints as separate
 modules. A new block must not contradict the principles below.
@@ -209,8 +210,9 @@ Results on 2026-11-19 (`gpt-6-luna` answering, `gpt-6.1-sol` judging):
 These change a user flow or a product rule. On 2026-11-26 the founder answered
 «Да, внедряй» to all nine as written (decision
 [2026-11-26-agent-concept-phase4.md](../../architecture/decisions/2026-11-26-agent-concept-phase4.md)).
-Each item says whether it is built, kept or waiting. Not on production until
-the founder's separate «да» for the deploy and the migrations.
+Each item says whether it is built, kept or waiting. Deployed with both
+migrations on 2026-11-26 after the founder's «Да, выкатывай»
+([deploy journal](../../operations/deploy-journal/2026-11-26-agent-concept-phase4.md)).
 
 1. **Profiler batches in Telegram — built.** Two ignored Telegram questions
    in a row pause Telegram batches for 14 days; any answer or skip resets the
