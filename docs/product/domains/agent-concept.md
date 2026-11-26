@@ -224,9 +224,14 @@ the founder's separate «да» for the deploy and the migrations.
    (`isProfilerStopRequest`), `workers/profiler.ts`,
    `services/notification-settings.ts`. Migration
    `20261126100000_profiler_pause_off_switch`.
-2. **Onboarding re-engagement.** Cap the chain at five touches per account
-   for life instead of restarting it, and change the LLM brief from «bring
-   them back» to «name the one step left». Recommendation: yes.
+2. **Onboarding re-engagement — built.** At most five touches per account
+   for life: activity moves the anchor and the worker re-times the next touch
+   to its own slot, but `reEngagementStep` is never reset, and a spent chain
+   an activity wakes is parked without a send. The LLM brief names the one
+   step left; «ты ещё тут?», «вернёшься?» and pleas are listed as bad. No
+   schema change. Code: `workers/re-engagement.ts`,
+   `workers/re-engagement-schedule.ts` (`touchTimeFor`). The
+   verification-stall reminder (kept by the audit) is untouched.
 3. **Paid offers on care messages.** Keep the next-date discount on the
    waiting notices, because it leads to a real date. Drop the Rematch offer
    from the expired-match notice and leave it on the screen.

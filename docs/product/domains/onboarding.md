@@ -1939,12 +1939,18 @@ rehabilitation and admin moderation handles borderline cases.
 
 ### 1.5 Re-engagement chain
 
-Drop-off during onboarding triggers a 5-step retention loop
-(`workers/re-engagement.ts`). Steps fire at +15 min, +2 h, day-of 19:00,
-day-of+1 19:00, day-of+2 14:00 (Kyiv). Quiet hours **23:00–09:00 Kyiv** are
-deferred to the next 13:00. Any user activity (consent click, language pick,
-agent reply, photo upload) resets the chain to step 0; finishing onboarding
-nulls `reEngagementNextAt` permanently.
+Drop-off during onboarding triggers at most five touches **per account, for
+life** (`workers/re-engagement.ts`; agent concept phase 4 item 2, founder
+2026-11-26). Steps fire at +15 min, +2 h, day-of 19:00, day-of+1 19:00,
+day-of+2 14:00 (Kyiv), counted from the latest drop-off. Quiet hours
+**23:00–09:00 Kyiv** are deferred to the next 13:00. User activity (consent
+click, language pick, agent reply, photo upload) moves the anchor but **no
+longer restarts the chain**: `reEngagementStep` is the lifetime count, the
+worker re-times the next touch to its own slot from the new drop-off, and
+after the fifth nothing more is sent. Finishing onboarding nulls
+`reEngagementNextAt` permanently. Each touch's LLM brief is «name the one step
+left» — never «bring them back»; the fifth lets them go. (Before 2026-11-26
+any activity reset the chain to step 0, so it had no lifetime cap.)
 
 **The nudge names the step the user actually stopped on (2026-08-12), which
 `User.onboardingStep` cannot say.** That column has four values, and the entry

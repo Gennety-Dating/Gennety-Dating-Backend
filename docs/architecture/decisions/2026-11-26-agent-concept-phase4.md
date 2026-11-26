@@ -43,3 +43,18 @@ proactive senders, not from the agent. Each item below changes one of them.
 5. Demo mode: the same. The demo bot runs the same worker and menu; a visitor
    who says «не спрашивай больше» gets the same switch, and it goes with the
    demo reset.
+
+## Item 2 — Onboarding re-engagement (built)
+
+1. At most five touches per account, for life. `reEngagementStep` is now the
+   lifetime count: `onboardingActivityPatch` no longer resets it, it only moves
+   `lastMessageAt` (the anchor) and wakes the worker 15 minutes later.
+2. The worker re-times a touch woken early to its own slot from the new
+   anchor (`touchTimeFor`), and parks a spent chain (`reEngagementNextAt =
+   null`) without a send. No schema change.
+3. The LLM brief changed from «bring them back» to «name the one step left»:
+   no «come back», no «we miss you», and the fifth touch lets them go. The
+   Telegram fallbacks (used only when the model call fails) are unchanged.
+4. Not changed: the verification-stall reminder, which the audit kept; it
+   still re-arms at the verification CTA.
+5. Demo mode: the demo bot runs the same worker; nothing to branch.

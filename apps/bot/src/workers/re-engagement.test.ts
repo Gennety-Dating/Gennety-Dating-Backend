@@ -39,7 +39,7 @@ vi.mock("../config.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { reEngagementTick, getFallbackMessage } from "./re-engagement.js";
-import { MAX_RE_ENGAGEMENT_STEP } from "./re-engagement-schedule.js";
+import { MAX_RE_ENGAGEMENT_STEP, onboardingActivityPatch, touchTimeFor } from "./re-engagement-schedule.js";
 
 function createMockApi() {
   return {
@@ -185,7 +185,7 @@ describe("re-engagement worker", () => {
     const mockFetch = vi.fn().mockResolvedValue(openaiTextResponse("last one"));
     const api = createMockApi();
 
-    await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+    await reEngagementTick(api, { fetchFn: mockFetch, now: touchTimeFor(MAX_RE_ENGAGEMENT_STEP, DROPOFF_TIME)! });
 
     const updateArgs = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(updateArgs.data.reEngagementStep).toBe(MAX_RE_ENGAGEMENT_STEP);
@@ -232,7 +232,7 @@ describe("re-engagement worker", () => {
     const mockFetch = vi.fn().mockResolvedValue(openaiTextResponse("evening nudge"));
     const api = createMockApi();
 
-    await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+    await reEngagementTick(api, { fetchFn: mockFetch, now: touchTimeFor(3, DROPOFF_TIME)! });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.messages[0].content).toContain("Touch 3 of 5");
@@ -439,5 +439,62 @@ describe("verification-stall nudges (Registration v2)", () => {
 
     expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
     expect(sendVerificationReminderMock).not.toHaveBeenCalled();
+  });
+
+  describe("five touches for life (agent concept phase 4 item 2)", () => {
+    it("onboarding activity moves the anchor but never resets the count", () => {
+      const patch = onboardingActivityPatch(DAY_TIME);
+      expect(patch).not.toHaveProperty("reEngagementStep");
+      expect(patch.lastMessageAt).toEqual(DAY_TIME);
+      expect(patch.reEngagementNextAt).toBeInstanceOf(Date);
+    });
+
+    it("sends nothing to a spent chain an activity woke, and parks it", async () => {
+      (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        {
+          telegramId: BigInt(901), onboardingStep: "conversational", messageHistory: [],
+          language: "en", firstName: null, lastMessageAt: DROPOFF_TIME,
+          reEngagementStep: MAX_RE_ENGAGEMENT_STEP,
+        },
+      ]).mockResolvedValueOnce([]);
+      const mockFetch = vi.fn();
+      const api = createMockApi();
+      const sent = await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+      expect(sent).toBe(0);
+      expect(mockFetch).not.toHaveBeenCalled();
+      const update = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(update.data).toEqual({ reEngagementNextAt: null });
+    });
+
+    it("re-times a touch woken early by activity to its own slot instead of sending", async () => {
+      (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        {
+          telegramId: BigInt(902), onboardingStep: "conversational", messageHistory: [],
+          language: "en", firstName: null, lastMessageAt: DROPOFF_TIME,
+          reEngagementStep: 3, // touch 4 belongs to the next evening
+        },
+      ]).mockResolvedValueOnce([]);
+      const mockFetch = vi.fn();
+      const api = createMockApi();
+      const sent = await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+      expect(sent).toBe(0);
+      const update = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(update.data.reEngagementNextAt).toEqual(touchTimeFor(4, DROPOFF_TIME));
+      expect(update.where.reEngagementStep).toBe(3);
+    });
+
+    it("the brief asks to name the one step left, not to bring them back", async () => {
+      (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        {
+          telegramId: BigInt(903), onboardingStep: "conversational", messageHistory: [],
+          language: "ru", firstName: null, lastMessageAt: DROPOFF_TIME, reEngagementStep: 0,
+        },
+      ]).mockResolvedValueOnce([]);
+      const mockFetch = vi.fn().mockResolvedValue(openaiTextResponse("осталось фото"));
+      await reEngagementTick(createMockApi(), { fetchFn: mockFetch, now: touchTimeFor(1, DROPOFF_TIME)! });
+      const prompt = JSON.parse(mockFetch.mock.calls[0][1].body).messages[0].content as string;
+      expect(prompt).toContain("names the one step left");
+      expect(prompt).not.toContain("bring them back");
+    });
   });
 });

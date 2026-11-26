@@ -11,6 +11,12 @@
  *   step 5: day+2 14:00 Kyiv         (afternoon free window)
  *   step 6+: null                    (chain exhausted)
  *
+ * Lifetime cap (agent concept phase 4 item 2, founder 2026-11-26): at most
+ * `MAX_RE_ENGAGEMENT_STEP` touches per account, ever. Onboarding activity no
+ * longer restarts the chain: `reEngagementStep` is the lifetime count, and
+ * activity only moves the anchor, so the next touch keeps its own spacing
+ * from the new drop-off moment.
+ *
  * Hard quiet hours: 23:00–09:00 Kyiv. Any computed touch falling inside this
  * window is deferred to the next 13:00 Kyiv (start of the 13:00–19:00 free
  * window). A minimum gap from `lastMessageAt` is also enforced per step so
@@ -66,6 +72,18 @@ export function computeNextTouch(
     Math.max(anchor.getTime(), minAt.getTime(), futureFloor.getTime()),
   );
   return shiftOutOfQuietHours(candidate);
+}
+
+/**
+ * When touch `step` is due for a drop-off at `lastMessageAt`, with no
+ * "not in the past" floor — the worker uses it to tell a touch that is really
+ * due from one an activity patch merely woke early (phase 4 item 2).
+ */
+export function touchTimeFor(step: number, lastMessageAt: Date): Date | null {
+  if (step < 1 || step > MAX_RE_ENGAGEMENT_STEP) return null;
+  const anchor = computeAnchor(step, lastMessageAt);
+  const minAt = new Date(lastMessageAt.getTime() + MIN_OFFSET_MS[step]!);
+  return shiftOutOfQuietHours(new Date(Math.max(anchor.getTime(), minAt.getTime())));
 }
 
 function computeAnchor(step: number, lastMessageAt: Date): Date {
@@ -159,17 +177,18 @@ function buildKyivUtc(
 
 /**
  * Prisma update patch for recording onboarding activity. Bumps
- * `lastMessageAt` and resets the re-engagement chain so the next touch fires
- * 15 min after the moment supplied.
+ * `lastMessageAt` (the chain's anchor) and wakes the worker no earlier than
+ * 15 min later. It deliberately does NOT reset `reEngagementStep` — that is
+ * the lifetime count of touches (agent concept phase 4 item 2). The worker
+ * re-times the next touch to its own slot from the new anchor
+ * (`touchTimeFor`), and sends nothing once the count reached the cap.
  */
 export function onboardingActivityPatch(now: Date = new Date()): {
   lastMessageAt: Date;
-  reEngagementStep: number;
   reEngagementNextAt: Date | null;
 } {
   return {
     lastMessageAt: now,
-    reEngagementStep: 0,
     reEngagementNextAt: computeNextTouch(1, now, now),
   };
 }

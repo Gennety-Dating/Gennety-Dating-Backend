@@ -14,6 +14,7 @@ import {
   computeNextTouch,
   MAX_RE_ENGAGEMENT_STEP,
   reEngagementStopPatch,
+  touchTimeFor,
 } from "./re-engagement-schedule.js";
 
 /**
@@ -36,9 +37,12 @@ import {
  * Hard quiet-hours 23:00–09:00 Kyiv are enforced inside `computeNextTouch`
  * by deferring the send to the following 13:00 Kyiv.
  *
- * Chain reset: any user activity (consent click, language pick, any
- * conversational reply, photo upload) resets step to 0 and schedules a new
- * touch 1. Onboarding completion nulls the next-at and halts the chain.
+ * Lifetime cap (agent concept phase 4 item 2, founder 2026-11-26): at most
+ * five touches per account, ever. Activity (consent click, language pick, any
+ * conversational reply, photo upload) no longer restarts the chain — it only
+ * moves the anchor and wakes the worker, which re-times the next touch to its
+ * own slot from the new drop-off and sends nothing past the fifth.
+ * Onboarding completion nulls the next-at and halts the chain.
  */
 
 export interface ReEngagementOptions {
@@ -129,8 +133,29 @@ export async function reEngagementTick(
 
     const currentStep = user.reEngagementStep;
     const nextStep = currentStep + 1;
-
     const anchor = user.lastMessageAt ?? now;
+
+    // Five touches for life: an activity patch woke a chain that is already
+    // spent. Park it; nothing is sent.
+    if (currentStep >= MAX_RE_ENGAGEMENT_STEP) {
+      await prisma.user.updateMany({
+        where: { telegramId: user.telegramId, reEngagementStep: currentStep, reEngagementNextAt: { not: null, lte: now } },
+        data: { reEngagementNextAt: null },
+      });
+      continue;
+    }
+
+    // Activity wakes the worker 15 min later whatever the step; touch 4 still
+    // belongs to the next evening after the new drop-off. Re-time, don't send.
+    const dueAt = touchTimeFor(nextStep, anchor);
+    if (dueAt && dueAt.getTime() > now.getTime()) {
+      await prisma.user.updateMany({
+        where: { telegramId: user.telegramId, reEngagementStep: currentStep, reEngagementNextAt: { not: null, lte: now } },
+        data: { reEngagementNextAt: dueAt },
+      });
+      continue;
+    }
+
     const following =
       nextStep > MAX_RE_ENGAGEMENT_STEP
         ? null
@@ -241,22 +266,23 @@ export async function reEngagementTick(
 
 /**
  * Tone hint for the LLM prompt based on which touch in the chain we're firing.
- * Each successive touch is a touch less urgent — retention loop, not nagging.
+ * Every touch names the one step left (agent concept phase 4 item 2); each is
+ * a touch quieter, and the fifth lets them go.
  */
 function getTouchToneHint(touchIndex: number): string {
   switch (touchIndex) {
     case 1:
-      return "Quick 15-min check-in. A calm one-liner — 'ещё тут?' energy, nothing more.";
+      return "15 minutes after they stopped. One calm line naming the step left, nothing more.";
     case 2:
-      return "Second check-in (~2h later). Still low-key; just note the profile is almost done.";
+      return "About two hours later. Still one line: the step, and that it is small.";
     case 3:
-      return "Same-day evening. Plainly: two minutes to wrap it up whenever there's a moment.";
+      return "Same-day evening. The step, plainly; two minutes whenever there's a moment.";
     case 4:
-      return "Next-day evening. A touch warmer — a friend who remembered, no pressure.";
+      return "Next-day evening. A touch warmer — a friend who remembered which step it was, no pressure.";
     case 5:
-      return "Final nudge, day after. Honest, quiet, low-pressure — the last message they'll get.";
+      return "The last message they will ever get about this. Name the step once, quietly, and let them go — no guilt, no 'last chance'.";
     default:
-      return "Warm, low-key reminder.";
+      return "One calm line naming the step left.";
   }
 }
 
@@ -295,7 +321,7 @@ export async function generateHookMessage(
 
   const prompt = `${VOICE_CORE}
 
-Right now you're doing ONE thing: a user started signing up and dropped off partway. Send a single short message to bring them back — the same voice you'd use in any normal chat with them, not a "campaign" blast.
+Right now you're doing ONE thing: a user started signing up and stopped partway. Send a single short message that names the one step left — what it is, and that it is small. That is the whole message. You are not trying to win them back: no "come back", no "we miss you", no hint at what they are missing. If they never return, that is their call. Same voice you'd use in any normal chat with them, not a "campaign" blast.
 
 User info:
 - Name: ${name || "unknown"}
@@ -306,21 +332,22 @@ User info:
 Recent conversation:
 ${lastMessages || "(no messages yet)"}
 
-CRITICAL — the message must match WHERE THEY STOPPED, above. Never name a step they have already passed (do not tell someone to choose a language, confirm a phone or pick a city if the line above says that is behind them), and never invent a step that is not there. Either point at the one thing that is actually next, or stay generic ("вернёшься дописать?") — but a concrete wrong step is the worst possible outcome. ${framing}
+CRITICAL — the message must match WHERE THEY STOPPED, above. Never name a step they have already passed (do not tell someone to choose a language, confirm a phone or pick a city if the line above says that is behind them), and never invent a step that is not there. Name the one thing that is actually next. If the line above does not say clearly what it is, say plainly that sign-up is not finished ("регистрация не дописана — там немного") — a concrete wrong step is the worst possible outcome. ${framing}
 
 Write it in ${lang}. 1–2 short sentences, one idea. Reference something concrete from the conversation if there is one; otherwise keep it simple. Emoji default is ZERO (at most one, only if it truly lands). No begging, no hype, no "заходи скорее!". Do not use step numbers or progress percentages.
 
 CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «упоминал/упоминала», «отвечал/отвечала», «відповів/відповіла», "wróciłeś/wróciłaś"). Rephrase to avoid gendered forms entirely — use infinitives, nouns, or impersonal constructions instead.
 
 Good examples (register, not to copy — pick the framing that fits THIS user's step):
-- "эй, ты ещё тут? осталось подтвердить номер — и всё."
-- "остановились на городе. вернёшься на минуту — и закончим."
-- "still there? just the photos left, then you're done."
+- "осталось подтвердить номер — это минута, и всё."
+- "остановились на городе: выбрать его — последний шаг регистрации."
+- "just the photos left, then the profile is done."
 
 Bad examples (DON'T do this):
 - "Уважаемый пользователь, напоминаем вам..." (corporate)
 - "Incredibly exciting matches await you!" / "У нас уже есть мэтчи 👀 Давай дооформим!" (hype, exclamation, emoji spam)
 - Naming a step that isn't the one above (e.g. "осталось выбрать язык" to someone who already chose it)
+- A plea to return or a hook instead of the step ("ты ещё тут?", "вернёшься?", "мы скучаем", "тебя уже ждут")
 - Any message with gendered past-tense forms in Russian/Ukrainian/Polish (упоминал, ответил, зашёл, wróciłeś/wróciłaś, etc.)
 
 Output ONLY the message text.`;
