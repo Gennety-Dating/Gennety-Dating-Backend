@@ -68,6 +68,12 @@ vi.mock("./chat-sessions.js", () => ({
 }));
 vi.mock("./chat-session-digest.js", () => ({ afterChatTurn: () => undefined }));
 vi.mock("./chat-person-card.js", () => ({ buildPersonCard: async () => null }));
+const REVIEW_BOARD = [
+  { author: "Olena Kovalenko", rating: 5, text: "Уютно, приятно посидеть вечером, вкусные сырники и хорошее вино.", when: "2 недели назад", source: "google", authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false },
+  { author: "Max", rating: 4, text: "Тихая музыка и отличный кофе, можно спокойно посидеть вдвоём и поговорить.", when: "месяц назад", source: "google", authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false },
+];
+const loadPlaceReviews = vi.fn(async (..._args: unknown[]) => REVIEW_BOARD);
+vi.mock("./place-reviews.js", () => ({ loadPlaceReviews: (...args: unknown[]) => loadPlaceReviews(...args) }));
 
 type Sent = { tools: Array<{ function: { name: string } }>; messages: Array<{ role: string; content: unknown; tool_call_id?: string }> };
 let queue: unknown[] = [];
@@ -161,6 +167,25 @@ describe("search, then the scene", () => {
     expect(stored).toMatchObject({ kind: "place_scene", sceneKind: "venue" });
     // One catalog read for the whole turn.
     expect(curatedFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("reviews: the server fetches the board for the place id in their language; the row stores no review text", async () => {
+    const args = { kind: "reviews", title: "Выбери вечер и загляни", venues: [{ id: "v1" }], dishes: [{ name: "сырники" }] };
+    queue = [calls([{ name: "show_place_scene", args }]), plain];
+    const turn = await runChatTurn({ userId: USER, text: "где поужинать?", imageUrls: [], chatCards: PLACES }, { fetchFn, consent });
+    expect(loadPlaceReviews).toHaveBeenCalledWith("pl-1", "ru", expect.any(Date), {});
+    expect(turn.place).toMatchObject({ sceneKind: "reviews", reviews: REVIEW_BOARD, dishes: [{ name: "сырники" }] });
+    const stored = messageCreate.mock.calls.at(-1)![0].data.attachment as Record<string, unknown>;
+    expect(stored).toMatchObject({ sceneKind: "reviews", reviews: [], reviewsFrom: { placeId: "pl-1", language: "ru" } });
+    expect(JSON.stringify(stored)).not.toContain("Тихая музыка");
+  });
+
+  it("reviews with too few good ones: refused, the model is told to pick another kind", async () => {
+    loadPlaceReviews.mockResolvedValueOnce([]);
+    queue = [calls([{ name: "show_place_scene", args: { kind: "reviews", title: "x", venues: [{ id: "v1" }] } }]), plain];
+    const turn = await runChatTurn({ userId: USER, text: "где поужинать?", imageUrls: [], chatCards: PLACES }, { fetchFn, consent });
+    expect(toolReply(1)).toMatchObject({ success: false, error: "too_few_reviews" });
+    expect(turn.place).toBeUndefined();
   });
 
   it("one scene per reply", async () => {

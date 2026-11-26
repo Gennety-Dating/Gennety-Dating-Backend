@@ -1,9 +1,10 @@
-<!-- WHEN_TO_READ: You are touching place scenes in the app chat — `search_venues`, `get_my_places`, `show_place_scene`, `ChatPlaceScene` / the `place` field, the `places` chat-card token, delivery links (Glovo, Bolt Food), the proactive place tip worker, or `AGENT_PLACE_SCENES_ENABLED` / `AGENT_PLACE_TIPS_*`. -->
+<!-- WHEN_TO_READ: You are touching place scenes in the app chat — `search_venues`, `get_my_places`, `show_place_scene`, `ChatPlaceScene` / the `place` field, the `places` chat-card token, the `reviews` board (Google reviews, their storage and attribution), the proactive place tip worker, or `AGENT_PLACE_SCENES_ENABLED` / `AGENT_PLACE_TIPS_*`. -->
 
 # Agent place scenes — answers about places as scenes in the app chat
 
 Status: built on branch `feat/place-scenes` (2026-11-26), not deployed.
-Decision: [2026-11-26-agent-place-scenes](../../architecture/decisions/2026-11-26-agent-place-scenes.md).
+Decision: [2026-11-26-agent-place-scenes](../../architecture/decisions/2026-11-26-agent-place-scenes.md)
+(and its entry «delivery dropped, reviews instead»).
 iOS plan: `docs/product/chat-place-scenes-plan.md` in the iOS repo (drawing,
 motion, sound, haptics of each scene). Contract: `ChatPlaceScene` and its parts
 in `openapi/gennety-v1.yaml`, copied byte-for-byte from the iOS scaffold.
@@ -13,14 +14,21 @@ in `openapi/gennety-v1.yaml`, copied byte-for-byte from the iOS scaffold.
 The founder asked on 2026-11-26 that an answer about a place stops being a text
 bubble: a venue opens as a postcard out of the map, recommendations are dealt
 as cards, the person's regular places become a constellation with a new place
-beside them, delivery shows where to order and what, opening hours turn into a
-dial, a walk into footsteps, and two places fight a duel. The agent should also
-tell the person, unasked, about a good place near where they already go.
+beside them, a place worth an evening comes with a couple of real reviews
+pinned to a board, opening hours turn into a dial, a walk into footsteps, and
+two places fight a duel. The agent should also tell the person, unasked, about
+a good place near where they already go.
+
+The same day the founder dropped delivery: «давать ссылки на Bolt или Glovo —
+неправильно, мы должны вытягивать человека в офлайн, а не давать повод сидеть
+дома». No scene, link, prompt line or tip ever points at ordering in.
 
 ## Phase 1 — The contract and the gate
 
 1. One card type for every scene: `ChatPlaceScene`, with `kind` one of
-   `venue`, `picks`, `regulars`, `delivery`, `hours`, `route`, `versus`.
+   `venue`, `picks`, `regulars`, `reviews`, `hours`, `route`, `versus`.
+   Links (`ChatPlaceLink.provider`) are `maps` or `web` only; a stored link of
+   any other provider is dropped on read.
    - It rides `place` on the `/v1/chat/message` and `/v1/chat/voice` replies
      and on `ChatHistoryMessage`, and is drawn after the reply text.
    - A build lists `places` in `X-Gennety-Chat-Cards` to get it. A build that
@@ -55,7 +63,7 @@ tell the person, unasked, about a good place near where they already go.
      count, price level, open now and the hours label, walking minutes from
      `near`, the nearest of their regular places with minutes, whether the
      place is one of their regulars, a 140-character summary, three tags, and
-     an empty `groundedDishes` list.
+     no dishes and no reviews (those exist only on a `reviews` scene).
 2. The catalog of a city is read once per ten minutes per process, and inside a
    turn only when a place tool is called.
 3. Opening hours are computed from the stored `openingHours` periods and
@@ -103,7 +111,9 @@ tell the person, unasked, about a good place near where they already go.
    - `regulars` is refused without the opt-in or without regular places;
    - `route` is refused without a start (`anchor_ids[0]`: a regular place or a
      catalog place);
-   - `delivery` is refused in a city no linked service covers;
+   - `reviews` is refused when Google gives fewer than two usable reviews
+     (or the place has no Google place ID) — the model is told to pick
+     `venue` or `picks`; `delivery` is no kind and is refused as `bad_kind`;
    - the title is cut to 40 characters, the subtitle 80, a reason 70, a tag
      24, the footnote 90, a versus label and value 18, the verdict 40.
 3. Kinds that need the server's own words:
@@ -114,42 +124,119 @@ tell the person, unasked, about a good place near where they already go.
      («₴₴»), walking minutes when there is a start — then up to five rows of
      the model's qualities («Шум: громко / тихо»). A model row that repeats a
      server row or holds a digit is dropped. No winner given: the rows decide.
-   - `venue`, `hours`, `route` and `regulars` get a Maps link when the catalog
-     has one.
+   - `venue`, `hours`, `route`, `regulars` and `reviews` get a Maps link when
+     the catalog has one.
 4. The photo is stored as the catalog id of the copy that has one and signed
    again (`/v1/venues/:id/photo`, card width, a day's validity) on every read;
-   everything else is stored as shown, so history draws the scene as it was —
-   including «open now» at the time of the answer.
+   everything else except review text is stored as shown, so history draws the
+   scene as it was — including «open now» at the time of the answer. Reviews:
+   Phase 5.
 5. The model reads `[Place scene (venue) after this reply: «Win Bar» (id …)]`
    under its own earlier reply, so a follow-up can reuse the ids.
 6. A turn whose closing call says nothing after a scene gets «Смотри:» in the
    person's language.
 
-## Phase 5 — Delivery
+## Phase 5 — Reviews
 
-1. Links are the providers' own search pages for the venue's name in the
-   person's city; the catalog has no menu links. Formats were checked on the
-   public sites on 2026-11-26, read-only:
-   - Glovo: `https://glovoapp.com/<lang>/ua/kyiv/search?q=<name>` — `uk`,
-     `ru`, `en`, `pl`; German has no Glovo page for Ukraine and opens English.
-     The older `/<country>/<lang>/<city>/` form now redirects to a 404.
-   - Bolt Food: `https://food.bolt.eu/<locale>/325-kyiv/search/?q=<name>` —
-     `uk-ua`, `ru-ru`, `en`, `pl-pl`, `de-de`.
-   - Only cities in `DELIVERY_CITIES` (`packages/shared/src/place-scenes.ts`)
-     get links; today that is Kyiv.
-2. A link is a search, not a promise that the place delivers: the scene's
-   button opens the service on the venue's name.
-3. Dishes are kept only when a review text of the venue names them. Neither
-   `CuratedVenue` nor `PlaceCache` stores review text today, so every delivery
-   scene has no dishes and the model is told to name none. Storing review
-   snippets would mean asking Google Place Details for `reviews` (a billed
-   field) and a schema change — a separate decision.
+1. What the founder asked (2026-11-26): «выбери день и заглянь туда, там
+   приятно сидеть» — one venue and two or three REAL Google reviews, pinned
+   to a board in the chat.
+   - The model picks the venue id and writes the title and subtitle in that
+     spirit; it never writes, quotes, sums up or paraphrases a review, and its
+     tool result says so.
+   - The server asks Google and chooses the reviews
+     (`services/place-reviews.ts`).
+2. The request: Place Details (New), `GET places/{placeId}?languageCode=<their
+   language>`, field mask `reviews` only — every other fact on the scene comes
+   from our catalog. Google returns up to five reviews, most relevant first,
+   the text translated to the requested language where it was written in
+   another one (`originalText` keeps the original).
+   - Billing: a mask holding `reviews` bills the «Place Details Enterprise +
+     Atmosphere» SKU (Google's data-fields table, read 2026-11-26:
+     https://developers.google.com/maps/documentation/places/web-service/data-fields).
+     Price (https://developers.google.com/maps/billing-and-pricing/pricing,
+     read 2026-11-26): 1 000 free a month, then $25.00 per 1 000 up to
+     100 000, $20.00 to 500 000, $15.00 to 1 000 000, $7.50 to 5 000 000,
+     $2.28 above.
+   - One request per `reviews` scene shown live, one per tip that picks a
+     place, and one per `reviews` scene on each history read (item 5), at
+     most three per read.
+3. Selection, all of it server-side and pure (`selectReviews`):
+   - usable: an author name (attribution is required), a rating of at least
+     3, a text of 60–220 characters after cutting;
+   - cutting: whitespace collapsed; a text over 220 characters is cut after
+     the last whole sentence that fits («.», «!», «?», «…», closing quotes
+     included, a decimal point is no end); no sentence end within 220 → not
+     usable. Never cut mid-sentence;
+   - order: 4★ and above first; then reviews about sitting there, the room
+     and the food (word stems in five languages) over complaints about the
+     service; then the recent (publish time, two years scale); then the ones
+     written in the person's language over ones Google translated; Google's
+     own order breaks ties;
+   - the best three go on the board; fewer than two usable → the scene is
+     refused (Phase 4).
+   - `when` is Google's localized relative time
+     (`relativePublishTimeDescription`, «2 недели назад»), `source: "google"`.
+   - Dishes (0–3): the model may pass names it expects; the server keeps one
+     only when a chosen review names it literally (`groundDishes`).
+     Otherwise none.
+4. Google's terms and policies, read 2026-11-26, and what follows from them:
+   - Google Maps Platform Terms of Service
+     (https://cloud.google.com/maps-platform/terms, last modified 2026-08-26),
+     3.2.3(a)(iii): no «copy and save business names, addresses, or user
+     reviews»; 3.2.3(b): no caching «except as expressly permitted under the
+     Maps Service Specific Terms».
+   - Service Specific Terms
+     (https://cloud.google.com/maps-platform/terms/maps-service-terms, last
+     modified 2026-11-24), §15.3 Places API: only latitude/longitude may be
+     cached, up to 30 days. The Places policies
+     (https://developers.google.com/maps/documentation/places/web-service/policies)
+     add that the place ID is exempt and may be stored indefinitely.
+   - So review text is cached NOWHERE — no memory cache, no table, no TTL.
+     There is no allowed period to strip after: it is never stored at all.
+   - Terms 3.2.2(b): attribution is displayed and not modified, and the
+     policies require crediting the author of every review shown (avatar,
+     name and profile link when space allows; the avatar at the very least),
+     a clear notice of how reviews were ordered and filtered, and access to
+     the review on Google Maps.
+   - Therefore the author goes out exactly as Google gives the display name,
+     not reduced to «first name + initial» as the founder's brief said — that
+     would be modifying attribution (decision record, open question).
+   - The notice is the scene's footnote, written by the server in their
+     language (`placeReviewsNotice`: «Отзывы из Google Maps. Мы выбрали
+     свежие и хорошие — о месте и еде.»), replacing any model footnote. The
+     Maps link of the scene opens the place, where every review can be read.
+   - The internal review keeps the author's profile and avatar links and the
+     review's own Google Maps link; `ChatPlaceReview` has no field for them
+     yet, so they are not sent (open question — see the decision record).
+5. Storage and history (the tension: a chat reply is stored in
+   `messages.attachment`):
+   - The stored scene keeps `reviews: []` and `reviewsFrom: { placeId,
+     language }` — a Google place ID, which may be stored, and the language
+     it was asked in. Review text never enters the row
+     (`storedPlaceScene`), and a row that somehow held some is never read
+     (`readPlaceScene` always returns `reviews: []`).
+   - The live reply carries the board from memory.
+   - `GET /v1/chat/history` fetches the board again for the `reviews`
+     scenes of the page, newest first, at most
+     `PLACE_REVIEWS.historyRefetchMax` (3) per read
+     (`refreshHistoryReviews`), and re-checks the dishes against the fresh
+     texts. History may therefore show newer reviews than the first answer:
+     they are always Google's current ones.
+   - A scene without a board (Google failed, the reviews changed, beyond the
+     three) is drawn as a `venue` scene: same venue, no dishes, no notice.
+6. Demo mode: the same; the demo bot is Telegram and never sees scenes.
+7. Not done: a `reviewSummary` (Google's AI summary — same SKU, but it is
+   Google's words about the place, not the people's); storing reviews or
+   snippets in `CuratedVenue` or `PlaceCache` (forbidden, above).
 
 ## Phase 6 — The proactive tip
 
 1. A worker every 30 minutes (`workers/place-tips.ts`) may post an assistant
-   message with a `regulars` scene: a catalog place near the places the person
-   keeps going to, that they have never been to.
+   message with a scene of a catalog place near the places the person keeps
+   going to, that they have never been to: a `reviews` board when Google has
+   two or three usable reviews of it (one billed request per tip), else a
+   `regulars` scene. Never anything about delivery.
 2. Off by default: `AGENT_PLACE_TIPS_ENABLED=false`, and the founder's preview
    list `AGENT_PLACE_TIPS_USER_IDS` (`services/feature-preview.ts`).
 3. Who gets one:
@@ -171,20 +258,23 @@ tell the person, unasked, about a good place near where they already go.
    «Новое рядом с твоими местами»). No inbox row.
 5. The cadence is read back from the stored scenes (`proactive: true` on the
    attachment); there is no table of its own.
-6. Deliberately not built: a proactive `delivery` tip. Without grounded dishes
-   and with links that only search, a tip saying «order from here» could point
-   at a place that does not deliver.
+6. The `reviews` tip is stored like any reviews scene: no review text in the
+   row, fetched again when history is read (Phase 5).
 7. Demo mode: the worker never runs for the demo bot (no app accounts there).
 
 ## Files
 
-1. `packages/shared/src/place-scenes.ts` — kinds, limits, the tip cadence, the
-   delivery providers and URL builder, the prompt block.
-2. `packages/shared/src/i18n.ts` — `place*` labels in five languages.
+1. `packages/shared/src/place-scenes.ts` — kinds, limits, link providers,
+   the review selection limits, the tip cadence, the prompt block.
+2. `packages/shared/src/i18n.ts` — `place*` labels in five languages,
+   `placeReviewsNotice`.
 3. `apps/bot/src/services/place-catalog.ts` — the city catalog, the clock, the
    walk, the regular places, the search.
 4. `apps/bot/src/services/chat-place-scene.ts` — the three tools, the scene,
-   reading back, the view, the history note.
-5. `apps/bot/src/services/chat-agent.ts`, `public/routes/chat.ts` — wiring.
-6. `apps/bot/src/services/place-tips.ts`, `workers/place-tips.ts`,
+   storing without review text, reading back, the history refresh, the view,
+   the history note.
+5. `apps/bot/src/services/place-reviews.ts` — the Google request, cutting at
+   a sentence, choosing the reviews.
+6. `apps/bot/src/services/chat-agent.ts`, `public/routes/chat.ts` — wiring.
+7. `apps/bot/src/services/place-tips.ts`, `workers/place-tips.ts`,
    `index.ts` — the tip.

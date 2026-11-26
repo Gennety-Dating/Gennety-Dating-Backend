@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 /**
  * Place scenes (decision 2026-11-26): every kind built from catalog facts,
- * counts and refusals, clamped text, delivery links and grounded dishes, the
- * versus rows, reading back, the view and the turn gating.
+ * counts and refusals, clamped text, the reviews board (stored without its
+ * text, fetched again on a history read), maps-only links, the versus rows,
+ * reading back, the view and the turn gating. `delivery` is no kind.
  */
 
 const env = { AGENT_PLACE_SCENES_ENABLED: true, PUBLIC_BASE_URL: "https://api.gennety.test/", BOT_TOKEN: "t" };
@@ -17,12 +18,14 @@ const {
   placeSceneView,
   placeScenesThisTurn,
   readPlaceScene,
+  refreshHistoryReviews,
+  storedPlaceScene,
   SHOW_PLACE_SCENE_TOOL,
   SEARCH_VENUES_TOOL,
   GET_MY_PLACES_TOOL,
 } = await import("./chat-place-scene.js");
 const { indexPlaces, toPlaceFacts } = await import("./place-catalog.js");
-const { PLACE_SCENE_KINDS } = await import("@gennety/shared");
+const { PLACE_LINK_PROVIDERS, PLACE_SCENE_KINDS } = await import("@gennety/shared");
 type Row = Parameters<typeof toPlaceFacts>[0][number];
 
 const THU_10 = new Date("2026-11-26T08:00:00Z");
@@ -158,20 +161,92 @@ describe("kinds with a start point", () => {
   });
 });
 
-describe("delivery", () => {
-  it("search links on Glovo and Bolt Food for the venue in their city, no dish without reviews", () => {
-    const { scene, result } = ok({ kind: "delivery", title: "Заказать", venues: [{ id: "a" }], dishes: [{ name: "Борщ" }] });
-    expect(scene.links).toEqual([
-      { provider: "glovo", label: "Glovo", url: "https://glovoapp.com/ru/ua/kyiv/search?q=Win%20Bar" },
-      { provider: "bolt", label: "Bolt Food", url: "https://food.bolt.eu/ru-ru/325-kyiv/search/?q=Win%20Bar" },
-    ]);
-    expect(scene.dishes).toEqual([]);
-    expect(JSON.parse(result).instruction).toContain("No grounded dishes");
+const BOARD = [
+  { author: "Olena Kovalenko", rating: 5, text: "Очень уютно на веранде, брали сырники и капучино. Обязательно вернёмся вечером.", when: "2 недели назад", source: "google" as const, authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false },
+  { author: "Max", rating: 4, text: "Приятная атмосфера, тихая музыка, можно спокойно посидеть вдвоём и поговорить.", when: "месяц назад", source: "google" as const, authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false },
+];
+
+describe("reviews", () => {
+  it("one venue, the server's board, dishes only when a chosen review names them, the notice as footnote", () => {
+    const { scene, result } = ok(
+      { kind: "reviews", title: "Выбери вечер и загляни", subtitle: "Там приятно сидеть", venues: [{ id: "a" }, { id: "b" }], dishes: [{ name: "Сырники" }, { name: "Борщ" }], footnote: "моё" },
+      { ...ctx, reviews: BOARD },
+    );
+    expect(scene.sceneKind).toBe("reviews");
+    expect(scene.venues.map((v) => v.id)).toEqual(["a"]);
+    expect(scene.reviews).toEqual(BOARD);
+    expect(scene.reviewsFrom).toEqual({ placeId: "pl-a", language: "ru" });
+    expect(scene.dishes).toEqual([{ name: "Сырники", note: null, price: null }]);
+    expect(scene.footnote).toBe("Отзывы из Google Maps. Мы выбрали свежие и хорошие — о месте и еде.");
+    expect(scene.links).toEqual([{ provider: "maps", label: "Карты", url: "https://maps.google.com/?cid=1" }]);
+    expect(JSON.parse(result)).toMatchObject({ shown: { kind: "reviews", reviewsPinned: 2, dishes: ["Сырники"] } });
+    expect(JSON.parse(result).instruction).toContain("do not quote");
   });
 
-  it("a city no service covers: refused", () => {
-    const other = indexPlaces("pl:warsaw", catalog.places);
-    expect(refusal({ kind: "delivery", title: "x", venues: [{ id: "a" }] }, { ...ctx, catalog: other }).error).toBe("no_delivery_here");
+  it("fewer than two usable reviews: refused, so the model picks another kind", () => {
+    expect(refusal({ kind: "reviews", title: "x", venues: [{ id: "a" }] }, { ...ctx, reviews: [BOARD[0]!] }).error).toBe("too_few_reviews");
+    expect(refusal({ kind: "reviews", title: "x", venues: [{ id: "a" }] }, { ...ctx, reviews: null }).error).toBe("too_few_reviews");
+    expect(refusal({ kind: "reviews", title: "x", venues: [{ id: "a" }] }).error).toBe("too_few_reviews");
+  });
+
+  it("stored without review text; read back never trusts text in a row; the view degrades to venue without a board", () => {
+    const { scene } = ok({ kind: "reviews", title: "x", venues: [{ id: "a" }], dishes: [{ name: "Сырники" }] }, { ...ctx, reviews: BOARD });
+    const stored = JSON.parse(JSON.stringify(storedPlaceScene(scene)));
+    expect(JSON.stringify(stored)).not.toContain("веранде");
+    expect(stored.reviews).toEqual([]);
+    const back = readPlaceScene({ ...stored, reviews: BOARD })!;
+    expect(back.reviews).toEqual([]);
+    expect(back.reviewsFrom).toEqual({ placeId: "pl-a", language: "ru" });
+    const bare = placeSceneView(back, () => null);
+    expect(bare).toMatchObject({ kind: "venue", dishes: [], footnote: null });
+    expect(bare).not.toHaveProperty("reviews");
+    const live = placeSceneView(scene, () => null);
+    expect(live.kind).toBe("reviews");
+    expect(live.reviews).toEqual([
+      { author: "Olena Kovalenko", rating: 5, text: BOARD[0]!.text, when: "2 недели назад", source: "google" },
+      { author: "Max", rating: 4, text: BOARD[1]!.text, when: "месяц назад", source: "google" },
+    ]);
+  });
+
+  it("history: the board fetched again, newest first, at most three a read, dishes re-checked", async () => {
+    const { scene } = ok({ kind: "reviews", title: "x", venues: [{ id: "a" }], dishes: [{ name: "Сырники" }] }, { ...ctx, reviews: BOARD });
+    const stored = readPlaceScene(JSON.parse(JSON.stringify(storedPlaceScene(scene))))!;
+    const calls: string[] = [];
+    const fetchFn = (async (url: string) => {
+      calls.push(url);
+      return new Response(JSON.stringify({ reviews: googleReviews }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const rows = [0, 1, 2, 3].map((i) => ({ id: `m${i}`, createdAt: new Date(THU_10.getTime() + i * 1000), scene: stored }));
+    const fresh = await refreshHistoryReviews(rows, THU_10, { apiKey: "k", fetchFn });
+    expect([...fresh.keys()]).toEqual(["m3", "m2", "m1"]);
+    expect(calls[0]).toBe("https://places.googleapis.com/v1/places/pl-a?languageCode=ru");
+    const one = fresh.get("m3")!;
+    expect(one.reviews.length).toBeGreaterThanOrEqual(2);
+    expect(one.dishes).toEqual([]); // no fresh review names «Сырники»
+    expect(placeSceneView(one, () => null).kind).toBe("reviews");
+  });
+
+  it("`delivery` is no kind any more: refused by the tool, unreadable from a row", () => {
+    expect(refusal({ kind: "delivery", title: "x", venues: [{ id: "a" }] }).error).toBe("bad_kind");
+    expect(PLACE_SCENE_KINDS).not.toContain("delivery");
+    expect(readPlaceScene({ kind: "place_scene", sceneKind: "delivery", title: "x", venues: [{ id: "a", name: "A", lat: 1, lng: 2 }] })).toBeNull();
+  });
+
+  it("links: maps or web only — a stored delivery link never reaches the app", () => {
+    const back = readPlaceScene({
+      kind: "place_scene",
+      sceneKind: "venue",
+      title: "x",
+      venues: [{ id: "a", name: "A", lat: 1, lng: 2 }],
+      links: [
+        { provider: "glovo", label: "Glovo", url: "https://glovoapp.com/ru/ua/kyiv/search?q=A" },
+        { provider: "bolt", label: "Bolt Food", url: "https://food.bolt.eu/x" },
+        { provider: "maps", label: "Карты", url: "https://maps.google.com/?cid=1" },
+        { provider: "web", label: "Сайт", url: "http://insecure.example" },
+      ],
+    })!;
+    expect(back.links).toEqual([{ provider: "maps", label: "Карты", url: "https://maps.google.com/?cid=1" }]);
+    expect(PLACE_LINK_PROVIDERS).toEqual(["maps", "web"]);
   });
 
   it("dishes only when a review names them", () => {
@@ -181,6 +256,11 @@ describe("delivery", () => {
     expect(groundDishes([{ name: "Борщ" }], [])).toEqual([]);
   });
 });
+
+const googleReviews = [
+  { rating: 5, relativePublishTimeDescription: "неделю назад", publishTime: "2026-11-19T10:00:00Z", text: { text: "Прекрасное место, очень вкусная кухня и уютная атмосфера, хочется сидеть весь вечер.", languageCode: "ru" }, authorAttribution: { displayName: "Ira P" } },
+  { rating: 4, relativePublishTimeDescription: "месяц назад", publishTime: "2026-10-20T10:00:00Z", text: { text: "Хороший вид на парк, тихая музыка и отличный кофе. Были вдвоём, понравилось.", languageCode: "ru" }, authorAttribution: { displayName: "Dmytro" } },
+];
 
 describe("versus", () => {
   it("exactly two; the server's rows first, the model's qualities after, numbers in them dropped", () => {

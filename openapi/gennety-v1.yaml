@@ -11815,7 +11815,8 @@ components:
       description: |
         A place scene under an assistant reply (decision 2026-11-26, spec
         `docs/product/chat-place-scenes-plan.md` in the iOS repo): a venue,
-        picks, the person's regular places, delivery, opening hours, a walk
+        picks, the person's regular places, a board of real reviews, opening
+        hours, a walk
         or a duel of two venues, drawn as a custom animated scene with its own
         sound and haptic — not a bubble. Drawn AFTER the reply text. Every
         label is already in the person's language. One scene per reply;
@@ -11828,7 +11829,9 @@ components:
         kind:
           type: string
           description: >-
-            venue | picks | regulars | delivery | hours | route | versus.
+            venue | picks | regulars | reviews | hours | route | versus.
+            (`delivery` was dropped 2026-11-26 before release: the product pulls
+            people out to places, it does not keep them home.)
         title: { type: string, description: "Short headline, ≤ 40 chars." }
         subtitle: { type: string, nullable: true, description: "One line under the title, ≤ 80 chars." }
         venues:
@@ -11836,7 +11839,7 @@ components:
           minItems: 1
           maxItems: 3
           description: >-
-            venue/hours/route/delivery/regulars: 1 (the recommended one);
+            venue/hours/route/reviews/regulars: 1 (the recommended one);
             picks: 2–3; versus: exactly 2 (A then B).
           items: { $ref: "#/components/schemas/ChatPlaceVenue" }
         anchors:
@@ -11849,13 +11852,20 @@ components:
         dishes:
           type: array
           maxItems: 3
-          description: delivery only — dishes worth ordering, grounded in reviews.
+          description: reviews only — up to 3 things to try there, named in the reviews themselves; empty when no review names one.
           items: { $ref: "#/components/schemas/ChatPlaceDish" }
         links:
           type: array
           maxItems: 3
-          description: delivery (glovo, bolt) and maps links. Opened outside the app.
+          description: maps or web links only, opened outside the app. Never delivery services.
           items: { $ref: "#/components/schemas/ChatPlaceLink" }
+        reviews:
+          type: array
+          maxItems: 3
+          description: >-
+            reviews only — 2–3 REAL reviews of the venue quoted verbatim (or
+            trimmed at a sentence) from the source, never written by the model.
+          items: { $ref: "#/components/schemas/ChatPlaceReview" }
         versus:
           $ref: "#/components/schemas/ChatPlaceVersus"
         footnote: { type: string, nullable: true }
@@ -11904,11 +11914,20 @@ components:
         name: { type: string }
         note: { type: string, nullable: true }
         price: { type: string, nullable: true }
+    ChatPlaceReview:
+      type: object
+      required: [author, text, source]
+      properties:
+        author: { type: string, description: "Reviewer's display name as the source shows it (first name + initial)." }
+        rating: { type: integer, nullable: true, minimum: 1, maximum: 5 }
+        text: { type: string, description: "The review, ≤ 220 chars, cut at a sentence boundary." }
+        when: { type: string, nullable: true, description: "Localized relative time, e.g. «2 недели назад»." }
+        source: { type: string, description: "google — the client shows the attribution." }
     ChatPlaceLink:
       type: object
       required: [provider, label, url]
       properties:
-        provider: { type: string, description: "glovo | bolt | wolt | maps | web" }
+        provider: { type: string, description: "maps | web" }
         label: { type: string }
         url: { type: string }
     ChatPlaceVersus:

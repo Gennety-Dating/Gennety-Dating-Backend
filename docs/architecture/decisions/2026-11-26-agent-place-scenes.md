@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: Touching place scenes in the app chat (`search_venues`, `get_my_places`, `show_place_scene`, `ChatPlaceScene`, token `places`), the delivery links, or the proactive place tip — or wondering why a scene has no dishes, no walking minutes from «where I am», or why the tip is regulars-only. -->
+<!-- WHEN_TO_READ: Touching place scenes in the app chat (`search_venues`, `get_my_places`, `show_place_scene`, `ChatPlaceScene`, token `places`), the `reviews` board, or the proactive place tip — or wondering why there is no delivery, why review text is never stored, why the author name is not shortened, or why a scene has no walking minutes from «where I am». -->
 
 # 2026-11-26 — place scenes in the app chat (server)
 
@@ -52,3 +52,71 @@ the iOS scaffold (`claude/chat-scenes`) and copied unchanged.
 
 **Deploy.** Not deployed; waits for the founder's «да»
 ([pending.md](../../operations/deploy-journal/pending.md)).
+
+---
+
+# 2026-11-26 (later) — delivery dropped, a board of real reviews instead
+
+**Kind:** founder request (voice, 2026-11-26), built on branch
+`feat/place-scenes` before any deploy; supersedes items 6 and 8 above.
+
+**Founder's reason.** «Давать ссылки на Bolt или Glovo — неправильно: мы
+должны вытягивать человека в офлайн, а не давать повод сидеть дома. Лучше:
+выбери день и заглянь туда, там приятно сидеть — и покажи пару НАСТОЯЩИХ
+отзывов, приколотых к доске в чате.»
+
+**What.**
+1. Kind `delivery` is gone everywhere: no Glovo / Bolt / Wolt links, no
+   delivery line in the prompt (the prompt now says outright: never ordering
+   in), no delivery tip. A stored `delivery` scene is unreadable (no such
+   kind) and links are `maps | web` only, filtered on read too.
+2. New kind `reviews`: one venue and 2–3 real Google reviews the server
+   fetches (Place Details (New), mask `reviews`, `languageCode` = their
+   language) and chooses — 4★+ first, 60–220 characters after cutting at a
+   sentence, about the place and the food over the service, recent, untranslated.
+   The model picks only the venue and writes the title/subtitle in the spirit
+   of «Выбери вечер и загляни — там приятно сидеть». Fewer than two usable
+   reviews → refused, the model picks another kind. Dishes only when a chosen
+   review names one. Contract: `ChatPlaceReview` and `reviews` on
+   `ChatPlaceScene`, copied unchanged from the iOS spec.
+3. Price: «Place Details Enterprise + Atmosphere», 1 000 free a month, then
+   $25 per 1 000 (Google's pricing page, read 2026-11-26).
+4. **Review text is never stored or cached** (Maps Terms 3.2.3(a)(iii) «copy
+   and save … user reviews» and 3.2.3(b) no caching; the Places service terms
+   allow caching only lat/lng for 30 days, the place ID indefinitely). Chosen
+   handling of the `messages.attachment` tension: the row keeps the place ID
+   and language (`reviewsFrom`) and no text; history fetches the board again,
+   at most three scenes per read, and draws a scene it could not refill as a
+   plain `venue`. Rejected: a TTL cache (no TTL is permitted for review text);
+   stripping text after a period (no period is permitted).
+5. The proactive tip may now be a `reviews` board (when Google has two usable
+   reviews of the tipped place), else `regulars`. Still dark:
+   `AGENT_PLACE_TIPS_ENABLED=false` + the founder preview list.
+
+**Deliberate deviation from the brief.** The brief said the author is shown
+as «first name + initial». Maps Terms 3.2.2(b) forbid modifying attribution,
+and the Places policies require crediting each review's author. So the
+author goes out exactly as Google's display name. The founder decides
+whether to accept that or take it up with Google; changing it is one line in
+`selectReviews`.
+
+**Open, for the founder and the iOS contract.**
+1. Attribution the contract cannot carry yet: the policies want the author's
+   avatar and profile link when space allows (the avatar as the minimum) and
+   access to the review on Google Maps. `ChatPlaceReview` has
+   `author / rating / text / when / source` only. The server already keeps
+   `authorUri`, `authorPhotoUri` and the review's `googleMapsUri` internally;
+   adding three optional fields to `ChatPlaceReview` would let iOS show them.
+   Until then the board shows the name and «Google Maps» and the Maps link
+   opens the place.
+2. Translations: Google translates reviews into the requested language; the
+   policies recommend saying so. Untranslated reviews are preferred; the
+   contract has no «translated» flag.
+3. Places service terms §15.2: «must not use Google Maps Content from the
+   Places API in conjunction with a non-Google map». The app's maps are
+   MapLibre with our own tiles. This applies to every Places-sourced fact on
+   any scene drawn on a map (and predates this change), not only to reviews.
+
+**Deploy.** Still not deployed; same block in
+[pending.md](../../operations/deploy-journal/pending.md), order unchanged.
+

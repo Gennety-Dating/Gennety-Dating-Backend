@@ -1,8 +1,10 @@
 /**
  * Proactive place tips (decision 2026-11-26; spec
  * `docs/product/domains/agent-place-scenes.md`, phase 5, and agent-advisor
- * phase 4): the agent writes first with a `regulars` scene — a catalog place
- * near the places the person keeps going to, one they have never been to.
+ * phase 4): the agent writes first with a scene of a catalog place near the
+ * places the person keeps going to, one they have never been to — a
+ * `reviews` board when Google has 2–3 good reviews of it, else `regulars`.
+ * Never a delivery tip (founder, 2026-11-26: pull them out, not keep them in).
  *
  * Who gets one, all of it checked here and nowhere else:
  * - the flag `AGENT_PLACE_TIPS_ENABLED`, or the founder's preview list;
@@ -20,10 +22,11 @@
  * back — no table of its own.
  */
 import { prisma, type Prisma } from "@gennety/db";
-import { PLACE_TIPS, PLACE_TITLE_MAX_LEN, cityKeyToTimeZone, isQuietHourIn, isValidTimeZone, localHourIn, t, type Language } from "@gennety/shared";
+import { PLACE_FOOTNOTE_MAX_LEN, PLACE_REVIEWS, PLACE_TIPS, PLACE_TITLE_MAX_LEN, cityKeyToTimeZone, isQuietHourIn, isValidTimeZone, localHourIn, t, type Language } from "@gennety/shared";
 import { CHAT_REPLY_PUSH_TYPE } from "./chat-reply-push.js";
 import { NOT_ONLY_MY_DATES } from "./notification-mute.js";
-import { PLACE_SCENE_KIND, cut, readPlaceScene, sceneVenue, type PlaceAnchor, type PlaceScene } from "./chat-place-scene.js";
+import { PLACE_SCENE_KIND, cut, readPlaceScene, sceneVenue, storedPlaceScene, type PlaceAnchor, type PlaceScene } from "./chat-place-scene.js";
+import { loadPlaceReviews, type PlaceReview } from "./place-reviews.js";
 import { touchChatSession } from "./chat-sessions.js";
 import { loadRegulars, placeCatalogForCity, placeCityOf, placeClock, placeWalk, type PlaceCatalog, type PlaceFacts, type PlaceWalk, type RegularPlace } from "./place-catalog.js";
 import { sendPushToUser } from "./push.js";
@@ -109,14 +112,26 @@ export function pickTipPlace(input: {
   return best?.pick ?? null;
 }
 
-/** The tip as a stored scene and the line above it. Pure. */
-export function buildTip(pick: TipPick, regulars: readonly RegularPlace[], language: Language, now: Date): { scene: PlaceScene; line: string } {
+/**
+ * The tip as a scene and the line above it. Pure. With a board of real
+ * reviews (`reviews`, at least `PLACE_REVIEWS.min`) it is a `reviews` scene,
+ * else `regulars` with their places as anchors. Store it through
+ * `storedPlaceScene` — review text never goes into the row.
+ */
+export function buildTip(
+  pick: TipPick,
+  regulars: readonly RegularPlace[],
+  language: Language,
+  now: Date,
+  reviews: readonly PlaceReview[] = [],
+): { scene: PlaceScene; line: string } {
   const venue = sceneVenue(pick.place, { language, now, walk: pick.walk });
   const minutes = pick.walk.walkMinutes ?? 1;
-  const anchors: PlaceAnchor[] = regulars.map((r) => ({ label: r.name, lat: r.lat, lng: r.lng, visits: r.visits }));
+  const board = reviews.length >= PLACE_REVIEWS.min && pick.place.placeId ? reviews.slice(0, PLACE_REVIEWS.max) : null;
+  const anchors: PlaceAnchor[] = board ? [] : regulars.map((r) => ({ label: r.name, lat: r.lat, lng: r.lng, visits: r.visits }));
   const scene: PlaceScene = {
     kind: PLACE_SCENE_KIND,
-    sceneKind: "regulars",
+    sceneKind: board ? "reviews" : "regulars",
     title: cut(t(language, "placeTipTitle"), PLACE_TITLE_MAX_LEN),
     subtitle: t(language, "placeFromAnchor", { minutes, place: pick.regular.name }),
     venues: [venue],
@@ -124,7 +139,9 @@ export function buildTip(pick: TipPick, regulars: readonly RegularPlace[], langu
     dishes: [],
     links: pick.place.mapsUri ? [{ provider: "maps", label: t(language, "placeLinkMaps"), url: pick.place.mapsUri }] : [],
     versus: null,
-    footnote: null,
+    footnote: board ? cut(t(language, "placeReviewsNotice"), PLACE_FOOTNOTE_MAX_LEN) : null,
+    reviews: board ? [...board] : [],
+    ...(board && pick.place.placeId ? { reviewsFrom: { placeId: pick.place.placeId, language } } : {}),
     proactive: true,
   };
   const line = t(language, "placeTipLine", { venue: pick.place.name, minutes, anchor: pick.regular.name });
@@ -174,6 +191,8 @@ export interface TipDeps {
   /** The preview list; null = everyone (the flag is on). */
   users: readonly string[] | null;
   push?: typeof sendPushToUser;
+  /** Google reviews of the tipped place (one billed request); a test passes its own. */
+  reviews?: typeof loadPlaceReviews;
 }
 
 /**
@@ -228,7 +247,10 @@ async function sendOneTip(
   });
   if (!pick) return false;
   const language = (user.language ?? "en") as Language;
-  const { scene, line } = buildTip(pick, regulars, language, now);
+  const reviews = pick.place.placeId
+    ? await (deps.reviews ?? loadPlaceReviews)(pick.place.placeId, language, now).catch(() => [])
+    : [];
+  const { scene, line } = buildTip(pick, regulars, language, now, reviews);
   const sessionId = await tipChatFor(user.id, now);
   const message = await prisma.message.create({
     data: {
@@ -237,7 +259,8 @@ async function sendOneTip(
       role: "assistant",
       content: line,
       imageUrls: [],
-      attachment: scene as unknown as Prisma.InputJsonValue,
+      // Without review text (Google's terms): a history read fetches it again.
+      attachment: storedPlaceScene(scene) as unknown as Prisma.InputJsonValue,
     },
     select: { id: true, createdAt: true },
   });

@@ -65,7 +65,7 @@ import {
 import { changeOfferView, readChangeOffer, resolveChangeOffer } from "../../services/chat-offer.js";
 import { appGuideView, readAppGuide } from "../../services/chat-app-guide.js";
 import { VIBE_CARD_CLIENT_TOKEN, readVibeCard, vibeCardView } from "../../services/chat-vibe-card.js";
-import { PLACE_SCENE_CLIENT_TOKEN, placeSceneView, readPlaceScene, type PlaceScene } from "../../services/chat-place-scene.js";
+import { PLACE_SCENE_CLIENT_TOKEN, placeSceneView, readPlaceScene, refreshHistoryReviews, type PlaceScene } from "../../services/chat-place-scene.js";
 import { ALLOWED_PHOTO_WIDTHS } from "../places-photo.js";
 import { venuePhotoUrl } from "../showcase-photos.js";
 import { readScreenshotsCard, screenshotsCardViews, type ScreenshotsCard } from "../../services/chat-screenshots.js";
@@ -792,6 +792,19 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
   // a scene already in a chat stays in it.
   const placeScenesDrawn = chatCardsOf(req).has(PLACE_SCENE_CLIENT_TOKEN);
   const historyNow = Date.now();
+  const placeByRow = new Map<string, PlaceScene>();
+  if (placeScenesDrawn) {
+    for (const row of page) {
+      const scene = row.role === "assistant" ? readPlaceScene(row.attachment) : null;
+      if (scene) placeByRow.set(row.id, scene);
+    }
+  }
+  // A reviews board is stored without its text (Google's terms) and fetched
+  // again here, a few per read; a scene left without one is drawn as `venue`.
+  const freshReviews = await refreshHistoryReviews(
+    page.filter((row) => placeByRow.has(row.id)).map((row) => ({ id: row.id, createdAt: row.createdAt, scene: placeByRow.get(row.id)! })),
+    new Date(historyNow),
+  ).catch(() => new Map<string, PlaceScene>());
   // Reactions (decision 2026-11-24): on every row, both sides possibly null,
   // only for a build that draws them with the feature on — the app reads the
   // field's presence as «show the reaction UI».
@@ -806,7 +819,7 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
     const rowGuide = row.role === "assistant" ? readAppGuide(row.attachment) : null;
     // Vibe cards (decision 2026-11-21) only for a build that draws them.
     const rowVibe = row.role === "assistant" && vibeCardsDrawn ? readVibeCard(row.attachment) : null;
-    const rowPlace = row.role === "assistant" && placeScenesDrawn ? readPlaceScene(row.attachment) : null;
+    const rowPlace = freshReviews.get(row.id) ?? placeByRow.get(row.id) ?? null;
     const signedUrls = rowPaths.map(() => signed[cursor++] ?? "");
     return {
       id: row.id,

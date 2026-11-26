@@ -1,6 +1,4 @@
 import {
-  DELIVERY_PROVIDER_LABELS,
-  DELIVERY_PROVIDERS,
   PLACE_ANCHOR_LABEL_MAX_LEN,
   PLACE_ANCHORS_MAX,
   PLACE_CATEGORIES,
@@ -8,8 +6,10 @@ import {
   PLACE_DISH_NOTE_MAX_LEN,
   PLACE_DISHES_MAX,
   PLACE_FOOTNOTE_MAX_LEN,
+  PLACE_LINK_PROVIDERS,
   PLACE_LINKS_MAX,
   PLACE_REASON_MAX_LEN,
+  PLACE_REVIEWS,
   PLACE_SCENE_KINDS,
   PLACE_SCENE_RULES,
   PLACE_SCENE_VENUES,
@@ -23,7 +23,6 @@ import {
   PLACE_VERSUS_LABEL_MAX_LEN,
   PLACE_VERSUS_ROWS_MAX,
   PLACE_VERSUS_VALUE_MAX_LEN,
-  deliverySearchUrl,
   t,
   type Language,
   type PlaceSceneKind,
@@ -41,6 +40,7 @@ import {
   type PlaceWalk,
   type RegularPlace,
 } from "./place-catalog.js";
+import { loadPlaceReviews, type PlaceReview, type ReviewFetchDeps } from "./place-reviews.js";
 
 /**
  * Place scenes — an answer about places drawn as an animated scene after the
@@ -54,6 +54,11 @@ import {
  * the catalog; the model never writes one. Labels are in the account language
  * and stored with the scene, so history draws it as it was shown; only the
  * photo link is signed again on every read, because it expires.
+ *
+ * A `reviews` scene carries real Google reviews (`place-reviews.ts`). Their
+ * text may not be stored (Google Maps Platform Terms 3.2.3), so the stored
+ * scene keeps only the Google place ID (`reviewsFrom`) and a history read
+ * fetches the reviews again; without them the scene is drawn as `venue`.
  *
  * Capability-gated by `X-Gennety-Chat-Cards: places` and
  * `AGENT_PLACE_SCENES_ENABLED`: a build that does not draw scenes never gets
@@ -134,8 +139,25 @@ export interface PlaceScene {
   links: PlaceLink[];
   versus: PlaceVersus | null;
   footnote: string | null;
+  /**
+   * `reviews` only: the board, in memory for the live reply and filled again
+   * on a history read — ALWAYS empty in `messages.attachment`
+   * ({@link storedPlaceScene}).
+   */
+  reviews: PlaceReview[];
+  /** `reviews` only: where to fetch them again — a Google place ID may be stored. */
+  reviewsFrom?: { placeId: string; language: Language };
   /** Written by the proactive tip worker, not by a turn (`place-tips.ts`). */
   proactive?: boolean;
+}
+
+/** `ChatPlaceReview` in the OpenAPI contract. */
+export interface PlaceReviewView {
+  author: string;
+  rating: number | null;
+  text: string;
+  when: string | null;
+  source: string;
 }
 
 /** What the app gets — `ChatPlaceScene` in the OpenAPI contract. */
@@ -147,6 +169,7 @@ export interface PlaceSceneView {
   anchors: PlaceAnchor[];
   dishes: PlaceDish[];
   links: PlaceLink[];
+  reviews?: PlaceReviewView[];
   versus?: PlaceVersus;
   footnote: string | null;
 }
@@ -158,7 +181,7 @@ export const SEARCH_VENUES_TOOL = {
   function: {
     name: SEARCH_VENUES_TOOL_NAME,
     description:
-      "Search the places of their city in our catalog: cafés, coffee, restaurants, bars, parks, museums. Call it whenever they ask about a place — where to go, what is near, is X open, how far, A or B, what to order — before show_place_scene. Returns ids and facts; only these ids may go on a scene.",
+      "Search the places of their city in our catalog: cafés, coffee, restaurants, bars, parks, museums. Call it whenever they ask about a place — where to go, what is near, is X open, how far, A or B, what is good there — before show_place_scene. Returns ids and facts; only these ids may go on a scene.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -188,7 +211,7 @@ export const SHOW_PLACE_SCENE_TOOL = {
   function: {
     name: SHOW_PLACE_SCENE_TOOL_NAME,
     description:
-      "Draw ONE animated place scene after your reply, with venue ids from search_venues. The server fills every fact (name, photo, rating, price, hours, open now, walking minutes, links) — pass only ids and your words. Kinds: venue (one place), picks (2–3 recommendations), regulars (a new place near their regular places; anchor_ids from get_my_places), delivery (order in from one place), hours (is it open / until when), route (how far on foot; anchor_ids = one start), versus (exactly two places compared).",
+      "Draw ONE animated place scene after your reply, with venue ids from search_venues. The server fills every fact (name, photo, rating, price, hours, open now, walking minutes, links) — pass only ids and your words. Kinds: venue (one place), picks (2–3 recommendations), regulars (a new place near their regular places; anchor_ids from get_my_places), reviews (one place worth an evening; the server pins 2–3 real Google reviews — never write one yourself), hours (is it open / until when), route (how far on foot; anchor_ids = one start), versus (exactly two places compared).",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -201,7 +224,7 @@ export const SHOW_PLACE_SCENE_TOOL = {
           type: "array",
           minItems: 1,
           maxItems: 3,
-          description: "In order. venue/hours/route/delivery/regulars: 1; picks: 2–3; versus: exactly 2 (A then B).",
+          description: "In order. venue/hours/route/reviews/regulars: 1; picks: 2–3; versus: exactly 2 (A then B).",
           items: {
             type: "object",
             additionalProperties: false,
@@ -247,7 +270,7 @@ export const SHOW_PLACE_SCENE_TOOL = {
         dishes: {
           type: "array",
           maxItems: PLACE_DISHES_MAX,
-          description: "delivery only, and only dishes the search result lists as grounded. Anything else is dropped.",
+          description: "reviews only: names of things to try you expect there. The server keeps one only when a chosen review names it literally; anything else is dropped.",
           items: {
             type: "object",
             additionalProperties: false,
@@ -320,6 +343,11 @@ export interface PlaceSceneContext {
   regulars: RegularPlace[] | null;
   language: Language;
   now: Date;
+  /**
+   * `reviews` only: the board already chosen for the first venue
+   * (`loadPlaceReviews`, fetched by the caller so this stays pure).
+   */
+  reviews?: PlaceReview[] | null;
 }
 
 export type PlaceSceneOutcome =
@@ -425,39 +453,55 @@ function buildVersus(raw: unknown, a: StoredPlaceVenue, b: StoredPlaceVenue, lan
   return { winner, verdict: cut(v.verdict, PLACE_VERDICT_MAX_LEN) || null, rows };
 }
 
-function linksFor(kind: PlaceSceneKind, venue: StoredPlaceVenue, place: PlaceFacts, cityKey: string, language: Language): PlaceLink[] {
+/**
+ * Maps or web only — never a delivery service (founder, 2026-11-26). On a
+ * `reviews` scene the Maps link is also where the person reads every review
+ * in full, which Google's policies ask for.
+ */
+function linksFor(kind: PlaceSceneKind, place: PlaceFacts, language: Language): PlaceLink[] {
   const links: PlaceLink[] = [];
-  if (kind === "delivery") {
-    for (const provider of DELIVERY_PROVIDERS) {
-      const url = deliverySearchUrl(provider, cityKey, venue.name, language);
-      if (url) links.push({ provider, label: DELIVERY_PROVIDER_LABELS[provider], url });
-    }
-  }
-  if (place.mapsUri && (kind === "venue" || kind === "route" || kind === "hours" || kind === "regulars")) {
+  if (place.mapsUri && kind !== "picks" && kind !== "versus") {
     links.push({ provider: "maps", label: t(language, "placeLinkMaps"), url: place.mapsUri });
   }
   return links.slice(0, PLACE_LINKS_MAX);
 }
 
+/** A link a scene may carry: a known provider, an https URL. */
+function allowedLink(link: unknown): link is PlaceLink {
+  if (!link || typeof link !== "object") return false;
+  const l = link as Record<string, unknown>;
+  return (
+    PLACE_LINK_PROVIDERS.some((p) => p === l.provider) &&
+    typeof l.label === "string" &&
+    typeof l.url === "string" &&
+    l.url.startsWith("https://")
+  );
+}
+
+/** The venues the model named, in order: unknown ids drop out, one place twice counts once. */
+export function pickedVenues(raw: unknown, catalog: PlaceCatalog): Array<{ place: PlaceFacts; reason: unknown; tags: unknown }> {
+  const seen = new Set<string>();
+  const picked: Array<{ place: PlaceFacts; reason: unknown; tags: unknown }> = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const v = (item && typeof item === "object" ? item : typeof item === "string" ? { id: item } : {}) as Record<string, unknown>;
+    const place = typeof v.id === "string" ? catalog.byId.get(v.id.trim()) : undefined;
+    if (!place || seen.has(place.id)) continue;
+    seen.add(place.id);
+    picked.push({ place, reason: v.reason, tags: v.tags });
+  }
+  return picked;
+}
+
 /**
  * The tool call as a scene, or the reason it is refused. Pure: the caller
- * stores it with the reply.
+ * stores it with the reply ({@link storedPlaceScene}).
  */
 export function assemblePlaceScene(args: unknown, ctx: PlaceSceneContext): PlaceSceneOutcome {
   const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
   const kind = PLACE_SCENE_KINDS.find((k) => k === a.kind);
   if (!kind) return refused("bad_kind", `kind must be one of ${PLACE_SCENE_KINDS.join(", ")}.`);
 
-  // Unknown ids drop out; one place twice counts once.
-  const seen = new Set<string>();
-  const picked: Array<{ place: PlaceFacts; reason: unknown; tags: unknown }> = [];
-  for (const item of Array.isArray(a.venues) ? a.venues : []) {
-    const v = (item && typeof item === "object" ? item : typeof item === "string" ? { id: item } : {}) as Record<string, unknown>;
-    const place = typeof v.id === "string" ? ctx.catalog.byId.get(v.id.trim()) : undefined;
-    if (!place || seen.has(place.id)) continue;
-    seen.add(place.id);
-    picked.push({ place, reason: v.reason, tags: v.tags });
-  }
+  const picked = pickedVenues(a.venues, ctx.catalog);
   const { min, max } = PLACE_SCENE_VENUES[kind];
   if (picked.length === 0) {
     return refused("no_valid_venue", "None of these ids is a place from search_venues. Call search_venues and use its ids, or answer in words.");
@@ -514,9 +558,13 @@ export function assemblePlaceScene(args: unknown, ctx: PlaceSceneContext): Place
 
   const first = venues[0]!;
   const firstPlace = chosen[0]!.place;
-  const links = linksFor(kind, first, firstPlace, ctx.catalog.cityKey, ctx.language);
-  if (kind === "delivery" && !links.some((l) => l.provider !== "maps")) {
-    return refused("no_delivery_here", "No delivery service we link to covers this city. Answer in words, no delivery scene.");
+  const links = linksFor(kind, firstPlace, ctx.language);
+  const reviews = kind === "reviews" ? (ctx.reviews ?? []) : [];
+  if (kind === "reviews" && (reviews.length < PLACE_REVIEWS.min || !firstPlace.placeId)) {
+    return refused(
+      "too_few_reviews",
+      "This place has too few good reviews to pin on a board. Choose kind venue (or picks with another place) instead; never write a review yourself.",
+    );
   }
 
   const autoSubtitle =
@@ -530,10 +578,15 @@ export function assemblePlaceScene(args: unknown, ctx: PlaceSceneContext): Place
     subtitle: autoSubtitle ?? (cut(a.subtitle, PLACE_SUBTITLE_MAX_LEN) || null),
     venues,
     anchors,
-    dishes: kind === "delivery" ? groundDishes(a.dishes, firstPlace.reviewTexts) : [],
+    dishes: kind === "reviews" ? groundDishes(a.dishes, reviews.map((r) => r.text)) : [],
     links,
     versus: kind === "versus" ? buildVersus(a.versus, venues[0]!, venues[1]!, ctx.language) : null,
-    footnote: cut(a.footnote, PLACE_FOOTNOTE_MAX_LEN) || null,
+    // A reviews board says how its reviews were chosen (Google's policies), in our words.
+    footnote: kind === "reviews"
+      ? cut(t(ctx.language, "placeReviewsNotice"), PLACE_FOOTNOTE_MAX_LEN)
+      : cut(a.footnote, PLACE_FOOTNOTE_MAX_LEN) || null,
+    reviews,
+    ...(kind === "reviews" && firstPlace.placeId ? { reviewsFrom: { placeId: firstPlace.placeId, language: ctx.language } } : {}),
   };
 
   return {
@@ -545,12 +598,15 @@ export function assemblePlaceScene(args: unknown, ctx: PlaceSceneContext): Place
         kind,
         venues: venues.map((v) => ({ name: v.name, open: v.openNow, hours: v.hoursLabel, walkMinutes: v.walkMinutes })),
         ...(scene.versus ? { winner: scene.versus.winner } : {}),
+        ...(kind === "reviews" ? { reviewsPinned: scene.reviews.length } : {}),
         dishes: scene.dishes.map((d) => d.name),
         links: scene.links.map((l) => l.provider),
       },
       instruction:
         "The scene is drawn AFTER your reply and shows the names, photo, rating, hours and minutes. Now write 1–2 short sentences in their language that add what it does not show — why it fits them, when to go, what to watch for. Do not repeat its facts." +
-        (kind === "delivery" && scene.dishes.length === 0 ? " No grounded dishes: name no dish." : ""),
+        (kind === "reviews"
+          ? ` Real reviews are pinned on the board: do not quote, sum up or invent any.${scene.dishes.length === 0 ? " No dish was named in them: name no dish." : ""}`
+          : ""),
     }),
   };
 }
@@ -645,7 +701,6 @@ export async function runSearchVenues(turn: PlaceTurn, args: unknown): Promise<s
       ...(place.placeId && regularIds.has(place.placeId) ? { theirRegular: true } : {}),
       about: place.summary ? cut(place.summary, PLACE_SEARCH_ABOUT_MAX_LEN) : null,
       tags: place.vibeTags.slice(0, PLACE_TAGS_MAX),
-      groundedDishes: [],
     })),
     ...(hits.length === 0
       ? { instruction: "Nothing matched. Try a broader query, only a category, or no open_now — or say in words that you found nothing fitting." }
@@ -653,10 +708,19 @@ export async function runSearchVenues(turn: PlaceTurn, args: unknown): Promise<s
   });
 }
 
-/** `show_place_scene`: the scene, or the refusal the model reads. */
-export async function runShowPlaceScene(turn: PlaceTurn, args: unknown): Promise<PlaceSceneOutcome> {
+/**
+ * `show_place_scene`: the scene, or the refusal the model reads. A `reviews`
+ * scene asks Google for the first venue's reviews here (one billed request).
+ */
+export async function runShowPlaceScene(turn: PlaceTurn, args: unknown, deps: ReviewFetchDeps = {}): Promise<PlaceSceneOutcome> {
   const [catalog, regulars] = await Promise.all([turn.catalog(), turn.regulars()]);
-  return assemblePlaceScene(args, { catalog, regulars, language: turn.input.language, now: turn.now });
+  const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+  let reviews: PlaceReview[] | null = null;
+  if (a.kind === "reviews") {
+    const first = pickedVenues(a.venues, catalog)[0]?.place;
+    reviews = first?.placeId ? await loadPlaceReviews(first.placeId, turn.input.language, turn.now, deps) : [];
+  }
+  return assemblePlaceScene(args, { catalog, regulars, language: turn.input.language, now: turn.now, reviews });
 }
 
 /* ── reading back ───────────────────────────────────────────────────────── */
@@ -712,11 +776,62 @@ export function readPlaceScene(raw: unknown): PlaceScene | null {
     venues,
     anchors: Array.isArray(c.anchors) ? (c.anchors as PlaceAnchor[]) : [],
     dishes: Array.isArray(c.dishes) ? (c.dishes as PlaceDish[]) : [],
-    links: Array.isArray(c.links) ? (c.links as PlaceLink[]) : [],
+    links: Array.isArray(c.links) ? c.links.filter(allowedLink) : [],
     versus: versus && Array.isArray(versus.rows) && side(versus.winner) ? versus : null,
     footnote: str(c.footnote),
+    // Review text is never read from storage, even if a row held some.
+    reviews: [],
+    ...(reviewsFromOf(c.reviewsFrom) ? { reviewsFrom: reviewsFromOf(c.reviewsFrom)! } : {}),
     ...(c.proactive === true ? { proactive: true } : {}),
   };
+}
+
+function reviewsFromOf(raw: unknown): PlaceScene["reviewsFrom"] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  return typeof r.placeId === "string" && r.placeId && typeof r.language === "string"
+    ? { placeId: r.placeId, language: r.language as Language }
+    : null;
+}
+
+/**
+ * What goes into `messages.attachment`: the scene without review text, which
+ * Google's terms do not let us store — `reviewsFrom` (a place ID, which may be
+ * stored) is enough to fetch them again.
+ */
+export function storedPlaceScene(scene: PlaceScene): PlaceScene {
+  return { ...scene, reviews: [] };
+}
+
+/**
+ * A stored `reviews` scene with its board fetched again from Google, the
+ * dishes re-checked against the fresh texts. No board (Google failed, the
+ * reviews changed): the scene comes back without reviews and is drawn as
+ * `venue` ({@link placeSceneView}).
+ */
+export async function withFreshReviews(scene: PlaceScene, now: Date, deps: ReviewFetchDeps = {}): Promise<PlaceScene> {
+  if (scene.sceneKind !== "reviews" || !scene.reviewsFrom) return scene;
+  const reviews = await loadPlaceReviews(scene.reviewsFrom.placeId, scene.reviewsFrom.language, now, deps);
+  return { ...scene, reviews, dishes: groundDishes(scene.dishes, reviews.map((r) => r.text)) };
+}
+
+/**
+ * History: the `reviews` scenes of one page get their boards again, newest
+ * first and at most `PLACE_REVIEWS.historyRefetchMax` per read (each is a
+ * billed request); the rest are drawn as `venue`. Returns the refreshed
+ * scenes by row id.
+ */
+export async function refreshHistoryReviews(
+  rows: ReadonlyArray<{ id: string; createdAt: Date; scene: PlaceScene }>,
+  now: Date,
+  deps: ReviewFetchDeps = {},
+): Promise<Map<string, PlaceScene>> {
+  const wanted = rows
+    .filter((r) => r.scene.sceneKind === "reviews" && r.scene.reviewsFrom)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, PLACE_REVIEWS.historyRefetchMax);
+  const fresh = await Promise.all(wanted.map(async (r) => [r.id, await withFreshReviews(r.scene, now, deps)] as const));
+  return new Map(fresh);
 }
 
 /**
@@ -725,8 +840,11 @@ export function readPlaceScene(raw: unknown): PlaceScene | null {
  * out of this layer.
  */
 export function placeSceneView(scene: PlaceScene, photoUrl: (venueId: string) => string | null): PlaceSceneView {
+  // A reviews board without its reviews is a postcard of the venue.
+  const board = scene.sceneKind === "reviews" && scene.reviews.length >= PLACE_REVIEWS.min;
+  const degraded = scene.sceneKind === "reviews" && !board;
   return {
-    kind: scene.sceneKind,
+    kind: degraded ? "venue" : scene.sceneKind,
     title: scene.title,
     subtitle: scene.subtitle,
     venues: scene.venues.map(({ photoVenueId, ...venue }) => ({
@@ -734,10 +852,13 @@ export function placeSceneView(scene: PlaceScene, photoUrl: (venueId: string) =>
       photoUrl: photoVenueId ? photoUrl(photoVenueId) : null,
     })),
     anchors: scene.anchors,
-    dishes: scene.dishes,
-    links: scene.links,
+    dishes: degraded ? [] : scene.dishes,
+    links: scene.links.filter(allowedLink),
+    ...(board
+      ? { reviews: scene.reviews.map(({ author, rating, text, when, source }) => ({ author, rating, text, when, source })) }
+      : {}),
     ...(scene.versus ? { versus: scene.versus } : {}),
-    footnote: scene.footnote,
+    footnote: degraded ? null : scene.footnote,
   };
 }
 

@@ -7,7 +7,8 @@ import jwt from "jsonwebtoken";
 /**
  * `/v1/chat` and place scenes (decision 2026-11-26): `place` on the text and
  * voice replies and on history rows — only for a build that sent `places`,
- * the photo link signed on every read, nothing for an older build.
+ * the photo link signed on every read, nothing for an older build; a reviews
+ * board fetched again from Google on a history read (its text is never stored).
  */
 
 const JWT_SECRET = "test-jwt-secret-value-long-enough";
@@ -182,5 +183,66 @@ describe("history", () => {
     const a1 = res.body.messages.find((m: { id: string }) => m.id === "a1");
     expect(a1).not.toHaveProperty("place");
     expect(a1.content).toBe("Там тихо.");
+  });
+});
+
+describe("reviews board", () => {
+  const BOARD = [
+    { author: "Olena Kovalenko", rating: 5, text: "Уютная веранда, приятно посидеть вечером. Вкусная кухня и хорошее вино.", when: "2 недели назад", source: "google", authorUri: "https://www.google.com/maps/contrib/1", authorPhotoUri: null, reviewUri: null, translated: false },
+    { author: "Max", rating: 4, text: "Тихая музыка и отличный кофе, можно спокойно посидеть вдвоём и поговорить.", when: "месяц назад", source: "google", authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false },
+  ];
+  const STORED_REVIEWS = { ...STORED, sceneKind: "reviews", reviews: [], reviewsFrom: { placeId: "ChIJ-veranda", language: "ru" }, footnote: "Отзывы из Google Maps." };
+  const googleBody = {
+    reviews: [
+      { rating: 5, relativePublishTimeDescription: "неделю назад", publishTime: "2026-11-19T10:00:00Z", text: { text: "Прекрасное место, очень вкусная кухня и уютная атмосфера, хочется сидеть весь вечер.", languageCode: "ru" }, authorAttribution: { displayName: "Ira P" } },
+      { rating: 4, relativePublishTimeDescription: "месяц назад", publishTime: "2026-10-20T10:00:00Z", text: { text: "Хороший вид на парк, тихая музыка и отличный кофе. Были вдвоём, понравилось.", languageCode: "ru" }, authorAttribution: { displayName: "Dmytro" } },
+    ],
+  };
+  const row = (attachment: unknown) => [
+    { id: "a1", role: "assistant", content: "Загляни.", imageUrl: null, imageUrls: [], context: null, attachment, userReaction: null, agentReaction: null, createdAt: new Date("2026-11-26T10:00:00Z") },
+  ];
+
+  it("the live reply carries the board as `reviews` (contract fields only)", async () => {
+    turnResult = { ...REPLY, place: { ...STORED, sceneKind: "reviews", reviews: BOARD, footnote: "Отзывы из Google Maps." } };
+    const res = await request(app()).post("/v1/chat/message").set(auth()).set("X-Gennety-Chat-Cards", "places").send({ text: "где поужинать?" });
+    expect(res.body.place.kind).toBe("reviews");
+    expect(res.body.place.reviews).toEqual([
+      { author: "Olena Kovalenko", rating: 5, text: BOARD[0]!.text, when: "2 недели назад", source: "google" },
+      { author: "Max", rating: 4, text: BOARD[1]!.text, when: "месяц назад", source: "google" },
+    ]);
+  });
+
+  it("history: fetched again from Google in the stored language, never read from the row", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(googleBody), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      historyRows = row({ ...STORED_REVIEWS, reviews: BOARD });
+      const res = await request(app()).get("/v1/chat/history").set(auth()).set("X-Gennety-Chat-Cards", "places");
+      const place = res.body.messages[0].place;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe("https://places.googleapis.com/v1/places/ChIJ-veranda?languageCode=ru");
+      expect(place.kind).toBe("reviews");
+      expect(place.reviews.map((r: { author: string }) => r.author)).toEqual(["Ira P", "Dmytro"]);
+      expect(JSON.stringify(place)).not.toContain("Olena");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.PLACES_API_KEY;
+    }
+  });
+
+  it("history: Google unavailable → drawn as the venue, no board, no notice", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    process.env.PLACES_API_KEY = "test-key";
+    try {
+      historyRows = row(STORED_REVIEWS);
+      const res = await request(app()).get("/v1/chat/history").set(auth()).set("X-Gennety-Chat-Cards", "places");
+      const place = res.body.messages[0].place;
+      expect(place).toMatchObject({ kind: "venue", dishes: [], footnote: null });
+      expect(place).not.toHaveProperty("reviews");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.PLACES_API_KEY;
+    }
   });
 });

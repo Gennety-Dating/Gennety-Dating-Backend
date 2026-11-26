@@ -146,6 +146,7 @@ import {
   runGetMyPlaces,
   runSearchVenues,
   runShowPlaceScene,
+  storedPlaceScene,
   type PlaceScene,
 } from "./chat-place-scene.js";
 import { placeCityOf } from "./place-catalog.js";
@@ -1387,7 +1388,8 @@ async function runTurnInner(
       ...(!card && !offer && guide ? { attachment: guide as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && !guide && shots ? { attachment: shots as unknown as Prisma.InputJsonValue } : {}),
       ...(!card && !offer && !guide && !shots && vibe ? { attachment: vibe as unknown as Prisma.InputJsonValue } : {}),
-      ...(!card && !offer && !guide && !shots && !vibe && place ? { attachment: place as unknown as Prisma.InputJsonValue } : {}),
+      // Stored without review text (Google's terms): history fetches it again.
+      ...(!card && !offer && !guide && !shots && !vibe && place ? { attachment: storedPlaceScene(place) as unknown as Prisma.InputJsonValue } : {}),
     },
   });
   // One open offer at a time: earlier unanswered cards stop working. A failure

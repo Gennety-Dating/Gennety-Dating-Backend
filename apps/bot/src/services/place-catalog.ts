@@ -73,8 +73,6 @@ export interface PlaceFacts {
   summary: string | null;
   primaryType: string | null;
   mapsUri: string | null;
-  /** Review text the catalog holds for grounding dishes. Empty today: neither the catalog nor `PlaceCache` stores reviews. */
-  reviewTexts: string[];
   createdAt: Date;
 }
 
@@ -163,7 +161,6 @@ export function toPlaceFacts(rows: readonly PlaceRow[]): PlaceFacts[] {
       summary: summary ? summary : null,
       primaryType: row.primaryType,
       mapsUri: httpsOrNull(row.googleMapsUri),
-      reviewTexts: [],
       createdAt: row.createdAt,
     });
   }

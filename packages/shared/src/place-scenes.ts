@@ -4,13 +4,18 @@
  * `docs/product/domains/agent-place-scenes.md`, iOS plan
  * `docs/product/chat-place-scenes-plan.md` in the iOS repo).
  *
- * Every limit, the closed lists, the delivery providers and the prompt block
+ * Every limit, the closed lists, the review selection and the prompt block
  * live here so the bot, the worker, the tests and the iOS contract read one
  * source. Model instructions are English like every other model instruction;
  * the person reads the scene in their own language.
  */
 
-export const PLACE_SCENE_KINDS = ["venue", "picks", "regulars", "delivery", "hours", "route", "versus"] as const;
+/**
+ * `delivery` was dropped before release (founder, 2026-11-26): the product
+ * pulls people out to places, it does not give them a reason to stay home.
+ * `reviews` took its place — real Google reviews pinned to a board.
+ */
+export const PLACE_SCENE_KINDS = ["venue", "picks", "regulars", "reviews", "hours", "route", "versus"] as const;
 export type PlaceSceneKind = (typeof PLACE_SCENE_KINDS)[number];
 
 /** How many venues each kind carries (`ChatPlaceScene.venues`). */
@@ -18,7 +23,7 @@ export const PLACE_SCENE_VENUES: Readonly<Record<PlaceSceneKind, { min: number; 
   venue: { min: 1, max: 1 },
   picks: { min: 2, max: 3 },
   regulars: { min: 1, max: 1 },
-  delivery: { min: 1, max: 1 },
+  reviews: { min: 1, max: 1 },
   hours: { min: 1, max: 1 },
   route: { min: 1, max: 1 },
   versus: { min: 2, max: 2 },
@@ -89,79 +94,60 @@ export const PLACE_TIPS = {
 export const PLACE_CATEGORIES = ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"] as const;
 export type PlaceCategory = (typeof PLACE_CATEGORIES)[number];
 
+/** Link providers a scene may carry (`ChatPlaceLink.provider`). Never a delivery service. */
+export const PLACE_LINK_PROVIDERS = ["maps", "web"] as const;
+export type PlaceLinkProvider = (typeof PLACE_LINK_PROVIDERS)[number];
+
 /**
- * Delivery: search links on the provider's own site, by city and venue name.
- * The catalog has no menu links, so the button searches the place at the
- * service. Formats checked on the public sites 2026-11-26 (read-only):
- * - Glovo: `https://glovoapp.com/<lang>/<country>/<city>/search?q=…` — the
- *   2025 site moved the language in front of the country; the brief's
- *   `/<country>/<lang>/…` form now 308-redirects to a 404. German has no
- *   Glovo page for Ukraine and falls back to English.
- * - Bolt Food: `https://food.bolt.eu/<locale>/<cityId>-<city>/search/?q=…`
- *   (Kyiv is `325-kyiv`); every one of our five locales answers.
- * Only cities listed here get a link; a provider absent from a city is absent.
+ * The `reviews` scene (founder, 2026-11-26): 2–3 REAL Google reviews of one
+ * venue, quoted verbatim or cut at a sentence, chosen by the server — the
+ * model never writes or paraphrases one. Selection rules in
+ * `apps/bot/src/services/place-reviews.ts`; storage and attribution rules in
+ * `docs/product/domains/agent-place-scenes.md` phase 5.
  */
-export const DELIVERY_PROVIDERS = ["glovo", "bolt"] as const;
-export type DeliveryProvider = (typeof DELIVERY_PROVIDERS)[number];
-
-interface DeliveryCity {
-  glovo?: { country: string; city: string };
-  bolt?: { city: string };
-}
-
-export const DELIVERY_CITIES: Readonly<Record<string, DeliveryCity>> = {
-  "ua:kyiv": {
-    glovo: { country: "ua", city: "kyiv" },
-    bolt: { city: "325-kyiv" },
-  },
-};
-
-const GLOVO_LANG: Readonly<Record<string, string>> = { en: "en", ru: "ru", uk: "uk", pl: "pl", de: "en" };
-const BOLT_LOCALE: Readonly<Record<string, string>> = { en: "en", ru: "ru-ru", uk: "uk-ua", pl: "pl-pl", de: "de-de" };
-
-/** The provider's search link for one venue, or null where it does not deliver. */
-export function deliverySearchUrl(
-  provider: DeliveryProvider,
-  cityKey: string | null | undefined,
-  venueName: string,
-  language: string,
-): string | null {
-  const city = cityKey ? DELIVERY_CITIES[cityKey.trim().toLowerCase()] : undefined;
-  const name = venueName.replace(/\s+/g, " ").trim();
-  if (!city || !name) return null;
-  const q = encodeURIComponent(name);
-  if (provider === "glovo" && city.glovo) {
-    const lang = GLOVO_LANG[language] ?? "en";
-    return `https://glovoapp.com/${lang}/${city.glovo.country}/${city.glovo.city}/search?q=${q}`;
-  }
-  if (provider === "bolt" && city.bolt) {
-    const locale = BOLT_LOCALE[language] ?? "en";
-    return `https://food.bolt.eu/${locale}/${city.bolt.city}/search/?q=${q}`;
-  }
-  return null;
-}
-
-/** Display names of the providers — brand names, never translated. */
-export const DELIVERY_PROVIDER_LABELS: Readonly<Record<DeliveryProvider, string>> = {
-  glovo: "Glovo",
-  bolt: "Bolt Food",
-};
+export const PLACE_REVIEWS = {
+  /** A board needs at least this many usable reviews, or the scene is refused. */
+  min: 2,
+  max: 3,
+  /** The quoted text, after cutting at a sentence boundary. */
+  textMinLen: 60,
+  textMaxLen: 220,
+  /** Reviews at or above this rating come first. */
+  preferRating: 4,
+  /** Below this a review never goes on an «go there» board. */
+  floorRating: 3,
+  /** The author name as Google gives it, cut only if absurdly long. */
+  authorMaxLen: 40,
+  /**
+   * Review text may not be stored (Google Maps Platform Terms 3.2.3), so a
+   * history read fetches it again: at most this many scenes per read; the
+   * rest are drawn as a plain `venue` scene.
+   */
+  historyRefetchMax: 3,
+} as const;
 
 /** The prompt block on a turn that offers the place tools. */
 export const PLACE_SCENE_RULES = `### Places — search, then one scene
 The app draws an answer about places as an animated scene AFTER your reply
-(decision 2026-11-26). Rules:
+(decision 2026-11-26). The point of every place answer is to get them OUT to a
+place, never to keep them home: no ordering in, no delivery apps, no «stay in
+tonight». Rules:
 1. Whenever they ask about a place — where to go, what is near, is X open,
-   how far, A or B, what to order — call search_venues first, then at most ONE
-   show_place_scene with ids from those results. Never name a place you did
-   not get from search_venues or get_my_places, and never invent an address,
-   a rating, hours, prices, a distance or a dish: the server fills every fact.
+   how far, A or B, what is good there — call search_venues first, then at
+   most ONE show_place_scene with ids from those results. Never name a place
+   you did not get from search_venues or get_my_places, and never invent an
+   address, a rating, hours, prices, a distance, a dish or a review: the
+   server fills every fact.
 2. Pick the kind that answers the question:
    - venue: one place they asked about, or the one you recommend;
    - picks: 2–3 recommendations («куда сходить», «что рядом»);
    - regulars: a new place near the places they go to (only after
      get_my_places, with its ids as anchor_ids);
-   - delivery: they want to eat at home / order in — one place;
+   - reviews: one place worth an evening, with 2–3 real Google reviews the
+     server pins to a board — when they want to eat out, ask what a place is
+     like, or wonder whether it is worth going. Your title and subtitle invite
+     them to pick an evening and drop in («Выбери вечер и загляни», «Там
+     приятно сидеть») — you never quote, sum up or paraphrase a review;
    - hours: is it open, until when, will they make it;
    - route: how far, how long to walk (anchor_ids: one start — a place id from
      get_my_places or a venue id from search_venues);
@@ -169,8 +155,10 @@ The app draws an answer about places as an animated scene AFTER your reply
      side per row, and a winner.
 3. Your text: 1–2 short sentences that add what the scene does not show — why
    it fits THEM, when to go, what to watch for. Do not list the names, hours,
-   ratings, addresses or minutes the scene already shows.
-4. Dishes: only names the tool result says are grounded; otherwise none. Do
-   not mention dishes in your text either unless the result named them.
-5. Nothing fits, or the search is empty: say so in words, no scene. A place
-   in another city than theirs: words only.`;
+   ratings, addresses, minutes or reviews the scene already shows.
+4. Dishes: only on a reviews scene, as names you expect there; the server
+   keeps one only when a chosen review names it. Do not mention dishes in your
+   text unless the scene's result listed them.
+5. A reviews scene that is refused (too few good reviews): choose venue or
+   picks instead. Nothing fits, or the search is empty: say so in words, no
+   scene. A place in another city than theirs: words only.`;

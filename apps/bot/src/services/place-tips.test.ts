@@ -113,7 +113,22 @@ describe("pickTipPlace", () => {
     expect(scene.anchors).toEqual([{ label: "Gym Café", lat: 50.45, lng: 30.52, visits: 6 }]);
     expect(scene.subtitle).toMatch(/^\d+ мин от Gym Café$/);
     expect(line).toMatch(new RegExp(`^${pick.place.name} — в \\d+ мин от Gym Café, и это место для тебя новое\\.$`));
+    expect(scene.reviews).toEqual([]);
   });
+
+  it("with two real reviews the tip is a reviews board; one review is not enough", () => {
+    const pick = pickTipPlace({ catalog, regulars: [regular], visitedPlaceIds: new Set(), tippedVenueIds: new Set(), now: NOON })!;
+    const board = buildTip(pick, [regular], "ru", NOON, [BOARD_REVIEW("A"), BOARD_REVIEW("B")]).scene;
+    expect(board).toMatchObject({ sceneKind: "reviews", anchors: [], reviewsFrom: { placeId: pick.place.placeId, language: "ru" } });
+    expect(board.reviews).toHaveLength(2);
+    expect(board.subtitle).toMatch(/^\d+ мин от Gym Café$/);
+    expect(buildTip(pick, [regular], "ru", NOON, [BOARD_REVIEW("A")]).scene.sceneKind).toBe("regulars");
+  });
+});
+
+const BOARD_REVIEW = (author: string) => ({
+  author, rating: 5, text: "Затишна веранда, приємно посидіти ввечері, смачна кухня й добре вино.", when: "тиждень тому",
+  source: "google" as const, authorUri: null, authorPhotoUri: null, reviewUri: null, translated: false,
 });
 
 describe("sendPlaceTips", () => {
@@ -135,7 +150,7 @@ describe("sendPlaceTips", () => {
 
   it("an eligible person: one assistant row with the scene, one push to that chat", async () => {
     const push = vi.fn(async () => true);
-    expect(await sendPlaceTips(NOON, { users: [USER], push })).toBe(1);
+    expect(await sendPlaceTips(NOON, { users: [USER], push, reviews: async () => [] })).toBe(1);
     const where = (db.userFindMany.mock.calls.at(-1)![0] as { where: Record<string, unknown> }).where;
     expect(where).toMatchObject({ id: { in: [USER] }, frequentPlacesOptIn: true, notifyOnlyDates: false, platform: { in: ["mobile", "both"] } });
     const data = db.messageCreate.mock.calls.at(-1)![0].data as { role: string; sessionId: string; content: string; attachment: { venues: Array<{ id: string }>; proactive: boolean } };
@@ -144,6 +159,16 @@ describe("sendPlaceTips", () => {
     expect(data.attachment.proactive).toBe(true);
     expect(data.content).toContain("Place new");
     expect(push).toHaveBeenCalledWith(USER, expect.objectContaining({ title: "Нове поруч із твоїми місцями", data: { type: "chat.reply", sessionId: "s-new" } }));
+  });
+
+  it("Google has a board for the place: a reviews tip, stored without review text", async () => {
+    const reviews = vi.fn(async () => [BOARD_REVIEW("Olena K"), BOARD_REVIEW("Max")]);
+    expect(await sendPlaceTips(NOON, { users: [USER], push: async () => true, reviews })).toBe(1);
+    expect(reviews).toHaveBeenCalledWith("pl-new", "uk", NOON);
+    const data = db.messageCreate.mock.calls.at(-1)![0].data as { attachment: Record<string, unknown> };
+    expect(data.attachment).toMatchObject({ sceneKind: "reviews", proactive: true, reviews: [], reviewsFrom: { placeId: "pl-new", language: "uk" }, anchors: [] });
+    expect(JSON.stringify(data.attachment)).not.toContain("веранда");
+    expect(data.attachment.footnote).toBe("Відгуки з Google Maps. Ми обрали свіжі й добрі — про місце та їжу.");
   });
 
   it("a tip two days ago: nothing", async () => {
