@@ -25,6 +25,8 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    - item 5 — one announcement push per person per week; the inbox row is still written; no schema.
    - item 6 — «только мои свидания» per-type mute: `users.notify_only_dates`, every non-date proactive sender skips a
      muted person, Settings toggle, `onlyMyDates` on `/v1/me/notifications`.
+   - item 8 — Telegram memory wiring moved into `services/telegram-memory-turn.ts` (no behaviour change; still behind
+     `AGENT_MEMORY_ENABLED` / `AGENT_MEMORY_USER_IDS`). Items 7 (banner kept) and 9 (advisor phase 4 waits) change no code.
 2. Ship: migrations FIRST, in order (all additive, the new code reads the columns):
    - `20261126100000_profiler_pause_off_switch` — three columns on `profiles`.
    - `20261126120000_notify_only_dates` — one boolean on `users`.

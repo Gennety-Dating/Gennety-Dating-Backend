@@ -122,3 +122,34 @@ proactive senders, not from the agent. Each item below changes one of them.
 7. Demo mode: the same switch and the same senders; the demo runs fewer of
    them (no announcement fan-out, no waiting notices), so there is less to
    mute.
+
+## Item 7 — The pinned countdown banner (kept)
+
+Kept as it is, as recommended: it re-edits a message already on screen and
+sends no notification. No code changed.
+
+## Item 8 — Telegram memory (already built; tests added)
+
+1. Checked first, as asked: the long-term-memory work (decision 2026-11-19,
+   question 6.5) had already given the Telegram agent the app's person card,
+   the memory block, the four memory tools and `search_past_chats` /
+   `read_past_chat`, behind `AGENT_MEMORY_ENABLED` / `AGENT_MEMORY_USER_IDS`.
+   It reached production dark on 2026-11-24.
+2. Missing was only coverage. The wiring moved unchanged from
+   `menu-agent.ts` into `services/telegram-memory-turn.ts` and is tested
+   there: flag off gives the old turn, flag on gives card, block, note and
+   tools, and a failing card drops only the card.
+3. Not changed: the Telegram replay window (24 h, 12 messages). Nothing new
+   is behind a new flag; the existing memory flag and preview ids gate it.
+
+## Item 9 — Advisor phase 4 (waiting, deliberately not built)
+
+The founder's decision is to wait: the agent does not write first after a
+date until this block has settled with real users. When it comes it stays
+event-only (`agent-advisor.md`). Recorded here so the next session does not
+build it.
+
+## Deploy
+
+Not deployed. Production and both migrations wait for the founder's separate
+«да» (`docs/operations/deploy-journal/pending.md`).

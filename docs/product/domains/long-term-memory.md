@@ -235,8 +235,9 @@ way `agent-stances.ts` is.
    `remember`, `update_memory`, `forget_memory`). That is what makes the two
    surfaces one friend. The agent audit (`agent-concept.md`, principle 8 and
    phase 4 item 8) proposes closing the rest of the Telegram gap in this same
-   work: the person card and `search_past_chats` there too. That waits for
-   the founder's answer to question 6.5 of the decision. The local time and
+   work: the person card and `search_past_chats` there too. The founder said
+   yes (question 6.5) and it was built behind the same flag; since
+   2026-11-26 the wiring lives in `services/telegram-memory-turn.ts`. The local time and
    `relationshipIntents` already ride the concept block, so the memory block
    does not repeat them.
 5. **Token cost.** The block is about 450 tokens at most and the rules about

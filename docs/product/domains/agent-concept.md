@@ -262,11 +262,19 @@ the founder's separate «да» for the deploy and the migrations.
    `services/notification-mute.ts`; a new proactive sender adds itself there.
    Toggle: the bot's ⚙️ Settings («🔕 Только мои свидания») and
    `PATCH /v1/me/notifications { onlyMyDates }`.
-7. **The pinned countdown banner.** Keep it: it is information that is
-   already on screen, not a new ping. Recommendation: keep.
-8. **Telegram memory.** Give the Telegram agent the app's person card and its
-   past-chat search, so the friend with a memory exists on both surfaces.
-   Recommendation: yes, together with the `chat-memory` work.
-9. **Advisor phase 4** (the agent writes first after a date). Keep it
-   event-only, as `agent-advisor.md` specifies, and build it only after this
-   block has settled with real users. Recommendation: wait.
+7. **The pinned countdown banner — kept, no change.** It re-edits a message
+   already on screen and sends no notification (`status-timer.ts`,
+   `proposal-countdown.ts`).
+8. **Telegram memory — already built, now covered.** The long-term-memory
+   work (decision 2026-11-19, its question 6.5) had shipped the person card,
+   the memory block, the four memory tools and `search_past_chats` /
+   `read_past_chat` to the Telegram agent behind `AGENT_MEMORY_ENABLED` /
+   `AGENT_MEMORY_USER_IDS`; it is on production dark since 2026-11-24. Only
+   the tests were missing: the wiring moved into
+   `services/telegram-memory-turn.ts` unchanged and is tested there. The
+   Telegram replay window (24 h, 12 messages) is unchanged; the notes and
+   the past-chat search carry the long memory.
+9. **Advisor phase 4 (the agent writes first after a date) — waiting, not
+   built.** The founder's decision on 2026-11-26 is to wait until this block
+   has settled with real users. It stays event-only, as `agent-advisor.md`
+   specifies, when it comes.
