@@ -31,6 +31,7 @@ vi.mock("./storage.js", () => ({
 
 const {
   announcementFanoutTick,
+  announcementPushedWithinGap,
   attachAnnouncementMedia,
   audienceWhere,
   parseAnnouncementFields,
@@ -324,6 +325,39 @@ describe("announcementFanoutTick", () => {
     expect(inboxMarks.has(ID)).toBe(false);
   });
 
+  it("one announcement push per person per week: the row stays, the phone stays quiet (phase 4 item 5)", async () => {
+    const written = new Date("2026-09-13T11:00:00Z");
+    db.inboxItem.findMany
+      .mockResolvedValueOnce([
+        { id: "r1", userId: USER, readAt: null, createdAt: written },
+        { id: "r2", userId: "u2", readAt: null, createdAt: written },
+      ])
+      .mockResolvedValueOnce([]);
+    db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+    // USER was pushed another announcement three days ago; u2 was not.
+    db.user.findUnique.mockImplementation(async (args: { where: { id: string } }) =>
+      args.where.id === USER
+        ? {
+            inboxItems: [
+              {
+                createdAt: new Date("2026-09-10T10:00:00Z"),
+                pushedAt: new Date("2026-09-10T10:05:00Z"),
+                readAt: null,
+              },
+            ],
+          }
+        : { inboxItems: [] },
+    );
+
+    const result = await announcementFanoutTick({ ...deps(), send: sendPushToUser });
+
+    expect(sendPushToUser).toHaveBeenCalledTimes(1);
+    expect(sendPushToUser.mock.calls[0][0]).toBe("u2");
+    // Held row: marked handled, back-dated to its write time (never counts as a push).
+    expect(db.inboxItem.update).toHaveBeenCalledWith({ where: { id: "r1" }, data: { pushedAt: written } });
+    expect(result.pushed).toBe(1);
+  });
+
   it("does not ring a phone about something already read in the app", async () => {
     db.inboxItem.findMany.mockResolvedValueOnce([{ id: "r1", userId: USER, readAt: NOW }]).mockResolvedValueOnce([]);
     db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
@@ -332,5 +366,34 @@ describe("announcementFanoutTick", () => {
 
     expect(sendPushToUser).not.toHaveBeenCalled();
     expect(db.inboxItem.update).toHaveBeenCalledWith({ where: { id: "r1" }, data: { pushedAt: NOW } });
+  });
+});
+
+describe("announcementPushedWithinGap", () => {
+  const at = (iso: string) => new Date(iso);
+  const check = (rows: unknown[]) => {
+    db.user.findUnique.mockResolvedValueOnce({ inboxItems: rows });
+    return announcementPushedWithinGap(USER, ID, NOW);
+  };
+
+  it("counts a real push in the window, read or not", async () => {
+    expect(await check([{ createdAt: at("2026-09-10T10:00:00Z"), pushedAt: at("2026-09-10T10:01:00Z"), readAt: null }])).toBe(true);
+    expect(await check([{ createdAt: at("2026-09-10T10:00:00Z"), pushedAt: at("2026-09-10T10:01:00Z"), readAt: at("2026-09-10T12:00:00Z") }])).toBe(true);
+  });
+
+  it("does not count a row the cap held (pushedAt = createdAt) — the cap cannot feed itself", async () => {
+    expect(await check([{ createdAt: at("2026-09-10T10:00:00Z"), pushedAt: at("2026-09-10T10:00:00Z"), readAt: null }])).toBe(false);
+  });
+
+  it("does not count a row read before its push moment (no phone rang)", async () => {
+    expect(await check([{ createdAt: at("2026-09-10T02:00:00Z"), pushedAt: at("2026-09-10T09:00:00Z"), readAt: at("2026-09-10T03:00:00Z") }])).toBe(false);
+  });
+
+  it("asks only about other sendPush announcements inside seven days", async () => {
+    await check([]);
+    const where = db.user.findUnique.mock.calls.at(-1)![0].select.inboxItems.where;
+    expect(where.announcementId).toEqual({ not: ID });
+    expect(where.announcement).toEqual({ sendPush: true });
+    expect(where.pushedAt.gte).toEqual(new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000));
   });
 });

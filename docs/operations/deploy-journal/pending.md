@@ -22,6 +22,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
    - item 2 — onboarding re-engagement: five touches per account for life, brief «name the one step left»; no schema.
    - item 3 — the expired-match notice no longer carries the Rematch offer; no schema.
    - item 4 — campus drop and the T+24h feedback prompt wait out quiet hours (23:00–09:00 Kyiv); no schema.
+   - item 5 — one announcement push per person per week; the inbox row is still written; no schema.
 2. Ship: migrations FIRST, in order (all additive, the new code reads the columns):
    - `20261126100000_profiler_pause_off_switch` — three columns on `profiles`.
    Then `db:generate`, the shared + bot build and restart. No new env, no flag: the changes are live with the deploy.

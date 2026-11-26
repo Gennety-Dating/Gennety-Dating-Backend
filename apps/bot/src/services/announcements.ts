@@ -4,6 +4,7 @@ import {
   ANNOUNCEMENT_LIMITS,
   ANNOUNCEMENT_MEDIA,
   ANNOUNCEMENT_PUSH_INTERVAL_MS,
+  ANNOUNCEMENT_PUSH_MIN_GAP_MS,
   ANNOUNCEMENT_PUSH_TYPE,
 } from "@gennety/shared";
 import { isQuietHours } from "../workers/quiet-hours.js";
@@ -744,13 +745,21 @@ async function pushPending(a: Deliverable, deps: PushDeps): Promise<{ pushed: nu
     if (deps.quiet(deps.now())) return { pushed, held: true };
     const rows = await prisma.inboxItem.findMany({
       where: { announcementId: a.id, pushedAt: null },
-      select: { id: true, userId: true, readAt: true },
+      select: { id: true, userId: true, readAt: true, createdAt: true },
       orderBy: { id: "asc" },
       take: 200,
     });
     if (rows.length === 0) return { pushed, held: false };
     for (const row of rows) {
       if (deps.quiet(deps.now())) return { pushed, held: true };
+      // One announcement push per person per week (agent concept phase 4
+      // item 5). The row stays in the inbox; it is marked handled with
+      // `pushedAt = createdAt`, the "held by the cap" marker, so it never
+      // counts as a push itself.
+      if (!row.readAt && (await announcementPushedWithinGap(row.userId, a.id, deps.now()))) {
+        await prisma.inboxItem.update({ where: { id: row.id }, data: { pushedAt: row.createdAt } });
+        continue;
+      }
       // Someone who already opened it in the app (it was in their inbox
       // through the night) does not need the phone to ring about it at nine.
       if (!row.readAt) {
@@ -763,4 +772,46 @@ async function pushPending(a: Deliverable, deps: PushDeps): Promise<{ pushed: nu
       if (!row.readAt) await deps.sleep(ANNOUNCEMENT_PUSH_INTERVAL_MS);
     }
   }
+}
+
+/**
+ * Did this person get another announcement's push inside
+ * `ANNOUNCEMENT_PUSH_MIN_GAP_MS`? Read from the inbox rows themselves, so no
+ * extra column (agent concept phase 4 item 5):
+ * - a row of a `sendPush` announcement whose `pushedAt` is in the window;
+ * - `pushedAt > createdAt` — a row held by this cap is back-dated to its
+ *   `createdAt` and never counts, so the cap cannot feed itself;
+ * - not read before its push moment (`readAt` null or after `pushedAt`) — a
+ *   row skipped because it was already read rang no phone.
+ * A push the provider refused (no token) still counts: the cap errs quiet.
+ */
+export async function announcementPushedWithinGap(
+  userId: string,
+  announcementId: string,
+  now: Date,
+): Promise<boolean> {
+  const since = new Date(now.getTime() - ANNOUNCEMENT_PUSH_MIN_GAP_MS);
+  // Read through the person, not the fan-out's own `inboxItem` cursor.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      inboxItems: {
+        where: {
+          type: ANNOUNCEMENT_PUSH_TYPE,
+          announcementId: { not: announcementId },
+          pushedAt: { gte: since },
+          announcement: { sendPush: true },
+        },
+        select: { createdAt: true, pushedAt: true, readAt: true },
+        orderBy: { pushedAt: "desc" },
+        take: 10,
+      },
+    },
+  });
+  return (user?.inboxItems ?? []).some(
+    (r) =>
+      r.pushedAt !== null &&
+      r.pushedAt.getTime() > r.createdAt.getTime() &&
+      (r.readAt === null || r.readAt.getTime() >= r.pushedAt.getTime()),
+  );
 }

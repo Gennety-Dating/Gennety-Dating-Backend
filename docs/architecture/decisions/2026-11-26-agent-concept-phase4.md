@@ -81,3 +81,16 @@ proactive senders, not from the agent. Each item below changes one of them.
    the morning tick.
 4. Demo mode: the demo runs no campus drop; the T+24h prompt follows the same
    window there.
+
+## Item 5 — Announcements cap (built)
+
+1. At most one announcement push per person in seven days
+   (`ANNOUNCEMENT_PUSH_MIN_GAP_MS`). The inbox row is still written and stays
+   unread.
+2. **Decided in the build:** no new column. The cap reads the person's other
+   inbox rows. A held row is marked handled with `pushedAt = createdAt`;
+   a real push always lands after its row was written, so `pushedAt >
+   createdAt` separates the two, and a held row can never extend the cap.
+   A push APNs refused (no token) still counts, so the cap errs quiet.
+3. Not capped: the admin preview (one founder-picked account).
+4. Demo mode: the fan-out is not scheduled in demo; nothing changes there.

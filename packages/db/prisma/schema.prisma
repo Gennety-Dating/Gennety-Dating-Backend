@@ -3278,7 +3278,9 @@ model InboxItem {
   createdAt DateTime  @default(now()) @map("created_at")
   readAt    DateTime? @map("read_at")
   /// Set once APNs accepted the push, or when no push applies. The fan-out
-  /// resumes from `pushedAt IS NULL` after a restart.
+  /// resumes from `pushedAt IS NULL` after a restart. An announcement row held
+  /// by the one-push-per-week cap (agent concept phase 4 item 5) is set to its
+  /// own `createdAt` — the marker that keeps it out of the cap's own count.
   pushedAt  DateTime? @map("pushed_at")
 
   /// One announcement lands once per person — the fan-out's restart guard.

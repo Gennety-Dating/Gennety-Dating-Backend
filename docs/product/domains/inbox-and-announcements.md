@@ -80,6 +80,14 @@ draft ──schedule──▶ scheduled ──(worker claims)──▶ sending �
   (`ANNOUNCEMENT_PUSH_INTERVAL_MS`). Quiet hours (23:00–09:00 Kyiv) hold the
   pushes and resume them on the first tick after nine; the inbox rows are
   already there. Someone who read it in the app overnight is not pushed.
+- **One push per person per week** (agent concept phase 4 item 5, founder
+  2026-11-26; `ANNOUNCEMENT_PUSH_MIN_GAP_MS`). Before each push the fan-out
+  checks the person's other `sendPush` announcement rows: a real push inside
+  seven days (`pushedAt` in the window, after `createdAt`, not read before
+  it) holds this one. The inbox row is still written and stays unread; it is
+  marked handled with `pushedAt = createdAt`, which is also what keeps a held
+  row out of the next week's count. A push APNs refused still counts — the
+  cap errs quiet. The admin preview is not capped.
   Restart-safe: claiming is a CAS, rows are unique, pushes resume from
   `pushed_at IS NULL`.
 - **Push payload** — `type: "announcement"`, `inboxItemId`, `announcementId`,

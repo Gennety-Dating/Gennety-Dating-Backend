@@ -97,6 +97,13 @@ export const ANNOUNCEMENT_PUSH_INTERVAL_MS = 100;
 export const ANNOUNCEMENT_INBOX_BATCH = 500;
 
 /**
+ * At most one announcement push per person in this window (agent concept
+ * phase 4 item 5, founder 2026-11-26). A second announcement inside it still
+ * writes its inbox row; only the phone stays quiet.
+ */
+export const ANNOUNCEMENT_PUSH_MIN_GAP_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * How long a context-bearing chat message keeps grounding the agent. The same
  * silence that cuts a chat topic (`services/chat-topics.ts`): past it, the
  * person has moved on and the old announcement would only mislead the model.

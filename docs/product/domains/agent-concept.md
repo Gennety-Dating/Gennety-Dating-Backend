@@ -243,8 +243,10 @@ the founder's separate «да» for the deploy and the migrations.
    night (`workers/campus-drop.ts`), so no proposal deadline starts while the
    person sleeps. The T+24h prompt and its push are held, while the match
    still turns `completed` on time (`services/date-lifecycle.ts`).
-5. **Announcements cap.** At most one announcement push per person per
-   week; the inbox row is still written. Recommendation: yes.
+5. **Announcements cap — built.** At most one announcement push per person
+   per week (`ANNOUNCEMENT_PUSH_MIN_GAP_MS`); the inbox row is still written.
+   No schema: a held row is marked `pushedAt = createdAt`
+   (`services/announcements.ts`, `announcementPushedWithinGap`).
 6. **A per-type mute** («only my dates») in settings. It needs a schema
    field, so it is asked separately. Recommendation: yes, after 1–5.
 7. **The pinned countdown banner.** Keep it: it is information that is
