@@ -11,6 +11,23 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+## **PENDING** — prompt cache, part 3: live part out of the cached block, fixed 30-row window, Telegram live part split (2026-11-28)
+
+Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, part 3.
+Code only: no schema, no migration, no env, no dependency. Demo mode: same code.
+iOS: none.
+
+```bash
+# after deploy: a NEW app chat, three messages; and two Telegram agent messages
+pm2 logs gennety-bot --lines 300 --nostream | grep -E "\[llm-usage\]|\[chat\] turn usage"
+# → app: turn 1 cached=0, turns 2+ cached ≈ the rules+tools block (most of prompt)
+# → Telegram: from the second message on, cached > 0
+```
+
+**Rollback:** revert the commit, sync, restart.
+
+---
+
 ## **Deployed 2026-11-26 (was PENDING; production `83f8376e`, see [2026-11-26-token-budget.md](./2026-11-26-token-budget.md))** — token budget: cached tokens at a tenth + usage log + cache-friendly request (2026-11-26)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`.

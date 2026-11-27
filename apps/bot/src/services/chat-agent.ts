@@ -57,7 +57,7 @@ import {
   type MenuAgentAction,
 } from "./menu-agent.js";
 import { buildSystemPromptParts } from "./prompt-builder.js";
-import { HISTORY_STEP, LIVE_PART_HEADER, joinPromptPart, splitRuleBlocks, steppedWindowSize } from "./prompt-layout.js";
+import { LIVE_PART_HEADER, joinPromptPart, livePartIndex, splitRuleBlocks } from "./prompt-layout.js";
 import {
   activeChatContext,
   buildChatContextBlock,
@@ -1508,19 +1508,13 @@ async function buildChatMessages(
   /** The newest offer card in this chat still waiting for an answer. */
   openOffer: { messageId: string; tool: string } | null;
 }> {
-  // Stepped window (decision 2026-11-26): up to `HISTORY_STEP - 1` rows more
-  // than `HISTORY_LIMIT`, starting on a multiple of the step, so the history's
-  // first rows stay the same for several turns and the provider's prompt cache
-  // covers them. Never fewer rows than before.
-  const fetched = await prisma.message.findMany({
+  // A fixed window again (decision 2026-11-26, part 3): the provider never
+  // reuses the history on its own, so a stepped window only paid for more rows.
+  const rows = await prisma.message.findMany({
     where: { userId, sessionId },
     orderBy: { createdAt: "desc" },
-    take: HISTORY_LIMIT + HISTORY_STEP - 1,
+    take: HISTORY_LIMIT,
   });
-  const windowSize = fetched.length > HISTORY_LIMIT
-    ? steppedWindowSize((await chatRowCount(userId, sessionId)) ?? HISTORY_LIMIT, HISTORY_LIMIT)
-    : fetched.length;
-  const rows = fetched.slice(0, Math.min(fetched.length, Math.max(HISTORY_LIMIT, windowSize)));
   rows.reverse();
   const openedNewSession = rows.filter((row) => row.role !== "system").length === 1;
   // A full window may mean an older start this turn cannot see.
@@ -1745,18 +1739,9 @@ async function buildChatMessages(
     // `system` rows are ignored — our SYSTEM_PROMPT is canonical.
   }
 
-  // The live part goes right before the message being answered, so the
-  // history above it stays a cacheable prefix.
-  if (live) {
-    let at = out.length;
-    for (let i = out.length - 1; i > 0; i--) {
-      if (out[i]!.role === "user") {
-        at = i;
-        break;
-      }
-    }
-    out.splice(at, 0, { role: "system", content: `${LIVE_PART_HEADER}\n\n${live}` });
-  }
+  // The live part goes next to the message being answered and never into the
+  // leading system run, which the provider caches as one block with the tools.
+  if (live) out.splice(livePartIndex(out), 0, { role: "system", content: `${LIVE_PART_HEADER}\n\n${live}` });
 
   return { messages: out, openedNewSession, refreshSummary: earlier?.refresh ?? false, visiblePhotos, openCardItems, openOffer };
 }
@@ -1771,16 +1756,6 @@ async function buildChatMessages(
  * summary is missing or `CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES` behind, it is
  * rewritten after the reply, for the next turn.
  */
-/** Rows in this chat, for the stepped window; null when the count fails. */
-async function chatRowCount(userId: string, sessionId: string): Promise<number | null> {
-  try {
-    return await prisma.message.count({ where: { userId, sessionId } });
-  } catch (err) {
-    console.warn("[chat] row count unavailable:", err instanceof Error ? err.name : "error");
-    return null;
-  }
-}
-
 async function earlierInThisChat(sessionId: string): Promise<{ block: string | null; refresh: boolean } | null> {
   const [count, session] = await Promise.all([
     prisma.message.count({ where: { sessionId, role: { not: "system" } } }),

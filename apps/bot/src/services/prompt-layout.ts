@@ -71,17 +71,22 @@ export function joinPromptPart(pieces: ReadonlyArray<string | null | undefined |
   return pieces.filter((piece): piece is string => typeof piece === "string" && piece.trim().length > 0).join("\n\n");
 }
 
-/** Window history in steps so its start stays put for several turns (decision 2026-11-26). */
-export const HISTORY_STEP = 10;
-
 /**
- * How many of the newest rows to show when the chat holds `total` rows and at
- * least `min` are owed: the window starts on a multiple of `step`, so it shows
- * between `min` and `min + step - 1` rows and its first row stays the same for
- * `step` new rows. Never fewer than `min` (or `total`, when smaller).
+ * Where the live part goes in a request (decision 2026-11-26, part 3).
+ *
+ * Measured on gpt-6-luna: the provider reuses the leading run of system
+ * messages together with the tools as ONE block — a change anywhere in it,
+ * even its last character, and nothing of it is reused. So the live part must
+ * never join that run. It goes right before the message being answered; on the
+ * first turn of a chat, where that message sits directly under the rules, it
+ * goes right after it instead. Without this, every chat's second turn missed
+ * the cache: the first turn's block held the live part, the second's did not.
  */
-export function steppedWindowSize(total: number, min: number, step = HISTORY_STEP): number {
-  if (total <= min) return total;
-  const start = Math.floor((total - min) / step) * step;
-  return total - start;
+export function livePartIndex(messages: ReadonlyArray<{ role: string }>): number {
+  let lead = 0;
+  while (lead < messages.length && messages[lead]!.role === "system") lead++;
+  for (let i = messages.length - 1; i >= lead; i--) {
+    if (messages[i]!.role === "user") return i > lead ? i : i + 1;
+  }
+  return messages.length;
 }

@@ -18,9 +18,9 @@ way `agent-stances.ts` is.
 ## Phase 1 — What exists today
 
 1. **The app chat (`chat-agent.ts`).** The agent sees only the current chat.
-   - It sees the newest 30–39 rows: the window starts on a multiple of ten
-     rows, so its start stays put for several turns and stays in the
-     provider's prompt cache (decision 2026-11-26). When a chat is longer,
+   - It sees the newest 30 rows (a stepped 30–39 window was tried on
+     2026-11-26 and reverted the next day: the provider never caches the
+     history on its own). When a chat is longer,
      its own summary rides the prompt as «Earlier in this chat», a system
      message right before the history. That summary lives in
      `ChatSession.summary` and is rewritten when it falls

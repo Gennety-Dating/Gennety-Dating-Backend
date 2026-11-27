@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Cache-friendly request layout (decision 2026-11-26).
+ * Cache-friendly request layout (decision 2026-11-26, parts 2 and 3).
  *
- * The provider reuses a prompt only up to the first token that changed since
- * the previous call. So the request goes: fixed rules → history → live data →
- * the person's message; the history window moves in steps of ten rows so its
- * start stays put; and the calls carry a per-person `prompt_cache_key`, which
- * is dropped for good the moment the API refuses it.
+ * The provider reuses the leading system message together with the tools as
+ * one block, only when it is identical. So the request goes: fixed rules →
+ * history → live data → the person's message, and on a chat's first turn the
+ * live part follows their message so it never joins that block. The calls
+ * carry a per-person `prompt_cache_key`, dropped for good the moment the API
+ * refuses it.
  */
 
 const messageCreate = vi.fn();
@@ -134,14 +135,11 @@ describe("request layout", () => {
   });
 });
 
-describe("stepped history window", () => {
+describe("history window", () => {
   it.each([
+    [4, 4],
     [30, 30],
-    [39, 39],
-    [40, 30],
-    [45, 35],
-    [49, 39],
-    [50, 30],
+    [45, 30],
   ])("a chat of %i rows shows its newest %i", async (total, shown) => {
     rows = chatRows(total);
     await turn();
@@ -149,24 +147,16 @@ describe("stepped history window", () => {
     expect(texts).toHaveLength(shown);
     expect(texts[texts.length - 1]).toBe("сейчас");
   });
+});
 
-  it("keeps the same first row while the chat grows within a step", async () => {
-    const firsts: string[] = [];
-    for (const total of [41, 43, 45, 47, 49]) {
-      rows = chatRows(total);
-      sent = [];
-      await turn();
-      firsts.push(historyTexts()[0]!);
-    }
-    expect(new Set(firsts)).toEqual(new Set([firsts[0]!]));
-    expect(firsts[0]).toBe("сообщение 10");
-  });
-
-  it("falls back to the old thirty rows when the count fails", async () => {
-    rows = chatRows(45);
-    messageCount.mockRejectedValue(new Error("db down"));
+describe("a chat's first turn", () => {
+  it("keeps the live part out of the leading system message, after their message", async () => {
+    rows = chatRows(1);
     await turn();
-    expect(historyTexts()).toHaveLength(30);
+    const messages = sent[0]!.messages;
+    expect(messages.map((m) => m.role)).toEqual(["system", "user", "system"]);
+    expect(messages[1]).toMatchObject({ role: "user", content: "сейчас" });
+    expect(String(messages[2]!.content).startsWith(LIVE_PART_HEADER)).toBe(true);
   });
 });
 

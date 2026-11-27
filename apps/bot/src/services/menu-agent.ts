@@ -31,7 +31,7 @@ import {
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { buildSystemPromptParts } from "./prompt-builder.js";
-import { LIVE_PART_HEADER, joinPromptPart, splitRuleBlocks } from "./prompt-layout.js";
+import { LIVE_PART_HEADER, joinPromptPart, livePartIndex, splitRuleBlocks } from "./prompt-layout.js";
 import {
   SUGGEST_VIDEO_TOOL,
   SUGGEST_VIDEO_TOOL_NAME,
@@ -2038,13 +2038,15 @@ async function runMenuAgentTurnUnqueued(
     ...concept.live,
     ...memory.live,
   ]);
+  // Rules only (decision 2026-11-26, part 3): the provider caches the leading
+  // system message with the tools as one block, so the live part rides its own
+  // message next to the person's, placed below.
   const systemPrompt = joinPromptPart([
     basePrompt,
     ...takes.rules,
     ...stances.rules,
     ...concept.rules,
     ...memory.rules,
-    livePart ? `${LIVE_PART_HEADER}\n\n${livePart}` : null,
   ]);
   const turnTools = [
     ...baseTools(),
@@ -2067,6 +2069,11 @@ async function runMenuAgentTurnUnqueued(
   // replayed window before it belongs to earlier turns.
   const turnStart = history.length;
   history.push({ role: "user", content: userMessage });
+  // Never stored with the turn: it is rebuilt fresh on every call.
+  const liveMessage: ChatMessage | null = livePart
+    ? { role: "system", content: `${LIVE_PART_HEADER}\n\n${livePart}` }
+    : null;
+  if (liveMessage) history.splice(livePartIndex(history), 0, liveMessage);
 
   // A tool may request a post-reply UI action (e.g. the Premium cancel card).
   let pendingAction: MenuAgentAction | null = null;
@@ -2218,6 +2225,7 @@ async function runMenuAgentTurnUnqueued(
   const stamp = Date.now();
   const thisTurn: StoredChatMessage[] = history
     .slice(turnStart)
+    .filter((m) => m !== liveMessage)
     .map((m) => ({ ...m, ts: stamp }));
   const toStore: StoredChatMessage[] = [...stored, ...thisTurn].slice(
     -AGENT_STORED_HISTORY_MAX_MESSAGES,

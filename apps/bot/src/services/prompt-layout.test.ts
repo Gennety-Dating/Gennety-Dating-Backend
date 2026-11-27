@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_MEMORY_RULES, CONCEPT_RULES, STANCE_RULES, TASTE_CANON, conceptBlock } from "@gennety/shared";
-import { joinPromptPart, splitRuleBlocks, steppedWindowSize } from "./prompt-layout.js";
+import { joinPromptPart, livePartIndex, splitRuleBlocks } from "./prompt-layout.js";
 
 describe("splitRuleBlocks", () => {
   it("keeps every rule and every live piece, each in its own order", () => {
@@ -23,17 +23,22 @@ describe("splitRuleBlocks", () => {
   });
 });
 
-describe("steppedWindowSize", () => {
-  it("never shows fewer rows than the minimum and starts on a step", () => {
-    for (let total = 0; total <= 200; total++) {
-      const size = steppedWindowSize(total, 30);
-      expect(size).toBe(total <= 30 ? total : size);
-      if (total > 30) {
-        expect(size).toBeGreaterThanOrEqual(30);
-        expect(size).toBeLessThanOrEqual(39);
-        expect((total - size) % 10).toBe(0);
-      }
-    }
+describe("livePartIndex", () => {
+  const m = (...roles: string[]) => roles.map((role) => ({ role }));
+  it("goes right before the message being answered when the chat has history", () => {
+    expect(livePartIndex(m("system", "user", "assistant", "user"))).toBe(3);
+    expect(livePartIndex(m("system", "system", "user", "assistant", "user"))).toBe(4);
+  });
+  it("on a chat's first turn goes after their message, never into the leading system run", () => {
+    expect(livePartIndex(m("system", "user"))).toBe(2);
+    expect(livePartIndex(m("system", "system", "user"))).toBe(3);
+  });
+  it("a typed lead before a voice note is history enough", () => {
+    expect(livePartIndex(m("system", "user", "user"))).toBe(2);
+  });
+  it("without a person's message it goes last", () => {
+    expect(livePartIndex(m("system"))).toBe(1);
+    expect(livePartIndex(m())).toBe(0);
   });
 });
 

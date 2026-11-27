@@ -66,10 +66,9 @@ moved every turn, so the history's start changed every turn anyway.
    (`services/prompt-layout.ts`) only moves the rule texts in front.
    `buildSystemPromptParts` gives the shared prompt in its two halves;
    `buildSystemPrompt` still returns exactly the old string.
-2. The history window shows 30–39 rows, starting on a multiple of ten
-   (`steppedWindowSize`, one `count` per long chat): never fewer rows than
-   before, and the same first row for ten new rows. A failed count gives the
-   old 30.
+2. ~~The history window shows 30–39 rows, starting on a multiple of ten.~~
+   Reverted in part 3: the provider never reuses the history on its own, so
+   the extra rows were only paid for. The window is the old fixed 30 again.
 3. App chat calls carry `prompt_cache_key` = a SHA-256 slice of the user id
    (never the id itself). A 400 that names the parameter switches it off for
    the process and the call is retried at once without it, so it can never
@@ -81,7 +80,7 @@ moved every turn, so the history's start changed every turn anyway.
 **Measured** with the real prompt builder, two turns a minute apart in a
 45-row chat, the second after one exchange: the part of the request equal to
 the previous call (what the cache can serve) went from 73.9 % to 92.8 %;
-fresh characters per call from ~17.7k to ~5k.
+fresh characters per call from ~17.7k to ~5k. This was a character estimate that assumed prefix caching. Part 3 measured the provider: it reuses less, so the real gain is the rules and tools block.
 
 **Deliberately not done**, each because it would cost quality or needs data
 first:
@@ -100,8 +99,51 @@ first:
 5. Earlier photos are still signed afresh each turn, so the history stops
    being a cache hit at the first earlier photo (within the last eight rows).
 
+## Part 3 — measured on production, the layout corrected (2026-11-28)
+
+After the deploy (`83f8376e`) the founder's first two app chat turns showed
+`cached=0` at ~21k prompt tokens each, while a small side call in the same
+minute got 1800 of 1914 cached. Probes against gpt-6-luna from the Mac, with
+the real persona and the real 27 tools, showed how its cache behaves. Each
+probe sent two requests a few seconds apart and read the cache on the second.
+
+1. The same request twice: 6368 of 6371 tokens cached, with
+   `prompt_cache_key` and without it. Caching works with tools and the key.
+2. The leading run of system messages and the tools are reused as ONE block.
+   - A change in the last characters of the system message gives 0 cached.
+   - One tool appended to the end of the list also gives 0 cached.
+   - Prefix matching inside that block does not happen.
+3. Past that block, only a whole earlier request is reused.
+   - With the live part kept in the history (an experiment), the next turn
+     got 10004 of 10029 cached.
+   - With the live part right before the person's message (our layout), the
+     history identical in both turns was NOT reused. Only the block was:
+     6362 of 10041.
+4. A new chat's first turn is `[rules, live, message]`, so its leading system
+   run held the live part. The second turn's run did not hold it, so the cache
+   missed. That is exactly the production `cached=0`. From the third turn on,
+   the block was reused (6362).
+
+Changes:
+
+1. `livePartIndex` (`services/prompt-layout.ts`) places the live part. With
+   history above, it goes right before the person's message. With none, it goes
+   right after the message, so it never joins the leading system run. Probe:
+   the second turn then got 6368 cached instead of 0.
+2. The history window is the fixed 30 again: `steppedWindowSize` and its
+   `count` are removed.
+3. Telegram: the live part was the tail of its only system message, so by
+   item 2 its cache could never hit. It now rides its own system message,
+   placed by `livePartIndex`, and is never written into the stored history.
+
+What the cache now covers: the rules and tools block on every turn but a
+chat's first, at a tenth. The history and the live part are paid in full.
+Caching the history would mean keeping each turn's live part in it, about
+1–3k extra tokens a turn. That is not done.
+
 ## Deploy
 
-Not deployed. Waits for the founder's «да» (`docs/operations/deploy-journal/pending.md`).
+Parts 1 and 2 are deployed (`83f8376e`, 2026-11-26). Part 3 waits for the
+founder's «да» (`docs/operations/deploy-journal/pending.md`).
 No schema, no migration, no new required env; demo mode: same code, same
 defaults, no flow change.
