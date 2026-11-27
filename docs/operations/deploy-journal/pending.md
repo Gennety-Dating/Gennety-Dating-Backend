@@ -11,7 +11,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — prompt cache, part 3: live part out of the cached block, fixed 30-row window, Telegram live part split (2026-11-28)
+## **Deployed 2026-11-28 (was PENDING; production file-scoped `8e7d0450`, see [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md))** — prompt cache, part 3: live part out of the cached block, fixed 30-row window, Telegram live part split (2026-11-28)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, part 3.
 Code only: no schema, no migration, no env, no dependency. Demo mode: same code.
