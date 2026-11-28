@@ -11,7 +11,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — `search_web` spends about half the tokens (2026-11-28)
+## **Deployed 2026-11-28 (was PENDING; production `159b1068`, see [2026-11-28-chat-web-search-tokens.md](./2026-11-28-chat-web-search-tokens.md))** — `search_web` spends about half the tokens (2026-11-28)
 
 Decision: `docs/architecture/decisions/2026-11-28-chat-web-search.md` → «Token economy».
 Files: `apps/bot/src/services/chat-web-search.ts` (one look-up, low reasoning, word-set cache key `chat-web:v2`, «not found» kept 30 min, `repeated` result, «search narrower» instruction), `chat-agent.ts` (a same-turn repeat reuses the first result), `packages/shared/src/web-search.ts` (`MAX_OUTPUT_TOKENS` 800, `NOT_FOUND_CACHE_MS`).

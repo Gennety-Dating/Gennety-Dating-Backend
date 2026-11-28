@@ -7,6 +7,7 @@
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-11-28 | Production `159b1068`: `search_web` spends about half the tokens (one look-up, low reasoning, word-set cache, 30 min «not found», same-turn repeat reused); production search 12.9k in, 6.3 s, `searches=1`, repeat from cache in 36 ms | [2026-11-28-chat-web-search-tokens](./2026-11-28-chat-web-search-tokens.md) |
 | Deployed | 2026-11-28 | Production full main `6f469192`: the app chat agent searches the web itself (`search_web`, `web` step, «Looking things up» rules, 8/day 2/turn); checked with one production search (MAKEUP Black Friday, 8.4 s, cited) | [2026-11-28-chat-web-search](./2026-11-28-chat-web-search.md) |
 | Deployed | 2026-11-28 | Production full main `04e03951`: voice note carries the text typed before it (`b79cf24f`: `text` on `/v1/chat/voice`, own message, one answer, `leadMessageId`); back on full main after file-scoped `8e7d0450` / `a849fa09`; no migration, no env | [2026-11-28-full-main-voice-lead.md](./2026-11-28-full-main-voice-lead.md) |
 | Deployed | 2026-11-28 | Production file-scoped `a849fa09` (`108ea1ec` on `8e7d0450`): `usageOf` reads Responses API usage (`input_`/`output_` tokens, cached at a tenth); `b79cf24f` still NOT shipped; no migration, no env | [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md) |
