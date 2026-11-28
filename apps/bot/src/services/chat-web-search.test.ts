@@ -15,7 +15,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-const { citedSources, cleanSummary, resetWebSearchCounts, searchWeb, webSearchToolResult, SEARCH_WEB_TOOL } = await import("./chat-web-search.js");
+const { citedSources, cleanSummary, isNearDuplicateQuery, queryWords, resetWebSearchCounts, searchWeb, webSearchToolResult, SEARCH_WEB_TOOL } = await import("./chat-web-search.js");
 
 const now = new Date("2026-11-28T10:00:00.000Z");
 
@@ -72,6 +72,10 @@ describe("searchWeb", () => {
     expect(request.tools[0]).toMatchObject({ type: "web_search", user_location: { type: "approximate", country: "UA" } });
     expect(request.input).toBe("makeup black friday киев");
     expect(request.instructions).toContain("2026-11-28");
+    // Token economy (2026-11-28): one look-up, little thinking, a short answer.
+    expect(request.max_tool_calls).toBe(1);
+    expect(request.reasoning).toEqual({ effort: "low" });
+    expect(request.max_output_tokens).toBe(800);
   });
 
   it("answers a repeat from the cache without a second search", async () => {
@@ -81,9 +85,26 @@ describe("searchWeb", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it("an answer no page backs is not_found, and is not cached", async () => {
+  it("the same question in other case, punctuation or word order is one search", async () => {
+    const fetchFn = okFetch(responseBody("facts", [{ url: "https://a.com/p" }]));
+    await searchWeb("u1", "Black Friday Parfums Kyiv", null, { fetchFn, now, overBudget: () => false });
+    await searchWeb("u2", "parfums kyiv: black friday!", null, { fetchFn, now, overBudget: () => false });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("an answer no page backs is not_found, kept for half an hour only", async () => {
     const fetchFn = okFetch(responseBody("made up", []));
     expect(await searchWeb("u1", "q", null, { fetchFn, now, overBudget: () => false })).toEqual({ status: "not_found" });
+    expect(await searchWeb("u1", "q", null, { fetchFn, now, overBudget: () => false })).toEqual({ status: "not_found" });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const later = new Date(now.getTime() + 31 * 60_000);
+    await searchWeb("u1", "q", null, { fetchFn, now: later, overBudget: () => false });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed search is not kept", async () => {
+    const fetchFn = vi.fn(async () => new Response("nope", { status: 500 })) as unknown as typeof fetch;
+    await searchWeb("u1", "q", null, { fetchFn, now, overBudget: () => false });
     expect(cache.size).toBe(0);
   });
 
@@ -104,7 +125,22 @@ describe("searchWeb", () => {
   });
 });
 
+describe("near-duplicate queries", () => {
+  it("compares words, not case, punctuation or order", () => {
+    expect(queryWords("Black-Friday, Parfums KYIV  kyiv")).toEqual(["black", "friday", "kyiv", "parfums"]);
+    expect(isNearDuplicateQuery("Black Friday Parfums Kyiv", "parfums kyiv black friday 2026")).toBe(true);
+    expect(isNearDuplicateQuery("Black Friday Parfums Kyiv", "Parfums Kyiv opening hours")).toBe(false);
+    expect(isNearDuplicateQuery("", "anything")).toBe(false);
+  });
+});
+
 describe("webSearchToolResult", () => {
+  it("a repeated look-up says so and carries the same facts", () => {
+    const repeated = JSON.parse(webSearchToolResult({ status: "found", summary: "facts", sources: [{ title: "a", url: "https://a.com" }] }, { repeated: true }));
+    expect(repeated).toMatchObject({ success: true, repeated: true, summary: "facts" });
+    expect(repeated.instruction).toMatch(/not searched again/);
+  });
+
   it("never tells the agent to ask the person for a link", () => {
     for (const status of ["not_found", "over_limit", "over_budget", "unavailable"] as const) {
       const parsed = JSON.parse(webSearchToolResult({ status }));

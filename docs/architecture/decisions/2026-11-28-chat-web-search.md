@@ -29,7 +29,7 @@ comes from the tool that runs (`chat-activity.ts`).
       answer no page backs is `not_found`.
    4. Limits live in `@gennety/shared` `web-search.ts`: 8 searches per person
       per UTC day and 2 per turn, a 25 s timeout and a 3 h cache in
-      `WebLookupCache` (kind `chat_web`). Only found answers are cached. The
+      `WebLookupCache` (kind `chat_web`). Found answers are cached (and, since the token economy below, «nothing found» for 30 min). The
       token budget gate is shared with the other look-ups.
 2. The tool reports the existing `web` activity step, so the app shows «Ищу в
    интернете…» while it runs. No contract change: `web` was already a key of
@@ -53,3 +53,43 @@ comes from the tool that runs (`chat-activity.ts`).
 
 Demo accounts reach the same chat turn. Their searches are real look-ups
 within the same limits. Demo mode does not fake web results.
+
+## Token economy (same day, founder: «оптимизировать, чтобы эффективнее расходовал токены»)
+
+Measured first: a search cost 15–21k tokens, nearly all of it fresh input,
+because the search model made two look-ups by itself and read both pages'
+results. The agent's own calls around it are mostly cached, and search results
+never enter the chat history, so later turns do not pay for them.
+
+1. One look-up per request: `max_tool_calls: 1` on the Responses call.
+2. Little thinking: `reasoning: { effort: "low" }`, and `max_output_tokens`
+   800 instead of 1500. The twelve-line answer measured 240–500 tokens.
+3. The cache key is the query's words, with case, punctuation and order
+   ignored (`queryWords`, cache version `chat-web:v2`). «Nothing found» is now
+   kept for 30 minutes (`CHAT_WEB_SEARCH_NOT_FOUND_CACHE_MS`), so the same
+   failed question asked again right away is not paid for twice. A failed
+   request is still not kept.
+4. Within one turn, a second query that repeats the first in other words
+   (four words of five in common, `isNearDuplicateQuery`) gets the first
+   result back with `repeated: true` and is not searched again. It still
+   counts toward the 2 per turn.
+5. One look-up sometimes misses a detail that two found. In the measurement
+   these were a restaurant's hours and the IMAX session times. The `found`
+   instruction now tells the agent to search once more with a narrower query
+   naming the missing detail. That second search recovered the hours at 8.8k,
+   so two searches together cost about what one did before.
+
+Measured on six fixed Kyiv queries (shop sales, exhibitions, a restaurant,
+IMAX, Rozetka), same instructions, before → after:
+
+1. Tokens: 113k → 59k in total, 48 % less. Per search: ~9k instead of
+   13–29k.
+2. Speed: 8.0 s → 5.3 s on average.
+3. Cited pages: the same or more on every query.
+
+Consciously not done, each waiting for the founder:
+
+1. A cheaper search model. It saves money, not the person's token budget,
+   which counts tokens of any model alike.
+2. More than 8 searches a day. At ~9k per search there is room for 12–15.
+   This is a product limit, so the founder decides.

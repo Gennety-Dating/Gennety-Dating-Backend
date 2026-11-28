@@ -6,6 +6,7 @@ import {
   CHAT_WEB_SEARCH_CACHE_MS,
   CHAT_WEB_SEARCH_MAX_OUTPUT_TOKENS,
   CHAT_WEB_SEARCH_MAX_SOURCES,
+  CHAT_WEB_SEARCH_NOT_FOUND_CACHE_MS,
   CHAT_WEB_SEARCH_QUERY_MAX_LEN,
   CHAT_WEB_SEARCH_SUMMARY_MAX_CHARS,
   CHAT_WEB_SEARCH_TIMEOUT_MS,
@@ -70,7 +71,7 @@ export interface WebSearchDeps {
   overBudget?: (userId: string) => boolean;
 }
 
-const CACHE_VERSION = "chat-web:v1";
+const CACHE_VERSION = "chat-web:v2";
 const CACHE_KIND = "chat_web";
 const TITLE_MAX_LEN = 120;
 
@@ -140,10 +141,33 @@ export function resetWebSearchCounts(): void {
   searchCountsDay = "";
 }
 
+/* ── Same question, other words ────────────────────────────────────────── */
+
+/** The words of a query, case, punctuation and order aside. */
+export function queryWords(query: string): string[] {
+  const words = query.normalize("NFKC").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return [...new Set(words)].sort();
+}
+
+/**
+ * The agent's «look again» that repeats the first look in other words
+ * («Black Friday Parfums Kyiv» → «parfums kyiv black friday 2026»): four
+ * words of five in common. Searching it again would pay ~9k for the same pages.
+ */
+export function isNearDuplicateQuery(a: string, b: string): boolean {
+  const left = new Set(queryWords(a));
+  const right = new Set(queryWords(b));
+  if (left.size === 0 || right.size === 0) return false;
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared++;
+  return shared / (left.size + right.size - shared) >= 0.8;
+}
+
 /* ── Cache ──────────────────────────────────────────────────────────────── */
 
+/** Shared by everyone: only the query and the city are in it. */
 function cacheKey(query: string, city: string | null): string {
-  return createHash("sha256").update([CACHE_VERSION, query, city ?? ""].join("\n").toLowerCase()).digest("hex");
+  return createHash("sha256").update([CACHE_VERSION, queryWords(query).join(" "), (city ?? "").toLowerCase()].join("\n")).digest("hex");
 }
 
 async function readCache(key: string, now: Date): Promise<WebSearchResult | null> {
@@ -151,7 +175,7 @@ async function readCache(key: string, now: Date): Promise<WebSearchResult | null
     const row = await prisma.webLookupCache.findUnique({ where: { key }, select: { payload: true, expiresAt: true } });
     if (!row || row.expiresAt.getTime() <= now.getTime()) return null;
     const payload = row.payload as unknown as { status?: unknown } | null;
-    return payload?.status === "found" ? (payload as unknown as WebSearchResult) : null;
+    return payload?.status === "found" || payload?.status === "not_found" ? (payload as unknown as WebSearchResult) : null;
   } catch (err) {
     console.warn("[web-search] cache read failed", err instanceof Error ? err.name : "error");
     return null;
@@ -159,7 +183,8 @@ async function readCache(key: string, now: Date): Promise<WebSearchResult | null
 }
 
 async function writeCache(key: string, result: WebSearchResult, now: Date): Promise<void> {
-  const expiresAt = new Date(now.getTime() + CHAT_WEB_SEARCH_CACHE_MS);
+  const ttl = result.status === "found" ? CHAT_WEB_SEARCH_CACHE_MS : CHAT_WEB_SEARCH_NOT_FOUND_CACHE_MS;
+  const expiresAt = new Date(now.getTime() + ttl);
   const payload = result as unknown as Prisma.InputJsonValue;
   try {
     await prisma.webLookupCache.upsert({
@@ -198,6 +223,13 @@ async function searchOnce(query: string, city: { name: string; countryCode: stri
       input: query,
       tools: [tool],
       tool_choice: "required",
+      // One look-up per request (2026-11-28): the second one the model made by
+      // itself doubled the pages it read, 15–21k tokens instead of ~9k, for
+      // much the same facts. The agent can still search again in other words.
+      max_tool_calls: 1,
+      // Summarising pages needs little thought: 240 tokens out instead of 580,
+      // and the answer comes ~2× sooner while «Ищу в интернете…» is on screen.
+      reasoning: { effort: "low" },
       include: ["web_search_call.action.sources"],
       max_output_tokens: CHAT_WEB_SEARCH_MAX_OUTPUT_TOKENS,
       store: false,
@@ -218,8 +250,8 @@ async function searchOnce(query: string, city: { name: string; countryCode: stri
 }
 
 /**
- * Cache, then the person's limits, then the search. A failed or empty search
- * is not cached: the next turn may well find it.
+ * Cache, then the person's limits, then the search. «Found» is kept for hours,
+ * «nothing found» for half an hour; a failed search is not kept at all.
  */
 export async function searchWeb(
   userId: string,
@@ -249,12 +281,20 @@ export async function searchWeb(
     console.warn("[web-search] search threw:", err instanceof Error ? err.name : "error");
     result = { status: "unavailable" };
   }
-  if (result.status === "found") await writeCache(key, result, now);
+  if (result.status === "found" || result.status === "not_found") await writeCache(key, result, now);
   return result;
 }
 
 /** What the agent reads back: the facts with their links, or what to say instead. */
-export function webSearchToolResult(result: WebSearchResult | null): string {
+export function webSearchToolResult(result: WebSearchResult | null, options: { repeated?: boolean } = {}): string {
+  if (options.repeated && result) {
+    const again = JSON.parse(webSearchToolResult(result)) as Record<string, unknown>;
+    return JSON.stringify({
+      ...again,
+      repeated: true,
+      instruction: `This query repeats your earlier search this turn, so it was not searched again; the result is the same. ${String(again.instruction ?? "")}`.trim(),
+    });
+  }
   if (!result) {
     return JSON.stringify({ success: false, error: "empty_query", instruction: "Write a concrete search query and call search_web again." });
   }
@@ -265,7 +305,7 @@ export function webSearchToolResult(result: WebSearchResult | null): string {
         summary: result.summary,
         sources: result.sources,
         instruction:
-          "Answer from this summary only, in your own words and the person's language. Give the one or two most useful links as plain URLs from `sources`. Say what the pages do not confirm; never add facts that are not here.",
+          "Answer from this summary only, in your own words and the person's language. Give the one or two most useful links as plain URLs from `sources`. Say what the pages do not confirm; never add facts that are not here. If the summary misses the very thing asked (the hours, the price, the session times), search once more with a narrower query naming it.",
       });
     case "not_found":
       return JSON.stringify({

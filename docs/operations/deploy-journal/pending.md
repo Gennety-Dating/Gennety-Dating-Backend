@@ -11,6 +11,23 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+## **PENDING** — `search_web` spends about half the tokens (2026-11-28)
+
+Decision: `docs/architecture/decisions/2026-11-28-chat-web-search.md` → «Token economy».
+Files: `apps/bot/src/services/chat-web-search.ts` (one look-up, low reasoning, word-set cache key `chat-web:v2`, «not found» kept 30 min, `repeated` result, «search narrower» instruction), `chat-agent.ts` (a same-turn repeat reuses the first result), `packages/shared/src/web-search.ts` (`MAX_OUTPUT_TOKENS` 800, `NOT_FOUND_CACHE_MS`).
+No schema, no migration, no env, no dependency. Old `chat-web:v1` cache rows simply expire (3 h).
+Cost: six fixed Kyiv queries, 113k → 59k tokens (−48 %), 8.0 → 5.3 s on average.
+Demo mode: same code. iOS: no contract change.
+
+```bash
+pm2 logs gennety-bot --lines 300 --nostream | grep "\[web-search\] tokens"
+# → in≈9k per search, searches=1
+```
+
+**Rollback:** revert the commit, sync, restart.
+
+---
+
 ## **Deployed 2026-11-28 (was PENDING; production full main `6f469192`, see [2026-11-28-chat-web-search.md](./2026-11-28-chat-web-search.md))** — the app chat agent searches the web itself: `search_web` (2026-11-28)
 
 Decision: `docs/architecture/decisions/2026-11-28-chat-web-search.md`.

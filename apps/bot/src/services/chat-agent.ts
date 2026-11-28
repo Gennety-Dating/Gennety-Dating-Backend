@@ -18,7 +18,7 @@ import {
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
 import { REMINDER_TOOLS, REMINDER_TOOL_KINDS, executeReminderTool, isReminderTool, reminderClockBlock } from "./agent-reminders.js";
-import { SEARCH_WEB_TOOL, SEARCH_WEB_TOOL_NAME, searchWeb, webSearchToolResult } from "./chat-web-search.js";
+import { isNearDuplicateQuery, SEARCH_WEB_TOOL, SEARCH_WEB_TOOL_NAME, searchWeb, webSearchToolResult, type WebSearchResult } from "./chat-web-search.js";
 import { personTimeZone } from "./suggested-replies.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
 import { agentMemoryOn, agentReactionsOn, agentRemindersOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
@@ -856,6 +856,8 @@ async function runTurnInner(
   let failure = "";
   let writesUsed = 0;
   let webSearches = 0;
+  // This turn's look-ups, so a «look again» in other words reuses the first.
+  const turnSearches: Array<{ query: string; result: WebSearchResult | null }> = [];
   const receipts: string[] = [];
   const wishlistReadItems = new Map<string, WishlistToolItem>();
   let pendingAction: MenuAgentAction | null = null;
@@ -986,10 +988,17 @@ async function runTurnInner(
         } catch {
           // an empty query is refused below
         }
-        const found = await searchWeb(userId, args.query, account.profile?.homeCityKey ?? null).catch((err: unknown) => {
+        const query = typeof args.query === "string" ? args.query : "";
+        const earlier = query ? turnSearches.find((s) => isNearDuplicateQuery(s.query, query)) : undefined;
+        if (earlier) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: webSearchToolResult(earlier.result, { repeated: true }) });
+          continue;
+        }
+        const found: WebSearchResult | null = await searchWeb(userId, args.query, account.profile?.homeCityKey ?? null).catch((err: unknown) => {
           console.warn("[chat] search_web threw:", err instanceof Error ? err.name : "error");
           return { status: "unavailable" as const };
         });
+        if (query && found && found.status !== "unavailable") turnSearches.push({ query, result: found });
         messages.push({ role: "tool", tool_call_id: tc.id, content: webSearchToolResult(found) });
         continue;
       }
