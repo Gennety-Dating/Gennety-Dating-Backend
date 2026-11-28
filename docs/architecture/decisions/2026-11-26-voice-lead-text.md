@@ -59,7 +59,7 @@ never reached the agent.
 3. Mockup variants B (a dashed bubble above the field) and C (the text as an
    attachment card): not chosen.
 
-## Not deployed
+## Deployed
 
-1. The backend needs the founder's «да» for production.
+1. Production on 2026-11-28 with full `main` `04e03951` (founder: «Выкати и b79cf24f тоже»); see `docs/operations/deploy-journal/2026-11-28-full-main-voice-lead.md`.
 2. Older app builds never send `text`, so for them nothing changes.
