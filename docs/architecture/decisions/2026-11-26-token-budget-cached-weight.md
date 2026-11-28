@@ -141,6 +141,17 @@ chat's first, at a tenth. The history and the live part are paid in full.
 Caching the history would mean keeping each turn's live part in it, about
 1–3k extra tokens a turn. That is not done.
 
+## Part 3, checked on production (2026-11-28)
+
+A new app chat after the deploy (`8e7d0450`):
+
+1. Turn 1 had 0 of 20985 tokens cached.
+2. Turn 2 made three calls and got 19664, 21130 and 21220 cached. The turn counted 8043 tokens, against 63698 sent.
+   - The rules and tools block is about 19.6k of the 21k tokens.
+   - Within one turn, each tool round's call reuses the previous call whole.
+
+The same turn showed `[llm-usage] … prompt=0 cached=0 … counted=19823`. That was a Responses API call (`wishlist-lookup.ts` or `event-check.ts`, which use web search). Its usage reads `input_tokens` / `output_tokens` / `input_tokens_details.cached_tokens`, and `usageOf` read only the Chat Completions names. As a result such a call counted its total whole, its cached part was never weighted, and it logged zeros. `usageOf` now reads both sets of names (`108ea1ec`).
+
 ## Deploy
 
 Parts 1 and 2 are deployed (`83f8376e`, 2026-11-26). Part 3 waits for the

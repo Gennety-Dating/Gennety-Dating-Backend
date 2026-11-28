@@ -11,6 +11,22 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+## **PENDING** — usage of Responses API calls read correctly (2026-11-28, `108ea1ec`)
+
+Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, «Part 3, checked on production».
+`token-usage.ts` only: `usageOf` reads `input_tokens` / `output_tokens` / `input_tokens_details.cached_tokens` as well.
+Effect: a web-search lookup (wishlist, event check) logs real numbers, and its cached part counts at a tenth.
+No schema, no env, no dependency. Demo mode and iOS: none.
+Ship file-scoped on top of `8e7d0450` while `b79cf24f` waits for its own «да».
+
+```bash
+pm2 logs gennety-bot --lines 300 --nostream | grep "\[llm-usage\]" | grep -v "prompt=0 "
+```
+
+**Rollback:** revert, sync, restart.
+
+---
+
 ## **Deployed 2026-11-28 (was PENDING; production file-scoped `8e7d0450`, see [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md))** — prompt cache, part 3: live part out of the cached block, fixed 30-row window, Telegram live part split (2026-11-28)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, part 3.
