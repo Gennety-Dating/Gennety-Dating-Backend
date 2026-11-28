@@ -11,7 +11,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — the app chat agent searches the web itself: `search_web` (2026-11-28)
+## **Deployed 2026-11-28 (was PENDING; production full main `6f469192`, see [2026-11-28-chat-web-search.md](./2026-11-28-chat-web-search.md))** — the app chat agent searches the web itself: `search_web` (2026-11-28)
 
 Decision: `docs/architecture/decisions/2026-11-28-chat-web-search.md`.
 Files: `apps/bot/src/services/chat-web-search.ts` (new), `chat-agent.ts` (tool, dispatch, «Looking things up» rules), `chat-activity.ts` (`search_web` → `web`), `config.ts` (`CHAT_WEB_SEARCH_ENABLED`), `packages/shared/src/web-search.ts` (new) + `index.ts` export.
