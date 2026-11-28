@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 261 entries
+# Deploy journal index — 262 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| Deployed | 2026-11-28 | Production file-scoped `a849fa09` (`108ea1ec` on `8e7d0450`): `usageOf` reads Responses API usage (`input_`/`output_` tokens, cached at a tenth); `b79cf24f` still NOT shipped; no migration, no env | [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md) |
 | Deployed | 2026-11-28 | Production file-scoped `8e7d0450` (`70b9a247` cherry-picked on `83f8376e`): prompt cache part 3 — live part never in the leading system run (`livePartIndex`), fixed 30-row window, Telegram live part in its own message; `b79cf24f` (voice lead text) on main NOT shipped, waits for its own «да»; no migration, no env | [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md) |
 | Deployed | 2026-11-26 | Production `83f8376e` (on `ca1e08a6`): token budget — cached prompt tokens counted at a tenth, `[llm-usage]` / `[chat] turn usage` log, app chat request laid out for the prompt cache (rules → history → live), history window 30–39 rows, per-person `prompt_cache_key`, Telegram rules-first; no migration, no env, no dependency; synced without `--delete` | [2026-11-26-token-budget.md](./2026-11-26-token-budget.md) |
 | Deployed | 2026-11-26 | Production `ca1e08a6` (token-budget commits after it NOT shipped): agent concept phase 4 — proactive senders (Profiler pause + off switch, re-engagement lifetime cap, no Rematch on expiry, quiet hours for campus drop / T+24h, weekly announcement cap, «только мои свидания» mute); **two additive migrations** `20261126100000`, `20261126120000`; `/v1/me/notifications`; no env; CI green, synced without `--delete` | [2026-11-26-agent-concept-phase4.md](./2026-11-26-agent-concept-phase4.md) |

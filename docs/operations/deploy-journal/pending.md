@@ -11,7 +11,7 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
-## **PENDING** — usage of Responses API calls read correctly (2026-11-28, `108ea1ec`)
+## **Deployed 2026-11-28 (was PENDING; production file-scoped `a849fa09`, see [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md))** — usage of Responses API calls read correctly (2026-11-28, `108ea1ec`)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, «Part 3, checked on production».
 `token-usage.ts` only: `usageOf` reads `input_tokens` / `output_tokens` / `input_tokens_details.cached_tokens` as well.

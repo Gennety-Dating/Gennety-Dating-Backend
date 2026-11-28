@@ -17,3 +17,16 @@ The founder approved the deploy in chat («Да, выкатывай»).
 5. Runtime: `pm2 restart gennety-bot --update-env` and `pm2 save`. `/v1/ping` returns ok, the bot started, and the restart count is 14, of which one is this deploy.
 6. Not checked yet: the cache on real turns. A new app chat should show `cached=0` on turn 1 and the rules and tools block cached from turn 2. Telegram should show `cached > 0` from its second message.
 7. Rollback: sync production `83f8376e` (or `4a7a107a`) back and restart.
+
+## Follow-up the same night: Responses usage (file-scoped `a849fa09`)
+
+The founder approved it in chat («Да, выкатывай»).
+
+1. What shipped: `108ea1ec`, cherry-picked onto `8e7d0450`. It changes only `token-usage.ts` and its test.
+2. Not shipped: `b79cf24f` is still off production.
+3. Checks:
+   - Tests: 3 files, 48 of 48.
+   - The dry-run sync showed exactly the two files.
+   - `/v1/ping` returns ok, the bot started, and the restart count is 15, of which one is this deploy.
+4. Not checked yet: the first web-search lookup with real numbers in `[llm-usage]`.
+5. Rollback: sync `8e7d0450` back and restart.
