@@ -93,6 +93,11 @@ describe("openaiFetch token metering", () => {
     expect(usageOf({}, 0.1)).toBeNull();
   });
 
+  it("usageOf reads the Responses API names too (input_/output_ tokens)", () => {
+    const usage = { input_tokens: 19_000, input_tokens_details: { cached_tokens: 18_000 }, output_tokens: 800, total_tokens: 19_800 };
+    expect(usageOf({ usage }, 0.1)).toEqual({ prompt: 19_000, cached: 18_000, completion: 800, counted: 3_600 });
+  });
+
   it("falls back to prompt+completion when total_tokens is absent", async () => {
     const body = { usage: { prompt_tokens: 10, completion_tokens: 5 } };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
