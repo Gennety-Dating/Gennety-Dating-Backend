@@ -18,6 +18,7 @@ import {
   type ScreenshotsCardView,
 } from "./chat-screenshots.js";
 import { REMINDER_TOOLS, REMINDER_TOOL_KINDS, executeReminderTool, isReminderTool, reminderClockBlock } from "./agent-reminders.js";
+import { SEARCH_WEB_TOOL, SEARCH_WEB_TOOL_NAME, searchWeb, webSearchToolResult } from "./chat-web-search.js";
 import { personTimeZone } from "./suggested-replies.js";
 import { executeMemoryTool, isMemoryTool, MEMORY_ADDENDUM, MEMORY_TOOL_KINDS, MEMORY_TOOLS } from "./chat-memory.js";
 import { agentMemoryOn, agentReactionsOn, agentRemindersOn, memoryIdeasOn, screenshotLibraryOn } from "./feature-preview.js";
@@ -39,7 +40,7 @@ import { createHash } from "node:crypto";
 import { prisma, type Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { usageOf, type CallUsage } from "./token-usage.js";
-import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
+import { CHAT_SESSION_LONG_RESUMMARIZE_MESSAGES, CHAT_WEB_SEARCHES_PER_TURN, SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
@@ -293,6 +294,17 @@ below differ from the bubble and length rules above, these win here.
 - If they mention a photo you do not see, say exactly that and ask them to send
   it again. Never claim you "can't read" something you were never shown.
 
+### Looking things up
+- You can search the internet yourself with \`search_web\`. When the answer
+  depends on anything current or that you don't know for sure — a shop or
+  place and what it has, sales and promotions (Black Friday), prices, opening
+  hours, addresses, events, news — search first, in the same turn, and answer
+  from what it found. Never ask them for a link or tell them to search; ask
+  only if you truly cannot tell what to look for.
+- Fix names misheard in speech, add the city and the month for anything
+  current. Not found: say so plainly, never guess.
+- Give the one or two most useful links from the result as plain URLs.
+
 ### Honesty about yourself
 - Never invent a reason for your own glitch or a limit you don't have. If the
   conversation shows a reply of yours failed, own it in a few words and answer
@@ -483,7 +495,7 @@ function appOpenScreen<T extends (typeof AGENT_TOOLS)[number]>(tool: T): T {
  */
 const ALL_TOOLS = [...AGENT_TOOLS.map(appOpenScreen), ...CHAT_TOOLS, GET_MY_DATE_TOOL, ...PAST_CHAT_TOOLS];
 type ToolList = Array<
-  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number] | ReactTool
+  (typeof ALL_TOOLS)[number] | (typeof REMINDER_TOOLS)[number] | typeof SUGGEST_VIDEO_TOOL | (typeof WISHLIST_TOOLS)[number] | typeof PROPOSE_WISHLIST_TOOL | typeof OFFER_CHANGE_TOOL | typeof SHOW_APP_GUIDE_TOOL | (typeof SCREENSHOT_TOOLS)[number] | (typeof MEMORY_TOOLS)[number] | (typeof AGENT_MEMORY_TOOLS)[number] | typeof SEARCH_WEB_TOOL | ReactTool
 >;
 
 /**
@@ -494,6 +506,9 @@ export function turnTools(options: { wishlistCards: boolean; offerCards: boolean
   const ideas = options.memoryIdeas ?? env.MEMORY_IDEAS_ENABLED;
   return [
     ...ALL_TOOLS,
+    // The agent's own web look-up (decision 2026-11-28). Off only by
+    // `CHAT_WEB_SEARCH_ENABLED=false`.
+    ...(webSearchOn() ? [SEARCH_WEB_TOOL] : []),
     // Runs through the shared executor (`executeAgentTool`), like Telegram.
     ...(videoTakesEnabled() ? [SUGGEST_VIDEO_TOOL] : []),
     ...(env.WISHLIST_FEATURE_ENABLED ? WISHLIST_TOOLS : []),
@@ -534,11 +549,18 @@ const CHAT_TOOL_KINDS: Record<string, "read" | "write" | "confirm"> = {
   [GET_MY_DATE_TOOL_NAME]: "read",
   // Writes only the reaction on their message, never the profile (`chat-reactions.ts`).
   [REACT_TOOL_NAME]: "read",
+  // Reads the web, writes nothing (`chat-web-search.ts`).
+  [SEARCH_WEB_TOOL_NAME]: "read",
   ...PAST_CHAT_TOOL_KINDS,
   ...SCREENSHOT_TOOL_KINDS,
   ...MEMORY_TOOL_KINDS,
   ...AGENT_MEMORY_TOOL_KINDS,
 };
+
+/** The kill switch reads `false` only when set so: a missing value is on. */
+function webSearchOn(): boolean {
+  return env.CHAT_WEB_SEARCH_ENABLED !== false;
+}
 
 function toolKind(name: string): string | undefined {
   return TOOL_KINDS[name] ?? CHAT_TOOL_KINDS[name] ?? REMINDER_TOOL_KINDS[name];
@@ -833,6 +855,7 @@ async function runTurnInner(
   let lastReply = "";
   let failure = "";
   let writesUsed = 0;
+  let webSearches = 0;
   const receipts: string[] = [];
   const wishlistReadItems = new Map<string, WishlistToolItem>();
   let pendingAction: MenuAgentAction | null = null;
@@ -939,6 +962,36 @@ async function runTurnInner(
           });
           continue;
         }
+      }
+
+      // The web (decision 2026-11-28): the query the model wrote, nothing of the
+      // chat, goes out. A failed search costs that look, never the answer.
+      if (name === SEARCH_WEB_TOOL_NAME) {
+        if (!webSearchOn()) {
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify({ success: false, error: "unknown_tool" }) });
+          continue;
+        }
+        if (webSearches >= CHAT_WEB_SEARCHES_PER_TURN) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, error: "search_budget_exhausted", instruction: "Enough searching for this turn: answer from what you found." }),
+          });
+          continue;
+        }
+        webSearches++;
+        let args: { query?: unknown } = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}") as { query?: unknown };
+        } catch {
+          // an empty query is refused below
+        }
+        const found = await searchWeb(userId, args.query, account.profile?.homeCityKey ?? null).catch((err: unknown) => {
+          console.warn("[chat] search_web threw:", err instanceof Error ? err.name : "error");
+          return { status: "unavailable" as const };
+        });
+        messages.push({ role: "tool", tool_call_id: tc.id, content: webSearchToolResult(found) });
+        continue;
       }
 
       // Gennety's reaction (decision 2026-11-24): checked here, written onto the

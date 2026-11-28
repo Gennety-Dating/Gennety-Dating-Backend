@@ -108,6 +108,8 @@ export const CHAT_TOOL_STEPS: ReadonlyMap<string, ChatActivityStep> = new Map<st
   ["show_screenshots", "screenshots"],
   ["view_screenshot", "screenshots"],
   ["check_event", "web"],
+  // The agent's own web look-up (`chat-web-search.ts`, decision 2026-11-28).
+  ["search_web", "web"],
   // Nothing to report.
   ["open_screen", "thinking"],
   // Reads the curated video list — answers at once (`agent-video-takes.ts`).

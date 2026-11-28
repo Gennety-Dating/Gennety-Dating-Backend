@@ -786,6 +786,9 @@ export const env = {
   /// tool — founder's choice 2026-10-08, no new provider). A model that takes
   /// tools on the Responses API; overridable without a deploy of code.
   WISHLIST_SEARCH_MODEL: process.env.WISHLIST_SEARCH_MODEL ?? "gpt-6-luna",
+  /// The app chat agent's own `search_web` tool on the same model (decision
+  /// 2026-11-28). On unless set to "false".
+  CHAT_WEB_SEARCH_ENABLED: process.env.CHAT_WEB_SEARCH_ENABLED !== "false",
   /// Budget for one look-up (search + reading the found page). The person is
   /// watching the search animation; past this the agent says it found nothing.
   WISHLIST_LOOKUP_TIMEOUT_MS: Math.min(

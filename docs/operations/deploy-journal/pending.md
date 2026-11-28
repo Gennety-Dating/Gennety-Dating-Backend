@@ -11,6 +11,25 @@ Demo-only catch-up: [2026-10-29-demo.md](./2026-10-29-demo.md). Current main is 
 
 ---
 
+## **PENDING** — the app chat agent searches the web itself: `search_web` (2026-11-28)
+
+Decision: `docs/architecture/decisions/2026-11-28-chat-web-search.md`.
+Files: `apps/bot/src/services/chat-web-search.ts` (new), `chat-agent.ts` (tool, dispatch, «Looking things up» rules), `chat-activity.ts` (`search_web` → `web`), `config.ts` (`CHAT_WEB_SEARCH_ENABLED`), `packages/shared/src/web-search.ts` (new) + `index.ts` export.
+No schema, no migration, no new dependency, no new provider: the existing OpenAI key and `WISHLIST_SEARCH_MODEL`. Cache rows reuse `WebLookupCache` (kind `chat_web`).
+Env: none needed. `CHAT_WEB_SEARCH_ENABLED=false` turns it off without a deploy of code.
+Cost: one search is ~14k tokens on the person's budget (local smoke 2026-11-28: 11–12 s, real MAKEUP Black Friday pages cited). 8 per person per day, 2 per turn.
+Demo mode: same code; demo accounts get real searches within the same limits. iOS: no contract change, `web` is a known step key; the matching iOS build lets voice record while the agent thinks.
+
+```bash
+# after deploy: in the app chat ask «какие скидки на Чёрную пятницу в MAKEUP в Киеве?»
+pm2 logs gennety-bot --lines 300 --nostream | grep -E "\[web-search\]|\[chat\] search_web"
+# → one "[web-search] tokens in=… searches=N" line per search; the reply names the offer with a makeup.com.ua link
+```
+
+**Rollback:** set `CHAT_WEB_SEARCH_ENABLED=false` and restart, or revert, sync, restart.
+
+---
+
 ## **Deployed 2026-11-28 (was PENDING; production file-scoped `a849fa09`, see [2026-11-28-prompt-cache-part3.md](./2026-11-28-prompt-cache-part3.md))** — usage of Responses API calls read correctly (2026-11-28, `108ea1ec`)
 
 Decision: `docs/architecture/decisions/2026-11-26-token-budget-cached-weight.md`, «Part 3, checked on production».
